@@ -1,0 +1,5 @@
+.glide/
+.pkg_config
+bin/
+obj/
+testResults/

@@ -1,0 +1,47 @@
+{
+  "apiVersion": "vlabs",
+  "location": "",
+  "properties": {
+    "orchestratorProfile": {
+      "orchestratorType": "Kubernetes",
+      "orchestratorRelease": "1.9",
+      "kubernetesConfig": {
+          "useCloudControllerManager": true,
+          "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.11.0-alpha.0",
+          "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.11.0-alpha.0",
+          "networkPolicy": "none",
+          "apiServerConfig": {
+            "--admission-control":  "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
+          }
+      }
+    },
+    "masterProfile": {
+      "count": 1,
+      "dnsPrefix": "{dnsPrefix}",
+      "vmSize": "Standard_F2"
+    },
+    "agentPoolProfiles": [
+      {
+        "name": "agentpool1",
+        "count": 2,
+        "vmSize": "Standard_F2",
+        "availabilityProfile": "AvailabilitySet",
+        "storageProfile": "ManagedDisks"
+      }
+    ],
+    "linuxProfile": {
+      "adminUsername": "k8s-ci",
+      "ssh": {
+        "publicKeys": [
+          {
+            "keyData": "{keyData}"
+          }
+        ]
+      }
+    },
+    "servicePrincipalProfile": {
+      "clientID": "{servicePrincipalClientID}",
+      "secret": "{servicePrincipalClientSecret}"
+    }
+  }
+}

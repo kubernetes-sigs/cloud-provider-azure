@@ -1,0 +1,6 @@
+*
+!.git
+!cloud-controller-manager
+!Makefile
+!scripts/pkg-config.sh
+!vendor
