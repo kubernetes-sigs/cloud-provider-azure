@@ -1,0 +1,9 @@
+package: github.com/kubernetes/cloud-provider-azure
+import:
+- package: k8s.io/kubernetes
+  version: v1.11.0-alpha.0
+- package: github.com/Azure/azure-sdk-for-go
+  version: v12.4.0-beta
+testImport:
+- package: github.com/stretchr/testify
+  version: v1.1.4
