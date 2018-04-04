@@ -31,7 +31,7 @@ function update-cloudprovider {
     for file in azure.go azure_test.go
     do
         perl -i -pe \
-            's#k8s.io/kubernetes/pkg/cloudprovider/providers/azure#github.com/kubernetes/cloud-provider-azure/cloud-controller-manager/azureprovider#;' $file
+            's#k8s.io/kubernetes/pkg/cloudprovider/providers/azure#k8s.io/cloud-provider-azure/cloud-controller-manager/azureprovider#;' $file
         gofmt -s $file > bak
         mv bak $file
     done
