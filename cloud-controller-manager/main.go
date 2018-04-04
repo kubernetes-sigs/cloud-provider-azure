@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-pa2ckage main
+package main
 
 import (
 	goflag "flag"
