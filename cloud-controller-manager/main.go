@@ -23,11 +23,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/kubernetes/cloud-provider-azure/cloud-controller-manager/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	utilflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/logs"
+	"k8s.io/cloud-provider-azure/cloud-controller-manager/version"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 	azureprovider "k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 )
