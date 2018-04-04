@@ -23,5 +23,5 @@ import (
 
 func TestVersionNotEmpty(t *testing.T) {
 	info := getInfo()
-	assert.Empty(t, info.Version)
+	assert.NotEmpty(t, info.Version)
 }

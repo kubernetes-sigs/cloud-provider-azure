@@ -31,7 +31,7 @@ import (
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 	azureprovider "k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 )
-3
+
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
