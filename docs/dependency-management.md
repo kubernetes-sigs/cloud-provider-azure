@@ -4,7 +4,7 @@ We use [glide](https://github.com/Masterminds/glide) to manage package dependenc
 - [glide](https://github.com/Masterminds/glide) (tested version: 0.12.3)
 - [glide-vc](https://github.com/sgotti/glide-vc) (tested version: 0.1.0)
 
-Note that due to some limitations (see [Working with staging packages](#working-with-staging-packages)), 'glide update' && 'glide install' would fail due to unknown dependency. We've preovide a wrapper script to get this around, which could be triggered via `make update`.
+Note that due to some limitations (see [Working with staging packages](#working-with-staging-packages)), 'glide update' && 'glide install' would fail due to unknown dependency. We've preovided a wrapper script to get this around, which could be triggered via `make update`.
 
 The goal for `Dependency management` is:
 - Automatic dependency update
