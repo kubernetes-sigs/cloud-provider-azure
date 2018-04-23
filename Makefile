@@ -49,3 +49,6 @@ test-update: update-prepare update
 		echo "You have committed changes after running 'make update', please check"; \
 		exit 1; \
 	} \
+
+e2e:
+	tests/e2e.sh
