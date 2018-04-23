@@ -40,8 +40,8 @@ popd
 
 export IMAGE_TAG=$(scripts/image-tag.sh)
 [ -z "$K8S_AZURE_IMAGE_REPOSITORY" ] && { echo "K8S_AZURE_IMAGE_REPOSITORY not set"; exit 1; }
-# make clean image
-# docker push $IMAGE_TAG
+make clean image
+docker push $IMAGE_TAG
 
 
 # run
@@ -49,7 +49,7 @@ export ARTIFACTS_DIR='_artifacts.kai'
 rm -rf $ARTIFACTS_DIR *.xml
 export K8S_AZURE_workspace=$ARTIFACTS_DIR
 export K8S_AZURE_global_skip_files="$(pwd)/.jenkins/skip.txt"
-export K8S_AZURE_subject="at11"
-tests/k8s-azure/k8s-azure e2e -v -caccm_image=$IMAGE_TAG -ctype=default
+tests/k8s-azure/k8s-azure e2e -v -caccm_image=$IMAGE_TAG 
+# -ctype=default \    -cskipdeploy=1 -cbuild_e2e_test=1 -cname=kai-at11-e58e50a-default
 
 echo Done
