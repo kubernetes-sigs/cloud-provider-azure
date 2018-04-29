@@ -71,7 +71,7 @@
     ```
 
 5. Run E2E tests
-    Please first ensure the kuberentes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
+    Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
     - Run test suite: default, serial, slow, smoke (smoke suite just tests the cluster is up and do not run any case)
         ```
         tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -ctype=<SuiteName> -cskipdeploy=1 -cbuild_e2e_test=1
