@@ -95,7 +95,7 @@ sub e2e {
   my $custom_tests      = $config->{custom_tests}; # passed to --ginkoFocus parameter, valid when type='custom'.
   my $location          = $config->{location};
   my $accm_image        = $config->{accm_image} // '';
-  my $global_skip_files = $config->{global_skip_files}; # global skiped tests text file
+  my $global_skip_files = $config->{global_skip_files}; # global skipped tests text file
   my $skipdeploy        = $config->{skipdeploy};
   my $build_e2e_test    = $config->{build_e2e_test}; # build E2E tests.
   my $parallel          = $config->{parallel} // $type =~ /^(default|slow)$/;
