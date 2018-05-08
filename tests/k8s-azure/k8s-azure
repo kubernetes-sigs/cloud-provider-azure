@@ -179,6 +179,7 @@ sub e2e {
     $rgc_client = RgcClient->new($ENV{K8S_AZURE_RGCENDPOINT});
   }
 
+  my $success = 1;
   run_steps([
       step('Create test cluster', sub {
           my $deploy_location = $location;
@@ -196,7 +197,7 @@ sub e2e {
             }, sub {!$build_e2e_test}),
       step('Run E2E tests.', sub {
           &_chdir_k8s_root && run_cmd('./e2e --get=false') || croak(q{./e2e not found, have you specified '-cbuild_e2e_test=1'?});
-          $e2e_run->($test_args_map{$type}, $report_dir, $parallel);
+          $success = $e2e_run->($test_args_map{$type}, $report_dir, $parallel);
           1;    # make test run cmd always pass
             }),
       step('Rerun failed cases', sub {
@@ -224,7 +225,7 @@ sub e2e {
             return 1;
           }
 
-          $e2e_run->({ focus => join '|', @entries }, $report_rerun, 0);
+          $success = $e2e_run->({ focus => join '|', @entries }, $report_rerun, 0);
 
           my $bak = $report_dir . '.origin';
           remove_tree($bak); rename($report_dir, $bak);    # report -> report.bak
@@ -237,6 +238,8 @@ sub e2e {
           $rgc_client->delete($name);
             }, sub {!$rgc_client}),
   ]);
+
+  return $success;
 }
 
 sub junit_combine {
