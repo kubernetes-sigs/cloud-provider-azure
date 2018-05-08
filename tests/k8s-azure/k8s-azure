@@ -235,8 +235,9 @@ sub e2e {
           runFlow(\&junit_combine, { report_dirs => "$report_staging $report_rerun", result_xml => $result_xml });
             }, sub { $type eq 'custom' }),
       step('Clean up', sub {
-          $rgc_client->delete($name);
-            }, sub {!$rgc_client}),
+          if ($rgc_client){ $rgc_client->delete($name); }
+          else { run_cmd("az group delete -n $name"); }
+            }),
   ]);
 
   return $success;

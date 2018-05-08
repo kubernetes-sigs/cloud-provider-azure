@@ -63,4 +63,4 @@ test-e2e: image
 	docker build -t $(TEST_IMAGE) tests/k8s-azure
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
 		-v /workspace/kubetest:/usr/local/bin/kubetest \
-		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE)
+		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE) -csubject=$(SUBJECT)

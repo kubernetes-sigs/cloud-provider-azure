@@ -21,6 +21,13 @@ RUN git clone -b $ACSENGINE_VERSION https://github.com/Azure/acs-engine . \
 FROM buildpack-deps:stretch-scm
 # libxml-simple-perl, liblwp-useragent-determined-perl by k8s-azure
 RUN apt update && apt install -y --no-install-recommends libxml-simple-perl liblwp-useragent-determined-perl
+RUN echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ stretch main" > \
+        /etc/apt/sources.list.d/azure-cli.list \
+    && apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893 \
+    && apt-get install apt-transport-https \
+    && apt-get update \
+    && apt-get install azure-cli
+
 ENV GOPATH="/home/k8s-ci/go"
 
 COPY --from=build_kubernetes /go/bin $GOPATH/bin
@@ -32,13 +39,6 @@ RUN ["/bin/bash", "-c", "ln -s /opt/k8s-azure/k8s-azure /usr/local/bin"]
 ENV K8S_AZURE_MANIFEST_DIR='/opt/k8s-azure/manifest'
 ENV K8S_AZURE_GLOBAL_SKIP_FILES='/opt/k8s-azure/skip.txt'
 RUN useradd -m k8s-ci
-
-# RUN echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ stretch main" > \
-#         /etc/apt/sources.list.d/azure-cli.list \
-#     && apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893 \
-#     && apt-get install apt-transport-https \
-#     && apt-get update \
-#     && apt-get install azure-cli
 
 COPY init.sh /usr/local/bin
 ENTRYPOINT [ "init.sh" ] 
