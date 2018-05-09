@@ -10,7 +10,6 @@ RUN git clone -b $K8S_VERSION https://github.com/kubernetes/kubernetes . \
     && go build hack/e2e.go \
     && ./e2e
 RUN rm -rf _output/local/go
-RUN bash -c 'export GLOBIGNORE=cluster:hack:_output:e2e;rm -rf * .*'
 
 FROM golang:1.8.3-stretch AS build_acs-engine
 ARG ACSENGINE_VERSION=v0.14.0
@@ -31,7 +30,10 @@ RUN echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ stret
 ENV GOPATH="/home/k8s-ci/go"
 
 COPY --from=build_kubernetes /go/bin $GOPATH/bin
-COPY --from=build_kubernetes /go/src/k8s.io/kubernetes $GOPATH/src/k8s.io/kubernetes
+COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/cluster $GOPATH/src/k8s.io/kubernetes/cluster
+COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/hack $GOPATH/src/k8s.io/kubernetes/hack
+COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/_output $GOPATH/src/k8s.io/kubernetes/_output
+COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/e2e $GOPATH/src/k8s.io/kubernetes/e2e
 COPY --from=build_acs-engine /go/src/github.com/Azure/acs-engine/bin/acs-engine /usr/local/bin/
 COPY k8s-azure skip.txt /opt/k8s-azure/
 COPY manifest /opt/k8s-azure/manifest
