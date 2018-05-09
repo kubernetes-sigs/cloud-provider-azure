@@ -3,7 +3,8 @@ FROM golang:1.9.3-stretch AS build_kubernetes
 RUN apt update && apt install -y --no-install-recommends rsync
 ARG K8S_VERSION=v1.11.0-alpha.0
 WORKDIR /go/src/k8s.io/kubernetes
-RUN git clone -b $K8S_VERSION https://github.com/kubernetes/kubernetes . \
+RUN git clone https://github.com/kubernetes/kubernetes . \
+    && git checkout -b temp $K8S_VERSION \
     && make WHAT=cmd/kubectl \
     && make WHAT=test/e2e/e2e.test \
     && make ginkgo \
@@ -14,7 +15,8 @@ RUN rm -rf _output/local/go
 FROM golang:1.8.3-stretch AS build_acs-engine
 ARG ACSENGINE_VERSION=v0.14.0
 WORKDIR /go/src/github.com/Azure/acs-engine
-RUN git clone -b $ACSENGINE_VERSION https://github.com/Azure/acs-engine . \
+RUN git clone https://github.com/Azure/acs-engine . \
+    && git checkout -b temp $ACSENGINE_VERSION \
     && make
 
 FROM buildpack-deps:stretch-scm

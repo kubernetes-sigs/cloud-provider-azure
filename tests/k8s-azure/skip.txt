@@ -1,7 +1,7 @@
 # cases having special requirements
 ## does not support GetSigner, for ssh
 [sig-node] Mount propagation
-#[sig-network] Network should set TCP CLOSE_WAIT timeout
+[sig-network] Network should set TCP CLOSE_WAIT timeout
 [sig-storage] PersistentVolumes-local
 
 ## Others
