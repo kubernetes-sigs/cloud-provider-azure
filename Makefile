@@ -64,5 +64,6 @@ test-e2e: image
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
 		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(WORKSPACE)/_artifacts
 		-v $(WORKSPACE):$(WORKSPACE) \
-		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE) -csubject=$(SUBJECT)
+		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE) -csubject=smoke
+		#$(SUBJECT)
 	ls /workspace/_artifacts
