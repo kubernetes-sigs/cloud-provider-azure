@@ -236,7 +236,7 @@ sub e2e {
             }, sub { $type eq 'custom' }),
       step('Clean up', sub {
           if ($rgc_client){ $rgc_client->delete($name); }
-          else { run_cmd("az group delete -n $name"); }
+          else { run_cmd("az group delete -y -n $name"); }
             }),
   ]);
 
