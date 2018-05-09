@@ -10,6 +10,14 @@ TEST_RESULTS_DIR=testResults
 # -E deadcode -E gocyclo -E vetshadow -E gas -E ineffassign
 GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 
+IMAGE_REGISTRY ?= local
+IMAGE_NAME=azure-cloud-controller-manager
+IMAGE_TAG=$(shell git rev-parse --short=7 HEAD)
+IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+TEST_IMAGE_NAME=azure-cloud-controller-manager-test
+TEST_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)
+
 all: $(BIN_DIR)/azure-cloud-controller-manager
 
 clean:
@@ -19,7 +27,7 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cloud-contro
 	 go build -o $@ $(PKG_CONFIG_CONTENT) ./cloud-controller-manager
 
 image:
-	docker build -t $(shell scripts/image-tag.sh) .
+	docker build -t $(IMAGE) .
 
 $(PKG_CONFIG):
 	scripts/pkg-config.sh > $@
@@ -49,3 +57,13 @@ test-update: update-prepare update
 		echo "You have committed changes after running 'make update', please check"; \
 		exit 1; \
 	} \
+
+test-e2e: image
+	docker push $(IMAGE)
+	docker build -t $(TEST_IMAGE) tests/k8s-azure
+	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
+		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(WORKSPACE)/_artifacts
+		-v $(WORKSPACE):$(WORKSPACE) \
+		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE) -csubject=smoke
+		#$(SUBJECT)
+	ls /workspace/_artifacts
