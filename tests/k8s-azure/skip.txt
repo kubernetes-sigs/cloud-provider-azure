@@ -1,0 +1,54 @@
+# cases having special requirements
+## does not support GetSigner, for ssh
+[sig-node] Mount propagation
+[sig-network] Network should set TCP CLOSE_WAIT timeout
+[sig-storage] PersistentVolumes-local
+
+## Others
+[sig-network] Services should be able to create a functioning NodePort service # could not connect locally
+[sig-scheduling] SchedulerPredicates [Serial] validates MaxPods limit number of pods that are allowed to run [Slow] # IsMasterNode function does not apply
+
+# cases using dynamic PVC, pending on dynamic provision support
+[sig-storage] Dynamic Provisioning DynamicProvisioner Default should create and delete default persistent volumes [Slow]
+[sig-storage] Dynamic Provisioning DynamicProvisioner should provision storage with different parameters [Slow]
+[sig-storage] Dynamic Provisioning DynamicProvisioner should test that deleting a claim before the volume is provisioned deletes the volume.
+[sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should adopt matching orphans and release non-matching pods
+[sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should not deadlock when a pod's predecessor fails
+[sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should provide basic identity
+[sig-storage] PVC Protection 
+
+# cases using 'TestUnderTemporaryNetworkFailure', which is not supported for following listed, others are skipped by provider check
+#[sig-apps] Network Partition [Disruptive] [Slow] [k8s.io] [Job] should create new pods when node is partitioned
+#[sig-apps] Network Partition [Disruptive] [Slow] [k8s.io] [ReplicationController] should eagerly create replacement pod during network partition when termination grace is non-zero
+#[sig-apps] Network Partition [Disruptive] [Slow] [k8s.io] [ReplicationController] should recreate pods scheduled on the unreachable node AND allow scheduling of pods on a node after it rejoins the cluster
+[sig-apps] Network Partition [Disruptive] [Slow]
+
+# cases in a flaky manner
+# 'upstreamNameservers' config sometimes does not populate in time
+[sig-network] DNS configMap federations should be able to change federation configuration [Slow][Serial]
+[sig-network] DNS configMap nameserver should be able to change stubDomain configuration [Slow][Serial]
+
+# cases for perf, rss memory setting varies
+[k8s.io] [sig-node] Kubelet [Serial] [Slow] [k8s.io] [sig-node] regular resource usage tracking resource tracking for 0 pods per node
+[k8s.io] [sig-node] Kubelet [Serial] [Slow] [k8s.io] [sig-node] regular resource usage tracking resource tracking for 100 pods per node
+
+# cases depending on resource metrics https://github.com/Azure/acs-engine/issues/1936
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [DisabledForLargeClusters] ReplicationController light Should scale from 1 pod to 2 pods
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [DisabledForLargeClusters] ReplicationController light Should scale from 2 pods to 1 pod
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] Deployment Should scale from 1 pod to 3 pods and from 3 to 5
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] Deployment Should scale from 5 pods to 3 pods and from 3 to 1
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] ReplicaSet Should scale from 1 pod to 3 pods and from 3 to 5
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] ReplicaSet Should scale from 5 pods to 3 pods and from 3 to 1
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] ReplicationController Should scale from 1 pod to 3 pods and from 3 to 5 and verify decision stability
+#[sig-autoscaling] [HPA] Horizontal pod autoscaling (scale resource: CPU) [sig-autoscaling] [Serial] [Slow] ReplicationController Should scale from 5 pods to 3 pods and from 3 to 1 and verify decision stability
+Horizontal pod autoscaling (scale resource: CPU)
+
+# case pending on kubelet config, https://github.com/Azure/acs-engine/issues/1882
+[sig-storage] Dynamic Provisioning DynamicProvisioner External should let an external dynamic provisioner create and delete persistent volumes [Slow]
+
+# cadvisor listening disabled, https://github.com/Azure/acs-engine/pull/2098#issuecomment-367907089
+should proxy to cadvisor
+
+# does not support containized kubelet https://github.com/kubernetes/kubernetes/issues/61456
+[sig-storage] Subpath [Volume type: hostPathSymlink]
+[sig-storage] Subpath [Volume type: hostPath]
