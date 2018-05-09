@@ -135,7 +135,7 @@ sub e2e {
 
   my $subject_dir   = catfile($workspace, $name);
   my $e2e_profile   = catfile($subject_dir, CLUSTER_PROFILE);
-  my $report_dir    = catfile($subject_dir, 'report');
+  my $report_dir    = $config->{test_artifacts_dir} || catfile($subject_dir, 'report');
   ensure_path($subject_dir);
 
   my @global_skip_cases;
