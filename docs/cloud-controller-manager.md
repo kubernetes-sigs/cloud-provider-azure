@@ -7,7 +7,41 @@ Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/co
 `azure-cloud-controller-manager` is a specialization of `cloud-controller-manager`. It depends on [cloud-controller-manager app](https://github.com/kubernetes/kubernetes/tree/master/cmd/cloud-controller-manager/app) and [azure cloud provider](https://github.com/kubernetes/kubernetes/tree/master/pkg/cloudprovider/providers/azure).
 
 ## Usage
-You can use [acs-engine](https://github.com/Azure/acs-engine) to deploy a Kubernetes cluster running with cloud-controller-manager. It supports deploying `Kubernetes azure-cloud-controller-manager` for Kubernetes v1.8+.
+To use cloud controller manager, the following components need to be configured:
+
+1. kubelet
+
+    Set flag `--cloud-provider=external`
+
+1. kube-controller-manager
+    Set following flags:
+
+    |Flag|Value|Remark|
+    |---|---|---|
+    |--cloud-provider|external||
+    |--external-cloud-volume-plugin|azure|Optional*|
+
+    `*` Since cloud controller manager does not support volume controllers, it will not provide volume capabilities compared to using previous built-in cloud provider case. You can add this flag to turn on volume controller for in-tree cloud providers. This option is likely to be [removed with in-tree cloud providers](https://github.com/kubernetes/kubernetes/blob/v1.11.0-alpha.2/cmd/kube-controller-manager/app/options/options.go#L93) in future.
+
+1. kube-apiserver
+
+    Do not set flag `--cloud-provider`
+
+1. azure-cloud-controller-manager
+
+    Set following flags:
+
+    |Flag|Value|Remark|
+    |---|---|---|
+    |--cloud-provider|azure||
+    |--cloud-config||Path for [cloud provider config](cloud-provider-config.md)|
+    |--kubeconfig||Path for cluster kubeconfig|
+
+    For other flags such as `--allocate-node-cidrs`, `--configure-cloud-routes`, `--cluster-cidr`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value. 
+
+    For details of those flags, please refere to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/).
+
+Alternatively, you can use [acs-engine](https://github.com/Azure/acs-engine) to deploy a Kubernetes cluster running with cloud-controller-manager. It supports deploying `Kubernetes azure-cloud-controller-manager` for Kubernetes v1.8+.
 
 ## Development
 Build project:
