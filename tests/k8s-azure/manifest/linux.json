@@ -4,7 +4,7 @@
   "properties": {
     "orchestratorProfile": {
       "orchestratorType": "Kubernetes",
-      "orchestratorRelease": "1.9",
+      "orchestratorRelease": "1.11",
       "kubernetesConfig": {
           "useCloudControllerManager": true,
           "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.11.0-alpha.0",

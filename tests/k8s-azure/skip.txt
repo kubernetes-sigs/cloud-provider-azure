@@ -52,3 +52,8 @@ should proxy to cadvisor
 # does not support containized kubelet https://github.com/kubernetes/kubernetes/issues/61456
 [sig-storage] Subpath [Volume type: hostPathSymlink]
 [sig-storage] Subpath [Volume type: hostPath]
+
+# does not have mount.nfs https://github.com/Azure/acs-engine/issues/3022
+[sig-storage] PersistentVolumes NFS
+[sig-storage] Volumes NFS
+[sig-storage] Volume plugin streaming [Slow] NFS
