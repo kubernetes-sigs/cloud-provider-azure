@@ -13,7 +13,7 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
 RUN rm -rf _output/local/go
 
 FROM golang:1.8.3-stretch AS build_acs-engine
-ARG ACSENGINE_VERSION=v0.14.0
+ARG ACSENGINE_VERSION=v0.17.0
 WORKDIR /go/src/github.com/Azure/acs-engine
 RUN git clone https://github.com/Azure/acs-engine . \
     && git checkout -b temp $ACSENGINE_VERSION \
@@ -22,9 +22,9 @@ RUN git clone https://github.com/Azure/acs-engine . \
 FROM buildpack-deps:stretch-scm
 # libxml-simple-perl, liblwp-useragent-determined-perl by k8s-azure
 RUN apt update && apt install -y --no-install-recommends libxml-simple-perl liblwp-useragent-determined-perl
+RUN curl -L https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
 RUN echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ stretch main" > \
         /etc/apt/sources.list.d/azure-cli.list \
-    && apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893 \
     && apt-get install apt-transport-https \
     && apt-get update \
     && apt-get install azure-cli
