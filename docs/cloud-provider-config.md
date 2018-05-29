@@ -28,7 +28,7 @@ Note: All values are of string type if not explicitly called out.
 
 
 ## Auth config
-|Name|Descriiption|Remark
+|Name|Description|Remark
 |---|---|---|
 |cloud|The cloud environment identifier|Valid [values](https://github.com/Azure/go-autorest/blob/v9.9.0/autorest/azure/environments.go#L29)|
 |tenantID|The AAD Tenant ID for the Subscription that the cluster is deployed in||
