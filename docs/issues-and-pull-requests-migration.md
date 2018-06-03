@@ -22,7 +22,7 @@ In both cases, leave a link to the new created issue in the old issue.
 
 Basically we are migrating code from `k8s.io/kubernetes/pkg/cloudprovider/providers/azure/` to `github.com/kubernetes/cloud-provider-azure/cloud-controller-manager/azureprovider`.
 
-The following steps descibe how to port an existing PR from kubernetes repository to this repository.
+The following steps describe how to port an existing PR from kubernetes repository to this repository.
 
 1. Generate pull request patch
 
