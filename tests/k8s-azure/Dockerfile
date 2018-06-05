@@ -1,7 +1,7 @@
-FROM golang:1.9.3-stretch AS build_kubernetes
+FROM golang:1.10.2-stretch AS build_kubernetes
 # rsync: building k8s
 RUN apt update && apt install -y --no-install-recommends rsync
-ARG K8S_VERSION=v1.11.0-alpha.0
+ARG K8S_VERSION=v1.12.0-alpha.0
 WORKDIR /go/src/k8s.io/kubernetes
 RUN git clone https://github.com/kubernetes/kubernetes . \
     && git checkout -b temp $K8S_VERSION \
@@ -13,7 +13,7 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
 RUN rm -rf _output/local/go
 
 FROM golang:1.8.3-stretch AS build_acs-engine
-ARG ACSENGINE_VERSION=v0.17.0
+ARG ACSENGINE_VERSION=v0.18.1
 WORKDIR /go/src/github.com/Azure/acs-engine
 RUN git clone https://github.com/Azure/acs-engine . \
     && git checkout -b temp $ACSENGINE_VERSION \

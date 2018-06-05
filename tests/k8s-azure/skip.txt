@@ -3,6 +3,8 @@
 [sig-node] Mount propagation
 [sig-network] Network should set TCP CLOSE_WAIT timeout
 [sig-storage] PersistentVolumes-local
+should unmount if pod is gracefully deleted while kubelet is down [Disruptive][Slow]
+should unmount if pod is force deleted while kubelet is down [Disruptive][Slow]
 
 ## Others
 [sig-network] Services should be able to create a functioning NodePort service # could not connect locally
@@ -15,7 +17,8 @@
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should adopt matching orphans and release non-matching pods
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should not deadlock when a pod's predecessor fails
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should provide basic identity
-[sig-storage] PVC Protection 
+[sig-storage] PVC Protection
+[sig-storage] Dynamic Provisioning [k8s.io] GlusterDynamicProvisioner
 
 # cases using 'TestUnderTemporaryNetworkFailure', which is not supported for following listed, others are skipped by provider check
 #[sig-apps] Network Partition [Disruptive] [Slow] [k8s.io] [Job] should create new pods when node is partitioned
@@ -25,8 +28,11 @@
 
 # cases in a flaky manner
 # 'upstreamNameservers' config sometimes does not populate in time
-[sig-network] DNS configMap federations should be able to change federation configuration [Slow][Serial]
-[sig-network] DNS configMap nameserver should be able to change stubDomain configuration [Slow][Serial]
+#[sig-network] DNS configMap federations should be able to change federation configuration [Slow][Serial]
+#[sig-network] DNS configMap nameserver Change stubDomain should be able to change stubDomain configuration [Slow][Serial]
+#[sig-network] DNS configMap nameserver Forward external name lookup should forward externalname lookup to upstream nameserver [Slow][Serial]
+#[sig-network] DNS configMap nameserver Forward PTR lookup should forward PTR records lookup to upstream nameserver [Slow][Serial]
+[sig-network] DNS configMap
 
 # cases for perf, rss memory setting varies
 [k8s.io] [sig-node] Kubelet [Serial] [Slow] [k8s.io] [sig-node] regular resource usage tracking resource tracking for 0 pods per node
@@ -57,3 +63,10 @@ should proxy to cadvisor
 [sig-storage] PersistentVolumes NFS
 [sig-storage] Volumes NFS
 [sig-storage] Volume plugin streaming [Slow] NFS
+
+# Broken due to clean up https://github.com/kubernetes/kubernetes/pull/63489
+# [sig-network] Services should have session affinity work for LoadBalancer service with ESIPP on [Slow] [DisabledForLargeClusters]
+# [sig-network] Services should be able to switch session affinity for LoadBalancer service with ESIPP on [Slow] [DisabledForLargeClusters]
+# [sig-network] Services should have session affinity work for LoadBalancer service with ESIPP off [Slow] [DisabledForLargeClusters]
+# [sig-network] Services should be able to switch session affinity for LoadBalancer service with ESIPP off [Slow] [DisabledForLargeClusters]
+ESIPP
