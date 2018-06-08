@@ -10,9 +10,89 @@ And also, For Azure, we cannot afford to have more than 1 worker of service_cont
 
 There are two load balancers per availability set internal and external. There is a limit on number of services that can be associated with a single load balancer.
 By default primary load balancer is selected. Services can be annotated to allow auto selection of available load balancers. Service annotations can also be used to provide specific availability sets that host the load balancers. Note that in case of auto selection or specific availability set selection, when the availability set is lost in case of downtime or cluster scale down the services are currently not auto assigned to an available load balancer.
-Service Annotation for Auto and specific load balancer mode
 
-- service.beta.kubernetes.io/azure-load-balancer-mode" (__auto__|as1,as2...)
+## LoadBalancer annotations
+
+1. Internal mode
+    ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-internal: ""
+    ```
+    Value type: string
+
+    Supported values: "true", "false"
+
+    Default value: "false"
+
+    Description: Specify whether the load balancer should be internal, by default a public Internet faced load balancer will be created.
+1. Internal mode subnet
+    ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-internal-subnet: ""
+    ```
+    Value type: string
+
+    Description: Specify which subnet the internal load balancer should be bound to.
+1. Load balancer mode
+    ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-mode: ""
+    ```
+    Value type: string
+
+    Supported values: "__auto__", "{name1},{name2}"
+
+    Description: Specify the Azure load balancer selection based on availability sets. There are currently three possible load balancer selection modes :
+      1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode"). In this case the Loadbalancer of the primary Availability set is selected
+      2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any availability set is selected which has the minimum rules associated with it.
+      3. "{name1}, {name2}" mode - this is when the load balancer from the specified availability sets is selected that has the minimum rules associated with it.
+1. Dns label name
+   ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-dns-label-name: ""
+    ```
+    Value type: string
+
+    Description: Specify the DNS label name for the service.
+1. Shared security rule
+   ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-shared-securityrule: ""
+    ```
+    Value type: string
+
+    Description: Specify that the service should be exposed using an Azure security rule that may be shared with other service, trading specificity of rules for an increase in the number of services that can be exposed. This relies on the Azure "augmented security rules" feature.
+1. Load balancer resource group
+   ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-resource-group: ""
+    ```
+    Value type: string
+
+    Description: Specify the resource group of load balancer objects that are not in the same resource group as the cluster.
+
+1. Allowed service tags
+   ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-allowed-service-tags: ""
+    ```
+    Value type: string
+    
+    Description: Specify a list of allowed service tags separated by comma
 
 ## Introduce Functions
 

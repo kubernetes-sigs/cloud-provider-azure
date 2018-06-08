@@ -15,6 +15,7 @@ Please also check following docs:
 - [Dependency management](docs/dependency-management.md)
 - [E2E Tests](docs/e2e-tests.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
+- [Load balancer](docs/development-loadbalancer.md)
 
 ### NOTE
 Currently this repository is used for building and testing cloud-controller-manager for Azure, it references Azure cloud provider implementation code as [vendor dir](vendor/k8s.io/kubernetes/pkg/cloudprovider/providers/azure). After handoff, the Azure cloud provider implementation will be moved here.
