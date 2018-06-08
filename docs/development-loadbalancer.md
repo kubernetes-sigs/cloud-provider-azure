@@ -71,7 +71,10 @@ By default primary load balancer is selected. Services can be annotated to allow
     ```
     Value type: string
 
+    Supported values: "true", "false"
+
     Description: Specify that the service should be exposed using an Azure security rule that may be shared with other service, trading specificity of rules for an increase in the number of services that can be exposed. This relies on the Azure "augmented security rules" feature.
+
 1. Load balancer resource group
    ```
     metadata:
@@ -93,6 +96,8 @@ By default primary load balancer is selected. Services can be annotated to allow
     Value type: string
     
     Description: Specify a list of allowed service tags separated by comma
+
+    Reference: https://docs.microsoft.com/en-us/azure/virtual-network/security-overview#service-tags
 
 ## Introduce Functions
 
