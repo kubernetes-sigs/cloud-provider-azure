@@ -33,7 +33,7 @@
     go get -d k8s.io/kubernetes
     ```
 
-2. Fill in following profile file and save it somewhere. This file will be refered as `<TestProfile>` in following steps.
+2. Fill in following profile file and save it somewhere. This file will be referred as `<TestProfile>` in following steps.
 
     ```
     # Azure tenant id
