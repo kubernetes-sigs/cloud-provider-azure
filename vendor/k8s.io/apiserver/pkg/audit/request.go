@@ -127,7 +127,6 @@ func LogRequestObject(ae *auditinternal.Event, obj runtime.Object, gvr schema.Gr
 			ae.ObjectRef.ResourceVersion = meta.GetResourceVersion()
 		}
 	}
-	// TODO: ObjectRef should include the API group.
 	if len(ae.ObjectRef.APIVersion) == 0 {
 		ae.ObjectRef.APIGroup = gvr.Group
 		ae.ObjectRef.APIVersion = gvr.Version
@@ -153,7 +152,7 @@ func LogRequestObject(ae *auditinternal.Event, obj runtime.Object, gvr schema.Gr
 	}
 }
 
-// LogRquestPatch fills in the given patch as the request object into an audit event.
+// LogRequestPatch fills in the given patch as the request object into an audit event.
 func LogRequestPatch(ae *auditinternal.Event, patch []byte) {
 	if ae == nil || ae.Level.Less(auditinternal.LevelRequest) {
 		return
@@ -172,7 +171,12 @@ func LogResponseObject(ae *auditinternal.Event, obj runtime.Object, gv schema.Gr
 		return
 	}
 	if status, ok := obj.(*metav1.Status); ok {
-		ae.ResponseStatus = status
+		// selectively copy the bounded fields.
+		ae.ResponseStatus = &metav1.Status{
+			Status: status.Status,
+			Reason: status.Reason,
+			Code:   status.Code,
+		}
 	}
 
 	if ae.Level.Less(auditinternal.LevelRequestResponse) {

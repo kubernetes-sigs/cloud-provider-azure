@@ -7,11 +7,11 @@
       "orchestratorRelease": "1.11",
       "kubernetesConfig": {
           "useCloudControllerManager": true,
-          "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.11.0-alpha.0",
-          "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.11.0-alpha.0",
+          "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.12.0-alpha.0",
+          "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.12.0-alpha.0",
           "networkPolicy": "none",
           "apiServerConfig": {
-            "--admission-control":  "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
+            "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
           }
       }
     },

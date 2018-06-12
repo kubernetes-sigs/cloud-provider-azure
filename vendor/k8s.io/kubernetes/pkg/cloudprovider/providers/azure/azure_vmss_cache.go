@@ -46,14 +46,20 @@ func (ss *scaleSet) makeVmssVMName(scaleSetName, instanceID string) string {
 	return fmt.Sprintf("%s%s%s", scaleSetName, vmssNameSeparator, instanceID)
 }
 
-func (ss *scaleSet) extractVmssVMName(name string) (string, string, error) {
-	ret := strings.Split(name, vmssNameSeparator)
-	if len(ret) != 2 {
+func extractVmssVMName(name string) (string, string, error) {
+	split := strings.SplitAfter(name, vmssNameSeparator)
+	if len(split) < 2 {
 		glog.Errorf("Failed to extract vmssVMName %q", name)
 		return "", "", ErrorNotVmssInstance
 	}
 
-	return ret[0], ret[1], nil
+	ssName := strings.Join(split[0:len(split)-1], "")
+	// removing the trailing `vmssNameSeparator` since we used SplitAfter
+	ssName = ssName[:len(ssName)-1]
+
+	instanceID := split[len(split)-1]
+
+	return ssName, instanceID, nil
 }
 
 func (ss *scaleSet) newVmssCache() (*timedCache, error) {
@@ -128,7 +134,7 @@ func (ss *scaleSet) newAvailabilitySetNodesCache() (*timedCache, error) {
 func (ss *scaleSet) newVmssVMCache() (*timedCache, error) {
 	getter := func(key string) (interface{}, error) {
 		// vmssVM name's format is 'scaleSetName_instanceID'
-		ssName, instanceID, err := ss.extractVmssVMName(key)
+		ssName, instanceID, err := extractVmssVMName(key)
 		if err != nil {
 			return nil, err
 		}
