@@ -91,14 +91,14 @@ sub e2e {
   my $workspace         = rel2abs($config->{workspace}); # if workspace empty, will set to current dir
   my $name              = $config->{name}; # Cluster name, will auto-generate based on subject if not set
   my $subject           = $config->{subject} || _getTime();
-  my $type              = $config->{type} || 'smoke'; # default/serial/slow/smoke/custom
+  my $type              = $config->{type} || 'smoke'; # default/serial/slow/smoke/custom/conformance
   my $custom_tests      = $config->{custom_tests}; # passed to --ginkoFocus parameter, valid when type='custom'.
   my $location          = $config->{location} || 'westus2';
   my $accm_image        = $config->{accm_image} // '';
   my $global_skip_files = $config->{global_skip_files}; # global skipped tests text file
   my $skipdeploy        = $config->{skipdeploy};
   my $build_e2e_test    = $config->{build_e2e_test}; # build E2E tests.
-  my $parallel          = $config->{parallel} // $type =~ /^(default|slow)$/;
+  my $parallel          = $config->{parallel} // $type =~ /^(default|slow|conformance)$/;
   my $rerun             = $config->{rerun};
 
   # https://github.com/kubernetes/community/blob/master/contributors/devel/e2e-tests.md#what-runs-in-ci
@@ -117,6 +117,10 @@ sub e2e {
     slow => {
       focus => '[Slow]',
       skip  => '[Serial]|[Disruptive]|[Flaky]|[Feature:.+]',
+    },
+    conformance => {
+      focus => '[Conformance]',
+      skip  => 'Alpha|[Disruptive]|[Feature:.+]|[Flaky]|Kubectl',
     },
     smoke  => { focus => '^$' },
     custom => { focus => $custom_tests },
