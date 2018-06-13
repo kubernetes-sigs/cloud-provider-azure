@@ -3,7 +3,7 @@
 ## Release source
 There're two major code change sources for this project, either may push forward a new release for `Kubernetes azure-cloud-controller-manager`:
 1. Changes in [Kubernetes cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/components/#cloud-controller-manager), which happens in [Kubernetes repository](https://github.com/kubernetes/kubernetes)
-   Since this project dependes on `Kubernetes cloud-controller-manager`, we'll periodly sync changes from Kubernetes upstream repository. When upstream shipped a new release tag, we may consider publishing a new release
+   Since this project dependes on `Kubernetes cloud-controller-manager`, we'll periodically sync changes from Kubernetes upstream repository. When upstream shipped a new release tag, we may consider publishing a new release
 
 2. Changes in [Azure cloud provider](../cloud-controller-manager/azureprovider), which happens directly in this repository
    Azure cloud provider also accepts new features and bug changes. In cases when a security fix is required or when the changes accumulated to certain amount, we may also consider publishing a new release, even if there is no change from Kubernetes upstream.
@@ -40,7 +40,7 @@ Version tags:
 - X.Y.0-alpha.0
   - This is initial tag for a new release, it will be applied when a release branch is created. See below for detail 
 - X.Y.0-alpha.W, W > 0 
-  - Those version tags are periodly created if enough change accumlated. It does not have direct mapping with `X.Y.0-alpha.W` in Kubernetes upstream
+  - Those version tags are periodically created if enough change accumulated. It does not have direct mapping with `X.Y.0-alpha.W` in Kubernetes upstream
 
 #### releasing branch
 For release `X.Y`, the branch will have name `release-X.Y`. When upgrading dependencies, it will sync with Kubernetes upstream's `release-X.Y` branch.
@@ -51,7 +51,7 @@ Version tags:
   - `X.Y.0-beta.0` would be tagged at first independent commit on release branch, the corresponding seperation point commit on master would be tagged `X.Y+1.0-alpha.0`
   - No new feature changes are allowed from this time on
 - X.Y.0-beta.W, W > 0 
-  - Those version tags are periodly created if enough change accumlated. It does not have direct mapping with `X.Y.0-beta.W` in Kubernetes upstream
+  - Those version tags are periodically created if enough change accumulated. It does not have direct mapping with `X.Y.0-beta.W` in Kubernetes upstream
 - X.Y.0
   - This is the final release version. When upstream `X.Y.0` tag rolls out, we will begin prepare `X.Y.0` release
   - After merging upstream `X.Y.0` tag commit, we will run full test cycle to ensure the `Azure cloud provider` works well before release:
@@ -60,7 +60,7 @@ Version tags:
     - Finally, apply `X.Y.0` to latest commit of releasing branch
   - X.Y.1-beta.0 will be tagged at the same commit
 - X.Y.Z, Z > 0
-  - Those version tags are periodly created if enough change accumlated. It does not have direct mapping with `X.Y.Z` in Kubernetes upstream
+  - Those version tags are periodically created if enough change accumulated. It does not have direct mapping with `X.Y.Z` in Kubernetes upstream
   - Testing and release process follows same rule as `X.Y.0`
 
 ### CI and dev version scheme
