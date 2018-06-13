@@ -41,6 +41,9 @@ ifdef JUNIT
 	scripts/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
 endif
 
+# collection of check tests
+test-check: test-lint
+
 test-lint-prepare:
 	go get -u gopkg.in/alecthomas/gometalinter.v1
 	gometalinter.v1 -i

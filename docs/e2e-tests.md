@@ -15,11 +15,17 @@
 1. Prepare dependency project
 - [acs-engine](https://github.com/Azure/acs-engine)
 
+    It is recommended to use the same version as defined in test [Dockerfile](/tests/k8s-azure/Dockerfile). For example:
+    ```
+    ARG ACSENGINE_VERSION=v0.18.1
+    ```
+
     Build acs-engine, and make acs-engine binary in PATH environment variable.
 
     ```
     go get -d github.com/Azure/acs-engine
     pushd $GOPATH/src/github.com/Azure/acs-engine
+    # git checkout <version>
     make
     popd
     export PATH=$PATH:$GOPATH/src/github.com/Azure/acs-engine/bin
@@ -50,14 +56,16 @@
     export K8S_AZURE_LOCATION=
     ```
 
-3. Build custom image
-    Build a custom image and push it to a testing repository.
+3. Build a custom image and push it to a testing repository.
     ```
-    K8S_AZURE_IMAGE_REPOSITORY=<username> make image
+    IMAGE_REGISTRY=<username> make image
     docker push <username>/azure-cloud-controller-manager:<image_version>
     ```
 
 4. Deploy a cluster and run smoke test
+
+    Note that 'k8s-azure e2e' command will delete the cluster as last running step. To skip that, add parameter '-cskipcleanup=1' or set environment variable 'K8S_AZURE_SKIPCLEANUP=1'.
+
     ```
     source <TestProfile>
     CLUSTER_NAME=<ClusterName>
