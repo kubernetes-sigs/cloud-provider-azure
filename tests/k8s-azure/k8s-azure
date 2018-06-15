@@ -98,6 +98,7 @@ sub e2e {
   my $global_skip_files = $config->{global_skip_files}; # global skipped tests text file
   my $skipdeploy        = $config->{skipdeploy};
   my $build_e2e_test    = $config->{build_e2e_test}; # build E2E tests.
+  my $skipcleanup       = $config->{skipcleanup};
   my $parallel          = $config->{parallel} // $type =~ /^(default|slow|conformance)$/;
   my $rerun             = $config->{rerun};
 
@@ -242,7 +243,7 @@ sub e2e {
       step('Clean up', sub {
           if ($rgc_client){ $rgc_client->delete($name); }
           else { run_cmd("az group delete --no-wait -y -n $name"); }
-            }),
+            }, sub { $skipcleanup }),
   ]);
 
   return $success;
