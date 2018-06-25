@@ -39,7 +39,7 @@ To use cloud controller manager, the following components need to be configured:
 
     For other flags such as `--allocate-node-cidrs`, `--configure-cloud-routes`, `--cluster-cidr`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value. 
 
-    For details of those flags, please refere to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/).
+    For details of those flags, please refer to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/).
 
 Alternatively, you can use [acs-engine](https://github.com/Azure/acs-engine) to deploy a Kubernetes cluster running with cloud-controller-manager. It supports deploying `Kubernetes azure-cloud-controller-manager` for Kubernetes v1.8+.
 
