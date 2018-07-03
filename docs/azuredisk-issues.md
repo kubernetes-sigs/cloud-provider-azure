@@ -304,3 +304,18 @@ total 0
 lrwxrwxrwx 1 root root 12 Apr 27 08:04 lun0 -> ../../../sdc
 lrwxrwxrwx 1 root root 13 Apr 27 08:04 lun0-part1 -> ../../../sdc1
 ```
+
+### 11. Delete azure disk PVC which is already in use by a pod
+**Issue details**:
+Following error may occur if delete azure disk PVC which is already in use by a pod:
+```
+kubectl describe pv pvc-d8eebc1d-74d3-11e8-902b-e22b71bb1c06
+...
+Message:         disk.DisksClient#Delete: Failure responding to request: StatusCode=409 -- Original Error: autorest/azure: Service returned an error. Status=409 Code="OperationNotAllowed" Message="Disk kubernetes-dynamic-pvc-d8eebc1d-74d3-11e8-902b-e22b71bb1c06 is attached to VM /subscriptions/{subs-id}/resourceGroups/MC_markito-aks-pvc_markito-aks-pvc_westus/providers/Microsoft.Compute/virtualMachines/aks-agentpool-25259074-0."
+```
+
+**Fix**:
+This is a common k8s issue, other cloud provider would also has this issue. There is a [PVC protection](https://kubernetes.io/docs/tasks/administer-cluster/pvc-protection/) feature to prevent this, it's alpha in v1.9, and beta(enabled by default) in v1.10
+
+**Work around**:
+delete pod first and then delete azure disk pvc after a few minutes
