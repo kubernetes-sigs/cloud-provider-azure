@@ -7,3 +7,7 @@ import:
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.4
+- package: github.com/onsi/ginkgo
+  version: 67b9df7f55fe1165fd9ad49aca7754cce01a42b8
+- package: github.com/onsi/gomega
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
