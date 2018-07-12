@@ -1,4 +1,4 @@
-.PHONY: all clean update-prepare update test-update test-unit test-lint test-lint-prepare image
+.PHONY: all clean update-prepare update test-check test-update test-unit test-lint test-lint-prepare image
 .DELETE_ON_ERROR:
 
 SHELL=/bin/bash -o pipefail
@@ -42,7 +42,7 @@ ifdef JUNIT
 endif
 
 # collection of check tests
-test-check: test-lint
+test-check: test-lint-prepare test-lint 
 
 test-lint-prepare:
 	go get -u gopkg.in/alecthomas/gometalinter.v1
