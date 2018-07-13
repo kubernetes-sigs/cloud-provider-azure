@@ -99,6 +99,18 @@ By default primary load balancer is selected. Services can be annotated to allow
 
     Reference: https://docs.microsoft.com/en-us/azure/virtual-network/security-overview#service-tags
 
+1. Load balancer TCP idle timeout
+   ```
+    metadata:
+      name: my-service
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: ""
+   ```
+
+    Value type: string
+
+    Description: Specify the time, in minutes, for TCP connection idle timeouts to occur on the load balancer. Default and minimum value is 4. Maximum value is 30. Must be a whole number.
+
 ## Introduce Functions
 
 - reconcileLoadBalancer(clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*network.LoadBalancer, error)
