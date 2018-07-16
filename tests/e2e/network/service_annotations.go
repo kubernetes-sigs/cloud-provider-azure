@@ -75,7 +75,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Create service")
 		serviceDomainNamePrefix := serviceName + string(uuid.NewUUID())
 		testutils.Logf("Creating deployment " + serviceName)
-		deployment := portDeployment(serviceName, labels)
+		deployment := defaultDeployment(serviceName, labels)
 		_, err := cs.Extensions().Deployments(ns.Name).Create(deployment)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -138,8 +138,9 @@ func createLoadBalancerService(c clientset.Interface, name string, annotation ma
 	return c.CoreV1().Services(namespace).Create(&service)
 }
 
-// DefaultDeployment returns a defualt deplotment
-func portDeployment(name string, labels map[string]string) (result *v1beta1.Deployment) {
+// defaultDeployment returns a default deployment
+// running nginx image which exposes port 80
+func defaultDeployment(name string, labels map[string]string) (result *v1beta1.Deployment) {
 	var replicas int32
 	replicas = 5
 	result = &v1beta1.Deployment{

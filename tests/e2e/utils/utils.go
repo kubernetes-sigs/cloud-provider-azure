@@ -34,8 +34,6 @@ const (
 	deletionTimeout   = 10 * time.Minute
 	poll              = 2 * time.Second
 	singleCallTimeout = 5 * time.Minute
-
-	PodImage = "k8s.gcr.io/pause:3.1"
 )
 
 func findExistingKubeConfig() string {
@@ -73,7 +71,7 @@ func extractSuffix() string {
 	c := obtainConfig()
 	prefix := ExtractDNSPrefix()
 	url := c.Clusters[prefix].Server
-	suffix := url[strings.Index(url, "."):len(url)]
+	suffix := url[strings.Index(url, "."):]
 	return suffix
 }
 
