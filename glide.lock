@@ -1,5 +1,5 @@
-hash: 94c34706c54309813f1552d1977f432db42172f974fbeadb269e378c5d1d9c9e
-updated: 2018-06-05T14:47:51.914081842+08:00
+hash: b8371ccd3fdacb75f39f845948278673db65ed4771cb510b49df4cd54c28eb49
+updated: 2018-07-03T06:24:04.512930342Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -204,6 +204,49 @@ imports:
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/NYTimes/gziphandler
   version: 56545f4a5d46df9a6648819d1664c3a03a13ffdb
+- name: github.com/onsi/ginkgo
+  version: 67b9df7f55fe1165fd9ad49aca7754cce01a42b8
+  subpackages:
+  - config
+  - ginkgo
+  - ginkgo/convert
+  - ginkgo/interrupthandler
+  - ginkgo/nodot
+  - ginkgo/testrunner
+  - ginkgo/testsuite
+  - ginkgo/watch
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/spec_iterator
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - reporters/stenographer/support/go-colorable
+  - reporters/stenographer/support/go-isatty
+  - types
+- name: github.com/onsi/gomega
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  subpackages:
+  - format
+  - gstruct
+  - gstruct/errors
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
 - name: github.com/opencontainers/go-digest
   version: a6d0ee40d4207ea02364bd3b9e8e77b9159ba1eb
 - name: github.com/pborman/uuid
@@ -331,7 +374,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 670d4cfef0544295bc27a114dbac37980d83185a
 - name: k8s.io/api
-  version: 9da066d5ad2dd017226f6b86d1584d96117409b0
+  version: 5b126158895a7d80961807e85f369cbd116c1112
   subpackages:
   - admission/v1beta1
   - admissionregistration/v1alpha1
@@ -364,11 +407,11 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: df852a10b49aeb1a8e0e1da0ab00e102fa7fc02b
+  version: d8e280e715d6e92c6a997589bb33aa3492396906
   subpackages:
   - pkg/features
 - name: k8s.io/apimachinery
-  version: 5703be81932445834f1720f2a22e5eeea1165149
+  version: 116dea69a7092b6b938e4a4a6b08ac999600e16c
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -419,7 +462,7 @@ imports:
   - third_party/forked/golang/json
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 7d00291573156c8f4bfca207d1223de59dde2990
+  version: 43325c4f734157aad6a21af991100d1058414a84
   subpackages:
   - pkg/admission
   - pkg/admission/configuration
@@ -510,7 +553,7 @@ imports:
   - plugin/pkg/authenticator/token/webhook
   - plugin/pkg/authorizer/webhook
 - name: k8s.io/client-go
-  version: be9a101c9af1edd382fda69081516aeef299bab0
+  version: 99f3f2d155d9a460d3862b45de1481196da921fb
   subpackages:
   - discovery
   - informers
