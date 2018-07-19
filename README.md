@@ -17,5 +17,9 @@ Please also check following docs:
 - [Cloud provider config](docs/cloud-provider-config.md)
 - [Load balancer](docs/development-loadbalancer.md)
 
+## Contributing
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on how to contribute.
+
 ### NOTE
 Currently this repository is used for building and testing cloud-controller-manager for Azure, it references Azure cloud provider implementation code as [vendor dir](vendor/k8s.io/kubernetes/pkg/cloudprovider/providers/azure). After handoff, the Azure cloud provider implementation will be moved here.
