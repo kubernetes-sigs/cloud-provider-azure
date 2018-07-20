@@ -49,7 +49,7 @@ test-lint-prepare:
 	gometalinter.v1 -i
 test-lint:
 	gometalinter.v1 $(GOMETALINTER_OPTION) ./ cloud-controller-manager/...
-
+	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
 update-prepare:
 	go get -u github.com/sgotti/glide-vc
 	go get -u github.com/Masterminds/glide

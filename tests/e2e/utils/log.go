@@ -31,6 +31,7 @@ func log(level string, format string, args ...interface{}) {
 	fmt.Fprintf(ginkgo.GinkgoWriter, nowStamp()+": "+level+": "+format+"\n", args...)
 }
 
+// Logf prints info logs
 func Logf(format string, args ...interface{}) {
 	log("INFO", format, args...)
 }

@@ -103,9 +103,8 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
 		return targetNodeCount == len(nodes), nil
 	}) == wait.ErrWaitTimeout {
 		return fmt.Errorf("Fail to get target node count in limited time")
-	} else {
-		return err
 	}
+	return err
 }
 
 // WaitNodeDeletion ensures a list of nodes to be deleted
