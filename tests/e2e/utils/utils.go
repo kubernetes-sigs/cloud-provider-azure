@@ -18,12 +18,12 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -42,8 +42,8 @@ func findExistingKubeConfig() string {
 	return rules.GetDefaultFilename()
 }
 
-// GetClientSet obtains the client set interface from Kubeconfig
-func GetClientSet() (clientset.Interface, error) {
+// CreateKubeClientSet obtains the client set interface from Kubeconfig
+func CreateKubeClientSet() (clientset.Interface, error) {
 	//TODO: It should implement only once
 	//rather than once per test
 	Logf("Creating a kubernetes client")
@@ -60,31 +60,8 @@ func GetClientSet() (clientset.Interface, error) {
 	return clientSet, nil
 }
 
-// ExtractDNSPrefix obtains the cluster DNS prefix
-func ExtractDNSPrefix() string {
-	c := obtainConfig()
-	return c.CurrentContext
-}
-
-// extractSuffix obtains the server domain name suffix
-func extractSuffix() string {
-	c := obtainConfig()
-	prefix := ExtractDNSPrefix()
-	url := c.Clusters[prefix].Server
-	suffix := url[strings.Index(url, "."):]
-	return suffix
-}
-
-// Load config from file
-func obtainConfig() *clientcmdapi.Config {
-	filename := findExistingKubeConfig()
-	c := clientcmd.GetConfigFromFileOrDie(filename)
-	return c
-}
-
-//CreateTestingNameSpace builds namespace for each test
-//baseName and labels determine name of the space
-func CreateTestingNameSpace(baseName string, cs clientset.Interface) (*v1.Namespace, error) {
+// CreateTestingNamespace builds namespace for each test baseName and labels determine name of the space
+func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namespace, error) {
 	Logf("Creating a test namespace")
 
 	namespaceObj := &v1.Namespace{
@@ -100,7 +77,7 @@ func CreateTestingNameSpace(baseName string, cs clientset.Interface) (*v1.Namesp
 		var err error
 		got, err = cs.CoreV1().Namespaces().Create(namespaceObj)
 		if err != nil {
-			if isRetryableAPIError(err) {
+			if IsRetryableAPIError(err) {
 				return false, nil
 			}
 			return false, err
@@ -112,9 +89,27 @@ func CreateTestingNameSpace(baseName string, cs clientset.Interface) (*v1.Namesp
 	return got, nil
 }
 
-// DeleteNameSpace deletes the provided namespace, waits for it to be completely deleted, and then checks
+func getNamespaceList(cs clientset.Interface) (*v1.NamespaceList, error) {
+	var list *v1.NamespaceList
+	if err := wait.PollImmediate(poll, 30*time.Second, func() (bool, error) {
+		var err error
+		list, err = cs.CoreV1().Namespaces().List(metav1.ListOptions{})
+		if err != nil {
+			if IsRetryableAPIError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// DeleteNamespace deletes the provided namespace, waits for it to be completely deleted, and then checks
 // whether there are any pods remaining in a non-terminating state.
-func DeleteNameSpace(cs clientset.Interface, namespace string) error {
+func DeleteNamespace(cs clientset.Interface, namespace string) error {
 	Logf("Deleting namespace %s", namespace)
 	if err := cs.CoreV1().Namespaces().Delete(namespace, nil); err != nil {
 		return err
@@ -126,30 +121,40 @@ func DeleteNameSpace(cs clientset.Interface, namespace string) error {
 				return true, nil
 			}
 			Logf("Error while waiting for namespace to be terminated: %v", err)
-			return false, nil
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
 		}
 		return false, nil
 	})
-
 	return err
 }
 
-func waitListNamespace(cs clientset.Interface) (*v1.NamespaceList, error) {
-	var list *v1.NamespaceList
-	if err := wait.PollImmediate(poll, 30*time.Second, func() (bool, error) {
-		var err error
-		list, err = cs.CoreV1().Namespaces().List(metav1.ListOptions{})
-		if err != nil {
-			if isRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
-	}); err != nil {
-		return nil, err
+// IsRetryableAPIError will judge whether an error retrable or not
+func IsRetryableAPIError(err error) bool {
+	// These errors may indicate a transient error that we can retry in tests.
+	if apierrs.IsInternalError(err) || apierrs.IsTimeout(err) || apierrs.IsServerTimeout(err) ||
+		apierrs.IsTooManyRequests(err) || utilnet.IsProbableEOF(err) || utilnet.IsConnectionReset(err) {
+		return true
 	}
-	return list, nil
+	// If the error sends the Retry-After header, we respect it as an explicit confirmation we should retry.
+	if _, shouldRetry := apierrs.SuggestsClientDelay(err); shouldRetry {
+		return true
+	}
+	return false
+}
+
+// ExtractDNSPrefix obtains the cluster DNS prefix
+func ExtractDNSPrefix() string {
+	c := obtainConfig()
+	return c.CurrentContext
+}
+
+// Load config from file
+func obtainConfig() *clientcmdapi.Config {
+	filename := findExistingKubeConfig()
+	c := clientcmd.GetConfigFromFileOrDie(filename)
+	return c
 }
 
 // stringInSlice check if string in a list
