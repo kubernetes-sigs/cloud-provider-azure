@@ -28,36 +28,14 @@ const (
 	pauseImage = "k8s.gcr.io/pause:3.1"
 )
 
-// WaitDeletePods deletes the pods
-func WaitDeletePods(cs clientset.Interface, ns string) error {
-	pods, err := waitListPods(cs, ns)
-	if err != nil {
-		return err
-	}
-	for _, p := range pods.Items {
-		cs.CoreV1().Pods(ns).Delete(p.Name, nil)
-	}
-	for _, p := range pods.Items {
-		if err := wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-			if _, err := cs.CoreV1().Pods(ns).Get(p.Name, metav1.GetOptions{}); err != nil {
-				return apierrs.IsNotFound(err), nil
-			}
-			return false, nil
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// waitListPods is a wapper around listing pods
-func waitListPods(cs clientset.Interface, ns string) (*v1.PodList, error) {
+// getPodList is a wapper around listing pods
+func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	var pods *v1.PodList
 	var err error
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		pods, err = cs.CoreV1().Pods(ns).List(metav1.ListOptions{})
 		if err != nil {
-			if isRetryableAPIError(err) {
+			if IsRetryableAPIError(err) {
 				return false, nil
 			}
 			return false, err
@@ -67,4 +45,35 @@ func waitListPods(cs clientset.Interface, ns string) (*v1.PodList, error) {
 		return pods, err
 	}
 	return pods, nil
+}
+
+// DeletePodsInNamespace deletes all pods in the namespace
+func DeletePodsInNamespace(cs clientset.Interface, ns string) error {
+	Logf("Deleting all pods in namespace %s", ns)
+	pods, err := getPodList(cs, ns)
+	if err != nil {
+		return err
+	}
+	for _, p := range pods.Items {
+		err = DeletePod(cs, ns, p.Name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeletePod deletes a single pod
+func DeletePod(cs clientset.Interface, ns string, podName string) error {
+	err := cs.CoreV1().Pods(ns).Delete(podName, nil)
+	Logf("Deleting pod %s in namespace %s", podName, ns)
+	if err != nil {
+		return err
+	}
+	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
+		if _, err := cs.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{}); err != nil {
+			return apierrs.IsNotFound(err), nil
+		}
+		return false, nil
+	})
 }

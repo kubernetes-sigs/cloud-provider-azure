@@ -24,7 +24,6 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 )
@@ -33,22 +32,9 @@ const (
 	nodeLabelRole = "kubernetes.io/role"
 )
 
-func isRetryableAPIError(err error) bool {
-	// These errors may indicate a transient error that we can retry in tests.
-	if apierrs.IsInternalError(err) || apierrs.IsTimeout(err) || apierrs.IsServerTimeout(err) ||
-		apierrs.IsTooManyRequests(err) || utilnet.IsProbableEOF(err) || utilnet.IsConnectionReset(err) {
-		return true
-	}
-	// If the error sends the Retry-After header, we respect it as an explicit confirmation we should retry.
-	if _, shouldRetry := apierrs.SuggestsClientDelay(err); shouldRetry {
-		return true
-	}
-	return false
-}
-
 // GetAgentNodes obtians the list of agent nodes
 func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
-	nodesList, err := waitListNodes(cs)
+	nodesList, err := getNodeList(cs)
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +47,14 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	return ret, nil
 }
 
-// waitListSchedulableNodes is a wapper around listing nodes
-func waitListNodes(cs clientset.Interface) (*v1.NodeList, error) {
+// GetNodeList is a wapper around listing nodes
+func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	var nodes *v1.NodeList
 	var err error
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		nodes, err = cs.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
-			if isRetryableAPIError(err) {
+			if IsRetryableAPIError(err) {
 				return false, nil
 			}
 			return false, err
@@ -80,35 +66,42 @@ func waitListNodes(cs clientset.Interface) (*v1.NodeList, error) {
 	return nodes, nil
 }
 
-// WaitAutoScaleNodes returns nodes count after autoscaling in 30 minutes
-func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
-	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
-	var nodes []v1.Node
-	var err error
-	poll := 20 * time.Second
-	autoScaleTimeOut := 30 * time.Minute
-	if wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
-		nodes, err = GetAgentNodes(cs)
-		if err != nil {
-			if isRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		if nodes == nil {
-			err = fmt.Errorf("Unexpected nil node list")
-			return false, err
-		}
-		Logf("Detect %v nodes, target %v", len(nodes), targetNodeCount)
-		return targetNodeCount == len(nodes), nil
-	}) == wait.ErrWaitTimeout {
-		return fmt.Errorf("Fail to get target node count in limited time")
+// GetAvailableNodeCapacity will calculate the overall quantity of
+// cpu requested by all running pods in all namespaces
+func GetAvailableNodeCapacity(cs clientset.Interface) (resource.Quantity, error) {
+	var result resource.Quantity
+	namespaceList, err := getNamespaceList(cs)
+	if err != nil {
+		return result, err
 	}
-	return err
+	masterNodeNames, err := obtainMasterNodeNames(cs)
+	if err != nil {
+		return result, err
+	}
+
+	for _, namespace := range namespaceList.Items {
+		podList, err := getPodList(cs, namespace.Name)
+		if err != nil {
+			// will not abort, just ignore this namespace
+			Logf("Ignore pods resource request in namespace %s", namespace.Name)
+			continue
+		}
+		for _, pod := range podList.Items {
+			if pod.Status.Phase == v1.PodRunning {
+				if !stringInSlice(pod.Spec.NodeName, masterNodeNames) {
+					for _, container := range pod.Spec.Containers {
+						cpuRequest := container.Resources.Requests[v1.ResourceCPU]
+						result.Add(cpuRequest)
+					}
+				}
+			}
+		}
+	}
+	return result, nil
 }
 
-// WaitNodeDeletion ensures a list of nodes to be deleted
-func WaitNodeDeletion(cs clientset.Interface, names []string) error {
+// DeleteNodes ensures a list of nodes to be deleted
+func DeleteNodes(cs clientset.Interface, names []string) error {
 	for _, name := range names {
 		if err := deleteNode(cs, name); err != nil {
 			return err
@@ -134,6 +127,33 @@ func deleteNode(cs clientset.Interface, name string) error {
 	return err
 }
 
+// WaitAutoScaleNodes returns nodes count after autoscaling in 30 minutes
+func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
+	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
+	var nodes []v1.Node
+	var err error
+	poll := 20 * time.Second
+	autoScaleTimeOut := 30 * time.Minute
+	if wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
+		nodes, err = GetAgentNodes(cs)
+		if err != nil {
+			if IsRetryableAPIError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if nodes == nil {
+			err = fmt.Errorf("Unexpected nil node list")
+			return false, err
+		}
+		Logf("Detect %v nodes, target %v", len(nodes), targetNodeCount)
+		return targetNodeCount == len(nodes), nil
+	}) == wait.ErrWaitTimeout {
+		return fmt.Errorf("Fail to get target node count in limited time")
+	}
+	return err
+}
+
 // isMasterNode returns true if the node has a master role label.
 // The master role is determined by looking for:
 // * a kubernetes.io/role="master" label
@@ -146,7 +166,7 @@ func isMasterNode(node *v1.Node) bool {
 
 func obtainMasterNodeNames(cs clientset.Interface) ([]string, error) {
 	masters := make([]string, 0)
-	nodeList, err := waitListNodes(cs)
+	nodeList, err := getNodeList(cs)
 	if err != nil {
 		return masters, err
 	}
@@ -156,38 +176,4 @@ func obtainMasterNodeNames(cs clientset.Interface) ([]string, error) {
 		}
 	}
 	return masters, nil
-}
-
-// GetAvailableNodeCapacity will calculate the overall quantity of
-// cpu requested by all running pods in all namespaces
-func GetAvailableNodeCapacity(cs clientset.Interface) (resource.Quantity, error) {
-	var result resource.Quantity
-	namespaceList, err := waitListNamespace(cs)
-	if err != nil {
-		return result, err
-	}
-	masterNodeNames, err := obtainMasterNodeNames(cs)
-	if err != nil {
-		return result, err
-	}
-
-	for _, namespace := range namespaceList.Items {
-		podList, err := waitListPods(cs, namespace.Name)
-		if err != nil {
-			// will not abort, just ignore this namespace
-			Logf("Ignore pods resource request in namespace %s", namespace.Name)
-			continue
-		}
-		for _, pod := range podList.Items {
-			if pod.Status.Phase == v1.PodRunning {
-				if !stringInSlice(pod.Spec.NodeName, masterNodeNames) {
-					for _, container := range pod.Spec.Containers {
-						cpuRequest := container.Resources.Requests[v1.ResourceCPU]
-						result.Add(cpuRequest)
-					}
-				}
-			}
-		}
-	}
-	return result, nil
 }

@@ -18,13 +18,30 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 )
+
+// DeleteService deletes a service
+func DeleteService(cs clientset.Interface, ns string, serviceName string) error {
+	err := cs.CoreV1().Services(ns).Delete(serviceName, nil)
+	Logf("Deleting service %s in namespace %s", serviceName, ns)
+	if err != nil {
+		return err
+	}
+	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
+		if _, err := cs.CoreV1().Services(ns).Get(serviceName, metav1.GetOptions{}); err != nil {
+			return apierrs.IsNotFound(err), nil
+		}
+		return false, nil
+	})
+}
 
 // GetServiceDomainName cat prefix and azure suffix
 func GetServiceDomainName(prefix string) (ret string) {
@@ -35,14 +52,14 @@ func GetServiceDomainName(prefix string) (ret string) {
 }
 
 // WaitServiceExposure returns ip of ingress
-func WaitServiceExposure(cs clientset.Interface, namespace string, name string) error {
+func WaitServiceExposure(cs clientset.Interface, namespace string, name string) (string, error) {
 	var service *v1.Service
 	var err error
 
 	if wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
-			if isRetryableAPIError(err) {
+			if IsRetryableAPIError(err) {
 				return false, nil
 			}
 			return false, err
@@ -50,12 +67,23 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 
 		IngressList := service.Status.LoadBalancer.Ingress
 		if IngressList == nil || len(IngressList) == 0 {
-			err = fmt.Errorf("Cannot find Ingress")
+			err = fmt.Errorf("Cannot find Ingress in limited time")
+			Logf("Fail to find ingress, retry it in 10 seconds")
 			return false, nil
 		}
+		Logf("Exposure successfully")
 		return true, nil
 	}) != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return service.Status.LoadBalancer.Ingress[0].IP, nil
+}
+
+// extractSuffix obtains the server domain name suffix
+func extractSuffix() string {
+	c := obtainConfig()
+	prefix := ExtractDNSPrefix()
+	url := c.Clusters[prefix].Server
+	suffix := url[strings.Index(url, "."):]
+	return suffix
 }
