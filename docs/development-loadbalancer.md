@@ -1,10 +1,10 @@
 # Azure LoadBalancer
 
-The way azure define LoadBalancer is different with GCE or AWS. Azure's LB can have multiple frontend IP refs. The GCE and AWS can only allow one, if you want more, you better to have another LB. Because of the fact, Public IP is not part of the LB in Azure. NSG is not part of LB in Azure either. However, you cannot delete them in parallel, Public IP can only be delete after LB's frontend IP ref is removed. 
+The way azure define LoadBalancer is different with GCE or AWS. Azure's LB can have multiple frontend IP refs. The GCE and AWS can only allow one, if you want more, you'd better to have another LB. Because of the fact, Public IP is not part of the LB in Azure. NSG is not part of LB in Azure either. However, you cannot delete them in parallel, Public IP can only be deleted after LB's frontend IP ref is removed. 
 
-For different Azure Resources, such as LB, Public IP, NSG. They are the same tier azure resources. We need to make sure there is no connection in their own ensure loops. In another words, They would be eventually reconciled regardless of other resources' state. They should only depends on service state.
+For different Azure Resources, such as LB, Public IP, NSG. They are the same tier Azure resources. We need to make sure there is no connection in their own ensure loops. In another words, They would be eventually reconciled regardless of other resources' state. They should only depend on service state.
 
-Despite the ideal philosophy above, we have to face the reality. NSG depends on LB's frontend ip to adjust NSG rules. So when we want to reconcile NSG, the LB should contain the corresponding frontend ip config.
+Despite the ideal philosophy above, we have to face the reality. NSG depends on LB's frontend IP to adjust NSG rules. So when we want to reconcile NSG, the LB should contain the corresponding frontend IP config.
 
 And also, For Azure, we cannot afford to have more than 1 worker of service_controller. Because, different services could operate on the same LB, concurrent execution could result in conflict or unexpected result. For AWS and GCE, they apparently doesn't have the problem, they use one LB per service, no such conflict.
 
@@ -123,7 +123,7 @@ By default primary load balancer is selected. Services can be annotated to allow
   - Go though NSG' properties, update based on wantLb
     - Use destinationIPAddress as target address if possible
     - Consolidate NSG rules if possible
-  - If any change on the NSG, (the NSG should always exists)
+  - If any change on the NSG, (the NSG should always exist)
     - Call az cloud to CreateOrUpdate on this NSG
   - return sg, err
 
@@ -138,7 +138,7 @@ By default primary load balancer is selected. Services can be annotated to allow
 - getServiceLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node, wantLb bool) (lb, status, exists, error)
   - gets the loadbalancer for the service if it already exists
   - If wantLb is TRUE then -it selects a new load balancer, the selection helps distribute the services across load balancers
-  - In case the selected load balancer does not exists it returns network.LoadBalancer struct with added metadata (such as name, location) and existsLB set to FALSE 
+  - In case the selected load balancer does not exist it returns network.LoadBalancer struct with added metadata (such as name, location) and existsLB set to FALSE 
   - By default - cluster default LB is returned
 
 ## Define interface behaviors
