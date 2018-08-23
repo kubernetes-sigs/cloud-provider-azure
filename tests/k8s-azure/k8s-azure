@@ -99,7 +99,7 @@ sub e2e {
   my $skipdeploy        = $config->{skipdeploy};
   my $build_e2e_test    = $config->{build_e2e_test}; # build E2E tests.
   my $skipcleanup       = $config->{skipcleanup};
-  my $parallel          = $config->{parallel} // $type =~ /^(default|slow|conformance)$/;
+  my $parallel          = $config->{parallel} // $type =~ /^(default|slow)$/;
   my $rerun             = $config->{rerun};
 
   # https://github.com/kubernetes/community/blob/master/contributors/devel/e2e-tests.md#what-runs-in-ci
