@@ -22,15 +22,15 @@ import (
 
 // ClientConnectionConfiguration contains details for constructing a client.
 type ClientConnectionConfiguration struct {
-	// kubeConfigFile is the path to a kubeconfig file.
-	KubeConfigFile string
+	// kubeconfig is the path to a KubeConfig file.
+	Kubeconfig string
 	// acceptContentTypes defines the Accept header sent by clients when connecting to a server, overriding the
 	// default value of 'application/json'. This field will control all connections to the server used by a particular
 	// client.
 	AcceptContentTypes string
 	// contentType is the content type used when sending data to the server from this client.
 	ContentType string
-	// cps controls the number of queries per second allowed for this connection.
+	// qps controls the number of queries per second allowed for this connection.
 	QPS float32
 	// burst allows extra queries to accumulate when a client is exceeding its rate.
 	Burst int32
@@ -244,6 +244,28 @@ type KubeControllerManagerConfiguration struct {
 	ExternalCloudVolumePlugin string
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type CloudControllerManagerConfiguration struct {
+	metav1.TypeMeta
+
+	// CloudProviderConfiguration holds configuration for CloudProvider related features.
+	CloudProvider CloudProviderConfiguration
+	// DebuggingConfiguration holds configuration for Debugging related features.
+	Debugging DebuggingConfiguration
+	// GenericComponentConfiguration holds configuration for GenericComponent
+	// related features both in cloud controller manager and kube-controller manager.
+	GenericComponent GenericComponentConfiguration
+	// KubeCloudSharedConfiguration holds configuration for shared related features
+	// both in cloud controller manager and kube-controller manager.
+	KubeCloudShared KubeCloudSharedConfiguration
+	// ServiceControllerConfiguration holds configuration for ServiceController
+	// related features.
+	ServiceController ServiceControllerConfiguration
+	// NodeStatusUpdateFrequency is the frequency at which the controller updates nodes' status
+	NodeStatusUpdateFrequency metav1.Duration
+}
+
 type CloudProviderConfiguration struct {
 	// Name is the provider for cloud services.
 	Name string
@@ -301,9 +323,6 @@ type KubeCloudSharedConfiguration struct {
 	// configureCloudRoutes enables CIDRs allocated with allocateNodeCIDRs
 	// to be configured on the cloud provider.
 	ConfigureCloudRoutes bool
-	// serviceAccountKeyFile is the filename containing a PEM-encoded private RSA key
-	// used to sign service account tokens.
-	ServiceAccountKeyFile string
 	// nodeSyncPeriod is the period for syncing nodes from cloudprovider. Longer
 	// periods will result in fewer calls to cloud provider, but may delay addition
 	// of new nodes to cluster.
@@ -484,6 +503,9 @@ type ResourceQuotaControllerConfiguration struct {
 }
 
 type SAControllerConfiguration struct {
+	// serviceAccountKeyFile is the filename containing a PEM-encoded private RSA key
+	// used to sign service account tokens.
+	ServiceAccountKeyFile string
 	// concurrentSATokenSyncs is the number of service account token syncing operations
 	// that will be done concurrently.
 	ConcurrentSATokenSyncs int32

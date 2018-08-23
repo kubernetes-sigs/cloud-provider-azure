@@ -18,6 +18,7 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -168,6 +169,12 @@ func (cnc *CloudNodeController) updateNodeAddress(node *v1.Node, instances cloud
 		glog.Errorf("%v", err)
 		return
 	}
+
+	if len(nodeAddresses) == 0 {
+		glog.V(5).Infof("Skipping node address update for node %q since cloud provider did not return any", node.Name)
+		return
+	}
+
 	// Check if a hostname address exists in the cloud provided addresses
 	hostnameExists := false
 	for i := range nodeAddresses {
@@ -249,7 +256,7 @@ func (cnc *CloudNodeController) MonitorNode() {
 				// does not delete node from kubernetes cluster when instance it is shutdown see issue #46442
 				shutdown, err := nodectrlutil.ShutdownInCloudProvider(context.TODO(), cnc.cloud, node)
 				if err != nil {
-					glog.Errorf("Error getting data for node %s from cloud: %v", node.Name, err)
+					glog.Errorf("Error checking if node %s is shutdown: %v", node.Name, err)
 				}
 
 				if shutdown && err == nil {
@@ -266,7 +273,7 @@ func (cnc *CloudNodeController) MonitorNode() {
 				// doesn't, delete the node immediately.
 				exists, err := ensureNodeExistsByProviderID(instances, node)
 				if err != nil {
-					glog.Errorf("Error getting data for node %s from cloud: %v", node.Name, err)
+					glog.Errorf("Error checking if node %s exists: %v", node.Name, err)
 					continue
 				}
 
@@ -330,6 +337,21 @@ func (cnc *CloudNodeController) AddCloudNode(obj interface{}) {
 	}
 
 	err := clientretry.RetryOnConflict(UpdateNodeSpecBackoff, func() error {
+		// TODO(wlan0): Move this logic to the route controller using the node taint instead of condition
+		// Since there are node taints, do we still need this?
+		// This condition marks the node as unusable until routes are initialized in the cloud provider
+		if cnc.cloud.ProviderName() == "gce" {
+			if err := nodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+				Type:               v1.NodeNetworkUnavailable,
+				Status:             v1.ConditionTrue,
+				Reason:             "NoRouteCreated",
+				Message:            "Node created without a route",
+				LastTransitionTime: metav1.Now(),
+			}); err != nil {
+				return err
+			}
+		}
+
 		curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -349,38 +371,22 @@ func (cnc *CloudNodeController) AddCloudNode(obj interface{}) {
 
 		nodeAddresses, err := getNodeAddressesByProviderIDOrName(instances, curNode)
 		if err != nil {
-			glog.Errorf("%v", err)
-			return nil
+			return err
 		}
 
 		// If user provided an IP address, ensure that IP address is found
 		// in the cloud provider before removing the taint on the node
 		if nodeIP, ok := ensureNodeProvidedIPExists(curNode, nodeAddresses); ok {
 			if nodeIP == nil {
-				glog.Errorf("failed to get specified nodeIP in cloudprovider")
-				return nil
+				return errors.New("failed to find kubelet node IP from cloud provider")
 			}
 		}
 
 		if instanceType, err := getInstanceTypeByProviderIDOrName(instances, curNode); err != nil {
-			glog.Errorf("%v", err)
 			return err
 		} else if instanceType != "" {
 			glog.V(2).Infof("Adding node label from cloud provider: %s=%s", kubeletapis.LabelInstanceType, instanceType)
 			curNode.ObjectMeta.Labels[kubeletapis.LabelInstanceType] = instanceType
-		}
-
-		// TODO(wlan0): Move this logic to the route controller using the node taint instead of condition
-		// Since there are node taints, do we still need this?
-		// This condition marks the node as unusable until routes are initialized in the cloud provider
-		if cnc.cloud.ProviderName() == "gce" {
-			curNode.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
-				Type:               v1.NodeNetworkUnavailable,
-				Status:             v1.ConditionTrue,
-				Reason:             "NoRouteCreated",
-				Message:            "Node created without a route",
-				LastTransitionTime: metav1.Now(),
-			})
 		}
 
 		if zones, ok := cnc.cloud.Zones(); ok {
@@ -445,6 +451,9 @@ func ensureNodeExistsByProviderID(instances cloudprovider.Instances, node *v1.No
 		var err error
 		providerID, err = instances.InstanceID(context.TODO(), types.NodeName(node.Name))
 		if err != nil {
+			if err == cloudprovider.InstanceNotFound {
+				return false, nil
+			}
 			return false, err
 		}
 
