@@ -9,14 +9,14 @@ There're two major code change sources for this project, either may push forward
    Azure cloud provider also accepts new features and bug changes. In cases when a security fix is required or when the changes accumulated to certain amount, we may also consider publishing a new release, even if there is no change from Kubernetes upstream.
 
 ## Versioning
-This project is a Kubernetes component whereas the functionalities and APIs all go with Kubernetes upstream project, thus we will use same versionging mechanism of Kubernetes, with some subtle differences for `Azure cloud provider` and non-Kubernetes changes.
+This project is a Kubernetes component whereas the functionalities and APIs all go with Kubernetes upstream project, thus we will use same versioning mechanism of Kubernetes, with some subtle differences for `Azure cloud provider` and non-Kubernetes changes.
 
 The basic rule is:
 1. Every release version follows `Semantic Versioning`, in the form of `MAJOR.MINOR.PATCH`
 2. For `MAJOR.MINOR`, it keeps same value as the Kubernetes upstream
 3. For `PATCH`, it is calcuated independently:
-    - If upstream Kubernetes has a new a [patch release](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/release/versioning.md#patch-releases), which introduces change in `cloud-controller-manager` or any component we depend on, then sync the change and increse the `PATCH` number.
-    - If any code change happens in [Azure cloud provider](../cloud-controller-manager/azureprovider) or other dependency projects, which becomes eligible for a new release, then increse the `PATCH` number.
+    - If upstream Kubernetes has a new a [patch release](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/release/versioning.md#patch-releases), which introduces change in `cloud-controller-manager` or any component we depend on, then sync the change and increase the `PATCH` number.
+    - If any code change happens in [Azure cloud provider](../cloud-controller-manager/azureprovider) or other dependency projects, which becomes eligible for a new release, then increase the `PATCH` number.
 
 References:
 - [Kubernetes Release Versioning](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/release/versioning.md)
