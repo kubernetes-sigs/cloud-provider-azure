@@ -28,8 +28,10 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/discovery"
 	"k8s.io/apiserver/pkg/registry/rest"
+	openapicommon "k8s.io/kube-openapi/pkg/common"
 )
 
 // APIGroupVersion is a helper for exposing rest.Storage objects as http.Handlers via go-restful
@@ -70,6 +72,11 @@ type APIGroupVersion struct {
 	Linker          runtime.SelfLinker
 	UnsafeConvertor runtime.ObjectConvertor
 
+	// Authorizer determines whether a user is allowed to make a certain request. The Handler does a preliminary
+	// authorization check using the request URI but it may be necessary to make additional checks, such as in
+	// the create-on-update case
+	Authorizer authorizer.Authorizer
+
 	Admit admission.Interface
 
 	MinRequestTimeout time.Duration
@@ -77,6 +84,9 @@ type APIGroupVersion struct {
 	// EnableAPIResponseCompression indicates whether API Responses should support compression
 	// if the client requests it via Accept-Encoding
 	EnableAPIResponseCompression bool
+
+	// OpenAPIConfig lets the individual handlers build a subset of the OpenAPI schema before they are installed.
+	OpenAPIConfig *openapicommon.Config
 }
 
 // InstallREST registers the REST handlers (storage, watch, proxy and redirect) into a restful Container.

@@ -110,18 +110,18 @@ sub e2e {
   # kubernetes-e2e-<provider>-serial runs
   #   all [Serial] and [Disruptive], non-[Flaky], non-[Feature:.+] tests in serial.
   my %test_args_map = (
-    default => { skip => '[Slow]|[Serial]|[Disruptive]|[Flaky]|[Feature:.+]' },
+    default => { skip => '[Slow]|[Serial]|[Disruptive]|[Flaky]|[Feature:.+]|[NodeFeature:.+]' },
     serial => {
       focus => '[Serial]|[Disruptive]',
-      skip  => '[Flaky]|[Feature:.+]',
+      skip  => '[Flaky]|[Feature:.+]|[NodeFeature:.+]',
     },
     slow => {
       focus => '[Slow]',
-      skip  => '[Serial]|[Disruptive]|[Flaky]|[Feature:.+]',
+      skip  => '[Serial]|[Disruptive]|[Flaky]|[Feature:.+]|[NodeFeature:.+]',
     },
     conformance => {
       focus => '[Conformance]',
-      skip  => 'Alpha|[Disruptive]|[Feature:.+]|[Flaky]|Kubectl',
+      skip  => 'Alpha|[Disruptive]|[Feature:.+]|[NodeFeature:.+]|[Flaky]|Kubectl',
     },
     smoke  => { focus => '^$' },
     custom => { focus => $custom_tests },
