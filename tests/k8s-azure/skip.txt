@@ -12,13 +12,16 @@ should unmount if pod is force deleted while kubelet is down [Disruptive][Slow]
 
 # cases using dynamic PVC, pending on dynamic provision support
 [sig-storage] Dynamic Provisioning DynamicProvisioner Default should create and delete default persistent volumes [Slow]
-[sig-storage] Dynamic Provisioning DynamicProvisioner should provision storage with different parameters [Slow]
+[sig-storage] Dynamic Provisioning DynamicProvisioner should provision storage with different parameters
 [sig-storage] Dynamic Provisioning DynamicProvisioner should test that deleting a claim before the volume is provisioned deletes the volume.
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should adopt matching orphans and release non-matching pods
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should not deadlock when a pod's predecessor fails
+[sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should perform rolling updates and roll backs of template modifications with PVCs
 [sig-apps] StatefulSet [k8s.io] Basic StatefulSet functionality [StatefulSetBasic] should provide basic identity
+[sig-storage] PersistentVolumes Default StorageClass pods that use multiple volumes should be reschedulable
 [sig-storage] PVC Protection
 [sig-storage] Dynamic Provisioning [k8s.io] GlusterDynamicProvisioner
+[sig-storage] Volumes Azure Disk should be mountable [Slow]
 
 # cases using 'TestUnderTemporaryNetworkFailure', which is not supported for following listed, others are skipped by provider check
 #[sig-apps] Network Partition [Disruptive] [Slow] [k8s.io] [Job] should create new pods when node is partitioned
