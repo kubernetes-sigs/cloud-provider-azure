@@ -17,6 +17,7 @@ limitations under the License.
 package rest
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -110,7 +111,7 @@ type Config struct {
 	Timeout time.Duration
 
 	// Dial specifies the dial function for creating unencrypted TCP connections.
-	Dial func(network, addr string) (net.Conn, error)
+	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 
 	// Version forces a specific version to be used (if registered)
 	// Do we need this?
@@ -219,7 +220,7 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 // the config.Version to be empty.
 func UnversionedRESTClientFor(config *Config) (*RESTClient, error) {
 	if config.NegotiatedSerializer == nil {
-		return nil, fmt.Errorf("NeogitatedSerializer is required when initializing a RESTClient")
+		return nil, fmt.Errorf("NegotiatedSerializer is required when initializing a RESTClient")
 	}
 
 	baseURL, versionedAPIPath, err := defaultServerUrlFor(config)

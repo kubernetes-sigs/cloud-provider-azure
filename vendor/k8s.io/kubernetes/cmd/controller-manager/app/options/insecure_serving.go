@@ -21,6 +21,7 @@ import (
 	"net"
 
 	"github.com/spf13/pflag"
+
 	"k8s.io/apiserver/pkg/server/options"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
 )
@@ -52,8 +53,8 @@ func (s *InsecureServingOptions) Validate() []error {
 
 	errors := []error{}
 
-	if s.BindPort < 0 || s.BindPort > 32767 {
-		errors = append(errors, fmt.Errorf("--insecure-port %v must be between 0 and 32767, inclusive. 0 for turning off insecure (HTTP) port", s.BindPort))
+	if s.BindPort < 0 || s.BindPort > 65335 {
+		errors = append(errors, fmt.Errorf("--insecure-port %v must be between 0 and 65535, inclusive. 0 for turning off insecure (HTTP) port", s.BindPort))
 	}
 
 	return errors

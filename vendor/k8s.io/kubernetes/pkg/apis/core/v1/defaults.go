@@ -17,13 +17,15 @@ limitations under the License.
 package v1
 
 import (
+	"time"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/util/parsers"
-	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -221,6 +223,12 @@ func SetDefaults_ProjectedVolumeSource(obj *v1.ProjectedVolumeSource) {
 	if obj.DefaultMode == nil {
 		perm := int32(v1.ProjectedVolumeSourceDefaultMode)
 		obj.DefaultMode = &perm
+	}
+}
+func SetDefaults_ServiceAccountTokenProjection(obj *v1.ServiceAccountTokenProjection) {
+	hour := int64(time.Hour.Seconds())
+	if obj.ExpirationSeconds == nil {
+		obj.ExpirationSeconds = &hour
 	}
 }
 func SetDefaults_PersistentVolume(obj *v1.PersistentVolume) {
