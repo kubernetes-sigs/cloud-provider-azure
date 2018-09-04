@@ -43,6 +43,16 @@ func DeleteService(cs clientset.Interface, ns string, serviceName string) error 
 	})
 }
 
+// DeleteServiceIfExists deletes a service if it exists, return nil if not exists
+func DeleteServiceIfExists(cs clientset.Interface, ns string, serviceName string) error {
+	err := DeleteService(cs, ns, serviceName)
+	if apierrs.IsNotFound(err) {
+		Logf("Service %s does not exists, no need to delete", serviceName)
+		return nil
+	}
+	return err
+}
+
 // GetServiceDomainName cat prefix and azure suffix
 func GetServiceDomainName(prefix string) (ret string) {
 	suffix := extractSuffix()
@@ -71,12 +81,13 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 			Logf("Fail to find ingress, retry it in 10 seconds")
 			return false, nil
 		}
-		Logf("Exposure successfully")
 		return true, nil
 	}) != nil {
 		return "", err
 	}
-	return service.Status.LoadBalancer.Ingress[0].IP, nil
+	ip := service.Status.LoadBalancer.Ingress[0].IP
+	Logf("Exposure successfully, get external ip: %s", ip)
+	return ip, nil
 }
 
 // extractSuffix obtains the server domain name suffix

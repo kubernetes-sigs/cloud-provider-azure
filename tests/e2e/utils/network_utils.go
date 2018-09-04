@@ -92,3 +92,35 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 	}
 	return getNextSubnet(vnetCIDR, existSubnets)
 }
+
+// getSecurityGroupList is a wapper around listing VirtualNetwork
+func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork.SecurityGroupListResultPage, err error) {
+	Logf("Getting virtural network list")
+	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		result, err = securityGroupsClient.List(context.Background(), getResourceGroup())
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return true, nil
+	})
+	return
+}
+
+// GetClusterSecurityGroup gets the only vnet of the cluster
+func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwork.SecurityGroup, err error) {
+	securityGroupsList, err := azureTestClient.getSecurityGroupList()
+	if err != nil {
+		return
+	}
+	// Assume there is only one cluster in one resource group
+	if len(securityGroupsList.Values()) != 1 {
+		err = fmt.Errorf("Found no or more than 1 virtual network in resource group same as cluster name")
+		return
+	}
+	ret = &securityGroupsList.Values()[0]
+	return
+}

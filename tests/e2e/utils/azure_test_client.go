@@ -62,3 +62,8 @@ func (tc *AzureTestClient) createSubnetsClient() *aznetwork.SubnetsClient {
 func (tc *AzureTestClient) createVirtualNetworksClient() *aznetwork.VirtualNetworksClient {
 	return &aznetwork.VirtualNetworksClient{BaseClient: tc.networkClient}
 }
+
+// CreateSecurityGroupsClient generates security group client with the same baseclient as azure test client
+func (tc *AzureTestClient) CreateSecurityGroupsClient() *aznetwork.SecurityGroupsClient {
+	return &aznetwork.SecurityGroupsClient{BaseClient: tc.networkClient}
+}
