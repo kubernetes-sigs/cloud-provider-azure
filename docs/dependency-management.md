@@ -4,7 +4,7 @@ We use [glide](https://github.com/Masterminds/glide) to manage package dependenc
 - [glide](https://github.com/Masterminds/glide) (tested version: 0.12.3)
 - [glide-vc](https://github.com/sgotti/glide-vc) (tested version: 0.1.0)
 
-Note that due to some limitations (see [Working with staging packages](#working-with-staging-packages)), 'glide update' && 'glide install' would fail due to unknown dependency. We've preovide a wrapper script to get this around, which could be triggered via `make update`.
+Note that due to some limitations (see [Working with staging packages](#working-with-staging-packages)), 'glide update' && 'glide install' would fail due to unknown dependency. We've provided a wrapper script to get this around, which could be triggered via `make update`.
 
 The goal for `Dependency management` is:
 - Automatic dependency update
@@ -44,7 +44,7 @@ There are some packages under `staging` directory of Kubernetes repository, to w
 
 Those packages are intended to be periodically published under top-level `k8s.io` repositories, and the code under `staging` directory serves as authoritative (see description [here](https://github.com/kubernetes/kubernetes/tree/master/staging) ).
 
-One possible way is to specify all the versions of referenced packages explicitly in `glide.yaml`, but it's hard to maintain since user would have to edit all the versions whenever thers is a version update. Also, it is not possible to sync to latest Kubernetes master versions, since some dependecies package might not have been published.
+One possible way is to specify all the versions of referenced packages explicitly in `glide.yaml`, but it's hard to maintain since user would have to edit all the versions whenever there is a version update. Also, it is not possible to sync to latest Kubernetes master versions, since some dependecies package might not have been published.
 
 In Kubernetes code, those packages can be refereed via `k8s.io/package` directly, that is because in Kubernetes repository there are corresponding soft links under vendor directory pointing to those under staging. This is a workaround by Kubernetes  (see also discussion [here](https://github.com/kubernetes/kubernetes/pull/24202)).
 
