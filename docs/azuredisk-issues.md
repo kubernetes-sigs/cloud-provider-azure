@@ -222,6 +222,9 @@ azureDisk - mountDevice:FormatAndMount failed with exit status 32
 ```
 That's because azureDisk use ext4 file system by default, mountOptions like [uid=x,gid=x] could not be set in mount time.
 
+**Related issues**
+ - [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014)
+
 **Solution**:
 Set uid in `runAsUser` and gid in `fsGroup` for pod: [security context for a Pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 
@@ -236,6 +239,7 @@ spec:
     runAsUser: 0
     fsGroup: 0
 ```
+ > Note: Since gid & uid is mounted as 0(root) by default, if set as non-root(e.g. 1000), k8s will use chown/chmod to change all dir/files under that disk, this is a time consuming job, which would make mount device very slow, in this issue: [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-413546283), it costs about 10 min for chown/chmod operation complete.
 
 ### 8. `Addition of a blob based disk to VM with managed disks is not supported`
 **Issue details**:
@@ -292,7 +296,7 @@ When use an existing azure disk(also called [static provisioning](https://github
 | k8s version | fixed version |
 | ---- | ---- |
 | v1.8 | 1.8.15 |
-| v1.9 | in cherry-pick |
+| v1.9 | 1.9.11 |
 | v1.10 | 1.10.5 |
 | v1.11 | 1.11.0 |
 
@@ -319,3 +323,44 @@ This is a common k8s issue, other cloud provider would also has this issue. Ther
 
 **Work around**:
 delete pod first and then delete azure disk pvc after a few minutes
+
+### 12. create azure disk PVC failed due to account creation failure
+ > please note this issue only happens on **unmanaged** k8s cluster
+
+**Issue details**: User may get `Account property kind is invalid for the request` error when trying to create a new **unmanaged** azure disk PVC, error would be like following:
+```
+azureuser@k8s-master-17140924-0:/tmp$ kubectl describe pvc
+Name:          pvc-azuredisk
+Namespace:     default
+StorageClass:  hdd
+Status:        Bound
+...
+Events:
+  Type     Reason                 Age                From                         Message
+  ----     ------                 ----               ----                         -------
+  Warning  ProvisioningFailed     31m                persistentvolume-controller  Failed to provision volume with StorageClass "hdd": Create Storage Account: ds10e15ed89c5811e8a0a70, error: storage.AccountsClient#Create: Failure sending request: StatusCode=400 -- Original Error: Code="AccountPropertyIsInvalid" Message="Account property kind is invalid for the request."
+```
+
+**Fix**
+ - PR [fix azure disk create failure due to sdk upgrade](https://github.com/kubernetes/kubernetes/pull/67236) fixed this issue
+ 
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.9 | no such issue |
+| v1.10 | no such issue |
+| v1.11 | 1.11.3 |
+| v1.12 | no such issue |
+
+**Work around**:
+ - create a storage account and specify that account in azure disk storage class, e.g.
+ ```
+kind: StorageClass
+apiVersion: storage.k8s.io/v1beta1
+metadata:
+  name: ssd
+provisioner: kubernetes.io/azure-disk
+parameters:
+  skuname: Premium_LRS
+  storageAccount: customerstorageaccount
+  kind: Dedicated
+ ```
