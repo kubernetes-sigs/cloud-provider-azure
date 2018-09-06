@@ -17,6 +17,7 @@ Please also check following docs:
 - [E2E Tests](docs/e2e-tests.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
 - [Load balancer Annotations](docs/development-loadbalancer.md)
+- [Using Azure availability zones](docs/using-availability-zones.md)
 - [Using cross resource group nodes](docs/using-cross-resource-group-nodes.md)
 - [AzureDisk known issues](docs/azuredisk-issues.md)
 - [AzureFile known issues](docs/azurefile-issues.md)
