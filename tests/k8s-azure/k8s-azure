@@ -90,7 +90,7 @@ sub e2e {
   my $config            = shift;
   my $workspace         = rel2abs($config->{workspace}); # if workspace empty, will set to current dir
   my $name              = $config->{name}; # Cluster name, will auto-generate based on subject if not set
-  my $subject           = $config->{subject} || _getTime();
+  my $subject           = $config->{subject} || 'test';
   my $type              = $config->{type} || 'smoke'; # default/serial/slow/smoke/custom/conformance
   my $custom_tests      = $config->{custom_tests}; # passed to --ginkoFocus parameter, valid when type='custom'.
   my $location          = $config->{location} || 'westus2';
@@ -131,12 +131,13 @@ sub e2e {
   croak "Unsupported type: $type, supported: " . join ', ', @types unless grep(/^$type$/, @types);
 
   unless ($name) {
-    # name: {testgroup_prefix}-subject-version-type
+    # name: {testgroup_prefix}-subject-version-type-{timestamp}
     $subject =~ tr/\/://d;
     my $testgroup_prefix = $config->{testgroup_prefix} || "kai-";
     my $version_id = ($accm_image =~ s/.*://r);
     my $version_id_sub = substr $version_id, 0, 7;
-    $name = $config->{name} || "$testgroup_prefix$subject-$version_id_sub-$type";
+    my $timestamp = _getTime();
+    $name = "$testgroup_prefix$subject-$version_id_sub-$type-$timestamp";
   }
 
   my $subject_dir   = catfile($workspace, $name);
