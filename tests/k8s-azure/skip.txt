@@ -2,7 +2,7 @@
 ## does not support GetSigner, for ssh
 [sig-node] Mount propagation
 [sig-network] Network should set TCP CLOSE_WAIT timeout
-[sig-storage] PersistentVolumes-local
+[sig-storage] PersistentVolumes-local Stress with local volume provisioner [Serial] should use be able to process many pods and reuse local volumes
 should unmount if pod is gracefully deleted while kubelet is down [Disruptive][Slow]
 should unmount if pod is force deleted while kubelet is down [Disruptive][Slow]
 
@@ -54,18 +54,6 @@ Horizontal pod autoscaling (scale resource: CPU)
 
 # case pending on kubelet config, https://github.com/Azure/acs-engine/issues/1882
 [sig-storage] Dynamic Provisioning DynamicProvisioner External should let an external dynamic provisioner create and delete persistent volumes [Slow]
-
-# cadvisor listening disabled, https://github.com/Azure/acs-engine/pull/2098#issuecomment-367907089
-should proxy to cadvisor
-
-# does not support containized kubelet https://github.com/kubernetes/kubernetes/issues/61456
-[sig-storage] Subpath [Volume type: hostPathSymlink]
-[sig-storage] Subpath [Volume type: hostPath]
-
-# does not have mount.nfs https://github.com/Azure/acs-engine/issues/3022
-[sig-storage] PersistentVolumes NFS
-[sig-storage] Volumes NFS
-[sig-storage] Volume plugin streaming [Slow] NFS
 
 # Broken due to clean up https://github.com/kubernetes/kubernetes/pull/63489
 # [sig-network] Services should have session affinity work for LoadBalancer service with ESIPP on [Slow] [DisabledForLargeClusters]
