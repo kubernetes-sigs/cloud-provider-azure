@@ -44,7 +44,7 @@ There are some packages under `staging` directory of Kubernetes repository, to w
 
 Those packages are intended to be periodically published under top-level `k8s.io` repositories, and the code under `staging` directory serves as authoritative (see description [here](https://github.com/kubernetes/kubernetes/tree/master/staging) ).
 
-One possible way is to specify all the versions of referenced packages explicitly in `glide.yaml`, but it's hard to maintain since user would have to edit all the versions whenever there is a version update. Also, it is not possible to sync to latest Kubernetes master versions, since some dependecies package might not have been published.
+One possible way is to specify all the versions of referenced packages explicitly in `glide.yaml`, but it's hard to maintain since user would have to edit all the versions whenever there is a version update. Also, it is not possible to sync to latest Kubernetes master versions, since some dependencies package might not have been published.
 
 In Kubernetes code, those packages can be refereed via `k8s.io/package` directly, that is because in Kubernetes repository there are corresponding soft links under vendor directory pointing to those under staging. This is a workaround by Kubernetes  (see also discussion [here](https://github.com/kubernetes/kubernetes/pull/24202)).
 
