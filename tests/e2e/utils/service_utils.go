@@ -47,7 +47,7 @@ func DeleteService(cs clientset.Interface, ns string, serviceName string) error 
 func DeleteServiceIfExists(cs clientset.Interface, ns string, serviceName string) error {
 	err := DeleteService(cs, ns, serviceName)
 	if apierrs.IsNotFound(err) {
-		Logf("Service %s does not exists, no need to delete", serviceName)
+		Logf("Service %s does not exist, no need to delete", serviceName)
 		return nil
 	}
 	return err
