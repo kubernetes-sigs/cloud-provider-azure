@@ -188,7 +188,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Waiting for service exposure")
 		ip, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Get Externel IP: %s", ip)
+		utils.Logf("Get External IP: %s", ip)
 
 		By("Validating external ip in target subnet")
 		ret, err := utils.ValidateIPInCIDR(ip, newSubnetCIDR)
