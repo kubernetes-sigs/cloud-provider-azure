@@ -28,7 +28,7 @@ Following Kubernetes versions should stick to Kubernetes package version specifi
 
    - E2E tests: [Dockerfile](/tests/k8s-azure/Dockerfile)
  
-     Update `ARG K8S_VERSION=` for Kuberentes version.
+     Update `ARG K8S_VERSION=` for Kubernetes version.
  
      Update `FROM golang:* AS build_kubernetes`. This should stick to the Go version used by [Kubernetes](https://github.com/kubernetes/kubernetes/blob/master/build/build-image/cross/Dockerfile)
 
