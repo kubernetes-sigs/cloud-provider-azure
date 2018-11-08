@@ -1,7 +1,7 @@
-FROM golang:1.10.3-stretch AS build_kubernetes
+FROM golang:1.11.2-stretch AS build_kubernetes
 # rsync: building k8s
 RUN apt update && apt install -y --no-install-recommends rsync
-ARG K8S_VERSION=v1.13.0-alpha.0
+ARG K8S_VERSION=v1.13.0-alpha.3
 WORKDIR /go/src/k8s.io/kubernetes
 RUN git clone https://github.com/kubernetes/kubernetes . \
     && git checkout -b temp $K8S_VERSION \
@@ -10,10 +10,9 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
     && make ginkgo \
     && go build hack/e2e.go \
     && ./e2e
-RUN rm -rf _output/local/go
 
-FROM golang:1.10.3-stretch AS build_acs-engine
-ARG ACSENGINE_VERSION=v0.21.0
+FROM golang:1.11.2-stretch AS build_acs-engine
+ARG ACSENGINE_VERSION=v0.25.0
 WORKDIR /go/src/github.com/Azure/acs-engine
 RUN git clone https://github.com/Azure/acs-engine . \
     && git checkout -b temp $ACSENGINE_VERSION \
@@ -45,4 +44,4 @@ ENV K8S_AZURE_GLOBAL_SKIP_FILES='/opt/k8s-azure/skip.txt'
 RUN useradd -m k8s-ci
 
 COPY init.sh /usr/local/bin
-ENTRYPOINT [ "init.sh" ] 
+ENTRYPOINT [ "init.sh" ]
