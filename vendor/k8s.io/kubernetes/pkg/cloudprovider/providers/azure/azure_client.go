@@ -24,7 +24,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2018-04-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2017-10-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2018-07-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/golang/glog"
@@ -129,6 +129,11 @@ type DisksClient interface {
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, diskName string, diskParameter compute.Disk) (resp *http.Response, err error)
 	Delete(ctx context.Context, resourceGroupName string, diskName string) (resp *http.Response, err error)
 	Get(ctx context.Context, resourceGroupName string, diskName string) (result compute.Disk, err error)
+}
+
+// VirtualMachineSizesClient defines needed functions for azure compute.VirtualMachineSizesClient
+type VirtualMachineSizesClient interface {
+	List(ctx context.Context, location string) (result compute.VirtualMachineSizeListResult, err error)
 }
 
 // azClientConfig contains all essential information to create an Azure client.
@@ -1324,6 +1329,44 @@ func (az *azDisksClient) Get(ctx context.Context, resourceGroupName string, disk
 
 	mc := newMetricContext("disks", "get", resourceGroupName, az.client.SubscriptionID)
 	result, err = az.client.Get(ctx, resourceGroupName, diskName)
+	mc.Observe(err)
+	return
+}
+
+// azVirtualMachineSizesClient implements VirtualMachineSizesClient.
+type azVirtualMachineSizesClient struct {
+	client            compute.VirtualMachineSizesClient
+	rateLimiterReader flowcontrol.RateLimiter
+	rateLimiterWriter flowcontrol.RateLimiter
+}
+
+func newAzVirtualMachineSizesClient(config *azClientConfig) *azVirtualMachineSizesClient {
+	VirtualMachineSizesClient := compute.NewVirtualMachineSizesClient(config.subscriptionID)
+	VirtualMachineSizesClient.BaseURI = config.resourceManagerEndpoint
+	VirtualMachineSizesClient.Authorizer = autorest.NewBearerAuthorizer(config.servicePrincipalToken)
+	VirtualMachineSizesClient.PollingDelay = 5 * time.Second
+	configureUserAgent(&VirtualMachineSizesClient.Client)
+
+	return &azVirtualMachineSizesClient{
+		rateLimiterReader: config.rateLimiterReader,
+		rateLimiterWriter: config.rateLimiterWriter,
+		client:            VirtualMachineSizesClient,
+	}
+}
+
+func (az *azVirtualMachineSizesClient) List(ctx context.Context, location string) (result compute.VirtualMachineSizeListResult, err error) {
+	if !az.rateLimiterReader.TryAccept() {
+		err = createRateLimitErr(false, "VMSizesList")
+		return
+	}
+
+	glog.V(10).Infof("azVirtualMachineSizesClient.List(%q): start", location)
+	defer func() {
+		glog.V(10).Infof("azVirtualMachineSizesClient.List(%q): end", location)
+	}()
+
+	mc := newMetricContext("vmsizes", "list", "", az.client.SubscriptionID)
+	result, err = az.client.List(ctx, location)
 	mc.Observe(err)
 	return
 }
