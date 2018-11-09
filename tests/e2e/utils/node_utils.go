@@ -32,7 +32,7 @@ const (
 	nodeLabelRole = "kubernetes.io/role"
 )
 
-// GetAgentNodes obtians the list of agent nodes
+// GetAgentNodes obtains the list of agent nodes
 func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	nodesList, err := getNodeList(cs)
 	if err != nil {
