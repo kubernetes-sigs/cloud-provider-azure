@@ -10,6 +10,7 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
     && make ginkgo \
     && go build hack/e2e.go \
     && ./e2e
+RUN rm -rf _output/local/go
 
 FROM golang:1.11.2-stretch AS build_acs-engine
 ARG ACSENGINE_VERSION=v0.25.0

@@ -64,7 +64,11 @@ sub deploy {
                 }, undef, $ENGINE_FILE)
               && do {
                 if ($accm_image) {edit_file($ENGINE_FILE, sub { s/"customCcmImage":\h*"\K.*"/$accm_image"/ }); }
+                else { 1; }
+              }
+              && do {
                 if ($hyperkube_image) {edit_file($ENGINE_FILE, sub { s/"customHyperkubeImage":\h*"\K.*"/$hyperkube_image"/ }); }
+                else { 1; }
               }
               && mlog("Creating cluster: $name")
               && run_cmd("acs-engine deploy --api-model $ENGINE_FILE"
@@ -78,7 +82,7 @@ sub deploy {
 export KUBECONFIG=$kube_config_file
 alias km='ssh k8s-ci\@$dns_prefix.$location.cloudapp.azure.com'
 
-# export KUBERNETES_PROVIDER=azure # no use when conformance=y
+export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
 export CLOUD_CONFIG=$manifest_dir/azure.json # workaround for the new parameter.
@@ -180,7 +184,7 @@ sub e2e {
     $env .= " GINKGO_PARALLEL_NODES=20" if $parallel;
     &_chdir_k8s_root
         && run_cmd(". $e2e_profile && $env ./e2e --get=false -- --test --check-version-skew=false"
-          . " --dump=$report_dir --test_args='$test_args'");
+          . " --test_args='$test_args'");
   };
   # agent for creating/deleting resource group
   my $rgc_client;
