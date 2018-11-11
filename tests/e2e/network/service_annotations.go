@@ -286,7 +286,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 		err = utils.DeletePod(c, ns, podName)
 	}()
 
-	// publicFlag shows whether pulic accessible test ends
+	// publicFlag shows whether public accessible test ends
 	// internalFlag shows whether internal accessible test ends
 	utils.Logf("Call from the created pod")
 	err = wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {

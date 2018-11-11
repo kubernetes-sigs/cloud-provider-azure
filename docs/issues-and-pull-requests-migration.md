@@ -14,7 +14,7 @@ Here are some notes for issues and pull requests migration.
 
 If issue applies only to Azure cloud provider, please close it and create a new one in this repository.
 
-If issue also involves other component, levae it there, but do create a new issue in this repository to track counterpater in Azure cloud provider.
+If issue also involves other component, leave it there, but do create a new issue in this repository to track counterpater in Azure cloud provider.
 
 In both cases, leave a link to the new created issue in the old issue.
 
