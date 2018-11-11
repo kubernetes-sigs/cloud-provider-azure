@@ -26,7 +26,7 @@ import (
 
 // getVirtualNetworkList is a wapper around listing VirtualNetwork
 func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwork.VirtualNetworkListResultPage, err error) {
-	Logf("Getting virtural network list")
+	Logf("Getting virtual network list")
 	vNetClient := azureTestClient.createVirtualNetworksClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = vNetClient.List(context.Background(), getResourceGroup())
@@ -95,7 +95,7 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 
 // getSecurityGroupList is a wapper around listing VirtualNetwork
 func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork.SecurityGroupListResultPage, err error) {
-	Logf("Getting virtural network list")
+	Logf("Getting virtual network list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), getResourceGroup())
