@@ -47,6 +47,7 @@ sub deploy {
   my $sshpub       = $config->{sshpub} // '';
   my $password     = $config->{password} // '';
   my $dns_prefix   = ($name =~ tr/\._//dr);
+  my $hyperkube_image = $config->{hyperkube_image};
 
   run_steps([
       step('Create cluster', sub {
@@ -65,6 +66,10 @@ sub deploy {
                 if ($accm_image) {edit_file($ENGINE_FILE, sub { s/"customCcmImage":\h*"\K.*"/$accm_image"/ }); }
                 else { 1; }
               }
+              && do {
+                if ($hyperkube_image) {edit_file($ENGINE_FILE, sub { s/"customHyperkubeImage":\h*"\K.*"/$hyperkube_image"/ }); }
+                else { 1; }
+              }
               && mlog("Creating cluster: $name")
               && run_cmd("acs-engine deploy --api-model $ENGINE_FILE"
                 . " --azure-env $az_env --subscription-id \$K8S_AZURE_SUBSID --location $location --resource-group $name"
@@ -77,10 +82,10 @@ sub deploy {
 export KUBECONFIG=$kube_config_file
 alias km='ssh k8s-ci\@$dns_prefix.$location.cloudapp.azure.com'
 
-# export KUBERNETES_PROVIDER=azure # no use when conformance=y
+export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
-export CLOUD_CONFIG=1 # workaround for the new parameter.
+export CLOUD_CONFIG=$manifest_dir/azure.json # workaround for the new parameter.
 EOM
             }),
   ]);
@@ -95,6 +100,7 @@ sub e2e {
   my $custom_tests      = $config->{custom_tests}; # passed to --ginkoFocus parameter, valid when type='custom'.
   my $location          = $config->{location} || 'westus2';
   my $accm_image        = $config->{accm_image} // '';
+  my $hyperkube_image   = $config->{hyperkube_image} // '';
   my $global_skip_files = $config->{global_skip_files}; # global skipped tests text file
   my $skipdeploy        = $config->{skipdeploy};
   my $build_e2e_test    = $config->{build_e2e_test}; # build E2E tests.
@@ -178,7 +184,7 @@ sub e2e {
     $env .= " GINKGO_PARALLEL_NODES=20" if $parallel;
     &_chdir_k8s_root
         && run_cmd(". $e2e_profile && $env ./e2e --get=false -- --test --check-version-skew=false"
-          . " --dump=$report_dir --test_args='$test_args'");
+          . " --test_args='$test_args'");
   };
   # agent for creating/deleting resource group
   my $rgc_client;
@@ -195,7 +201,7 @@ sub e2e {
             $deploy_location = $rgc_client->create($name);
           }
           chdir($subject_dir)
-              && runFlow(\&deploy, { %$config, name => $name, location => $deploy_location, accm_image => $accm_image });
+              && runFlow(\&deploy, { %$config, name => $name, location => $deploy_location, accm_image => $accm_image , hyperkube_image => $hyperkube_image});
             }, sub {$skipdeploy}),
       step('Build E2E tests', sub {
           &_chdir_k8s_root

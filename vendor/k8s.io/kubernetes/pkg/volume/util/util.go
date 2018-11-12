@@ -143,7 +143,7 @@ func UnmountMountPoint(mountPath string, mounter mount.Interface, extensiveMount
 		glog.Warningf("Warning: Unmount skipped because path does not exist: %v", mountPath)
 		return nil
 	}
-	corruptedMnt := isCorruptedMnt(pathErr)
+	corruptedMnt := IsCorruptedMnt(pathErr)
 	if pathErr != nil && !corruptedMnt {
 		return fmt.Errorf("Error checking path: %v", pathErr)
 	}
@@ -199,15 +199,15 @@ func PathExists(path string) (bool, error) {
 		return true, nil
 	} else if os.IsNotExist(err) {
 		return false, nil
-	} else if isCorruptedMnt(err) {
+	} else if IsCorruptedMnt(err) {
 		return true, err
 	} else {
 		return false, err
 	}
 }
 
-// isCorruptedMnt return true if err is about corrupted mount point
-func isCorruptedMnt(err error) bool {
+// IsCorruptedMnt return true if err is about corrupted mount point
+func IsCorruptedMnt(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -222,7 +222,8 @@ func isCorruptedMnt(err error) bool {
 	case *os.SyscallError:
 		underlyingError = pe.Err
 	}
-	return underlyingError == syscall.ENOTCONN || underlyingError == syscall.ESTALE
+
+	return underlyingError == syscall.ENOTCONN || underlyingError == syscall.ESTALE || underlyingError == syscall.EIO
 }
 
 // GetSecretForPod locates secret by name in the pod's namespace and returns secret map
@@ -260,6 +261,7 @@ func GetSecretForPV(secretNamespace, secretName, volumePluginName string, kubeCl
 	return secret, nil
 }
 
+// GetClassForVolume locates storage class by persistent volume
 func GetClassForVolume(kubeClient clientset.Interface, pv *v1.PersistentVolume) (*storage.StorageClass, error) {
 	if kubeClient == nil {
 		return nil, fmt.Errorf("Cannot get kube client")
@@ -319,62 +321,102 @@ func LoadPodFromFile(filePath string) (*v1.Pod, error) {
 	return pod, nil
 }
 
-// SelectZone selects a zone for a volume based on several factors:
-// node.zone, allowedTopologies, zone/zones parameters from storageclass
-// and zones with active nodes from the cluster
+// SelectZoneForVolume is a wrapper around SelectZonesForVolume
+// to select a single zone for a volume based on parameters
 func SelectZoneForVolume(zoneParameterPresent, zonesParameterPresent bool, zoneParameter string, zonesParameter, zonesWithNodes sets.String, node *v1.Node, allowedTopologies []v1.TopologySelectorTerm, pvcName string) (string, error) {
+	zones, err := SelectZonesForVolume(zoneParameterPresent, zonesParameterPresent, zoneParameter, zonesParameter, zonesWithNodes, node, allowedTopologies, pvcName, 1)
+	if err != nil {
+		return "", err
+	}
+	zone, ok := zones.PopAny()
+	if !ok {
+		return "", fmt.Errorf("could not determine a zone to provision volume in")
+	}
+	return zone, nil
+}
+
+// SelectZonesForVolume selects zones for a volume based on several factors:
+// node.zone, allowedTopologies, zone/zones parameters from storageclass,
+// zones with active nodes from the cluster. The number of zones = replicas.
+func SelectZonesForVolume(zoneParameterPresent, zonesParameterPresent bool, zoneParameter string, zonesParameter, zonesWithNodes sets.String, node *v1.Node, allowedTopologies []v1.TopologySelectorTerm, pvcName string, numReplicas uint32) (sets.String, error) {
 	if zoneParameterPresent && zonesParameterPresent {
-		return "", fmt.Errorf("both zone and zones StorageClass parameters must not be used at the same time")
+		return nil, fmt.Errorf("both zone and zones StorageClass parameters must not be used at the same time")
 	}
 
-	// pick zone from node if present
+	var zoneFromNode string
+	// pick one zone from node if present
 	if node != nil {
-		// DynamicProvisioningScheduling implicit since node is not nil
+		// VolumeScheduling implicit since node is not nil
 		if zoneParameterPresent || zonesParameterPresent {
-			return "", fmt.Errorf("zone[s] cannot be specified in StorageClass if VolumeBindingMode is set to WaitForFirstConsumer. Please specify allowedTopologies in StorageClass for constraining zones.")
+			return nil, fmt.Errorf("zone[s] cannot be specified in StorageClass if VolumeBindingMode is set to WaitForFirstConsumer. Please specify allowedTopologies in StorageClass for constraining zones")
 		}
 
-		// pick node's zone and ignore any allowedTopologies (since scheduler is assumed to have accounted for it already)
-		z, ok := node.ObjectMeta.Labels[kubeletapis.LabelZoneFailureDomain]
+		// pick node's zone for one of the replicas
+		var ok bool
+		zoneFromNode, ok = node.ObjectMeta.Labels[kubeletapis.LabelZoneFailureDomain]
 		if !ok {
-			return "", fmt.Errorf("%s Label for node missing", kubeletapis.LabelZoneFailureDomain)
+			return nil, fmt.Errorf("%s Label for node missing", kubeletapis.LabelZoneFailureDomain)
 		}
-		return z, nil
+		// if single replica volume and node with zone found, return immediately
+		if numReplicas == 1 {
+			return sets.NewString(zoneFromNode), nil
+		}
 	}
 
 	// pick zone from allowedZones if specified
 	allowedZones, err := ZonesFromAllowedTopologies(allowedTopologies)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if (len(allowedTopologies) > 0) && (allowedZones.Len() == 0) {
-		return "", fmt.Errorf("no matchLabelExpressions with %s key found in allowedTopologies. Please specify matchLabelExpressions with %s key", kubeletapis.LabelZoneFailureDomain, kubeletapis.LabelZoneFailureDomain)
+		return nil, fmt.Errorf("no matchLabelExpressions with %s key found in allowedTopologies. Please specify matchLabelExpressions with %s key", kubeletapis.LabelZoneFailureDomain, kubeletapis.LabelZoneFailureDomain)
 	}
 
 	if allowedZones.Len() > 0 {
-		// DynamicProvisioningScheduling implicit since allowedZones present
+		// VolumeScheduling implicit since allowedZones present
 		if zoneParameterPresent || zonesParameterPresent {
-			return "", fmt.Errorf("zone[s] cannot be specified in StorageClass if allowedTopologies specified")
+			return nil, fmt.Errorf("zone[s] cannot be specified in StorageClass if allowedTopologies specified")
 		}
-		return ChooseZoneForVolume(*allowedZones, pvcName), nil
+		// scheduler will guarantee if node != null above, zoneFromNode is member of allowedZones.
+		// so if zoneFromNode != "", we can safely assume it is part of allowedZones.
+		zones, err := chooseZonesForVolumeIncludingZone(allowedZones, pvcName, zoneFromNode, numReplicas)
+		if err != nil {
+			return nil, fmt.Errorf("cannot process zones in allowedTopologies: %v", err)
+		}
+		return zones, nil
 	}
 
 	// pick zone from parameters if present
 	if zoneParameterPresent {
-		return zoneParameter, nil
+		if numReplicas > 1 {
+			return nil, fmt.Errorf("zone cannot be specified if desired number of replicas for pv is greather than 1. Please specify zones or allowedTopologies to specify desired zones")
+		}
+		return sets.NewString(zoneParameter), nil
 	}
 
 	if zonesParameterPresent {
-		return ChooseZoneForVolume(zonesParameter, pvcName), nil
+		if uint32(zonesParameter.Len()) < numReplicas {
+			return nil, fmt.Errorf("not enough zones found in zones parameter to provision a volume with %d replicas. Found %d zones, need %d zones", numReplicas, zonesParameter.Len(), numReplicas)
+		}
+		// directly choose from zones parameter; no zone from node need to be considered
+		return ChooseZonesForVolume(zonesParameter, pvcName, numReplicas), nil
 	}
 
 	// pick zone from zones with nodes
-	return ChooseZoneForVolume(zonesWithNodes, pvcName), nil
+	if zonesWithNodes.Len() > 0 {
+		// If node != null (and thus zoneFromNode != ""), zoneFromNode will be member of zonesWithNodes
+		zones, err := chooseZonesForVolumeIncludingZone(zonesWithNodes, pvcName, zoneFromNode, numReplicas)
+		if err != nil {
+			return nil, fmt.Errorf("cannot process zones where nodes exist in the cluster: %v", err)
+		}
+		return zones, nil
+	}
+	return nil, fmt.Errorf("cannot determine zones to provision volume in")
 }
 
 // ZonesFromAllowedTopologies returns a list of zones specified in allowedTopologies
-func ZonesFromAllowedTopologies(allowedTopologies []v1.TopologySelectorTerm) (*sets.String, error) {
+func ZonesFromAllowedTopologies(allowedTopologies []v1.TopologySelectorTerm) (sets.String, error) {
 	zones := make(sets.String)
 	for _, term := range allowedTopologies {
 		for _, exp := range term.MatchLabelExpressions {
@@ -387,16 +429,21 @@ func ZonesFromAllowedTopologies(allowedTopologies []v1.TopologySelectorTerm) (*s
 			}
 		}
 	}
-	return &zones, nil
+	return zones, nil
 }
 
+// ZonesSetToLabelValue converts zones set to label value
 func ZonesSetToLabelValue(strSet sets.String) string {
 	return strings.Join(strSet.UnsortedList(), kubeletapis.LabelMultiZoneDelimiter)
 }
 
 // ZonesToSet converts a string containing a comma separated list of zones to set
 func ZonesToSet(zonesString string) (sets.String, error) {
-	return stringToSet(zonesString, ",")
+	zones, err := stringToSet(zonesString, ",")
+	if err != nil {
+		return nil, fmt.Errorf("error parsing zones %s, must be strings separated by commas: %v", zonesString, err)
+	}
+	return zones, nil
 }
 
 // LabelZonesToSet converts a PV label value from string containing a delimited list of zones to set
@@ -419,6 +466,27 @@ func stringToSet(str, delimiter string) (sets.String, error) {
 		zonesSet.Insert(trimmedZone)
 	}
 	return zonesSet, nil
+}
+
+// LabelZonesToList converts a PV label value from string containing a delimited list of zones to list
+func LabelZonesToList(labelZonesValue string) ([]string, error) {
+	return stringToList(labelZonesValue, kubeletapis.LabelMultiZoneDelimiter)
+}
+
+// StringToList converts a string containing list separated by specified delimiter to a list
+func stringToList(str, delimiter string) ([]string, error) {
+	zonesSlice := make([]string, 0)
+	for _, zone := range strings.Split(str, delimiter) {
+		trimmedZone := strings.TrimSpace(zone)
+		if trimmedZone == "" {
+			return nil, fmt.Errorf(
+				"%q separated list (%q) must not contain an empty string",
+				delimiter,
+				str)
+		}
+		zonesSlice = append(zonesSlice, trimmedZone)
+	}
+	return zonesSlice, nil
 }
 
 // CalculateTimeoutForVolume calculates time for a Recycler pod to complete a
@@ -445,7 +513,7 @@ func CalculateTimeoutForVolume(minimumTimeout, timeoutIncrement int, pv *v1.Pers
 func RoundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
 	roundedUp := volumeSizeBytes / allocationUnitBytes
 	if volumeSizeBytes%allocationUnitBytes > 0 {
-		roundedUp += 1
+		roundedUp++
 	}
 	return roundedUp
 }
@@ -519,6 +587,11 @@ func GetPath(mounter volume.Mounter) (string, error) {
 // This means that a StatefulSet's volumes (`claimname-statefulsetname-id`) will spread across available zones,
 // assuming the id values are consecutive.
 func ChooseZoneForVolume(zones sets.String, pvcName string) string {
+	// No zones available, return empty string.
+	if zones.Len() == 0 {
+		return ""
+	}
+
 	// We create the volume in a zone determined by the name
 	// Eventually the scheduler will coordinate placement into an available zone
 	hash, index := getPVCNameHashAndIndexOffset(pvcName)
@@ -538,8 +611,41 @@ func ChooseZoneForVolume(zones sets.String, pvcName string) string {
 	return zone
 }
 
+// chooseZonesForVolumeIncludingZone is a wrapper around ChooseZonesForVolume that ensures zoneToInclude is chosen
+// zoneToInclude can either be empty in which case it is ignored. If non-empty, zoneToInclude is expected to be member of zones.
+// numReplicas is expected to be > 0 and <= zones.Len()
+func chooseZonesForVolumeIncludingZone(zones sets.String, pvcName, zoneToInclude string, numReplicas uint32) (sets.String, error) {
+	if numReplicas == 0 {
+		return nil, fmt.Errorf("invalid number of replicas passed")
+	}
+	if uint32(zones.Len()) < numReplicas {
+		return nil, fmt.Errorf("not enough zones found to provision a volume with %d replicas. Need at least %d distinct zones for a volume with %d replicas", numReplicas, numReplicas, numReplicas)
+	}
+	if zoneToInclude != "" && !zones.Has(zoneToInclude) {
+		return nil, fmt.Errorf("zone to be included: %s needs to be member of set: %v", zoneToInclude, zones)
+	}
+	if uint32(zones.Len()) == numReplicas {
+		return zones, nil
+	}
+	if zoneToInclude != "" {
+		zones.Delete(zoneToInclude)
+		numReplicas = numReplicas - 1
+	}
+	zonesChosen := ChooseZonesForVolume(zones, pvcName, numReplicas)
+	if zoneToInclude != "" {
+		zonesChosen.Insert(zoneToInclude)
+	}
+	return zonesChosen, nil
+}
+
 // ChooseZonesForVolume is identical to ChooseZoneForVolume, but selects a multiple zones, for multi-zone disks.
 func ChooseZonesForVolume(zones sets.String, pvcName string, numZones uint32) sets.String {
+	// No zones available, return empty set.
+	replicaZones := sets.NewString()
+	if zones.Len() == 0 {
+		return replicaZones
+	}
+
 	// We create the volume in a zone determined by the name
 	// Eventually the scheduler will coordinate placement into an available zone
 	hash, index := getPVCNameHashAndIndexOffset(pvcName)
@@ -553,7 +659,6 @@ func ChooseZonesForVolume(zones sets.String, pvcName string, numZones uint32) se
 	// PVC placement (which could also e.g. avoid putting volumes in overloaded or
 	// unhealthy zones)
 	zoneSlice := zones.List()
-	replicaZones := sets.NewString()
 
 	startingIndex := index * numZones
 	for index = startingIndex; index < startingIndex+numZones; index++ {
@@ -663,7 +768,7 @@ func JoinMountOptions(userOptions []string, systemOptions []string) []string {
 	for _, mountOption := range systemOptions {
 		allMountOptions.Insert(mountOption)
 	}
-	return allMountOptions.UnsortedList()
+	return allMountOptions.List()
 }
 
 // ValidateZone returns:
@@ -840,6 +945,38 @@ func CheckVolumeModeFilesystem(volumeSpec *volume.Spec) (bool, error) {
 // If the mode is Block, return true otherwise return false.
 func CheckPersistentVolumeClaimModeBlock(pvc *v1.PersistentVolumeClaim) bool {
 	return utilfeature.DefaultFeatureGate.Enabled(features.BlockVolume) && pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == v1.PersistentVolumeBlock
+}
+
+// IsWindowsUNCPath checks if path is prefixed with \\
+// This can be used to skip any processing of paths
+// that point to SMB shares, local named pipes and local UNC path
+func IsWindowsUNCPath(goos, path string) bool {
+	if goos != "windows" {
+		return false
+	}
+	// Check for UNC prefix \\
+	if strings.HasPrefix(path, `\\`) {
+		return true
+	}
+	return false
+}
+
+// IsWindowsLocalPath checks if path is a local path
+// prefixed with "/" or "\" like "/foo/bar" or "\foo\bar"
+func IsWindowsLocalPath(goos, path string) bool {
+	if goos != "windows" {
+		return false
+	}
+	if IsWindowsUNCPath(goos, path) {
+		return false
+	}
+	if strings.Contains(path, ":") {
+		return false
+	}
+	if !(strings.HasPrefix(path, `/`) || strings.HasPrefix(path, `\`)) {
+		return false
+	}
+	return true
 }
 
 // MakeAbsolutePath convert path to absolute path according to GOOS

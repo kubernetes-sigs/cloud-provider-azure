@@ -39,7 +39,7 @@ func TestAzureTest(t *testing.T) {
 	var r []Reporter
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
-			glog.Fatal("Failed creating report directory: %v", err)
+			glog.Fatalf("Failed creating report directory: %v", err)
 		} else {
 			r = append(r, reporters.NewJUnitReporter(path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", config.GinkgoConfig.ParallelNode))))
 		}

@@ -11,6 +11,10 @@ TEST_RESULTS_DIR=testResults
 GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 
 IMAGE_REGISTRY ?= local
+K8S_VERSION ?= v1.13.0-alpha.3
+ACSENGINE_VERSION ?= v0.25.0
+HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
+
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG=$(shell git rev-parse --short=7 HEAD)
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
@@ -42,7 +46,7 @@ ifdef JUNIT
 endif
 
 # collection of check tests
-test-check: test-lint-prepare test-lint 
+test-check: test-lint-prepare test-lint
 
 test-lint-prepare:
 	go get -u gopkg.in/alecthomas/gometalinter.v1
@@ -65,8 +69,14 @@ test-update: update-prepare update
 
 test-e2e: image
 	docker push $(IMAGE)
-	docker build -t $(TEST_IMAGE) tests/k8s-azure
+	docker build -t $(TEST_IMAGE) \
+		--build-arg K8S_VERSION=$(K8S_VERSION) \
+		--build-arg ACSENGINE_VERSION=$(ACSENGINE_VERSION) \
+		tests/k8s-azure
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
 		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(WORKSPACE)/_artifacts \
 		-v $(WORKSPACE):$(WORKSPACE) \
-		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) -ctype=$(SUITE) -csubject=$(SUBJECT)
+		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
+		-ctype=$(SUITE) \
+		-csubject=$(SUBJECT) \
+		-chyperkube_image=$(HYPERKUBE_IMAGE)

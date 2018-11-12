@@ -3,3 +3,5 @@
 bin/
 obj/
 testResults/
+_artifacts
+_report

@@ -1,0 +1,14 @@
+{
+    "cloud":"AzurePublicCloud",
+    "tenantId": "fakeId",
+    "subscriptionId": "fakeId",
+    "aadClientId": "fakeId",
+    "aadClientSecret": "fakeId",
+    "resourceGroup": "fakeId",
+    "location": "southeastasia",
+    "subnetName": "fakeName",
+    "securityGroupName": "fakeName",
+    "vnetName": "fakeName",
+    "routeTableName": "fakeName",
+    "primaryAvailabilitySetName": "fakeName"
+}
