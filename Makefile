@@ -14,6 +14,10 @@ IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.13.0-alpha.3
 ACSENGINE_VERSION ?= v0.25.0
 HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
+# manifest name under tests/e2e/k8s-azure/manifest
+TEST_MANIFEST ?= linux
+# build hyperkube image when specified
+K8S_BRANCH ?=
 
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG=$(shell git rev-parse --short=7 HEAD)
@@ -34,6 +38,12 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cloud-contro
 
 image:
 	docker build -t $(IMAGE) .
+
+hyperkube:
+ifneq ($(K8S_BRANCH), )
+	$(eval K8S_VERSION=$(shell REGISTRY=$(IMAGE_REGISTRY) BRANCH=$(K8S_BRANCH) scripts/build-hyperkube.sh))
+	$(eval HYPERKUBE_IMAGE=$(IMAGE_REGISTRY)/hyperkube-amd64:$(K8S_VERSION))
+endif
 
 $(PKG_CONFIG):
 	scripts/pkg-config.sh > $@
@@ -67,7 +77,7 @@ test-update: update-prepare update
 		exit 1; \
 	} \
 
-test-e2e: image
+test-e2e: image hyperkube
 	docker push $(IMAGE)
 	docker build -t $(TEST_IMAGE) \
 		--build-arg K8S_VERSION=$(K8S_VERSION) \
@@ -79,4 +89,5 @@ test-e2e: image
 		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
 		-ctype=$(SUITE) \
 		-csubject=$(SUBJECT) \
+		-cmanifest=$(TEST_MANIFEST) \
 		-chyperkube_image=$(HYPERKUBE_IMAGE)
