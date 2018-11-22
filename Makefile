@@ -13,7 +13,8 @@ GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.13.0-alpha.3
 ACSENGINE_VERSION ?= v0.25.0
-HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
+HYPERKUBE_IMAGE := feisky/hyperkube-amd64:v1.14.0-alpha.0-502-gb7cc9023e1
+K8S_AZURE_MANIFEST := linux-kcm
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
