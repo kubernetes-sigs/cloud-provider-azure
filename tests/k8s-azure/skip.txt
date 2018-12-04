@@ -92,4 +92,9 @@ ESIPP
 #[sig-storage] In-tree Volumes [Driver: azure] [Testpattern: Pre-provisioned PV (default fs)] subPath should support readOnly file specified in the volumeMount
 #[sig-storage] In-tree Volumes [Driver: azure] [Testpattern: Pre-provisioned PV (default fs)] volumes should be mountable
 #[sig-storage] In-tree Volumes [Driver: azure] [Testpattern: Pre-provisioned PV (ext4)] volumes should be mountable
+
+# Broken due to 1.13 changes
 In-tree Volumes
+PersistentVolumes-local
+CSI Volumes
+should write entries to /etc/hosts
