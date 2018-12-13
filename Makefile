@@ -27,6 +27,7 @@ TEST_IMAGE_NAME=azure-cloud-controller-manager-test
 TEST_IMAGE=$(TEST_IMAGE_NAME):$(IMAGE_TAG)
 
 WORKSPACE ?= $(shell pwd)
+ARTIFACTS ?= $(WORKSPACE)/_artifacts
 
 all: $(BIN_DIR)/azure-cloud-controller-manager
 
@@ -84,7 +85,7 @@ test-e2e: image hyperkube
 		--build-arg ACSENGINE_VERSION=$(ACSENGINE_VERSION) \
 		tests/k8s-azure
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
-		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(WORKSPACE)/_artifacts \
+		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(ARTIFACTS) \
 		-v $(WORKSPACE):$(WORKSPACE) \
 		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
 		-ctype=$(SUITE) \

@@ -41,5 +41,5 @@ if [ "$BRANCH" != "" ]; then
 fi
 
 VERSION=$(git rev-parse --short=7 HEAD)
-VERSION=$VERSION REGISTRY=$REGISTRY hack/dev-push-hyperkube.sh >&2
+VERSION=$VERSION REGISTRY=$REGISTRY KUBE_VERBOSE=1 hack/dev-push-hyperkube.sh >&2
 echo -n $VERSION
