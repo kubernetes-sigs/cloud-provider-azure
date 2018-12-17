@@ -87,6 +87,7 @@ test-e2e: image hyperkube
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
 		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(ARTIFACTS) \
 		-v $(WORKSPACE):$(WORKSPACE) \
+		-v $(ARTIFACTS):$(ARTIFACTS) \
 		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
 		-ctype=$(SUITE) \
 		-csubject=$(SUBJECT) \
