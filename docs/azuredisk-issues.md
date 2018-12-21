@@ -16,6 +16,8 @@
     - [10. data loss if using existing azure disk with partitions in disk mount](#10-data-loss-if-using-existing-azure-disk-with-partitions-in-disk-mount)
     - [11. Delete azure disk PVC which is already in use by a pod](#11-delete-azure-disk-pvc-which-is-already-in-use-by-a-pod)
     - [12. create azure disk PVC failed due to account creation failure](#12-create-azure-disk-pvc-failed-due-to-account-creation-failure)
+    - [13. cannot find Lun for disk](https://github.com/andyzhangx/demo/blob/master/issues/azuredisk-issues.md#13-cannot-find-lun-for-disk)
+    - [14. azure disk attach/detach failure, mount issue, i/o error](https://github.com/andyzhangx/demo/blob/master/issues/azuredisk-issues.md#14-azure-disk-attachdetach-failure-mount-issue-io-error)
 
 <!-- /TOC -->
 
@@ -26,7 +28,10 @@
 | v1.7 | 1.7.14 or later |
 | v1.8 | 1.8.13 or later |
 | v1.9 | 1.9.7 or later (1.9.6 on AKS) |
-| v1.10 | 1.10.2 or later |
+| v1.10 | 1.10.12 or later |
+| v1.11 | 1.11.6 or later |
+| v1.12 | 1.12.4 or later |
+| v1.13 | 1.13.0 |
 
 ## 1. disk attach error
 
@@ -302,7 +307,7 @@ spec:
     fsGroup: 0
 ```
 
-> Note: Since gid & uid is mounted as 0(root) by default, if set as non-root(e.g. 1000), k8s will use chown/chmod to change all dir/files under that disk, this is a time consuming job, which would make mount device very slow, in this issue: [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-413546283), it costs about 10 min for chown/chmod operation complete.
+> Note: Since gid & uid is mounted as 0(root) by default, if set as non-root(e.g. 1000), k8s will use chown to change all dir/files under that disk, this is a time consuming job, which would make mount device very slow, in this issue: [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-413546283), it costs about 10 min for chown operation complete.
 
 ## 8. `Addition of a blob based disk to VM with managed disks is not supported`
 
@@ -453,3 +458,69 @@ parameters:
   storageAccount: customerstorageaccount
   kind: Dedicated
  ```
+
+## 13. cannot find Lun for disk
+
+**Issue details**:
+
+Following error may occur if attach a disk to a node:
+```
+MountVolume.WaitForAttach failed for volume "pvc-12b458f4-c23f-11e8-8d27-46799c22b7c6" : Cannot find Lun for disk kubernetes-dynamic-pvc-12b458f4-c23f-11e8-8d27-46799c22b7c6
+```
+
+**Related issues**
+
+- [GetAzureDiskLun sometimes costs 1 min which is too long time](https://github.com/kubernetes/kubernetes/issues/69262)
+
+**Fix**
+
+- PR [fix azure disk attachment error on Linux](https://github.com/kubernetes/kubernetes/pull/70002) will extract the LUN num from device path **only on Linux**
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.9 | no such issue |
+| v1.10 | 1.10.10 |
+| v1.11 | 1.11.5 |
+| v1.12 | 1.12.3 |
+| v1.13 | no such issue |
+
+**Work around**:
+
+wait for a few more minutes should work
+
+## 14. azure disk attach/detach failure, mount issue, i/o error
+
+**Issue details**:
+
+We found a disk attach/detach issue due to [dirty vm cache PR](https://github.com/kubernetes/kubernetes/pull/58313) introduced from v1.9.2, it would lead to following disk issues:
+ - disk attach/detach failure for a long time
+ - disk I/O error
+
+> Note: above error may **only** happen when there are multiple disk attach/detach operations in parellel and it’s not easy to repro since it happens on a little possibility.
+
+
+**Related issues**
+
+- [Azure Disks volume attach still times out on Kubernetes 1.10](https://github.com/kubernetes/kubernetes/issues/71344)
+- [Azure Disks occasionally mounted in a way leading to I/O errors](https://github.com/kubernetes/kubernetes/issues/71453)
+
+**Fix**
+
+We changed the azure disk attach/detach retry logic in k8s v1.13, switch to use k8s attach-detach controller to do attach/detach disk retry and clean vm cache after every disk operation, this issue is proved to be fixed in our disk attach/detach stress test and also verified in customer env:
+- PR [remove retry operation on attach/detach azure disk in azure cloud provider](https://github.com/kubernetes/kubernetes/pull/70568)
+- PR [fix azure disk attach/detach failed forever issue](https://github.com/kubernetes/kubernetes/pull/71377)
+- PR [fix detach azure disk issue due to dirty cache](https://github.com/kubernetes/kubernetes/pull/71495)
+
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.9 | issue introduced in v1.9.2, no cherry-pick fix allowed|
+| v1.10 | 1.10.12 |
+| v1.11 | 1.11.6 |
+| v1.12 | 1.12.4 |
+| v1.13 | no such issue |
+
+**Work around**:
+ - if there is attach disk failure for long time, restart controller manager may work
+ - if there is disk not detached for long time, detach that disk manually
+

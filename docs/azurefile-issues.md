@@ -14,7 +14,8 @@
     - [6. azure file plugin on Windows does not work after node restart](#6-azure-file-plugin-on-windows-does-not-work-after-node-restart)
     - [7. file permission could not be changed using azure file, e.g. postgresql](#7-file-permission-could-not-be-changed-using-azure-file-eg-postgresql)
     - [8. Could not delete pod with AzureFile volume if storage account key changed](#8-could-not-delete-pod-with-azurefile-volume-if-storage-account-key-changed)
-
+    - [9. Long latency when handling lots of small files](#9-long-latency-compared-to-disk-when-handling-lots-of-small-files)
+    
 <!-- /TOC -->
 
 ## Recommended stable version for azure file
@@ -44,11 +45,12 @@
 | version | `fileMode`, `dirMode` value |
 | ---- | ---- |
 | v1.6.x, v1.7.x | 0777 |
-| v1.8.0-v1.8.5 | 0700 |
-| v1.8.6 or above | 0755 |
-| v1.9.0 | 0700 |
-| v1.9.1 or above | 0755 |
-| v1.10.0| 0755 |
+| v1.8.0 ~ v1.8.5, v1.9.0 | 0700 |
+| v1.8.6 or later, v1.9.1 ~ v1.10.9, v1.11.0 ~ v1.11.3, v1.12.0 ~ v.12.1 | 0755 |
+| v1.10.10 or later | 0777 |
+| v1.11.4 or later | 0777 |
+| v1.12.2 or later | 0777 |
+| v1.13.x | 0777 |
 
 ### other useful `mountOptions` setting:
 
@@ -94,6 +96,7 @@ m:persistent-volume-binder" cannot create secrets in the namespace "default"
 ```sh
 kubectl create -f https://raw.githubusercontent.com/andyzhangx/Demo/master/acs-engine/rbac/azure-cloud-provider-deployment.yaml
 ```
+- delete the original PVC and recreate PVC
 
 **Fix**
 
@@ -191,7 +194,7 @@ fixing permissions on existing directory /var/lib/postgresql/data
 azure file plugin is using cifs/SMB protocol, file/dir permission could not be changed after mounting
 
 **Workaround**:
-Use subPath together with azure disk plugin
+Use `subPath` together with azure disk plugin (for ext3/4 disk type, there is a `lost+found` directory after disk format)
 
 **Related issues**
 [Persistent Volume Claim permissions](https://github.com/Azure/AKS/issues/225)
@@ -236,3 +239,9 @@ sudo umount /var/lib/kubelet/pods/cc5c86cd-422a-11e8-91d7-000d3a03ee84/volumes/k
 
 - [UnmountVolume.TearDown fails for AzureFile volume, locks up node](https://github.com/kubernetes/kubernetes/issues/62824)
 - [Kubelet failure to umount glusterfs mount points](https://github.com/kubernetes/kubernetes/issues/41141)
+
+## 9. Long latency compared to disk when handling lots of small files
+
+**Related issues**
+ - [`azurefile` is very slow](https://github.com/Azure/AKS/issues/223)
+ - [Can't roll out Wordpress chart with PV on AzureFile](https://github.com/helm/charts/issues/5751)
