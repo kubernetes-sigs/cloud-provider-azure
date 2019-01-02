@@ -37,7 +37,7 @@
 
 **Issue details**:
 
-In some corner case(detaching multiple disks on a node simultaneously), when scheduling a pod with azure disk mount from one node to another, there could be lots of disk attach error(no recovery) due to the disk not being released in time from the previous node. This issue is due to lack of lock before DetachDisk operation, actually there should be a central lock for both AttachDisk and DetachDisk opertions, only one AttachDisk or DetachDisk operation is allowed at one time.
+In some corner case(detaching multiple disks on a node simultaneously), when scheduling a pod with azure disk mount from one node to another, there could be lots of disk attach error(no recovery) due to the disk not being released in time from the previous node. This issue is due to lack of lock before DetachDisk operation, actually there should be a central lock for both AttachDisk and DetachDisk operations, only one AttachDisk or DetachDisk operation is allowed at one time.
 
 The disk attach error could be like following:
 
@@ -74,7 +74,7 @@ az vm update -g <group> -n <name>
 
 1) ```kubectl cordon node``` #make sure no scheduling on this node
 2) ```kubectl drain node```  #schedule pod in current node to other node
-3) restart the Azure VM for node via the API or portal, wait untli VM is "Running"
+3) restart the Azure VM for node via the API or portal, wait until VM is "Running"
 4) ```kubectl uncordon node```
 
 **Fix**
@@ -122,7 +122,7 @@ azureuser@k8s-agentpool2-40588258-0:~$ tree /dev/disk/azure
 - [Disk error when pods are mounting a certain amount of volumes on a node](https://github.com/Azure/AKS/issues/201)
 - [unable to use azure disk in StatefulSet since /dev/sd* changed after detach/attach disk](https://github.com/Azure/acs-engine/issues/1918)
 - [Input/output error when accessing PV](https://github.com/Azure/AKS/issues/297)
-- [PersistantVolumeClaims changing to Read-only file system suddenly](https://github.com/Azure/ACS/issues/113)
+- [PersistentVolumeClaims changing to Read-only file system suddenly](https://github.com/Azure/ACS/issues/113)
 
 **Workaround**:
 
@@ -167,7 +167,7 @@ parameters:
 
 ## 4. Time cost for Azure Disk PVC mount
 
-Original time cost for Azure Disk PVC mount on a standard node size(e.g. Standard_D2_V2) is around 1 minute, `podAttachAndMountTimeout` is [2 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L76), total `waitForAttachTimeout` is [10 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L88), so a disk remount(detach and attach in sequetial) would possibly cost more than 2min, thus may fail.
+Original time cost for Azure Disk PVC mount on a standard node size(e.g. Standard_D2_V2) is around 1 minute, `podAttachAndMountTimeout` is [2 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L76), total `waitForAttachTimeout` is [10 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L88), so a disk remount(detach and attach in sequential) would possibly cost more than 2min, thus may fail.
 
 > Note: for some smaller VM size which has only 1 CPU core, time cost would be much bigger(e.g. > 10min) since container is hard to get CPU slot.
 
@@ -295,7 +295,7 @@ That's because azureDisk use ext4 file system by default, mountOptions like [uid
 
 Set uid in `runAsUser` and gid in `fsGroup` for pod: [security context for a Pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 
-e.g. Following setting will set pod run as root, make it accessiable to any file:
+e.g. Following setting will set pod run as root, make it accessible to any file:
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -496,7 +496,7 @@ We found a disk attach/detach issue due to [dirty vm cache PR](https://github.co
  - disk attach/detach failure for a long time
  - disk I/O error
 
-> Note: above error may **only** happen when there are multiple disk attach/detach operations in parellel and it’s not easy to repro since it happens on a little possibility.
+> Note: above error may **only** happen when there are multiple disk attach/detach operations in parallel and it’s not easy to repro since it happens on a little possibility.
 
 
 **Related issues**
