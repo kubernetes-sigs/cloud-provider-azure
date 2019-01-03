@@ -5,7 +5,7 @@
 
     Please follow this [guide](https://github.com/Azure/acs-engine/blob/v0.14.0/docs/serviceprincipal.md) for creating an azure service principal
     The service principal should either have:
-    - Contributor permsision of a subscription
+    - Contributor permission of a subscription
     - Contributor permission of a resource group. In this case, please create the resource group first
 
 ## How to run E2E test locally
