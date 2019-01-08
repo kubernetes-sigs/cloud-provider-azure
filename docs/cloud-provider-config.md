@@ -36,7 +36,7 @@ Note: All values are of string type if not explicitly called out.
 |aadClientSecret|The ClientSecret for an AAD application with RBAC access to talk to Azure RM APIs||
 |aadClientCertPath|The path of a client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
 |aadClientCertPassword|The password of the client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
-|useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to faluse|
+|useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to false|
 |subscriptionId|The ID of the Azure Subscription that the cluster is deployed in||
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
