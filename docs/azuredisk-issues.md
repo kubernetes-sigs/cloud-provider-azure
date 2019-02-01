@@ -16,8 +16,8 @@
     - [10. data loss if using existing azure disk with partitions in disk mount](#10-data-loss-if-using-existing-azure-disk-with-partitions-in-disk-mount)
     - [11. Delete azure disk PVC which is already in use by a pod](#11-delete-azure-disk-pvc-which-is-already-in-use-by-a-pod)
     - [12. create azure disk PVC failed due to account creation failure](#12-create-azure-disk-pvc-failed-due-to-account-creation-failure)
-    - [13. cannot find Lun for disk](https://github.com/andyzhangx/demo/blob/master/issues/azuredisk-issues.md#13-cannot-find-lun-for-disk)
-    - [14. azure disk attach/detach failure, mount issue, i/o error](https://github.com/andyzhangx/demo/blob/master/issues/azuredisk-issues.md#14-azure-disk-attachdetach-failure-mount-issue-io-error)
+    - [13. cannot find Lun for disk](#13-cannot-find-Lun-for-disk)
+    - [14. azure disk attach/detach failure, mount issue, i/o error](#14-azure-disk-attachdetach-failure-mount-issue-io-error)
 
 <!-- /TOC -->
 
@@ -90,7 +90,7 @@ az vm update -g <group> -n <name>
 | v1.10 | 1.10.0 |
 
 ## 2. disk unavailable after attach/detach a data disk on a node
-
+> 💡 NOTE: Azure platform has fixed the host cache issue, the suggested host cache setting of data disk is `ReadOnly` now, more details about [azure disk cache setting](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/premium-storage-performance#disk-caching)
 **Issue details**:
 
 From k8s v1.7, default host cache setting changed from `None` to `ReadWrite`, this change would lead to device name change after attach multiple disks on a node, finally lead to disk unavailable from pod. When access data disk inside a pod, will get following error:
@@ -293,7 +293,7 @@ That's because azureDisk use ext4 file system by default, mountOptions like [uid
 
 **Solution**:
 
-Set uid in `runAsUser` and gid in `fsGroup` for pod: [security context for a Pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
+ - option#1: Set uid in `runAsUser` and gid in `fsGroup` for pod: [security context for a Pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 
 e.g. Following setting will set pod run as root, make it accessible to any file:
 ```yaml
@@ -308,6 +308,17 @@ spec:
 ```
 
 > Note: Since gid & uid is mounted as 0(root) by default, if set as non-root(e.g. 1000), k8s will use chown to change all dir/files under that disk, this is a time consuming job, which would make mount device very slow, in this issue: [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-413546283), it costs about 10 min for chown operation complete.
+
+ - option#2: use `chown` in `initContainers`
+```
+initContainers:
+- name: volume-mount
+  image: busybox
+  command: ["sh", "-c", "chown -R 100:100 /data"]
+  volumeMounts:
+  - name: <your data volume>
+    mountPath: /data
+```
 
 ## 8. `Addition of a blob based disk to VM with managed disks is not supported`
 
@@ -495,8 +506,10 @@ wait for a few more minutes should work
 We found a disk attach/detach issue due to [dirty vm cache PR](https://github.com/kubernetes/kubernetes/pull/58313) introduced from v1.9.2, it would lead to following disk issues:
  - disk attach/detach failure for a long time
  - disk I/O error
+ - unexpected disk detachment from VM
+ - VM running into failed state due to attaching non-existing disk
 
-> Note: above error may **only** happen when there are multiple disk attach/detach operations in parallel and it’s not easy to repro since it happens on a little possibility.
+> Note: above error may **only** happen when there are multiple disk attach/detach operations in parallel and it's not easy to repro since it happens on a little possibility.
 
 
 **Related issues**
