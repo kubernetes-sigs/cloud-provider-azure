@@ -84,5 +84,5 @@ In other words, if you use multiple agent pools (availability sets), you MUST se
 ### primaryScaleSetName
 If this is set, the Azure cloudprovider will only add nodes from that scale set to the load
 balancer backend pool. If this is not set, and multiple agent pools (scale sets) are used, then
-the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
-In other words, if you use multiple agent pools (scale sets), you MUST set this field.
+the cloudprovider will try to add all nodes to a single backend pool which is forbidden when using Load Balancer Basic SKU.
+In other words, if you use multiple agent pools (scale sets), and `loadBalancerSku` is set to `basic` you MUST set this field.
