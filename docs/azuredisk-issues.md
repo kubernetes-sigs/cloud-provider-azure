@@ -334,7 +334,7 @@ This issue is by design as in Azure, there are two kinds of disks, blob based(un
 
 **Solution**:
 
-Use `default` azure disk storage class in acs-engine, as `default` will always be identical to the agent pool, that is, if VM is managed, it will be managed azure disk class, if unmanaged, then it's unmanaged disk class.
+Use `default` azure disk storage class in aks-engine, as `default` will always be identical to the agent pool, that is, if VM is managed, it will be managed azure disk class, if unmanaged, then it's unmanaged disk class.
 
 ## 9. dynamic azure disk PVC try to access wrong storage account (of other resource group)
 
@@ -362,7 +362,7 @@ Failed to provision volume with StorageClass "default": azureDisk - account ds6c
 
 **Work around**:
 
-this bug only exists in blob based VM in v1.8.x, v1.9.x, so if specify `ManagedDisks` when creating k8s cluster in acs-engine(AKS is using managed disk by default), it won't have this issue:
+this bug only exists in blob based VM in v1.8.x, v1.9.x, so if specify `ManagedDisks` when creating k8s cluster in aks-engine(AKS is using managed disk by default), it won't have this issue:
 
 ```json
     "agentPoolProfiles": [

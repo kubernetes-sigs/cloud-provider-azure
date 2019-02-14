@@ -41,7 +41,7 @@ Note: All values are of string type if not explicitly called out.
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
 - [Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview): set `useManagedIdentityExtension` to true
-- [Service Principal](https://github.com/Azure/acs-engine/blob/master/docs/serviceprincipal.md): set `aadClientID` and `aadClientSecret`
+- [Service Principal](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md): set `aadClientID` and `aadClientSecret`
 - [Client Certificate](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-protocols-oauth-service-to-service): set `aadClientCertPath` and `aadClientCertPassword`
 
 If more than one value is set, the order is `Managed Identity` > `Service Principal` > `Client Certificate`.

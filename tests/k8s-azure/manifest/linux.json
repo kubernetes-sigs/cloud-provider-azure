@@ -4,7 +4,7 @@
     "properties": {
         "orchestratorProfile": {
             "orchestratorType": "Kubernetes",
-            "orchestratorRelease": "1.12",
+            "orchestratorRelease": "1.14",
             "kubernetesConfig": {
                 "useCloudControllerManager": true,
                 "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.13.0-alpha.3",
@@ -18,7 +18,8 @@
         "masterProfile": {
             "count": 1,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_F2"
+            "vmSize": "Standard_F2",
+            "distro": "ubuntu"
         },
         "agentPoolProfiles": [
             {
@@ -26,7 +27,8 @@
                 "count": 2,
                 "vmSize": "Standard_F2",
                 "availabilityProfile": "AvailabilitySet",
-                "storageProfile": "ManagedDisks"
+                "storageProfile": "ManagedDisks",
+                "distro": "ubuntu"
             }
         ],
         "linuxProfile": {

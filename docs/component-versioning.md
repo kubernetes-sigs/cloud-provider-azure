@@ -32,10 +32,10 @@ Following Kubernetes versions should stick to Kubernetes package version specifi
  
      Update `FROM golang:* AS build_kubernetes`. This should stick to the Go version used by [Kubernetes](https://github.com/kubernetes/kubernetes/blob/master/build/build-image/cross/Dockerfile)
 
-### 3. acs-engine in E2E test
+### 3. aks-engine in E2E test
    Edit file [Dockerfile](/tests/k8s-azure/Dockerfile)
 
-   Update `ARG ACSENGINE_VERSION=` for acs-engine version.
+   Update `ARG AKSENGINE_VERSION=` for aks-engine version.
 
-   Update `FROM golang:* AS build_acs-engine`.
-   This should stick to the Go version used by [acs-engine](https://github.com/Azure/acs-engine/blob/master/Dockerfile).
+   Update `FROM golang:* AS build_aks-engine`.
+   This should stick to the Go version used by [aks-engine](https://github.com/Azure/aks-engine/blob/master/releases/Dockerfile.linux).

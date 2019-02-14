@@ -7,7 +7,7 @@
     - [1. azure file mountOptions setting](#1-azure-file-mountoptions-setting)
         - [file/dir mode setting:](#filedir-mode-setting)
         - [other useful `mountOptions` setting:](#other-useful-mountoptions-setting)
-    - [2. permission issue of azure file dynamic provision in acs-engine](#2-permission-issue-of-azure-file-dynamic-provision-in-acs-engine)
+    - [2. permission issue of azure file dynamic provision in aks-engine](#2-permission-issue-of-azure-file-dynamic-provision-in-aks-engine)
     - [3. Azure file support on Sovereign Cloud](#3-azure-file-support-on-sovereign-cloud)
     - [4. azure file dynamic provision failed due to cluster name length issue](#4-azure-file-dynamic-provision-failed-due-to-cluster-name-length-issue)
     - [5. azure file dynamic provision failed due to no storage account in current resource group](#5-azure-file-dynamic-provision-failed-due-to-no-storage-account-in-current-resource-group)
@@ -68,7 +68,7 @@ Error: SQLITE_BUSY: database is locked
 - [Allow nobrl parameter like docker to use sqlite over network drive](https://github.com/kubernetes/kubernetes/issues/61767)
 - [Error to deploy mongo with azure file storage](https://github.com/kubernetes/kubernetes/issues/58308)
 
-## 2. permission issue of azure file dynamic provision in acs-engine
+## 2. permission issue of azure file dynamic provision in aks-engine
 
 **Issue details**:
 

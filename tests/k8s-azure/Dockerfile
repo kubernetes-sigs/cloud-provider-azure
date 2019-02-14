@@ -12,11 +12,11 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
     && ./e2e
 RUN rm -rf _output/local/go
 
-FROM golang:1.11.2-stretch AS build_acs-engine
-ARG ACSENGINE_VERSION=v0.25.0
-WORKDIR /go/src/github.com/Azure/acs-engine
-RUN git clone https://github.com/Azure/acs-engine . \
-    && git checkout -b temp $ACSENGINE_VERSION \
+FROM golang:1.11.2-stretch AS build_aks-engine
+ARG AKSENGINE_VERSION=v0.31.0
+WORKDIR /go/src/github.com/Azure/aks-engine
+RUN git clone https://github.com/Azure/aks-engine . \
+    && git checkout -b temp $AKSENGINE_VERSION \
     && make
 
 FROM buildpack-deps:stretch-scm
@@ -36,7 +36,7 @@ COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/cluster $GOPATH/src/k8s.i
 COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/hack $GOPATH/src/k8s.io/kubernetes/hack
 COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/_output $GOPATH/src/k8s.io/kubernetes/_output
 COPY --from=build_kubernetes /go/src/k8s.io/kubernetes/e2e $GOPATH/src/k8s.io/kubernetes/e2e
-COPY --from=build_acs-engine /go/src/github.com/Azure/acs-engine/bin/acs-engine /usr/local/bin/
+COPY --from=build_aks-engine /go/src/github.com/Azure/aks-engine/bin/aks-engine /usr/local/bin/
 COPY k8s-azure skip.txt /opt/k8s-azure/
 COPY manifest /opt/k8s-azure/manifest
 RUN ["/bin/bash", "-c", "ln -s /opt/k8s-azure/k8s-azure /usr/local/bin"]
