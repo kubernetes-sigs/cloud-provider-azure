@@ -12,7 +12,7 @@ GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 
 IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.13.0-alpha.3
-ACSENGINE_VERSION ?= v0.25.0
+AKSENGINE_VERSION ?= v0.31.0
 HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
@@ -82,7 +82,7 @@ test-e2e: image hyperkube
 	docker push $(IMAGE)
 	docker build -t $(TEST_IMAGE) \
 		--build-arg K8S_VERSION=$(K8S_VERSION) \
-		--build-arg ACSENGINE_VERSION=$(ACSENGINE_VERSION) \
+		--build-arg AKSENGINE_VERSION=$(AKSENGINE_VERSION) \
 		tests/k8s-azure
 	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
 		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(ARTIFACTS) \

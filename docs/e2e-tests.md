@@ -3,7 +3,7 @@
 ## Prerequisite
 - An azure service principal
 
-    Please follow this [guide](https://github.com/Azure/acs-engine/blob/v0.14.0/docs/serviceprincipal.md) for creating an azure service principal
+    Please follow this [guide](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md) for creating an azure service principal
     The service principal should either have:
     - Contributor permission of a subscription
     - Contributor permission of a resource group. In this case, please create the resource group first
@@ -13,22 +13,22 @@
 ### 1. Without container
 
 1. Prepare dependency project
-- [acs-engine](https://github.com/Azure/acs-engine)
+- [aks-engine](https://github.com/Azure/aks-engine)
 
     It is recommended to use the same version as defined in test [Dockerfile](/tests/k8s-azure/Dockerfile). For example:
     ```
-    ARG ACSENGINE_VERSION=v0.18.1
+    ARG AKSENGINE_VERSION=v0.31.0
     ```
 
-    Build acs-engine, and make acs-engine binary in PATH environment variable.
+    Build aks-engine, and make aks-engine binary in PATH environment variable.
 
     ```
-    go get -d github.com/Azure/acs-engine
-    pushd $GOPATH/src/github.com/Azure/acs-engine
+    go get -d github.com/Azure/aks-engine
+    pushd $GOPATH/src/github.com/Azure/aks-engine
     # git checkout <version>
     make
     popd
-    export PATH=$PATH:$GOPATH/src/github.com/Azure/acs-engine/bin
+    export PATH=$PATH:$GOPATH/src/github.com/Azure/aks-engine/bin
     ```
 
 - [Kubernetes](https://github.com/kubernetes/kubernetes)

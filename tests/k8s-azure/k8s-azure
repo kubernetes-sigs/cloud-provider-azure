@@ -71,7 +71,7 @@ sub deploy {
                 else { 1; }
               }
               && mlog("Creating cluster: $name")
-              && run_cmd("acs-engine deploy --api-model $ENGINE_FILE"
+              && run_cmd("aks-engine deploy --api-model $ENGINE_FILE"
                 . " --azure-env $az_env --subscription-id \$K8S_AZURE_SUBSID --location $location --resource-group $name"
                 . " --auth-method client_secret --client-id \$K8S_AZURE_SPID --client-secret \$K8S_AZURE_SPSEC");
             }),
