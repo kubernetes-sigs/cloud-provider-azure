@@ -67,7 +67,12 @@ sub deploy {
                 else { 1; }
               }
               && do {
-                if ($hyperkube_image) {edit_file($ENGINE_FILE, sub { s/"customHyperkubeImage":\h*"\K.*"/$hyperkube_image"/ }); }
+                if ($hyperkube_image) {
+                  edit_file($ENGINE_FILE, sub { s/"customHyperkubeImage":\h*"\K.*"/$hyperkube_image"/ }); 
+                  my $myindex = index $hyperkube_image "/";
+                  my $private_azure_registry_server = substr $hyperkube_image, 0, $myindex;
+                  edit_file($ENGINE_FILE, sub { s/"privateAzureRegistryServer":\h*"\K.*"/$private_azure_registry_server"/ }); 
+                }
                 else { 1; }
               }
               && mlog("Creating cluster: $name")
