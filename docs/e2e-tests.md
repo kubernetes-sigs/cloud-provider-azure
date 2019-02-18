@@ -17,7 +17,7 @@
 
     It is recommended to use the same version as defined in test [Dockerfile](/tests/k8s-azure/Dockerfile). For example:
     ```
-    ARG AKSENGINE_VERSION=v0.31.0
+    ARG AKSENGINE_VERSION=v0.31.1
     ```
 
     Build aks-engine, and make aks-engine binary in PATH environment variable.
