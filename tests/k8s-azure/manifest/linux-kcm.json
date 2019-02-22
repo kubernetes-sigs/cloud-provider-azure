@@ -9,6 +9,8 @@
                 "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.13.0-alpha.3",
                 "privateAzureRegistryServer": "gcrio.azureedge.net",
                 "networkPolicy": "none",
+                "cloudProviderRateLimitQPS": 6,
+                "cloudProviderRateLimitBucket": 20,
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
                 }

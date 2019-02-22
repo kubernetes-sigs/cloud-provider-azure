@@ -22,11 +22,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/golang/glog"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"k8s.io/klog"
 
 	_ "k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "k8s.io/cloud-provider-azure/tests/e2e/network"
@@ -39,7 +39,7 @@ func TestAzureTest(t *testing.T) {
 	var r []Reporter
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
-			glog.Fatalf("Failed creating report directory: %v", err)
+			klog.Fatalf("Failed creating report directory: %v", err)
 		} else {
 			r = append(r, reporters.NewJUnitReporter(path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", config.GinkgoConfig.ParallelNode))))
 		}

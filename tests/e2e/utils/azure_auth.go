@@ -22,7 +22,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 const (
@@ -57,7 +57,7 @@ func getServicePrincipalToken(config *AzureAuthConfig) (*adal.ServicePrincipalTo
 	}
 
 	if len(config.AADClientSecret) > 0 {
-		glog.V(2).Infoln("azure: using client_id+client_secret to retrieve access token")
+		klog.V(2).Infoln("azure: using client_id+client_secret to retrieve access token")
 		return adal.NewServicePrincipalToken(
 			*oauthConfig,
 			config.AADClientID,

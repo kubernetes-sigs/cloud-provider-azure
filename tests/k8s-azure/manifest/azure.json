@@ -1,5 +1,5 @@
 {
-    "cloud":"AzurePublicCloud",
+    "cloud": "AzurePublicCloud",
     "tenantId": "fakeId",
     "subscriptionId": "fakeId",
     "aadClientId": "fakeId",

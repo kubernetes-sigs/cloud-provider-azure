@@ -1,5 +1,5 @@
 hash: 01765ee158fc0bc0d9d300fc64e132fde1bd643de2d14f839969d8434210f080
-updated: 2019-03-04T10:49:26.751808682+08:00
+updated: 2019-03-05T10:43:29.094037545+08:00
 imports:
 - name: github.com/Azure/azure-sdk-for-go
   version: da91af54816b4cf72949c225a2d0980f51fab01b
@@ -281,6 +281,7 @@ imports:
   - prometheus
   - prometheus/internal
   - prometheus/promhttp
+  - prometheus/testutil
 - name: github.com/prometheus/client_model
   version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
   subpackages:
@@ -431,7 +432,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 - name: k8s.io/api
-  version: 676ab814e75ce50ce3894737e54e4609919742f6
+  version: 2c0ad56b2edea4b10f827ef0440b2856e959e00d
   subpackages:
   - admission/v1beta1
   - admissionregistration/v1beta1
@@ -469,11 +470,11 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: c617180602d8c12b3eb714c2ab060eab84c57520
+  version: 33c4882cc5edc47105076f96bb6702b44984e78d
   subpackages:
   - pkg/features
 - name: k8s.io/apimachinery
-  version: 81b69da5c302c79688d4fd69ff47a73d95cb4e26
+  version: 543ce06723609ee794c79843a0fe7bc44bdad136
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -525,7 +526,7 @@ imports:
   - third_party/forked/golang/json
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 9421e6206e41cafc7fc354e842f1f368e91d8b2f
+  version: 961a314d306acdca9bef3cdbf4c9bc540d1d6d3d
   subpackages:
   - pkg/admission
   - pkg/admission/configuration
@@ -623,7 +624,7 @@ imports:
   - plugin/pkg/authenticator/token/webhook
   - plugin/pkg/authorizer/webhook
 - name: k8s.io/client-go
-  version: 5771679deb5557d394e16889cfb681e371894b30
+  version: e229810d4d4fb58570d0100dc218b99f458680db
   subpackages:
   - discovery
   - informers
@@ -770,7 +771,7 @@ imports:
   - util/retry
   - util/workqueue
 - name: k8s.io/cloud-provider
-  version: a4502edb8db4740dfd1d7ee0d5a1242a6ca395f5
+  version: 119062858fcb0db0d5e81dd25a3635f2707c8fbf
   subpackages:
   - features
   - service/helpers
@@ -778,7 +779,7 @@ imports:
   - volume/errors
   - volume/helpers
 - name: k8s.io/component-base
-  version: ea97baa8198a1b241e8c4c8e7d85d86f2c25d4e1
+  version: 63631dacbaf55cfe7fd22fcd117a8b26893a9a7b
   subpackages:
   - cli/flag
   - cli/globalflag
@@ -788,7 +789,7 @@ imports:
 - name: k8s.io/klog
   version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
 - name: k8s.io/kube-controller-manager
-  version: 277831e8d7ff7f4a887b67453163183065ea33ad
+  version: e0e07cae80af5a2faedcb6e73ca1a76e315c2612
   subpackages:
   - config/v1alpha1
 - name: k8s.io/kube-openapi
@@ -835,6 +836,7 @@ imports:
   - pkg/apis/scheduling
   - pkg/capabilities
   - pkg/client/leaderelectionconfig
+  - pkg/client/metrics/prometheus
   - pkg/cloudprovider/providers/azure
   - pkg/cloudprovider/providers/azure/auth
   - pkg/controller
@@ -857,8 +859,13 @@ imports:
   - pkg/util/metrics
   - pkg/util/node
   - pkg/util/parsers
+  - pkg/util/prometheusclientgo
+  - pkg/util/prometheusclientgo/leaderelection
+  - pkg/util/reflector/prometheus
   - pkg/util/taints
+  - pkg/util/workqueue/prometheus
   - pkg/version
+  - pkg/version/prometheus
   - pkg/version/verflag
 - name: k8s.io/utils
   version: c2654d5206da6b7b6ace12841e8f359bb89b443c
