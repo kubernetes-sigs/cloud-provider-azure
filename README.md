@@ -1,6 +1,6 @@
 # Cloud provider for Azure
 
-## Cloud controller manager for Azure
+## Introduction
 
 This repository provides tools and scripts for building and testing `Kubernetes cloud-controller-manager` for Azure. The project is under development.
 
@@ -8,19 +8,56 @@ The Azure cloud provider code locates at [Kubernetes repository directory](https
 
 There is an ongoing work for refactoring cloud providers out of the upstream repository. For more details, please check [this issue](https://github.com/kubernetes/features/issues/88).
 
-Please checkout details in [Cloud controller manager doc](docs/cloud-controller-manager.md).
+## Build
 
-Please also check following docs:
+Build azure-cloud-controller-manager:
+
+```sh
+make
+```
+
+Build docker image for azure-cloud-controller-manager:
+
+```sh
+IMAGE_REGISTRY=<registry> make image
+```
+
+## Run
+
+Run azure-cloud-controller-manager:
+
+```sh
+azure-cloud-controller-manager --cloud-provider=azure \
+    --cloud-config=/etc/kubernetes/azure.json \
+    --kubeconfig=/etc/kubernetes/kubeconfig \
+    --allocate-node-cidrs=true \
+    --configure-cloud-routes=true \
+    --cluster-cidr=10.240.0.0/12 \
+    --leader-elect=true \
+    --v=2
+```
+
+Please checkout more details in [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
+
+## E2E tests
+
+Please check the following documents for e2e tests:
+
+- [Upstream Kubernetes e2e tests](docs/e2e-tests.md)
+- [Azure e2e tests](docs/e2e-tests-azure.md)
+
+## Documentation
 
 - [Component versioning](docs/component-versioning.md)
 - [Dependency management](docs/dependency-management.md)
-- [E2E Tests](docs/e2e-tests.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
-- [Load balancer Annotations](docs/development-loadbalancer.md)
+- [Load balancer Annotations](docs/azure-loadbalancer.md)
 - [Using Azure availability zones](docs/using-availability-zones.md)
 - [Using cross resource group nodes](docs/using-cross-resource-group-nodes.md)
 - [AzureDisk known issues](docs/azuredisk-issues.md)
 - [AzureFile known issues](docs/azurefile-issues.md)
+
+See [docs](docs/) for more documentations.
 
 ## Contributing
 
