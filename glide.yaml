@@ -1,7 +1,7 @@
 package: k8s.io/cloud-provider-azure
 import:
 - package: k8s.io/kubernetes
-  version: v1.13.0-alpha.3
+  version: v1.14.0-beta.1
 - package: github.com/Azure/azure-sdk-for-go
   version: v21.3.0
 testImport:

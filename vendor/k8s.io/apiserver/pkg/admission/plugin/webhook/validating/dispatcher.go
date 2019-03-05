@@ -22,12 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/api/admissionregistration/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	admissionmetrics "k8s.io/apiserver/pkg/admission/metrics"
 	webhookerrors "k8s.io/apiserver/pkg/admission/plugin/webhook/errors"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/generic"
@@ -46,7 +47,7 @@ func newValidatingDispatcher(cm *webhook.ClientManager) generic.Dispatcher {
 
 var _ generic.Dispatcher = &validatingDispatcher{}
 
-func (d *validatingDispatcher) Dispatch(ctx context.Context, attr *generic.VersionedAttributes, relevantHooks []*v1beta1.Webhook) error {
+func (d *validatingDispatcher) Dispatch(ctx context.Context, attr *generic.VersionedAttributes, o admission.ObjectInterfaces, relevantHooks []*v1beta1.Webhook) error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(relevantHooks))
 	wg.Add(len(relevantHooks))
@@ -64,17 +65,17 @@ func (d *validatingDispatcher) Dispatch(ctx context.Context, attr *generic.Versi
 			ignoreClientCallFailures := hook.FailurePolicy != nil && *hook.FailurePolicy == v1beta1.Ignore
 			if callErr, ok := err.(*webhook.ErrCallingWebhook); ok {
 				if ignoreClientCallFailures {
-					glog.Warningf("Failed calling webhook, failing open %v: %v", hook.Name, callErr)
+					klog.Warningf("Failed calling webhook, failing open %v: %v", hook.Name, callErr)
 					utilruntime.HandleError(callErr)
 					return
 				}
 
-				glog.Warningf("Failed calling webhook, failing closed %v: %v", hook.Name, err)
+				klog.Warningf("Failed calling webhook, failing closed %v: %v", hook.Name, err)
 				errCh <- apierrors.NewInternalError(err)
 				return
 			}
 
-			glog.Warningf("rejected by webhook %q: %#v", hook.Name, err)
+			klog.Warningf("rejected by webhook %q: %#v", hook.Name, err)
 			errCh <- err
 		}(relevantHooks[i])
 	}
@@ -124,7 +125,7 @@ func (d *validatingDispatcher) callHook(ctx context.Context, h *v1beta1.Webhook,
 	for k, v := range response.Response.AuditAnnotations {
 		key := h.Name + "/" + k
 		if err := attr.AddAnnotation(key, v); err != nil {
-			glog.Warningf("Failed to set admission audit annotation %s to %s for validating webhook %s: %v", key, v, h.Name, err)
+			klog.Warningf("Failed to set admission audit annotation %s to %s for validating webhook %s: %v", key, v, h.Name, err)
 		}
 	}
 	if response.Response.Allowed {

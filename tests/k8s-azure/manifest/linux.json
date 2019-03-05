@@ -10,6 +10,8 @@
                 "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.13.0-alpha.3",
                 "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.13.0-alpha.3",
                 "networkPolicy": "none",
+                "cloudProviderRateLimitQPS": 6,
+                "cloudProviderRateLimitBucket": 20,
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
                 }

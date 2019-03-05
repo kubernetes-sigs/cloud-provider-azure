@@ -25,20 +25,32 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	utilflag "k8s.io/apiserver/pkg/util/flag"
-	"k8s.io/apiserver/pkg/util/logs"
+
 	"k8s.io/cloud-provider-azure/cloud-controller-manager/version"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 	azureprovider "k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
+	_ "k8s.io/kubernetes/pkg/util/prometheusclientgo" // load all the prometheus client-go plugins
+	_ "k8s.io/kubernetes/pkg/version/prometheus"      // for version metric registration
 )
+
+func init() {
+	// Those flags are not used, but it is referenced in vendors, hence it's still registered and hidden from users.
+	_ = goflag.String("cloud-provider-gce-lb-src-cidrs", "", "not used")
+}
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	command := app.NewCloudControllerManagerCommand()
-	pflag.CommandLine.SetNormalizeFunc(utilflag.WordSepNormalizeFunc)
+	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
+	// TODO: once we switch everything over to Cobra commands, we can go back to calling
+	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
+	// normalize func and add the go flag set by hand.
+	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -48,6 +60,12 @@ func main() {
 		if flag.Name == "cloud-provider" {
 			flag.Value.Set(azureprovider.CloudProviderName)
 			flag.DefValue = azureprovider.CloudProviderName
+			return
+		}
+
+		// Set unwanted flags as hidden.
+		if flag.Name == "cloud-provider-gce-lb-src-cidrs" {
+			flag.Hidden = true
 		}
 	})
 
