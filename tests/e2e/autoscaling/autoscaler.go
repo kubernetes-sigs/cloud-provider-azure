@@ -33,7 +33,7 @@ import (
 
 const podSize int64 = 200 //podSize to create, 200m, 0.2 core
 
-// Cluster autoscaling cannot run in parrallel, since multiple threads will infect the count of nodes
+// Cluster autoscaling cannot run in parallel, since multiple threads will infect the count of nodes
 // It is slow, where at most 30 minutes are required to complete a single up or down scale
 var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 	basename := "autoscaler"
@@ -101,7 +101,6 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 
 		// clean up
 		cs = nil
-		nodesToDelete = nil
 		initNodesNames = nil
 		ns = nil
 		initNodeCount = 0
