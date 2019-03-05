@@ -1,5 +1,7 @@
 # Cloud provider for Azure
 
+[![Go Report Card](https://goreportcard.com/badge/k8s.io/cloud-provider-azure)](https://goreportcard.com/report/k8s.io/cloud-provider-azure)
+
 ## Introduction
 
 This repository provides tools and scripts for building and testing `Kubernetes cloud-controller-manager` for Azure. The project is under development.

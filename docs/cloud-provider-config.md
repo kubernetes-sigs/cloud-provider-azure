@@ -3,7 +3,8 @@
 This doc describes cloud provider config file, which is to be used via `--cloud-config` flag of azure-cloud-controller-manager.
 
 Here is a config file sample:
-```
+
+```json
 {
     "cloud":"AzurePublicCloud",
     "tenantId": "0000000-0000-0000-0000-000000000000",
@@ -26,8 +27,8 @@ Here is a config file sample:
 
 Note: All values are of string type if not explicitly called out.
 
+## Auth configs
 
-## Auth config
 |Name|Description|Remark
 |---|---|---|
 |cloud|The cloud environment identifier|Valid [values](https://github.com/Azure/go-autorest/blob/v9.9.0/autorest/azure/environments.go#L29)|
@@ -37,17 +38,21 @@ Note: All values are of string type if not explicitly called out.
 |aadClientCertPath|The path of a client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
 |aadClientCertPassword|The password of the client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
 |useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to false|
+|userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs||
 |subscriptionId|The ID of the Azure Subscription that the cluster is deployed in||
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
-- [Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview): set `useManagedIdentityExtension` to true
+
+- [Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview):
+  - For system-assigned managed identity: set `useManagedIdentityExtension` to true
+  - For user-assigned managed identity: set `useManagedIdentityExtension` to true and also set `userAssignedIdentityID`
 - [Service Principal](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md): set `aadClientID` and `aadClientSecret`
 - [Client Certificate](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-protocols-oauth-service-to-service): set `aadClientCertPath` and `aadClientCertPassword`
 
 If more than one value is set, the order is `Managed Identity` > `Service Principal` > `Client Certificate`.
 
-
 ## Cluster config
+
 |Name|Description|Remark|
 |---|---|---|
 |resourceGroup|The name of the resource group that the cluster is deployed in||
@@ -65,6 +70,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |cloudProviderBackoffExponent|Backoff exponent|Float value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffDuration|Backoff duration|Integer value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffJitter|Backoff jitter|Float value, valid if `cloudProviderBackoff` is true|
+|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default"|Default to "default"|
 |cloudProviderRateLimit|Enable rate limiting|Boolean value, default to false|
 |cloudProviderRateLimitQPS|Rate limit QPS (Read)|Float value, valid if `cloudProviderRateLimit` is true|
 |cloudProviderRateLimitBucket|Rate limit Bucket Size|Integar value, valid if `cloudProviderRateLimit` is true|
@@ -76,13 +82,21 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
 
 ### primaryAvailabilitySetName
+
 If this is set, the Azure cloudprovider will only add nodes from that availability set to the load
 balancer backend pool. If this is not set, and multiple agent pools (availability sets) are used, then
 the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
 In other words, if you use multiple agent pools (availability sets), you MUST set this field.
 
 ### primaryScaleSetName
+
 If this is set, the Azure cloudprovider will only add nodes from that scale set to the load
 balancer backend pool. If this is not set, and multiple agent pools (scale sets) are used, then
 the cloudprovider will try to add all nodes to a single backend pool which is forbidden when using Load Balancer Basic SKU.
 In other words, if you use multiple agent pools (scale sets), and `loadBalancerSku` is set to `basic` you MUST set this field.
+
+### excludeMasterFromStandardLB
+
+Master nodes would not add to the backends of Azure loadbalancer (ALB) if `excludeMasterFromStandardLB` is set.
+
+By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want adding the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
