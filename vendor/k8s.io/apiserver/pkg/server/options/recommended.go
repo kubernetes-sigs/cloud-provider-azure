@@ -82,8 +82,9 @@ func (o *RecommendedOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 // ApplyTo adds RecommendedOptions to the server configuration.
+// scheme is the scheme of the apiserver types that are sent to the admission chain.
 // pluginInitializers can be empty, it is only need for additional initializers.
-func (o *RecommendedOptions) ApplyTo(config *server.RecommendedConfig) error {
+func (o *RecommendedOptions) ApplyTo(config *server.RecommendedConfig, scheme *runtime.Scheme) error {
 	if err := o.Etcd.ApplyTo(&config.Config); err != nil {
 		return err
 	}
@@ -107,7 +108,7 @@ func (o *RecommendedOptions) ApplyTo(config *server.RecommendedConfig) error {
 	}
 	if initializers, err := o.ExtraAdmissionInitializers(config); err != nil {
 		return err
-	} else if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, config.ClientConfig, initializers...); err != nil {
+	} else if err := o.Admission.ApplyTo(&config.Config, config.SharedInformerFactory, config.ClientConfig, scheme, initializers...); err != nil {
 		return err
 	}
 

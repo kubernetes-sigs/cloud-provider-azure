@@ -62,20 +62,6 @@ type Attributes interface {
 	AddAnnotation(key, value string) error
 }
 
-// ObjectInterfaces is an interface used by AdmissionController to get object interfaces
-// such as Converter or Defaulter. These interfaces are normally coming from Request Scope
-// to handle special cases like CRDs.
-type ObjectInterfaces interface {
-	// GetObjectCreater is the ObjectCreator appropriate for the requested object.
-	GetObjectCreater() runtime.ObjectCreater
-	// GetObjectTyper is the ObjectTyper appropriate for the requested object.
-	GetObjectTyper() runtime.ObjectTyper
-	// GetObjectDefaulter is the ObjectDefaulter appropriate for the requested object.
-	GetObjectDefaulter() runtime.ObjectDefaulter
-	// GetObjectConvertor is the ObjectConvertor appropriate for the requested object.
-	GetObjectConvertor() runtime.ObjectConvertor
-}
-
 // privateAnnotationsGetter is a private interface which allows users to get annotations from Attributes.
 type privateAnnotationsGetter interface {
 	getAnnotations() map[string]string
@@ -98,7 +84,7 @@ type MutationInterface interface {
 	Interface
 
 	// Admit makes an admission decision based on the request attributes
-	Admit(a Attributes, o ObjectInterfaces) (err error)
+	Admit(a Attributes) (err error)
 }
 
 // ValidationInterface is an abstract, pluggable interface for Admission Control decisions.
@@ -106,7 +92,7 @@ type ValidationInterface interface {
 	Interface
 
 	// Validate makes an admission decision based on the request attributes.  It is NOT allowed to mutate
-	Validate(a Attributes, o ObjectInterfaces) (err error)
+	Validate(a Attributes) (err error)
 }
 
 // Operation is the type of resource operation being checked for admission control

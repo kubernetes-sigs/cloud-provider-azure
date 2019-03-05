@@ -44,7 +44,7 @@ func WithAudit(i Interface, ae *auditinternal.Event) Interface {
 	return &auditHandler{i, ae}
 }
 
-func (handler auditHandler) Admit(a Attributes, o ObjectInterfaces) error {
+func (handler auditHandler) Admit(a Attributes) error {
 	if !handler.Interface.Handles(a.GetOperation()) {
 		return nil
 	}
@@ -53,13 +53,13 @@ func (handler auditHandler) Admit(a Attributes, o ObjectInterfaces) error {
 	}
 	var err error
 	if mutator, ok := handler.Interface.(MutationInterface); ok {
-		err = mutator.Admit(a, o)
+		err = mutator.Admit(a)
 		handler.logAnnotations(a)
 	}
 	return err
 }
 
-func (handler auditHandler) Validate(a Attributes, o ObjectInterfaces) error {
+func (handler auditHandler) Validate(a Attributes) error {
 	if !handler.Interface.Handles(a.GetOperation()) {
 		return nil
 	}
@@ -68,7 +68,7 @@ func (handler auditHandler) Validate(a Attributes, o ObjectInterfaces) error {
 	}
 	var err error
 	if validator, ok := handler.Interface.(ValidationInterface); ok {
-		err = validator.Validate(a, o)
+		err = validator.Validate(a)
 		handler.logAnnotations(a)
 	}
 	return err

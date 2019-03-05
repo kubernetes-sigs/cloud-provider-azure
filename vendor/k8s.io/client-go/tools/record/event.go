@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,8 +29,10 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record/util"
 	ref "k8s.io/client-go/tools/reference"
+
+	"net/http"
+
 	"k8s.io/klog"
 )
 
@@ -155,6 +157,16 @@ func recordToSink(sink EventSink, event *v1.Event, eventCorrelator *EventCorrela
 	}
 }
 
+func isKeyNotFoundError(err error) bool {
+	statusErr, _ := err.(*errors.StatusError)
+
+	if statusErr != nil && statusErr.Status().Code == http.StatusNotFound {
+		return true
+	}
+
+	return false
+}
+
 // recordEvent attempts to write event to a sink. It returns true if the event
 // was successfully recorded or discarded, false if it should be retried.
 // If updateExistingEvent is false, it creates a new event, otherwise it updates
@@ -166,7 +178,7 @@ func recordEvent(sink EventSink, event *v1.Event, patch []byte, updateExistingEv
 		newEvent, err = sink.Patch(event, patch)
 	}
 	// Update can fail because the event may have been removed and it no longer exists.
-	if !updateExistingEvent || (updateExistingEvent && util.IsKeyNotFoundError(err)) {
+	if !updateExistingEvent || (updateExistingEvent && isKeyNotFoundError(err)) {
 		// Making sure that ResourceVersion is empty on creation
 		event.ResourceVersion = ""
 		newEvent, err = sink.Create(event)
@@ -248,7 +260,7 @@ func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations m
 		return
 	}
 
-	if !util.ValidateEventType(eventtype) {
+	if !validateEventType(eventtype) {
 		klog.Errorf("Unsupported event type: '%v'", eventtype)
 		return
 	}
@@ -261,6 +273,14 @@ func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations m
 		defer utilruntime.HandleCrash()
 		recorder.Action(watch.Added, event)
 	}()
+}
+
+func validateEventType(eventtype string) bool {
+	switch eventtype {
+	case v1.EventTypeNormal, v1.EventTypeWarning:
+		return true
+	}
+	return false
 }
 
 func (recorder *recorderImpl) Event(object runtime.Object, eventtype, reason, message string) {

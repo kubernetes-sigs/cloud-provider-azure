@@ -16,7 +16,6 @@
 
 set -e
 cd $(dirname "$BASH_SOURCE")/..
-export GLIDE_HOME=$(pwd)/.glide
 
 function update-cloudprovider {
     AZURE_PROVIDER_DIR=pkg/azureprovider
@@ -57,7 +56,7 @@ function glide-update-staging-mirror {
 }
 
 # Install dependencies, first round
-glide update --no-recursive
+dep ensure -update
 # Uncomment when moving cloud provider code
 # update-cloudprovider
 glide-update-staging-mirror
