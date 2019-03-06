@@ -32,10 +32,17 @@ import (
 	_ "k8s.io/cloud-provider-azure/tests/e2e/network"
 )
 
+const (
+	reportDirEnv = "CCM_JUNIT_REPORT_DIR"
+	defaultReportDir = "_report/"
+)
+
 func TestAzureTest(t *testing.T) {
 	RegisterFailHandler(Fail)
-	reportDir := "_report/"
-
+	reportDir := os.Getenv(reportDirEnv)
+	if reportDir == "" {
+		reportDir = defaultReportDir
+	}
 	var r []Reporter
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
