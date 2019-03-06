@@ -93,3 +93,6 @@ test-e2e: image hyperkube
 		-csubject=$(SUBJECT) \
 		-cmanifest=$(TEST_MANIFEST) \
 		-chyperkube_image=$(HYPERKUBE_IMAGE)
+
+test-ccm-e2e:
+	go test ./tests/e2e/
