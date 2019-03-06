@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	reportDirEnv = "CCM_JUNIT_REPORT_DIR"
+	reportDirEnv     = "CCM_JUNIT_REPORT_DIR"
 	defaultReportDir = "_report/"
 )
 
