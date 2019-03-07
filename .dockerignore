@@ -2,5 +2,5 @@
 !.git
 !cloud-controller-manager
 !Makefile
-!scripts/pkg-config.sh
+!hack/pkg-config.sh
 !vendor

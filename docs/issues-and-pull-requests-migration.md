@@ -47,7 +47,7 @@ git branch -D $PR_BRANCH_LOCAL
 Switch to kubernetes-azure-cloud-controller-manager repo.
 Apply the patch:
 ```
-scripts/transform-patch.pl $PATCH_FILE | git apply
+hack/transform-patch.pl $PATCH_FILE | git apply
 ```
 
 If any of file in the patch does not fall under Azure cloud provider directory, the transform script will prompt a warning.
