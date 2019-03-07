@@ -95,4 +95,4 @@ test-e2e: image hyperkube
 		-chyperkube_image=$(HYPERKUBE_IMAGE)
 
 test-ccm-e2e:
-	go test ./tests/e2e/
+	go test ./tests/e2e/ -timeout 0
