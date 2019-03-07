@@ -1,4 +1,18 @@
-.PHONY: all clean update-prepare update test-check test-update test-unit test-lint test-lint-prepare image
+# Copyright 2019 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+.PHONY: all clean update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate
 .DELETE_ON_ERROR:
 
 SHELL=/bin/bash -o pipefail
@@ -42,22 +56,22 @@ image:
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
-	$(eval K8S_VERSION=$(shell REGISTRY=$(IMAGE_REGISTRY) BRANCH=$(K8S_BRANCH) scripts/build-hyperkube.sh))
+	$(eval K8S_VERSION=$(shell REGISTRY=$(IMAGE_REGISTRY) BRANCH=$(K8S_BRANCH) hack/build-hyperkube.sh))
 	$(eval HYPERKUBE_IMAGE=$(IMAGE_REGISTRY)/hyperkube-amd64:$(K8S_VERSION))
 endif
 
 $(PKG_CONFIG):
-	scripts/pkg-config.sh > $@
+	hack/pkg-config.sh > $@
 
 test-unit: $(PKG_CONFIG)
 	mkdir -p $(TEST_RESULTS_DIR)
 	cd cloud-controller-manager && go test $(PKG_CONFIG_CONTENT) -v ./... | tee ../$(TEST_RESULTS_DIR)/unittest.txt
 ifdef JUNIT
-	scripts/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
+	hack/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
 endif
 
 # collection of check tests
-test-check: test-lint-prepare test-lint
+test-check: test-lint-prepare test-lint test-boilerplate
 
 test-lint-prepare:
 	go get -u gopkg.in/alecthomas/gometalinter.v1
@@ -65,11 +79,15 @@ test-lint-prepare:
 test-lint:
 	gometalinter.v1 $(GOMETALINTER_OPTION) ./ cloud-controller-manager/...
 	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
+
+test-boilerplate:
+	hack/verify-boilerplate.sh
+
 update-prepare:
 	go get -u github.com/sgotti/glide-vc
 	go get -u github.com/Masterminds/glide
 update:
-	scripts/update-dependencies.sh
+	hack/update-dependencies.sh
 test-update: update-prepare update
 	git checkout glide.lock
 	git add -A .
