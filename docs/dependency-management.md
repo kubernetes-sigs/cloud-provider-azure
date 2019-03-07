@@ -52,7 +52,7 @@ Such workaround makes things a bit tricky for packages that will depend on Kuber
 
 For example, a vendoring tool such as glide will try to fetch `k8s.io/api` during resolving packages. But it doesn't know the exact version tag to get(not recorded in `Godeps.json`), and then it will try to use HEAD version, which is not likely to be correct.
 
-Hereby we create a script (`scripts/update-dependencies.sh`) to update dependencies. It uses `glide`'s `mirror` feature, copying staging package to a local and set it as upstream for `k8s staging packages`.
+Hereby we create a script (`hack/update-dependencies.sh`) to update dependencies. It uses `glide`'s `mirror` feature, copying staging package to a local and set it as upstream for `k8s staging packages`.
 
 Command `make update` will trigger the update script run.
 
