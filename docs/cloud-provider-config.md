@@ -29,17 +29,17 @@ Note: All values are of string type if not explicitly called out.
 
 ## Auth configs
 
-|Name|Description|Remark
+|Name|Description|Remark|
 |---|---|---|
-|cloud|The cloud environment identifier|Valid [values](https://github.com/Azure/go-autorest/blob/v9.9.0/autorest/azure/environments.go#L29)|
-|tenantID|The AAD Tenant ID for the Subscription that the cluster is deployed in||
-|aadClientID|The ClientID for an AAD application with RBAC access to talk to Azure RM APIs||
-|aadClientSecret|The ClientSecret for an AAD application with RBAC access to talk to Azure RM APIs||
-|aadClientCertPath|The path of a client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
-|aadClientCertPassword|The password of the client certificate for an AAD application with RBAC access to talk to Azure RM APIs||
-|useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to false|
-|userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs||
-|subscriptionId|The ID of the Azure Subscription that the cluster is deployed in||
+|cloud|The cloud environment identifier|Valid values could be found  [here](https://github.com/Azure/go-autorest/blob/v9.9.0/autorest/azure/environments.go#L29). Default to `AzurePublicCloud`.|
+|tenantID|The AAD Tenant ID for the Subscription that the cluster is deployed in|**Required**.|
+|aadClientID|The ClientID for an AAD application with RBAC access to talk to Azure RM APIs|Used for service principal authn.|
+|aadClientSecret|The ClientSecret for an AAD application with RBAC access to talk to Azure RM APIs|Used for service principal  authn.|
+|aadClientCertPath|The path of a client certificate for an AAD application with RBAC access to talk to Azure RM APIs|Used for client cert authn.|
+|aadClientCertPassword|The password of the client certificate for an AAD application with RBAC access to talk to Azure RM APIs|Used for client cert authn.|
+|useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to false.|
+|userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs|Required for user-assigned managed identity.|
+|subscriptionId|The ID of the Azure Subscription that the cluster is deployed in|**Required**.|
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
 
