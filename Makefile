@@ -33,6 +33,7 @@ TEST_MANIFEST ?= linux
 # build hyperkube image when specified
 K8S_BRANCH ?=
 # Only run conformance tests by default (non-serial and non-slow)
+# Note autoscaling tests would be skiped as well.
 CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 
 IMAGE_NAME=azure-cloud-controller-manager
