@@ -14,4 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-go test ../tests/e2e/ -timeout 0
+REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
+go test ${REPO_ROOT}/tests/e2e/ -timeout 0 $*
