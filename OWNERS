@@ -4,6 +4,7 @@ approvers:
 - feiskyer
 - karataliu
 - khenidak
+- ritazh
 reviewers:
 - andyzhangx
 - brendandburns
@@ -11,3 +12,4 @@ reviewers:
 - justaugustus
 - karataliu
 - khenidak
+- ritazh
