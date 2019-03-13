@@ -32,6 +32,8 @@ HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
 K8S_BRANCH ?=
+# Only run conformance tests by default (non-serial and non-slow)
+CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG=$(shell git rev-parse --short=7 HEAD)
@@ -113,4 +115,4 @@ test-e2e: image hyperkube
 		-chyperkube_image=$(HYPERKUBE_IMAGE)
 
 test-ccm-e2e:
-	go test ./tests/e2e/ -timeout 0
+	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
