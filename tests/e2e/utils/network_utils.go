@@ -29,7 +29,7 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 	Logf("Getting virtual network list")
 	vNetClient := azureTestClient.createVirtualNetworksClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = vNetClient.List(context.Background(), getResourceGroup())
+		result, err = vNetClient.List(context.Background(), azureTestClient.getResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -63,7 +63,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 	subnetParameter.Name = subnetName
 	subnetParameter.AddressPrefix = prefix
 	subnetsClient := azureTestClient.createSubnetsClient()
-	_, err := subnetsClient.CreateOrUpdate(context.Background(), getResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
+	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.getResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
 	return err
 }
 
@@ -71,7 +71,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName string) error {
 	subnetClient := azureTestClient.createSubnetsClient()
 	return wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err := subnetClient.Delete(context.Background(), getResourceGroup(), vnetName, subnetName)
+		_, err := subnetClient.Delete(context.Background(), azureTestClient.getResourceGroup(), vnetName, subnetName)
 		if err != nil {
 			return false, nil
 		}
@@ -98,7 +98,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	Logf("Getting virtual network list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = securityGroupsClient.List(context.Background(), getResourceGroup())
+		result, err = securityGroupsClient.List(context.Background(), azureTestClient.getResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
