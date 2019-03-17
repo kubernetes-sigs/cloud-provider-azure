@@ -28,6 +28,10 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 )
 
+const (
+	serviceTimeout = 20 * time.Minute
+)
+
 // DeleteService deletes a service
 func DeleteService(cs clientset.Interface, ns string, serviceName string) error {
 	err := cs.CoreV1().Services(ns).Delete(serviceName, nil)
@@ -66,7 +70,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 	var service *v1.Service
 	var err error
 
-	if wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
+	if wait.PollImmediate(10*time.Second, serviceTimeout, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
