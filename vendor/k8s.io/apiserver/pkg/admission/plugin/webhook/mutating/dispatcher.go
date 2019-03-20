@@ -94,6 +94,12 @@ func (a *mutatingDispatcher) callAttrMutatingHook(ctx context.Context, h *v1beta
 		}
 	}
 
+	// Currently dispatcher only supports `v1beta1` AdmissionReview
+	// TODO: Make the dispatcher capable of sending multiple AdmissionReview versions
+	if !util.HasAdmissionReviewVersion(v1beta1.SchemeGroupVersion.Version, h) {
+		return &webhook.ErrCallingWebhook{WebhookName: h.Name, Reason: fmt.Errorf("webhook does not accept v1beta1 AdmissionReview")}
+	}
+
 	// Make the webhook request
 	request := request.CreateAdmissionReview(attr)
 	client, err := a.cm.HookClient(util.HookClientConfigForWebhook(h))
@@ -101,7 +107,11 @@ func (a *mutatingDispatcher) callAttrMutatingHook(ctx context.Context, h *v1beta
 		return &webhook.ErrCallingWebhook{WebhookName: h.Name, Reason: err}
 	}
 	response := &admissionv1beta1.AdmissionReview{}
-	if err := client.Post().Context(ctx).Body(&request).Do().Into(response); err != nil {
+	r := client.Post().Context(ctx).Body(&request)
+	if h.TimeoutSeconds != nil {
+		r = r.Timeout(time.Duration(*h.TimeoutSeconds) * time.Second)
+	}
+	if err := r.Do().Into(response); err != nil {
 		return &webhook.ErrCallingWebhook{WebhookName: h.Name, Reason: err}
 	}
 
