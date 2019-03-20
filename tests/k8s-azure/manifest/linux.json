@@ -7,8 +7,7 @@
             "orchestratorRelease": "1.14",
             "kubernetesConfig": {
                 "useCloudControllerManager": true,
-                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.13.0-alpha.3",
-                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.13.0-alpha.3",
+                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.14.0-alpha.1",
                 "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
@@ -20,8 +19,7 @@
         "masterProfile": {
             "count": 1,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_F2",
-            "distro": "ubuntu"
+            "vmSize": "Standard_F2"
         },
         "agentPoolProfiles": [
             {
@@ -29,8 +27,7 @@
                 "count": 2,
                 "vmSize": "Standard_F2",
                 "availabilityProfile": "AvailabilitySet",
-                "storageProfile": "ManagedDisks",
-                "distro": "ubuntu"
+                "storageProfile": "ManagedDisks"
             }
         ],
         "linuxProfile": {
