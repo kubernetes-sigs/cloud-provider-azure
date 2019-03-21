@@ -63,12 +63,12 @@ var _ = Describe("Network security group", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.Extensions().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.Extensions().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)

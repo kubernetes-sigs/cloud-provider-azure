@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -129,7 +129,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		utils.Logf("Create deployment")
 		replicas := int32(podCount)
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename})
-		_, err := cs.Extensions().Deployments(ns.Name).Create(deployment)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(deployment)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scale up")
@@ -141,7 +141,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		utils.Logf("Delete Pods by replic=0")
 		replicas = 0
 		deployment.Spec.Replicas = &replicas
-		_, err = cs.Extensions().Deployments(ns.Name).Update(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Update(deployment)
 		Expect(err).NotTo(HaveOccurred())
 		targetNodeCount = initNodeCount
 		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
@@ -178,13 +178,13 @@ func createScalerPodManifest(name string) (result *v1.Pod) {
 	return
 }
 
-func createDeploymentManifest(name string, replicas int32, label map[string]string) (result *v1beta1.Deployment) {
+func createDeploymentManifest(name string, replicas int32, label map[string]string) (result *appsv1.Deployment) {
 	spec := createPodSpec()
-	result = &v1beta1.Deployment{
+	result = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: v1beta1.DeploymentSpec{
+		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: label,
