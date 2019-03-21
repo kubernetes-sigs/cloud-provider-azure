@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -68,12 +68,12 @@ var _ = Describe("Service with annotation", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.Extensions().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.Extensions().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -213,14 +213,14 @@ func createLoadBalancerServiceManifest(c clientset.Interface, name string, annot
 
 // defaultDeployment returns a default deployment
 // running nginx image which exposes port 80
-func createNginxDeploymentManifest(name string, labels map[string]string) (result *v1beta1.Deployment) {
+func createNginxDeploymentManifest(name string, labels map[string]string) (result *appsv1.Deployment) {
 	var replicas int32
 	replicas = 5
-	result = &v1beta1.Deployment{
+	result = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: v1beta1.DeploymentSpec{
+		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
