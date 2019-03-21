@@ -6,7 +6,7 @@
             "orchestratorType": "Kubernetes",
             "orchestratorRelease": "1.14",
             "kubernetesConfig": {
-                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.13.0-alpha.3",
+                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.14.0-rc.1",
                 "privateAzureRegistryServer": "gcrio.azureedge.net",
                 "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
