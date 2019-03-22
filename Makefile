@@ -37,7 +37,7 @@ K8S_BRANCH ?=
 CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 
 IMAGE_NAME=azure-cloud-controller-manager
-IMAGE_TAG=$(shell git rev-parse --short=7 HEAD)
+IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
 TEST_IMAGE_NAME=azure-cloud-controller-manager-test
