@@ -47,6 +47,22 @@ func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	return pods, nil
 }
 
+// LogPodStatus logs the rate of pending
+func LogPodStatus(cs clientset.Interface, ns string) error {
+	pods, err := getPodList(cs, ns)
+	if err != nil {
+		return err
+	}
+	pendingPodCount := 0
+	for _, p := range pods.Items {
+		if p.Status.Phase == v1.PodPending {
+			pendingPodCount++
+		}
+	}
+	Logf("%d of %d pods in namespace %s are pending", pendingPodCount, len(pods.Items), ns)
+	return nil
+}
+
 // DeletePodsInNamespace deletes all pods in the namespace
 func DeletePodsInNamespace(cs clientset.Interface, ns string) error {
 	Logf("Deleting all pods in namespace %s", ns)
