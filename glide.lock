@@ -1,5 +1,5 @@
-hash: 01765ee158fc0bc0d9d300fc64e132fde1bd643de2d14f839969d8434210f080
-updated: 2019-03-05T10:43:29.094037545+08:00
+hash: 23cb1a507e23444e0c4a0e3e9fb8a2a32dc6a7656d475b141a52f157d43aa259
+updated: 2019-03-20T13:54:22.407238547+08:00
 imports:
 - name: github.com/Azure/azure-sdk-for-go
   version: da91af54816b4cf72949c225a2d0980f51fab01b
@@ -256,7 +256,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  version: 5533ce8a0da374da682cd53d70ddcc54adf1a710
   subpackages:
   - format
   - gstruct
@@ -309,7 +309,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/cobra
-  version: 7547e83b2d85fd1893c7d76916f67689d761fecb
+  version: ba1052d4cbce7aac421a96de820558f75199ccbc
 - name: github.com/spf13/pflag
   version: 24fa6976df40757dce6aea913e7b81ade90530e1
 - name: golang.org/x/crypto
@@ -333,14 +333,17 @@ imports:
   - ssh
   - ssh/terminal
 - name: golang.org/x/net
-  version: 0ed95abb35c445290478a5348a7b38bb154135fd
+  version: 65e2d4e15006aab9813ff8769e768bbf4bb667a0
   subpackages:
   - context
+  - html
+  - html/atom
+  - html/charset
+  - http/httpguts
   - http2
   - http2/hpack
   - idna
   - internal/timeseries
-  - lex/httplex
   - trace
   - websocket
 - name: golang.org/x/oauth2
@@ -361,8 +364,19 @@ imports:
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - cases
+  - encoding
+  - encoding/charmap
+  - encoding/htmlindex
+  - encoding/internal
+  - encoding/internal/identifier
+  - encoding/japanese
+  - encoding/korean
+  - encoding/simplifiedchinese
+  - encoding/traditionalchinese
+  - encoding/unicode
   - internal
   - internal/tag
+  - internal/utf8internal
   - language
   - runes
   - secure/bidirule
@@ -432,7 +446,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 - name: k8s.io/api
-  version: 2c0ad56b2edea4b10f827ef0440b2856e959e00d
+  version: 88d2c10eb60a6ce4dc4596bb593ba346454e6101
   subpackages:
   - admission/v1beta1
   - admissionregistration/v1beta1
@@ -458,6 +472,8 @@ imports:
   - extensions/v1beta1
   - networking/v1
   - networking/v1beta1
+  - node/v1alpha1
+  - node/v1beta1
   - policy/v1beta1
   - rbac/v1
   - rbac/v1alpha1
@@ -470,11 +486,11 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: 33c4882cc5edc47105076f96bb6702b44984e78d
+  version: b4257b5f32d9106d763a290aa7b17f75b733e93f
   subpackages:
   - pkg/features
 - name: k8s.io/apimachinery
-  version: 543ce06723609ee794c79843a0fe7bc44bdad136
+  version: c3067da359d56294e805b1f5e7ca0b41c2834794
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -526,7 +542,7 @@ imports:
   - third_party/forked/golang/json
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 961a314d306acdca9bef3cdbf4c9bc540d1d6d3d
+  version: 3218ad6861fa9e6a29ac681c263de90bc7a5e701
   subpackages:
   - pkg/admission
   - pkg/admission/configuration
@@ -624,7 +640,7 @@ imports:
   - plugin/pkg/authenticator/token/webhook
   - plugin/pkg/authorizer/webhook
 - name: k8s.io/client-go
-  version: e229810d4d4fb58570d0100dc218b99f458680db
+  version: 3bc5538f1133432bf07a88f63f011ce65d7d1ba9
   subpackages:
   - discovery
   - informers
@@ -659,6 +675,9 @@ imports:
   - informers/networking
   - informers/networking/v1
   - informers/networking/v1beta1
+  - informers/node
+  - informers/node/v1alpha1
+  - informers/node/v1beta1
   - informers/policy
   - informers/policy/v1beta1
   - informers/rbac
@@ -700,6 +719,8 @@ imports:
   - kubernetes/typed/extensions/v1beta1
   - kubernetes/typed/networking/v1
   - kubernetes/typed/networking/v1beta1
+  - kubernetes/typed/node/v1alpha1
+  - kubernetes/typed/node/v1beta1
   - kubernetes/typed/policy/v1beta1
   - kubernetes/typed/rbac/v1
   - kubernetes/typed/rbac/v1alpha1
@@ -730,6 +751,8 @@ imports:
   - listers/extensions/v1beta1
   - listers/networking/v1
   - listers/networking/v1beta1
+  - listers/node/v1alpha1
+  - listers/node/v1beta1
   - listers/policy/v1beta1
   - listers/rbac/v1
   - listers/rbac/v1alpha1
@@ -771,7 +794,7 @@ imports:
   - util/retry
   - util/workqueue
 - name: k8s.io/cloud-provider
-  version: 119062858fcb0db0d5e81dd25a3635f2707c8fbf
+  version: 6647a6acc954197bedd76b91292884f773329c1a
   subpackages:
   - features
   - service/helpers
@@ -779,7 +802,7 @@ imports:
   - volume/errors
   - volume/helpers
 - name: k8s.io/component-base
-  version: 63631dacbaf55cfe7fd22fcd117a8b26893a9a7b
+  version: 057d8daca3ba4a25d7edef65e3d2e6c9e646f5a2
   subpackages:
   - cli/flag
   - cli/globalflag
@@ -787,13 +810,13 @@ imports:
   - config/v1alpha1
   - logs
 - name: k8s.io/klog
-  version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
+  version: 8e90cee79f823779174776412c13478955131846
 - name: k8s.io/kube-controller-manager
-  version: e0e07cae80af5a2faedcb6e73ca1a76e315c2612
+  version: 58459354a96d16f4df4d200ac8587968567f2bb5
   subpackages:
   - config/v1alpha1
 - name: k8s.io/kube-openapi
-  version: d7c86cdc46e3a4fcf892b32dd7bc3aa775e0870e
+  version: b3a7cee44a305be0a69e1b9ac03018307287e1b0
   subpackages:
   - cmd/openapi-gen
   - cmd/openapi-gen/args
@@ -810,7 +833,7 @@ imports:
   - pkg/util/proto/validation
   - pkg/util/sets
 - name: k8s.io/kubernetes
-  version: 6c7afd1222ebf2cb91567364471d74ac056437b7
+  version: f5ee25e22987e51192b32b0c727458809e1a767c
   subpackages:
   - cmd/cloud-controller-manager/app
   - cmd/cloud-controller-manager/app/apis/config
@@ -822,7 +845,6 @@ imports:
   - cmd/controller-manager/app/options
   - pkg/api/legacyscheme
   - pkg/api/service
-  - pkg/api/v1/node
   - pkg/api/v1/pod
   - pkg/apis/apps
   - pkg/apis/autoscaling
@@ -845,10 +867,12 @@ imports:
   - pkg/controller/cloud
   - pkg/controller/route
   - pkg/controller/service
+  - pkg/controller/util/node
   - pkg/features
   - pkg/fieldpath
   - pkg/kubelet/apis
   - pkg/kubelet/types
+  - pkg/kubelet/util/format
   - pkg/master/ports
   - pkg/scheduler/api
   - pkg/security/apparmor
@@ -877,7 +901,7 @@ imports:
   - pointer
   - trace
 - name: sigs.k8s.io/structured-merge-diff
-  version: e5e029740eb81ee0217ecf9d950c25a0eeb9688a
+  version: e85c7b244fd2cc57bb829d73a061f93a441e63ce
   subpackages:
   - fieldpath
   - merge
@@ -892,6 +916,6 @@ testImports:
   subpackages:
   - difflib
 - name: github.com/stretchr/testify
-  version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
+  version: ffdc059bfe9ce6a4e144ba849dbedead332c6053
   subpackages:
   - assert

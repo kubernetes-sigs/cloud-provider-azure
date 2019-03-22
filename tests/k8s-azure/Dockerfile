@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.11.2-stretch AS build_kubernetes
+FROM golang:1.12.1-stretch AS build_kubernetes
 # rsync: building k8s
 RUN apt update && apt install -y --no-install-recommends rsync
-ARG K8S_VERSION=v1.13.0-alpha.3
+ARG K8S_VERSION=v1.14.0-rc.1
 WORKDIR /go/src/k8s.io/kubernetes
 RUN git clone https://github.com/kubernetes/kubernetes . \
     && git checkout -b temp $K8S_VERSION \
@@ -26,8 +26,8 @@ RUN git clone https://github.com/kubernetes/kubernetes . \
     && ./e2e
 RUN rm -rf _output/local/go
 
-FROM golang:1.11.2-stretch AS build_aks-engine
-ARG AKSENGINE_VERSION=v0.31.1
+FROM golang:1.12.1-stretch AS build_aks-engine
+ARG AKSENGINE_VERSION=v0.32.3
 WORKDIR /go/src/github.com/Azure/aks-engine
 RUN git clone https://github.com/Azure/aks-engine . \
     && git checkout -b temp $AKSENGINE_VERSION \
