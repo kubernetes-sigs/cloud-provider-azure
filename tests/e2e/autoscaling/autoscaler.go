@@ -17,7 +17,6 @@ limitations under the License.
 package autoscaling
 
 import (
-	"fmt"
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -80,6 +79,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		emptyQuantity.Sub(runningQuantity)
 
 		podCount = int(emptyQuantity.MilliValue()/podSize) + 1
+		utils.Logf("%vm space are already in use", runningQuantity.Value())
 		utils.Logf("will create %v pod, each %vm size", podCount, podSize)
 	})
 
@@ -107,24 +107,6 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		podCount = 0
 	})
 
-	It("should scale up if created pods exceed the node capacity [Feature:Autoscaling]", func() {
-		utils.Logf("creating pods")
-		for i := 0; i < podCount; i++ {
-			pod := createScalerPodManifest(fmt.Sprintf("%s-pod-%v", basename, i))
-			_, err := cs.CoreV1().Pods(ns.Name).Create(pod)
-			Expect(err).NotTo(HaveOccurred())
-		}
-		defer func() {
-			utils.Logf("deleting pods")
-			err := utils.DeletePodsInNamespace(cs, ns.Name)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-		By("scale up")
-		targetNodeCount := initNodeCount + 1
-		err := utils.WaitAutoScaleNodes(cs, targetNodeCount)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 	It("should scale up or down if deployment replicas leave nodes busy or idle [Feature:Autoscaling]", func() {
 		utils.Logf("Create deployment")
 		replicas := int32(podCount)
@@ -135,6 +117,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		By("Scale up")
 		targetNodeCount := initNodeCount + 1
 		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
+		utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scale down")
@@ -145,6 +128,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		Expect(err).NotTo(HaveOccurred())
 		targetNodeCount = initNodeCount
 		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
+		utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

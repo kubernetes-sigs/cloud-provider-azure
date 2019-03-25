@@ -54,10 +54,7 @@ func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		nodes, err = cs.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
-			if IsRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
+			return false, nil
 		}
 		return true, nil
 	}) != nil {
@@ -132,8 +129,8 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
 	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
 	var nodes []v1.Node
 	var err error
-	poll := 20 * time.Second
-	autoScaleTimeOut := 30 * time.Minute
+	poll := 60 * time.Second
+	autoScaleTimeOut := 50 * time.Minute
 	if wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {
