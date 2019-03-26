@@ -1,5 +1,5 @@
-hash: 23cb1a507e23444e0c4a0e3e9fb8a2a32dc6a7656d475b141a52f157d43aa259
-updated: 2019-03-20T13:54:22.407238547+08:00
+hash: 282107a0578c18cc2e4092ae6f55e2192e3923148fccfa22a7e314db80d4b9f0
+updated: 2019-03-26T11:01:55.483761653+08:00
 imports:
 - name: github.com/Azure/azure-sdk-for-go
   version: da91af54816b4cf72949c225a2d0980f51fab01b
@@ -309,7 +309,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/cobra
-  version: ba1052d4cbce7aac421a96de820558f75199ccbc
+  version: 67fc4837d267bc9bfd6e47f77783fcc3dffc68de
 - name: github.com/spf13/pflag
   version: 24fa6976df40757dce6aea913e7b81ade90530e1
 - name: golang.org/x/crypto
@@ -446,7 +446,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 - name: k8s.io/api
-  version: 88d2c10eb60a6ce4dc4596bb593ba346454e6101
+  version: 5e37dc172c8eac89f895e9c9dc6481c9448d5a66
   subpackages:
   - admission/v1beta1
   - admissionregistration/v1beta1
@@ -486,11 +486,11 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: b4257b5f32d9106d763a290aa7b17f75b733e93f
+  version: b2eb9f8d087f4a7edb2a6d8d78ec2c2b66d8985c
   subpackages:
   - pkg/features
 - name: k8s.io/apimachinery
-  version: c3067da359d56294e805b1f5e7ca0b41c2834794
+  version: 65280c1f2bfbdbbcb293204be63d5a98ff3bc328
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -542,7 +542,7 @@ imports:
   - third_party/forked/golang/json
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 3218ad6861fa9e6a29ac681c263de90bc7a5e701
+  version: a5515b2d833e8ee8a1b24e003724b58c387a487a
   subpackages:
   - pkg/admission
   - pkg/admission/configuration
@@ -640,7 +640,7 @@ imports:
   - plugin/pkg/authenticator/token/webhook
   - plugin/pkg/authorizer/webhook
 - name: k8s.io/client-go
-  version: 3bc5538f1133432bf07a88f63f011ce65d7d1ba9
+  version: 8234d502b09ce7efc5876dbf01b6535e5c7745af
   subpackages:
   - discovery
   - informers
@@ -794,7 +794,7 @@ imports:
   - util/retry
   - util/workqueue
 - name: k8s.io/cloud-provider
-  version: 6647a6acc954197bedd76b91292884f773329c1a
+  version: 5996525cae37717f047d0eb7a6e1b0931c38bcaa
   subpackages:
   - features
   - service/helpers
@@ -802,7 +802,7 @@ imports:
   - volume/errors
   - volume/helpers
 - name: k8s.io/component-base
-  version: 057d8daca3ba4a25d7edef65e3d2e6c9e646f5a2
+  version: 0ae3ee08815b079b22ac0c3c17d95b7f42abd069
   subpackages:
   - cli/flag
   - cli/globalflag
@@ -812,7 +812,7 @@ imports:
 - name: k8s.io/klog
   version: 8e90cee79f823779174776412c13478955131846
 - name: k8s.io/kube-controller-manager
-  version: 58459354a96d16f4df4d200ac8587968567f2bb5
+  version: c64c6404d7930986b7d2299d7f26dbc9bf7a6a0e
   subpackages:
   - config/v1alpha1
 - name: k8s.io/kube-openapi
@@ -833,7 +833,7 @@ imports:
   - pkg/util/proto/validation
   - pkg/util/sets
 - name: k8s.io/kubernetes
-  version: f5ee25e22987e51192b32b0c727458809e1a767c
+  version: 641856db18352033a0d96dbc99153fa3b27298e5
   subpackages:
   - cmd/cloud-controller-manager/app
   - cmd/cloud-controller-manager/app/apis/config
