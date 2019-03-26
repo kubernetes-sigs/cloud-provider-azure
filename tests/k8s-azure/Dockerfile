@@ -15,7 +15,7 @@
 FROM golang:1.12.1-stretch AS build_kubernetes
 # rsync: building k8s
 RUN apt update && apt install -y --no-install-recommends rsync
-ARG K8S_VERSION=v1.14.0-rc.1
+ARG K8S_VERSION=v1.14.0
 WORKDIR /go/src/k8s.io/kubernetes
 RUN git clone https://github.com/kubernetes/kubernetes . \
     && git checkout -b temp $K8S_VERSION \
