@@ -94,6 +94,41 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 	return ip, nil
 }
 
+// WaitUpdateServiceExposure returns ip of ingress
+func WaitUpdateServiceExposure(cs clientset.Interface, namespace string, name string, targetIP string, expectSame bool) error {
+	var service *v1.Service
+	var err error
+	poll := 10 * time.Second
+	timeout := 10 * time.Minute
+
+	return wait.PollImmediate(poll, timeout, func() (bool, error) {
+		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			if IsRetryableAPIError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		IngressList := service.Status.LoadBalancer.Ingress
+		if IngressList == nil || len(IngressList) == 0 {
+			err = fmt.Errorf("Cannot find Ingress in limited time")
+			Logf("Fail to get ingress, retry it in %v seconds", poll)
+			return false, nil
+		}
+		if targetIP != service.Status.LoadBalancer.Ingress[0].IP == expectSame {
+			if expectSame {
+				Logf("still unmatched external IP, retry it in %v seconds", poll)
+			} else {
+				Logf("External IP is still %s", targetIP)
+			}
+			return false, nil
+		}
+		Logf("Exposure successfully")
+		return true, nil
+	})
+}
+
 // extractSuffix obtains the server domain name suffix
 func extractSuffix() string {
 	c := obtainConfig()

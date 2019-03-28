@@ -19,8 +19,10 @@ package utils
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -123,4 +125,79 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwor
 	}
 	ret = &securityGroupsList.Values()[0]
 	return
+}
+
+// WaitCreatePIP waits to create a public ip resource
+func WaitCreatePIP(azureTestClient *AzureTestClient, ipName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
+	Logf("Creating public IP resource named %s", ipName)
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+	_, err := pipClient.CreateOrUpdate(context.Background(), azureTestClient.getResourceGroup(), ipName, ipParameter)
+	var pip aznetwork.PublicIPAddress
+	if err != nil {
+		return pip, err
+	}
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		pip, err = pipClient.Get(context.Background(), azureTestClient.getResourceGroup(), ipName, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return pip.IPAddress != nil, nil
+	})
+	return pip, err
+}
+
+// DeletePIPWithRetry tries to delete a pulic ip resourc
+func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName string) error {
+	Logf("Deleting public IP resource named %s", ipName)
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		_, err := pipClient.Delete(context.Background(), azureTestClient.getResourceGroup(), ipName)
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+// WaitGetPIP waits to get a specific public ip resource
+func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (err error) {
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		_, err = pipClient.Get(context.Background(), azureTestClient.getResourceGroup(), ipName, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return true, nil
+	})
+	return
+}
+
+// SelectAvailablePrivateIP selects a private IP address in subnet 10.240.0.0/12
+// select range from 10.240.1.0 ~ 10.240.1.10
+func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
+	vNet, err := tc.GetClusterVirtualNetwork()
+	vNetClient := tc.createVirtualNetworksClient()
+	if err != nil {
+		return "", err
+	}
+	baseIP := "10.240.1."
+	for i := 0; i <= 100; i++ {
+		IP := baseIP + strconv.Itoa(i)
+		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.getResourceGroup(), to.String(vNet.Name), IP)
+		if err != nil {
+			// just ignore
+			continue
+		}
+		if ret.Available != nil && *ret.Available {
+			return IP, nil
+		}
+	}
+	return "", fmt.Errorf("Find no availabePrivateIP in range 10.240.1.0 ~ 10.240.1.100")
 }

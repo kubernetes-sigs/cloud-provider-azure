@@ -95,6 +95,11 @@ func (tc *AzureTestClient) CreateSecurityGroupsClient() *aznetwork.SecurityGroup
 	return &aznetwork.SecurityGroupsClient{BaseClient: tc.networkClient}
 }
 
+// GetPublicIPAddressesClient generates virtual network client with the same baseclient as azure test client
+func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAddressesClient {
+	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
+}
+
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.
 func getResourceGroupFromProviderID(providerID string) (string, error) {
 	matches := azureResourceGroupNameRE.FindStringSubmatch(providerID)
