@@ -1,11 +1,10 @@
 # Azure LoadBalancer
 
-The way azure define LoadBalancer is different with GCE or AWS. Azure's LB can have multiple frontend IP refs. The GCE and AWS can only allow one, if you want more, you'd better to have another LB. Because of the fact, Public IP is not part of the LB in Azure. NSG is not part of LB in Azure either. However, you cannot delete them in parallel, Public IP can only be deleted after LB's frontend IP ref is removed. 
+The way Azure defines a LoadBalancer is different from GCE or AWS. Azure's LB can have multiple frontend IP refs. GCE and AWS only allow one, if you want more, you would need multiple LB's. Since Public IP's are not part of the LB in Azure an NSG is not part of LB in Azure either. However, you cannot delete them in parallel, a Public IP can only be deleted after LB's frontend IP ref is removed. 
 
-For different Azure Resources, such as LB, Public IP, NSG. They are the same tier Azure resources. We need to make sure there is no connection in their own ensure loops. In another words, They would be eventually reconciled regardless of other resources' state. They should only depend on service state.
+The different Azure Resources such as LB, Public IP, and NSG are the same tier of Azure resources and circular dependencies need to be avoided. In another words, they should only depend on service state.
 
-By default primary load balancer (with basic SKU) is selected. Services can be annotated to allow auto selection of available load balancers. Service annotations can also be used to provide specific availability sets that host the load balancers. Note that in case of auto selection or specific availability set selection, when the availability set is lost in case of downtime or cluster scale down the services are currently not auto assigned to an available load balancer.
-
+By default the basic SKU is selected for a load balancer. Services can be annotated to allow auto selection of available load balancers. Service annotations can also be used to provide specific availability sets that host the load balancers. Note that in case of auto selection or specific availability set selection, services are currently not auto-reassigned to an available loadbalancer when the availability set is lost in case of downtime or cluster scale down.
 ## LoadBalancer annotations
 
 Below is a list of annotations supported for Kubernetes services with type `LoadBalancer`:
@@ -29,14 +28,14 @@ There are currently three possible load balancer selection modes :
   2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any availability set is selected which has the minimum rules associated with it.
   3. "{name1}, {name2}" mode - this is when the load balancer from the specified availability sets is selected that has the minimum rules associated with it.
 
-The selection modes of load balancer only works for basic SKU (see below) because of their difference in backend pool endpoints:
+The selection mode for a load balancer only works for Azure's basic SKU (see below) because of the difference in backend pool endpoints:
 
-* Standard SKU supports any virtual machine in a single virtual network, including blend of virtual machines, availability sets, virtual machine scale sets. So all the nodes would be added to the same standard LB backend pools for standard SKU (it supports 1000 instances at most).
-* Basic SKU only supports virtual machines in a single availability set or virtual machine scale set. So only nodes with same availability set or virtual machine scale set would be added to the basic LB backend pools.
+* Standard SKU supports any virtual machine in a single virtual network, including blend of virtual machines, availability sets, virtual machine scale sets. So all the nodes would be added to the same standard LB backend pool, it supports 1000 instances at most.
+* Basic SKU only supports virtual machines in a single availability set or virtual machine scale set. Only nodes with the same availability set or virtual machine scale set would be added to the basic LB backend pool.
 
 ## LoadBalancer SKUs
 
-Azure cloud provider supports both `basic` and `standard` SKU load balancers, which can be set via `loadBalancerSku` option in [cloud config file](cloud-provider-config.md). A list of differences between these two SKUs could be found [here](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-standard-overview#why-use-standard-load-balancer).
+Azure cloud provider supports both `basic` and `standard` SKU load balancers, which can be set via `loadBalancerSku` option in [cloud config file](cloud-provider-config.md). A list of differences between these two SKUs can be found [here](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-standard-overview#why-use-standard-load-balancer).
 
 > Note that the public IPs used in load balancer frontend configurations should be same SKU. That is standard public IP for standard load balancer, while basic public IP for basic load balancer.
 
@@ -46,8 +45,8 @@ Azure doesn’t support a network interface joining load balancers with differen
 
 ### Outbound connectivity
 
-Though there are many differences between two SKUs, the [outbound connectivity](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-connections
-) is the one that each provisioning tools should take care:
+[Outbound connectivity](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-connections
+) is also different between the two load balancer SKUs:
 
 * For basic SKU, the outbound connectivity is opened by default. If multiple frontends are set, then the outbound IP is selected randomly (and configurable) from them.
 
@@ -55,17 +54,17 @@ Though there are many differences between two SKUs, the [outbound connectivity](
 
 ### Standard LoadBalancer
 
-Because load balancer in Kubernetes cluster is managed by Azure cloud provider and it may change dynamically (e.g. the public load balancer would be deleted if no services defined with type `LoadBalancer`), [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) are recommended way if you want to ensure the outbound connectivity for all nodes.
+Because the load balancer in a Kubernetes cluster is managed by Azure cloud provider and it may change dynamically (e.g. the public load balancer would be deleted if no services defined with type `LoadBalancer`), [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) are recommended way if you want to ensure the outbound connectivity for all nodes.
 
-> Specially notes:
+> Especially note:
 >
 > * In the context of outbound connectivity, a single standalone VM, all the VM's in an Availability Set, all the instances in a VMSS behave as a group. This means, if a single VM in an Availability Set is associated with a Standard SKU, all VM instances within this Availability Set now behave by the same rules as if they are associated with Standard SKU, even if an individual instance is not directly associated with it.
 >
 > * Public IP's used as instance-level public IP are mutually exclusive with outbound rules.  
 
-Here is the recommend way to define the [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) in provisioning tools:
+Here is the recommend way to define the [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) when using seperate provisioning tools:
 
 * Create a separate IP (or multiple IPs for scale) in standard SKU for outbound rules. Make use of the [allocatedOutboundPorts](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview#snatports) parameter to allocate sufficient ports for your desired scenario scale.
-* Create a separate pool definition for outbound, and ensure all virtual machines or VMSS virtual machines are in this pool. Azure cloud provider would manage the load balancer rules with another pool, so that provisioning tools and Azure cloud provider won't affect each other.
+* Create a separate pool definition for outbound, and ensure all virtual machines or VMSS virtual machines are in this pool. Azure cloud provider will manage the load balancer rules with another pool, so that provisioning tools and Azure cloud provider won't affect each other.
 * Define inbound with load balancing rules and inbound NAT rules as needed, and set `disableOutboundSNAT` to true on the load balancing rule(s).  Don't rely on the side effect from these rules for outbound connectivity. It makes it messier than it needs to be and limits your options.  Use inbound NAT rules to create port forwarding mappings for SSH access to the VM's rather than burning public IPs per instance.
 
