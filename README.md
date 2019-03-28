@@ -1,6 +1,8 @@
 # Cloud provider for Azure
 
 [![Go Report Card](https://goreportcard.com/badge/k8s.io/cloud-provider-azure)](https://goreportcard.com/report/k8s.io/cloud-provider-azure)
+[![GitHub stars](https://img.shields.io/github/stars/kubernetes/cloud-provider-azure.svg)](https://github.com/kubernetes/cloud-provider-azure/stargazers)
+[![GitHub stars](https://img.shields.io/badge/contributions-welcome-orange.svg)](https://github.com/kubernetes/cloud-provider-azure/blob/master/CONTRIBUTING.md)
 
 ## Introduction
 
@@ -9,6 +11,18 @@ This repository provides tools and scripts for building and testing `Kubernetes 
 The Azure cloud provider code locates at [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/pkg/cloudprovider/providers/azure). If you want to create issues or pull requests for cloud provider, please go to [Kubernetes repository](https://github.com/kubernetes/kubernetes).
 
 There is an ongoing work for refactoring cloud providers out of the upstream repository. For more details, please check [this issue](https://github.com/kubernetes/features/issues/88).
+
+## Current status
+
+cloud-provider-azure is still under **alpha** stage and its releases are maintained on Microsoft Container Registry (MCR).
+
+The latest version of azure-cloud-controller-manager could be found at `mcr.microsoft.com/k8s/core/azure-cloud-controller-manager:v0.1.0`.
+
+Version matrix:
+
+|Kubernetes version|cloud-provider version|cloud-provider branch|
+|------------------|----------------------|---------------------|
+| v1.14.x          | v0.1.0               | master              |
 
 ## Build
 
@@ -26,20 +40,24 @@ IMAGE_REGISTRY=<registry> make image
 
 ## Run
 
-Run azure-cloud-controller-manager:
+Run azure-cloud-controller-manager locally:
 
 ```sh
 azure-cloud-controller-manager --cloud-provider=azure \
+    --cluster-name=kubernetes \
     --cloud-config=/etc/kubernetes/azure.json \
     --kubeconfig=/etc/kubernetes/kubeconfig \
     --allocate-node-cidrs=true \
     --configure-cloud-routes=true \
-    --cluster-cidr=10.240.0.0/12 \
+    --cluster-cidr=10.240.0.0/16 \
+    --route-reconciliation-period=10s \
     --leader-elect=true \
     --v=2
 ```
 
-Please checkout more details in [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
+It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/cloud-controller-manager.yaml) for the example.
+
+Please checkout more details at [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
 
 ## E2E tests
 
@@ -65,6 +83,10 @@ See [docs](docs/) for more documentations.
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on how to contribute.
 
-## NOTE
+## Code of conduct
 
-Currently this repository is used for building and testing cloud-controller-manager for Azure, it references Azure cloud provider implementation code as [vendor dir](vendor/k8s.io/kubernetes/pkg/cloudprovider/providers/azure). After handoff, the Azure cloud provider implementation will be moved here.
+Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](code-of-conduct.md).
+
+## License
+
+[Apache License 2.0](LICENSE).

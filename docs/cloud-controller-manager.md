@@ -7,18 +7,21 @@ Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/co
 `azure-cloud-controller-manager` is a specialization of `cloud-controller-manager`. It depends on [cloud-controller-manager app](https://github.com/kubernetes/kubernetes/tree/master/cmd/cloud-controller-manager/app) and [azure cloud provider](https://github.com/kubernetes/kubernetes/tree/master/pkg/cloudprovider/providers/azure).
 
 ## Usage
+
 To use cloud controller manager, the following components need to be configured:
 
 1. kubelet
 
-    Set flag `--cloud-provider=external`
+    |Flag|Value|Remark|
+    |----|-----|------|
+    |--cloud-provider|external|cloud-provider should be set external|
+    |--azure-container-registry-config|/etc/kubernetes/azure.json|Used for Azure credential provider|
 
 1. kube-controller-manager
-    Set following flags:
 
     |Flag|Value|Remark|
     |---|---|---|
-    |--cloud-provider|external||
+    |--cloud-provider|external|cloud-provider should be set external|
     |--external-cloud-volume-plugin|azure|Optional*|
 
     `*` Since cloud controller manager does not support volume controllers, it will not provide volume capabilities compared to using previous built-in cloud provider case. You can add this flag to turn on volume controller for in-tree cloud providers. This option is likely to be [removed with in-tree cloud providers](https://github.com/kubernetes/kubernetes/blob/v1.11.0-alpha.2/cmd/kube-controller-manager/app/options/options.go#L93) in future.
@@ -33,9 +36,9 @@ To use cloud controller manager, the following components need to be configured:
 
     |Flag|Value|Remark|
     |---|---|---|
-    |--cloud-provider|azure||
-    |--cloud-config||Path for [cloud provider config](cloud-provider-config.md)|
-    |--kubeconfig||Path for cluster kubeconfig|
+    |--cloud-provider|azure|cloud-provider should be set azure|
+    |--cloud-config|/etc/kubernetes/azure.json|Path for [cloud provider config](cloud-provider-config.md)|
+    |--kubeconfig|/etc/kubernetes/kubeconfig|Path for cluster kubeconfig|
 
     For other flags such as `--allocate-node-cidrs`, `--configure-cloud-routes`, `--cluster-cidr`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
@@ -43,23 +46,110 @@ To use cloud controller manager, the following components need to be configured:
 
 Alternatively, you can use [aks-engine](https://github.com/Azure/aks-engine) to deploy a Kubernetes cluster running with cloud-controller-manager. It supports deploying `Kubernetes azure-cloud-controller-manager` for Kubernetes v1.8+.
 
-## Development
-Build project:
+## AzureDisk and AzureFile
+
+AzureDisk and AzureFile volume plugins are not supported with external coud provider (See [kubernetes/kubernetes#71018](https://github.com/kubernetes/kubernetes/issues/71018) for explanations).
+
+Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) and [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) should be used for persistent volumes.
+
+### Deploy AzureDisk CSI plugin
+
+Run following commands:
+
+```sh
+# run deploy.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-driver-registry.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-node-info.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/azuredisk-csi-driver.yaml
+# create storage class.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/example/storageclass-azuredisk-csi.yaml
 ```
+
+See [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) for more details.
+
+### Deploy AzureFile CSI plugin
+
+Run following commands:
+
+```sh
+# run deploy.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-driver-registry.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-node-info.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/azurefile-csi-driver.yaml
+# create storage class.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/example/storageclass-azurefile-csi.yaml
+```
+
+See [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) for more details.
+
+### Change default storage class
+
+Follow the steps bellow if you want change the current default storage class to AzureDisk CSI driver.
+
+First, delete the default storage class:
+
+```sh
+kubectl delete storageclass default
+```
+
+Then create a new storage class named `default`:
+
+```sh
+cat <<EOF | kubectl apply -f-
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.beta.kubernetes.io/is-default-class: "true"
+  name: default
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: Standard_LRS # available values: Standard_LRS, Premium_LRS, StandardSSD_LRS and UltraSSD_LRS
+  kind: managed         # value "dedicated", "shared" are deprecated since it's using unmanaged disk
+  cachingMode: ReadOnly
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+EOF
+```
+
+## Development
+
+Build project:
+
+```sh
 make
 ```
 
 Build image:
-```
-make image
+
+```sh
+IMAGE_REGISTRY=<registry> make image
 ```
 
 Run unit tests:
-```
+
+```sh
 make test-unit
 ```
 
 Updating dependency: (please check [Dependency management](dependency-management.md) for additional information)
-```
+
+```sh
 make update
 ```
+
+## Limitations
+
+Because [CSI](https://kubernetes-csi.github.io/docs/) is not ready on Windows, AzureDisk/AzureFile CSI drivers don't support Windows either. If you have Windows nodes in the cluster, please use kube-controller-manager instead of cloud-controller-manager.
