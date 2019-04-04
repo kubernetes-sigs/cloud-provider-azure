@@ -1,6 +1,5 @@
 #!/bin/bash
-
-# Copyright 2018 The Kubernetes Authors.
+# Copyright 2019 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,58 +13,96 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
-cd $(dirname "$BASH_SOURCE")/..
-export GLIDE_HOME=$(pwd)/.glide
+set -o nounset
+set -o errexit
+set -o pipefail
 
-function update-cloudprovider {
-    AZURE_PROVIDER_DIR=pkg/azureprovider
-    rm -rf $AZURE_PROVIDER_DIR
-    mkdir -p $AZURE_PROVIDER_DIR
-    cp -aT vendor/k8s.io/kubernetes/pkg/cloudprovider/providers/azure $AZURE_PROVIDER_DIR
-    find $AZURE_PROVIDER_DIR \( -name BUILD -o -name OWNERS \) -exec rm {} +
-    find $AZURE_PROVIDER_DIR -name '*.go' -exec perl -i -pe \
-        's/^package azure\K$/provider/;' {} \;
-    
-    pushd $AZURE_PROVIDER_DIR
-    for file in azure.go azure_test.go
-    do
-        perl -i -pe \
-            's#k8s.io/kubernetes/pkg/cloudprovider/providers/azure#k8s.io/cloud-provider-azure/cloud-controller-manager/azureprovider#;' $file
-        gofmt -s $file > bak
-        mv bak $file
-    done
-    popd
+# Explicitly opt into go modules, even though we're inside a GOPATH directory
+export GO111MODULE=on
+# Explicitly clear GOPATH, to ensure nothing this script calls makes use of that path info
+export GOPATH=
+# Explicitly clear GOFLAGS, since GOFLAGS=-mod=vendor breaks dependency resolution while rebuilding vendor
+export GOFLAGS=
+
+cd "$(git rev-parse --show-toplevel)"
+trap 'echo "FAILED" >&2' ERR
+TMP_DIR="${TMP_DIR:-$(mktemp -d /tmp/update-vendor.XXXX)}"
+
+prune-vendor() {
+  find vendor -type f \
+    -not -iname "*.c" \
+    -not -iname "*.go" \
+    -not -iname "*.h" \
+    -not -iname "*.proto" \
+    -not -iname "*.s" \
+    -not -iname "AUTHORS*" \
+    -not -iname "CONTRIBUTORS*" \
+    -not -iname "COPYING*" \
+    -not -iname "LICENSE*" \
+    -not -iname "NOTICE*" \
+    -delete
 }
 
-function glide-update-staging-mirror {
-    K8S_STAGING=$GLIDE_HOME/k8s_staging/k8s.io
-    # remove local glide cache for file repo, since we're to setup new git repo
-    rm -rf $GLIDE_HOME/cache/{src,info}/file*
-    rm -rf $K8S_STAGING
-    mkdir -p $K8S_STAGING
-    cp -aT vendor/k8s.io/kubernetes/staging/src/k8s.io $K8S_STAGING
+# ensure_require_replace_directives_for_all_dependencies:
+# - ensures all existing 'require' directives have an associated 'replace' directive pinning a version
+# - adds explicit 'require' directives for all transitive dependencies
+# - adds explicit 'replace' directives for all require directives (existing 'replace' directives take precedence)
+function ensure_require_replace_directives_for_all_dependencies() {
+  local local_tmp_dir
+  local_tmp_dir=$(mktemp -d "${TMP_DIR}/pin_replace.XXXX")
 
-    find $K8S_STAGING -name Godeps.json -exec perl -i -pe 's/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx//' {} \;
+  # collect 'require' directives that actually specify a version
+  local require_filter='(.Version != null) and (.Version != "v0.0.0") and (.Version != "v0.0.0-00010101000000-000000000000")'
+  # collect 'replace' directives that unconditionally pin versions (old=new@version)
+  local replace_filter='(.Old.Version == null) and (.New.Version != null)'
 
-    for dir in $(ls -d $K8S_STAGING/*); do
-        glide mirror set https://k8s.io/$(basename $dir) file://$dir --vcs git
-        pushd $dir
-        git init -q && git add -A . && git commit -q -m 'staging commit'
-        popd
-    done
+  # Capture local require/replace directives before running any go commands that can modify the go.mod file
+  local require_json="${local_tmp_dir}/require.json"
+  local replace_json="${local_tmp_dir}/replace.json"
+  go mod edit -json | jq -r ".Require // [] | sort | .[] | select(${require_filter})" > "${require_json}"
+  go mod edit -json | jq -r ".Replace // [] | sort | .[] | select(${replace_filter})" > "${replace_json}"
+
+  # 1. Ensure require directives have a corresponding replace directive pinning a version
+  cat "${require_json}" | jq -r '"-replace \(.Path)=\(.Path)@\(.Version)"'            | xargs -L 100 go mod edit -fmt
+  cat "${replace_json}" | jq -r '"-replace \(.Old.Path)=\(.New.Path)@\(.New.Version)"'| xargs -L 100 go mod edit -fmt
+
+  # 2. Add explicit require directives for indirect dependencies
+  go list -m -json all | jq -r 'select(.Main != true) | select(.Indirect == true) | "-require \(.Path)@\(.Version)"'          | xargs -L 100 go mod edit -fmt
+
+  # 3. Add explicit replace directives pinning dependencies that aren't pinned yet
+  go list -m -json all | jq -r 'select(.Main != true) | select(.Replace == null)  | "-replace \(.Path)=\(.Path)@\(.Version)"' | xargs -L 100 go mod edit -fmt
 }
 
-# Install dependencies, first round
-glide update --no-recursive
-# Uncomment when moving cloud provider code
-# update-cloudprovider
-glide-update-staging-mirror
+function group_replace_directives() {
+  local local_tmp_dir
+  local_tmp_dir=$(mktemp -d "${TMP_DIR}/group_replace.XXXX")
+  local go_mod_replace="${local_tmp_dir}/go.mod.replace.tmp"
+  local go_mod_noreplace="${local_tmp_dir}/go.mod.noreplace.tmp"
+  # separate replace and non-replace directives
+  cat go.mod | awk "
+     # print lines between 'replace (' ... ')' lines
+     /^replace [(]/      { inreplace=1; next                   }
+     inreplace && /^[)]/ { inreplace=0; next                   }
+     inreplace           { print > \"${go_mod_replace}\"; next }
+     
+     # print ungrouped replace directives with the replace directive trimmed
+     /^replace [^(]/ { sub(/^replace /,\"\"); print > \"${go_mod_replace}\"; next }
+     
+     # otherwise print to the noreplace file
+     { print > \"${go_mod_noreplace}\" }
+  "
+  cat "${go_mod_noreplace}" >  go.mod
+  echo "replace ("          >> go.mod
+  cat "${go_mod_replace}"   >> go.mod
+  echo ")"                  >> go.mod
 
-# A first round, update install dependencies
-glide update
-# A second round, this minimizes package in 'glide.lock'
-glide update --strip-vendor
-# Clean up, turn on use-lock-file, otherwise test dependencies are removed
-glide-vc --use-lock-file --only-code --no-tests > /dev/null
- 
+  go mod edit -fmt
+}
+
+ensure_require_replace_directives_for_all_dependencies
+go mod tidy
+ensure_require_replace_directives_for_all_dependencies
+group_replace_directives
+go mod vendor
+prune-vendor
+echo SUCCESS
