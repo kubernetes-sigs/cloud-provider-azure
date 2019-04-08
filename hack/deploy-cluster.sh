@@ -56,12 +56,30 @@ SUB6=$(echo $SUB5| cut -d"}" -f 1)
 TENANT_ID=${TENANT_ID:-"$SUB6"}
 
 
-echo "Type the filename of the generated api-model to be used in .json format"
-read FILENAME
+#echo "Type the filename of the generated api-model to be used in .json format"
+FILENAME=$1
+TEMPFILE=$(mktemp)
+if [ -z "$var" ]
+then
+echo "FILE NAME must be specified"
+exit 1
+fi
+
+echo "Provide a new ccm image"
+read IMAGE_CCM
+
+if [ "$IMAGE_CCM" = "" ]
+then
+$IMAGE_CCM=$IMAGE
+fi
+
+#to be modified
 echo "Client_id is $CLIENT_ID"
 echo "Client_secret is $CLIENT_SECRET"
 echo "Please edit dnsPrefix,keydata,clientId and secret"
-gedit ../tests/k8s-azure/manifest/$FILENAME
+gedit ../$FILENAME
+
+sed	's/$(IMAGE)/$(IMAGE_CCM)/'	/$FILENAME	>$TEMPFILE
 
 check=$(aks-engine version)
 if [ "$check" != "" ]
@@ -72,10 +90,11 @@ echo "Ok! aks-engine installed.Let go ahead"
   --dns-prefix \
   --resource-group $RESOURCE_GROUP_NAME \
   --location $LOCATION \
-  --api-model ../tests/k8s-azure/manifest/$FILENAME \
+  --api-model ../$FILENAME \
   --set servicePrincipalProfile.clientId="$CLIENT_ID" \
   --set servicePrincipalProfile.secret="$CLIENT_SECRET"
  #deployed cluster successfully
 else
 echo "aks-engine not installed.Please refer to link https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md"
 fi
+rm $(TEMPFILE)
