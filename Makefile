@@ -77,8 +77,8 @@ endif
 test-check: test-lint-prepare test-lint test-boilerplate
 
 test-lint-prepare:
-	go get -u gopkg.in/alecthomas/gometalinter.v1
-	gometalinter.v1 -i
+	GO111MODULE=off go get -u gopkg.in/alecthomas/gometalinter.v1
+	GO111MODULE=off gometalinter.v1 -i
 test-lint:
 	gometalinter.v1 $(GOMETALINTER_OPTION) ./ cloud-controller-manager/...
 	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
