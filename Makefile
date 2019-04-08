@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: all clean update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate
+.PHONY: all clean push update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate deploy
 .DELETE_ON_ERROR:
 
 SHELL=/bin/bash -o pipefail
@@ -56,6 +56,8 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cloud-contro
 
 image:
 	docker build -t $(IMAGE) .
+push:
+	docker push $(IMAGE)
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
@@ -117,3 +119,6 @@ test-e2e: image hyperkube
 
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
+
+deploy: image hyperkube	push
+	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh	
