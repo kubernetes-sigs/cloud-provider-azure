@@ -64,19 +64,26 @@
 
 4. Deploy a cluster and run smoke test
 
-    Note that 'k8s-azure e2e' command will delete the cluster as last running step. To skip that, add parameter '-cskipcleanup=1' or set environment variable 'K8S_AZURE_SKIPCLEANUP=1'.
-
+    To deploy a cluster:
     ```
-    source <TestProfile>
-    CLUSTER_NAME=<ClusterName>
-    tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -cbuild_e2e_test=1 -caccm_image=<username>/azure-cloud-controller-manager:<image_version>
+    #Enter all of the details as in TestProfile
+    RESOURCE_GROUP_NAME=<resource group name>
+    LOCATION=<location>
+    SUBSCRIPTION_ID=<subscription ID>
+    CLIENT_ID=<client id>
+    CLIENT_SECRET=<client secret>
+    TENANT_ID=<tenant id>
+    make deploy
     ```
 
     To connect the cluster:
     ```
-    source $CLUSTER_NAME/cluster.profile
-    kubectl version
+    cd tests/k8s-azure/manifest
+    export KUBECONFIG=_output/kubeconfig/kubeconfig.<LOCATION>.json
+    kubectl cluster-info
     ```
+    To check out more of the deployed cluster , replace ``` kubectl cluster-info ``` with other `kubectl` commands.
+    To further debug and diagnose cluster problems, use ```kubectl cluster-info dump```
 
 5. Run E2E tests
     Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
