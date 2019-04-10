@@ -27,7 +27,7 @@ GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.14.0
 AKSENGINE_VERSION ?= master
-HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
+HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
@@ -121,4 +121,4 @@ test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
 
 deploy: image hyperkube	push
-	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh	
+	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
