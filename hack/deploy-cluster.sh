@@ -14,68 +14,64 @@
 # limitations under the License.
 set -e
 
+REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 RESOURCE_GROUP_NAME=${RESOURCE_GROUP_NAME:-""}
 LOCATION=${LOCATION:-""}
+SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-""}
+CLIENT_ID=${CLIENT_ID:-""}
+CLIENT_SECRET=${CLIENT_SECRET:-""}
+TENANT_ID=${TENANT_ID:-""}
 
-#check for variables is initialized or not
-
-if [ "$RESOURCE_GROUP_NAME" = "" ]
-then
-echo "RESOURCE GROUP NAME must be specified"
-exit 1
+# check for variables is initialized or not
+if [ -z "$LOCATION" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ]; then
+  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET and LOCATION must be specified"
+  exit 1
 fi
-if [ "$LOCATION" = "" ]
-then
-echo "LOCATION must be specified"
-exit 1
+if [ -z "$IMAGE" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
+  echo "Please deploy the cluster by running 'IMAGE_REGISTRY=<your-registry> make deploy'."
+  exit 1
 fi
 
-#getting the subscription id
-
-INPUT=$(az group create --name $RESOURCE_GROUP_NAME --location $LOCATION)
-CUT_ID=$(echo $INPUT| cut -d"/" -f 3)
-SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-"$CUT_ID"}
-
-#getting client_id
-
-INPUT1=$(az ad sp create-for-rbac --role="Contributor" --scopes="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$resrc")
-SUB1=$(echo $INPUT1| cut -d":" -f 2)
-SUB2=$(echo $SUB1| cut -d"," -f 1)
-CLIENT_ID=${CLIENT_ID:-"$SUB2"}
-
-#getting client_secret
-
-SUB3=$(echo $INPUT1| cut -d":" -f 2)
-SUB4=$(echo $SUB3| cut -d"," -f 1)
-CLIENT_SECRET=${CLIENT_SECRET:-"$SUB4"}
-
-#getting tenant_id
-
-SUB5=$(echo $INPUT1| cut -d":" -f 7-)
-SUB6=$(echo $SUB5| cut -d"}" -f 1)
-TENANT_ID=${TENANT_ID:-"$SUB6"}
-
-
-echo "Type the filename of the generated api-model to be used in .json format"
-read FILENAME
-echo "Client_id is $CLIENT_ID"
-echo "Client_secret is $CLIENT_SECRET"
-echo "Please edit dnsPrefix,keydata,clientId and secret"
-gedit ../tests/k8s-azure/manifest/$FILENAME
-
-check=$(aks-engine version)
-if [ "$check" != "" ]
-then
-echo "Ok! aks-engine installed.Let go ahead"
-  aks-engine deploy --subscription-id $SUBSCRIPTION_ID \
-  --auth-method cli \
-  --dns-prefix \
-  --resource-group $RESOURCE_GROUP_NAME \
-  --location $LOCATION \
-  --api-model ../tests/k8s-azure/manifest/$FILENAME \
-  --set servicePrincipalProfile.clientId="$CLIENT_ID" \
-  --set servicePrincipalProfile.secret="$CLIENT_SECRET"
- #deployed cluster successfully
-else
-echo "aks-engine not installed.Please refer to link https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md"
+# check for commands which would be used in following steps.
+if ! [ -x "$(command -v jq)" ]; then
+  echo 'Error: jq is not installed. Please follow https://stedolan.github.io/jq/ to install it.'
+  exit 1
 fi
+if ! [ -x "$(command -v aks-engine)" ]; then
+  echo 'Error: aks-engine is not installed. Please follow https://github.com/Azure/aks-engine to install it.'
+  exit 1
+fi
+
+# initialize variables
+manifest_file=$(mktemp)
+if [ -z "$RESOURCE_GROUP_NAME" ]; then
+  UUID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+  RESOURCE_GROUP_NAME="k8s-$UUID"
+fi
+
+# Add handler for cleanup
+function cleanup() {
+  rm -f ${manifest_file}
+}
+trap cleanup EXIT
+
+# Configure the manifests for aks-engine
+cat ${REPO_ROOT}/examples/aks-engine.json | \
+  jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${IMAGE}\"" | \
+  jq ".properties.orchestratorProfile.kubernetesConfig.customHyperkubeImage=\"${HYPERKUBE_IMAGE}\"" | \
+  jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
+  jq ".properties.servicePrincipalProfile.secret=\"${CLIENT_SECRET}\"" \
+  > ${manifest_file}
+
+# Deploy the cluster
+echo "Deploying kubernetes cluster to resource group ${RESOURCE_GROUP_NAME}..."
+aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
+  --auth-method client_secret \
+  --auto-suffix \
+  --resource-group ${RESOURCE_GROUP_NAME} \
+  --location ${LOCATION} \
+  --api-model ${manifest_file} \
+  --client-id ${CLIENT_ID} \
+  --client-secret ${CLIENT_SECRET}
+echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
+
