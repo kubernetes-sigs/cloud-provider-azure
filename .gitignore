@@ -5,3 +5,5 @@ obj/
 testResults/
 _artifacts
 _report
+_output/
+translations/
