@@ -74,4 +74,40 @@ aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
   --client-id ${CLIENT_ID} \
   --client-secret ${CLIENT_SECRET}
 echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
+export KUBECONFIG=_output/kubeconfig/kubeconfig.$LOCATION.json
 
+#Deploy AzureDisk CSI Plugin
+COMMAND_DISK="kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy"
+config_disk=("crd-csi-driver-registry.yaml" "crd-csi-node-info.yaml" "rbac-csi-attacher.yaml" "rbac-csi-driver-registrar.yaml" "rbac-csi-provisioner.yaml" "rbac-csi-snapshotter.yaml" "csi-azuredisk-provisioner.yaml" "csi-azuredisk-attacher.yaml" "azuredisk-csi-driver.yaml" "example/storageclass-azuredisk-csi.yaml")
+for i in {1..10}
+do
+$COMMAND_DISK/$config_disk
+done
+#Deploy AzureFile CSI Plugin
+COMMAND_FILE="kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy"
+config_files=("crd-csi-driver-registry.yaml" "crd-csi-node-info.yaml" "rbac-csi-attacher.yaml" "rbac-csi-driver-registrar.yaml" "rbac-csi-provisioner.yaml" "rbac-csi-snapshotter.yaml" "csi-azurefile-provisioner.yaml" "csi-azurefile-attacher.yaml" "azurefile-csi-driver.yaml" "example/storageclass-azurefile-csi.yaml")
+for i in {1..10}
+do
+$COMMAND_FILE/$config_files
+done
+echo "Do you want to change the default storage class?[Yes/No]"
+read CHANGE
+if [ $CHANGE = "Yes" ]
+then
+kubectl delete storageclass default
+cat <<EOF | kubectl apply -f-
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.beta.kubernetes.io/is-default-class: "true"
+  name: default
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: Standard_LRS # available values: Standard_LRS, Premium_LRS, StandardSSD_LRS and UltraSSD_LRS
+  kind: managed         # value "dedicated", "shared" are deprecated since it's using unmanaged disk
+  cachingMode: ReadOnly
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+EOF
+fi
