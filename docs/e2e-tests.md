@@ -38,41 +38,26 @@
     ```
     go get -d k8s.io/kubernetes
     ```
+   
 
-2. Fill in following profile file and save it somewhere. This file will be referred as `<TestProfile>` in following steps.
-
-    ```
-    # Azure tenant id
-    export K8S_AZURE_TENANTID=
-    # Azure subscription id
-    export K8S_AZURE_SUBSID=
-    # Azure service principal id
-    export K8S_AZURE_SPID=
-    # Azure service principal secret
-    export K8S_AZURE_SPSEC=
-    # SSH public key to be deployed to cluster
-    export K8S_AZURE_SSHPUB=
-    # Azure location for the testing cluster
-    export K8S_AZURE_LOCATION=
-    ```
-
-3. Build a custom image and push it to a testing repository.
+2. Build a custom image and push it to a testing repository.
     ```
     IMAGE_REGISTRY=<username> make image
     docker push <username>/azure-cloud-controller-manager:<image_version>
     ```
 
-4. Deploy a cluster and run smoke test
+3. Deploy a cluster and run smoke test
 
     To deploy a cluster:
     ```
     #Enter all of the details as in TestProfile
-    RESOURCE_GROUP_NAME=<resource group name>
-    LOCATION=<location>
-    SUBSCRIPTION_ID=<subscription ID>
-    CLIENT_ID=<client id>
-    CLIENT_SECRET=<client secret>
-    TENANT_ID=<tenant id>
+    export RESOURCE_GROUP_NAME=<resource group name>
+    export LOCATION=<location>
+    export SUBSCRIPTION_ID=<subscription ID>
+    export CLIENT_ID=<client id>
+    export CLIENT_SECRET=<client secret>
+    export TENANT_ID=<tenant id>
+    export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
     make deploy
     ```
 
@@ -85,7 +70,7 @@
     To check out more of the deployed cluster , replace ``` kubectl cluster-info ``` with other `kubectl` commands.
     To further debug and diagnose cluster problems, use ```kubectl cluster-info dump```
 
-5. Run E2E tests
+4. Run E2E tests
     Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
     - Run test suite: default, serial, slow, smoke (smoke suite just tests the cluster is up and do not run any case)
         ```
