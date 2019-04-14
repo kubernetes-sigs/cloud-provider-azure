@@ -21,10 +21,11 @@ SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-""}
 CLIENT_ID=${CLIENT_ID:-""}
 CLIENT_SECRET=${CLIENT_SECRET:-""}
 TENANT_ID=${TENANT_ID:-""}
+USE_CSI_DEFAULT_STORAGECLASS=${USE_CSI_DEFAULT_STORAGECLASS:-""}
 
 # check for variables is initialized or not
-if [ -z "$LOCATION" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ]; then
-  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET and LOCATION must be specified"
+if [ -z "$LOCATION" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ]; then
+  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET ,LOCATION and USE_CSI_DEFAULT_STORAGECLASS must be specified"
   exit 1
 fi
 if [ -z "$IMAGE" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
@@ -74,4 +75,50 @@ aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
   --client-id ${CLIENT_ID} \
   --client-secret ${CLIENT_SECRET}
 echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
+export KUBECONFIG=_output/kubeconfig/kubeconfig.$LOCATION.json
 
+#Deploy AzureDisk CSI Plugin
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-driver-registry.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-node-info.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/azuredisk-csi-driver.yaml
+# create storage class.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/example/storageclass-azuredisk-csi.yaml
+
+#Deploy AzureFile CSI Plugin
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-driver-registry.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-node-info.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-provisioner.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-attacher.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/azurefile-csi-driver.yaml
+# create storage class.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/example/storageclass-azurefile-csi.yaml
+
+if [ $USE_CSI_DEFAULT_STORAGECLASS = "Yes" ]
+then
+kubectl delete storageclass default
+cat <<EOF | kubectl apply -f-
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.beta.kubernetes.io/is-default-class: "true"
+  name: default
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: Standard_LRS # available values: Standard_LRS, Premium_LRS, StandardSSD_LRS and UltraSSD_LRS
+  kind: managed         # value "dedicated", "shared" are deprecated since it's using unmanaged disk
+  cachingMode: ReadOnly
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+EOF
+fi
