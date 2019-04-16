@@ -63,6 +63,7 @@ cat ${REPO_ROOT}/examples/aks-engine.json | \
   jq ".properties.servicePrincipalProfile.secret=\"${CLIENT_SECRET}\"" \
   > ${manifest_file}
 
+<<<<<<< HEAD
 # Deploy the cluster
 echo "Deploying kubernetes cluster to resource group ${RESOURCE_GROUP_NAME}..."
 aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
@@ -75,3 +76,47 @@ aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
   --client-secret ${CLIENT_SECRET}
 echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
 
+=======
+#echo "Type the filename of the generated api-model to be used in .json format"
+FILENAME=$1
+TEMPFILE=$(mktemp)
+if [ -z "$var" ]
+then
+echo "FILE NAME must be specified"
+exit 1
+fi
+
+echo "Provide a new ccm image"
+read IMAGE_CCM
+
+if [ "$IMAGE_CCM" = "" ]
+then
+$IMAGE_CCM=$IMAGE
+fi
+
+#to be modified
+echo "Client_id is $CLIENT_ID"
+echo "Client_secret is $CLIENT_SECRET"
+echo "Please edit dnsPrefix,keydata,clientId and secret"
+gedit ../$FILENAME
+
+sed	's/$(IMAGE)/$(IMAGE_CCM)/'	/$FILENAME	>$TEMPFILE
+
+check=$(aks-engine version)
+if [ "$check" != "" ]
+then
+echo "Ok! aks-engine installed.Let go ahead"
+  aks-engine deploy --subscription-id $SUBSCRIPTION_ID \
+  --auth-method cli \
+  --dns-prefix \
+  --resource-group $RESOURCE_GROUP_NAME \
+  --location $LOCATION \
+  --api-model ../$FILENAME \
+  --set servicePrincipalProfile.clientId="$CLIENT_ID" \
+  --set servicePrincipalProfile.secret="$CLIENT_SECRET"
+ #deployed cluster successfully
+else
+echo "aks-engine not installed.Please refer to link https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md"
+fi
+rm $(TEMPFILE)
+>>>>>>> 598de01e... Added deploy target
