@@ -17,11 +17,9 @@
 
   Binary downloads for the latest version of aks-engine for are available [on Github](https://github.com/Azure/aks-engine/releases/latest). Download AKS Engine for your operating system, extract the binary and copy it to your `$PATH`.
 
-  You can also choose to install aks-engine using [gofish][gofish-about]. To do so, execute the command `gofish install aks-engine`. You can install gofish following the [instructions][gofish-install] for your OS.
+  On macOS, you can install aks-engine with [Homebrew](https://brew.sh/). Run the command `brew install Azure/aks-engine/aks-engine` to do so. You can install Homebrew following the [instructions](https://brew.sh/).
 
-  On macOS, you can install aks-engine with [Homebrew][homebrew]. Run the command `brew install Azure/aks-engine/aks-engine` to do so. You can install Homebrew following the [instructions][homebrew-install].
-
-  On Windows, you can install aks-engine via [Chocolatey][choco] by executing the command `choco install aks-engine`. You can install Chocolatey following the [instructions][choco-install].
+  On Windows, you can install aks-engine via [Chocolatey](https://chocolatey.org/) by executing the command `choco install aks-engine`. You can install Chocolatey following the [instructions](https://chocolatey.org/install).
 
   On Linux, it could also be installed by following commands:
   
