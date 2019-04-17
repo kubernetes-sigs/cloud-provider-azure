@@ -39,82 +39,38 @@
     go get -d k8s.io/kubernetes
     ```
 
-2. Fill in following profile file and save it somewhere. This file will be referred as `<TestProfile>` in following steps.
 
-    ```
-    # Azure tenant id
-    export K8S_AZURE_TENANTID=
-    # Azure subscription id
-    export K8S_AZURE_SUBSID=
-    # Azure service principal id
-    export K8S_AZURE_SPID=
-    # Azure service principal secret
-    export K8S_AZURE_SPSEC=
-    # SSH public key to be deployed to cluster
-    export K8S_AZURE_SSHPUB=
-    # Azure location for the testing cluster
-    export K8S_AZURE_LOCATION=
-    ```
-
-3. Build a custom image and push it to a testing repository.
+2. Build a custom image and push it to a testing repository.
     ```
     IMAGE_REGISTRY=<username> make image
     docker push <username>/azure-cloud-controller-manager:<image_version>
     ```
 
-4. Deploy a cluster and run smoke test
+3 Deploy a cluster and run smoke test
 
-    Note that 'k8s-azure e2e' command will delete the cluster as last running step. To skip that, add parameter '-cskipcleanup=1' or set environment variable 'K8S_AZURE_SKIPCLEANUP=1'.
+   To deploy a cluster:
 
     ```
-    source <TestProfile>
-    CLUSTER_NAME=<ClusterName>
-    tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -cbuild_e2e_test=1 -caccm_image=<username>/azure-cloud-controller-manager:<image_version>
+    #Enter all of the details as in TestProfile
+    export RESOURCE_GROUP_NAME=<resource group name>
+    export LOCATION=<location>
+    export SUBSCRIPTION_ID=<subscription ID>
+    export CLIENT_ID=<client id>
+    export CLIENT_SECRET=<client secret>
+    export TENANT_ID=<tenant id>
+    export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
+    make deploy
     ```
 
-    To connect the cluster:
-    ```
-    source $CLUSTER_NAME/cluster.profile
-    kubectl version
-    ```
+   To connect the cluster:
 
-5. Run E2E tests
+    ```
+    cd tests/k8s-azure/manifest
+    export KUBECONFIG=_output/kubeconfig/kubeconfig.<LOCATION>.json
+    kubectl cluster-info
+    ```
+To check out more of the deployed cluster , replace `kubectl cluster-info` with other `kubectl` commands. To further debug and    diagnose cluster problems, use `kubectl cluster-info dump`
+
+
+4. Run E2E tests
     Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
-    - Run test suite: default, serial, slow, smoke (smoke suite just tests the cluster is up and do not run any case)
-        ```
-        tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -ctype=<SuiteName> -cskipdeploy=1 -cbuild_e2e_test=1
-        ```
-
-        Option '-cbuild_e2e_test=1' tells it to build E2E tests, if the tests have been built, that option can be omitted.
-
-    - Run custom test:
-        ```
-        CASE_NAME='<some name>'
-        tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -ctype=custom -ccustom_tests=$CASE_NAME -cskipdeploy=1
-        ```
-
-## 2. With container
-
-1. Prepare the environment variable file `<TestProfileWithContainer>`.
-    ```
-    # Azure tenant id
-    K8S_AZURE_TENANTID=
-    # Azure subscription id
-    K8S_AZURE_SUBSID=
-    # Azure service principal id
-    K8S_AZURE_SPID=
-    # Azure service principal secret
-    K8S_AZURE_SPSEC=
-    # SSH public key to be deployed to cluster
-    K8S_AZURE_SSHPUB=
-    # Azure location for the testing cluster
-    K8S_AZURE_LOCATION=
-    ```
-
-2. Build the container image
-
-    ```
-    cd tests/k8s-azure
-    docker build . -t k8s-azure:local
-    docker run --env-file <TestProfileWithContainer> k8s-azure:local k8s-azure e2e
-    ```
