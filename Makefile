@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: all clean update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate
+.PHONY: all clean push update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate deploy
 .DELETE_ON_ERROR:
 
 SHELL=/bin/bash -o pipefail
@@ -27,7 +27,7 @@ GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 IMAGE_REGISTRY ?= local
 K8S_VERSION ?= v1.14.0
 AKSENGINE_VERSION ?= master
-HYPERKUBE_IMAGE ?= "gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)"
+HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
@@ -35,6 +35,8 @@ K8S_BRANCH ?=
 # Only run conformance tests by default (non-serial and non-slow)
 # Note autoscaling tests would be skiped as well.
 CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
+#The test args for Kubernetes e2e tests
+TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
@@ -56,6 +58,8 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cloud-contro
 
 image:
 	docker build -t $(IMAGE) .
+push:
+	docker push $(IMAGE)
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
@@ -99,21 +103,12 @@ test-update: update-prepare update
 		exit 1; \
 	} \
 
-test-e2e: image hyperkube
-	docker push $(IMAGE)
-	docker build -t $(TEST_IMAGE) \
-		--build-arg K8S_VERSION=$(K8S_VERSION) \
-		--build-arg AKSENGINE_VERSION=$(AKSENGINE_VERSION) \
-		tests/k8s-azure
-	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
-		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(ARTIFACTS) \
-		-v $(WORKSPACE):$(WORKSPACE) \
-		-v $(ARTIFACTS):$(ARTIFACTS) \
-		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
-		-ctype=$(SUITE) \
-		-csubject=$(SUBJECT) \
-		-cmanifest=$(TEST_MANIFEST) \
-		-chyperkube_image=$(HYPERKUBE_IMAGE)
+test-e2e:
+	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
+	
 
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
+
+deploy: image hyperkube	push
+	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh

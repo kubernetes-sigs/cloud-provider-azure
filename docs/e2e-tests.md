@@ -1,6 +1,7 @@
-# E2E tests
+# Kubernetes e2e tests
 
 ## Prerequisite
+
 - An azure service principal
 
     Please follow this [guide](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md) for creating an azure service principal
@@ -8,28 +9,25 @@
     - Contributor permission of a subscription
     - Contributor permission of a resource group. In this case, please create the resource group first
 
-## How to run E2E test locally
-
-### 1. Without container
+## How to run Kubernetes e2e tests locally
 
 1. Prepare dependency project
+
 - [aks-engine](https://github.com/Azure/aks-engine)
 
-    It is recommended to use the same version as defined in test [Dockerfile](/tests/k8s-azure/Dockerfile). For example:
-    ```
-    ARG AKSENGINE_VERSION=v0.31.1
-    ```
+  Binary downloads for the latest version of aks-engine for are available [on Github](https://github.com/Azure/aks-engine/releases/latest). Download AKS Engine for your operating system, extract the binary and copy it to your `$PATH`.
 
-    Build aks-engine, and make aks-engine binary in PATH environment variable.
+  On macOS, you can install aks-engine with [Homebrew](https://brew.sh/). Run the command `brew install Azure/aks-engine/aks-engine` to do so. You can install Homebrew following the [instructions](https://brew.sh/).
 
-    ```
-    go get -d github.com/Azure/aks-engine
-    pushd $GOPATH/src/github.com/Azure/aks-engine
-    # git checkout <version>
-    make
-    popd
-    export PATH=$PATH:$GOPATH/src/github.com/Azure/aks-engine/bin
-    ```
+  On Windows, you can install aks-engine via [Chocolatey](https://chocolatey.org/) by executing the command `choco install aks-engine`. You can install Chocolatey following the [instructions](https://chocolatey.org/install).
+
+  On Linux, it could also be installed by following commands:
+  
+  ```sh
+  $ curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
+  $ chmod 700 get-akse.sh
+  $ ./get-akse.sh
+  ```
 
 - [Kubernetes](https://github.com/kubernetes/kubernetes)
 
@@ -39,82 +37,65 @@
     go get -d k8s.io/kubernetes
     ```
 
-2. Fill in following profile file and save it somewhere. This file will be referred as `<TestProfile>` in following steps.
+- [kubectl](https://kubectl.docs.kubernetes.io/)
+
+  Kubectl allows you to run command against Kubernetes cluster, which is also used for deploying CSI plugins. You can follow [here](https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-kubectl-binary-with-curl) to install kubectl. e.g. on Linux
+  
+  ```sh
+  curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+  chmod +x kubectl
+  sudo mv kubectl /usr/local/bin/
+  ```
+
+2. Build docker image `azure-cloud-controller-manager` and push it to your docker image repository.
 
     ```
-    # Azure tenant id
-    export K8S_AZURE_TENANTID=
-    # Azure subscription id
-    export K8S_AZURE_SUBSID=
-    # Azure service principal id
-    export K8S_AZURE_SPID=
-    # Azure service principal secret
-    export K8S_AZURE_SPSEC=
-    # SSH public key to be deployed to cluster
-    export K8S_AZURE_SSHPUB=
-    # Azure location for the testing cluster
-    export K8S_AZURE_LOCATION=
+    cd $GOPATH/src/k8s.io/cloud-provider-azure
+    export IMAGE_REGISTRY=<username>
+    make image push
     ```
 
-3. Build a custom image and push it to a testing repository.
-    ```
-    IMAGE_REGISTRY=<username> make image
-    docker push <username>/azure-cloud-controller-manager:<image_version>
-    ```
+3. Deploy a Kubernetes cluster with the above `azure-cloud-controller-manager` image.
 
-4. Deploy a cluster and run smoke test
-
-    Note that 'k8s-azure e2e' command will delete the cluster as last running step. To skip that, add parameter '-cskipcleanup=1' or set environment variable 'K8S_AZURE_SKIPCLEANUP=1'.
+   To deploy a cluster, export all the required environmetal variables first and then invoke `make deploy`:
 
     ```
-    source <TestProfile>
-    CLUSTER_NAME=<ClusterName>
-    tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -cbuild_e2e_test=1 -caccm_image=<username>/azure-cloud-controller-manager:<image_version>
+    export RESOURCE_GROUP_NAME=<resource group name>
+    export LOCATION=<location>
+    export SUBSCRIPTION_ID=<subscription ID>
+    export CLIENT_ID=<client id>
+    export CLIENT_SECRET=<client secret>
+    export TENANT_ID=<tenant id>
+    export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
+    
+    make deploy
     ```
 
-    To connect the cluster:
-    ```
-    source $CLUSTER_NAME/cluster.profile
-    kubectl version
-    ```
-
-5. Run E2E tests
-    Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
-    - Run test suite: default, serial, slow, smoke (smoke suite just tests the cluster is up and do not run any case)
-        ```
-        tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -ctype=<SuiteName> -cskipdeploy=1 -cbuild_e2e_test=1
-        ```
-
-        Option '-cbuild_e2e_test=1' tells it to build E2E tests, if the tests have been built, that option can be omitted.
-
-    - Run custom test:
-        ```
-        CASE_NAME='<some name>'
-        tests/k8s-azure/k8s-azure e2e -cname=$CLUSTER_NAME -ctype=custom -ccustom_tests=$CASE_NAME -cskipdeploy=1
-        ```
-
-## 2. With container
-
-1. Prepare the environment variable file `<TestProfileWithContainer>`.
-    ```
-    # Azure tenant id
-    K8S_AZURE_TENANTID=
-    # Azure subscription id
-    K8S_AZURE_SUBSID=
-    # Azure service principal id
-    K8S_AZURE_SPID=
-    # Azure service principal secret
-    K8S_AZURE_SPSEC=
-    # SSH public key to be deployed to cluster
-    K8S_AZURE_SSHPUB=
-    # Azure location for the testing cluster
-    K8S_AZURE_LOCATION=
-    ```
-
-2. Build the container image
+   To connect the cluster:
 
     ```
-    cd tests/k8s-azure
-    docker build . -t k8s-azure:local
-    docker run --env-file <TestProfileWithContainer> k8s-azure:local k8s-azure e2e
+    export KUBECONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
+    kubectl cluster-info
     ```
+
+To check out more of the deployed cluster , replace `kubectl cluster-info` with other `kubectl` commands. To further debug and diagnose cluster problems, use `kubectl cluster-info dump`
+
+
+4. Run E2E tests
+
+Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
+
+```sh
+cd $GOPATH/src/k8s.io/kubernetes
+
+make WHAT='test/e2e/e2e.test'
+make WHAT=cmd/kubectl
+
+export KUBERNETES_PROVIDER=azure
+export KUBERNETES_CONFORMANCE_TEST=y
+export KUBERNETES_CONFORMANCE_PROVIDER=azure
+export CLOUD_CONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
+
+# Replace the test_args with your own.
+go run hack/e2e.go -- --test --provider=local --check-version-skew=false --test_args='--ginkgo.focus=Port\sforwarding'
+```
