@@ -74,8 +74,9 @@ aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
   --api-model ${manifest_file} \
   --client-id ${CLIENT_ID} \
   --client-secret ${CLIENT_SECRET}
-echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
-export KUBECONFIG=_output/kubeconfig/kubeconfig.$LOCATION.json
+
+export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
+echo "Kubernetes cluster deployed. Please find the kubeconfig at $KUBECONFIG"
 
 #Deploy AzureDisk CSI Plugin
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-driver-registry.yaml
