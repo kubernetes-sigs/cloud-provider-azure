@@ -35,6 +35,8 @@ K8S_BRANCH ?=
 # Only run conformance tests by default (non-serial and non-slow)
 # Note autoscaling tests would be skiped as well.
 CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
+#The test args for Kubernetes e2e tests
+TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
@@ -101,21 +103,9 @@ test-update: update-prepare update
 		exit 1; \
 	} \
 
-test-e2e: image hyperkube
-	docker push $(IMAGE)
-	docker build -t $(TEST_IMAGE) \
-		--build-arg K8S_VERSION=$(K8S_VERSION) \
-		--build-arg AKSENGINE_VERSION=$(AKSENGINE_VERSION) \
-		tests/k8s-azure
-	docker run --env-file $(K8S_AZURE_ACCOUNT_CONFIG) \
-		-e K8S_AZURE_TEST_ARTIFACTS_DIR=$(ARTIFACTS) \
-		-v $(WORKSPACE):$(WORKSPACE) \
-		-v $(ARTIFACTS):$(ARTIFACTS) \
-		$(TEST_IMAGE) e2e -v -caccm_image=$(IMAGE) \
-		-ctype=$(SUITE) \
-		-csubject=$(SUBJECT) \
-		-cmanifest=$(TEST_MANIFEST) \
-		-chyperkube_image=$(HYPERKUBE_IMAGE)
+test-e2e:
+	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
+	
 
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
