@@ -100,3 +100,57 @@ In other words, if you use multiple agent pools (scale sets), and `loadBalancerS
 Master nodes would not add to the backends of Azure loadbalancer (ALB) if `excludeMasterFromStandardLB` is set.
 
 By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want adding the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
+
+# Azure Stack Configuration
+
+Azure Stack has different API endpoints, depending on the Azure Stack deployment. These need to be provided to the Azure SDK and currently this is done by adding an extra `json` file with the arguments, as well as an environment variable pointing to this file.
+
+There are several available presets, namely:
+
+- `AzureChinaCloud`
+- `AzureGermanCloud`
+- `AzurePublicCloud`
+- `AzureUSGovernmentCloud`
+
+These are determined using `cloud: <PRESET>` described above in the description of `azure.json`.
+
+When `cloud: AzureStackCloud`, the extra environment variable used by the Azure SDK to find the Azure Stack configuration file is:
+
+  - [`AZURE_ENVIRONMENT_FILEPATH`](https://github.com/Azure/go-autorest/blob/562d376/autorest/azure/environments.go#L28)
+
+The configuration parameters of this file:
+
+```
+{
+  "name": "AzureStackCloud",
+  "managementPortalURL": "...",
+  "publishSettingsURL": "...",
+  "serviceManagementEndpoint": "...",
+  "resourceManagerEndpoint": "...",
+  "activeDirectoryEndpoint": "...",
+  "galleryEndpoint": "...",
+  "keyVaultEndpoint": "...",
+  "graphEndpoint": "...",
+  "serviceBusEndpoint": "...",
+  "batchManagementEndpoint": "...",
+  "storageEndpointSuffix": "...",
+  "sqlDatabaseDNSSuffix": "...",
+  "trafficManagerDNSSuffix": "...",
+  "keyVaultDNSSuffix": "...",
+  "serviceBusEndpointSuffix": "...",
+  "serviceManagementVMDNSSuffix": "...",
+  "resourceManagerVMDNSSuffix": "...",
+  "containerRegistryDNSSuffix": "...",
+  "cosmosDBDNSSuffix": "...",
+  "tokenAudience": "...",
+  "resourceIdentifiers": {
+    "graph": "...",
+    "keyVault": "...",
+    "datalake": "...",
+    "batch": "...",
+    "operationalInsights": "..."
+  }
+}
+```
+
+The full list of existing settings for the `AzureChinaCloud`, `AzureGermanCloud`, `AzurePublicCloud` and `AzureUSGovernmentCloud` is available in the source code at https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go#L51
