@@ -24,11 +24,11 @@ import (
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
+	"k8s.io/legacy-cloud-providers/azure"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -30,9 +30,9 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
-	azureprovider "k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 	_ "k8s.io/kubernetes/pkg/util/prometheusclientgo" // load all the prometheus client-go plugins
 	_ "k8s.io/kubernetes/pkg/version/prometheus"      // for version metric registration
+	azureprovider "k8s.io/legacy-cloud-providers/azure"
 )
 
 func init() {

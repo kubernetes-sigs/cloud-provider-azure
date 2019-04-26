@@ -3,8 +3,8 @@ module k8s.io/cloud-provider-azure
 go 1.12
 
 require (
-	github.com/Azure/azure-sdk-for-go v21.3.0+incompatible
-	github.com/Azure/go-autorest v11.1.0+incompatible
+	github.com/Azure/azure-sdk-for-go v21.4.0+incompatible
+	github.com/Azure/go-autorest v11.1.2+incompatible
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
@@ -35,14 +35,15 @@ require (
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/component-base v0.0.0
-	k8s.io/klog v0.2.0
+	k8s.io/klog v0.3.0
 	k8s.io/kubernetes v1.15.0-alpha.0.0.20190404074127-79a8827c37d6
+	k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f
 )
 
 replace (
 	bitbucket.org/bertimus9/systemstat => bitbucket.org/bertimus9/systemstat v0.0.0-20180207000608-0eeff89b0690
 	cloud.google.com/go => cloud.google.com/go v0.34.0
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v21.3.0+incompatible
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v21.4.0+incompatible
 	github.com/Azure/go-ansiterm => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v11.1.0+incompatible
 	github.com/BurntSushi/toml => github.com/BurntSushi/toml v0.3.1
@@ -320,6 +321,7 @@ replace (
 	k8s.io/kube-scheduler => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20190404123052-4d380ee279aa
 	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20190404123052-4d380ee279aa
 	k8s.io/kubernetes => k8s.io/kubernetes v1.15.0-alpha.0.0.20190404074127-79a8827c37d6
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f
 	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190404123052-4d380ee279aa
 	k8s.io/node-api => k8s.io/kubernetes/staging/src/k8s.io/node-api v0.0.0-20190404123052-4d380ee279aa
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.0-20190329054012-df02ded38f95
