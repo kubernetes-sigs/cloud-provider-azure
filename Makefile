@@ -53,8 +53,8 @@ all: $(BIN_DIR)/azure-cloud-controller-manager
 clean:
 	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
 
-$(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cloud-controller-manager/*) $(wildcard cloud-controller-manager/**/*)
-	 go build -o $@ $(PKG_CONFIG_CONTENT) ./cloud-controller-manager
+$(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard pkg/*) $(wildcard pkg/**/*)
+	 go build -o $@ $(PKG_CONFIG_CONTENT) ./pkg
 
 image:
 	docker build -t $(IMAGE) .
@@ -72,7 +72,7 @@ $(PKG_CONFIG):
 
 test-unit: $(PKG_CONFIG)
 	mkdir -p $(TEST_RESULTS_DIR)
-	cd cloud-controller-manager && go test $(PKG_CONFIG_CONTENT) -v ./... | tee ../$(TEST_RESULTS_DIR)/unittest.txt
+	cd pkg && go test $(PKG_CONFIG_CONTENT) -v ./... | tee ../$(TEST_RESULTS_DIR)/unittest.txt
 ifdef JUNIT
 	hack/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
 endif
@@ -84,7 +84,7 @@ test-lint-prepare:
 	GO111MODULE=off go get -u gopkg.in/alecthomas/gometalinter.v1
 	GO111MODULE=off gometalinter.v1 -i
 test-lint:
-	gometalinter.v1 $(GOMETALINTER_OPTION) ./ cloud-controller-manager/...
+	gometalinter.v1 $(GOMETALINTER_OPTION) ./ pkg/...
 	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
 
 test-boilerplate:

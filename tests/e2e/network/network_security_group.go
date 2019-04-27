@@ -27,8 +27,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/cloud-provider-azure/pkg/azure"
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
-	"k8s.io/legacy-cloud-providers/azure"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

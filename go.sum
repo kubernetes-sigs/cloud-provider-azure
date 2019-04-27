@@ -392,8 +392,6 @@ k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20190404123052-4d380e
 k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20190404123052-4d380ee279aa/go.mod h1:4A8X7nfS+MbdHzTYK4K7+SUlKIcympFSMbVgYZpd8sU=
 k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190404123052-4d380ee279aa/go.mod h1:vPB/dyKRvO24RU/0TNinh++6Ew2tznWL9Be8cg2RBsY=
 k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20190404123052-4d380ee279aa/go.mod h1:poTT4eFmP0l1hK6+8W9lkUjSmQkr9ZOUWONskHdHNuA=
-k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f h1:hSwyl6ijQpJdcBXn2YJN5WFhY7N/kR17cX0jyZLZ4uc=
-k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f/go.mod h1:mqVmoHKW6YKnK2+eTWD5PM/wJSKyl9kTAttkyWQuze0=
 k8s.io/repo-infra v0.0.0-20190329054012-df02ded38f95/go.mod h1:+G1xBfZDfVFsm1Tj/HNCvg4QqWx8rJ2Fxpqr1rqp/gQ=
 k8s.io/utils v0.0.0-20190221042446-c2654d5206da h1:ElyM7RPonbKnQqOcw7dG2IK5uvQQn3b/WPHqD5mBvP4=
 k8s.io/utils v0.0.0-20190221042446-c2654d5206da/go.mod h1:8k8uAuAQ0rXslZKaEWd0c3oVhZz7sSzSiPnVZayjIX0=

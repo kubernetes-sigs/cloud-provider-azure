@@ -26,13 +26,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"k8s.io/cloud-provider-azure/cloud-controller-manager/version"
+	azureprovider "k8s.io/cloud-provider-azure/pkg/azure"
+	"k8s.io/cloud-provider-azure/pkg/version"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
 	_ "k8s.io/kubernetes/pkg/util/prometheusclientgo" // load all the prometheus client-go plugins
 	_ "k8s.io/kubernetes/pkg/version/prometheus"      // for version metric registration
-	azureprovider "k8s.io/legacy-cloud-providers/azure"
 )
 
 func init() {

@@ -1,6 +1,6 @@
 *
 !.git
-!cloud-controller-manager
+!pkg
 !Makefile
 !hack/pkg-config.sh
 !vendor
