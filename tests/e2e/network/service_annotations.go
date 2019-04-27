@@ -23,14 +23,14 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
+	"k8s.io/legacy-cloud-providers/azure"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

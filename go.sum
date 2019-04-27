@@ -1,7 +1,7 @@
 bitbucket.org/bertimus9/systemstat v0.0.0-20180207000608-0eeff89b0690/go.mod h1:Ulb78X89vxKYgdL24HMTiXYHlyHEvruOj1ZPlqeNEZM=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
-github.com/Azure/azure-sdk-for-go v21.3.0+incompatible h1:YFvAka2WKAl2xnJkYV1e1b7E2z88AgFszDzWU18ejMY=
-github.com/Azure/azure-sdk-for-go v21.3.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
+github.com/Azure/azure-sdk-for-go v21.4.0+incompatible h1:rsdM2HqR64WhJv7YqMAjWOLAebbx4c9/gzcLC7yoDDE=
+github.com/Azure/azure-sdk-for-go v21.4.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 h1:w+iIsaOQNcT7OZ575w+acHgRric5iCyQh+xv+KJ4HB8=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78/go.mod h1:LmzpDX56iTiv29bbRTIsUNlaFfuhWRQBWjQdVyAevI8=
 github.com/Azure/go-autorest v11.1.0+incompatible h1:9DfMsQdUMEtg1jKRTjtkNZsvOuZXJOMl4dN1kiQwAc8=
@@ -392,6 +392,8 @@ k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20190404123052-4d380e
 k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20190404123052-4d380ee279aa/go.mod h1:4A8X7nfS+MbdHzTYK4K7+SUlKIcympFSMbVgYZpd8sU=
 k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190404123052-4d380ee279aa/go.mod h1:vPB/dyKRvO24RU/0TNinh++6Ew2tznWL9Be8cg2RBsY=
 k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20190404123052-4d380ee279aa/go.mod h1:poTT4eFmP0l1hK6+8W9lkUjSmQkr9ZOUWONskHdHNuA=
+k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f h1:hSwyl6ijQpJdcBXn2YJN5WFhY7N/kR17cX0jyZLZ4uc=
+k8s.io/legacy-cloud-providers v0.0.0-20190426093850-28f2a6e69d1f/go.mod h1:mqVmoHKW6YKnK2+eTWD5PM/wJSKyl9kTAttkyWQuze0=
 k8s.io/repo-infra v0.0.0-20190329054012-df02ded38f95/go.mod h1:+G1xBfZDfVFsm1Tj/HNCvg4QqWx8rJ2Fxpqr1rqp/gQ=
 k8s.io/utils v0.0.0-20190221042446-c2654d5206da h1:ElyM7RPonbKnQqOcw7dG2IK5uvQQn3b/WPHqD5mBvP4=
 k8s.io/utils v0.0.0-20190221042446-c2654d5206da/go.mod h1:8k8uAuAQ0rXslZKaEWd0c3oVhZz7sSzSiPnVZayjIX0=
