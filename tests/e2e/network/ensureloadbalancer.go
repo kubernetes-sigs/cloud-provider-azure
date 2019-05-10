@@ -18,7 +18,7 @@ package network
 
 import (
 	"os"
-	"time"
+	"strings"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -209,7 +209,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
-		targetIP = ""
 
 		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceBalanceIP(service, false, targetIP)
@@ -240,7 +239,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		//Wait for 10 minutes, there should return timeout err, since external ip should not change
 		err = utils.WaitUpdateServiceExposure(cs, ns.Name, serviceName, targetIP, false /*expectSame*/)
 		Expect(err).To(Equal(wait.ErrWaitTimeout))
-		time.Sleep(10 * time.Minute)
 	})
 })
 
@@ -266,9 +264,19 @@ func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (re
 }
 
 func defaultPublicIPAddress(ipName string) aznetwork.PublicIPAddress {
+	// The default sku for LoadBalancer and PublicIP is basic.
+	skuName := aznetwork.PublicIPAddressSkuNameBasic
+	if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
+		if strings.EqualFold(skuEnv, string(aznetwork.PublicIPAddressSkuNameStandard)) {
+			skuName = aznetwork.PublicIPAddressSkuNameStandard
+		}
+	}
 	return aznetwork.PublicIPAddress{
 		Name:     to.StringPtr(ipName),
-		Location: to.StringPtr(os.Getenv("K8S_AZURE_LOCATION")),
+		Location: to.StringPtr(os.Getenv(utils.ClusterLocationEnv)),
+		Sku: &aznetwork.PublicIPAddressSku{
+			Name: skuName,
+		},
 		PublicIPAddressPropertiesFormat: &aznetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: aznetwork.Static,
 		},
