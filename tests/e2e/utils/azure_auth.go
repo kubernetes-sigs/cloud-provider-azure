@@ -25,13 +25,15 @@ import (
 	"k8s.io/klog"
 )
 
+// Environmental variables for validating Azure resource status.
 const (
-	tenantIDEnv               = "K8S_AZURE_TENANTID"
-	subscriptionEnv           = "K8S_AZURE_SUBSID"
-	servicePrincipleIDEnv     = "K8S_AZURE_SPID"
-	servicePrincipleSecretEnv = "K8S_AZURE_SPSEC"
-	clusterLocationEnv        = "K8S_AZURE_LOCATION"
-	clusterEnvironment        = "K8S_AZURE_ENVIRONMENT"
+	TenantIDEnv               = "K8S_AZURE_TENANTID"
+	SubscriptionEnv           = "K8S_AZURE_SUBSID"
+	ServicePrincipleIDEnv     = "K8S_AZURE_SPID"
+	ServicePrincipleSecretEnv = "K8S_AZURE_SPSEC"
+	ClusterLocationEnv        = "K8S_AZURE_LOCATION"
+	ClusterEnvironment        = "K8S_AZURE_ENVIRONMENT"
+	LoadBalancerSkuEnv        = "K8S_AZURE_LOADBALANCE_SKU"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
@@ -71,7 +73,7 @@ func getServicePrincipalToken(config *AzureAuthConfig) (*adal.ServicePrincipalTo
 // azureAuthConfigFromTestProfile obtains azure config from Environment
 func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 	var env azure.Environment
-	envStr := os.Getenv(clusterEnvironment)
+	envStr := os.Getenv(ClusterEnvironment)
 	if len(envStr) == 0 {
 		env = azure.PublicCloud
 	} else {
@@ -82,10 +84,10 @@ func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 		}
 	}
 	c := &AzureAuthConfig{
-		TenantID:        os.Getenv(tenantIDEnv),
-		AADClientID:     os.Getenv(servicePrincipleIDEnv),
-		AADClientSecret: os.Getenv(servicePrincipleSecretEnv),
-		SubscriptionID:  os.Getenv(subscriptionEnv),
+		TenantID:        os.Getenv(TenantIDEnv),
+		AADClientID:     os.Getenv(ServicePrincipleIDEnv),
+		AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
+		SubscriptionID:  os.Getenv(SubscriptionEnv),
 		Environment:     env,
 	}
 	return c, nil
