@@ -1,14 +1,14 @@
 {
     "cloud": "AzurePublicCloud",
-    "tenantId": "fakeId",
-    "subscriptionId": "fakeId",
-    "aadClientId": "fakeId",
-    "aadClientSecret": "fakeId",
-    "resourceGroup": "fakeId",
-    "location": "southeastasia",
-    "subnetName": "fakeName",
-    "securityGroupName": "fakeName",
-    "vnetName": "fakeName",
-    "routeTableName": "fakeName",
-    "primaryAvailabilitySetName": "fakeName"
+    "tenantId": "abcb9dfb-225f-4d73-9450-fd6a4620e652",
+    "subscriptionId": "11a9a54c-e5aa-43b1-85f5-ce4294e0dbaa",
+    "aadClientId": "96d866db-4bb8-4d26-94c2-c78ef13fae16",
+    "aadClientSecret": "3728d6d0-96d1-481a-8593-4cc80f64052b",
+    "resourceGroup": "akscheck",
+    "location": "westus2",
+    "subnetName": "k8s-subnet",
+    "securityGroupName": "-",
+    "vnetName": "k8s-vnet-10465041",
+    "routeTableName": "k8s-agentpool1-10465041-0",
+    "primaryAvailabilitySetName": "k8s-master-pool-10465041"
 }
