@@ -40,6 +40,7 @@ if [ "$RESOURCE_GROUP_NAME" = "" ]
 then
 echo "RESOURCE GROUP NAME must be specified"
 exit 1
+fi
 
 # Check for commands which would be used in following steps.
 if ! [ -x "$(command -v jq)" ]; then
@@ -92,7 +93,7 @@ echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/
 export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
 echo "Kubernetes cluster deployed. Please find the kubeconfig at $KUBECONFIG"
 
-#Deploy AzureDisk CSI Plugin
+# Deploy AzureDisk CSI Plugin
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-driver-registry.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-node-info.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-attacher.yaml
@@ -105,7 +106,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi
 # create storage class.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/example/storageclass-azuredisk-csi.yaml
 
-#Deploy AzureFile CSI Plugin
+# Deploy AzureFile CSI Plugin
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-driver-registry.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-node-info.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-attacher.yaml
