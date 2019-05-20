@@ -17,11 +17,14 @@ set -e
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 RESOURCE_GROUP_NAME=${RESOURCE_GROUP_NAME:-""}
 LOCATION=${LOCATION:-""}
+
+#Check for variables is initialized or not
 SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-""}
 CLIENT_ID=${CLIENT_ID:-""}
 CLIENT_SECRET=${CLIENT_SECRET:-""}
 TENANT_ID=${TENANT_ID:-""}
 USE_CSI_DEFAULT_STORAGECLASS=${USE_CSI_DEFAULT_STORAGECLASS:-""}
+ENABLE_AVAILABILITY_ZONE=${ENABLE_AVAILABILITY_ZONE:-""}
 
 # Check for variables is initialized or not
 if [ -z "$LOCATION" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ]; then
@@ -32,7 +35,6 @@ if [ -z "$IMAGE" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
   echo "Please deploy the cluster by running 'IMAGE_REGISTRY=<your-registry> make deploy'."
   exit 1
 fi
-
 
 if [ "$RESOURCE_GROUP_NAME" = "" ]
 then
@@ -63,8 +65,13 @@ function cleanup() {
 }
 trap cleanup EXIT
 
+base_manifest_file=${REPO_ROOT}/examples/aks-engine.json
+if [ ! -z "$ENABLE_AVAILABILITY_ZONE" ]; then
+    base_manifest_file=${REPO_ROOT}/examples/az.json
+fi
+
 # Configure the manifests for aks-engine
-cat ${REPO_ROOT}/examples/aks-engine.json | \
+cat $base_manifest | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${IMAGE}\"" | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customHyperkubeImage=\"${HYPERKUBE_IMAGE}\"" | \
   jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
@@ -96,7 +103,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-provisioner.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-attacher.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/azuredisk-csi-driver.yaml
-# Create storage class.
+# create storage class.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/example/storageclass-azuredisk-csi.yaml
 
 # Deploy AzureFile CSI Plugin
@@ -109,7 +116,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-provisioner.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-attacher.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/azurefile-csi-driver.yaml
-# Create storage class.
+# create storage class.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/example/storageclass-azurefile-csi.yaml
 
 if [ $USE_CSI_DEFAULT_STORAGECLASS = "Yes" ]
@@ -131,3 +138,4 @@ reclaimPolicy: Delete
 volumeBindingMode: Immediate
 EOF
 fi
+
