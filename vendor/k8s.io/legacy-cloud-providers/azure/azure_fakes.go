@@ -30,10 +30,14 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2018-07-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
+)
+
+var (
+	errPreconditionFailedEtagMismatch = fmt.Errorf("PreconditionFailedEtagMismatch")
 )
 
 type fakeAzureLBClient struct {
@@ -48,7 +52,7 @@ func newFakeAzureLBClient() *fakeAzureLBClient {
 	return fLBC
 }
 
-func (fLBC *fakeAzureLBClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, loadBalancerName string, parameters network.LoadBalancer) (resp *http.Response, err error) {
+func (fLBC *fakeAzureLBClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, loadBalancerName string, parameters network.LoadBalancer, etag string) (resp *http.Response, err error) {
 	fLBC.mutex.Lock()
 	defer fLBC.mutex.Unlock()
 
@@ -286,7 +290,7 @@ func newFakeAzureVirtualMachinesClient() *fakeAzureVirtualMachinesClient {
 	return fVMC
 }
 
-func (fVMC *fakeAzureVirtualMachinesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachine) (resp *http.Response, err error) {
+func (fVMC *fakeAzureVirtualMachinesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachine, source string) (resp *http.Response, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
@@ -417,12 +421,20 @@ func newFakeAzureNSGClient() *fakeAzureNSGClient {
 	return fNSG
 }
 
-func (fNSG *fakeAzureNSGClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkSecurityGroupName string, parameters network.SecurityGroup) (resp *http.Response, err error) {
+func (fNSG *fakeAzureNSGClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, networkSecurityGroupName string, parameters network.SecurityGroup, etag string) (resp *http.Response, err error) {
 	fNSG.mutex.Lock()
 	defer fNSG.mutex.Unlock()
 
 	if _, ok := fNSG.FakeStore[resourceGroupName]; !ok {
 		fNSG.FakeStore[resourceGroupName] = make(map[string]network.SecurityGroup)
+	}
+
+	if nsg, ok := fNSG.FakeStore[resourceGroupName][networkSecurityGroupName]; ok {
+		if etag != "" && to.String(nsg.Etag) != "" && etag != to.String(nsg.Etag) {
+			return &http.Response{
+				StatusCode: http.StatusPreconditionFailed,
+			}, errPreconditionFailedEtagMismatch
+		}
 	}
 	fNSG.FakeStore[resourceGroupName][networkSecurityGroupName] = parameters
 
@@ -538,7 +550,7 @@ func (fVMC *fakeVirtualMachineScaleSetVMsClient) GetInstanceView(ctx context.Con
 	return result, nil
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM) (resp *http.Response, err error) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (resp *http.Response, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
@@ -630,7 +642,7 @@ func newFakeRoutesClient() *fakeRoutesClient {
 	return fRC
 }
 
-func (fRC *fakeRoutesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, routeTableName string, routeName string, routeParameters network.Route) (resp *http.Response, err error) {
+func (fRC *fakeRoutesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, routeTableName string, routeName string, routeParameters network.Route, etag string) (resp *http.Response, err error) {
 	fRC.mutex.Lock()
 	defer fRC.mutex.Unlock()
 
@@ -671,7 +683,7 @@ func newFakeRouteTablesClient() *fakeRouteTablesClient {
 	return fRTC
 }
 
-func (fRTC *fakeRouteTablesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, routeTableName string, parameters network.RouteTable) (resp *http.Response, err error) {
+func (fRTC *fakeRouteTablesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, routeTableName string, parameters network.RouteTable, etag string) (resp *http.Response, err error) {
 	fRTC.mutex.Lock()
 	defer fRTC.mutex.Unlock()
 
