@@ -65,9 +65,9 @@ function cleanup() {
 }
 trap cleanup EXIT
 
-base_manifest_file=${REPO_ROOT}/examples/aks-engine.json
+base_manifest=${REPO_ROOT}/examples/aks-engine.json
 if [ ! -z "$ENABLE_AVAILABILITY_ZONE" ]; then
-    base_manifest_file=${REPO_ROOT}/examples/az.json
+    base_manifest=${REPO_ROOT}/examples/az.json
 fi
 
 # Configure the manifests for aks-engine
@@ -138,4 +138,3 @@ reclaimPolicy: Delete
 volumeBindingMode: Immediate
 EOF
 fi
-
