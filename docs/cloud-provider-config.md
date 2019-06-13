@@ -19,6 +19,7 @@ Here is a config file sample:
     "vnetResourceGroup": "",
     "routeTableName": "<name>",
     "primaryAvailabilitySetName": "<name>",
+    "routeTableResourceGroup": "<name>",
     "cloudProviderBackoff": false,
     "useManagedIdentityExtension": false,
     "useInstanceMetadata": true
@@ -79,7 +80,10 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |useInstanceMetadata|Use instance metadata service where possible|Boolean value, default to false|
 |loadBalancerSku|Sku of Load Balancer and Public IP. Candidate values are: `basic` and `standard`.|Default to `basic`.|
 |excludeMasterFromStandardLB|ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.|Boolean value, default to true.|
+|disableOutboundSNAT| Disable outbound SNAT for SLB | Default to false and avaible since v1.11.9, v1.12.7, v1.13.5 and v1.14.0|
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
+|routeTableResourceGroup| The resource group name for routeTable | Default same as resourceGroup and available since v1.15.0 |
+|cloudConfigType| The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.| Default to `merge`.  and available since v1.15.0 |
 
 ### primaryAvailabilitySetName
 
@@ -101,7 +105,66 @@ Master nodes would not add to the backends of Azure loadbalancer (ALB) if `exclu
 
 By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want adding the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
 
-# Azure Stack Configuration
+### Setting Azure cloud provider from Kubernetes secrets
+
+Since v1.15.0, Azure cloud provider supports reading the cloud config from Kubernetes secrets. The secret is a serialized version of `azure.json` file with key `cloud-config`. The secret should be put in `kube-system` namespace and its name should be `azure-cloud-provider`.
+
+To enable this feature, set `cloudConfigType` to `secret` or `merge` (default is `mergg`). All supported values for this option are:
+
+- `file`: The cloud provider configuration is read from cloud-config file.
+- `secret`: the cloud provider configuration must be overridden by the secret.
+- `merge`: the cloud provider configuration can be optionally overridden by a secret when it is set explicitly in the secret, this is default value.
+
+Since Azure cloud provider would read Kubernetes secrets, the following RBAC should also be configured:
+
+```yaml
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  labels:
+    kubernetes.io/cluster-service: "true"
+  name: system:azure-cloud-provider-secret-getter
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    kubernetes.io/cluster-service: "true"
+  name: system:azure-cloud-provider-secret-getter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:azure-cloud-provider-secret-getter
+subjects:
+- kind: ServiceAccount
+  name: azure-cloud-provider
+  namespace: kube-system
+```
+
+## Run Kubelet without Azure identity
+
+When running Kubelet with kube-controller-manager, it also supports running without Azure identity since v1.15.0.
+
+Both kube-controller-manager and kubelet should configure `--cloud-provider=azure --cloud-config=/etc/kubernetes/azure.json`, but the contents for `azure.json` are different:
+
+(1) For kube-controller-manager, refer the above part for setting `azure.json`.
+
+(2) For kubelet, `useInstanceMetadata` is required to be `true` and Azure identities are not required. A sample for Kubelet's azure.json is
+
+```json
+{
+  "useInstanceMetadata": true,
+  "vmType": "vmss"
+}
+```
+
+## Azure Stack Configuration
 
 Azure Stack has different API endpoints, depending on the Azure Stack deployment. These need to be provided to the Azure SDK and currently this is done by adding an extra `json` file with the arguments, as well as an environment variable pointing to this file.
 
@@ -120,7 +183,7 @@ When `cloud: AzureStackCloud`, the extra environment variable used by the Azure 
 
 The configuration parameters of this file:
 
-```
+```json
 {
   "name": "AzureStackCloud",
   "managementPortalURL": "...",
