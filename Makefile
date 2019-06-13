@@ -25,7 +25,7 @@ TEST_RESULTS_DIR=testResults
 GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 
 IMAGE_REGISTRY ?= local
-K8S_VERSION ?= v1.14.0
+K8S_VERSION ?= v1.15.0-rc.1
 AKSENGINE_VERSION ?= master
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 # manifest name under tests/e2e/k8s-azure/manifest
@@ -105,7 +105,7 @@ test-update: update-prepare update
 
 test-e2e:
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
-	
+
 
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)

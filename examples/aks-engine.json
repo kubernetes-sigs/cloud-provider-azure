@@ -4,11 +4,11 @@
     "properties": {
         "orchestratorProfile": {
             "orchestratorType": "Kubernetes",
-            "orchestratorRelease": "1.14",
+            "orchestratorRelease": "1.15",
             "kubernetesConfig": {
                 "useCloudControllerManager": true,
-                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.14.0",
-                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.14.0",
+                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.15.0-rc.1",
+                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.15.0-rc.1",
                 "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
