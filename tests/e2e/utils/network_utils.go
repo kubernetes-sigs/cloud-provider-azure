@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -200,4 +202,41 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Find no availabePrivateIP in range 10.240.1.0 ~ 10.240.1.100")
+}
+
+//ListPublicIPs lists all the publicIP addresses active
+func (azureTestClient *AzureTestClient) ListPublicIPs(ctx context.Context, resourceGroupName string) ([]network.PublicIPAddress, error) {
+	Logf("Getting PublicIP list")
+	result := make([]network.PublicIPAddress, 0)
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+	iterator, err := pipClient.ListComplete(ctx, resourceGroupName)
+	if err != nil {
+		return nil, err
+	}
+	for ; iterator.NotDone(); err = iterator.Next() {
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, iterator.Value())
+	}
+	return result, nil
+}
+
+func (tc *AzureTestClient) GetLoadBalancer() (*network.LoadBalancersClient, error) {
+	Logf("creating new LoadBalancer Client")
+	c := &aznetwork.LoadBalancersClient{
+		BaseClient: tc.networkClient,
+	}
+	return c, nil
+}
+
+// IsMasterNode returns true if the node has a master role label.
+// The master role is determined by looking for:
+// * a kubernetes.io/role="master" label
+func IsMasterNode(node *v1.Node) bool {
+	if val, ok := node.Labels[nodeLabelRole]; ok && val == "master" {
+		return true
+	}
+	return false
 }
