@@ -128,6 +128,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
+  resourceNames: ["azure-cloud-provider"]
   verbs:
   - get
 ---
