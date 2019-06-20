@@ -354,8 +354,8 @@ k8s.io/klog v0.2.1-0.20190311220638-291f19f84ceb h1:A9ZNjOQRZrgdg1PPVRlVnnzB2+pm
 k8s.io/klog v0.2.1-0.20190311220638-291f19f84ceb/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
 k8s.io/kube-openapi v0.0.0-20190401085232-94e1e7b7574c h1:kJCzg2vGCzah5icgkKR7O1Dzn0NA2iGlym27sb0ZfGE=
 k8s.io/kube-openapi v0.0.0-20190401085232-94e1e7b7574c/go.mod h1:BXM9ceUBTj2QnfH2MK1odQs778ajze1RxcmP6S8RVVc=
-k8s.io/kubernetes v1.15.0-rc.1 h1:g4AL5/JyMoctFYRj8FE+uSOukHlCWVpNNKGitJipjec=
-k8s.io/kubernetes v1.15.0-rc.1/go.mod h1:gHiryyVekxFDzuK//3LKiE8ur1UWjIHJbNRp2r+TcxA=
+k8s.io/kubernetes v1.15.0 h1:0P6jAdZ1cF5/wSc14HqHCjWlbnwYzmFJBYeXBezZEE0=
+k8s.io/kubernetes v1.15.0/go.mod h1:3RE5ikMc73WK+dSxk4pQuQ6ZaJcPXiZX2dj98RcdCuM=
 k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20190612200019-4f29960cb205 h1:pK67WasxhXax/4MfNm3BVYm1dIa3mKIXGyHPDu3w9iQ=
 k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20190612200019-4f29960cb205/go.mod h1:F6Fl77o501YUXNsJfBI+WAoC0ZcVGbw3FWQYig2Eplw=
 k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20190612200019-4f29960cb205 h1:HojGTx5tztbC0CcqK4IWhCUk6xl6DTsX6I1+9qx7MFA=
