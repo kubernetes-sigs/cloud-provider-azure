@@ -7,8 +7,8 @@
             "orchestratorRelease": "1.15",
             "kubernetesConfig": {
                 "useCloudControllerManager": true,
-                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.15.0-rc.1",
-                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.15.0-rc.1",
+                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.15.0",
+                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.15.0",
                 "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
