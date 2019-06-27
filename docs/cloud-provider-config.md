@@ -109,7 +109,7 @@ By default, if nodes are labeled with `node-role.kubernetes.io/master`, they wou
 
 Since v1.15.0, Azure cloud provider supports reading the cloud config from Kubernetes secrets. The secret is a serialized version of `azure.json` file with key `cloud-config`. The secret should be put in `kube-system` namespace and its name should be `azure-cloud-provider`.
 
-To enable this feature, set `cloudConfigType` to `secret` or `merge` (default is `mergg`). All supported values for this option are:
+To enable this feature, set `cloudConfigType` to `secret` or `merge` (default is `merge`). All supported values for this option are:
 
 - `file`: The cloud provider configuration is read from cloud-config file.
 - `secret`: the cloud provider configuration must be overridden by the secret.
