@@ -20,11 +20,14 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+const k8sVNetPrefix = "k8s-vnet-"
 
 // getVirtualNetworkList is a wapper around listing VirtualNetwork
 func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwork.VirtualNetworkListResultPage, err error) {
@@ -44,18 +47,34 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 }
 
 // GetClusterVirtualNetwork gets the only vnet of the cluster
-func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (ret aznetwork.VirtualNetwork, err error) {
+func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwork aznetwork.VirtualNetwork, err error) {
 	vNetList, err := azureTestClient.getVirtualNetworkList()
 	if err != nil {
 		return
 	}
-	// Assume there is only one cluster in one resource group
-	if len(vNetList.Values()) != 1 {
-		err = fmt.Errorf("Found no or more than 1 virtual network in resource group same as cluster name")
+
+	k8sVNetCount := 0
+	returnIndex := 0
+	for i, vNet := range vNetList.Values() {
+		if strings.HasPrefix(to.String(vNet.Name), k8sVNetPrefix) {
+			Logf("found one k8s virtual network %s", to.String(vNet.Name))
+			k8sVNetCount++
+			returnIndex = i
+		} else {
+			Logf("found other virtual network %s, skip", to.String(vNet.Name))
+		}
+	}
+	switch k8sVNetCount {
+	case 0:
+		err = fmt.Errorf("Found no virtual network of the corresponding cluster in resource group")
+		return
+	case 1:
+		virtualNetwork = vNetList.Values()[returnIndex]
+		return
+	default:
+		err = fmt.Errorf("Found more than one virtual network of the corresponding cluster in resource group")
 		return
 	}
-	ret = vNetList.Values()[0]
-	return
 }
 
 // CreateSubnet will create a new subnet in certain virtual network
