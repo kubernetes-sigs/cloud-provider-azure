@@ -25,7 +25,7 @@ TEST_RESULTS_DIR=testResults
 GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint
 
 IMAGE_REGISTRY ?= local
-K8S_VERSION ?= v1.15.0-rc.1
+K8S_VERSION ?= v1.15.0
 AKSENGINE_VERSION ?= master
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 # manifest name under tests/e2e/k8s-azure/manifest

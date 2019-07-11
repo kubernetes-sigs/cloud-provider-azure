@@ -9,6 +9,8 @@
     - Contributor permission of a subscription
     - Contributor permission of a resource group. In this case, please create the resource group first
 
+- Docker daemon enabled
+
 ## How to run Kubernetes e2e tests locally
 
 1. Prepare dependency project
@@ -33,7 +35,8 @@
 
     This serves as E2E tests case source, it should be located at `$GOPATH/src/k8s.io/kubernetes`.
 
-    ```
+    ```sh
+    cd $GOPATH/src
     go get -d k8s.io/kubernetes
     ```
 
@@ -49,7 +52,8 @@
 
 2. Build docker image `azure-cloud-controller-manager` and push it to your docker image repository.
 
-    ```
+    ```sh
+    git clone https://github.com/kubernetes/cloud-provider-azure $GOPATH/src/k8s.io/cloud-provider-azure
     cd $GOPATH/src/k8s.io/cloud-provider-azure
     export IMAGE_REGISTRY=<username>
     make image push
@@ -59,7 +63,7 @@
 
    To deploy a cluster, export all the required environmetal variables first and then invoke `make deploy`:
 
-    ```
+    ```sh
     export RESOURCE_GROUP_NAME=<resource group name>
     export LOCATION=<location>
     export SUBSCRIPTION_ID=<subscription ID>
@@ -73,7 +77,7 @@
 
    To connect the cluster:
 
-    ```
+    ```sh
     export KUBECONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
     kubectl cluster-info
     ```
@@ -90,6 +94,7 @@ cd $GOPATH/src/k8s.io/kubernetes
 
 make WHAT='test/e2e/e2e.test'
 make WHAT=cmd/kubectl
+make ginkgo
 
 export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y

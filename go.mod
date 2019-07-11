@@ -39,7 +39,7 @@ require (
 	k8s.io/client-go v0.0.0
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v0.3.2
-	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
+	k8s.io/kubernetes v1.15.0
 	k8s.io/legacy-cloud-providers v0.0.0
 )
 
@@ -324,7 +324,7 @@ replace (
 	k8s.io/kube-proxy => k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20190612200019-4f29960cb205
 	k8s.io/kube-scheduler => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20190612200019-4f29960cb205
 	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20190612200019-4f29960cb205
-	k8s.io/kubernetes => k8s.io/kubernetes v1.15.0-rc.1
+	k8s.io/kubernetes => k8s.io/kubernetes v1.15.0
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20190612131456-ca2c1fa39887
 	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190612200019-4f29960cb205
 	k8s.io/node-api => k8s.io/kubernetes/staging/src/k8s.io/node-api v0.0.0-20190612200019-4f29960cb205
