@@ -17,13 +17,13 @@ limitations under the License.
 package network
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +52,7 @@ const (
 	pullTimeout     = 10 * time.Minute
 )
 
-var _ = Describe("Service with annotation", func() {
+var _ = FDescribe("Service with annotation", func() {
 	basename := "service"
 	serviceName := "annotation-test"
 
@@ -204,13 +204,57 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ret).To(Equal(true), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
 	})
+})
 
-	It("should bound to the specified load balancer from azure-load-balancer-mode [MultipleAgentPools][VMSS]", func() {
+var _ = Describe("[MultipleAgentPools][VMSS]", func() {
+	basename := "service"
+	serviceName := "annotation-test"
+
+	var cs clientset.Interface
+	var ns *v1.Namespace
+
+	labels := map[string]string{
+		"app": serviceName,
+	}
+	ports := []v1.ServicePort{{
+		Port:       nginxPort,
+		TargetPort: intstr.FromInt(nginxPort),
+	}}
+
+	BeforeEach(func() {
+		var err error
+		cs, err = utils.CreateKubeClientSet()
+		Expect(err).NotTo(HaveOccurred())
+
+		ns, err = utils.CreateTestingNamespace(basename, cs)
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating deployment " + serviceName)
+		deployment := createNginxDeploymentManifest(serviceName, labels)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = utils.DeleteNamespace(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		cs = nil
+		ns = nil
+	})
+
+	It("should bound to the specified load balancer from azure-load-balancer-mode", func() {
 		//get nodelist and providerID specific to an agentnodes
+		By("Getting agent nodes list")
 		nodes, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
+
 		// Get all the vmss names from all node's providerIDs
-		vmssname := sets.NewString()
+		By("Get vmss names from node providerIDs")
+		vmssNames := sets.NewString()
 		var resourceGroupName string
 		for _, node := range nodes {
 			if utils.IsMasterNode(&node) {
@@ -219,21 +263,22 @@ var _ = Describe("Service with annotation", func() {
 			providerID := node.Spec.ProviderID
 			matches := scalesetRE.FindStringSubmatch(providerID)
 			if len(matches) != 3 {
-				Skip("Report error")
+				Skip("azure-load-balancer-mode tests only works for vmss cluster")
 			}
-			vmss := matches[1]
-			resourceGroupName = matches[2]
-			vmssname.Insert(vmss)
+			resourceGroupName = matches[1]
+			vmssNames.Insert(matches[2])
 		}
 		Expect(resourceGroupName).NotTo(Equal(""))
-		//Skip if there're less than two vmss nodes
-		if len(vmssname) < 2 {
+		utils.Logf("Got vmss names %v", vmssNames.List())
+
+		//Skip if there're less than two vmss
+		if len(vmssNames) < 2 {
 			Skip("azure-load-balancer-mode tests only works for cluster with multiple vmss agent pools")
 		}
-		vmssList := vmssname.List()[:2]
 
+		vmssList := vmssNames.List()[:2]
 		for _, vmss := range vmssList {
-			validateLoadBalancerBackendPools(vmss, cs, labels, ns.Name, ports, resourceGroupName)
+			validateLoadBalancerBackendPools(vmss, cs, serviceName, labels, ns.Name, ports, resourceGroupName)
 		}
 	})
 })
@@ -357,66 +402,90 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 	return err
 }
 
-func validateLoadBalancerBackendPools(vmssname string, cs clientset.Interface, labels map[string]string, ns string, ports []v1.ServicePort, resourceGroupName string) {
-	serviceName := "validate-lb-mode"
-	lbModeLoadBalancerName := serviceName + string(uuid.NewUUID())
-	// create deployment
-	utils.Logf("Creating deployment " + lbModeLoadBalancerName)
-	deployment := createNginxDeploymentManifest(lbModeLoadBalancerName, labels)
-	_, err := cs.AppsV1().Deployments(ns).Create(deployment)
-	Expect(err).NotTo(HaveOccurred())
+func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, serviceName string, labels map[string]string, ns string, ports []v1.ServicePort, resourceGroupName string) {
+	serviceName = fmt.Sprintf("%s-%s", serviceName, vmssName)
 
 	// create annotation for LoadBalancer service
+	By("Creating service " + serviceName + " in namespace " + ns)
 	annotation := map[string]string{
-		azure.ServiceAnnotationLoadBalancerMode: vmssname,
+		azure.ServiceAnnotationLoadBalancerMode: vmssName,
 	}
-	service := createLoadBalancerServiceManifest(cs, lbModeLoadBalancerName, annotation, labels, ns, ports)
-	_, er := cs.CoreV1().Services(ns).Create(service)
-	Expect(er).NotTo(HaveOccurred())
-	utils.Logf("Successfully created LoadBalancer service " + lbModeLoadBalancerName + " in namespace " + ns)
+	service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
+	_, err := cs.CoreV1().Services(ns).Create(service)
+	Expect(err).NotTo(HaveOccurred())
+	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)
 
 	//wait and get service's public IP Address
 	By("Waiting for service exposure")
-	pip, err := utils.WaitServiceExposure(cs, ns, serviceName)
+	publicIP, err := utils.WaitServiceExposure(cs, ns, serviceName)
 	Expect(err).NotTo(HaveOccurred())
 
-	//Invoking azure network client to get list of public IP Addresses
-	ctx := context.Background()
+	By("Creating Azure clients")
 	azureTestClient, err := utils.CreateAzureTestClient()
 	Expect(err).NotTo(HaveOccurred())
-	iplist, er := azureTestClient.ListPublicIPs(ctx, resourceGroupName)
-	Expect(er).NotTo(HaveOccurred())
-	var pipID string
-	for _, ip := range iplist {
-		if ip.PublicIPAddressPropertiesFormat != nil && ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil && *ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
-			pipID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
-			utils.Logf("Public Ip verified")
+
+	// Invoking azure network client to get list of public IP Addresses
+	By("Getting public IPs in the resourceGroup " + resourceGroupName)
+	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Getting public IP frontend configuration ID")
+	var pipFrontendConfigurationID string
+	for _, ip := range pipList {
+		if ip.PublicIPAddressPropertiesFormat != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
+			*ip.PublicIPAddressPropertiesFormat.IPAddress == publicIP {
+			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
+			break
 		}
 	}
-	//Get Azure loadBalancer Name
-	match := lbNameRE.FindStringSubmatch(pipID)
-	if len(match) != 2 {
-		Skip("Report error")
-	}
-	loadBalancername := match[1]
-	utils.Logf(loadBalancername)
-	//Get backendpools list
-	lbClient, err := azureTestClient.GetLoadBalancer()
-	loadBalancerproperties, err := lbClient.ListComplete(ctx, loadBalancername)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(loadBalancerproperties.Value().BackendAddressPools).NotTo(BeNil())
-	Expect(loadBalancerproperties.Value().LoadBalancingRules).NotTo(BeNil())
+	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
-	//Get the backendpoolID from loadbalancingrules and then verify the vmss name from backendIPConfiguration
+	//Get Azure loadBalancer Name
+	By("Getting loadBalancer name from pipFrontendConfigurationID")
+	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
+	Expect(len(match)).To(Equal(2))
+	loadBalancerName := match[1]
+	Expect(loadBalancerName).NotTo(Equal(""))
+	utils.Logf("Got loadBalancerName %q", loadBalancerName)
+
+	//Get backendpools list
+	By("Getting loadBalancer")
+	lb, err := azureTestClient.GetLoadBalancer(resourceGroupName, loadBalancerName)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(lb.BackendAddressPools).NotTo(BeNil())
+	Expect(lb.LoadBalancingRules).NotTo(BeNil())
+
+	if lb.Sku != nil && lb.Sku.Name == network.LoadBalancerSkuNameStandard {
+		Skip("azure-load-balancer-mode is not working for standard load balancer")
+	}
+
+	By("Getting loadBalancer backendPoolID")
+	backendPoolID := ""
+	for _, rule := range *lb.LoadBalancingRules {
+		if rule.FrontendIPConfiguration != nil &&
+			rule.FrontendIPConfiguration.ID != nil &&
+			strings.EqualFold(*rule.FrontendIPConfiguration.ID, pipFrontendConfigurationID) {
+			Expect(rule.BackendAddressPool).NotTo(BeNil())
+			Expect(rule.BackendAddressPool.ID).NotTo(BeNil())
+			backendPoolID = *rule.BackendAddressPool.ID
+		}
+	}
+	Expect(backendPoolID).NotTo(Equal(""))
+
 	By("Validating loadBalancer backendPool")
 	for _, pool := range *lb.BackendAddressPools {
 		if pool.ID == nil || pool.BackendIPConfigurations == nil || !strings.EqualFold(*pool.ID, backendPoolID) {
 			continue
 		}
+
 		for _, ipConfig := range *pool.BackendIPConfigurations {
 			if ipConfig.ID == nil {
 				continue
 			}
+
 			matches := backendIPConfigurationRE.FindStringSubmatch(*ipConfig.ID)
 			Expect(len(matches)).To(Equal(2))
 			Expect(matches[1]).To(Equal(vmssName))

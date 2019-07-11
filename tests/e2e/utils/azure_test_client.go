@@ -95,9 +95,14 @@ func (tc *AzureTestClient) CreateSecurityGroupsClient() *aznetwork.SecurityGroup
 	return &aznetwork.SecurityGroupsClient{BaseClient: tc.networkClient}
 }
 
-// GetPublicIPAddressesClient generates virtual network client with the same baseclient as azure test client
+// createPublicIPAddressesClient generates virtual network client with the same baseclient as azure test client
 func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAddressesClient {
 	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
+}
+
+// creteLoadBalancerClient generates loadbalancer client with the same baseclient as azure test client
+func (tc *AzureTestClient) creteLoadBalancerClient() *aznetwork.LoadBalancersClient {
+	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}
 }
 
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.
