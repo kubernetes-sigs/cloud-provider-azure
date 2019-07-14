@@ -220,3 +220,30 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	}
 	return "", fmt.Errorf("Find no availabePrivateIP in range 10.240.1.0 ~ 10.240.1.100")
 }
+
+// ListPublicIPs lists all the publicIP addresses active
+func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) ([]aznetwork.PublicIPAddress, error) {
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+
+	iterator, err := pipClient.ListComplete(context.Background(), resourceGroupName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]aznetwork.PublicIPAddress, 0)
+	for ; iterator.NotDone(); err = iterator.Next() {
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, iterator.Value())
+	}
+
+	return result, nil
+}
+
+// GetLoadBalancer gets aznetwork.LoadBalancer by loadBalancer name.
+func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
+	lbClient := azureTestClient.creteLoadBalancerClient()
+	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
+}

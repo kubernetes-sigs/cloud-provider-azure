@@ -34,7 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Network security group", func() {
+var _ = FDescribe("Network security group", func() {
 	basename := "nsg"
 	serviceName := "nsg-test"
 
