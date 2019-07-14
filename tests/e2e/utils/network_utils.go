@@ -242,6 +242,7 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 	return result, nil
 }
 
+// GetLoadBalancer gets aznetwork.LoadBalancer by loadBalancer name.
 func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
 	lbClient := azureTestClient.creteLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
