@@ -101,6 +101,10 @@ export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
 export CLOUD_CONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
 
+# some test cases require ssh configurations
+export KUBE_SSH_KEY_PATH=path/to/ssh/privatekey
+export KUBE_SSH_USER={ssh_user}
+
 # Replace the test_args with your own.
 go run hack/e2e.go -- --test --provider=local --check-version-skew=false --test_args='--ginkgo.focus=Port\sforwarding'
 ```
