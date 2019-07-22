@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	serviceTimeout = 20 * time.Minute
+	serviceTimeout = 30 * time.Minute
 )
 
 // DeleteService deletes a service
@@ -99,7 +99,7 @@ func WaitUpdateServiceExposure(cs clientset.Interface, namespace string, name st
 	var service *v1.Service
 	var err error
 	poll := 10 * time.Second
-	timeout := 10 * time.Minute
+	timeout := 30 * time.Minute
 
 	return wait.PollImmediate(poll, timeout, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
