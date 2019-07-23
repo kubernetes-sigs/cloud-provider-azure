@@ -240,6 +240,26 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		err = utils.WaitUpdateServiceExposure(cs, ns.Name, serviceName, targetIP, false /*expectSame*/)
 		Expect(err).To(Equal(wait.ErrWaitTimeout))
 	})
+
+	It("should support the annotation of ServiceAnnotationLoadBalancerIdleTimeout", func() {
+		annotation := map[string]string{
+			azure.ServiceAnnotationLoadBalancerIdleTimeout: "5",
+		}
+		// ipName := basename + "-public-none-IP" + string(uuid.NewUUID())[0:4]
+		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(service)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		idleAnnotation, ok := service.ObjectMeta.Annotations[azure.ServiceAnnotationLoadBalancerIdleTimeout]
+		Expect(ok).To(Equal(true))
+		Expect(idleAnnotation).To(Equal("5"))
+	})
 })
 
 func judgeInternal(service v1.Service) bool {
