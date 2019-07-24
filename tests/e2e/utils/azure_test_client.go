@@ -75,8 +75,8 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	return c, nil
 }
 
-// getResourceGroup get RG name which is same of cluster name as definite in k8s-azure
-func (tc *AzureTestClient) getResourceGroup() string {
+// GetResourceGroup get RG name which is same of cluster name as definite in k8s-azure
+func (tc *AzureTestClient) GetResourceGroup() string {
 	return tc.resourceGroup
 }
 

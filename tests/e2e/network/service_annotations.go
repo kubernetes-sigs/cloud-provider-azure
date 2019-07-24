@@ -41,7 +41,7 @@ import (
 
 var (
 	scalesetRE               = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-	lbNameRE                 = regexp.MustCompile(`^/subscriptions/(?:.)/resourceGroups/(?:.)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
+	lbNameRE                 = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
 	backendIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
 )
 
@@ -203,6 +203,67 @@ var _ = FDescribe("Service with annotation", func() {
 		ret, err := utils.ValidateIPInCIDR(ip, newSubnetCIDR)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ret).To(Equal(true), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
+	})
+
+	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerIdleTimeout'", func() {
+		// create annotation for LoadBalancer service
+		By("Creating service " + serviceName + " in namespace " + ns.Name)
+		annotation := map[string]string{
+			azure.ServiceAnnotationLoadBalancerIdleTimeout: "5",
+		}
+		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(service)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+		//wait and get service's public IP Address
+		By("Waiting for service exposure")
+		publicIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating Azure clients")
+		azureTestClient, err := utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		resourceGroupName := azureTestClient.GetResourceGroup()
+		By("Getting public IPs in the resourceGroup " + resourceGroupName)
+		pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Getting public IP frontend configuration ID")
+		var pipFrontendConfigurationID string
+		for _, ip := range pipList {
+			if ip.PublicIPAddressPropertiesFormat != nil &&
+				ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+				ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
+				ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
+				*ip.PublicIPAddressPropertiesFormat.IPAddress == publicIP {
+				pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
+				break
+			}
+		}
+		Expect(pipFrontendConfigurationID).NotTo(Equal(""))
+		By(fmt.Sprintf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID))
+
+		By("Getting loadBalancer name from pipFrontendConfigurationID")
+		match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
+		Expect(len(match)).To(Equal(2))
+		loadBalancerName := match[1]
+		Expect(loadBalancerName).NotTo(Equal(""))
+		utils.Logf("Got loadBalancerName %q", loadBalancerName)
+
+		By("Getting loadBalancer")
+		lb, err := azureTestClient.GetLoadBalancer(resourceGroupName, loadBalancerName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(lb.LoadBalancingRules).NotTo(BeNil())
+
+		var idleTimeout *int32
+		for _, rule := range *lb.LoadBalancingRules {
+			if rule.IdleTimeoutInMinutes != nil {
+				idleTimeout = rule.IdleTimeoutInMinutes
+			}
+		}
+		Expect(*idleTimeout).To(Equal(int32(5)))
 	})
 })
 
