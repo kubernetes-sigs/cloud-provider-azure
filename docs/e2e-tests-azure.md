@@ -20,6 +20,7 @@ export K8S_AZURE_SPSEC=<service-principal-secret>   # the service principal secr
 export K8S_AZURE_ENVIRONMENT=<AzurePublicCloud>     # the cloud environment (optional, default is AzurePublicCloud)
 export K8S_AZURE_LOCATION=<location>                # the location
 export K8S_AZURE_LOADBALANCE_SKU=<loadbalancer-sku> # the sku of load balancer (optional, default is basic)
+export K8S_AZURE_RG_NAME=<resource-group-name>      # the name of resource group
 ```
 
 ### Setup KUBECONFIG
