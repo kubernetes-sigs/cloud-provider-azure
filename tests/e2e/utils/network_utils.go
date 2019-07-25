@@ -34,7 +34,7 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 	Logf("Getting virtual network list")
 	vNetClient := azureTestClient.createVirtualNetworksClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = vNetClient.List(context.Background(), azureTestClient.getResourceGroup())
+		result, err = vNetClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -84,7 +84,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 	subnetParameter.Name = subnetName
 	subnetParameter.AddressPrefix = prefix
 	subnetsClient := azureTestClient.createSubnetsClient()
-	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.getResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
+	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
 	return err
 }
 
@@ -92,7 +92,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName string) error {
 	subnetClient := azureTestClient.createSubnetsClient()
 	return wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err := subnetClient.Delete(context.Background(), azureTestClient.getResourceGroup(), vnetName, subnetName)
+		_, err := subnetClient.Delete(context.Background(), azureTestClient.GetResourceGroup(), vnetName, subnetName)
 		if err != nil {
 			return false, nil
 		}
@@ -119,7 +119,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	Logf("Getting virtual network list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		result, err = securityGroupsClient.List(context.Background(), azureTestClient.getResourceGroup())
+		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -150,13 +150,13 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwor
 func WaitCreatePIP(azureTestClient *AzureTestClient, ipName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
 	Logf("Creating public IP resource named %s", ipName)
 	pipClient := azureTestClient.createPublicIPAddressesClient()
-	_, err := pipClient.CreateOrUpdate(context.Background(), azureTestClient.getResourceGroup(), ipName, ipParameter)
+	_, err := pipClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), ipName, ipParameter)
 	var pip aznetwork.PublicIPAddress
 	if err != nil {
 		return pip, err
 	}
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		pip, err = pipClient.Get(context.Background(), azureTestClient.getResourceGroup(), ipName, "")
+		pip, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, "")
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -173,7 +173,7 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName string) error {
 	Logf("Deleting public IP resource named %s", ipName)
 	pipClient := azureTestClient.createPublicIPAddressesClient()
 	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err := pipClient.Delete(context.Background(), azureTestClient.getResourceGroup(), ipName)
+		_, err := pipClient.Delete(context.Background(), azureTestClient.GetResourceGroup(), ipName)
 		if err != nil {
 			return false, nil
 		}
@@ -186,7 +186,7 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName string) error {
 func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (err error) {
 	pipClient := azureTestClient.createPublicIPAddressesClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err = pipClient.Get(context.Background(), azureTestClient.getResourceGroup(), ipName, "")
+		_, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, "")
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -209,7 +209,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	baseIP := "10.240.1."
 	for i := 0; i <= 100; i++ {
 		IP := baseIP + strconv.Itoa(i)
-		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.getResourceGroup(), to.String(vNet.Name), IP)
+		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), to.String(vNet.Name), IP)
 		if err != nil {
 			// just ignore
 			continue
