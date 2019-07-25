@@ -1,0 +1,60 @@
+{
+    "apiVersion": "vlabs",
+    "location": "",
+    "properties": {
+        "orchestratorProfile": {
+            "orchestratorType": "Kubernetes",
+            "orchestratorRelease": "1.15",
+            "kubernetesConfig": {
+                "useCloudControllerManager": true,
+                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.15.0",
+                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.15.0",
+                "networkPolicy": "none",
+                "cloudProviderRateLimitQPS": 6,
+                "cloudProviderRateLimitBucket": 20,
+                "controllerManagerConfig": {
+                    "--feature-gates": "CSIInlineVolume=true,LocalStorageCapacityIsolation=true,ServiceNodeExclusion=true"
+                },
+                "apiServerConfig": {
+                    "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
+                }
+            }
+        },
+        "masterProfile": {
+            "count": 5,
+            "dnsPrefix": "{dnsPrefix}",
+            "vmSize": "Standard_DS2_v2",
+            "availabilityProfile": "VirtualMachineScaleSets",
+            "availabilityZones": [
+                "1",
+                "2"
+            ]
+        },
+        "agentPoolProfiles": [
+            {
+                "name": "agentpool",
+                "count": 4,
+                "vmSize": "Standard_DS2_v2",
+                "availabilityProfile": "VirtualMachineScaleSets",
+                "availabilityZones": [
+                    "1",
+                    "2"
+                ]
+            }
+        ],
+        "linuxProfile": {
+            "adminUsername": "k8s-ci",
+            "ssh": {
+                "publicKeys": [
+                    {
+                        "keyData": "{keyData}"
+                    }
+                ]
+            }
+        },
+        "servicePrincipalProfile": {
+            "clientID": "{servicePrincipalClientID}",
+            "secret": "{servicePrincipalClientSecret}"
+        }
+    }
+}
