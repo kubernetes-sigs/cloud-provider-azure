@@ -100,7 +100,7 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 	})
 }
 
-// GetNextSubnetCIDR obatins a new ip address which has no overlapping with other subnet
+// GetNextSubnetCIDR obtains a new ip address which has no overlapping with other subnet
 func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 	if len((*vnet.AddressSpace.AddressPrefixes)) == 0 {
 		return "", fmt.Errorf("vNet has no prefix")
@@ -114,7 +114,7 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 	return getNextSubnet(vnetCIDR, existSubnets)
 }
 
-// getSecurityGroupList is a wapper around listing VirtualNetwork
+// getSecurityGroupList is a wrapper around listing VirtualNetwork
 func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork.SecurityGroupListResultPage, err error) {
 	Logf("Getting virtual network list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
