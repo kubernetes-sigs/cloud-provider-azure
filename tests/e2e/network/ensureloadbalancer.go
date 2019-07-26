@@ -144,6 +144,12 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		}()
 		By("Waiting for exposure of internal service with specific IP")
 		err = utils.WaitUpdateServiceExposure(cs, ns.Name, serviceName, ip1, true)
+		list, errList := cs.CoreV1().Events(ns.Name).List(metav1.ListOptions{})
+		Expect(errList).NotTo(HaveOccurred())
+		utils.Logf("Events list:")
+		for i, event := range list.Items {
+			utils.Logf("%d. %v", i, event)
+		}
 		Expect(err).NotTo(HaveOccurred())
 
 		ip2, err := utils.SelectAvailablePrivateIP(tc)
@@ -186,6 +192,12 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 
 		By("Waiting for exposure of the original service without assigned lb private IP")
 		ip1, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		list, errList := cs.CoreV1().Events(ns.Name).List(metav1.ListOptions{})
+		Expect(errList).NotTo(HaveOccurred())
+		utils.Logf("Events list:")
+		for i, event := range list.Items {
+			utils.Logf("%d. %v", i, event)
+		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ip1).NotTo(Equal(targetIP))
 
