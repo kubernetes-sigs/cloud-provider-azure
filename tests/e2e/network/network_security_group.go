@@ -162,6 +162,29 @@ var _ = FDescribe("Network security group", func() {
 		ipList := []string{ip1, ip2}
 		Expect(validateSharedSecurityRuleExists(nsg, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 	})
+
+	It("can set source IP prefixes automatically accroding to corresponding service tag", func() {
+		By("Creating service and wait it to expose")
+		annotation := map[string]string{
+			azure.ServiceAnnotationAllowedServiceTag: "AzureCloud",
+		}
+		_, err := createAndWaitServiceExposure(cs, ns.Name, serviceName, annotation, labels, ports)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Validating if the corresponding IP prefix existing in nsg")
+		nsg, err := azureTestClient.GetClusterSecurityGroup()
+		Expect(err).NotTo(HaveOccurred())
+
+		rules := nsg.SecurityRules
+		Expect(len(*rules)).NotTo(Equal(0))
+		var found bool
+		for _, rule := range *rules {
+			if strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
+	})
 })
 
 func validateUnsharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ip string, port string) bool {
