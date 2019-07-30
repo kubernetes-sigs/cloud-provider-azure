@@ -168,6 +168,28 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName string, ipParameter 
 	return pip, err
 }
 
+// WaitCreateNewPIP waits to create a public ip resource in a specific resource group
+func WaitCreateNewPIP(azureTestClient *AzureTestClient, ipName, rgName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
+	Logf("Creating public IP resource named %s", ipName)
+	pipClient := azureTestClient.createPublicIPAddressesClient()
+	_, err := pipClient.CreateOrUpdate(context.Background(), rgName, ipName, ipParameter)
+	var pip aznetwork.PublicIPAddress
+	if err != nil {
+		return pip, err
+	}
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		pip, err = pipClient.Get(context.Background(), rgName, ipName, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return pip.IPAddress != nil, nil
+	})
+	return pip, err
+}
+
 // DeletePIPWithRetry tries to delete a pulic ip resourc
 func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName string) error {
 	Logf("Deleting public IP resource named %s", ipName)

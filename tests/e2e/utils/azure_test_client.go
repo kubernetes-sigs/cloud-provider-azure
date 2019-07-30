@@ -20,19 +20,26 @@ import (
 	"fmt"
 	"regexp"
 
+	v1 "k8s.io/api/core/v1"
+
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
+	azresources "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 )
 
 var (
 	azureResourceGroupNameRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/(?:.*)`)
+	nodeLabelLocation        = "failure-domain.beta.kubernetes.io/region"
+	defaultLocation          = "eastus2"
 )
 
 // AzureTestClient configs Azure specific clients
 type AzureTestClient struct {
-	resourceGroup string
-	networkClient aznetwork.BaseClient
+	location       string
+	resourceGroup  string
+	networkClient  aznetwork.BaseClient
+	resourceClient azresources.BaseClient
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
@@ -48,6 +55,9 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 	baseClient := aznetwork.NewWithBaseURI(azure.PublicCloud.TokenAudience, authconfig.SubscriptionID)
 	baseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
+
+	resourceBaseClient := azresources.BaseClient(baseClient)
+	resourceBaseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
 
 	kubeClient, err := CreateKubeClientSet()
 	if err != nil {
@@ -66,10 +76,13 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	location := getLocationFromNodeLabels(&nodes[0])
 
 	c := &AzureTestClient{
-		resourceGroup: resourceGroup,
-		networkClient: baseClient,
+		location:       location,
+		resourceGroup:  resourceGroup,
+		networkClient:  baseClient,
+		resourceClient: resourceBaseClient,
 	}
 
 	return c, nil
@@ -105,6 +118,11 @@ func (tc *AzureTestClient) creteLoadBalancerClient() *aznetwork.LoadBalancersCli
 	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}
 }
 
+// createResourceGroupClient generates resource group client with the same baseclient as azure test client
+func (tc *AzureTestClient) createResourceGroupClient() *azresources.GroupsClient {
+	return &azresources.GroupsClient{BaseClient: tc.resourceClient}
+}
+
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.
 func getResourceGroupFromProviderID(providerID string) (string, error) {
 	matches := azureResourceGroupNameRE.FindStringSubmatch(providerID)
@@ -113,4 +131,11 @@ func getResourceGroupFromProviderID(providerID string) (string, error) {
 	}
 
 	return matches[1], nil
+}
+
+func getLocationFromNodeLabels(node *v1.Node) string {
+	if location, ok := node.Labels[nodeLabelLocation]; ok {
+		return location
+	}
+	return defaultLocation
 }

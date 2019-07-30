@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
+
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -219,6 +221,39 @@ var _ = FDescribe("Service with annotation", func() {
 		}
 		Expect(len(existingProtocols)).To(Equal(2))
 	})
+
+	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerResourceGroup'", func() {
+		By("Creating Azure clients")
+		tc, err := utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("creating a test resource group")
+		rg, cleanup := utils.CreateTestResourceGroup(tc)
+		defer cleanup(to.String(rg.Name))
+
+		By("creating test PIP in the test resource group")
+		testPIPName := "testPIP" + string(uuid.NewUUID())[0:4]
+		pip, err := utils.WaitCreateNewPIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName))
+		Expect(err).NotTo(HaveOccurred())
+
+		annotation := map[string]string{
+			azure.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
+		}
+		By("Creating service " + serviceName + " in namespace " + ns.Name)
+		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service.Spec.LoadBalancerIP = *pip.IPAddress
+		_, err = cs.CoreV1().Services(ns.Name).Create(service)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+		//wait and get service's public IP Address
+		By("Waiting service to expose...")
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		lb := getAzureLoadBalancerFromPIP(*pip.IPAddress, *rg.Name)
+		Expect(lb).NotTo(BeNil())
+	})
 })
 
 var _ = Describe("[MultipleAgentPools][VMSS]", func() {
@@ -332,6 +367,45 @@ func getAzureLoadBalancer(pip string) *network.LoadBalancer {
 
 	By("Getting loadBalancer")
 	lb, err := azureTestClient.GetLoadBalancer(resourceGroupName, loadBalancerName)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(lb.LoadBalancingRules).NotTo(BeNil())
+
+	return &lb
+}
+
+func getAzureLoadBalancerFromPIP(pip, resourceGroupName string) *network.LoadBalancer {
+	By("Creating Azure clients")
+	azureTestClient, err := utils.CreateAzureTestClient()
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Getting public IPs in the resourceGroup " + resourceGroupName)
+	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Getting public IP frontend configuration ID")
+	var pipFrontendConfigurationID string
+	for _, ip := range pipList {
+		if ip.PublicIPAddressPropertiesFormat != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
+			*ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
+			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
+			break
+		}
+	}
+	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
+	By(fmt.Sprintf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID))
+
+	By("Getting loadBalancer name from pipFrontendConfigurationID")
+	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
+	Expect(len(match)).To(Equal(2))
+	loadBalancerName := match[1]
+	Expect(loadBalancerName).NotTo(Equal(""))
+	utils.Logf("Got loadBalancerName %q", loadBalancerName)
+
+	By("Getting loadBalancer")
+	lb, err := azureTestClient.GetLoadBalancer(azureTestClient.GetResourceGroup(), loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(lb.LoadBalancingRules).NotTo(BeNil())
 
