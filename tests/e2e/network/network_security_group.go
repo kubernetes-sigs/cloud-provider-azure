@@ -224,7 +224,7 @@ func validateSharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ips []string
 
 func createAndWaitServiceExposure(cs clientset.Interface, ns string, serviceName string, annotation map[string]string, labels map[string]string, ports []v1.ServicePort) (string, error) {
 	ip := ""
-	service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
+	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
 	if _, err := cs.CoreV1().Services(ns).Create(service); err != nil {
 		return ip, err
 	}

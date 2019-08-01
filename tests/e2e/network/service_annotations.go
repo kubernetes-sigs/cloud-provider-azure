@@ -42,9 +42,10 @@ import (
 )
 
 var (
-	scalesetRE               = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-	lbNameRE                 = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
-	backendIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	scalesetRE                 = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	lbNameRE                   = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
+	backendIPConfigurationRE   = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	backendASIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/availabilitySets/(.+)/virtualMachines(?:.*)`)
 )
 
 const (
@@ -240,7 +241,7 @@ var _ = FDescribe("Service with annotation", func() {
 			azure.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
-		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		service.Spec.LoadBalancerIP = *pip.IPAddress
 		_, err = cs.CoreV1().Services(ns.Name).Create(service)
 		Expect(err).NotTo(HaveOccurred())
@@ -251,7 +252,7 @@ var _ = FDescribe("Service with annotation", func() {
 		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
 
-		lb := getAzureLoadBalancerFromPIP(*pip.IPAddress, *rg.Name)
+		lb := getAzureLoadBalancerFromPIP(*pip.IPAddress, *rg.Name, "")
 		Expect(lb).NotTo(BeNil())
 	})
 })
@@ -373,13 +374,13 @@ func getAzureLoadBalancer(pip string) *network.LoadBalancer {
 	return &lb
 }
 
-func getAzureLoadBalancerFromPIP(pip, resourceGroupName string) *network.LoadBalancer {
+func getAzureLoadBalancerFromPIP(pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
 	By("Creating Azure clients")
 	azureTestClient, err := utils.CreateAzureTestClient()
 	Expect(err).NotTo(HaveOccurred())
 
-	By("Getting public IPs in the resourceGroup " + resourceGroupName)
-	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	By("Getting public IPs in the resourceGroup " + pipResourceGroup)
+	pipList, err := azureTestClient.ListPublicIPs(pipResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Getting public IP frontend configuration ID")
@@ -405,7 +406,10 @@ func getAzureLoadBalancerFromPIP(pip, resourceGroupName string) *network.LoadBal
 	utils.Logf("Got loadBalancerName %q", loadBalancerName)
 
 	By("Getting loadBalancer")
-	lb, err := azureTestClient.GetLoadBalancer(azureTestClient.GetResourceGroup(), loadBalancerName)
+	if lbResourceGroup == "" {
+		lbResourceGroup = azureTestClient.GetResourceGroup()
+	}
+	lb, err := azureTestClient.GetLoadBalancer(lbResourceGroup, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(lb.LoadBalancingRules).NotTo(BeNil())
 
@@ -414,7 +418,7 @@ func getAzureLoadBalancerFromPIP(pip, resourceGroupName string) *network.LoadBal
 
 func createServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
 	By("Creating service " + serviceName + " in namespace " + nsName)
-	service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, nsName, ports)
+	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, nsName, ports)
 	_, err := cs.CoreV1().Services(nsName).Create(service)
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
@@ -425,20 +429,6 @@ func createServiceWithAnnotation(cs clientset.Interface, serviceName, nsName str
 	Expect(err).NotTo(HaveOccurred())
 
 	return publicIP
-}
-
-func createLoadBalancerServiceManifest(c clientset.Interface, name string, annotation map[string]string, labels map[string]string, namespace string, ports []v1.ServicePort) *v1.Service {
-	return &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Annotations: annotation,
-		},
-		Spec: v1.ServiceSpec{
-			Selector: labels,
-			Ports:    ports,
-			Type:     "LoadBalancer",
-		},
-	}
 }
 
 // defaultDeployment returns a default deployment
@@ -554,7 +544,7 @@ func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, s
 	annotation := map[string]string{
 		azure.ServiceAnnotationLoadBalancerMode: vmssName,
 	}
-	service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
+	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
 	_, err := cs.CoreV1().Services(ns).Create(service)
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)

@@ -133,6 +133,11 @@ func getResourceGroupFromProviderID(providerID string) (string, error) {
 	return matches[1], nil
 }
 
+// GetNodeResourceGroup returns the resource group of the given node
+func GetNodeResourceGroup(node *v1.Node) (string, error) {
+	return getResourceGroupFromProviderID(node.Spec.ProviderID)
+}
+
 func getLocationFromNodeLabels(node *v1.Node) string {
 	if location, ok := node.Labels[nodeLabelLocation]; ok {
 		return location

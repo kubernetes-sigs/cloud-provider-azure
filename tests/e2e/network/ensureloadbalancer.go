@@ -87,7 +87,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		}
 		ipName := basename + "-public-none-IP" + string(uuid.NewUUID())[0:4]
 
-		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(service)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
@@ -131,7 +131,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		ip1, err := utils.SelectAvailablePrivateIP(tc)
 		Expect(err).NotTo(HaveOccurred())
 
-		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceBalanceIP(service, true, ip1)
 		_, err = cs.CoreV1().Services(ns.Name).Create(service)
 		Expect(err).NotTo(HaveOccurred())
@@ -173,7 +173,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		}
 		ipName := basename + "-internal-none-public-IP" + string(uuid.NewUUID())[0:4]
 
-		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(service)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
@@ -222,7 +222,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
-		service := createLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceBalanceIP(service, false, targetIP)
 		_, err = cs.CoreV1().Services(ns.Name).Create(service)
 		Expect(err).NotTo(HaveOccurred())
