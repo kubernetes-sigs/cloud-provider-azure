@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,6 +45,20 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 		}
 	}
 	return ret, nil
+}
+
+// GetMaster returns the master node
+func GetMaster(cs clientset.Interface) (*v1.Node, error) {
+	nodesList, err := getNodeList(cs)
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range nodesList.Items {
+		if isMasterNode(&node) {
+			return &node, nil
+		}
+	}
+	return nil, fmt.Errorf("cannot obtain the master node")
 }
 
 // GetNodeList is a wapper around listing nodes
