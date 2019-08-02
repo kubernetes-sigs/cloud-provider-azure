@@ -118,6 +118,11 @@ func (tc *AzureTestClient) creteLoadBalancerClient() *aznetwork.LoadBalancersCli
 	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}
 }
 
+// createInterfacesClient generates network interface client with the same baseclient as azure test client
+func (tc *AzureTestClient) createInterfacesClient() *aznetwork.InterfacesClient {
+	return &aznetwork.InterfacesClient{BaseClient: tc.networkClient}
+}
+
 // createResourceGroupClient generates resource group client with the same baseclient as azure test client
 func (tc *AzureTestClient) createResourceGroupClient() *azresources.GroupsClient {
 	return &azresources.GroupsClient{BaseClient: tc.resourceClient}
