@@ -215,4 +215,4 @@ An Availability Zone in an Azure region is a combination of a fault domain and a
 
 ## Reference
 
-See design docs for AZ in [KEP for Azure availability zones](https://github.com/kubernetes/community/blob/master/keps/sig-azure/0018-20180711-azure-availability-zones.md).
+See design docs for AZ in [KEP for Azure availability zones](https://github.com/kubernetes/enhancements/blob/master/keps/sig-cloud-provider/azure/20180711-azure-availability-zones.md).
