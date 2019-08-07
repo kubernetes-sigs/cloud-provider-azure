@@ -29,7 +29,7 @@ import (
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var vmNameRE = regexp.MustCompile(`(k8s-.+-\d+)-\d+`)
+var vmNameRE = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
 
 var _ = Describe("Cloud Provider Azure cross resource group nodes", func() {
 	basename := "service-lb"

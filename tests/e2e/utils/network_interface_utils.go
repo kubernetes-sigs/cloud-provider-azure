@@ -26,12 +26,13 @@ import (
 
 var (
 	nicIDConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/networkInterfaces/(.+)`)
-	vmNamePrefixRE       = regexp.MustCompile(`(.+)-nic-\d+`)
+	vmasNamePrefixRE     = regexp.MustCompile(`(.+)-nic-\d+`)
+	nicNameRE            = regexp.MustCompile(`k8s-.+-\d+-.+`)
 )
 
 // ListNICs returns the NIC list in the given resource group
 func ListNICs(tc *AzureTestClient, rgName string) (*[]network.Interface, error) {
-	Logf("Getting network interfaces list in resource group %s", rgName)
+	Logf("getting network interfaces list in resource group %s", rgName)
 
 	ic := tc.createInterfacesClient()
 
@@ -47,12 +48,13 @@ func ListNICs(tc *AzureTestClient, rgName string) (*[]network.Interface, error) 
 	return &value, err
 }
 
+// virtual machine availability set only, NIC on VMSS has another naming pattern
 func getVMNamePrefixFromNICID(nicID string) (string, error) {
 	nicMatches := nicIDConfigurationRE.FindStringSubmatch(nicID)
 	if len(nicMatches) != 2 {
 		return "", fmt.Errorf("cannot obtain the name of virtual machine from nicID")
 	}
-	vmMatches := vmNamePrefixRE.FindStringSubmatch(nicMatches[1])
+	vmMatches := vmasNamePrefixRE.FindStringSubmatch(nicMatches[1])
 	if len(vmMatches) != 2 {
 		return "", fmt.Errorf("cannot obtain the name of virtual machine from nicID")
 	}
