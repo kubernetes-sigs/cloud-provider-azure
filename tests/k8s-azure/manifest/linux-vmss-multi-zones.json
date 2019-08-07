@@ -28,7 +28,8 @@
             "availabilityZones": [
                 "1",
                 "2"
-            ]
+            ],
+            "distro": "aks-ubuntu-16.04"
         },
         "agentPoolProfiles": [
             {
@@ -39,7 +40,8 @@
                 "availabilityZones": [
                     "1",
                     "2"
-                ]
+                ],
+                "distro": "aks-ubuntu-16.04"
             }
         ],
         "linuxProfile": {
