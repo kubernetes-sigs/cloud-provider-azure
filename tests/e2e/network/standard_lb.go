@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -78,6 +79,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		lb := getAzureLoadBalancerFromPIP(publicIP, rgName, rgName)
 
 		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
+			utils.Logf("sku: %s", lb.Sku.Name)
 			Skip("only support standard load balancer")
 		}
 
@@ -109,4 +111,73 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Expect(found).To(BeTrue())
 		}
 	})
+
+	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
+		rgName := tc.GetResourceGroup()
+		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		lb := getAzureLoadBalancerFromPIP(publicIP, rgName, rgName)
+
+		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
+			utils.Logf("sku: %s", lb.Sku.Name)
+			Skip("only support standard load balancer")
+		}
+
+		Expect(lb.OutboundRules).NotTo(BeNil())
+		var fipConfigIDs []string
+		for _, outboundRule := range *lb.OutboundRules {
+			Expect(outboundRule.FrontendIPConfigurations).NotTo(BeNil())
+			for _, fipConfig := range *outboundRule.FrontendIPConfigurations {
+				fipConfigIDs = append(fipConfigIDs, *fipConfig.ID)
+			}
+		}
+
+		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(pips)).NotTo(Equal(0))
+
+		outboundRuleIPs := make(map[string]bool)
+		for _, fipConfigID := range fipConfigIDs {
+			for _, pip := range pips {
+				if strings.EqualFold(*pip.IPConfiguration.ID, fipConfigID) {
+					outboundRuleIPs[*pip.IPAddress] = true
+					break
+				}
+			}
+		}
+		Expect(len(outboundRuleIPs)).NotTo(Equal(0))
+
+		podTemplate := createPodGetIP()
+		err = utils.CreatePod(cs, ns.Name, podTemplate)
+		Expect(err).NotTo(HaveOccurred())
+
+		podOutboundIP, err := utils.GetPodOutboundIP(cs, podTemplate, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+		_, found := outboundRuleIPs[podOutboundIP]
+		Expect(found).To(BeTrue())
+	})
 })
+
+func createPodGetIP() *v1.Pod {
+	podName := "test-pod"
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: podName,
+		},
+		Spec: v1.PodSpec{
+			Hostname: podName,
+			Containers: []v1.Container{
+				{
+					Name:            "test-app",
+					Image:           "appropriate/curl",
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Command: []string{
+						"/bin/sh",
+						"-c",
+						`curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me`,
+					},
+				},
+			},
+			RestartPolicy: v1.RestartPolicyNever,
+		},
+	}
+}
