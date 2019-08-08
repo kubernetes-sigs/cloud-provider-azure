@@ -5,13 +5,14 @@ The way Azure defines a LoadBalancer is different from GCE or AWS. Azure's LB ca
 The different Azure Resources such as LB, Public IP, and NSG are the same tier of Azure resources and circular dependencies need to be avoided. In another words, they should only depend on service state.
 
 By default the basic SKU is selected for a load balancer. Services can be annotated to allow auto selection of available load balancers. Service annotations can also be used to provide specific availability sets that host the load balancers. Note that in case of auto selection or specific availability set selection, services are currently not auto-reassigned to an available loadbalancer when the availability set is lost in case of downtime or cluster scale down.
+
 ## LoadBalancer annotations
 
 Below is a list of annotations supported for Kubernetes services with type `LoadBalancer`:
 
-| Annotaion                                                    | Value                        | Description                                                  | Kubernetes Version |
+| Annotation | Value | Description | Kubernetes Version |
 | ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------ |------|
-| `service.beta.kubernetes.io/azure-load-balancer-internal`    | `true `or `false`            | Specify whether the load balancer should be internal. It’s defaulting to public if not set. | v1.10.0 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-internal`    | `true` or `false`            | Specify whether the load balancer should be internal. It’s defaulting to public if not set. | v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-internal-subnet` | Name of the subnet           | Specify which subnet the internal load balancer should be bound to. It’s defaulting to the subnet configured in cloud config file if not set. | v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-mode`        | `auto`, `{name1},{name2}`    | Specify the Azure load balancer selection algorithm based on availability sets. There are currently three possible load balancer selection modes : default, auto or "{name1}, {name2}". This is only working for basic LB (see below for how it works) |  v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-dns-label-name`            | Name of the DNS label        | Specify the DNS label name for the service.                  | v1.10.0 and later |
@@ -20,13 +21,15 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-allowed-service-tags`      | List of allowed service tags | Specify a list of allowed [service tags](https://docs.microsoft.com/en-us/azure/virtual-network/security-overview#service-tags) separated by comma. | v1.11.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout` | TCP idle timeouts in minutes | Specify the time, in minutes, for TCP connection idle timeouts to occur on the load balancer. Default and minimum value is 4. Maximum value is 30. Must be an integer. |  v1.11.4, v1.12.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-mixed-protocols` | `true` or `false`            | Specify whether both TCP and UDP protocols should be created for the service. (This is not allowed from Kubernetes API) | v1.12.7, v1.13.4 and later |
+|`service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset`|`true`|Disable `enableTcpReset` for SLB|v1.16 or later|
 
 ### Load balancer selection modes
 
 There are currently three possible load balancer selection modes :
-  1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode"). In this case the Loadbalancer of the primary Availability set is selected
-  2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any availability set is selected which has the minimum rules associated with it.
-  3. "{name1}, {name2}" mode - this is when the load balancer from the specified availability sets is selected that has the minimum rules associated with it.
+
+1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode"). In this case the Loadbalancer of the primary Availability set is selected
+2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any availability set is selected which has the minimum rules associated with it.
+3. "{name1}, {name2}" mode - this is when the load balancer from the specified availability sets is selected that has the minimum rules associated with it.
 
 The selection mode for a load balancer only works for Azure's basic SKU (see below) because of the difference in backend pool endpoints:
 

@@ -41,6 +41,7 @@ Note: All values are of string type if not explicitly called out.
 |useManagedIdentityExtension|Use managed service identity for the virtual machine to access Azure ARM APIs|Boolean type, default to false.|
 |userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs|Required for user-assigned managed identity.|
 |subscriptionId|The ID of the Azure Subscription that the cluster is deployed in|**Required**.|
+|identitySystem|The identity system for AzureStack. Supported values are: ADFS|Only used for AzureStack|
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
 
