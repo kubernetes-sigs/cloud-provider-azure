@@ -17,7 +17,10 @@ limitations under the License.
 package utils
 
 import (
-	"k8s.io/api/core/v1"
+	"regexp"
+	"time"
+
+	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -25,8 +28,12 @@ import (
 )
 
 const (
-	pauseImage = "k8s.gcr.io/pause:3.1"
+	pullInterval = 10 * time.Second
+	pullTimeout  = 5 * time.Minute
 )
+
+// PodIPRE tests if there's a valid IP in a easy way
+var PodIPRE = regexp.MustCompile(`\d{0,3}\.\d{0,3}\.\d{0,3}\.\d{0,3}`)
 
 // getPodList is a wapper around listing pods
 func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
@@ -92,4 +99,53 @@ func DeletePod(cs clientset.Interface, ns string, podName string) error {
 		}
 		return false, nil
 	})
+}
+
+// CreatePod creates a new pod
+func CreatePod(cs clientset.Interface, ns string, manifest *v1.Pod) error {
+	Logf("creating pod %s in namespace %s", manifest.Name, ns)
+	_, err := cs.CoreV1().Pods(ns).Create(manifest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetPodLogs gets the log of the given pods
+func GetPodLogs(cs clientset.Interface, ns, podName string, opts *v1.PodLogOptions) ([]byte, error) {
+	Logf("getting the log of pod %s", podName)
+	return cs.CoreV1().Pods(ns).GetLogs(podName, opts).Do().Raw()
+}
+
+// GetPodOutboundIP returns the outbound IP of the given pod
+func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string) (string, error) {
+	var log []byte
+	err := wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {
+		pod, err := cs.CoreV1().Pods(nsName).Get(podTemplate.Name, metav1.GetOptions{})
+		if err != nil {
+			if IsRetryableAPIError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if pod.Status.Phase != v1.PodSucceeded {
+			Logf("waiting for the pod to succeed, current status: %s", pod.Status.Phase)
+			return false, nil
+		}
+		if pod.Status.ContainerStatuses[0].State.Terminated == nil || pod.Status.ContainerStatuses[0].State.Terminated.Reason != "Completed" {
+			Logf("waiting for the container to be completed")
+			return false, nil
+		}
+		log, err = GetPodLogs(cs, nsName, podTemplate.Name, &v1.PodLogOptions{})
+		if err != nil {
+			Logf("retrying getting pod's log")
+			return false, nil
+		}
+		return PodIPRE.MatchString(string(log)), nil
+	})
+	if err != nil {
+		return "", err
+	}
+	Logf("Got pod outbound IP %s", string(log))
+	return string(log), nil
 }
