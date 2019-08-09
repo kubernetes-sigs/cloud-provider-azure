@@ -22,6 +22,7 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout` | TCP idle timeouts in minutes | Specify the time, in minutes, for TCP connection idle timeouts to occur on the load balancer. Default and minimum value is 4. Maximum value is 30. Must be an integer. |  v1.11.4, v1.12.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-mixed-protocols` | `true` or `false`            | Specify whether both TCP and UDP protocols should be created for the service. (This is not allowed from Kubernetes API) | v1.12.7, v1.13.4 and later |
 |`service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset`|`true`|Disable `enableTcpReset` for SLB|v1.16 or later|
+|`service.beta.kubernetes.io/azure-pip-name`|Name of PIP|Specify the PIP that will be applied to load balancer|v1.16 or later|
 
 ### Load balancer selection modes
 
