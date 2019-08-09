@@ -22,9 +22,7 @@
         },
         "masterProfile": {
             "count": 1,
-            "dnsPrefix": "k8s",
-            "vmSize": "Standard_D2_v3",
-            "distro": "aks-ubuntu-16.04"
+            "dnsPrefix": "k8s"
         },
         "agentPoolProfiles": [
             {
@@ -32,8 +30,7 @@
                 "count": 3,
                 "vmSize": "Standard_D2_v3",
                 "availabilityProfile": "VirtualMachineScaleSets",
-                "storageProfile": "ManagedDisks",
-                "distro": "aks-ubuntu-16.04"
+                "storageProfile": "ManagedDisks"
             }
         ],
         "linuxProfile": {
