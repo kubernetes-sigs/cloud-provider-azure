@@ -13,10 +13,11 @@ Kubernetes v1.12 adds support for cross resource group (RG) nodes and unmanaged 
 
 <!-- TOC -->
 
-- [Pre-requirements](#pre-requirements)
-- [Cross-RG nodes](#cross-rg-nodes)
-- [Unmanaged nodes](#unmanaged-nodes)
-- [Reference](#reference)
+- [Cross resource group nodes](#cross-resource-group-nodes)
+  - [Pre-requirements](#pre-requirements)
+  - [Cross-RG nodes](#cross-rg-nodes)
+  - [Unmanaged nodes](#unmanaged-nodes)
+  - [Reference](#reference)
 
 <!-- /TOC -->
 
@@ -62,4 +63,4 @@ kubelet ...\
 
 ## Reference
 
-See design docs for cross resource group nodes in [KEP-25](https://github.com/kubernetes/community/blob/master/keps/sig-azure/0025-20180809-cross-resource-group-nodes.md).
+See design docs for cross resource group nodes in [KEP 20180809-cross-resource-group-nodes](https://github.com/kubernetes/enhancements/blob/master/keps/sig-cloud-provider/azure/20180809-cross-resource-group-nodes.md).
