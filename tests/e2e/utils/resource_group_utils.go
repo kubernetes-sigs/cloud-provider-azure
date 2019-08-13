@@ -22,11 +22,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
 	"github.com/Azure/go-autorest/autorest/to"
-
-	"k8s.io/apimachinery/pkg/util/uuid"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/util/uuid"
 )
 
 // CreateTestResourceGroup create a test rg
@@ -39,10 +38,23 @@ func CreateTestResourceGroup(tc *AzureTestClient) (*resources.Group, func(string
 
 	return &rg, func(rgName string) {
 		Logf("cleaning up test resource group %s", rgName)
-		_, err := gc.Delete(context.Background(), rgName)
+		future, err := gc.Delete(context.Background(), rgName)
+		Expect(err).NotTo(HaveOccurred())
+		err = WaitForDeleteResourceGroupCompletion(gc, future, rgName)
 		Expect(err).NotTo(HaveOccurred())
 		return
 	}
+}
+
+// WaitForDeleteResourceGroupCompletion waits for delete group operations to finish
+func WaitForDeleteResourceGroupCompletion(gc *resources.GroupsClient, future resources.GroupsDeleteFuture, rgName string) error {
+	err := future.WaitForCompletionRef(context.Background(), gc.Client)
+	if err != nil {
+		return err
+	}
+
+	Logf("finished deleting group '%s'", rgName)
+	return nil
 }
 
 func createTestTemplate(tc *AzureTestClient, name *string) resources.Group {

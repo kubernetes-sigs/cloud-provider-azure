@@ -101,7 +101,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 			By("Cleaning up")
 			err = cs.CoreV1().Services(ns.Name).Delete(serviceName, nil)
 			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, ipName)
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -186,7 +186,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 			By("Cleaning up")
 			err = cs.CoreV1().Services(ns.Name).Delete(serviceName, nil)
 			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, ipName)
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -232,7 +232,7 @@ var _ = FDescribe("Ensure LoadBalancer", func() {
 			By("Cleaning up")
 			err = cs.CoreV1().Services(ns.Name).Delete(serviceName, nil)
 			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, ipName)
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
