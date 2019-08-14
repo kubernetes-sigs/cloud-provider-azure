@@ -210,12 +210,16 @@ func WaitCreateNewPIP(azureTestClient *AzureTestClient, ipName, rgName string, i
 }
 
 // DeletePIPWithRetry tries to delete a pulic ip resourc
-func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName string) error {
-	Logf("Deleting public IP resource named %s", ipName)
+func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
+	if rgName == "" {
+		rgName = azureTestClient.GetResourceGroup()
+	}
+	Logf("Deleting public IP resource named %s in resource group %s", ipName, rgName)
 	pipClient := azureTestClient.createPublicIPAddressesClient()
 	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err := pipClient.Delete(context.Background(), azureTestClient.GetResourceGroup(), ipName)
+		_, err := pipClient.Delete(context.Background(), rgName, ipName)
 		if err != nil {
+			Logf("error: %v, will retry soon", err)
 			return false, nil
 		}
 		return true, nil

@@ -233,9 +233,16 @@ var _ = FDescribe("Service with annotation", func() {
 		defer cleanup(to.String(rg.Name))
 
 		By("creating test PIP in the test resource group")
-		testPIPName := "testPIP" + string(uuid.NewUUID())[0:4]
+		testPIPName := "testPIP-" + string(uuid.NewUUID())[0:4]
 		pip, err := utils.WaitCreateNewPIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName))
 		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			By("Cleaning up")
+			err = cs.CoreV1().Services(ns.Name).Delete(serviceName, nil)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, testPIPName, *rg.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
