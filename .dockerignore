@@ -4,3 +4,5 @@
 !Makefile
 !hack/pkg-config.sh
 !vendor
+!cmd
+!pkg

@@ -14,20 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package version
+// +k8s:deepcopy-gen=package
+// +groupName=cloudcontrollermanager.config.k8s.io
 
-import (
-	"fmt"
-	"os"
-)
-
-// ApplicationName is name for the app
-const ApplicationName string = "azure-cloud-controller-manager"
-
-// PrintAndExit will handle '--version' flag.
-func PrintAndExit() {
-	info := getInfo()
-	fmt.Printf("%s %s\n", ApplicationName, info.Version)
-	fmt.Println(info)
-	os.Exit(0)
-}
+package config // import "k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
