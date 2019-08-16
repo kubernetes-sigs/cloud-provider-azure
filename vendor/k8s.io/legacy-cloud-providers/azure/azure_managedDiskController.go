@@ -25,13 +25,13 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
-	"k8s.io/klog"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	cloudvolume "k8s.io/cloud-provider/volume"
 	volumehelpers "k8s.io/cloud-provider/volume/helpers"
+	"k8s.io/klog"
 )
 
 const (
@@ -262,7 +262,7 @@ func (c *ManagedDiskController) ResizeDisk(diskURI string, oldSize resource.Quan
 // according to https://docs.microsoft.com/en-us/rest/api/compute/disks/get
 func getResourceGroupFromDiskURI(diskURI string) (string, error) {
 	fields := strings.Split(diskURI, "/")
-	if len(fields) != 9 || fields[3] != "resourceGroups" {
+	if len(fields) != 9 || strings.ToLower(fields[3]) != "resourcegroups" {
 		return "", fmt.Errorf("invalid disk URI: %s", diskURI)
 	}
 	return fields[4], nil
