@@ -166,7 +166,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	options := metav1.ListOptions{ResourceVersion: "0"}
 
 	if err := func() error {
-		initTrace := trace.New("Reflector " + r.name + " ListAndWatch")
+		initTrace := trace.New("Reflector ListAndWatch", trace.Field{"name", r.name})
 		defer initTrace.LogIfLong(10 * time.Second)
 		var list runtime.Object
 		var err error
@@ -268,8 +268,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			// To reduce load on kube-apiserver on watch restarts, you may enable watch bookmarks.
 			// Reflector doesn't assume bookmarks are returned at all (if the server do not support
 			// watch bookmarks, it will ignore this field).
-			// Disabled in Alpha release of watch bookmarks feature.
-			AllowWatchBookmarks: false,
+			AllowWatchBookmarks: true,
 		}
 
 		w, err := r.listerWatcher.Watch(options)
@@ -299,7 +298,12 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 
 		if err := r.watchHandler(w, &resourceVersion, resyncerrc, stopCh); err != nil {
 			if err != errorStopRequested {
-				klog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
+				switch {
+				case apierrs.IsResourceExpired(err):
+					klog.V(4).Infof("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
+				default:
+					klog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
+				}
 			}
 			return nil
 		}

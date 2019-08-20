@@ -27,10 +27,10 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -127,6 +127,9 @@ func (az *Cloud) mapLoadBalancerNameToVMSet(lbName string, clusterName string) (
 // So we'd have a separate name for internal load balancer.
 // This would be the name for Azure LoadBalancer resource.
 func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, isInternal bool) string {
+	if az.LoadBalancerName != "" {
+		clusterName = az.LoadBalancerName
+	}
 	lbNamePrefix := vmSetName
 	if strings.EqualFold(vmSetName, az.vmSet.GetPrimaryVMSetName()) || az.useStandardLoadBalancer() {
 		lbNamePrefix = clusterName
@@ -366,7 +369,9 @@ func (as *availabilitySet) GetPowerStatusByNodeName(name string) (powerState str
 		}
 	}
 
-	return "", fmt.Errorf("failed to get power status for node %q", name)
+	// vm.InstanceView or vm.InstanceView.Statuses are nil when the VM is under deleting.
+	klog.V(3).Infof("InstanceView for node %q is nil, assuming it's stopped", name)
+	return vmPowerStateStopped, nil
 }
 
 // GetNodeNameByProviderID gets the node name by provider ID.
@@ -458,6 +463,29 @@ func (as *availabilitySet) GetIPByNodeName(name string) (string, string, error) 
 	}
 
 	return privateIP, publicIP, nil
+}
+
+// returns a list of private ips assigned to node
+// TODO (khenidak): This should read all nics, not just the primary
+// allowing users to split ipv4/v6 on multiple nics
+func (as *availabilitySet) GetPrivateIPsByNodeName(name string) ([]string, error) {
+	ips := make([]string, 0)
+	nic, err := as.GetPrimaryInterface(name)
+	if err != nil {
+		return ips, err
+	}
+
+	if nic.IPConfigurations == nil {
+		return ips, fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", *nic.Name)
+	}
+
+	for _, ipConfig := range *(nic.IPConfigurations) {
+		if ipConfig.PrivateIPAddress != nil {
+			ips = append(ips, *(ipConfig.PrivateIPAddress))
+		}
+	}
+
+	return ips, nil
 }
 
 // getAgentPoolAvailabiliySets lists the virtual machines for the resource group and then builds

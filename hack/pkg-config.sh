@@ -17,8 +17,9 @@
 set -e
 cd $(dirname "$BASH_SOURCE")/..
 
-VERSION_PKG=k8s.io/cloud-provider-azure/cloud-controller-manager/version
+VERSION_PKG=k8s.io/cloud-provider-azure/pkg/version
 LDFLAGS="-s -w"
-LDFLAGS="$LDFLAGS -X $VERSION_PKG.version=$(git describe --tags --always --abbrev=9 || echo)"
-LDFLAGS="$LDFLAGS -X $VERSION_PKG.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitVersion=$(git describe --tags --always --abbrev=9 || echo)"
+LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitCommit=$(git rev-parse HEAD)"
+LDFLAGS="$LDFLAGS -X $VERSION_PKG.buildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 echo -ldflags \'$LDFLAGS\'

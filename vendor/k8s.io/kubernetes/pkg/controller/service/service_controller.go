@@ -60,9 +60,6 @@ const (
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
 
-	clientRetryCount    = 5
-	clientRetryInterval = 5 * time.Second
-
 	// LabelNodeRoleMaster specifies that a node is a master
 	// It's copied over to kubeadm until it's merged in core: https://github.com/kubernetes/kubernetes/pull/39112
 	LabelNodeRoleMaster = "node-role.kubernetes.io/master"
@@ -78,7 +75,7 @@ type cachedService struct {
 }
 
 type serviceCache struct {
-	mu         sync.Mutex // protects serviceMap
+	mu         sync.RWMutex // protects serviceMap
 	serviceMap map[string]*cachedService
 }
 
@@ -139,6 +136,8 @@ func New(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
 				svc, ok := cur.(*v1.Service)
+				// Check cleanup here can provide a remedy when controller failed to handle
+				// changes before it exiting (e.g. crashing, restart, etc.).
 				if ok && (wantsLoadBalancer(svc) || needsCleanup(svc)) {
 					s.enqueueService(cur)
 				}
@@ -340,6 +339,13 @@ func (s *ServiceController) syncLoadBalancerIfNeeded(service *v1.Service, key st
 		}
 		newStatus, err = s.ensureLoadBalancer(service)
 		if err != nil {
+			if err == cloudprovider.ImplementedElsewhere {
+				// ImplementedElsewhere indicates that the ensureLoadBalancer is a nop and the
+				// functionality is implemented by a different controller.  In this case, we
+				// return immediately without doing anything.
+				klog.V(4).Infof("LoadBalancer for service %s implemented by a different controller %s, Ignoring error", key, s.cloud.ProviderName())
+				return op, nil
+			}
 			return op, fmt.Errorf("failed to ensure load balancer: %v", err)
 		}
 		s.eventRecorder.Event(service, v1.EventTypeNormal, "EnsuredLoadBalancer", "Ensured load balancer")
@@ -378,8 +384,8 @@ func (s *ServiceController) ensureLoadBalancer(service *v1.Service) (*v1.LoadBal
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
 func (s *serviceCache) ListKeys() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	keys := make([]string, 0, len(s.serviceMap))
 	for k := range s.serviceMap {
 		keys = append(keys, k)
@@ -389,8 +395,8 @@ func (s *serviceCache) ListKeys() []string {
 
 // GetByKey returns the value stored in the serviceMap under the given key
 func (s *serviceCache) GetByKey(key string) (interface{}, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if v, ok := s.serviceMap[key]; ok {
 		return v, true, nil
 	}
@@ -400,8 +406,8 @@ func (s *serviceCache) GetByKey(key string) (interface{}, bool, error) {
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
 func (s *serviceCache) allServices() []*v1.Service {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	services := make([]*v1.Service, 0, len(s.serviceMap))
 	for _, v := range s.serviceMap {
 		services = append(services, v.state)
@@ -410,8 +416,8 @@ func (s *serviceCache) allServices() []*v1.Service {
 }
 
 func (s *serviceCache) get(serviceName string) (*cachedService, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	service, ok := s.serviceMap[serviceName]
 	return service, ok
 }
@@ -441,7 +447,20 @@ func (s *serviceCache) delete(serviceName string) {
 
 // needsCleanup checks if load balancer needs to be cleaned up as indicated by finalizer.
 func needsCleanup(service *v1.Service) bool {
-	return service.ObjectMeta.DeletionTimestamp != nil && servicehelper.HasLBFinalizer(service)
+	if !servicehelper.HasLBFinalizer(service) {
+		return false
+	}
+
+	if service.ObjectMeta.DeletionTimestamp != nil {
+		return true
+	}
+
+	// Service doesn't want loadBalancer but owns loadBalancer finalizer also need to be cleaned up.
+	if service.Spec.Type != v1.ServiceTypeLoadBalancer {
+		return true
+	}
+
+	return false
 }
 
 // needsUpdate checks if load balancer needs to be updated due to change in attributes.
@@ -462,6 +481,10 @@ func (s *ServiceController) needsUpdate(oldService *v1.Service, newService *v1.S
 	}
 
 	if !portsEqualForLB(oldService, newService) || oldService.Spec.SessionAffinity != newService.Spec.SessionAffinity {
+		return true
+	}
+
+	if !reflect.DeepEqual(oldService.Spec.SessionAffinityConfig, newService.Spec.SessionAffinityConfig) {
 		return true
 	}
 	if !loadBalancerIPsAreEqual(oldService, newService) {
@@ -501,10 +524,6 @@ func (s *ServiceController) needsUpdate(oldService *v1.Service, newService *v1.S
 	}
 
 	return false
-}
-
-func (s *ServiceController) loadBalancerName(service *v1.Service) string {
-	return s.balancer.GetLoadBalancerName(context.TODO(), "", service)
 }
 
 func getPortsForLB(service *v1.Service) ([]*v1.ServicePort, error) {
@@ -568,8 +587,9 @@ func portEqualForLB(x, y *v1.ServicePort) bool {
 		return false
 	}
 
-	// We don't check TargetPort; that is not relevant for load balancing
-	// TODO: Should we blank it out?  Or just check it anyway?
+	if x.TargetPort != y.TargetPort {
+		return false
+	}
 
 	return true
 }
@@ -690,7 +710,12 @@ func (s *ServiceController) lockedUpdateLoadBalancerHosts(service *v1.Service, h
 		}
 		return nil
 	}
-
+	if err == cloudprovider.ImplementedElsewhere {
+		// ImplementedElsewhere indicates that the UpdateLoadBalancer is a nop and the
+		// functionality is implemented by a different controller.  In this case, we
+		// return immediately without doing anything.
+		return nil
+	}
 	// It's only an actual error if the load balancer still exists.
 	if _, exists, err := s.balancer.GetLoadBalancer(context.TODO(), s.clusterName, service); err != nil {
 		runtime.HandleError(fmt.Errorf("failed to check if load balancer exists for service %s/%s: %v", service.Namespace, service.Name, err))
