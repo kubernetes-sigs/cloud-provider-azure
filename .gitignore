@@ -7,3 +7,10 @@ _artifacts
 _report
 _output/
 translations/
+
+# bazel
+/bazel-bin
+/bazel-cloud-provider-azure
+/bazel-genfiles
+/bazel-out
+/bazel-testlogs

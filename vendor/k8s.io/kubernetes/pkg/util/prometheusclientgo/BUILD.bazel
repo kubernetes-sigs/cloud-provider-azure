@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["adapters.go"],
+    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/util/prometheusclientgo",
+    importpath = "k8s.io/kubernetes/pkg/util/prometheusclientgo",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/k8s.io/kubernetes/pkg/client/metrics/prometheus:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/util/prometheusclientgo/leaderelection:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/util/workqueue/prometheus:go_default_library",
+    ],
+)

@@ -26,10 +26,16 @@ Version matrix:
 
 ## Build
 
-Build azure-cloud-controller-manager:
+Build azure-cloud-controller-manager with pure make:
 
 ```sh
 make
+```
+
+or with bazel:
+
+```sh
+make bazel-build
 ```
 
 Build docker image for azure-cloud-controller-manager:

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: all clean push update-prepare update test-check test-update test-unit test-lint test-lint-prepare image test-boilerplate deploy
 .DELETE_ON_ERROR:
 
 SHELL=/bin/bash -o pipefail
@@ -46,19 +45,23 @@ TEST_IMAGE_NAME=azure-cloud-controller-manager-test
 TEST_IMAGE=$(TEST_IMAGE_NAME):$(IMAGE_TAG)
 
 WORKSPACE ?= $(shell pwd)
-ARTIFACTS ?= $(WORKSPACE)/_artifacts
+ARTIFACTS ?= $(WORKSPACE)/_artifactsx
 
+# Bazel variables
+BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
+BAZEL_ARGS ?=
+
+.PHONY: all
 all: $(BIN_DIR)/azure-cloud-controller-manager
 
-clean:
-	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
-
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*)
-	 go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
+	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
 
+.PHONY: image
 image:
 	docker build -t $(IMAGE) .
 
+.PHONY: push
 push:
 	docker push $(IMAGE)
 
@@ -71,6 +74,7 @@ endif
 $(PKG_CONFIG):
 	hack/pkg-config.sh > $@
 
+.PHONY: test-unit
 test-unit: $(PKG_CONFIG)
 	mkdir -p $(TEST_RESULTS_DIR)
 	cd ./cmd/cloud-controller-manager && go test $(PKG_CONFIG_CONTENT) -v ./... | tee ../../$(TEST_RESULTS_DIR)/unittest.txt
@@ -79,24 +83,42 @@ ifdef JUNIT
 endif
 
 # collection of check tests
+.PHONY: test-check
 test-check: test-lint-prepare test-lint test-boilerplate
 
+.PHONY: test-lint-prepare
 test-lint-prepare:
 	GO111MODULE=off go get -u gopkg.in/alecthomas/gometalinter.v1
 	GO111MODULE=off gometalinter.v1 -i
+
+.PHONY: test-lint
 test-lint:
 	gometalinter.v1 $(GOMETALINTER_OPTION) ./ ./cmd/cloud-controller-manager/...
 	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
 
+.PHONY: test-boilerplate
 test-boilerplate:
 	hack/verify-boilerplate.sh
 
+.PHONY: test-bazel
+test-boilerplate:
+	hack/verify-bazel.sh
+
+.PHONY: update-prepare
 update-prepare:
 	go get -u github.com/sgotti/glide-vc
 	go get -u github.com/Masterminds/glide
+
+.PHONY: update-dependencie
 update:
 	hack/update-dependencies.sh
-test-update: update-prepare update
+
+.PHONY: update-bazel
+update:
+	hack/update-bazel.sh
+
+.PHONY: test-update
+test-update: update-prepare update-dependencie update-bazel
 	git checkout glide.lock
 	git add -A .
 	git diff --staged --name-status --exit-code || { \
@@ -107,9 +129,29 @@ test-update: update-prepare update
 test-e2e:
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
 
-
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
 
+.PHONY: deploy
 deploy: image hyperkube	push
 	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
+
+.PHONY: bazel-build
+bazel-build:
+# check if bazel exists
+ifndef BAZEL_VERSION
+	$(error "Bazel is not available. Installation instructions can be found at https://docs.bazel.build/versions/master/install.html")
+endif
+	bazel build //cmd/cloud-controller-manager $(BAZEL_ARGS)
+
+.PHONY: bazel-clean
+bazel-clean:
+ifndef BAZEL_VERSION
+	$(error "Bazel is not available. Installation instructions can be found at https://docs.bazel.build/versions/master/install.html")
+endif
+	bazel clean
+
+.PHONY: clean
+clean:
+	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
+	$(MAKE) bazel-clean
