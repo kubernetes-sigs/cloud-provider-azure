@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
+	"k8s.io/cloud-provider-azure/pkg/probes"
 	"k8s.io/component-base/logs"
 
 	_ "k8s.io/cloud-provider-azure/pkg/version/prometheus" // for version metric registration
@@ -43,6 +44,7 @@ func main() {
 	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
+	probes.InitAndStart()
 
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
