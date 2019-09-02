@@ -25,6 +25,13 @@ spec:
       - "--leader-elect=true"
       - "--route-reconciliation-period=10s"
       - "--v=2"
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8085
+        initialDelaySeconds: 20
+        periodSeconds: 10
+        timeoutSeconds: 10
       volumeMounts:
         - name: etc-kubernetes
           mountPath: /etc/kubernetes
