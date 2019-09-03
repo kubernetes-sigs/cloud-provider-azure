@@ -22,7 +22,9 @@ Version matrix:
 
 |Kubernetes version|cloud-provider version|cloud-provider branch|
 |------------------|----------------------|---------------------|
-| v1.14.x          | v0.1.0               | master              |
+| v1.16.x          |                      | master              |
+| v1.15.x          | v0.2.0               | N/A                 |
+| v1.14.x          | v0.1.0               | N/A                 |
 
 ## Build
 
@@ -61,7 +63,7 @@ azure-cloud-controller-manager --cloud-provider=azure \
     --v=2
 ```
 
-It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/cloud-controller-manager.yaml) for the example.
+It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
 
 Please checkout more details at [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
 
@@ -77,11 +79,12 @@ Please check the following documents for e2e tests:
 - [Component versioning](docs/component-versioning.md)
 - [Dependency management](docs/dependency-management.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
-- [Load balancer Annotations](docs/azure-loadbalancer.md)
-- [Using Azure availability zones](docs/using-availability-zones.md)
-- [Using cross resource group nodes](docs/using-cross-resource-group-nodes.md)
-- [AzureDisk known issues](docs/azuredisk-issues.md)
-- [AzureFile known issues](docs/azurefile-issues.md)
+- [Azure load balancer and annotations](docs/services/README.md)
+- [Azure permissions](docs/azure-permissions.md)
+- [Azure availability zones](docs/using-availability-zones.md)
+- [Cross resource group nodes](docs/using-cross-resource-group-nodes.md)
+- [AzureDisk known issues](docs/persistentvolumes/azuredisk/issues.md)
+- [AzureFile known issues](docs/persistentvolumes/azurefile/issues.md)
 
 See [docs](docs/) for more documentations.
 

@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
+  labels:
+    tier: control-plane
+    component: cloud-controller-manager
+spec:
+  hostNetwork: true
+  containers:
+    - name: cloud-controller-manager
+      image: k8s.gcr.io/hyperkube-amd64:v1.16.0-beta.1
+      imagePullPolicy: IfNotPresent
+      command: ["cloud-controller-manager"]
+      args: 
+        - "--allocate-node-cidrs=true"
+        - "--cloud-config=/etc/kubernetes/azure.json"
+        - "--cloud-provider=azure"
+        - "--cluster-cidr=10.244.0.0/16"
+        - "--cluster-name=k8s"
+        - "--configure-cloud-routes=true"   # "false" for Azure CNI and "true" for other network plugins
+        - "--kubeconfig=/var/lib/kubelet/kubeconfig"
+        - "--leader-elect=true"
+        - "--route-reconciliation-period=10s"
+        - "--v=2"
+        - "--port=10267"
+      volumeMounts:
+        - name: etc-kubernetes
+          mountPath: /etc/kubernetes
+        - name: etc-ssl
+          mountPath: /etc/ssl
+          readOnly: true
+        - name: var-lib-kubelet
+          mountPath: /var/lib/kubelet
+        - name: msi
+          mountPath: /var/lib/waagent/ManagedIdentity-Settings
+          readOnly: true
+  volumes:
+    - name: etc-kubernetes
+      hostPath:
+        path: /etc/kubernetes
+    - name: etc-ssl
+      hostPath:
+        path: /etc/ssl
+    - name: var-lib-kubelet
+      hostPath:
+        path: /var/lib/kubelet
+    - name: msi
+      hostPath:
+        path: /var/lib/waagent/ManagedIdentity-Settings

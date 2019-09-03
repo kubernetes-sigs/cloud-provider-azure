@@ -76,6 +76,7 @@ parameters:
   storageaccounttype: Premium_LRS
   zoned: "true"
 provisioner: kubernetes.io/azure-disk
+volumeBindingMode: WaitForFirstConsumer
 ```
 
 Another example of topology-aware provisioning storage class is:
@@ -92,6 +93,7 @@ parameters:
   kind: Managed
   storageaccounttype: Premium_LRS
 provisioner: kubernetes.io/azure-disk
+volumeBindingMode: WaitForFirstConsumer
 allowedTopologies:
 - matchLabelExpressions:
   - key: failure-domain.beta.kubernetes.io/zone
