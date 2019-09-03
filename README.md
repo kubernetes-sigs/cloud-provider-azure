@@ -79,9 +79,10 @@ Please check the following documents for e2e tests:
 - [Component versioning](docs/component-versioning.md)
 - [Dependency management](docs/dependency-management.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
-- [Azure Load balancer and annotations](docs/services/README.md)
-- [Using Azure availability zones](docs/using-availability-zones.md)
-- [Using cross resource group nodes](docs/using-cross-resource-group-nodes.md)
+- [Azure load balancer and annotations](docs/services/README.md)
+- [Azure permissions](docs/azure-permissions.md)
+- [Azure availability zones](docs/using-availability-zones.md)
+- [Cross resource group nodes](docs/using-cross-resource-group-nodes.md)
 - [AzureDisk known issues](docs/persistentvolumes/azuredisk/issues.md)
 - [AzureFile known issues](docs/persistentvolumes/azurefile/issues.md)
 
