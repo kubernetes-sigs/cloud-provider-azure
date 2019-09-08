@@ -37,22 +37,23 @@ CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 #The test args for Kubernetes e2e tests
 TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
-IMAGE_NAME=azure-cloud-controller-manager
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
+# cloud controller manager image
+IMAGE_NAME=azure-cloud-controller-manager
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
-
-TEST_IMAGE_NAME=azure-cloud-controller-manager-test
-TEST_IMAGE=$(TEST_IMAGE_NAME):$(IMAGE_TAG)
-
-WORKSPACE ?= $(shell pwd)
-ARTIFACTS ?= $(WORKSPACE)/_artifactsx
+# cloud node manager image
+NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
+NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
 
 # Bazel variables
 BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
 BAZEL_ARGS ?=
 
 .PHONY: all
-all: $(BIN_DIR)/azure-cloud-controller-manager
+all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager
+
+$(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*)
+	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*)
 	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
@@ -60,10 +61,12 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-co
 .PHONY: image
 image:
 	docker build -t $(IMAGE) .
+	docker build -t $(NODE_MANAGER_IMAGE) -f Dockerfile.node .
 
 .PHONY: push
 push:
 	docker push $(IMAGE)
+	docker push $(NODE_MANAGER_IMAGE)
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
@@ -101,7 +104,7 @@ test-boilerplate:
 	hack/verify-boilerplate.sh
 
 .PHONY: test-bazel
-test-boilerplate:
+test-bazel:
 	hack/verify-bazel.sh
 
 .PHONY: update-prepare
@@ -114,7 +117,7 @@ update:
 	hack/update-dependencies.sh
 
 .PHONY: update-bazel
-update:
+update-bazel:
 	hack/update-bazel.sh
 
 .PHONY: test-update

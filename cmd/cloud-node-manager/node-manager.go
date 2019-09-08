@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// The external controller manager is responsible for running controller loops that
+// The external node manager is responsible for running node reconciler loops that
 // are cloud provider dependent. It uses the API to listen to new events on resources.
 
 package main
@@ -24,7 +24,7 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
+	"k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app"
 	"k8s.io/component-base/logs"
 
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
@@ -34,12 +34,8 @@ import (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	command := app.NewCloudControllerManagerCommand()
+	command := app.NewCloudNodeManagerCommand()
 
-	// TODO: once we switch everything over to Cobra commands, we can go back to calling
-	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
-	// normalize func and add the go flag set by hand.
-	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
 

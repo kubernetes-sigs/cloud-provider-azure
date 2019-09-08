@@ -19,7 +19,7 @@ spec:
       - "--cloud-provider=azure"
       - "--cluster-cidr=10.244.0.0/16"
       - "--cluster-name=k8s"
-      - "--controllers=-cloud-node"       # disable cloud-node controller
+      - "--controllers=*,-cloud-node"       # disable cloud-node controller
       - "--configure-cloud-routes=true"   # "false" for Azure CNI and "true" for other network plugins
       - "--kubeconfig=/var/lib/kubelet/kubeconfig"
       - "--leader-elect=true"

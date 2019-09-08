@@ -2,11 +2,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["controller-manager.go"],
-    importpath = "k8s.io/cloud-provider-azure/cmd/cloud-controller-manager",
+    srcs = ["node-manager.go"],
+    importpath = "k8s.io/cloud-provider-azure/cmd/cloud-node-manager",
     visibility = ["//visibility:private"],
     deps = [
-        "//cmd/cloud-controller-manager/app:go_default_library",
+        "//cmd/cloud-node-manager/app:go_default_library",
         "//vendor/k8s.io/component-base/logs:go_default_library",
         "//vendor/k8s.io/component-base/metrics/prometheus/clientgo:go_default_library",
         "//vendor/k8s.io/legacy-cloud-providers/azure:go_default_library",
@@ -14,7 +14,7 @@ go_library(
 )
 
 go_binary(
-    name = "cloud-controller-manager",
+    name = "cloud-node-manager",
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
 )
