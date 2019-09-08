@@ -19,6 +19,13 @@ spec:
           mountPath: /etc/kubernetes
         - name: var-lib-kube-scheduler
           mountPath: /var/lib/kube-scheduler
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 4
+          memory: 2Gi
   volumes:
     - name: etc-kubernetes
       hostPath:
