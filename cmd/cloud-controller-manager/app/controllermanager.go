@@ -62,7 +62,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use: "cloud-controller-manager",
+		Use:  "cloud-controller-manager",
 		Long: `The Cloud controller manager is a daemon that embeds the cloud specific control loops shipped with Kubernetes.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			verflag.PrintAndExitIfRequested("Cloud Provider Azure")

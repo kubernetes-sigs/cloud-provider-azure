@@ -49,7 +49,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use: "cloud-node-manager",
+		Use:  "cloud-node-manager",
 		Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			verflag.PrintAndExitIfRequested("Cloud Node Manager")
