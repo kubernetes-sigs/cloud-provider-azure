@@ -75,7 +75,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 
 		runningQuantity, err := utils.GetAvailableNodeCapacity(cs)
 		Expect(err).NotTo(HaveOccurred())
-		emptyQuantity := initNodeCapacity.Copy()
+		emptyQuantity := initNodeCapacity.DeepCopy()
 		emptyQuantity.Sub(runningQuantity)
 
 		podCount = int(emptyQuantity.MilliValue()/podSize) + 1
