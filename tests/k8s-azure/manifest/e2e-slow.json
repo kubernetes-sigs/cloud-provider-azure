@@ -26,13 +26,13 @@
         "masterProfile": {
             "count": 1,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_F2"
+            "vmSize": "Standard_DS3_v2"
         },
         "agentPoolProfiles": [
             {
                 "name": "agentpool1",
                 "count": 2,
-                "vmSize": "Standard_F2",
+                "vmSize": "Standard_DS3_v2",
                 "availabilityProfile": "AvailabilitySet",
                 "storageProfile": "ManagedDisks"
             }
