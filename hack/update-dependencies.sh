@@ -25,6 +25,7 @@ export GOFLAGS=
 cd "$(git rev-parse --show-toplevel)"
 trap 'echo "FAILED" >&2' ERR
 TMP_DIR="${TMP_DIR:-$(mktemp -d /tmp/update-vendor.XXXX)}"
+SCRIPT_ROOT=$(dirname "${BASH_SOURCE}")
 
 prune-vendor() {
   find vendor -type f \
@@ -103,4 +104,5 @@ ensure_require_replace_directives_for_all_dependencies
 group_replace_directives
 go mod vendor
 prune-vendor
+${SCRIPT_ROOT}/update-bazel.sh
 echo SUCCESS

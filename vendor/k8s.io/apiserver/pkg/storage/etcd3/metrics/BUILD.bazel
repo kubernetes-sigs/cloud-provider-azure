@@ -6,5 +6,8 @@ go_library(
     importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/etcd3/metrics",
     importpath = "k8s.io/apiserver/pkg/storage/etcd3/metrics",
     visibility = ["//visibility:public"],
-    deps = ["//vendor/github.com/prometheus/client_golang/prometheus:go_default_library"],
+    deps = [
+        "//vendor/k8s.io/component-base/metrics:go_default_library",
+        "//vendor/k8s.io/component-base/metrics/legacyregistry:go_default_library",
+    ],
 )
