@@ -23,9 +23,12 @@ go_library(
         "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/intstr:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/validation/field:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/util/feature:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/apis/apps:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/apis/core:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/features:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/util/parsers:go_default_library",
+        "//vendor/k8s.io/utils/net:go_default_library",
         "//vendor/k8s.io/utils/pointer:go_default_library",
     ],
 )

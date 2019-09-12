@@ -32,6 +32,13 @@ spec:
         - "--terminated-pod-gc-threshold=5000"
         - "--use-service-account-credentials=true"
         - "--v=2"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 4
+          memory: 2Gi
       volumeMounts:
         - name: etc-kubernetes
           mountPath: /etc/kubernetes

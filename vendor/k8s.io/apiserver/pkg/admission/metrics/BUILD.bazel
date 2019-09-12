@@ -7,7 +7,8 @@ go_library(
     importpath = "k8s.io/apiserver/pkg/admission/metrics",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/github.com/prometheus/client_golang/prometheus:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/admission:go_default_library",
+        "//vendor/k8s.io/component-base/metrics:go_default_library",
+        "//vendor/k8s.io/component-base/metrics/legacyregistry:go_default_library",
     ],
 )

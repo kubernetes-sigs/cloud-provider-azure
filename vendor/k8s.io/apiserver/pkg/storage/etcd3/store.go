@@ -208,7 +208,7 @@ func (s *store) conditionalDelete(ctx context.Context, key string, out runtime.O
 				return err
 			}
 		}
-		if err := validateDeletion(origState.obj); err != nil {
+		if err := validateDeletion(ctx, origState.obj); err != nil {
 			return err
 		}
 		startTime := time.Now()
@@ -274,7 +274,20 @@ func (s *store) GuaranteedUpdate(
 	transformContext := authenticatedDataString(key)
 	for {
 		if err := preconditions.Check(key, origState.obj); err != nil {
-			return err
+			// If our data is already up to date, return the error
+			if !mustCheckData {
+				return err
+			}
+
+			// It's possible we were working with stale data
+			// Actually fetch
+			origState, err = getCurrentState()
+			if err != nil {
+				return err
+			}
+			mustCheckData = false
+			// Retry
+			continue
 		}
 
 		ret, ttl, err := s.updateState(origState, tryUpdate)

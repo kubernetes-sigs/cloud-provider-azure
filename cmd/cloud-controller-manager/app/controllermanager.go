@@ -62,11 +62,10 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use: "cloud-controller-manager",
-		Long: `The Cloud controller manager is a daemon that embeds
-the cloud specific control loops shipped with Kubernetes.`,
+		Use:  "cloud-controller-manager",
+		Long: `The Cloud controller manager is a daemon that embeds the cloud specific control loops shipped with Kubernetes.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			verflag.PrintAndExitIfRequested()
+			verflag.PrintAndExitIfRequested("Cloud Provider Azure")
 			utilflag.PrintFlags(cmd.Flags())
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
@@ -140,7 +139,7 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error
 	}
 
 	// Setup any healthz checks we will want to use.
-	var checks []healthz.HealthzChecker
+	var checks []healthz.HealthChecker
 	var electionChecker *leaderelection.HealthzAdaptor
 	if c.ComponentConfig.Generic.LeaderElection.LeaderElect {
 		electionChecker = leaderelection.NewLeaderHealthzAdaptor(time.Second * 20)

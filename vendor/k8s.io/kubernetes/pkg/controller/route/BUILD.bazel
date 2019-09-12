@@ -26,7 +26,6 @@ go_library(
         "//vendor/k8s.io/client-go/util/retry:go_default_library",
         "//vendor/k8s.io/cloud-provider:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/controller:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/controller/util/node:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/util/metrics:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/util/node:go_default_library",
