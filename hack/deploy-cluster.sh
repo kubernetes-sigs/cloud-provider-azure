@@ -18,27 +18,27 @@ set -e
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 RESOURCE_GROUP_NAME=${RESOURCE_GROUP_NAME:-""}
-LOCATION=${LOCATION:-""}
+LOCATION=${K8S_AZURE_LOCATION-""}
 
 #Check for variables is initialized or not
-SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-""}
-CLIENT_ID=${CLIENT_ID:-""}
-CLIENT_SECRET=${CLIENT_SECRET:-""}
-TENANT_ID=${TENANT_ID:-""}
+SUBSCRIPTION_ID=${K8S_AZURE_SUBSID:-""}
+CLIENT_ID=${K8S_AZURE_SPID:-""}
+CLIENT_SECRET=${K8S_AZURE_SPSEC:-""}
+TENANT_ID=${K8S_AZURE_TENANTID:-""}
 USE_CSI_DEFAULT_STORAGECLASS=${USE_CSI_DEFAULT_STORAGECLASS:-""}
 ENABLE_AVAILABILITY_ZONE=${ENABLE_AVAILABILITY_ZONE:-""}
 
 # Check for variables is initialized or not
-if [ -z "$LOCATION" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ]; then
+if [ -z "${LOCATION}" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ]; then
   echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET ,LOCATION and USE_CSI_DEFAULT_STORAGECLASS must be specified"
   exit 1
 fi
-if [ -z "$IMAGE" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
+if [ -z "${IMAGE}" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
   echo "Please deploy the cluster by running 'IMAGE_REGISTRY=<your-registry> make deploy'."
   exit 1
 fi
 
-if [ "$RESOURCE_GROUP_NAME" = "" ]
+if [ "${RESOURCE_GROUP_NAME}" = "" ]
 then
 echo "RESOURCE GROUP NAME must be specified"
 exit 1
@@ -56,7 +56,7 @@ fi
 
 # Initialize variables
 manifest_file=$(mktemp)
-if [ -z "$RESOURCE_GROUP_NAME" ]; then
+if [ -z "${RESOURCE_GROUP_NAME}" ]; then
   UUID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
   RESOURCE_GROUP_NAME="k8s-$UUID"
 fi
@@ -68,12 +68,12 @@ function cleanup() {
 trap cleanup EXIT
 
 base_manifest=${REPO_ROOT}/examples/aks-engine.json
-if [ ! -z "$ENABLE_AVAILABILITY_ZONE" ]; then
+if [ ! -z "${ENABLE_AVAILABILITY_ZONE}" ]; then
     base_manifest=${REPO_ROOT}/examples/az.json
 fi
 
 # Configure the manifests for aks-engine
-cat $base_manifest | \
+cat ${base_manifest} | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${IMAGE}\"" | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customHyperkubeImage=\"${HYPERKUBE_IMAGE}\"" | \
   jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
@@ -92,36 +92,28 @@ aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
   --client-secret ${CLIENT_SECRET}
 echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
 
-export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
-echo "Kubernetes cluster deployed. Please find the kubeconfig at $KUBECONFIG"
+export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.${LOCATION}.json
+echo "Kubernetes cluster deployed. Please find the kubeconfig at ${KUBECONFIG}"
 
 # Deploy AzureDisk CSI Plugin
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-driver-registry.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/crd-csi-node-info.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-attacher.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-provisioner.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-provisioner.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-attacher.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/azuredisk-csi-driver.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/rbac-csi-azuredisk-controller.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-controller.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/csi-azuredisk-node.yaml
 # create storage class.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/deploy/example/storageclass-azuredisk-csi.yaml
 
 # Deploy AzureFile CSI Plugin
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-driver-registry.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/crd-csi-node-info.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-attacher.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-driver-registrar.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-provisioner.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-snapshotter.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-provisioner.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-attacher.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/azurefile-csi-driver.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/rbac-csi-azurefile-controller.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-controller.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/csi-azurefile-node.yaml
 # create storage class.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/deploy/example/storageclass-azurefile-csi.yaml
 
-if [ $USE_CSI_DEFAULT_STORAGECLASS = "Yes" ]
+if [ ${USE_CSI_DEFAULT_STORAGECLASS} = "true" ]
 then
 kubectl delete storageclass default
 cat <<EOF | kubectl apply -f-
