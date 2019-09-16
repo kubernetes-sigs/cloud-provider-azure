@@ -65,11 +65,11 @@
 
     ```sh
     export RESOURCE_GROUP_NAME=<resource group name>
-    export LOCATION=<location>
-    export SUBSCRIPTION_ID=<subscription ID>
-    export CLIENT_ID=<client id>
-    export CLIENT_SECRET=<client secret>
-    export TENANT_ID=<tenant id>
+    export K8S_AZURE_LOCATION=<location>
+    export K8S_AZURE_SUBSID=<subscription ID>
+    export K8S_AZURE_SPID=<client id>
+    export K8S_AZURE_SPSEC=<client secret>
+    export K8S_AZURE_TENANTID=<tenant id>
     export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
     
     make deploy
