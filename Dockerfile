@@ -17,6 +17,6 @@ WORKDIR /go/src/k8s.io/cloud-provider-azure
 COPY . .
 RUN make
 
-FROM buildpack-deps:stretch-curl
+FROM k8s.gcr.io/debian-base:v1.0.0
 COPY --from=build /go/src/k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin
 RUN ln -s /usr/local/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager
