@@ -41,4 +41,4 @@ export K8S_AZURE_LOADBALANCE_SKU=<loadbalancer-sku> # the sku of load balancer (
 ### Without ginkgo
 - Run ```go test ./tests/e2e/ -timeout 0```
 
-After a long time test, a junit report will be generated in a directory named by the cluster name
+After a long time test, a JUnit report will be generated in a directory named by the cluster name
