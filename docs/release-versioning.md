@@ -23,7 +23,7 @@ References:
 - [Semantic Versioning](http://semver.org/)
 
 ### Branch and version scheme
-This project uses golang's vendoring mechanism for managing dependencies (see [Dependency management](docs/dependency-management.md) for detail). When talking abount 'sync from Kubernetes upstream', it actually means vendoring Kubernetes repository code under the vendor directory.
+This project uses golang's vendoring mechanism for managing dependencies (see [Dependency management](docs/dependency-management.md) for detail). When talking about 'sync from Kubernetes upstream', it actually means vendoring Kubernetes repository code under the vendor directory.
 
 During each sync from upstream, it is usually fine to sync to latest commit. But if there is a new tagged commit in upstream that we haven't vendored, we should sync to that tagged commit first, and apply a version tag correspondingly if applicable. The version tag mechanism is a bit different on master branch and releasing branch, please see below for detail.
 
