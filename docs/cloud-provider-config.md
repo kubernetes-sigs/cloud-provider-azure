@@ -104,7 +104,7 @@ In other words, if you use multiple agent pools (scale sets), and `loadBalancerS
 
 ### excludeMasterFromStandardLB
 
-Master nodes would not add to the backends of Azure loadbalancer (ALB) if `excludeMasterFromStandardLB` is set.
+Master nodes would not add to the backends of Azure LoadBalancer (ALB) if `excludeMasterFromStandardLB` is set.
 
 By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want adding the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
 
