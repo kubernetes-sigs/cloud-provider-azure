@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: cloud-controller-manager
-      image: k8s.gcr.io/hyperkube-amd64:v1.16.0-beta.1
+      image: mcr.microsoft.com/k8s/core/azure-cloud-controller-manager:v0.3.0
       imagePullPolicy: IfNotPresent
       command: ["cloud-controller-manager"]
       args:
