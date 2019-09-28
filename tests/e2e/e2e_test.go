@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/klog"
 
+	_ "k8s.io/cloud-provider-azure/tests/e2e/auth"
 	_ "k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "k8s.io/cloud-provider-azure/tests/e2e/network"
 )

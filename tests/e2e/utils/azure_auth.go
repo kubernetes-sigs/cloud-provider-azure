@@ -17,11 +17,16 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	azauth "github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/go-autorest/autorest/to"
+
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog"
 )
 
@@ -91,4 +96,25 @@ func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 		Environment:     env,
 	}
 	return c, nil
+}
+
+// assignRoleByID assigns role by roleDefinitionID to the given scope
+func (tc *AzureTestClient) assignRoleByID(scope, roleDefinitionID string) (result azauth.RoleAssignment, err error) {
+	authconfig := tc.GetAuthConfig()
+	if err != nil {
+		return azauth.RoleAssignment{}, err
+	}
+
+	roleAssignmentsClient := tc.createRoleAssignmentsClient()
+
+	return roleAssignmentsClient.Create(
+		context.Background(),
+		scope,
+		string(uuid.NewUUID()),
+		azauth.RoleAssignmentCreateParameters{
+			Properties: &azauth.RoleAssignmentProperties{
+				PrincipalID:      to.StringPtr(authconfig.AADClientID),
+				RoleDefinitionID: to.StringPtr(roleDefinitionID),
+			},
+		})
 }

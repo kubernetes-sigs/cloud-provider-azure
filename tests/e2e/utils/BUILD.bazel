@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "azure_auth.go",
         "azure_test_client.go",
+        "container_registry_utils.go",
         "ip_utils.go",
         "log.go",
         "network_interface_utils.go",
@@ -18,6 +19,8 @@ go_library(
     importpath = "k8s.io/cloud-provider-azure/tests/e2e/utils",
     visibility = ["//visibility:public"],
     deps = [
+        "//vendor/github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization:go_default_library",
+        "//vendor/github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry:go_default_library",
         "//vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network:go_default_library",
         "//vendor/github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest:go_default_library",

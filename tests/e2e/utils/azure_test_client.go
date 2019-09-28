@@ -22,6 +22,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
+	azauth "github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization"
+	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	azresources "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
 	"github.com/Azure/go-autorest/autorest"
@@ -36,28 +38,37 @@ var (
 
 // AzureTestClient configs Azure specific clients
 type AzureTestClient struct {
-	location       string
-	resourceGroup  string
-	networkClient  aznetwork.BaseClient
-	resourceClient azresources.BaseClient
+	location              string
+	resourceGroup         string
+	authConfig            AzureAuthConfig
+	networkClient         aznetwork.BaseClient
+	resourceClient        azresources.BaseClient
+	acrClient             acr.BaseClient
+	roleAssignmentsClient azauth.BaseClient
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
 // Only consider PublicCloud Environment
 func CreateAzureTestClient() (*AzureTestClient, error) {
-	authconfig, err := azureAuthConfigFromTestProfile()
+	authConfig, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return nil, err
 	}
-	servicePrincipleToken, err := getServicePrincipalToken(authconfig)
+	servicePrincipleToken, err := getServicePrincipalToken(authConfig)
 	if err != nil {
 		return nil, err
 	}
-	baseClient := aznetwork.NewWithBaseURI(azure.PublicCloud.TokenAudience, authconfig.SubscriptionID)
+	baseClient := aznetwork.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
 	baseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
 
 	resourceBaseClient := azresources.BaseClient(baseClient)
 	resourceBaseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
+
+	acrClient := acr.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
+	acrClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
+
+	roleAssignmentsClient := azauth.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
+	roleAssignmentsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
 
 	kubeClient, err := CreateKubeClientSet()
 	if err != nil {
@@ -79,10 +90,13 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	location := getLocationFromNodeLabels(&nodes[0])
 
 	c := &AzureTestClient{
-		location:       location,
-		resourceGroup:  resourceGroup,
-		networkClient:  baseClient,
-		resourceClient: resourceBaseClient,
+		location:              location,
+		resourceGroup:         resourceGroup,
+		authConfig:            *authConfig,
+		networkClient:         baseClient,
+		resourceClient:        resourceBaseClient,
+		acrClient:             acrClient,
+		roleAssignmentsClient: roleAssignmentsClient,
 	}
 
 	return c, nil
@@ -91,6 +105,16 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 // GetResourceGroup get RG name which is same of cluster name as definite in k8s-azure
 func (tc *AzureTestClient) GetResourceGroup() string {
 	return tc.resourceGroup
+}
+
+// GetLocation get location which is same of cluster name as definite in k8s-azure
+func (tc *AzureTestClient) GetLocation() string {
+	return tc.location
+}
+
+// GetAuthConfig gets the authorization configuration information
+func (tc *AzureTestClient) GetAuthConfig() AzureAuthConfig {
+	return tc.authConfig
 }
 
 // CreateSubnetsClient generates subnet client with the same baseclient as azure test client
@@ -126,6 +150,16 @@ func (tc *AzureTestClient) createInterfacesClient() *aznetwork.InterfacesClient 
 // createResourceGroupClient generates resource group client with the same baseclient as azure test client
 func (tc *AzureTestClient) createResourceGroupClient() *azresources.GroupsClient {
 	return &azresources.GroupsClient{BaseClient: tc.resourceClient}
+}
+
+// createACRClient generates ACR client with the same baseclient as azure test client
+func (tc *AzureTestClient) createACRClient() *acr.RegistriesClient {
+	return &acr.RegistriesClient{BaseClient: tc.acrClient}
+}
+
+// createRoleAssignmentsClient generates authorization client with the same baseclient as azure test client
+func (tc *AzureTestClient) createRoleAssignmentsClient() *azauth.RoleAssignmentsClient {
+	return &azauth.RoleAssignmentsClient{BaseClient: tc.roleAssignmentsClient}
 }
 
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.
