@@ -19,7 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"net"
 	"strings"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
@@ -243,17 +243,25 @@ func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (err error) {
 	return
 }
 
-// SelectAvailablePrivateIP selects a private IP address in subnet 10.240.0.0/12
-// select range from 10.240.1.0 ~ 10.240.1.10
+// SelectAvailablePrivateIP selects a private IP address in Azure subnet.
 func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	vNet, err := tc.GetClusterVirtualNetwork()
 	vNetClient := tc.createVirtualNetworksClient()
 	if err != nil {
 		return "", err
 	}
-	baseIP := "10.240.1."
-	for i := 0; i <= 100; i++ {
-		IP := baseIP + strconv.Itoa(i)
+	if vNet.Subnets == nil || len(*vNet.Subnets) == 0 {
+		return "", fmt.Errorf("failed to find a subnet in vNet %s", to.String(vNet.Name))
+	}
+	subnet := to.String((*vNet.Subnets)[0].AddressPrefix)
+	ip, _, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %v", to.String(vNet.Name), err)
+	}
+	baseIP := ip.To4()
+	for i := 0; i <= 254; i++ {
+		baseIP[3]++
+		IP := baseIP.String()
 		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), to.String(vNet.Name), IP)
 		if err != nil {
 			// just ignore
@@ -263,7 +271,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 			return IP, nil
 		}
 	}
-	return "", fmt.Errorf("Find no availabePrivateIP in range 10.240.1.0 ~ 10.240.1.100")
+	return "", fmt.Errorf("Find no availabePrivateIP in subnet CIDR %s", subnet)
 }
 
 // ListPublicIPs lists all the publicIP addresses active
