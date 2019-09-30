@@ -35,7 +35,7 @@ const (
 // PodIPRE tests if there's a valid IP in a easy way
 var PodIPRE = regexp.MustCompile(`\d{0,3}\.\d{0,3}\.\d{0,3}\.\d{0,3}`)
 
-// getPodList is a wapper around listing pods
+// getPodList is a wrapper around listing pods
 func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	var pods *v1.PodList
 	var err error
@@ -148,4 +148,26 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 	}
 	Logf("Got pod outbound IP %s", string(log))
 	return string(log), nil
+}
+
+// WaitPodTo returns True if pod is in the specific phase during
+// a short period of time
+func WaitPodTo(phase v1.PodPhase, cs clientset.Interface, podTemplate *v1.Pod, nsName string) (result bool, err error) {
+	if err := wait.PollImmediate(pullInterval, pullTimeout, func() (result bool, err error) {
+		pod, err := cs.CoreV1().Pods(nsName).Get(podTemplate.Name, metav1.GetOptions{})
+		if err != nil {
+			if IsRetryableAPIError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if pod.Status.Phase != phase {
+			Logf("waiting for the pod status to be %s, current status: %s", phase, pod.Status.Phase)
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return false, err
+	}
+	return true, err
 }
