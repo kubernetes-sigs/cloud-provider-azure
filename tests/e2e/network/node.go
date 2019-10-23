@@ -30,8 +30,10 @@ import (
 )
 
 var vmNameRE = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
+var vmssVMZoneLabelKey = "failure-domain.beta.kubernetes.io/zone"
+var vmssScaleUpCelling = 10
 
-var _ = Describe("Cloud Provider Azure cross resource group nodes", func() {
+var _ = Describe("Azure nodes", func() {
 	basename := "service-lb"
 	serviceName := "servicelb-test"
 
@@ -75,7 +77,30 @@ var _ = Describe("Cloud Provider Azure cross resource group nodes", func() {
 		ns = nil
 	})
 
-	It("should support nodes crossing resource groups [multi-group] [availabilitySet]", func() {
+	It("should expose zones correctly after created [VMSS][Serial][Slow]", func() {
+		utils.Logf("getting test VMSS")
+		vmss, err := utils.FindTestVMSS(tc, tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+		if vmss == nil {
+			Skip("only test cluster with VMSS")
+		}
+
+		utils.Logf("scaling VMSS")
+		count := *vmss.Sku.Capacity
+		err = utils.ScaleVMSS(tc, *vmss.Name, tc.GetResourceGroup(), int64(vmssScaleUpCelling))
+
+		defer func() {
+			utils.Logf("restoring VMSS")
+			err = utils.ScaleVMSS(tc, *vmss.Name, tc.GetResourceGroup(), count)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		utils.Logf("validating zone label")
+		err = utils.ValidateVMSSNodeLabels(tc, vmss, vmssVMZoneLabelKey)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should support crossing resource groups [Multi-Group][AvailabilitySet]", func() {
 		master, err := utils.GetMaster(cs)
 		Expect(err).NotTo(HaveOccurred())
 

@@ -31,9 +31,11 @@ import (
 )
 
 const (
-	deletionTimeout   = 10 * time.Minute
-	poll              = 2 * time.Second
-	singleCallTimeout = 10 * time.Minute
+	deletionTimeout       = 10 * time.Minute
+	poll                  = 2 * time.Second
+	singleCallTimeout     = 10 * time.Minute
+	vmssOperationInterval = 10 * time.Second
+	vmssOperationTimeout  = 20 * time.Minute
 )
 
 func findExistingKubeConfig() string {
