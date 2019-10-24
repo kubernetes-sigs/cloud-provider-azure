@@ -99,13 +99,27 @@ function dump-log() {
   echo "Finished dumping logs for ${node_name}"
 }
 
-# Dump systemd services logs from host $1 to local folder $2
+# Dump systemd services logs via a log dump pod $1 to a local folder $2
 function dump-systemd-log() {
   local -r pod_name="${1}"
   local -r dir="${2}"
   for systemd_service in "${systemd_services[@]}"; do
     echo "Dumping ${systemd_service}.log"
     kubectl exec "${pod_name}" -- journalctl --output=short-precise -u "${systemd_service}" > "${dir}/${systemd_service}.log"
+  done
+}
+
+# Convert json-based logs to slightly more human-readable logs
+function post-dump-log() {
+  local -r log_files=( $(find "${ARTIFACTS}" -name "*.log") )
+  for log_file in "${log_files[@]}"; do
+    # Delete unnecessary characters
+    sed -i 's/{"log":"//g' "${log_file}"
+    sed -i -e 's/\\n",.*$//g' "${log_file}"
+    # Unescape characters
+    sed -i 's/\\"/"/g' "${log_file}"
+    sed -i 's/\\u003c/</g' "${log_file}"
+    sed -i 's/\\u003e/>/g' "${log_file}"
   done
 }
 
@@ -134,6 +148,9 @@ function main() {
 
     dump-log "${node_name}" "${pod_name}" "${is_master}"
   done
+
+  post-dump-log
+
   echo "Logs successfully dumped to ${ARTIFACTS}"
 }
 
