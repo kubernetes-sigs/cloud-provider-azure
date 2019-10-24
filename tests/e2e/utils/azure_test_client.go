@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	azauth "github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization"
+	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	azresources "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
@@ -45,6 +46,8 @@ type AzureTestClient struct {
 	resourceClient        azresources.BaseClient
 	acrClient             acr.BaseClient
 	roleAssignmentsClient azauth.BaseClient
+	vmssClient            azcompute.BaseClient
+	vmssVMClient          azcompute.BaseClient
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
@@ -69,6 +72,12 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 
 	roleAssignmentsClient := azauth.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
 	roleAssignmentsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
+
+	vmssClient := azcompute.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
+	vmssClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
+
+	vmssVMClient := azcompute.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
+	vmssVMClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
 
 	kubeClient, err := CreateKubeClientSet()
 	if err != nil {
@@ -97,6 +106,8 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		resourceClient:        resourceBaseClient,
 		acrClient:             acrClient,
 		roleAssignmentsClient: roleAssignmentsClient,
+		vmssClient:            vmssClient,
+		vmssVMClient:          vmssVMClient,
 	}
 
 	return c, nil
@@ -160,6 +171,16 @@ func (tc *AzureTestClient) createACRClient() *acr.RegistriesClient {
 // createRoleAssignmentsClient generates authorization client with the same baseclient as azure test client
 func (tc *AzureTestClient) createRoleAssignmentsClient() *azauth.RoleAssignmentsClient {
 	return &azauth.RoleAssignmentsClient{BaseClient: tc.roleAssignmentsClient}
+}
+
+// createVMSSClient generates VMSS client with the same baseclient as azure test client
+func (tc *AzureTestClient) createVMSSClient() *azcompute.VirtualMachineScaleSetsClient {
+	return &azcompute.VirtualMachineScaleSetsClient{BaseClient: tc.vmssClient}
+}
+
+// createVMSSVMClient generates VMSS VM client with the same baseclient as azure test client
+func (tc *AzureTestClient) createVMSSVMClient() *azcompute.VirtualMachineScaleSetVMsClient {
+	return &azcompute.VirtualMachineScaleSetVMsClient{BaseClient: tc.vmssClient}
 }
 
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.
