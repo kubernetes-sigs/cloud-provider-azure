@@ -133,7 +133,7 @@ trap cleanup EXIT
 function main() {
   echo "Installing log-dump-daemonset.yaml via kubectl"
   kubectl apply -f "${script_dir}/log-dump-daemonset.yaml"
-  kubectl wait --for condition=ready pod --all --timeout=1m
+  kubectl wait --for condition=ready pod -l app=log-dump-node --timeout=5m
   echo "All pods from log-dump-daemonset are ready"
   kubectl get pod -owide
 
