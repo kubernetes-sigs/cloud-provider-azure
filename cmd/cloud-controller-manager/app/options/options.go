@@ -239,6 +239,10 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 		errors = append(errors, fmt.Errorf("--cloud-provider cannot be empty"))
 	}
 
+	if o.ServiceController.ConcurrentServiceSyncs != 1 {
+		errors = append(errors, fmt.Errorf("--concurrent-service-syncs is limited to 1 only"))
+	}
+
 	return utilerrors.NewAggregate(errors)
 }
 

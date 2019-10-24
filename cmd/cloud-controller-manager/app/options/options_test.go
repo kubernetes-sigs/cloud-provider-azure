@@ -256,3 +256,54 @@ func TestAddFlags(t *testing.T) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
 	}
 }
+
+func TestValidate(t *testing.T) {
+	testCases := []struct {
+		desc                                      string
+		expected                                  string
+		generateTestCloudControllerManagerOptions func() *CloudControllerManagerOptions
+	}{
+		{
+			desc:     "should not return an error when validating default options",
+			expected: "",
+			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
+				s, _ := NewCloudControllerManagerOptions()
+				return s
+			},
+		},
+		{
+			desc:     "should return an error when validating options with empty cloud provider",
+			expected: "--cloud-provider cannot be empty",
+			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
+				s, _ := NewCloudControllerManagerOptions()
+				s.KubeCloudShared.CloudProvider.Name = ""
+				return s
+			},
+		},
+		{
+			desc:     "should return an error when validating options with concurrent service syncs not equal to 1",
+			expected: "--concurrent-service-syncs is limited to 1 only",
+			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
+				s, _ := NewCloudControllerManagerOptions()
+				s.ServiceController.ConcurrentServiceSyncs = 10
+				return s
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := tc.generateTestCloudControllerManagerOptions()
+			err := s.Validate([]string{}, []string{})
+			var errMsg string
+			if err == nil {
+				errMsg = ""
+			} else {
+				errMsg = err.Error()
+			}
+			if errMsg != tc.expected {
+				t.Errorf("Expected error '%s' but got error '%s'", tc.expected, err)
+			}
+		})
+	}
+}
