@@ -18,8 +18,12 @@ package network
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
+	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -29,12 +33,240 @@ import (
 	"k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
+var vmProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)`)
+var vmssVMProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(\d+)`)
 var vmNameRE = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
 var vmssVMZoneLabelKey = "failure-domain.beta.kubernetes.io/zone"
 var vmssScaleUpCelling = 10
 
+var _ = Describe("Azure node resources", func() {
+	basename := "node-resources"
+
+	var cs clientset.Interface
+	var ns *v1.Namespace
+	var tc *utils.AzureTestClient
+
+	BeforeEach(func() {
+		var err error
+		cs, err = utils.CreateKubeClientSet()
+		Expect(err).NotTo(HaveOccurred())
+
+		ns, err = utils.CreateTestingNamespace(basename, cs)
+		Expect(err).NotTo(HaveOccurred())
+
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		err := utils.DeleteNamespace(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		cs = nil
+		ns = nil
+	})
+
+	It("should set node provider id correctly", func() {
+		utils.Logf("getting meta info of test environment")
+		authConfig := tc.GetAuthConfig()
+		subscriptionID := authConfig.SubscriptionID
+		rgName := tc.GetResourceGroup()
+
+		utils.Logf("getting VMs")
+		vms, err := utils.ListVMs(tc)
+		Expect(utils.HandleVMNotFoundErr(err)).To(BeTrue())
+
+		if vms != nil && len(*vms) != 0 {
+			for _, vm := range *vms {
+				nodeName, err := utils.GetVMComputerName(&vm)
+				Expect(err).NotTo(HaveOccurred())
+
+				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+				Expect(err).NotTo(HaveOccurred())
+
+				providerID := node.Spec.ProviderID
+				providerIDMatches := vmProviderIDRE.FindStringSubmatch(providerID)
+				Expect(len(providerIDMatches)).To(Equal(4))
+				Expect(strings.EqualFold(providerIDMatches[1], subscriptionID)).To(BeTrue())
+				Expect(strings.EqualFold(providerIDMatches[2], rgName)).To(BeTrue())
+				Expect(strings.EqualFold(providerIDMatches[3], *vm.Name)).To(BeTrue())
+			}
+		}
+
+		utils.Logf("getting VMSS VMs")
+		vmsses, err := utils.ListVMSSes(tc)
+		Expect(utils.HandleVMSSNotFoundErr(err)).To(BeTrue())
+
+		if vmsses != nil && len(*vmsses) != 0 {
+			for _, vmss := range *vmsses {
+				vmssVMs, err := utils.ListVMSSVMs(tc, *vmss.Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, vmssVM := range *vmssVMs {
+					nodeName, err := utils.GetVMSSVMComputerName(&vmssVM)
+					Expect(err).NotTo(HaveOccurred())
+
+					node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+					Expect(err).NotTo(HaveOccurred())
+
+					providerID := node.Spec.ProviderID
+					providerIDMatches := vmssVMProviderIDRE.FindStringSubmatch(providerID)
+					Expect(len(providerIDMatches)).To(Equal(5))
+					Expect(strings.EqualFold(providerIDMatches[1], subscriptionID)).To(BeTrue())
+					Expect(strings.EqualFold(providerIDMatches[2], rgName)).To(BeTrue())
+					Expect(strings.EqualFold(providerIDMatches[3], *vmss.Name)).To(BeTrue())
+					Expect(strings.EqualFold(providerIDMatches[4], *vmssVM.InstanceID)).To(BeTrue())
+				}
+			}
+		}
+	})
+
+	It("should set correct private IP address for every node", func() {
+		utils.Logf("getting all NICs of availabilitySet VMs")
+		vmasNICs, err := utils.ListNICs(tc, tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("getting all VMs managed by availabilitySet")
+		vmasVMs, err := utils.ListVMs(tc)
+		Expect(utils.HandleVMNotFoundErr(err)).To(BeTrue())
+
+		if vmasVMs != nil && len(*vmasVMs) != 0 {
+			for _, vmasVM := range *vmasVMs {
+				nodeName, err := utils.GetVMComputerName(&vmasVM)
+				Expect(err).NotTo(HaveOccurred())
+
+				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+				Expect(err).NotTo(HaveOccurred())
+
+				var privateIP string
+				for _, address := range node.Status.Addresses {
+					if address.Type == v1.NodeInternalIP {
+						privateIP = address.Address
+						break
+					}
+				}
+
+				nicIDs, err := utils.GetNicIDsFromVM(&vmasVM)
+				Expect(err).NotTo(HaveOccurred())
+
+				found := false
+
+			Loop:
+				for nicID := range nicIDs {
+					nic, err := utils.GetNICByID(nicID, vmasNICs)
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, ipConfig := range *nic.IPConfigurations {
+						if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+							found = true
+							break Loop
+						}
+					}
+				}
+				Expect(found).To(BeTrue())
+			}
+		}
+
+		utils.Logf("getting all scale sets")
+		vmsses, err := utils.ListVMSSes(tc)
+		Expect(utils.HandleVMSSNotFoundErr(err)).To(BeTrue())
+
+		utils.Logf("getting all NICs of VMSSes")
+		var vmssAllNics []network.Interface
+		vmssVMs := make([]compute.VirtualMachineScaleSetVM, 0)
+		if vmsses != nil && len(*vmsses) != 0 {
+			for _, vmss := range *vmsses {
+				vmssVMList, err := utils.ListVMSSVMs(tc, *vmss.Name)
+				Expect(err).NotTo(HaveOccurred())
+				vmssVMs = append(vmssVMs, *vmssVMList...)
+
+				vmssNics, err := utils.ListVMSSNICs(tc, *vmss.Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				vmssAllNics = append(vmssAllNics, *vmssNics...)
+			}
+		}
+
+		utils.Logf("getting all NICs of VMSS VMs")
+		if len(vmssVMs) != 0 {
+			utils.Logf("found %d VMSS VMs", len(vmssVMs))
+
+			for _, vmssVM := range vmssVMs {
+				nodeName, err := utils.GetVMSSVMComputerName(&vmssVM)
+				Expect(err).NotTo(HaveOccurred())
+
+				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+				Expect(err).NotTo(HaveOccurred())
+
+				var privateIP string
+				for _, address := range node.Status.Addresses {
+					if address.Type == v1.NodeInternalIP {
+						privateIP = address.Address
+						break
+					}
+				}
+
+				nicIDs, err := utils.GetNicIDsFromVMSSVM(&vmssVM)
+				Expect(err).NotTo(HaveOccurred())
+
+				found := false
+
+			VMSSLoop:
+				for nicID := range nicIDs {
+					nic, err := utils.GetNICByID(nicID, &vmssAllNics)
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, ipConfig := range *nic.IPConfigurations {
+						if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+							found = true
+							break VMSSLoop
+						}
+					}
+				}
+				Expect(found).To(BeTrue())
+			}
+		}
+	})
+
+	It("should set route table correctly when the cluster is enabled by kubenet [Kubenet]", func() {
+		utils.Logf("getting route table")
+		routeTables, err := utils.ListRouteTables(tc)
+		if err != nil {
+			if err == fmt.Errorf("no route table found") {
+				Skip("only test cluster with Kubenet network")
+			} else {
+				Fail(fmt.Sprintf("Unexpected err %v happens", err))
+			}
+		}
+
+		nodes, err := utils.GetAllNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+		nodeSet := make(map[string]interface{})
+		for _, node := range nodes {
+			nodeSet[node.Name] = true
+		}
+		utils.Logf("nodeSet: %v", nodeSet)
+
+		var succeeded bool
+		for _, routeTable := range *routeTables {
+			utils.Logf("getting all routes in route table %s", *routeTable.Name)
+			routeSet, err := utils.GetNodesInRouteTable(&routeTable)
+			Expect(err).NotTo(HaveOccurred())
+
+			utils.Logf("routeSet: %v", routeSet)
+
+			if reflect.DeepEqual(nodeSet, routeSet) {
+				succeeded = true
+				break
+			}
+		}
+
+		Expect(succeeded).To(BeTrue())
+	})
+})
+
 var _ = Describe("Azure nodes", func() {
-	basename := "service-lb"
+	basename := "azure-nodes"
 	serviceName := "servicelb-test"
 
 	var cs clientset.Interface

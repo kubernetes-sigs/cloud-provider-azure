@@ -32,6 +32,16 @@ const (
 	nodeLabelRole = "kubernetes.io/role"
 )
 
+// GetNode returns the node with the input name
+func GetNode(cs clientset.Interface, nodeName string) (*v1.Node, error) {
+	node, err := cs.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
 // GetAgentNodes obtains the list of agent nodes
 func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	nodesList, err := getNodeList(cs)
@@ -43,6 +53,19 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 		if !isMasterNode(&node) {
 			ret = append(ret, node)
 		}
+	}
+	return ret, nil
+}
+
+// GetAllNodes obtains the list of all nodes include master
+func GetAllNodes(cs clientset.Interface) ([]v1.Node, error) {
+	nodesList, err := getNodeList(cs)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]v1.Node, 0)
+	for _, node := range nodesList.Items {
+		ret = append(ret, node)
 	}
 	return ret, nil
 }

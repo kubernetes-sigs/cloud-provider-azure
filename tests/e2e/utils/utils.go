@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -178,4 +179,14 @@ func IsMasterNode(node *v1.Node) bool {
 	}
 
 	return false
+}
+
+// HandleVMNotFoundErr returns true if the input error is errVMNotFound or nil
+func HandleVMNotFoundErr(err error) bool {
+	return err == nil || reflect.DeepEqual(err, errVMNotFound)
+}
+
+// HandleVMSSNotFoundErr returns true if the input error is errVMSSNotFound or nil
+func HandleVMSSNotFoundErr(err error) bool {
+	return err == nil || reflect.DeepEqual(err, errVMSSNotFound)
 }

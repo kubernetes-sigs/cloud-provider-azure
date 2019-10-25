@@ -29,6 +29,7 @@ import (
 )
 
 var vmssVMRE = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
+var errVMSSNotFound = fmt.Errorf("cannot find any VMSS")
 
 // FindTestVMSS returns the first VMSS in the resource group,
 // assume the VMSS is in the cluster
@@ -193,4 +194,30 @@ func ListVMSSVMs(tc *AzureTestClient, vmssName string) (*[]azcompute.VirtualMach
 	}
 
 	return &res, nil
+}
+
+// ListVMSSes returns the list of scale sets
+func ListVMSSes(tc *AzureTestClient) (*[]azcompute.VirtualMachineScaleSet, error) {
+	vmssClient := tc.createVMSSClient()
+
+	list, err := vmssClient.List(context.Background(), tc.GetResourceGroup())
+	if err != nil {
+		return nil, err
+	}
+
+	res := list.Values()
+	if len(res) == 0 {
+		return nil, errVMSSNotFound
+	}
+
+	return &res, nil
+}
+
+// GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
+func GetVMSSVMComputerName(vm *azcompute.VirtualMachineScaleSetVM) (string, error) {
+	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
+		return "", fmt.Errorf("cannot find computer name from vmss vm %s", *vm.Name)
+	}
+
+	return *vm.OsProfile.ComputerName, nil
 }
