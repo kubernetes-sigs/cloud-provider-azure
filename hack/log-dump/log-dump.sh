@@ -21,6 +21,9 @@ set -o pipefail
 if ! command -v kubectl > /dev/null; then
   echo "kubectl not found"
   exit 1
+elif ! command -v jq > /dev/null; then
+  echo "jq not found"
+  exit 1
 elif [[ -z "${ARTIFACTS:-}" ]]; then
   echo "ARTIFACTS not set, defaulting to /workspace/_artifacts"
   export ARTIFACTS="/workspace/_artifacts"
@@ -75,6 +78,19 @@ function should-export-log() {
   echo "false"
 }
 
+# Check if log file $1 is exported from a systemd service
+function is-systemd-service() {
+  local -r log_file="${1}"
+  for systemd_service in "${systemd_services[@]}"; do
+    if [[ "${log_file}" =~ "${systemd_service}" ]]; then
+      echo "true"
+      return
+    fi
+  done
+
+  echo "false"
+}
+
 # Dump log files from node $1 to artifacts folder via a log dump pod $3
 # $3 if true if node $1 is master
 function dump-log() {
@@ -113,13 +129,11 @@ function dump-systemd-log() {
 function post-dump-log() {
   local -r log_files=( $(find "${ARTIFACTS}" -name "*.log") )
   for log_file in "${log_files[@]}"; do
-    # Delete unnecessary characters
-    sed -i 's/{"log":"//g' "${log_file}"
-    sed -i -e 's/\\n",.*$//g' "${log_file}"
-    # Unescape characters
-    sed -i 's/\\"/"/g' "${log_file}"
-    sed -i 's/\\u003c/</g' "${log_file}"
-    sed -i 's/\\u003e/>/g' "${log_file}"
+    # Do not convert systemd service logs because they are not in json format
+    if [[ "$(is-systemd-service "${log_file}")" == "false" ]]; then
+      # Select "log" field from json and remove lines with no character
+      cat "${log_file}" | jq -rs ".[].log" | sed "/^$/d" > "${log_file}.tmp" && mv "${log_file}.tmp" "${log_file}"
+    fi
   done
 }
 
@@ -133,11 +147,13 @@ trap cleanup EXIT
 function main() {
   echo "Installing log-dump-daemonset.yaml via kubectl"
   kubectl apply -f "${script_dir}/log-dump-daemonset.yaml"
-  kubectl wait --for condition=ready pod -l app=log-dump-node --timeout=5m
-  echo "All pods from log-dump-daemonset are ready"
+  if kubectl wait --for condition=ready pod -l app=log-dump-node --timeout=5m; then
+    echo "All pods from log-dump-daemonset are ready"
+  fi
   kubectl get pod -owide
 
-  local -r log_dump_pods=( $(kubectl get pod -l app=log-dump-node -ojsonpath={.items[*].metadata.name}) )
+  # Get pods in Running phase only in case some pods failed to run
+  local -r log_dump_pods=( $(kubectl get pod -l app=log-dump-node --field-selector=status.phase=Running -ojsonpath={.items[*].metadata.name}) )
   for pod_name in "${log_dump_pods[@]}"; do
     local node_name="$(get-node-name "${pod_name}")"
     if [[ "${node_name}" =~ "master" ]]; then
