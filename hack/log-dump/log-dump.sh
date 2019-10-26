@@ -21,6 +21,9 @@ set -o pipefail
 if ! command -v kubectl > /dev/null; then
   echo "kubectl not found"
   exit 1
+elif ! command -v jq > /dev/null; then
+  echo "jq not found"
+  exit 1
 elif [[ -z "${ARTIFACTS:-}" ]]; then
   echo "ARTIFACTS not set, defaulting to /workspace/_artifacts"
   export ARTIFACTS="/workspace/_artifacts"
@@ -75,6 +78,19 @@ function should-export-log() {
   echo "false"
 }
 
+# Check if log file $1 is exported from a systemd service
+function is-systemd-service() {
+  local -r log_file="${1}"
+  for systemd_service in "${systemd_services[@]}"; do
+    if [[ "${log_file}" =~ "${systemd_service}" ]]; then
+      echo "true"
+      return
+    fi
+  done
+
+  echo "false"
+}
+
 # Dump log files from node $1 to artifacts folder via a log dump pod $3
 # $3 if true if node $1 is master
 function dump-log() {
@@ -99,13 +115,25 @@ function dump-log() {
   echo "Finished dumping logs for ${node_name}"
 }
 
-# Dump systemd services logs from host $1 to local folder $2
+# Dump systemd services logs via a log dump pod $1 to a local folder $2
 function dump-systemd-log() {
   local -r pod_name="${1}"
   local -r dir="${2}"
   for systemd_service in "${systemd_services[@]}"; do
     echo "Dumping ${systemd_service}.log"
     kubectl exec "${pod_name}" -- journalctl --output=short-precise -u "${systemd_service}" > "${dir}/${systemd_service}.log"
+  done
+}
+
+# Convert json-based logs to slightly more human-readable logs
+function post-dump-log() {
+  local -r log_files=( $(find "${ARTIFACTS}" -name "*.log") )
+  for log_file in "${log_files[@]}"; do
+    # Do not convert systemd service logs because they are not in json format
+    if [[ "$(is-systemd-service "${log_file}")" == "false" ]]; then
+      # Select "log" field from json and remove lines with no character
+      cat "${log_file}" | jq -rs ".[].log" | sed "/^$/d" > "${log_file}.tmp" && mv "${log_file}.tmp" "${log_file}"
+    fi
   done
 }
 
@@ -119,11 +147,13 @@ trap cleanup EXIT
 function main() {
   echo "Installing log-dump-daemonset.yaml via kubectl"
   kubectl apply -f "${script_dir}/log-dump-daemonset.yaml"
-  kubectl wait --for condition=ready pod --all --timeout=1m
-  echo "All pods from log-dump-daemonset are ready"
+  if kubectl wait --for condition=ready pod -l app=log-dump-node --timeout=5m; then
+    echo "All pods from log-dump-daemonset are ready"
+  fi
   kubectl get pod -owide
 
-  local -r log_dump_pods=( $(kubectl get pod -l app=log-dump-node -ojsonpath={.items[*].metadata.name}) )
+  # Get pods in Running phase only in case some pods failed to run
+  local -r log_dump_pods=( $(kubectl get pod -l app=log-dump-node --field-selector=status.phase=Running -ojsonpath={.items[*].metadata.name}) )
   for pod_name in "${log_dump_pods[@]}"; do
     local node_name="$(get-node-name "${pod_name}")"
     if [[ "${node_name}" =~ "master" ]]; then
@@ -134,6 +164,9 @@ function main() {
 
     dump-log "${node_name}" "${pod_name}" "${is_master}"
   done
+
+  post-dump-log
+
   echo "Logs successfully dumped to ${ARTIFACTS}"
 }
 
