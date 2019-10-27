@@ -78,19 +78,6 @@ function should-export-log() {
   echo "false"
 }
 
-# Check if log file $1 is exported from a systemd service
-function is-systemd-service() {
-  local -r log_file="${1}"
-  for systemd_service in "${systemd_services[@]}"; do
-    if [[ "${log_file}" =~ "${systemd_service}" ]]; then
-      echo "true"
-      return
-    fi
-  done
-
-  echo "false"
-}
-
 # Dump log files from node $1 to artifacts folder via a log dump pod $3
 # $3 if true if node $1 is master
 function dump-log() {
@@ -129,8 +116,8 @@ function dump-systemd-log() {
 function post-dump-log() {
   local -r log_files=( $(find "${ARTIFACTS}" -name "*.log") )
   for log_file in "${log_files[@]}"; do
-    # Do not convert systemd service logs because they are not in json format
-    if [[ "$(is-systemd-service "${log_file}")" == "false" ]]; then
+    # Check if the log file can be parsed by jq
+    if cat "${log_file}" | jq -ers ".[].log" > /dev/null 2>&1; then
       # Select "log" field from json and remove lines with no character
       cat "${log_file}" | jq -rs ".[].log" | sed "/^$/d" > "${log_file}.tmp" && mv "${log_file}.tmp" "${log_file}"
     fi
