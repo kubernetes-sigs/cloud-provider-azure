@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 )
 
@@ -46,6 +48,23 @@ func ListNICs(tc *AzureTestClient, rgName string) (*[]network.Interface, error) 
 	}
 	value := list.Values()
 	return &value, err
+}
+
+// ListVMSSNICs returns the NIC list in the VMSS
+func ListVMSSNICs(tc *AzureTestClient, vmssName string) (*[]network.Interface, error) {
+	ic := tc.createInterfacesClient()
+
+	list, err := ic.ListVirtualMachineScaleSetNetworkInterfaces(context.Background(), tc.GetResourceGroup(), vmssName)
+	if err != nil {
+		return nil, err
+	}
+
+	res := list.Values()
+	if len(res) == 0 {
+		return nil, fmt.Errorf("cannot find NIC in the VMSS")
+	}
+
+	return &res, nil
 }
 
 // virtual machine availability set only, NIC on VMSS has another naming pattern
@@ -78,4 +97,45 @@ func GetTargetNICFromList(list *[]network.Interface, targetVMNamePrefix string) 
 	}
 	Logf("cannot find the target NIC in the given NIC list")
 	return nil, nil
+}
+
+// GetNicIDsFromVM returns the NIC ID in the VM
+func GetNicIDsFromVM(vm *compute.VirtualMachine) (map[string]interface{}, error) {
+	if vm.NetworkProfile == nil || vm.NetworkProfile.NetworkInterfaces == nil ||
+		len(*vm.NetworkProfile.NetworkInterfaces) == 0 {
+		return nil, fmt.Errorf("cannot obtain NIC on VM %s", *vm.Name)
+	}
+
+	nicIDSet := make(map[string]interface{})
+	for _, nic := range *vm.NetworkProfile.NetworkInterfaces {
+		nicIDSet[*nic.ID] = true
+	}
+
+	return nicIDSet, nil
+}
+
+// GetNicIDsFromVMSSVM returns the NIC ID in the VMSS VM
+func GetNicIDsFromVMSSVM(vm *compute.VirtualMachineScaleSetVM) (map[string]interface{}, error) {
+	if vm.NetworkProfile == nil || vm.NetworkProfile.NetworkInterfaces == nil ||
+		len(*vm.NetworkProfile.NetworkInterfaces) == 0 {
+		return nil, fmt.Errorf("cannot obtain NIC on VMSS VM %s", *vm.Name)
+	}
+
+	nicIDSet := make(map[string]interface{})
+	for _, nic := range *vm.NetworkProfile.NetworkInterfaces {
+		nicIDSet[*nic.ID] = true
+	}
+
+	return nicIDSet, nil
+}
+
+// GetNICByID returns the network interface with the input ID among the list
+func GetNICByID(nicID string, nicList *[]network.Interface) (*network.Interface, error) {
+	for _, nic := range *nicList {
+		if strings.EqualFold(*nic.ID, nicID) {
+			return &nic, nil
+		}
+	}
+
+	return nil, fmt.Errorf("network interface not found with ID %s", nicID)
 }
