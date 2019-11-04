@@ -14,7 +14,7 @@ go_library(
         "update.go",
         "watch.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/handlers",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/handlers",
     importpath = "k8s.io/apiserver/pkg/endpoints/handlers",
     visibility = ["//visibility:public"],
     deps = [

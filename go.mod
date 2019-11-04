@@ -1,4 +1,4 @@
-module k8s.io/cloud-provider-azure
+module sigs.k8s.io/cloud-provider-azure
 
 go 1.12
 

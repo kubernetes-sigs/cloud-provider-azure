@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/cloud-provider-azure/tests/e2e/utils"
+	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 	"k8s.io/legacy-cloud-providers/azure"
 
 	. "github.com/onsi/ginkgo"

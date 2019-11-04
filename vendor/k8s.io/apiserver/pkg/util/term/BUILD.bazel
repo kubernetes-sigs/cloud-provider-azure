@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["term.go"],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/util/term",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/util/term",
     importpath = "k8s.io/apiserver/pkg/util/term",
     visibility = ["//visibility:public"],
     deps = ["//vendor/github.com/docker/docker/pkg/term:go_default_library"],

@@ -3,16 +3,17 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "cross_rg_nodes.go",
         "ensureloadbalancer.go",
         "network_security_group.go",
+        "node.go",
         "service_annotations.go",
         "standard_lb.go",
     ],
-    importpath = "k8s.io/cloud-provider-azure/tests/e2e/network",
+    importpath = "sigs.k8s.io/cloud-provider-azure/tests/e2e/network",
     visibility = ["//visibility:public"],
     deps = [
         "//tests/e2e/utils:go_default_library",
+        "//vendor/github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute:go_default_library",
         "//vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest/to:go_default_library",
         "//vendor/github.com/onsi/ginkgo:go_default_library",

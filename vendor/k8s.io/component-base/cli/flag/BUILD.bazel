@@ -17,7 +17,7 @@ go_library(
         "string_flag.go",
         "tristate.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/component-base/cli/flag",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/component-base/cli/flag",
     importpath = "k8s.io/component-base/cli/flag",
     visibility = ["//visibility:public"],
     deps = [

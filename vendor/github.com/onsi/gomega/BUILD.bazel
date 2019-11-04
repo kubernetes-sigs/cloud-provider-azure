@@ -6,7 +6,7 @@ go_library(
         "gomega_dsl.go",
         "matchers.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/onsi/gomega",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/onsi/gomega",
     importpath = "github.com/onsi/gomega",
     visibility = ["//visibility:public"],
     deps = [

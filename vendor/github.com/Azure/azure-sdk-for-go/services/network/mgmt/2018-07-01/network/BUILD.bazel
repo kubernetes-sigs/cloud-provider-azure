@@ -59,7 +59,7 @@ go_library(
         "vpnsitesconfiguration.go",
         "watchers.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network",
     importpath = "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network",
     visibility = ["//visibility:public"],
     deps = [

@@ -6,7 +6,7 @@ go_library(
         "util.go",
         "vhd.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/rubiojr/go-vhd/vhd",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/rubiojr/go-vhd/vhd",
     importpath = "github.com/rubiojr/go-vhd/vhd",
     visibility = ["//visibility:public"],
 )

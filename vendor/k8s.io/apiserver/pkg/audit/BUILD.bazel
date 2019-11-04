@@ -10,7 +10,7 @@ go_library(
         "types.go",
         "union.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/audit",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/audit",
     importpath = "k8s.io/apiserver/pkg/audit",
     visibility = ["//visibility:public"],
     deps = [

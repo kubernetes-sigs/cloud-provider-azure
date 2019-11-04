@@ -25,7 +25,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"k8s.io/cloud-provider-azure/pkg/version"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 type versionValue int

@@ -31,7 +31,7 @@ make WHAT=cmd/kubectl
 export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
-export CLOUD_CONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
+export CLOUD_CONFIG=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
 
 # Replace the test_args with your own.
 go run hack/e2e.go -- --test --provider=local --check-version-skew=false --test_args=$1

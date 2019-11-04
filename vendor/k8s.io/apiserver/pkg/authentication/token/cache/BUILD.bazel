@@ -7,7 +7,7 @@ go_library(
         "cache_striped.go",
         "cached_token_authenticator.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/authentication/token/cache",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/authentication/token/cache",
     importpath = "k8s.io/apiserver/pkg/authentication/token/cache",
     visibility = ["//visibility:public"],
     deps = [

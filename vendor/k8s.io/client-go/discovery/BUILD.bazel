@@ -7,7 +7,7 @@ go_library(
         "doc.go",
         "helper.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/discovery",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/discovery",
     importpath = "k8s.io/client-go/discovery",
     visibility = ["//visibility:public"],
     deps = [

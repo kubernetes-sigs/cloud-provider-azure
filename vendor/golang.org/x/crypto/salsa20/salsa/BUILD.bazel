@@ -10,7 +10,7 @@ go_library(
         "salsa20_noasm.go",
         "salsa20_ref.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/golang.org/x/crypto/salsa20/salsa",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/golang.org/x/crypto/salsa20/salsa",
     importpath = "golang.org/x/crypto/salsa20/salsa",
     visibility = ["//visibility:public"],
 )

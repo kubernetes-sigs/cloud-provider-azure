@@ -6,7 +6,7 @@ go_library(
         "ipnet.go",
         "net.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/utils/net",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/utils/net",
     importpath = "k8s.io/utils/net",
     visibility = ["//visibility:public"],
 )

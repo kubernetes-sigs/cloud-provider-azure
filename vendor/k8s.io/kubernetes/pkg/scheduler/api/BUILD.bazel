@@ -9,7 +9,7 @@ go_library(
         "well_known_labels.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/scheduler/api",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/scheduler/api",
     importpath = "k8s.io/kubernetes/pkg/scheduler/api",
     visibility = ["//visibility:public"],
     deps = [

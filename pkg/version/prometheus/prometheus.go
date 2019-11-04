@@ -20,7 +20,7 @@ package prometheus
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/cloud-provider-azure/pkg/version"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 func init() {

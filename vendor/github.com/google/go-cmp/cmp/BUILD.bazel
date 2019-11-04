@@ -9,7 +9,7 @@ go_library(
         "reporter.go",
         "unsafe_reflect.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/google/go-cmp/cmp",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/google/go-cmp/cmp",
     importpath = "github.com/google/go-cmp/cmp",
     visibility = ["//visibility:public"],
     deps = [

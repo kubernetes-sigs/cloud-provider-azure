@@ -6,7 +6,7 @@ go_library(
         "doc.go",
         "matcher.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/admission/plugin/webhook/object",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/admission/plugin/webhook/object",
     importpath = "k8s.io/apiserver/pkg/admission/plugin/webhook/object",
     visibility = ["//visibility:public"],
     deps = [

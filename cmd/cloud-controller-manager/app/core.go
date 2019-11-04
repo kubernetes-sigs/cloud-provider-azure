@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	cloudprovider "k8s.io/cloud-provider"
-	cloudcontrollerconfig "k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
+	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"k8s.io/klog"
 	cloudcontrollers "k8s.io/kubernetes/pkg/controller/cloud"
 	routecontroller "k8s.io/kubernetes/pkg/controller/route"

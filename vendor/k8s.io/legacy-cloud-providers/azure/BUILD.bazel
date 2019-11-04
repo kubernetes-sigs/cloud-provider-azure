@@ -30,7 +30,7 @@ go_library(
         "azure_zones.go",
         "doc.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure",
     importpath = "k8s.io/legacy-cloud-providers/azure",
     visibility = ["//visibility:public"],
     deps = [

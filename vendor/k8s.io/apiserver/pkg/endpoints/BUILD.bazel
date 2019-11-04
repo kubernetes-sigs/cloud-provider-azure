@@ -7,7 +7,7 @@ go_library(
         "groupversion.go",
         "installer.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints",
     importpath = "k8s.io/apiserver/pkg/endpoints",
     visibility = ["//visibility:public"],
     deps = [

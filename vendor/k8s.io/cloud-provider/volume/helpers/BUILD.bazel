@@ -6,7 +6,7 @@ go_library(
         "rounding.go",
         "zones.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/cloud-provider/volume/helpers",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/cloud-provider/volume/helpers",
     importpath = "k8s.io/cloud-provider/volume/helpers",
     visibility = ["//visibility:public"],
     deps = [

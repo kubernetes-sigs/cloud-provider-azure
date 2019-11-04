@@ -7,7 +7,7 @@ go_library(
         "doc.go",
         "requestinfo.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/request",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/request",
     importpath = "k8s.io/apiserver/pkg/endpoints/request",
     visibility = ["//visibility:public"],
     deps = [

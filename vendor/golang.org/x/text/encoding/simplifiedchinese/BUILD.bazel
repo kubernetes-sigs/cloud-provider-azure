@@ -8,7 +8,7 @@ go_library(
         "hzgb2312.go",
         "tables.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/golang.org/x/text/encoding/simplifiedchinese",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/golang.org/x/text/encoding/simplifiedchinese",
     importpath = "golang.org/x/text/encoding/simplifiedchinese",
     visibility = ["//visibility:public"],
     deps = [

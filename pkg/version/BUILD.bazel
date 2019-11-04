@@ -7,7 +7,7 @@ go_library(
         "doc.go",
         "version.go",
     ],
-    importpath = "k8s.io/cloud-provider-azure/pkg/version",
+    importpath = "sigs.k8s.io/cloud-provider-azure/pkg/version",
     visibility = ["//visibility:public"],
     deps = ["//vendor/k8s.io/apimachinery/pkg/version:go_default_library"],
 )

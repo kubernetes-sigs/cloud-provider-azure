@@ -11,7 +11,7 @@ go_library(
         "command_win.go",
         "zsh_completions.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/spf13/cobra",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/spf13/cobra",
     importpath = "github.com/spf13/cobra",
     visibility = ["//visibility:public"],
     deps = [

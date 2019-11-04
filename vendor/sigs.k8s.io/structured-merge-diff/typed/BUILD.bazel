@@ -12,7 +12,7 @@ go_library(
         "union.go",
         "validate.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/typed",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/typed",
     importpath = "sigs.k8s.io/structured-merge-diff/typed",
     visibility = ["//visibility:public"],
     deps = [

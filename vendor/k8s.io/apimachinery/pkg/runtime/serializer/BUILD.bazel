@@ -6,7 +6,7 @@ go_library(
         "codec_factory.go",
         "negotiated_codec.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/runtime/serializer",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/runtime/serializer",
     importpath = "k8s.io/apimachinery/pkg/runtime/serializer",
     visibility = ["//visibility:public"],
     deps = [
