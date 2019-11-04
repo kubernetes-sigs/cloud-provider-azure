@@ -17,7 +17,7 @@
 set -e
 cd $(dirname "$BASH_SOURCE")/..
 
-VERSION_PKG=k8s.io/cloud-provider-azure/pkg/version
+VERSION_PKG=sigs.k8s.io/cloud-provider-azure/pkg/version
 LDFLAGS="-s -w"
 LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitVersion=$(git describe --tags --always --abbrev=9 || echo)"
 LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitCommit=$(git rev-parse HEAD)"

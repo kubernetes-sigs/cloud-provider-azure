@@ -8,7 +8,7 @@ go_library(
         "plugin.go",
         "reinvocationcontext.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/admission/plugin/webhook/mutating",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/admission/plugin/webhook/mutating",
     importpath = "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating",
     visibility = ["//visibility:public"],
     deps = [

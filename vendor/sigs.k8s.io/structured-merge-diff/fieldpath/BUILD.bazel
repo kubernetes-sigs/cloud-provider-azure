@@ -12,7 +12,7 @@ go_library(
         "serialize-pe.go",
         "set.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/fieldpath",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/fieldpath",
     importpath = "sigs.k8s.io/structured-merge-diff/fieldpath",
     visibility = ["//visibility:public"],
     deps = [

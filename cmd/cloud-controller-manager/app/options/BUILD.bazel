@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["options.go"],
-    importpath = "k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options",
+    importpath = "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options",
     visibility = ["//visibility:public"],
     deps = [
         "//cmd/cloud-controller-manager/app/apis/config:go_default_library",

@@ -13,7 +13,7 @@ go_library(
         "store.go",
         "watcher.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/etcd3",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/etcd3",
     importpath = "k8s.io/apiserver/pkg/storage/etcd3",
     visibility = ["//visibility:public"],
     deps = [

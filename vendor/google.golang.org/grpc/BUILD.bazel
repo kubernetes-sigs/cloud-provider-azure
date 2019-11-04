@@ -24,7 +24,7 @@ go_library(
         "trace.go",
         "version.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc",
     importpath = "google.golang.org/grpc",
     visibility = ["//visibility:public"],
     deps = [

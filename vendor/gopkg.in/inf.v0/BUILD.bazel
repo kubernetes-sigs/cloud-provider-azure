@@ -6,7 +6,7 @@ go_library(
         "dec.go",
         "rounder.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/gopkg.in/inf.v0",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/gopkg.in/inf.v0",
     importpath = "gopkg.in/inf.v0",
     visibility = ["//visibility:public"],
 )

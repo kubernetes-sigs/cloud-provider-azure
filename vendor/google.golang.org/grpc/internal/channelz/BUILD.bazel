@@ -10,7 +10,7 @@ go_library(
         "util_linux.go",
         "util_nonlinux.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc/internal/channelz",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc/internal/channelz",
     importpath = "google.golang.org/grpc/internal/channelz",
     visibility = ["//vendor/google.golang.org/grpc:__subpackages__"],
     deps = [

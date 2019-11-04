@@ -8,7 +8,7 @@ go_library(
         "console.go",
         "windows.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/docker/docker/pkg/term/windows",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/docker/docker/pkg/term/windows",
     importpath = "github.com/docker/docker/pkg/term/windows",
     visibility = ["//visibility:public"],
     deps = [

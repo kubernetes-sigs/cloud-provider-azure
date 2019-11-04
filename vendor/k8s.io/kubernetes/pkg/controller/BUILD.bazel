@@ -11,7 +11,7 @@ go_library(
         "informer_factory.go",
         "lookup_cache.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller",
     importpath = "k8s.io/kubernetes/pkg/controller",
     visibility = ["//visibility:public"],
     deps = [

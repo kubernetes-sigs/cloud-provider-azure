@@ -14,7 +14,7 @@ go_library(
         "tags.go",
         "version.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources",
     importpath = "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources",
     visibility = ["//visibility:public"],
     deps = [

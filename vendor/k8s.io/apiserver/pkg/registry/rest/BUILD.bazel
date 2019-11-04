@@ -13,7 +13,7 @@ go_library(
         "table.go",
         "update.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/registry/rest",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/registry/rest",
     importpath = "k8s.io/apiserver/pkg/registry/rest",
     visibility = ["//visibility:public"],
     deps = [

@@ -19,7 +19,7 @@ go_library(
         "cpu_x86.go",
         "cpu_x86.s",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/golang.org/x/sys/cpu",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/golang.org/x/sys/cpu",
     importpath = "golang.org/x/sys/cpu",
     visibility = ["//visibility:public"],
 )

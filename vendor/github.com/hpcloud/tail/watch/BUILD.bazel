@@ -9,7 +9,7 @@ go_library(
         "polling.go",
         "watch.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/hpcloud/tail/watch",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/hpcloud/tail/watch",
     importpath = "github.com/hpcloud/tail/watch",
     visibility = ["//visibility:public"],
     deps = [

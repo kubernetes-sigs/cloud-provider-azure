@@ -22,7 +22,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	ccmconfig "k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
+	ccmconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
 	"k8s.io/kubernetes/pkg/controller"
 )
 

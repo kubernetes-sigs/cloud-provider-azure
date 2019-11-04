@@ -7,7 +7,7 @@ go_library(
         "helpers.go",
         "types.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/version",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/version",
     importpath = "k8s.io/apimachinery/pkg/version",
     visibility = ["//visibility:public"],
 )

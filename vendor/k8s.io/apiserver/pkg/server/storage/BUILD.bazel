@@ -9,7 +9,7 @@ go_library(
         "storage_codec.go",
         "storage_factory.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/server/storage",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/server/storage",
     importpath = "k8s.io/apiserver/pkg/server/storage",
     visibility = ["//visibility:public"],
     deps = [

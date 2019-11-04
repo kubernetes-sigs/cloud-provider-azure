@@ -6,7 +6,7 @@ go_library(
         "handlers.go",
         "stats.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc/stats",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/google.golang.org/grpc/stats",
     importpath = "google.golang.org/grpc/stats",
     visibility = ["//visibility:public"],
 )

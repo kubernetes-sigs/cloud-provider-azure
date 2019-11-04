@@ -12,7 +12,7 @@ go_library(
         "open_mode_darwin.go",
         "windows.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/gopkg.in/fsnotify.v1",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/gopkg.in/fsnotify.v1",
     importpath = "gopkg.in/fsnotify.v1",
     visibility = ["//visibility:public"],
     deps = select({

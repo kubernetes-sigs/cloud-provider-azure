@@ -24,7 +24,7 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app"
+	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app"
 	"k8s.io/component-base/logs"
 
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins

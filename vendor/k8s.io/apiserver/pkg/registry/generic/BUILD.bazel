@@ -8,7 +8,7 @@ go_library(
         "options.go",
         "storage_decorator.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/registry/generic",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/registry/generic",
     importpath = "k8s.io/apiserver/pkg/registry/generic",
     visibility = ["//visibility:public"],
     deps = [

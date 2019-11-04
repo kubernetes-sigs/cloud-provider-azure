@@ -6,7 +6,7 @@ go_library(
         "node_controller.go",
         "node_lifecycle_controller.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/cloud",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/cloud",
     importpath = "k8s.io/kubernetes/pkg/controller/cloud",
     visibility = ["//visibility:public"],
     deps = [

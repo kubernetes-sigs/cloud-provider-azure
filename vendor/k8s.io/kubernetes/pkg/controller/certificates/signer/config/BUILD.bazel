@@ -7,7 +7,7 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/certificates/signer/config",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/certificates/signer/config",
     importpath = "k8s.io/kubernetes/pkg/controller/certificates/signer/config",
     visibility = ["//visibility:public"],
     deps = ["//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library"],

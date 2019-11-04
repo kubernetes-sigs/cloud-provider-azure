@@ -30,7 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/cloud-provider-azure/tests/e2e/utils"
+	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
 var vmProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)`)

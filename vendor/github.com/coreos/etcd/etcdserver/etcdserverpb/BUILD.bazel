@@ -8,7 +8,7 @@ go_library(
         "raft_internal_stringer.go",
         "rpc.pb.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/coreos/etcd/etcdserver/etcdserverpb",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/coreos/etcd/etcdserver/etcdserverpb",
     importpath = "github.com/coreos/etcd/etcdserver/etcdserverpb",
     visibility = ["//visibility:public"],
     deps = [

@@ -12,7 +12,7 @@ go_library(
         "impersonation.go",
         "requestinfo.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/filters",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/filters",
     importpath = "k8s.io/apiserver/pkg/endpoints/filters",
     visibility = ["//visibility:public"],
     deps = [

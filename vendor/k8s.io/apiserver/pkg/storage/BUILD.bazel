@@ -9,7 +9,7 @@ go_library(
         "selection_predicate.go",
         "util.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage",
     importpath = "k8s.io/apiserver/pkg/storage",
     visibility = ["//visibility:public"],
     deps = [

@@ -9,7 +9,7 @@ go_library(
         "role.go",
         "rolebinding.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/informers/rbac/v1alpha1",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/informers/rbac/v1alpha1",
     importpath = "k8s.io/client-go/informers/rbac/v1alpha1",
     visibility = ["//visibility:public"],
     deps = [

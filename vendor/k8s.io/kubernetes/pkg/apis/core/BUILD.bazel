@@ -15,7 +15,7 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/apis/core",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/apis/core",
     importpath = "k8s.io/kubernetes/pkg/apis/core",
     visibility = ["//visibility:public"],
     deps = [

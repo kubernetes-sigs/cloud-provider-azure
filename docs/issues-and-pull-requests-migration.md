@@ -20,7 +20,7 @@ In both cases, leave a link to the new created issue in the old issue.
 
 ## Pull request migration
 
-Basically we are migrating code from `k8s.io/legacy-cloud-providers/azure/` to `github.com/kubernetes/cloud-provider-azure/cloud-controller-manager/azureprovider`.
+Basically we are migrating code from `k8s.io/legacy-cloud-providers/azure/` to `github.com/kubernetes-sigs/cloud-provider-azure/cloud-controller-manager/azureprovider`.
 
 The following steps describe how to port an existing PR from kubernetes repository to this repository.
 

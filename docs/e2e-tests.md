@@ -53,8 +53,8 @@
 2. Build docker image `azure-cloud-controller-manager` and push it to your docker image repository.
 
     ```sh
-    git clone https://github.com/kubernetes/cloud-provider-azure $GOPATH/src/k8s.io/cloud-provider-azure
-    cd $GOPATH/src/k8s.io/cloud-provider-azure
+    git clone https://github.com/kubernetes-sigs/cloud-provider-azure $GOPATH/src/sigs.k8s.io/cloud-provider-azure
+    cd $GOPATH/src/sigs.k8s.io/cloud-provider-azure
     export IMAGE_REGISTRY=<username>
     make image push
     ```
@@ -78,7 +78,7 @@
    To connect the cluster:
 
     ```sh
-    export KUBECONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
+    export KUBECONFIG=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.$LOCATION.json
     kubectl cluster-info
     ```
 
@@ -99,7 +99,7 @@ make ginkgo
 export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
-export CLOUD_CONFIG=$GOPATH/src/k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
+export CLOUD_CONFIG=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
 
 # some test cases require ssh configurations
 export KUBE_SSH_KEY_PATH=path/to/ssh/privatekey

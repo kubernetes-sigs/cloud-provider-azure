@@ -8,7 +8,7 @@ go_library(
         "merge.go",
         "mergo.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/github.com/imdario/mergo",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/github.com/imdario/mergo",
     importpath = "github.com/imdario/mergo",
     visibility = ["//visibility:public"],
 )

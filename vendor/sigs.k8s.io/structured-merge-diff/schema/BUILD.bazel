@@ -7,7 +7,7 @@ go_library(
         "elements.go",
         "schemaschema.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/schema",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/schema",
     importpath = "sigs.k8s.io/structured-merge-diff/schema",
     visibility = ["//visibility:public"],
 )

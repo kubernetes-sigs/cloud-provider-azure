@@ -6,7 +6,7 @@ go_library(
         "metrics.go",
         "transformer.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/value",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/value",
     importpath = "k8s.io/apiserver/pkg/storage/value",
     visibility = ["//visibility:public"],
     deps = [

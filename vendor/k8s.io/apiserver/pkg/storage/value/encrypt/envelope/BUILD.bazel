@@ -6,7 +6,7 @@ go_library(
         "envelope.go",
         "grpc_service.go",
     ],
-    importmap = "k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope",
     importpath = "k8s.io/apiserver/pkg/storage/value/encrypt/envelope",
     visibility = ["//visibility:public"],
     deps = [
