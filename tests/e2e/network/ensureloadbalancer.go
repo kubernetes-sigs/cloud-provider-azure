@@ -28,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 	"k8s.io/legacy-cloud-providers/azure"
+	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
