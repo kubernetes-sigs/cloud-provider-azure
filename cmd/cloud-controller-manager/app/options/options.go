@@ -33,10 +33,6 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
-	ccmconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
-	ccmconfigscheme "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/scheme"
-	ccmconfigv1alpha1 "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/v1alpha1"
-	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog"
 	cmoptions "k8s.io/kubernetes/cmd/controller-manager/app/options"
@@ -44,6 +40,10 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/master/ports"
 	azureprovider "k8s.io/legacy-cloud-providers/azure"
+	ccmconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
+	ccmconfigscheme "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/scheme"
+	ccmconfigv1alpha1 "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/v1alpha1"
+	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 
 	// add the kubernetes feature gates
 	_ "k8s.io/kubernetes/pkg/features"

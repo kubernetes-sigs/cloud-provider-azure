@@ -35,16 +35,16 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cloudprovider "k8s.io/cloud-provider"
-	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
-	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
-	"sigs.k8s.io/cloud-provider-azure/pkg/version"
-	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/klog"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
 	"k8s.io/kubernetes/pkg/util/configz"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
+	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
+	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
 )
 
 const (
