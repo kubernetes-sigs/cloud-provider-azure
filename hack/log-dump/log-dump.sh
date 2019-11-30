@@ -37,11 +37,14 @@ readonly master_logfiles=(
   "kube-addon-manager"
   "cloud-controller-manager"
   "kube-proxy"
+  "cluster-autoscaler"
+  "cloud-node-manager"
 )
 readonly node_logfiles=(
   "csi-azuredisk"
   "csi-azurefile"
   "kube-proxy"
+  "cloud-node-manager"
 )
 readonly systemd_services=(
   "kubelet"

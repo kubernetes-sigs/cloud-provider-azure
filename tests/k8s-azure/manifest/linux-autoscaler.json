@@ -22,10 +22,15 @@
                     {
                         "name": "cluster-autoscaler",
                         "enabled": true,
-                        "config": {
-                            "minNodes": "1",
-                            "maxNodes": "5"
-                        }
+                        "pools": [
+                            {
+                                "name": "agentpool1",
+                                "config": {
+                                    "min-nodes": "1",
+                                    "max-nodes": "5"
+                                }
+                            }
+                        ]
                     }
                 ]
             }
