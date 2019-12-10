@@ -18,15 +18,14 @@ SHELL=/bin/bash -o pipefail
 BIN_DIR=bin
 PKG_CONFIG=.pkg_config
 PKG_CONFIG_CONTENT=$(shell cat $(PKG_CONFIG))
-TEST_RESULTS_DIR=testResults
+
 # TODO: fix code and enable more options
 # -E deadcode -E gocyclo -E vetshadow -E gas -E ineffassign
 GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint -e "don't use underscores in Go names"
 
-IMAGE_REGISTRY ?= local
-K8S_VERSION ?= v1.15.0
 AKSENGINE_VERSION ?= master
-HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
+
+TEST_RESULTS_DIR=testResults
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
@@ -37,6 +36,10 @@ CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 #The test args for Kubernetes e2e tests
 TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
+IMAGE_REGISTRY ?= local
+STAGING_REGISTRY := gcr.io/k8s-staging-provider-azure
+K8S_VERSION ?= v1.15.0
+HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
 # cloud controller manager image
 IMAGE_NAME=azure-cloud-controller-manager
@@ -49,6 +52,10 @@ NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
 BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
 BAZEL_ARGS ?=
 
+## --------------------------------------
+## Binaries
+## --------------------------------------
+
 .PHONY: all
 all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager
 
@@ -58,15 +65,31 @@ $(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-man
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*)
 	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
 
-.PHONY: image
-image:
+## --------------------------------------
+## Images
+## --------------------------------------
+
+.PHONY: build-ccm-image
+build-ccm-image:
 	docker build -t $(IMAGE) .
+
+.PHONY: build-node-image
+build-node-image:
 	docker build -t $(NODE_MANAGER_IMAGE) -f Dockerfile.node .
 
-.PHONY: push
-push:
+.PHONY: image
+image: build-ccm-image build-node-image
+
+.PHONY: push-ccm-image
+push-ccm-image:
 	docker push $(IMAGE)
+
+.PHONY: push-node-image
+push-node-image:
 	docker push $(NODE_MANAGER_IMAGE)
+
+.PHONY: push
+push: push-ccm-image push-node-image
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
@@ -74,8 +97,9 @@ ifneq ($(K8S_BRANCH), )
 	$(eval HYPERKUBE_IMAGE=$(IMAGE_REGISTRY)/hyperkube-amd64:$(K8S_VERSION))
 endif
 
-$(PKG_CONFIG):
-	hack/pkg-config.sh > $@
+## --------------------------------------
+## Tests
+## --------------------------------------
 
 .PHONY: test-unit
 test-unit: $(PKG_CONFIG)
@@ -85,7 +109,6 @@ ifdef JUNIT
 	hack/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
 endif
 
-# collection of check tests
 .PHONY: test-check
 test-check: test-lint-prepare test-lint test-boilerplate
 
@@ -135,10 +158,6 @@ test-e2e:
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
 
-.PHONY: deploy
-deploy: image hyperkube	push
-	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
-
 .PHONY: bazel-build
 bazel-build:
 # check if bazel exists
@@ -158,3 +177,18 @@ endif
 clean:
 	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
 	$(MAKE) bazel-clean
+
+$(PKG_CONFIG):
+	hack/pkg-config.sh > $@
+
+## --------------------------------------
+## Release
+## --------------------------------------
+
+.PHONY: deploy
+deploy: image push
+	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
+
+.PHONY: release-staging
+release-staging:
+	IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
