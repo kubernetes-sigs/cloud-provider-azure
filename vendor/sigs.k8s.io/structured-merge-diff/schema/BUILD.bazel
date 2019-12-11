@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "doc.go",
         "elements.go",
+        "equals.go",
         "schemaschema.go",
     ],
     importmap = "sigs.k8s.io/cloud-provider-azure/vendor/sigs.k8s.io/structured-merge-diff/schema",
