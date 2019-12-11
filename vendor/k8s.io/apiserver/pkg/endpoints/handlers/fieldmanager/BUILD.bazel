@@ -2,7 +2,14 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["fieldmanager.go"],
+    srcs = [
+        "buildmanagerinfo.go",
+        "capmanagers.go",
+        "fieldmanager.go",
+        "skipnonapplied.go",
+        "stripmeta.go",
+        "structuredmerge.go",
+    ],
     importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/handlers/fieldmanager",
     importpath = "k8s.io/apiserver/pkg/endpoints/handlers/fieldmanager",
     visibility = ["//visibility:public"],

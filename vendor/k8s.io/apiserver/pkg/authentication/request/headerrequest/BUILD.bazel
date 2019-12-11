@@ -7,7 +7,6 @@ go_library(
     importpath = "k8s.io/apiserver/pkg/authentication/request/headerrequest",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/authentication/authenticator:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/authentication/request/x509:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/authentication/user:go_default_library",
