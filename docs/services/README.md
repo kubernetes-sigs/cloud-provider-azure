@@ -66,7 +66,7 @@ Because the load balancer in a Kubernetes cluster is managed by Azure cloud prov
 >
 > * Public IP's used as instance-level public IP are mutually exclusive with outbound rules.
 
-Here is the recommend way to define the [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) when using seperate provisioning tools:
+Here is the recommend way to define the [outbound rules](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview) when using separate provisioning tools:
 
 * Create a separate IP (or multiple IPs for scale) in standard SKU for outbound rules. Make use of the [allocatedOutboundPorts](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview#snatports) parameter to allocate sufficient ports for your desired scenario scale.
 * Create a separate pool definition for outbound, and ensure all virtual machines or VMSS virtual machines are in this pool. Azure cloud provider will manage the load balancer rules with another pool, so that provisioning tools and Azure cloud provider won't affect each other.

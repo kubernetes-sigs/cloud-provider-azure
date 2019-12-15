@@ -163,7 +163,7 @@ var _ = FDescribe("Network security group", func() {
 		Expect(validateSharedSecurityRuleExists(nsg, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 	})
 
-	It("can set source IP prefixes automatically accroding to corresponding service tag", func() {
+	It("can set source IP prefixes automatically according to corresponding service tag", func() {
 		By("Creating service and wait it to expose")
 		annotation := map[string]string{
 			azure.ServiceAnnotationAllowedServiceTag: "AzureCloud",

@@ -38,8 +38,8 @@ Fixes to releasing branches should be merged in master branch first, and then po
 
 Version tags:
 - X.Y.0-alpha.0
-  - This is initial tag for a new release, it will be applied when a release branch is created. See below for detail 
-- X.Y.0-alpha.W, W > 0 
+  - This is initial tag for a new release, it will be applied when a release branch is created. See below for detail
+- X.Y.0-alpha.W, W > 0
   - Those version tags are periodically created if enough change accumulated. It does not have direct mapping with `X.Y.0-alpha.W` in Kubernetes upstream
 
 #### releasing branch
@@ -48,9 +48,9 @@ Release branch would be created when upstream release branch is created and firs
 
 Version tags:
 - X.Y.0-beta.0
-  - `X.Y.0-beta.0` would be tagged at first independent commit on release branch, the corresponding seperation point commit on master would be tagged `X.Y+1.0-alpha.0`
+  - `X.Y.0-beta.0` would be tagged at first independent commit on release branch, the corresponding separation point commit on master would be tagged `X.Y+1.0-alpha.0`
   - No new feature changes are allowed from this time on
-- X.Y.0-beta.W, W > 0 
+- X.Y.0-beta.W, W > 0
   - Those version tags are periodically created if enough change accumulated. It does not have direct mapping with `X.Y.0-beta.W` in Kubernetes upstream
 - X.Y.0
   - This is the final release version. When upstream `X.Y.0` tag rolls out, we will begin prepare `X.Y.0` release
