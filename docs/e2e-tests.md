@@ -24,7 +24,7 @@
   On Windows, you can install aks-engine via [Chocolatey](https://chocolatey.org/) by executing the command `choco install aks-engine`. You can install Chocolatey following the [instructions](https://chocolatey.org/install).
 
   On Linux, it could also be installed by following commands:
-  
+
   ```sh
   $ curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
   $ chmod 700 get-akse.sh
@@ -43,7 +43,7 @@
 - [kubectl](https://kubectl.docs.kubernetes.io/)
 
   Kubectl allows you to run command against Kubernetes cluster, which is also used for deploying CSI plugins. You can follow [here](https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-kubectl-binary-with-curl) to install kubectl. e.g. on Linux
-  
+
   ```sh
   curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
   chmod +x kubectl
@@ -61,7 +61,7 @@
 
 3. Deploy a Kubernetes cluster with the above `azure-cloud-controller-manager` image.
 
-   To deploy a cluster, export all the required environmetal variables first and then invoke `make deploy`:
+   To deploy a cluster, export all the required environmental variables first and then invoke `make deploy`:
 
     ```sh
     export RESOURCE_GROUP_NAME=<resource group name>
@@ -71,7 +71,7 @@
     export K8S_AZURE_SPSEC=<client secret>
     export K8S_AZURE_TENANTID=<tenant id>
     export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
-    
+
     make deploy
     ```
 

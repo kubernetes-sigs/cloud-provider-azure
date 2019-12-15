@@ -110,7 +110,7 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint-prepare test-lint test-boilerplate
+test-check: test-lint-prepare test-lint test-boilerplate test-spelling
 
 .PHONY: test-lint-prepare
 test-lint-prepare:
@@ -126,6 +126,10 @@ test-lint:
 test-boilerplate:
 	hack/verify-boilerplate.sh
 
+.PHONY: test-spelling
+test-spelling:
+	hack/verify-spelling.sh
+
 .PHONY: test-bazel
 test-bazel:
 	hack/verify-bazel.sh
@@ -135,16 +139,16 @@ update-prepare:
 	go get -u github.com/sgotti/glide-vc
 	go get -u github.com/Masterminds/glide
 
-.PHONY: update-dependencie
+.PHONY: update-dependencies
 update:
-	hack/update-dependencies.sh
+	hack/update-dependenciess.sh
 
 .PHONY: update-bazel
 update-bazel:
 	hack/update-bazel.sh
 
 .PHONY: test-update
-test-update: update-prepare update-dependencie update-bazel
+test-update: update-prepare update-dependencies update-bazel
 	git checkout glide.lock
 	git add -A .
 	git diff --staged --name-status --exit-code || { \

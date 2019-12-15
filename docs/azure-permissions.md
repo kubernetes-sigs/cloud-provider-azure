@@ -52,7 +52,7 @@ Microsoft.Compute/virtualMachineScaleSets/read
 Microsoft.Compute/virtualMachineScaleSets/virtualMachines/read
 Microsoft.Compute/virtualMachineScaleSets/virtualmachines/instanceView/read
 
-// Requred to add VM to LoadBalancer backendAddressPools
+// Required to add VM to LoadBalancer backendAddressPools
 Microsoft.Network/networkInterfaces/write
 // Required to add vmss to LoadBalancer backendAddressPools
 Microsoft.Compute/virtualMachineScaleSets/write
