@@ -14,5 +14,6 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/authorization/authorizer:go_default_library",
         "//vendor/k8s.io/client-go/informers:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
+        "//vendor/k8s.io/component-base/featuregate:go_default_library",
     ],
 )
