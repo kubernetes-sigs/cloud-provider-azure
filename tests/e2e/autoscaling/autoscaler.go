@@ -117,7 +117,8 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		By("Scale up")
 		targetNodeCount := initNodeCount + 1
 		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
-		utils.LogPodStatus(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+		err = utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scale down")
@@ -128,7 +129,8 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		Expect(err).NotTo(HaveOccurred())
 		targetNodeCount = initNodeCount
 		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
-		utils.LogPodStatus(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+		err = utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -147,17 +149,6 @@ func createPodSpec() (result v1.PodSpec) {
 				},
 			},
 		},
-	}
-	return
-}
-
-func createScalerPodManifest(name string) (result *v1.Pod) {
-	spec := createPodSpec()
-	result = &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: spec,
 	}
 	return
 }

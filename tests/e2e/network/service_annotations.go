@@ -42,10 +42,9 @@ import (
 )
 
 var (
-	scalesetRE                 = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-	lbNameRE                   = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
-	backendIPConfigurationRE   = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-	backendASIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/availabilitySets/(.+)/virtualMachines(?:.*)`)
+	scalesetRE               = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	lbNameRE                 = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
+	backendIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
 )
 
 const (
@@ -165,7 +164,8 @@ var _ = FDescribe("Service with annotation", func() {
 			By("Test subnet doesn't exist. Creating a new one...")
 			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet)
 			Expect(err).NotTo(HaveOccurred())
-			azureTestClient.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
+			err = azureTestClient.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
+			Expect(err).NotTo(HaveOccurred())
 		}
 
 		annotation := map[string]string{
@@ -441,8 +441,7 @@ func createServiceWithAnnotation(cs clientset.Interface, serviceName, nsName str
 // defaultDeployment returns a default deployment
 // running nginx image which exposes port 80
 func createNginxDeploymentManifest(name string, labels map[string]string) (result *appsv1.Deployment) {
-	var replicas int32
-	replicas = 5
+	var replicas int32 = 5
 	result = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

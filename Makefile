@@ -110,17 +110,19 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint-prepare test-lint test-boilerplate test-spelling
+test-check: test-lint test-boilerplate test-spelling test-gofmt test-govet
 
-.PHONY: test-lint-prepare
-test-lint-prepare:
-	GO111MODULE=off go get -u gopkg.in/alecthomas/gometalinter.v1
-	GO111MODULE=off gometalinter.v1 -i
+.PHONY: test-gofmt
+test-gofmt:
+	hack/verify-gofmt.sh
+
+.PHONY: test-govet
+test-govet:
+	hack/verify-govet.sh
 
 .PHONY: test-lint
 test-lint:
-	gometalinter.v1 $(GOMETALINTER_OPTION) ./ ./cmd/cloud-controller-manager/...
-	gometalinter.v1 $(GOMETALINTER_OPTION) -e "should not use dot imports" tests/e2e/...
+	hack/verify-golint.sh
 
 .PHONY: test-boilerplate
 test-boilerplate:
@@ -134,27 +136,20 @@ test-spelling:
 test-bazel:
 	hack/verify-bazel.sh
 
-.PHONY: update-prepare
-update-prepare:
-	go get -u github.com/sgotti/glide-vc
-	go get -u github.com/Masterminds/glide
-
 .PHONY: update-dependencies
-update:
-	hack/update-dependenciess.sh
+update-dependencies:
+	hack/update-dependencies.sh
 
 .PHONY: update-bazel
 update-bazel:
 	hack/update-bazel.sh
 
-.PHONY: test-update
-test-update: update-prepare update-dependencies update-bazel
-	git checkout glide.lock
-	git add -A .
-	git diff --staged --name-status --exit-code || { \
-		echo "You have committed changes after running 'make update', please check"; \
-		exit 1; \
-	} \
+.PHONY: update-gofmt
+update-gofmt:
+	hack/update-gofmt.sh
+
+.PHONY: update
+update: update-dependencies update-bazel update-gofmt
 
 test-e2e:
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)

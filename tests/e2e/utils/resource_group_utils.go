@@ -42,7 +42,6 @@ func CreateTestResourceGroup(tc *AzureTestClient) (*resources.Group, func(string
 		Expect(err).NotTo(HaveOccurred())
 		err = WaitForDeleteResourceGroupCompletion(gc, future, rgName)
 		Expect(err).NotTo(HaveOccurred())
-		return
 	}
 }
 

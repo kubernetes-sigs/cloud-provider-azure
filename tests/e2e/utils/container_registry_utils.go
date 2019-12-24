@@ -60,6 +60,9 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 
 	Logf("Deleting acr %s in resource group %s.", registryName, rgName)
 	future, err := acrClient.Delete(context.Background(), rgName, registryName)
+	if err != nil {
+		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %v", registryName, rgName, err)
+	}
 	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
 	if err != nil {
 		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %v", registryName, rgName, err)

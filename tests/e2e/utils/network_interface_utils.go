@@ -29,7 +29,6 @@ import (
 var (
 	nicIDConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/networkInterfaces/(.+)`)
 	vmasNamePrefixRE     = regexp.MustCompile(`(.+)-nic-\d+`)
-	nicNameRE            = regexp.MustCompile(`k8s-.+-\d+-.+`)
 )
 
 // ListNICs returns the NIC list in the given resource group
