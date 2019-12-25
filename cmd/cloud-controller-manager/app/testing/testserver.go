@@ -88,7 +88,10 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
-	fs.Parse(customFlags)
+	err = fs.Parse(customFlags)
+	if err != nil {
+		return TestServer{}, err
+	}
 
 	if s.SecureServing.BindPort != 0 {
 		s.SecureServing.Listener, s.SecureServing.BindPort, err = createListenerOnFreePort()
