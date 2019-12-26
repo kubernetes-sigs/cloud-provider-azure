@@ -63,11 +63,8 @@ func GetAllNodes(cs clientset.Interface) ([]v1.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]v1.Node, 0)
-	for _, node := range nodesList.Items {
-		ret = append(ret, node)
-	}
-	return ret, nil
+
+	return nodesList.Items, nil
 }
 
 // GetMaster returns the master node
