@@ -165,7 +165,10 @@ func TestAddFlags(t *testing.T) {
 		"--secure-port=10001",
 		"--use-service-account-credentials=false",
 	}
-	fs.Parse(args)
+	err := fs.Parse(args)
+	if err != nil {
+		t.Fatalf("Parse flags failed: %v", err)
+	}
 
 	expected := &CloudControllerManagerOptions{
 		Generic: &cmoptions.GenericControllerManagerConfigurationOptions{

@@ -28,17 +28,17 @@ import (
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/apiserver/pkg/util/term"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/klog"
+	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
+	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
-	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/component-base/cli/globalflag"
-	"k8s.io/klog"
-	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
-	utilflag "k8s.io/kubernetes/pkg/util/flag"
 )
 
 // NewCloudNodeManagerCommand creates a *cobra.Command object with default parameters
