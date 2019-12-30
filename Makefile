@@ -77,6 +77,9 @@ build-ccm-image:
 build-node-image:
 	docker build -t $(NODE_MANAGER_IMAGE) -f Dockerfile.node .
 
+.PHONY: build-images
+build-images: build-ccm-image build-node-image
+
 .PHONY: image
 image: build-ccm-image build-node-image
 
@@ -90,6 +93,9 @@ push-node-image:
 
 .PHONY: push
 push: push-ccm-image push-node-image
+
+.PHONY: push-images
+push-images: push-ccm-image push-node-image
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )
