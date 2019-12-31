@@ -40,7 +40,13 @@ IMAGE_REGISTRY ?= local
 STAGING_REGISTRY := gcr.io/k8s-staging-provider-azure
 K8S_VERSION ?= v1.15.0
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
-IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
+
+ifndef TAG
+	IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
+else 
+	IMAGE_TAG ?= $(TAG)
+endif
+
 # cloud controller manager image
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
