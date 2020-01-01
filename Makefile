@@ -35,7 +35,7 @@ K8S_BRANCH ?=
 CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 #The test args for Kubernetes e2e tests
 TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
-
+ 
 IMAGE_REGISTRY ?= local
 STAGING_REGISTRY := gcr.io/k8s-staging-provider-azure
 K8S_VERSION ?= v1.15.0
