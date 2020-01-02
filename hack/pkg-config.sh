@@ -15,11 +15,19 @@
 # limitations under the License.
 
 set -e
-cd $(dirname "$BASH_SOURCE")/..
+cd $(dirname "${BASH_SOURCE}")/..
+
+if [ "${ENABLE_GIT_COMMANDS}" = true ]; then
+  GIT_VERSION=$(git describe --tags --always --abbrev=9 || echo)
+  GIT_COMMIT=$(git rev-parse HEAD)
+else
+  GIT_VERSION="latest"
+  GIT_COMMIT="latest"
+fi
 
 VERSION_PKG=sigs.k8s.io/cloud-provider-azure/pkg/version
 LDFLAGS="-s -w"
-LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitVersion=$(git describe --tags --always --abbrev=9 || echo)"
-LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitCommit=$(git rev-parse HEAD)"
+LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitVersion=${GIT_VERSION}"
+LDFLAGS="$LDFLAGS -X $VERSION_PKG.gitCommit=${GIT_COMMIT}"
 LDFLAGS="$LDFLAGS -X $VERSION_PKG.buildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 echo -ldflags \'$LDFLAGS\'
