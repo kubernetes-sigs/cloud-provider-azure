@@ -190,7 +190,7 @@ clean:
 	$(MAKE) bazel-clean
 
 $(PKG_CONFIG):
-	hack/pkg-config.sh > $@
+	ENABLE_GIT_COMMANDS=$(ENABLE_GIT_COMMAND) hack/pkg-config.sh > $@
 
 ## --------------------------------------
 ## Release
@@ -202,4 +202,4 @@ deploy: image push
 
 .PHONY: release-staging
 release-staging:
-	IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
+	ENABLE_GIT_COMMANDS=false IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
