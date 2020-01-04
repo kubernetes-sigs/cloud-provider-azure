@@ -18,8 +18,8 @@ cloud-provider-azure is still under **alpha** stage and its releases are maintai
 
 The latest version of azure-cloud-controller-manager and azure-cloud-node-manager could be found at
 
-* `mcr.microsoft.com/k8s/core/azure-cloud-controller-manager:v0.4.0`
-* `mcr.microsoft.com/k8s/core/azure-cloud-node-manager:v0.4.0`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.4.1`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.4.1`
 
 Version matrix:
 
