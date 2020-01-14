@@ -159,7 +159,7 @@ func deleteNode(cs clientset.Interface, name string) error {
 }
 
 // WaitAutoScaleNodes returns nodes count after autoscaling in 30 minutes
-func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
+func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown bool) error {
 	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
 	var nodes []v1.Node
 	var err error
@@ -178,7 +178,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int) error {
 			return false, err
 		}
 		Logf("Detect %v nodes, target %v", len(nodes), targetNodeCount)
-		return targetNodeCount == len(nodes), nil
+		return (targetNodeCount > len(nodes) && isScaleDown) || targetNodeCount == len(nodes), nil
 	}) == wait.ErrWaitTimeout {
 		return fmt.Errorf("Fail to get target node count in limited time")
 	}
