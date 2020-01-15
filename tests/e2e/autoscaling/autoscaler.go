@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -116,7 +116,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 
 		By("Scale up")
 		targetNodeCount := initNodeCount + 1
-		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
+		err = utils.WaitAutoScaleNodes(cs, targetNodeCount, false)
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -128,7 +128,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		_, err = cs.AppsV1().Deployments(ns.Name).Update(deployment)
 		Expect(err).NotTo(HaveOccurred())
 		targetNodeCount = initNodeCount
-		err = utils.WaitAutoScaleNodes(cs, targetNodeCount)
+		err = utils.WaitAutoScaleNodes(cs, targetNodeCount, true)
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.LogPodStatus(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
