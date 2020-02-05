@@ -27,7 +27,11 @@
                                     "max-nodes": "5"
                                 }
                             }
-                        ]
+                        ],
+                        "config": {
+                            "scale-down-delay-after-add": "5m",
+                            "scale-down-unneeded-time": "5m"
+                        }
                     }
                 ]
             }
