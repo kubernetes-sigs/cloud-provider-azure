@@ -84,8 +84,13 @@
 
 To check out more of the deployed cluster , replace `kubectl cluster-info` with other `kubectl` commands. To further debug and diagnose cluster problems, use `kubectl cluster-info dump`
 
+4. Get kubetest binary
 
-4. Run E2E tests
+```sh
+go get -u k8s.io/test-infra/kubetest
+```
+
+5. Run E2E tests
 
 Please first ensure the kubernetes project locates at `$GOPATH/src/k8s.io/kubernetes`, the e2e tests will be built from that location.
 
@@ -106,5 +111,5 @@ export KUBE_SSH_KEY_PATH=path/to/ssh/privatekey
 export KUBE_SSH_USER={ssh_user}
 
 # Replace the test_args with your own.
-go run hack/e2e.go -- --test --provider=local --check-version-skew=false --test_args='--ginkgo.focus=Port\sforwarding'
+kubetest --test --provider=local --check-version-skew=false --test_args='--ginkgo.focus=Port\sforwarding'
 ```
