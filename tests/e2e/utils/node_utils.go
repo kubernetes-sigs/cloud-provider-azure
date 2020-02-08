@@ -30,6 +30,7 @@ import (
 
 const (
 	nodeLabelRole = "kubernetes.io/role"
+	typeLabel     = "type"
 )
 
 // GetNode returns the node with the input name
@@ -50,7 +51,7 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	}
 	ret := make([]v1.Node, 0)
 	for _, node := range nodesList.Items {
-		if !isMasterNode(&node) {
+		if !isMasterNode(&node) && !isVirtualKubeletNode(&node) {
 			ret = append(ret, node)
 		}
 	}
@@ -190,6 +191,13 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 // * a kubernetes.io/role="master" label
 func isMasterNode(node *v1.Node) bool {
 	if val, ok := node.Labels[nodeLabelRole]; ok && val == "master" {
+		return true
+	}
+	return false
+}
+
+func isVirtualKubeletNode(node *v1.Node) bool {
+	if val, ok := node.Labels[typeLabel]; ok && val == "virtual-kubelet" {
 		return true
 	}
 	return false

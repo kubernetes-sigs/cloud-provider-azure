@@ -43,7 +43,7 @@ HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_V
 
 ifndef TAG
 	IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
-else 
+else
 	IMAGE_TAG ?= $(TAG)
 endif
 
@@ -167,7 +167,7 @@ test-e2e:
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
 
 test-ccm-e2e:
-	go test ./tests/e2e/ -timeout 0 -v $(CCM_E2E_ARGS)
+	go test ./tests/e2e/ -timeout 0 -v -ginkgo.v $(CCM_E2E_ARGS)
 
 .PHONY: bazel-build
 bazel-build:
