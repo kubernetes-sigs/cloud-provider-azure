@@ -1,6 +1,6 @@
 # Cloud provider config
 
-This doc describes cloud provider config file, which is to be used via `--cloud-config` flag of azure-cloud-controller-manager.
+This doc describes cloud provider config file, which is to be used via the `--cloud-config` flag of azure-cloud-controller-manager.
 
 Here is a config file sample:
 
@@ -26,7 +26,7 @@ Here is a config file sample:
 }
 ```
 
-Note: All values are of string type if not explicitly called out.
+Note: All values are of type `string` if not explicitly called out.
 
 ## Auth configs
 
@@ -83,7 +83,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |loadBalancerResourceGroup|Resource group name of the load balancer user want to use, default value is the name of cluster's resource group|String value of rg's name, optional|
 |loadBalancerName|The name of the load balancer user want to use. If not set, default naming pattern is used.|String value, optional|
 |excludeMasterFromStandardLB|ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.|Boolean value, default to true.|
-|disableOutboundSNAT| Disable outbound SNAT for SLB | Default to false and avaible since v1.11.9, v1.12.7, v1.13.5 and v1.14.0|
+|disableOutboundSNAT| Disable outbound SNAT for SLB | Default to false and available since v1.11.9, v1.12.7, v1.13.5 and v1.14.0|
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
 |routeTableResourceGroup| The resource group name for routeTable | Default same as resourceGroup and available since v1.15.0 |
 |cloudConfigType| The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.| Default to `merge`.  and available since v1.15.0 |
@@ -104,9 +104,9 @@ In other words, if you use multiple agent pools (scale sets), and `loadBalancerS
 
 ### excludeMasterFromStandardLB
 
-Master nodes would not add to the backends of Azure LoadBalancer (ALB) if `excludeMasterFromStandardLB` is set.
+Master nodes are not added to the backends of Azure Load Balancer (ALB) if `excludeMasterFromStandardLB` is set.
 
-By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want adding the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
+By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want to add the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
 
 ### Setting Azure cloud provider from Kubernetes secrets
 
