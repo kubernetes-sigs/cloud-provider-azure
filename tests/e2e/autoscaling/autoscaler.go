@@ -17,6 +17,7 @@ limitations under the License.
 package autoscaling
 
 import (
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -84,16 +85,17 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 			quantity := node.Status.Capacity[v1.ResourceCPU]
 			initNodeCapacity.Add(quantity)
 		}
-		utils.Logf("Initial number of cores: %v", initNodeCapacity.Value())
+		utils.Logf("Initial number of cores: %vm", initNodeCapacity.MilliValue())
 
 		runningQuantity, err := utils.GetAvailableNodeCapacity(cs)
 		Expect(err).NotTo(HaveOccurred())
 		emptyQuantity := initNodeCapacity.DeepCopy()
 		emptyQuantity.Sub(runningQuantity)
 
-		podCount = int(emptyQuantity.MilliValue()/podSize) + 1
-		utils.Logf("%vm space are already in use", runningQuantity.Value())
-		utils.Logf("will create %v pod, each %vm size", podCount, podSize)
+		// Calculate the number of pods needed in a deployment to trigger a scale up operation
+		podCount = int(math.Ceil(float64(emptyQuantity.MilliValue())/float64(podSize))) + 1
+		utils.Logf("%vm space are already in use", runningQuantity.MilliValue())
+		utils.Logf("will create %v pods in a deployment, each pod requests %vm size", podCount, podSize)
 	})
 
 	AfterEach(func() {
