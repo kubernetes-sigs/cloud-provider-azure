@@ -34,7 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Network security group", func() {
+var _ = Describe("Network security group", func() {
 	basename := "nsg"
 	serviceName := "nsg-test"
 
@@ -149,7 +149,7 @@ var _ = FDescribe("Network security group", func() {
 		ip2, err := createAndWaitServiceExposure(cs, ns.Name, serviceName2, annotation, labels, ports)
 		defer func() {
 			By("Cleaning up")
-			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
