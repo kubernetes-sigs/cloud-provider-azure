@@ -35,7 +35,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Ensure LoadBalancer", func() {
+var _ = Describe("Ensure LoadBalancer", func() {
 	basename := "service-lb"
 	serviceName := "servicelb-test"
 

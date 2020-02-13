@@ -54,7 +54,7 @@ const (
 	pullTimeout     = 10 * time.Minute
 )
 
-var _ = FDescribe("Service with annotation", func() {
+var _ = Describe("Service with annotation", func() {
 	basename := "service"
 	serviceName := "annotation-test"
 
@@ -118,10 +118,15 @@ var _ = FDescribe("Service with annotation", func() {
 					}
 				}()
 				code = resp.StatusCode
-				if resp.StatusCode == nginxStatusCode {
+				if code == nginxStatusCode {
 					break
+				} else {
+					utils.Logf("Received %d status code from %s", code, url)
 				}
+			} else {
+				utils.Logf("Received the following error when validating %s: %v", url, err)
 			}
+			utils.Logf("Retrying in 20 seconds")
 			time.Sleep(20 * time.Second)
 		}
 		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")

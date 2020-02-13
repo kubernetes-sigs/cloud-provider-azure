@@ -102,6 +102,7 @@ github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0/go.mod h1:eEKB0N0r
 github.com/docker/go-connections v0.3.0/go.mod h1:Gbd7IOopHjR8Iph03tsViu4nIes5XhDvyHbTtUxmeec=
 github.com/docker/go-units v0.4.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/docker/libnetwork v0.8.0-dev.2.0.20190624125649-f0e46a78ea34/go.mod h1:93m0aTqz6z+g32wla4l4WxTrdtvBRmVzYRkYvasA5Z8=
+github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96 h1:cenwrSVm+Z7QLSV/BsnenAOcDXdX4cMv4wP0B/5QbPg=
 github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
@@ -488,13 +489,16 @@ k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200118001809-596
 k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200118001809-59603c6e503c/go.mod h1:2Gsj2VJhAB6dTcnR+841H51LUCyhufQPSzTQWRnevwY=
 k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200118001809-59603c6e503c h1:uMsraD2HwYVZXyS+YRuQXJdoQKl0P+ylZ8QCE+3kdKg=
 k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200118001809-59603c6e503c/go.mod h1:cTBtMr/eUcihQ4sFhgiDPlmlFpn1xBY37yQ+zNcT1IE=
+k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200118001809-59603c6e503c h1:v2eilBIDNyF7a+XH+JkLBjmGMFkAR3/B+eHmOaJWrxk=
 k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200118001809-59603c6e503c/go.mod h1:za6HqWgDNrKSvaq+Zg8GwyNeZifm/H9eMXr7yLJ+UdA=
+k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200118001809-59603c6e503c h1:SmFVlYGhjVc1whHL/Qpy3ZEPtCtgP0GRfAXabr//eLQ=
 k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200118001809-59603c6e503c/go.mod h1:LO9jViQKnx/FqMjlXE9SmKjZ3I4PE/SLsaDWKTlmiRw=
 k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator v0.0.0-20200118001809-59603c6e503c/go.mod h1:vh3GqAHrJU/N5vuEaKFmWYb78D7L6fiVBS4Id3OyDSc=
 k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200118001809-59603c6e503c h1:aaQtZGPxltDQbDrn8sXCS7qbLEsrqP32N+izWJJwOGk=
 k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200118001809-59603c6e503c/go.mod h1:mKHow8zS1GpDcLHlAgghj2BKPOZrpEIHA30lWyRF3gg=
 k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20200118001809-59603c6e503c/go.mod h1:6SB+e2ragxZ8CPWrgNZ7F9KkCFykx5zQjnLVP2SWQ00=
 k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200118001809-59603c6e503c/go.mod h1:8rHmgUeQCsvaVrSy79lQc3DKD5PQp9cJH0DLw2GSAdk=
+k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200118001809-59603c6e503c h1:FqMC9gHnzWqPQhvA1mjpJ+l0webCI7xzTlT6u5Rc8Gk=
 k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200118001809-59603c6e503c/go.mod h1:xacTENgh5ed/fa8fjur271/livetYIFI+P81WK+Ez9s=
 k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200118001809-59603c6e503c/go.mod h1:oHq6KV/WjiamPxKs2Np7JxcOEwHXfMybRBnLrMsTOHs=
 k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200118001809-59603c6e503c h1:UM47V+MxZ9tDF1wib3002Ca8DH826PPySS4nHRJLfVs=
