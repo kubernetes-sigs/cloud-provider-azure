@@ -100,13 +100,9 @@ func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 
 // GetAvailableNodeCapacity will calculate the overall quantity of
 // cpu requested by all running pods in all namespaces
-func GetAvailableNodeCapacity(cs clientset.Interface) (resource.Quantity, error) {
+func GetAvailableNodeCapacity(cs clientset.Interface, agentNodeNames []string) (resource.Quantity, error) {
 	var result resource.Quantity
 	namespaceList, err := getNamespaceList(cs)
-	if err != nil {
-		return result, err
-	}
-	masterNodeNames, err := obtainMasterNodeNames(cs)
 	if err != nil {
 		return result, err
 	}
@@ -119,12 +115,14 @@ func GetAvailableNodeCapacity(cs clientset.Interface) (resource.Quantity, error)
 			continue
 		}
 		for _, pod := range podList.Items {
+			var cpuRequest resource.Quantity
 			if pod.Status.Phase == v1.PodRunning {
-				if !stringInSlice(pod.Spec.NodeName, masterNodeNames) {
+				if stringInSlice(pod.Spec.NodeName, agentNodeNames) {
 					for _, container := range pod.Spec.Containers {
-						cpuRequest := container.Resources.Requests[v1.ResourceCPU]
-						result.Add(cpuRequest)
+						cpuRequest.Add(container.Resources.Requests[v1.ResourceCPU])
 					}
+					result.Add(cpuRequest)
+					Logf("%s in %s requested %vm core (total: %vm)", pod.Name, pod.Spec.NodeName, cpuRequest.MilliValue(), result.MilliValue())
 				}
 			}
 		}
@@ -201,18 +199,4 @@ func isVirtualKubeletNode(node *v1.Node) bool {
 		return true
 	}
 	return false
-}
-
-func obtainMasterNodeNames(cs clientset.Interface) ([]string, error) {
-	masters := make([]string, 0)
-	nodeList, err := getNodeList(cs)
-	if err != nil {
-		return masters, err
-	}
-	for _, node := range nodeList.Items {
-		if isMasterNode(&node) {
-			masters = append(masters, node.Name)
-		}
-	}
-	return masters, nil
 }

@@ -87,7 +87,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		}
 		utils.Logf("Initial number of cores: %vm", initNodeCapacity.MilliValue())
 
-		runningQuantity, err := utils.GetAvailableNodeCapacity(cs)
+		runningQuantity, err := utils.GetAvailableNodeCapacity(cs, initNodesNames)
 		Expect(err).NotTo(HaveOccurred())
 		emptyQuantity := initNodeCapacity.DeepCopy()
 		emptyQuantity.Sub(runningQuantity)
