@@ -39,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
+	azcache "k8s.io/legacy-cloud-providers/azure/cache"
 
 	"k8s.io/component-base/featuregate"
 	utilnet "k8s.io/utils/net"
@@ -65,14 +66,15 @@ const (
 	nodeLabelRole  = "kubernetes.io/role"
 	nicFailedState = "Failed"
 
-	storageAccountNameMaxLength = 24
+	storageAccountNameMaxLength   = 24
+	frontendIPConfigNameMaxLength = 80
+	loadBalancerRuleNameMaxLength = 80
 )
 
 var errNotInVMSet = errors.New("vm is not in the vmset")
 var providerIDRE = regexp.MustCompile(`^` + CloudProviderName + `://(?:.*)/Microsoft.Compute/virtualMachines/(.+)$`)
 var backendPoolIDRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/backendAddressPools/(?:.*)`)
 var nicResourceGroupRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(?:.*)`)
-var publicIPResourceGroupRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPAddresses/(?:.*)`)
 
 // getStandardMachineID returns the full identifier of a virtual machine.
 func (az *Cloud) getStandardMachineID(subscriptionID, resourceGroup, machineName string) string {
@@ -93,31 +95,31 @@ func (az *Cloud) getAvailabilitySetID(resourceGroup, availabilitySetName string)
 }
 
 // returns the full identifier of a loadbalancer frontendipconfiguration.
-func (az *Cloud) getFrontendIPConfigID(lbName, fipConfigName string) string {
+func (az *Cloud) getFrontendIPConfigID(lbName, rgName, fipConfigName string) string {
 	return fmt.Sprintf(
 		frontendIPConfigIDTemplate,
 		az.SubscriptionID,
-		az.ResourceGroup,
+		rgName,
 		lbName,
 		fipConfigName)
 }
 
 // returns the full identifier of a loadbalancer backendpool.
-func (az *Cloud) getBackendPoolID(lbName, backendPoolName string) string {
+func (az *Cloud) getBackendPoolID(lbName, rgName, backendPoolName string) string {
 	return fmt.Sprintf(
 		backendPoolIDTemplate,
 		az.SubscriptionID,
-		az.ResourceGroup,
+		rgName,
 		lbName,
 		backendPoolName)
 }
 
 // returns the full identifier of a loadbalancer probe.
-func (az *Cloud) getLoadBalancerProbeID(lbName, lbRuleName string) string {
+func (az *Cloud) getLoadBalancerProbeID(lbName, rgName, lbRuleName string) string {
 	return fmt.Sprintf(
 		loadBalancerProbeIDTemplate,
 		az.SubscriptionID,
-		az.ResourceGroup,
+		rgName,
 		lbName,
 		lbRuleName)
 }
@@ -274,12 +276,21 @@ func getBackendPoolName(ipv6DualStackEnabled bool, clusterName string, service *
 	return clusterName
 }
 
-func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protocol, port int32, subnetName *string) string {
+func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protocol, port int32) string {
 	prefix := az.getRulePrefix(service)
-	if subnetName == nil {
-		return fmt.Sprintf("%s-%s-%d", prefix, protocol, port)
+	ruleName := fmt.Sprintf("%s-%s-%d", prefix, protocol, port)
+	subnet := subnet(service)
+	if subnet == nil {
+		return ruleName
 	}
-	return fmt.Sprintf("%s-%s-%s-%d", prefix, *subnetName, protocol, port)
+
+	// Load balancer rule name must be less or equal to 80 characters, so excluding the hyphen two segments cannot exceed 79
+	subnetSegment := *subnet
+	if len(ruleName)+len(subnetSegment)+1 > loadBalancerRuleNameMaxLength {
+		subnetSegment = subnetSegment[:loadBalancerRuleNameMaxLength-len(ruleName)-1]
+	}
+
+	return fmt.Sprintf("%s-%s-%s-%d", prefix, subnetSegment, protocol, port)
 }
 
 func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string) string {
@@ -317,10 +328,17 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 	return strings.HasPrefix(*fip.Name, baseName)
 }
 
-func (az *Cloud) getFrontendIPConfigName(service *v1.Service, subnetName *string) string {
+func (az *Cloud) getFrontendIPConfigName(service *v1.Service) string {
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
+	subnetName := subnet(service)
 	if subnetName != nil {
-		return fmt.Sprintf("%s-%s", baseName, *subnetName)
+		ipcName := fmt.Sprintf("%s-%s", baseName, *subnetName)
+
+		// Azure lb front end configuration name must not exceed 80 characters
+		if len(ipcName) > frontendIPConfigNameMaxLength {
+			ipcName = ipcName[:frontendIPConfigNameMaxLength]
+		}
+		return ipcName
 	}
 	return baseName
 }
@@ -374,14 +392,14 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 	var machine compute.VirtualMachine
 	var err error
 
-	machine, err = as.getVirtualMachine(types.NodeName(name), cacheReadTypeUnsafe)
+	machine, err = as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err == cloudprovider.InstanceNotFound {
 		return "", cloudprovider.InstanceNotFound
 	}
 	if err != nil {
 		if as.CloudProviderBackoff {
 			klog.V(2).Infof("GetInstanceIDByNodeName(%s) backing off", name)
-			machine, err = as.GetVirtualMachineWithRetry(types.NodeName(name), cacheReadTypeUnsafe)
+			machine, err = as.GetVirtualMachineWithRetry(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 			if err != nil {
 				klog.V(2).Infof("GetInstanceIDByNodeName(%s) abort backoff", name)
 				return "", err
@@ -402,7 +420,7 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 
 // GetPowerStatusByNodeName returns the power state of the specified node.
 func (as *availabilitySet) GetPowerStatusByNodeName(name string) (powerState string, err error) {
-	vm, err := as.getVirtualMachine(types.NodeName(name), cacheReadTypeDefault)
+	vm, err := as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeDefault)
 	if err != nil {
 		return powerState, err
 	}
@@ -435,7 +453,7 @@ func (as *availabilitySet) GetNodeNameByProviderID(providerID string) (types.Nod
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
 func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error) {
-	machine, err := as.getVirtualMachine(types.NodeName(name), cacheReadTypeUnsafe)
+	machine, err := as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		klog.Errorf("as.GetInstanceTypeByNodeName(%s) failed: as.getVirtualMachine(%s) err=%v", name, name, err)
 		return "", err
@@ -447,7 +465,7 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error
 // GetZoneByNodeName gets availability zone for the specified node. If the node is not running
 // with availability zone, then it returns fault domain.
 func (as *availabilitySet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
-	vm, err := as.getVirtualMachine(types.NodeName(name), cacheReadTypeUnsafe)
+	vm, err := as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return cloudprovider.Zone{}, err
 	}
@@ -648,7 +666,7 @@ func extractResourceGroupByNicID(nicID string) (string, error) {
 func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName string) (network.Interface, error) {
 	var machine compute.VirtualMachine
 
-	machine, err := as.GetVirtualMachineWithRetry(types.NodeName(nodeName), cacheReadTypeDefault)
+	machine, err := as.GetVirtualMachineWithRetry(types.NodeName(nodeName), azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.V(2).Infof("GetPrimaryInterface(%s, %s) abort backoff", nodeName, vmSetName)
 		return network.Interface{}, err
@@ -690,9 +708,9 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName stri
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-	nic, err := as.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
-	if err != nil {
-		return network.Interface{}, err
+	nic, rerr := as.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
+	if rerr != nil {
+		return network.Interface{}, rerr.Error()
 	}
 
 	return nic, nil

@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "doc.go",
+        "interface.go",
+    ],
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure/clients/routeclient/mockrouteclient",
+    importpath = "k8s.io/legacy-cloud-providers/azure/clients/routeclient/mockrouteclient",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network:go_default_library",
+        "//vendor/github.com/golang/mock/gomock:go_default_library",
+        "//vendor/k8s.io/legacy-cloud-providers/azure/retry:go_default_library",
+    ],
+)
