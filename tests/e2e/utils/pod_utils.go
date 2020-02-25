@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"regexp"
 	"time"
 
@@ -40,7 +41,7 @@ func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	var pods *v1.PodList
 	var err error
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		pods, err = cs.CoreV1().Pods(ns).List(metav1.ListOptions{})
+		pods, err = cs.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
@@ -88,13 +89,13 @@ func DeletePodsInNamespace(cs clientset.Interface, ns string) error {
 
 // DeletePod deletes a single pod
 func DeletePod(cs clientset.Interface, ns string, podName string) error {
-	err := cs.CoreV1().Pods(ns).Delete(podName, nil)
+	err := cs.CoreV1().Pods(ns).Delete(context.TODO(), podName, nil)
 	Logf("Deleting pod %s in namespace %s", podName, ns)
 	if err != nil {
 		return err
 	}
 	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-		if _, err := cs.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{}); err != nil {
+		if _, err := cs.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{}); err != nil {
 			return apierrs.IsNotFound(err), nil
 		}
 		return false, nil
@@ -104,7 +105,7 @@ func DeletePod(cs clientset.Interface, ns string, podName string) error {
 // CreatePod creates a new pod
 func CreatePod(cs clientset.Interface, ns string, manifest *v1.Pod) error {
 	Logf("creating pod %s in namespace %s", manifest.Name, ns)
-	_, err := cs.CoreV1().Pods(ns).Create(manifest)
+	_, err := cs.CoreV1().Pods(ns).Create(context.TODO(), manifest, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -114,14 +115,14 @@ func CreatePod(cs clientset.Interface, ns string, manifest *v1.Pod) error {
 // GetPodLogs gets the log of the given pods
 func GetPodLogs(cs clientset.Interface, ns, podName string, opts *v1.PodLogOptions) ([]byte, error) {
 	Logf("getting the log of pod %s", podName)
-	return cs.CoreV1().Pods(ns).GetLogs(podName, opts).Do().Raw()
+	return cs.CoreV1().Pods(ns).GetLogs(podName, opts).Do(context.TODO()).Raw()
 }
 
 // GetPodOutboundIP returns the outbound IP of the given pod
 func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string) (string, error) {
 	var log []byte
 	err := wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {
-		pod, err := cs.CoreV1().Pods(nsName).Get(podTemplate.Name, metav1.GetOptions{})
+		pod, err := cs.CoreV1().Pods(nsName).Get(context.TODO(), podTemplate.Name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
@@ -154,7 +155,7 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 // a short period of time
 func WaitPodTo(phase v1.PodPhase, cs clientset.Interface, podTemplate *v1.Pod, nsName string) (result bool, err error) {
 	if err := wait.PollImmediate(pullInterval, pullTimeout, func() (result bool, err error) {
-		pod, err := cs.CoreV1().Pods(nsName).Get(podTemplate.Name, metav1.GetOptions{})
+		pod, err := cs.CoreV1().Pods(nsName).Get(context.TODO(), podTemplate.Name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil

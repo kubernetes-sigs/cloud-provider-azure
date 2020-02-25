@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -78,7 +79,7 @@ func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namesp
 	var got *v1.Namespace
 	if err := wait.PollImmediate(poll, 30*time.Second, func() (bool, error) {
 		var err error
-		got, err = cs.CoreV1().Namespaces().Create(namespaceObj)
+		got, err = cs.CoreV1().Namespaces().Create(context.TODO(), namespaceObj, metav1.CreateOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
@@ -96,7 +97,7 @@ func getNamespaceList(cs clientset.Interface) (*v1.NamespaceList, error) {
 	var list *v1.NamespaceList
 	if err := wait.PollImmediate(poll, 30*time.Second, func() (bool, error) {
 		var err error
-		list, err = cs.CoreV1().Namespaces().List(metav1.ListOptions{})
+		list, err = cs.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
@@ -114,12 +115,12 @@ func getNamespaceList(cs clientset.Interface) (*v1.NamespaceList, error) {
 // whether there are any pods remaining in a non-terminating state.
 func DeleteNamespace(cs clientset.Interface, namespace string) error {
 	Logf("Deleting namespace %s", namespace)
-	if err := cs.CoreV1().Namespaces().Delete(namespace, nil); err != nil {
+	if err := cs.CoreV1().Namespaces().Delete(context.TODO(), namespace, nil); err != nil {
 		return err
 	}
 	// wait for namespace to delete or timeout.
 	err := wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-		if _, err := cs.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
+		if _, err := cs.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
 			if apierrs.IsNotFound(err) {
 				return true, nil
 			}

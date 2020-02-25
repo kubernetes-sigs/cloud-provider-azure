@@ -17,6 +17,7 @@ limitations under the License.
 package network
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -28,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -294,12 +296,12 @@ var _ = Describe("Azure nodes", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
