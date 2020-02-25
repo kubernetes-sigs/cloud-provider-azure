@@ -165,7 +165,7 @@ func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
 
 // UpdateNodeStatus updates the node status, such as node addresses
 func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
-	nodes, err := cnc.kubeClient.CoreV1().Nodes().List(metav1.ListOptions{
+	nodes, err := cnc.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
 		ResourceVersion: "0",
 		FieldSelector:   fields.OneTermEqualSelector("metadata.name", cnc.nodeName).String(),
 	})
@@ -349,7 +349,7 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) {
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
-	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %v", node.Name, err))
 		return
@@ -373,7 +373,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 	})
 
 	err = clientretry.RetryOnConflict(UpdateNodeSpecBackoff, func() error {
-		curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+		curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -382,7 +382,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 			modify(curNode)
 		}
 
-		_, err = cnc.kubeClient.CoreV1().Nodes().Update(curNode)
+		_, err = cnc.kubeClient.CoreV1().Nodes().Update(context.TODO(), curNode, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
