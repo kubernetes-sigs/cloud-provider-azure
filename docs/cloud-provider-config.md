@@ -89,6 +89,8 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
 |routeTableResourceGroup| The resource group name for routeTable | Default same as resourceGroup and available since v1.15.0 |
 |cloudConfigType| The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.| Default to `merge`.  and available since v1.15.0 |
+|loadBalancerName| Working together with loadBalancerResourceGroup to determine the LB name in a different resource group | Since v1.18.0 | String value, default is cluster name setting on kube-controller-manager|
+|loadBalancerResourceGroup | The load balancer resource group name, which is different from node resource group | Since v1.18.0 | String value, default is same as resourceGroup|
 
 ### primaryAvailabilitySetName
 
@@ -151,6 +153,53 @@ subjects:
 - kind: ServiceAccount
   name: azure-cloud-provider
   namespace: kube-system
+```
+
+### per client rate limiting
+
+Since v1.18.0, the original global rate limiting has been switched to per-client. A set of new rate limit configure options are introduced for each client, which includes:
+
+
+- routeRateLimit
+- SubnetsRateLimit
+- InterfaceRateLimit
+- RouteTableRateLimit
+- LoadBalancerRateLimit
+- PublicIPAddressRateLimit
+- SecurityGroupRateLimit
+- VirtualMachineRateLimit
+- StorageAccountRateLimit
+- DiskRateLimit
+- SnapshotRateLimit
+- VirtualMachineScaleSetRateLimit 
+- VirtualMachineSizeRateLimit
+
+The original rate limiting options ("cloudProviderRateLimitBucket", "cloudProviderRateLimitBucketWrite", "cloudProviderRateLimitQPS", "cloudProviderRateLimitQPSWrite") are still supported, and they would be the default values if per-client rate limiting is not configured.
+
+Here is an example of per-client config:
+
+```json
+{
+        // default rate limit (enabled).
+        "cloudProviderRatelimit": true,
+		"cloudProviderRateLimitBucket": 1,
+		"cloudProviderRateLimitBucketWrite": 1,
+		"cloudProviderRateLimitQPS": 1,
+		"cloudProviderRateLimitQPSWrite": 1,
+		"virtualMachineScaleSetRateLimit": {
+			// VMSS specific (enabled).
+			"cloudProviderRatelimit": true,
+			"cloudProviderRateLimitBucket": 2,
+			"CloudProviderRateLimitBucketWrite": 2,
+			"cloudProviderRateLimitQPS": 0,
+			"CloudProviderRateLimitQPSWrite": 0
+		},
+		"loadBalancerRateLimit": {
+			// LB specific (disabled)
+			"cloudProviderRatelimit": false
+		},
+        ... // other cloud provider configs
+}
 ```
 
 ## Run Kubelet without Azure identity
