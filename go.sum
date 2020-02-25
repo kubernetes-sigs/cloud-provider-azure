@@ -510,8 +510,8 @@ k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200225053900-1dd25a9efc31/
 k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200225053900-1dd25a9efc31/go.mod h1:gpiIUEAyQvSEXKbsH2taOEzkrHXvoZwHuArWgR+DpG8=
 k8s.io/repo-infra v0.0.1-alpha.1/go.mod h1:wO1t9WaB99V80ljbeENTnayuEEwNZt7gECYh/CEyOJ8=
 k8s.io/system-validators v1.0.4/go.mod h1:HgSgTg4NAGNoYYjKsUyk52gdNi2PVDswQ9Iyn66R7NI=
-k8s.io/utils v0.0.0-20191114184206-e782cd3c129f h1:GiPwtSzdP43eI1hpPCbROQCCIgCuiMMNF8YUVLF3vJo=
-k8s.io/utils v0.0.0-20191114184206-e782cd3c129f/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
+k8s.io/utils v0.0.0-20200117235808-5f6fbceb4c31 h1:KCcLuc/HD1RogJgEbZi9ObRuLv1bgiRCfAbidLKrUpg=
+k8s.io/utils v0.0.0-20200117235808-5f6fbceb4c31/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
 modernc.org/golex v1.0.0/go.mod h1:b/QX9oBD/LhixY6NDh+IdGv17hgB+51fET1i2kPSmvk=
 modernc.org/mathutil v1.0.0/go.mod h1:wU0vUrJsVWBZ4P6e7xtFJEhFSNsfRLJ8H458uRjg03k=

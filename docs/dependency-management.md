@@ -35,9 +35,8 @@ To update their versions, you need switch to `$GOPATH/src/k8s.io/kubernetes`, ch
 the version you want upgrade to, and finally run the following commands to get the go modules expected version:
 
 ```sh
-commit=$(git log --date=format:'%Y%m%d%H%M%S' -1 | head -n 1 | awk '{print $2}' | cut -c1-12)
-date=$(git log --date=format:'%Y%m%d%H%M%S' -1 | awk '/Date:/{print $2}')
-echo "v0.0.0-$date-$commit"
+commit=$(TZ=UTC git --no-pager show --quiet --abbrev=12 --date='format-local:%Y%m%d%H%M%S' --format="%cd-%h")
+echo "v0.0.0-$commit"
 ```
 
 After this, replace all kubernetes and staging versions (e.g. `v0.0.0-20190815230911-4e7fd98763aa` in above example) in `go.mod`.

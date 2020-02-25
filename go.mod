@@ -415,7 +415,7 @@ replace (
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.1-alpha.1
 	k8s.io/sample-apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200225053900-1dd25a9efc31
 	k8s.io/system-validators => k8s.io/system-validators v1.0.4
-	k8s.io/utils => k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
+	k8s.io/utils => k8s.io/utils v0.0.0-20200117235808-5f6fbceb4c31
 	modernc.org/cc => modernc.org/cc v1.0.0
 	modernc.org/golex => modernc.org/golex v1.0.0
 	modernc.org/mathutil => modernc.org/mathutil v1.0.0
