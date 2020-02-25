@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -35,7 +36,7 @@ const (
 
 // GetNode returns the node with the input name
 func GetNode(cs clientset.Interface, nodeName string) (*v1.Node, error) {
-	node, err := cs.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := cs.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	var nodes *v1.NodeList
 	var err error
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		nodes, err = cs.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodes, err = cs.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return false, nil
 		}
@@ -143,13 +144,13 @@ func DeleteNodes(cs clientset.Interface, names []string) error {
 //deleteNodes deletes nodes according to names
 func deleteNode(cs clientset.Interface, name string) error {
 	Logf("Deleting node: %s", name)
-	if err := cs.CoreV1().Nodes().Delete(name, nil); err != nil {
+	if err := cs.CoreV1().Nodes().Delete(context.TODO(), name, nil); err != nil {
 		return err
 	}
 
 	// wait for node to delete or timeout.
 	err := wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-		if _, err := cs.CoreV1().Nodes().Get(name, metav1.GetOptions{}); err != nil {
+		if _, err := cs.CoreV1().Nodes().Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			return apierrs.IsNotFound(err), nil
 		}
 		return false, nil

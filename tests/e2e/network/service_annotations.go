@@ -17,6 +17,7 @@ limitations under the License.
 package network
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -79,12 +80,12 @@ var _ = Describe("Service with annotation", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -243,7 +244,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, testPIPName, *rg.Name)
 			Expect(err).NotTo(HaveOccurred())
@@ -255,7 +256,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
 		service.Spec.LoadBalancerIP = *pip.IPAddress
-		_, err = cs.CoreV1().Services(ns.Name).Create(service)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
@@ -294,12 +295,12 @@ var _ = Describe("[MultipleAgentPools][VMSS]", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -431,7 +432,7 @@ func getAzureLoadBalancerFromPIP(pip, pipResourceGroup, lbResourceGroup string) 
 func createServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
 	By("Creating service " + serviceName + " in namespace " + nsName)
 	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, nsName, ports)
-	_, err := cs.CoreV1().Services(nsName).Create(service)
+	_, err := cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
 
@@ -508,7 +509,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 			RestartPolicy: v1.RestartPolicyNever,
 		},
 	}
-	_, err := c.CoreV1().Pods(ns).Create(pod)
+	_, err := c.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -521,7 +522,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 	// internalFlag shows whether internal accessible test ends
 	utils.Logf("Call from the created pod")
 	err = wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {
-		pod, err := c.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
+		pod, err := c.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{})
 		if err != nil {
 			if utils.IsRetryableAPIError(err) {
 				return false, nil
@@ -537,7 +538,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 			return false, nil
 		}
 		utils.Logf("Still testing internal access from front pod to internal service")
-		log, err := c.CoreV1().Pods(ns).GetLogs(pod.Name, &v1.PodLogOptions{}).Do().Raw()
+		log, err := c.CoreV1().Pods(ns).GetLogs(pod.Name, &v1.PodLogOptions{}).Do(context.TODO()).Raw()
 		if err != nil {
 			return false, nil
 		}
@@ -556,7 +557,7 @@ func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, s
 		azure.ServiceAnnotationLoadBalancerMode: vmssName,
 	}
 	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
-	_, err := cs.CoreV1().Services(ns).Create(service)
+	_, err := cs.CoreV1().Services(ns).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)
 

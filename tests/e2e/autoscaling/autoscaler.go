@@ -17,6 +17,7 @@ limitations under the License.
 package autoscaling
 
 import (
+	"context"
 	"math"
 	"os"
 	"strconv"
@@ -126,7 +127,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		utils.Logf("Create a deployment that will trigger a scale up operation")
 		replicas := int32(podCount)
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename})
-		_, err := cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount)
@@ -137,13 +138,13 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		By("Creating a deployment that will trigger a scale up operation")
 		replicas := int32(podCount)
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename + "-deployment"})
-		_, err := cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		waitForScaleUpToComplete(cs, ns, initNodeCount)
 
 		By("Deploying a StatefulSet")
 		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(5), map[string]string{"app": basename + "-statefulset"})
-		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Create(statefulSetManifest)
+		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Create(context.TODO(), statefulSetManifest, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the StatefulSet to become ready")
@@ -156,7 +157,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		selector, err := metav1.LabelSelectorAsSelector(statefulSet.Spec.Selector)
 		Expect(err).NotTo(HaveOccurred())
 		options := metav1.ListOptions{LabelSelector: selector.String()}
-		statefulSetPods, err := cs.CoreV1().Pods(ns.Name).List(options)
+		statefulSetPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), options)
 		Expect(err).NotTo(HaveOccurred())
 		for _, pod := range statefulSetPods.Items {
 			podNodeMap[pod.Name] = pod.Spec.NodeName
@@ -171,7 +172,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying mounted volumes in each StatefulSet's pod after scaling down")
-		statefulSetPods, err = cs.CoreV1().Pods(ns.Name).List(options)
+		statefulSetPods, err = cs.CoreV1().Pods(ns.Name).List(context.TODO(), options)
 		Expect(err).NotTo(HaveOccurred())
 		for _, pod := range statefulSetPods.Items {
 			var expectedOutput string
@@ -203,7 +204,7 @@ func waitForScaleDownToComplete(cs clientset.Interface, ns *v1.Namespace, initNo
 	utils.Logf("Delete pods by setting the number of replicas in the deployment to 0")
 	replicas := int32(0)
 	deployment.Spec.Replicas = &replicas
-	_, err := cs.AppsV1().Deployments(ns.Name).Update(deployment)
+	_, err := cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	targetNodeCount := initNodeCount
 	err = utils.WaitAutoScaleNodes(cs, targetNodeCount, true)
@@ -307,7 +308,7 @@ func createStatefulSetWithPVCManifest(name string, replicas int32, label map[str
 func waitForStatefulSetComplete(cs clientset.Interface, ns *v1.Namespace, ss *appsv1.StatefulSet) error {
 	err := wait.PollImmediate(poll, pollTimeout, func() (bool, error) {
 		var err error
-		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Get(ss.Name, metav1.GetOptions{})
+		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Get(context.TODO(), ss.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

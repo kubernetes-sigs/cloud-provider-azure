@@ -17,6 +17,7 @@ limitations under the License.
 package network
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/legacy-cloud-providers/azure"
@@ -63,12 +65,12 @@ var _ = Describe("Network security group", func() {
 
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createNginxDeploymentManifest(serviceName, labels)
-		_, err = cs.AppsV1().Deployments(ns.Name).Create(deployment)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -225,7 +227,7 @@ func validateSharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ips []string
 func createAndWaitServiceExposure(cs clientset.Interface, ns string, serviceName string, annotation map[string]string, labels map[string]string, ports []v1.ServicePort) (string, error) {
 	ip := ""
 	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
-	if _, err := cs.CoreV1().Services(ns).Create(service); err != nil {
+	if _, err := cs.CoreV1().Services(ns).Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
 		return ip, err
 	}
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)

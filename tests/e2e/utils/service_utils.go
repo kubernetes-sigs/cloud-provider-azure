@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -34,13 +35,13 @@ const (
 
 // DeleteService deletes a service
 func DeleteService(cs clientset.Interface, ns string, serviceName string) error {
-	err := cs.CoreV1().Services(ns).Delete(serviceName, nil)
+	err := cs.CoreV1().Services(ns).Delete(context.TODO(), serviceName, nil)
 	Logf("Deleting service %s in namespace %s", serviceName, ns)
 	if err != nil {
 		return err
 	}
 	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-		if _, err := cs.CoreV1().Services(ns).Get(serviceName, metav1.GetOptions{}); err != nil {
+		if _, err := cs.CoreV1().Services(ns).Get(context.TODO(), serviceName, metav1.GetOptions{}); err != nil {
 			return apierrs.IsNotFound(err), nil
 		}
 		return false, nil
@@ -71,7 +72,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 	var err error
 
 	if wait.PollImmediate(10*time.Second, serviceTimeout, func() (bool, error) {
-		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
@@ -102,7 +103,7 @@ func WaitUpdateServiceExposure(cs clientset.Interface, namespace string, name st
 	timeout := 30 * time.Minute
 
 	return wait.PollImmediate(poll, timeout, func() (bool, error) {
-		service, err = cs.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
 				return false, nil
