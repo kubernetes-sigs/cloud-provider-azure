@@ -42,8 +42,8 @@ Note: All values are of type `string` if not explicitly called out.
 |userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs|Required for user-assigned managed identity.|
 |subscriptionId|The ID of the Azure Subscription that the cluster is deployed in|**Required**.|
 |identitySystem|The identity system for AzureStack. Supported values are: ADFS|Only used for AzureStack|
-|networkResourceTenantID|The AAD Tenant ID for the Subscription that the network resources are deployed in|Optional. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
-|networkResourceSubscriptionID|The ID of the Azure Subscription that the network resources are deployed in|Optional. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
+|networkResourceTenantID|The AAD Tenant ID for the Subscription that the network resources are deployed in|Optional. Supported since v1.18.0. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
+|networkResourceSubscriptionID|The ID of the Azure Subscription that the network resources are deployed in|Optional. Supported since v1.18.0. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
 
