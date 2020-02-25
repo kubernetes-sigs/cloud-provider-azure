@@ -42,6 +42,8 @@ Note: All values are of type `string` if not explicitly called out.
 |userAssignedIdentityID|The Client ID of the user assigned MSI which is assigned to the underlying VMs|Required for user-assigned managed identity.|
 |subscriptionId|The ID of the Azure Subscription that the cluster is deployed in|**Required**.|
 |identitySystem|The identity system for AzureStack. Supported values are: ADFS|Only used for AzureStack|
+|networkResourceTenantID|The AAD Tenant ID for the Subscription that the network resources are deployed in|Optional. Supported since v1.18.0. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
+|networkResourceSubscriptionID|The ID of the Azure Subscription that the network resources are deployed in|Optional. Supported since v1.18.0. Only used for hosting network resources in different AAD Tenant and Subscription than those for the cluster.|
 
 Note: Cloud provider currently supports three authentication methods, you can choose one combination of them:
 
@@ -221,3 +223,11 @@ The configuration parameters of this file:
 ```
 
 The full list of existing settings for the `AzureChinaCloud`, `AzureGermanCloud`, `AzurePublicCloud` and `AzureUSGovernmentCloud` is available in the source code at https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go#L51
+
+## Host Network Resources in different AAD Tenant and Subscription
+
+Since v1.18.0, Azure cloud provider supports hosting network resources (Virtual Network, Network Security Group, Route Table, Load Balancer and Public IP) in different AAD Tenant and Subscription than those for the cluster. To enable this feature, set `networkResourceTenantID` and `networkResourceSubscriptionID` in auth config. Note that the value of them need to be different than value of `tenantID` and `subscriptionID`.
+
+With this feature enabled, network resources of the cluster will be created in `networkResourceSubscriptionID` in `networkResourceTenantID`, and rest resources of the cluster still remain in `subscriptionID` in `tenantID`. Properties which specify the resource groups of network resources are compatible with this feature. For example, Virtual Network will be created in `vnetResourceGroup` in `networkResourceSubscriptionID` in `networkResourceTenantID`.
+
+For authentication methods, only Service Principal supports this feature, and `aadClientID` and `aadClientSecret` are used to authenticate with those two AAD Tenants and Subscriptions. Managed Identity and Client Certificate doesn't support this feature. Azure Stack doesn't support this feature.
