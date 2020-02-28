@@ -2,7 +2,6 @@
 
 set -e
 set -u
-set -x
 
 WORKING_DIR=$(dirname "${BASH_SOURCE[0]}")
 
@@ -72,34 +71,29 @@ prefix=${uuid:0:4}
 KUBEMARK_CLUSTER_RESOURCE_GROUP="${KUBEMARK_CLUSTER_RESOURCE_GROUP:-kubemark-cluster-$prefix}"
 EXTERNAL_CLUSTER_RESOURCE_GROUP="${EXTERNAL_CLUSTER_RESOURCE_GROUP:-kubemark-external-cluster-$prefix}"
 
+echo "kubemark rg is: ${KUBEMARK_CLUSTER_RESOURCE_GROUP}, external rg is: ${KUBEMARK_CLUSTER_RESOURCE_GROUP}"
+
 LOCATION="${LOCATION:-southcentralus}"
 
 KUBEMARK_SIZE="${KUBEMARK_SIZE:-100}"
 
-PRIVATE_KEY="${PRIVATE_KEY:-${HOME}/.ssh/id_rsa}"
-PUBLIC_KEY="${PRIVATE_KEY:-${HOME}/.ssh/id_rsa_pub}"
+echo "generating ssh key pair"
+ssh-keygen -t rsa -n '' -f "${WORKING_DIR}"/id_rsa -P "" > /dev/null
+PRIVATE_KEY="${PRIVATE_KEY:-${WORKING_DIR}/id_rsa}"
+PUBLIC_KEY="${PUBLIC_KEY:-${WORKING_DIR}/id_rsa.pub}"
 
 # install azure cli
+echo "installing azure cli"
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # read azure credentials
-ClientID=$(jq '.ClientID' "${AZURE_CREDENTIALS}" | sed 's/"//g')
-ClientSecret=$(jq '.ClientSecret' "${AZURE_CREDENTIALS}" | sed 's/"//g')
-TenantID=$(jq '.TenantID' "${AZURE_CREDENTIALS}" | sed 's/"//g')
+echo "reading azure credentials"
+ClientID=$(jq -r '.Creds.ClientID' "${AZURE_CREDENTIALS}")
+ClientSecret=$(jq -r '.Creds.ClientSecret' "${AZURE_CREDENTIALS}")
+TenantID=$(jq -r '.Creds.TenantID' "${AZURE_CREDENTIALS}")
 
-echo "got azure credentials: ClientID ($ClientID), ClientSecret ($ClientSecret), TenantID ($TenantID)"
-
-az login --service-principal --username "${ClientID}" --password "${ClientSecret}" --tenant "${TenantID}"
-
-AKS_ENGINE="${WORKING_DIR}/aks-engine"
-
-function ssh_and_do {
-    if [ -f "$2" ]; then
-        ssh -o StrictHostKeyChecking=no -i "${PRIVATE_KEY}" kubernetes@"$1" < "$2"
-    else
-        ssh -o StrictHostKeyChecking=no -i "${PRIVATE_KEY}" kubernetes@"$1" "$2"
-    fi
-}
+echo "logging in to azure"
+az login --service-principal --username "${ClientID}" --password "${ClientSecret}" --tenant "${TenantID}" > /dev/null
 
 function create_resource_group {
     az group create -n "$1" -l "${LOCATION}" --tags "autostop=no"
@@ -117,36 +111,40 @@ function cleanup {
 trap cleanup ERR EXIT
 
 function get_master_ip {
-    KUBEMARK_MASTER_IP=$(az network public-ip list -g "$1" | jq '.[0].ipAddress' | sed 's/"//g')
+    KUBEMARK_MASTER_IP=$(az network public-ip list -g "$1" | jq -r '.[0].ipAddress')
+    echo "got kubemark master IP: ${KUBEMARK_MASTER_IP}"
 }
 
 function build_kubemark_cluster {
-    ${AKS_ENGINE} generate "$1"
+    echo "generating kubemark cluster manifests to ${WORKING_DIR}"
+    "${AKS_ENGINE}" generate "$1"
 
-    KUBEMARK_CLUSTER_DNS_PREFIX=$(jq '.properties.masterProfile.dnsPrefix' "$1" | sed 's/"//g')
+    echo "deploying kubemark cluster"
+    KUBEMARK_CLUSTER_DNS_PREFIX=$(jq -r '.properties.masterProfile.dnsPrefix' "$1")
     az group deployment create \
       -g "${KUBEMARK_CLUSTER_RESOURCE_GROUP}" \
       --template-file "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/azuredeploy.json" \
-      --parameters "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json"
-
-    curl -o "${WORKING_DIR}/build-kubemark-master" "https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/tests/kubemark/build-kubemark-master.sh"
+      --parameters "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json" > /dev/null
 
     get_master_ip "${KUBEMARK_CLUSTER_RESOURCE_GROUP}"
-    ssh_and_do "${KUBEMARK_MASTER_IP}" "${WORKING_DIR}/build-kubemark-master.sh"
 
-    scp -i "${PRIVATE_KEY}" "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.crt" \
+    echo "copying etcd key"
+    scp  -o 'StrictHostKeyChecking=no' -o 'ConnectionAttempts=10' -i "${PRIVATE_KEY}" "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.crt" \
       "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.key" kubernetes@"${KUBEMARK_MASTER_IP}":~/
 }
 
 function build_external_cluster {
-    ${AKS_ENGINE} generate "$1"
+    echo "generating external cluster manifests to ${WORKING_DIR}"
+    "${AKS_ENGINE}" generate "$1"
 
-    EXTERNAL_CLUSTER_DNS_PREFIX=$(jq '.properties.masterProfile.dnsPrefix' "$1" | sed 's/"//g')
+    echo "deploying external cluster"
+    EXTERNAL_CLUSTER_DNS_PREFIX=$(jq -r '.properties.masterProfile.dnsPrefix' "$1")
     az group deployment create \
       -g "${EXTERNAL_CLUSTER_RESOURCE_GROUP}" \
       --template-file "${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/azuredeploy.json" \
-      --parameters "${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json"
+      --parameters "${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json" > /dev/null
     
+    echo "building external cluster"
     export KUBECONFIG="${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
     kubectl create namespace "kubemark"
     kubectl create configmap node-configmap -n "kubemark" --from-literal=content.type="test-cluster"
@@ -157,21 +155,26 @@ function build_external_cluster {
       --from-file="kubeproxy.kubeconfig=${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
 }
 
+echo "creating resource groups for kubemark and external clusters"
 create_resource_group "${KUBEMARK_CLUSTER_RESOURCE_GROUP}" &
 create_resource_group "${EXTERNAL_CLUSTER_RESOURCE_GROUP}" &
 wait
 
+echo "replacing deploying templates"
 curl -o "kubemark-cluster.json" "${KUBEMARK_CLUSTER_TEMPLATE_URL}"
 curl -o "external-cluster.json" "${EXTERNAL_CLUSTER_TEMPLATE_URL}"
 curl -o "hollow-node.yaml" "${HOLLOW_NODES_DEPLOYMENT_URL}"
 
+KUBEMARK_CLUSTER_DNS_PREFIX="${KUBEMARK_CLUSTER_DNS_PREFIX:-kubemark-$prefix}"
+EXTERNAL_CLUSTER_DNS_PREFIX="${EXTERNAL_CLUSTER_DNS_PREFIX:-kubemark-external-$prefix}"
+
 sed -i "s/{{DNS_PREFIX}}/$KUBEMARK_CLUSTER_DNS_PREFIX/" "${WORKING_DIR}/kubemark-cluster.json"
-sed -i "s/{{SSH_PUBLIC_KEY}}/$PUBLIC_KEY/" "${WORKING_DIR}/kubemark-cluster.json"
+sed -i "s:{{SSH_PUBLIC_KEY}}:$(cat $PUBLIC_KEY):" "${WORKING_DIR}/kubemark-cluster.json"
 sed -i "s/{{AZURE_CLIENT_ID}}/$ClientID/" "${WORKING_DIR}/kubemark-cluster.json"
 sed -i "s/{{AZURE_CLIENT_SECRET}}/$ClientSecret/" "${WORKING_DIR}/kubemark-cluster.json"
 
 sed -i "s/{{DNS_PREFIX}}/$EXTERNAL_CLUSTER_DNS_PREFIX/" "${WORKING_DIR}/external-cluster.json"
-sed -i "s/{{SSH_PUBLIC_KEY}}/$PUBLIC_KEY/" "${WORKING_DIR}/external-cluster.json"
+sed -i "s:{{SSH_PUBLIC_KEY}}:$(cat $PUBLIC_KEY):" "${WORKING_DIR}/external-cluster.json"
 sed -i "s/{{AZURE_CLIENT_ID}}/$ClientID/" "${WORKING_DIR}/external-cluster.json"
 sed -i "s/{{AZURE_CLIENT_SECRET}}/$ClientSecret/" "${WORKING_DIR}/external-cluster.json"
 
@@ -179,9 +182,17 @@ sed -i "s/{{numreplicas}}/$KUBEMARK_SIZE/" "${WORKING_DIR}/hollow-node.yaml"
 sed -i "s/{{kubemark_image_registry}}/ss104301/g" "${WORKING_DIR}/hollow-node.yaml"
 sed -i "s/{{kubemark_image_tag}}/latest/g" "${WORKING_DIR}/hollow-node.yaml"
 
+echo "getting aks-engine"
+curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
+chmod 700 get-akse.sh
+./get-akse.sh
+AKS_ENGINE="aks-engine"
+"${AKS_ENGINE}" version
+
 build_kubemark_cluster "${WORKING_DIR}/kubemark-cluster.json"
 build_external_cluster "${WORKING_DIR}/external-cluster.json"
 
+echo "deploying hollow nodes"
 export KUBECONFIG="${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
 
 kubectl apply -f "${WORKING_DIR}/hollow-node.yaml"
@@ -189,20 +200,29 @@ sleep 30
 
 export KUBECONFIG="${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
 
+echo "waiting ${KUBEMARK_SIZE} hollow nodes to be ready"
+total_retry=0
 while : 
 do
-    none_count=$(kubectl get no | awk '{print $3}' | grep "<none>" | wc -l)
-    node_count=$(kubectl get no | grep "hollow" | wc -l)
+    total_retry+=1
+    none_count=$(kubectl get no | awk '{print $3}' | grep -c "<none>")
+    node_count=$(kubectl get no | grep -c "hollow")
     if [ "${node_count}" -eq "${KUBEMARK_SIZE}" ] && [ "${none_count}" -eq 0  ]; then
         break
     else 
+        echo "there're ${node_count} ready hollow nodes, ${none_count} <none> nodes, will retry after 10 seconds"
         sleep 10
+    fi
+
+    if [ "${total_retry}" -eq 100 ]; then
+        echo "maximum retry times reached"
+        exit 100
     fi
 done
 
 export KUBE_CONFIG="${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
 
-# Test with clusterloader2
+# Test by clusterloader2
 PROVIDER="kubemark"
 
 # SSH config for metrics' collection
@@ -219,6 +239,7 @@ export ETCD_KEY=/home/kubernetes/etcdclient.key
 # apiserver
 export GET_APISERVER_PPROF_BY_K8S_CLIENT=true
 
+echo "fetching all test configs"
 git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/tests/kubemark/configs "${WORKING_DIR}"
 
@@ -234,10 +255,17 @@ TEST_CONFIG="${TEST_CONFIG:-${WORKING_DIR}/configs/density/config.yaml}"
 # Log config
 REPORT_DIR="/logs/artifacts"
 LOG_FILE="/logs/artifacts/cl2-test.log"
+if [ ! -d "${REPORT_DIR}" ]; then
+    mkdir -p "${REPORT_DIR}"
+    touch "${LOG_FILE}"
+    echo "report directory created"
+fi
 
 curl -o clusterloader2 "${CLUSTERLOADER2_BIN_URL}"
 CLUSTERLOADER2="${WORKING_DIR}/clusterloader2"
+chmod +x "${CLUSTERLOADER2}"
 
+echo "testing ${TEST_CONFIG} by clusterloader2"
 ${CLUSTERLOADER2} \
     --kubeconfig="${KUBE_CONFIG}" \
     --kubemark-root-kubeconfig="${KUBE_CONFIG}" \

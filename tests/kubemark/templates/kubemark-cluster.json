@@ -25,8 +25,21 @@
         "masterProfile": {
             "count": 1,
             "dnsPrefix": "{{DNS_PREFIX}}",
-            "vmSize": "Standard_DS2_v2"
+            "vmSize": "Standard_DS2_v2",
+            "extensions": [
+                {
+                    "name": "config-kubemark-master"
+                }
+            ]
         },
+        "extensionProfiles": [
+            {
+                "name": "config-kubemark-master",
+                "version": "v1",
+                "extensionParameters": "parameters",
+                "rootURL": "https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/tests/kubemark/"
+            }
+        ],
         "linuxProfile": {
             "adminUsername": "kubernetes",
             "ssh": {
