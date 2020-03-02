@@ -181,8 +181,9 @@ var _ = Describe("Network security group", func() {
 		Expect(len(*rules)).NotTo(Equal(0))
 		var found bool
 		for _, rule := range *rules {
-			if strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
+			if rule.SourceAddressPrefix != nil && strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
 				found = true
+				break
 			}
 		}
 		Expect(found).To(BeTrue())
