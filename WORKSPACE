@@ -15,12 +15,12 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
-# download basic go build rules at release v0.19.3
-go_build_rules_version = "0.19.3"
+# download basic go build rules at release v0.19.10
+go_build_rules_version = "v0.19.10"
 
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "313f2c7a23fecc33023563f082f381a32b9b7254f727a7dd2d6380ccc6dfe09b",
+    sha256 = "0a99597dd30ecfd94f64fc64717cd1b6c4bd9807918942a8501a3883990e4b1d",
     urls = [
         "https://storage.googleapis.com/bazel-mirror/github.com/bazelbuild/rules_go/releases/download/{}/rules_go-{}.tar.gz".format(go_build_rules_version, go_build_rules_version),
         "https://github.com/bazelbuild/rules_go/releases/download/{}/rules_go-{}.tar.gz".format(go_build_rules_version, go_build_rules_version),
@@ -30,9 +30,9 @@ http_archive(
 # repo of protobuf
 git_repository(
     name = "com_google_protobuf",
-    commit = "6a59a2ad1f61d9696092f79b6d74368b4d7970a3",  # v3.9.0
+    commit = "09745575a923640154bcf307fba8aedff47f240a",
     remote = "https://github.com/protocolbuffers/protobuf",
-    shallow_since = "1562856725 -0700",
+    shallow_since = "1558721209 -0700",
 )
 
 # download the rules_docker repository at release v0.9.0
@@ -45,12 +45,12 @@ http_archive(
     urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v{}/rules_docker-v{}.tar.gz".format(rules_docker_version, rules_docker_version)],
 )
 
-# download gazelle at release v0.18.1
-gazelle_version = "0.18.1"
+# download gazelle at release v0.18.2
+gazelle_version = "0.18.2"
 
 http_archive(
     name = "bazel_gazelle",
-    sha256 = "be9296bfd64882e3c08e3283c58fcb461fa6dd3c171764fcc4cf322f60615a9b",
+    sha256 = "7fc87f4170011201b1690326e8c16c5d802836e3a0d617d8f75c3af2b23180c4",
     urls = [
         "https://storage.googleapis.com/bazel-mirror/github.com/bazelbuild/bazel-gazelle/releases/download/{}/bazel-gazelle-{}.tar.gz".format(gazelle_version, gazelle_version),
         "https://github.com/bazelbuild/bazel-gazelle/releases/download/{}/bazel-gazelle-{}.tar.gz".format(gazelle_version, gazelle_version),
@@ -88,7 +88,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.12.7",
+    go_version = "1.13.6",
 )
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
