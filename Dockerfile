@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.13.4-stretch AS build
+FROM golang:1.13.8-stretch AS build
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 RUN make
