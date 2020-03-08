@@ -1,0 +1,75 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {  
+         "artifactsLocation": {
+             "type": "string",
+             "minLength": 1,
+             "metadata": {
+                 "description": "Artifacts Location - URL"
+             }
+         },
+         "apiVersionDeployments": {
+             "type": "string",
+             "minLength": 1,
+             "metadata": {
+                 "description": "Compute API Version"
+             }
+         },
+         "targetVMName":{
+             "type": "string",
+             "minLength": 1,
+             "metadata": {
+                 "description": "Name of the vm to run the "
+             }
+         },
+         "targetVMType":{
+             "type": "string",
+             "minLength": 1,
+             "metadata": {
+                 "description": "Type of the vm to run the extension: master or agent "
+             }
+         },
+         "extensionParameters": {
+             "type": "securestring",
+             "minLength": 0,
+             "metadata": {
+                 "description": "Custom Parameter for Extension - for config-kubemark-master, this is empty"
+             }
+         },
+         "vmIndex": {
+             "type": "int",
+             "metadata": {
+                 "description": "index in the pool of the current agent, used so that we can get the extension name right"
+             }
+         }
+    },
+    "variables": {  
+         "singleQuote": "'",
+         "initScriptUrl": "[concat(parameters('artifactsLocation'), 'https://raw.githubusercontent.com/nilo19/kubemark-performance-tests-on-azure/master/extensions/config-kubemark-master/v1/config-kubemark-master.sh')]"
+    },
+    "resources": [  
+     {
+       "apiVersion": "[parameters('apiVersionDeployments')]",
+       "dependsOn": [],
+       "location": "[resourceGroup().location]",
+       "type": "Microsoft.Compute/virtualMachines/extensions",
+       "name": "[concat(parameters('targetVMName'),'/cse', '-', parameters('targetVMType'), '-', parameters('vmIndex'))]", 
+       "properties": {
+         "publisher": "Microsoft.Azure.Extensions",
+         "type": "CustomScript",
+         "typeHandlerVersion": "2.0",
+         "autoUpgradeMinorVersion": true,
+         "settings": {
+             "fileUris": [ 
+                "[variables('initScriptUrl')]" 
+              ]
+         },
+         "protectedSettings": {
+             "commandToExecute": "[concat('/bin/bash -c \"/bin/bash ./config-kubemark-master.sh ', variables('singleQuote'), parameters('extensionParameters'), variables('singleQuote'), ' >> /var/log/azure/config-kubemark-master.log 2>&1 &\" &')]"
+         }
+       }
+     }
+     ],
+    "outputs": {  }
+ }

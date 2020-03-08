@@ -1,5 +1,7 @@
 #! /bin/bash
 
+set -x
+
 sudo bash -c 'cat >> /etc/kubernetes/addons/kube-proxy-daemonset.yaml << EOF
       affinity:
         nodeAffinity:
