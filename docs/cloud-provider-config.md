@@ -91,6 +91,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |cloudConfigType| The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.| Default to `merge`.  and available since v1.15.0 |
 |loadBalancerName| Working together with loadBalancerResourceGroup to determine the LB name in a different resource group | Since v1.18.0 | String value, default is cluster name setting on kube-controller-manager|
 |loadBalancerResourceGroup | The load balancer resource group name, which is different from node resource group | Since v1.18.0 | String value, default is same as resourceGroup|
+|disableAvailabilitySetNodes| Disable supporting for AvailabilitySet virtual machines in vmss cluster. It should be only used when vmType is "vmss" and all the nodes (including master) are VMSS virtual machines | Since v1.18.0 | Boolean value, default to false|
 
 ### primaryAvailabilitySetName
 
