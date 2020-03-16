@@ -1,17 +1,17 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(glob(["*.txt"]))
+load(
+    "@io_bazel_rules_go//go:def.bzl",
+    "go_library",
+)
 
-py_test(
-    name = "boilerplate_test",
+go_library(
+    name = "go_default_library",
     srcs = [
-        "boilerplate.py",
-        "boilerplate_test.py",
+        "fail.go",
+        "pass.go",
     ],
-    data = glob([
-        "*.txt",
-        "test/*",
-    ]),
+    importpath = "k8s.io/kubernetes/hack/boilerplate/test",
 )
 
 filegroup(
@@ -23,9 +23,6 @@ filegroup(
 
 filegroup(
     name = "all-srcs",
-    srcs = [
-        ":package-srcs",
-        "//hack/boilerplate/test:all-srcs",
-    ],
+    srcs = [":package-srcs"],
     tags = ["automanaged"],
 )
