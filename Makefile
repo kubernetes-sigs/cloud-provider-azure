@@ -63,13 +63,16 @@ BAZEL_ARGS ?=
 ## --------------------------------------
 
 .PHONY: all
-all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager
+all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager $(BIN_DIR)/azure-cloud-node-manager.exe
 
 $(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*)
-	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
+	CGO_ENABLED=0 GOOS=linux go build -a -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
+
+$(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*)
+	CGO_ENABLED=0 GOOS=windows go build -a -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*)
-	go build -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
+	CGO_ENABLED=0 GOOS=linux go build -a -o $@ $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
 
 ## --------------------------------------
 ## Images
