@@ -24,12 +24,12 @@ go_library(
         "//vendor/k8s.io/client-go/util/workqueue:go_default_library",
         "//vendor/k8s.io/component-base/metrics:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/controller/volume/scheduling:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/scheduler/apis/config:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/scheduler/listers:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/scheduler/metrics:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/scheduler/nodeinfo:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/scheduler/util:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/scheduler/volumebinder:go_default_library",
         "//vendor/sigs.k8s.io/yaml:go_default_library",
     ],
 )

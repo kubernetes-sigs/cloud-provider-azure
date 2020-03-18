@@ -23,7 +23,7 @@ require (
 	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kubernetes v0.0.0
 	k8s.io/legacy-cloud-providers v0.0.0
-	k8s.io/utils v0.0.0-20200117235808-5f6fbceb4c31
+	k8s.io/utils v0.0.0-20200229041039-0a110f9eb7ab
 )
 
 replace (
@@ -387,33 +387,33 @@ replace (
 	gotest.tools/gotestsum => gotest.tools/gotestsum v0.3.5
 	grpc.go4.org => grpc.go4.org v0.0.0-20170609214715-11d0a25b4919
 	honnef.co/go/tools => honnef.co/go/tools v0.0.1-2019.2.2
-	k8s.io/api v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/apiextensions-apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/apimachinery v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/cli-runtime v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cli-runtime v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/client-go v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/cloud-provider v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cloud-provider v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/cluster-bootstrap v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/code-generator v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/component-base v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/cri-api v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/csi-translation-lib v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200301000440-debb1edee1d4
+	k8s.io/api v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/apiextensions-apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/apimachinery v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/cli-runtime v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cli-runtime v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/client-go v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/cloud-provider v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cloud-provider v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/cluster-bootstrap v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/code-generator v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/component-base v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/cri-api v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/csi-translation-lib v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200318022839-7d6d4662a9bf
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20190822140433-26a664648505
 	k8s.io/heapster => k8s.io/heapster v1.2.0-beta.1
 	k8s.io/klog => k8s.io/klog v1.0.0
-	k8s.io/kube-aggregator v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/kube-controller-manager v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200301000440-debb1edee1d4
+	k8s.io/kube-aggregator v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/kube-controller-manager v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200318022839-7d6d4662a9bf
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c
-	k8s.io/kube-proxy v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/kube-scheduler v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/kubectl v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/kubelet v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/kubernetes => k8s.io/kubernetes v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/legacy-cloud-providers v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200301000440-debb1edee1d4
-	k8s.io/metrics v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200301000440-debb1edee1d4
+	k8s.io/kube-proxy v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/kube-scheduler v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/kubectl v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/kubelet v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/kubernetes => k8s.io/kubernetes v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/legacy-cloud-providers v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200318022839-7d6d4662a9bf
+	k8s.io/metrics v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200318022839-7d6d4662a9bf
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.1-alpha.1
-	k8s.io/sample-apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200301000440-debb1edee1d4
+	k8s.io/sample-apiserver v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200318022839-7d6d4662a9bf
 	k8s.io/system-validators => k8s.io/system-validators v1.0.4
 	k8s.io/utils => k8s.io/utils v0.0.0-20200117235808-5f6fbceb4c31
 	modernc.org/cc => modernc.org/cc v1.0.0
@@ -426,8 +426,8 @@ replace (
 	mvdan.cc/unparam => mvdan.cc/unparam v0.0.0-20190209190245-fbb59629db34
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.5
 	sigs.k8s.io/kustomize => sigs.k8s.io/kustomize v2.0.3+incompatible
-	sigs.k8s.io/structured-merge-diff/v3 => sigs.k8s.io/structured-merge-diff/v3 v3.0.0-20200207200219-5e70324e7c1c
-	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.1.0
+	sigs.k8s.io/structured-merge-diff/v3 => sigs.k8s.io/structured-merge-diff/v3 v3.0.0
+	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
 	sourcegraph.com/sqs/pbtypes => sourcegraph.com/sqs/pbtypes v0.0.0-20180604144634-d3ebe8f20ae4
 	vbom.ml/util => vbom.ml/util v0.0.0-20160121211510-db5cfe13f5cc
 )

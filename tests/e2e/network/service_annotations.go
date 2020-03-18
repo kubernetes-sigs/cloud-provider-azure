@@ -85,7 +85,7 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -209,25 +209,25 @@ var _ = Describe("Service with annotation", func() {
 		Expect(*idleTimeout).To(Equal(int32(5)))
 	})
 
-	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerMixedProtocols'", func() {
-		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerMixedProtocols: "true",
-		}
+	// It("should support load balancer annotation 'ServiceAnnotationLoadBalancerMixedProtocols'", func() {
+	// 	annotation := map[string]string{
+	// 		azure.ServiceAnnotationLoadBalancerMixedProtocols: "true",
+	// 	}
 
-		// create service with given annotation and wait it to expose
-		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+	// 	// create service with given annotation and wait it to expose
+	// 	publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
-		// get lb from azure client
-		lb := getAzureLoadBalancer(publicIP)
+	// 	// get lb from azure client
+	// 	lb := getAzureLoadBalancer(publicIP)
 
-		existingProtocols := make(map[network.TransportProtocol]int)
-		for _, rule := range *lb.LoadBalancingRules {
-			if _, ok := existingProtocols[rule.Protocol]; !ok {
-				existingProtocols[rule.Protocol]++
-			}
-		}
-		Expect(len(existingProtocols)).To(Equal(2))
-	})
+	// 	existingProtocols := make(map[network.TransportProtocol]int)
+	// 	for _, rule := range *lb.LoadBalancingRules {
+	// 		if _, ok := existingProtocols[rule.Protocol]; !ok {
+	// 			existingProtocols[rule.Protocol]++
+	// 		}
+	// 	}
+	// 	Expect(len(existingProtocols)).To(Equal(2))
+	// })
 
 	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerResourceGroup'", func() {
 		By("Creating Azure clients")
@@ -244,7 +244,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, testPIPName, *rg.Name)
 			Expect(err).NotTo(HaveOccurred())
@@ -300,7 +300,7 @@ var _ = Describe("[MultipleAgentPools][VMSS]", func() {
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
