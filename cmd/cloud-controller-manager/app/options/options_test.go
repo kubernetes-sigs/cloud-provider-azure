@@ -61,6 +61,7 @@ func TestDefaultFlags(t *testing.T) {
 			},
 			Debugging: &cmoptions.DebuggingOptions{
 				DebuggingConfiguration: &componentbaseconfig.DebuggingConfiguration{
+					EnableProfiling:           true,
 					EnableContentionProfiling: false,
 				},
 			},

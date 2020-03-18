@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -35,7 +35,8 @@ const (
 
 // DeleteService deletes a service
 func DeleteService(cs clientset.Interface, ns string, serviceName string) error {
-	err := cs.CoreV1().Services(ns).Delete(context.TODO(), serviceName, nil)
+	zero := int64(0)
+	err := cs.CoreV1().Services(ns).Delete(context.TODO(), serviceName, metav1.DeleteOptions{GracePeriodSeconds: &zero})
 	Logf("Deleting service %s in namespace %s", serviceName, ns)
 	if err != nil {
 		return err

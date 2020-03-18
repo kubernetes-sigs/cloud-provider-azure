@@ -89,7 +89,7 @@ func DeletePodsInNamespace(cs clientset.Interface, ns string) error {
 
 // DeletePod deletes a single pod
 func DeletePod(cs clientset.Interface, ns string, podName string) error {
-	err := cs.CoreV1().Pods(ns).Delete(context.TODO(), podName, nil)
+	err := cs.CoreV1().Pods(ns).Delete(context.TODO(), podName, metav1.DeleteOptions{})
 	Logf("Deleting pod %s in namespace %s", podName, ns)
 	if err != nil {
 		return err

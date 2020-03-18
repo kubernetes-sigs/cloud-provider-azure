@@ -115,7 +115,7 @@ func getNamespaceList(cs clientset.Interface) (*v1.NamespaceList, error) {
 // whether there are any pods remaining in a non-terminating state.
 func DeleteNamespace(cs clientset.Interface, namespace string) error {
 	Logf("Deleting namespace %s", namespace)
-	if err := cs.CoreV1().Namespaces().Delete(context.TODO(), namespace, nil); err != nil {
+	if err := cs.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 	// wait for namespace to delete or timeout.

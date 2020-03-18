@@ -70,7 +70,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, nil)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -100,7 +100,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -140,7 +140,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		By("Waiting for exposure of internal service with specific IP")
@@ -185,7 +185,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -231,7 +231,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		defer func() {
 			By("Cleaning up")
-			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, nil)
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
