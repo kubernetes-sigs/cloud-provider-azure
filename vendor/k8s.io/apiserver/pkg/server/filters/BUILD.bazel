@@ -6,6 +6,7 @@ go_library(
         "content_type.go",
         "cors.go",
         "doc.go",
+        "goaway.go",
         "longrunning.go",
         "maxinflight.go",
         "priority-and-fairness.go",

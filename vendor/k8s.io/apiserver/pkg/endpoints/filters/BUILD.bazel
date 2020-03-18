@@ -10,6 +10,7 @@ go_library(
         "cachecontrol.go",
         "doc.go",
         "impersonation.go",
+        "metrics.go",
         "requestinfo.go",
     ],
     importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/filters",
