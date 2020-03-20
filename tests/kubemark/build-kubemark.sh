@@ -102,9 +102,9 @@ curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # read azure credentials
 echo "reading azure credentials"
-ClientID=$(jq -r '.Creds.ClientID' "${AZURE_CREDENTIALS}")
-ClientSecret=$(jq -r '.Creds.ClientSecret' "${AZURE_CREDENTIALS}")
-TenantID=$(jq -r '.Creds.TenantID' "${AZURE_CREDENTIALS}")
+ClientID=$(grep "ClientID" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
+ClientSecret=$(grep "ClientSecret" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
+TenantID=$(grep "TenantID" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
 
 echo "logging in to azure"
 az login --service-principal --username "${ClientID}" --password "${ClientSecret}" --tenant "${TenantID}" > /dev/null
