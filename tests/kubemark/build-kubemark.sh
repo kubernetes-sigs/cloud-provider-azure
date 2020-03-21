@@ -101,10 +101,10 @@ echo "installing azure cli"
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # read azure credentials
-echo "reading azure credentials"
-ClientID=$(grep "ClientID" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
-ClientSecret=$(grep "ClientSecret" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
-TenantID=$(grep "TenantID" "${AZURE_CREDENTIALS}" | awk -F ' = ' '{print $2}' | sed 's/"//g')
+echo "reading azure credentials from environment variables"
+ClientID="${K8S_AZURE_SPID}"
+ClientSecret="${K8S_AZURE_SPSEC}"
+TenantID="${K8S_AZURE_TENANTID}"
 
 echo "logging in to azure"
 az login --service-principal --username "${ClientID}" --password "${ClientSecret}" --tenant "${TenantID}" > /dev/null
