@@ -39,7 +39,7 @@ func NewIMDSNodeProvider() *IMDSNodeProvider {
 			"vmType": "vmss"
 		}`)))
 	if err != nil {
-		klog.Fatalf("Failed to initilize Azure cloud provider: %v", err)
+		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
 	}
 
 	return &IMDSNodeProvider{

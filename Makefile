@@ -38,7 +38,7 @@ TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
 IMAGE_REGISTRY ?= local
 STAGING_REGISTRY := gcr.io/k8s-staging-provider-azure
-K8S_VERSION ?= v1.15.0
+K8S_VERSION ?= v1.18.0-rc.1
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 
 ifndef TAG
@@ -53,6 +53,8 @@ IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 # cloud node manager image
 NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
 NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
+NODE_MANAGER_WINDOWS_IMAGE_NAME=azure-cloud-node-manager-windows
+NODE_MANAGER_WINDOWS_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_WINDOWS_IMAGE_NAME):$(IMAGE_TAG)
 
 # Bazel variables
 BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
@@ -84,7 +86,12 @@ build-ccm-image:
 
 .PHONY: build-node-image
 build-node-image:
-	docker build -t $(NODE_MANAGER_IMAGE) -f Dockerfile.node .
+	docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile .
+
+.PHONY: build-node-image-windows
+build-node-image-windows:
+	go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe ./cmd/cloud-node-manager
+	docker build --platform windows/amd64 -t $(NODE_MANAGER_WINDOWS_IMAGE) -f cloud-node-manager-windows.Dockerfile .
 
 .PHONY: build-images
 build-images: build-ccm-image build-node-image
@@ -99,6 +106,10 @@ push-ccm-image:
 .PHONY: push-node-image
 push-node-image:
 	docker push $(NODE_MANAGER_IMAGE)
+
+.PHONY: push-node-image-windows
+push-node-image-windows:
+	docker push $(NODE_MANAGER_WINDOWS_IMAGE)
 
 .PHONY: push
 push: push-ccm-image push-node-image

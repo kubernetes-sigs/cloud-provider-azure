@@ -93,8 +93,9 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
-	// To help debugging, immediately log version
+	// To help debugging, immediately log version and nodeName
 	klog.Infof("Version: %+v", version.Get())
+	klog.Infof("NodeName: %s", c.NodeName)
 
 	// Start the controller manager HTTP server
 	var checks []healthz.HealthChecker

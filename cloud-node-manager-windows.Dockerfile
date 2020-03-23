@@ -1,4 +1,4 @@
-# Copyright 2019 The Kubernetes Authors.
+# Copyright 2020 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.13.4-stretch AS build
-WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
-COPY . .
-RUN make
+FROM mcr.microsoft.com/windows/servercore:1809 as core
 
-FROM k8s.gcr.io/debian-base:v1.0.0
-COPY --from=build /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin
-RUN ln -s /usr/local/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
+FROM mcr.microsoft.com/windows/nanoserver:1809
+COPY --from=core /Windows/System32/netapi32.dll /Windows/System32/netapi32.dll
+COPY bin/azure-cloud-node-manager.exe /cloud-node-manager.exe
+USER ContainerAdministrator
+ENTRYPOINT ["/azure-cloud-node-manager.exe"]

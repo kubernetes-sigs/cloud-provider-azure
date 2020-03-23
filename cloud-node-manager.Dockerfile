@@ -18,5 +18,5 @@ COPY . .
 RUN make
 
 FROM k8s.gcr.io/debian-base:v1.0.0
-COPY --from=build /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin
-RUN ln -s /usr/local/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager
+COPY --from=build /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin
+RUN ln -s /usr/local/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
