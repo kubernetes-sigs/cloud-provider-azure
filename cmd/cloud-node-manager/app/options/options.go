@@ -78,13 +78,7 @@ type CloudNodeManagerOptions struct {
 
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
 func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
-
 	s := CloudNodeManagerOptions{
-		NodeName:      strings.ToLower(hostname),
 		SecureServing: apiserveroptions.NewSecureServingOptions().WithLoopback(),
 		InsecureServing: (&apiserveroptions.DeprecatedInsecureServingOptions{
 			BindAddress: net.ParseIP(defaultInsecureCloudNodeManagerBindAddress),
@@ -120,6 +114,7 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fs := fss.FlagSet("misc")
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
+	fs.StringVar(&o.NodeName, "node-name", o.NodeName, "Name of the Node (default is hostname).")
 	fs.DurationVar(&o.NodeStatusUpdateFrequency.Duration, "node-status-update-frequency", o.NodeStatusUpdateFrequency.Duration, "Specifies how often the controller updates nodes' status.")
 	fs.DurationVar(&o.MinResyncPeriod.Duration, "min-resync-period", o.MinResyncPeriod.Duration, "The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod.")
 	fs.StringVar(&o.ClientConnection.ContentType, "kube-api-content-type", o.ClientConnection.ContentType, "Content type of requests sent to apiserver.")
@@ -168,7 +163,18 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 	// TODO(feiskyer): filter watch by node name whenever it's supported.
 	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, resyncPeriod(c)())
 	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
-	c.NodeName = o.NodeName
+
+	// Default NodeName is hostname.
+	c.NodeName = strings.ToLower(o.NodeName)
+	if c.NodeName == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return err
+		}
+
+		c.NodeName = strings.ToLower(hostname)
+	}
+
 	return nil
 }
 
