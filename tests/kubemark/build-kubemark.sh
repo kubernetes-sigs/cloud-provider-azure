@@ -220,8 +220,8 @@ while :
 do
     total_retry+=1
     none_count=$(kubectl get no | awk '{print $3}' | grep -c "<none>")
-    node_count=$(kubectl get no | grep -c "hollow")
-    if [ "${node_count}" -eq "${KUBEMARK_SIZE}" ] && [ "${none_count}" -eq 0  ]; then
+    node_count=$(kubectl get no | grep -c "hollow" | awk '{print $2}' | grep -c "^Ready$")
+    if [ "${node_count}" -eq "${KUBEMARK_SIZE}" ] && [ "${none_count}" -eq 0 ]; then
         break
     else 
         echo "there're ${node_count} ready hollow nodes, ${none_count} <none> nodes, will retry after 10 seconds"
@@ -233,6 +233,8 @@ do
         exit 100
     fi
 done
+
+echo "all hollow nodes are ready, starting test with clusterloader2"
 
 export KUBE_CONFIG="${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
 
@@ -257,6 +259,7 @@ echo "fetching all test configs"
 git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/tests/kubemark/configs "${WORKING_DIR}"
 
+echo "configuring clusterloader2"
 # Clusterloader2 testing strategy config paths
 # It supports setting up multiple test strategy. Each testing strategy is individual and serial.
 TEST_CONFIG="${TEST_CONFIG:-${WORKING_DIR}/configs/density/config.yaml}"
@@ -275,6 +278,7 @@ if [ ! -d "${REPORT_DIR}" ]; then
     echo "report directory created"
 fi
 
+echo "downloading clusterloader2"
 curl -o clusterloader2 "${CLUSTERLOADER2_BIN_URL}"
 CLUSTERLOADER2="${WORKING_DIR}/clusterloader2"
 chmod +x "${CLUSTERLOADER2}"
