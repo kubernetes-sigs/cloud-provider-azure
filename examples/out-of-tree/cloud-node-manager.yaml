@@ -62,7 +62,7 @@ spec:
       serviceAccountName: cloud-node-manager
       hostNetwork: true   # required to fetch correct hostname
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
@@ -118,7 +118,7 @@ spec:
       priorityClassName: system-node-critical
       serviceAccountName: cloud-node-manager
       nodeSelector:
-        beta.kubernetes.io/os: windows
+        kubernetes.io/os: windows
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
