@@ -15,12 +15,12 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
-# download basic go build rules at release v0.19.10
-go_build_rules_version = "v0.19.10"
+# download basic go build rules at release v0.21.5
+go_build_rules_version = "v0.21.5"
 
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "0a99597dd30ecfd94f64fc64717cd1b6c4bd9807918942a8501a3883990e4b1d",
+    sha256 = "effce27c4ef53af96397d538c1b9e37e9b8546e4a912ed9eb43590bb33cbbf95",
     urls = [
         "https://storage.googleapis.com/bazel-mirror/github.com/bazelbuild/rules_go/releases/download/{}/rules_go-{}.tar.gz".format(go_build_rules_version, go_build_rules_version),
         "https://github.com/bazelbuild/rules_go/releases/download/{}/rules_go-{}.tar.gz".format(go_build_rules_version, go_build_rules_version),
@@ -88,7 +88,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.13.6",
+    go_version = "1.13.9",
 )
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
