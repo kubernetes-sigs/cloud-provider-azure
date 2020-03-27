@@ -97,8 +97,10 @@ PRIVATE_KEY="${PRIVATE_KEY:-${WORKING_DIR}/id_rsa}"
 PUBLIC_KEY="${PUBLIC_KEY:-${WORKING_DIR}/id_rsa.pub}"
 
 # install azure cli
-echo "installing azure cli"
-curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+if ! command -v az > /dev/null; then
+    echo "installing azure cli"
+    curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+fi
 
 # read azure credentials
 echo "reading azure credentials from environment variables"
@@ -118,8 +120,6 @@ function cleanup {
 
     az group delete -n "${KUBEMARK_CLUSTER_RESOURCE_GROUP}" -y --no-wait
     az group delete -n "${EXTERNAL_CLUSTER_RESOURCE_GROUP}" -y --no-wait
-
-    az logout
 }
 
 trap cleanup ERR EXIT
@@ -143,7 +143,7 @@ function build_kubemark_cluster {
     get_master_ip "${KUBEMARK_CLUSTER_RESOURCE_GROUP}"
 
     echo "copying etcd key"
-    scp  -o 'StrictHostKeyChecking=no' -o 'ConnectionAttempts=10' -i "${PRIVATE_KEY}" "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.crt" \
+    scp -o 'StrictHostKeyChecking=no' -o 'ConnectionAttempts=10' -i "${PRIVATE_KEY}" "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.crt" \
       "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/etcdclient.key" kubernetes@"${KUBEMARK_MASTER_IP}":~/
 }
 
@@ -196,10 +196,12 @@ sed -i "s/{{numreplicas}}/$KUBEMARK_SIZE/" "${WORKING_DIR}/hollow-node.yaml"
 sed -i "s/{{kubemark_image_registry}}/ss104301/g" "${WORKING_DIR}/hollow-node.yaml"
 sed -i "s/{{kubemark_image_tag}}/latest/g" "${WORKING_DIR}/hollow-node.yaml"
 
-echo "getting aks-engine"
-curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
-chmod 700 get-akse.sh
-./get-akse.sh
+if ! command -v aks-engine > /dev/null; then
+    echo "getting aks-engine"
+    curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
+    chmod 700 get-akse.sh
+    ./get-akse.sh
+fi
 AKS_ENGINE="aks-engine"
 "${AKS_ENGINE}" version
 
@@ -219,8 +221,8 @@ total_retry=0
 while : 
 do
     total_retry=$(( $total_retry + 1 ))
-    none_count=$(kubectl get no | awk '{print $3}' | grep -c "<none>")
-    node_count=$(kubectl get no | grep -c "hollow" | awk '{print $2}' | grep -c "^Ready$")
+    none_count=$(kubectl get no | awk '{print $3}' | grep -c "<none>" || true)
+    node_count=$(kubectl get no | grep "hollow" | awk '{print $2}' | grep -c "^Ready$" || true)
     if [ "${node_count}" -eq "${KUBEMARK_SIZE}" ] && [ "${none_count}" -eq 0 ]; then
         break
     else 
@@ -279,7 +281,7 @@ if [ ! -d "${REPORT_DIR}" ]; then
 fi
 
 echo "downloading clusterloader2"
-curl -o clusterloader2 "${CLUSTERLOADER2_BIN_URL}"
+curl -L "${CLUSTERLOADER2_BIN_URL}" -o clusterloader2
 CLUSTERLOADER2="${WORKING_DIR}/clusterloader2"
 chmod +x "${CLUSTERLOADER2}"
 
