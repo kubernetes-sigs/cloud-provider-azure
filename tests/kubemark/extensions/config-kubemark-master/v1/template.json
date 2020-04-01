@@ -46,7 +46,7 @@
     },
     "variables": {  
          "singleQuote": "'",
-         "initScriptUrl": "[concat(parameters('artifactsLocation'), 'https://raw.githubusercontent.com/nilo19/kubemark-performance-tests-on-azure/master/extensions/config-kubemark-master/v1/config-kubemark-master.sh')]"
+         "initScriptUrl": "https://raw.githubusercontent.com/nilo19/kubemark-performance-tests-on-azure/master/extensions/config-kubemark-master/v1/config-kubemark-master.sh"
     },
     "resources": [  
      {
