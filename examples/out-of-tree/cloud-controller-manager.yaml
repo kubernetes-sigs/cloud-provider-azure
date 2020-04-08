@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: cloud-controller-manager
-      image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.4.1
+      image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.0
       imagePullPolicy: IfNotPresent
       command: ["cloud-controller-manager"]
       args:

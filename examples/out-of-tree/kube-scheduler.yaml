@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-scheduler
-      image: k8s.gcr.io/hyperkube-amd64:v1.17.2
+      image: k8s.gcr.io/hyperkube-amd64:v1.18.0
       imagePullPolicy: IfNotPresent
       command: ["/hyperkube", "kube-scheduler"]
       args: ["--kubeconfig=/var/lib/kube-scheduler/kubeconfig", "--leader-elect=true", "--profiling=false", "--v=2"]

@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-controller-manager
-      image: k8s.gcr.io/hyperkube-amd64:v1.17.2
+      image: k8s.gcr.io/hyperkube-amd64:v1.18.0
       imagePullPolicy: IfNotPresent
       command: ["/hyperkube", "kube-controller-manager"]
       args:
