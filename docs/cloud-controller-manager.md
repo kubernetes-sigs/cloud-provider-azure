@@ -38,7 +38,6 @@ To use cloud controller manager, the following components need to be configured:
     |---|---|---|
     |--cloud-provider|azure|cloud-provider should be set azure|
     |--cloud-config|/etc/kubernetes/azure.json|Path for [cloud provider config](cloud-provider-config.md)|
-    |--kubeconfig|/etc/kubernetes/kubeconfig|Path for cluster kubeconfig|
 
     For other flags such as `--allocate-node-cidrs`, `--configure-cloud-routes`, `--cluster-cidr`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
