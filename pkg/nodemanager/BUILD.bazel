@@ -24,7 +24,6 @@ go_library(
         "//vendor/k8s.io/cloud-provider/api:go_default_library",
         "//vendor/k8s.io/cloud-provider/node/helpers:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/kubelet/apis:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/util/node:go_default_library",
     ],
 )
@@ -47,6 +46,5 @@ go_test(
         "//vendor/k8s.io/cloud-provider/api:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
         "//vendor/k8s.io/kubernetes/pkg/controller/testutil:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/kubelet/apis:go_default_library",
     ],
 )
