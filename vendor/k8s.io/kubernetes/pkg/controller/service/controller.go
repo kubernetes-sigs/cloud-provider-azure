@@ -19,10 +19,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
-
-	"reflect"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -70,11 +69,6 @@ const (
 	// in 1.16 when the ServiceNodeExclusion gate is on.
 	labelNodeRoleExcludeBalancer = "node.kubernetes.io/exclude-from-external-load-balancers"
 
-	// labelAlphaNodeRoleExcludeBalancer specifies that the node should be
-	// exclude from load balancers created by a cloud provider. This label is deprecated and will
-	// be removed in 1.18.
-	labelAlphaNodeRoleExcludeBalancer = "alpha.service-controller.kubernetes.io/exclude-balancer"
-
 	// serviceNodeExclusionFeature is the feature gate name that
 	// enables nodes to exclude themselves from service load balancers
 	// originated from: https://github.com/kubernetes/kubernetes/blob/28e800245e/pkg/features/kube_features.go#L178
@@ -101,6 +95,7 @@ type serviceCache struct {
 type Controller struct {
 	cloud            cloudprovider.Interface
 	knownHosts       []*v1.Node
+	knownHostsLock   sync.Mutex
 	servicesToUpdate []*v1.Service
 	kubeClient       clientset.Interface
 	clusterName      string
@@ -174,6 +169,21 @@ func New(
 	)
 	s.serviceLister = serviceInformer.Lister()
 	s.serviceListerSynced = serviceInformer.Informer().HasSynced
+
+	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(cur interface{}) {
+				s.nodeSyncLoop()
+			},
+			UpdateFunc: func(old, cur interface{}) {
+				s.nodeSyncLoop()
+			},
+			DeleteFunc: func(old interface{}) {
+				s.nodeSyncLoop()
+			},
+		},
+		time.Duration(0),
+	)
 
 	if err := s.init(); err != nil {
 		return nil, err
@@ -618,10 +628,6 @@ func getNodeConditionPredicate() NodeConditionPredicate {
 			}
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(serviceNodeExclusionFeature) {
-			// Will be removed in 1.18
-			if _, hasExcludeBalancerLabel := node.Labels[labelAlphaNodeRoleExcludeBalancer]; hasExcludeBalancerLabel {
-				return false
-			}
 			if _, hasExcludeBalancerLabel := node.Labels[labelNodeRoleExcludeBalancer]; hasExcludeBalancerLabel {
 				return false
 			}
@@ -646,6 +652,8 @@ func getNodeConditionPredicate() NodeConditionPredicate {
 // nodeSyncLoop handles updating the hosts pointed to by all load
 // balancers whenever the set of nodes in the cluster changes.
 func (s *Controller) nodeSyncLoop() {
+	s.knownHostsLock.Lock()
+	defer s.knownHostsLock.Unlock()
 	newHosts, err := listWithPredicate(s.nodeLister, getNodeConditionPredicate())
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("Failed to retrieve current set of nodes from node lister: %v", err))
