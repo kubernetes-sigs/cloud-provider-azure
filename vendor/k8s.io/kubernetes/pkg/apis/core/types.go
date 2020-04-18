@@ -3560,7 +3560,8 @@ type ServicePort struct {
 	// RFC-6335 and http://www.iana.org/assignments/service-names).
 	// Non-standard protocols should use prefixed names such as
 	// mycompany.com/my-custom-protocol.
-	// Field can be enabled with ServiceAppProtocol feature gate.
+	// This is a beta field that is guarded by the ServiceAppProtocol feature
+	// gate and enabled by default.
 	// +optional
 	AppProtocol *string
 
@@ -3711,7 +3712,8 @@ type EndpointPort struct {
 	// RFC-6335 and http://www.iana.org/assignments/service-names).
 	// Non-standard protocols should use prefixed names such as
 	// mycompany.com/my-custom-protocol.
-	// Field can be enabled with ServiceAppProtocol feature gate.
+	// This is a beta field that is guarded by the ServiceAppProtocol feature
+	// gate and enabled by default.
 	// +optional
 	AppProtocol *string
 }
@@ -3816,7 +3818,7 @@ type NodeSystemInfo struct {
 	MachineID string
 	// SystemUUID reported by the node. For unique machine identification
 	// MachineID is preferred. This field is specific to Red Hat hosts
-	// https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html
+	// https://access.redhat.com/documentation/en-us/red_hat_subscription_management/1/html/rhsm/uuid
 	SystemUUID string
 	// Boot ID reported by the node.
 	BootID string
@@ -4037,7 +4039,7 @@ type NodeAddress struct {
 }
 
 // NodeResources is an object for conveying resource information about a node.
-// see http://releases.k8s.io/HEAD/docs/design/resources.md for more details.
+// see https://kubernetes.io/docs/concepts/architecture/nodes/#capacity for more details.
 type NodeResources struct {
 	// Capacity represents the available resources of a node
 	// +optional

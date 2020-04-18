@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "annotations.go",
         "doc.go",
+        "helpers.go",
         "register.go",
         "types.go",
         "zz_generated.deepcopy.go",

@@ -34,7 +34,6 @@ import (
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller/testutil"
-	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	mocknodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager/mock"
 
 	"github.com/stretchr/testify/assert"
@@ -451,7 +450,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
 					Labels:            map[string]string{},
 					Annotations: map[string]string{
-						kubeletapis.AnnotationProvidedIPAddr: "10.0.0.1",
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1",
 					},
 				},
 				Status: v1.NodeStatus{
