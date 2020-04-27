@@ -15,7 +15,7 @@
 FROM golang:1.13.9-stretch AS build
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
-RUN make
+RUN make ENABLE_GIT_COMMAND=true
 
 FROM k8s.gcr.io/debian-base:v1.0.0
 COPY --from=build /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin
