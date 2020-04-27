@@ -101,10 +101,6 @@ func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 // assignRoleByID assigns role by roleDefinitionID to the given scope
 func (tc *AzureTestClient) assignRoleByID(scope, roleDefinitionID string) (result azauth.RoleAssignment, err error) {
 	authconfig := tc.GetAuthConfig()
-	if err != nil {
-		return azauth.RoleAssignment{}, err
-	}
-
 	roleAssignmentsClient := tc.createRoleAssignmentsClient()
 
 	return roleAssignmentsClient.Create(

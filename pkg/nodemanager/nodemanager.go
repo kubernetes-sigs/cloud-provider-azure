@@ -525,9 +525,7 @@ func (cnc *CloudNodeController) ensureNodeExistsByProviderID(ctx context.Context
 func (cnc *CloudNodeController) getNodeAddressesByName(ctx context.Context, node *v1.Node) ([]v1.NodeAddress, error) {
 	nodeAddresses, err := cnc.nodeProvider.NodeAddresses(ctx, types.NodeName(node.Name))
 	if err != nil {
-		if err != nil {
-			return nil, fmt.Errorf("error fetching node by name %s: %v", node.Name, err)
-		}
+		return nil, fmt.Errorf("error fetching node by name %s: %v", node.Name, err)
 	}
 	return nodeAddresses, nil
 }
@@ -568,9 +566,7 @@ func ensureNodeProvidedIPExists(node *v1.Node, nodeAddresses []v1.NodeAddress) (
 func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node *v1.Node) (string, error) {
 	instanceType, err := cnc.nodeProvider.InstanceType(ctx, types.NodeName(node.Name))
 	if err != nil {
-		if err != nil {
-			return "", fmt.Errorf("InstanceType: Error fetching by NodeName %s: %v", node.Name, err)
-		}
+		return "", fmt.Errorf("InstanceType: Error fetching by NodeName %s: %v", node.Name, err)
 	}
 	return instanceType, err
 }
@@ -580,9 +576,7 @@ func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node 
 func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node) (cloudprovider.Zone, error) {
 	zone, err := cnc.nodeProvider.GetZone(ctx)
 	if err != nil {
-		if err != nil {
-			return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %v", node.Name, err)
-		}
+		return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %v", node.Name, err)
 	}
 
 	return zone, nil
