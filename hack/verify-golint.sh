@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.25.0
 
 golangci-lint run --deadline=10m
 
