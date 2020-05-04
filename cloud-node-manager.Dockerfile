@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.13.9-stretch AS build
+FROM golang:1.13.9-stretch AS builder
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
-RUN make ENABLE_GIT_COMMAND=true
+RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=true
 
-FROM k8s.gcr.io/debian-base:v1.0.0
-COPY --from=build /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin
-RUN ln -s /usr/local/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
+FROM gcr.io/distroless/static@sha256:c6d5981545ce1406d33e61434c61e9452dad93ecd8397c41e89036ef977a88f4
+COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /bin/azure-cloud-node-manager
+ENTRYPOINT [ "/bin/azure-cloud-node-manager" ]
