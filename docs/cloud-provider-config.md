@@ -281,3 +281,21 @@ Since v1.18.0, Azure cloud provider supports hosting network resources (Virtual 
 With this feature enabled, network resources of the cluster will be created in `networkResourceSubscriptionID` in `networkResourceTenantID`, and rest resources of the cluster still remain in `subscriptionID` in `tenantID`. Properties which specify the resource groups of network resources are compatible with this feature. For example, Virtual Network will be created in `vnetResourceGroup` in `networkResourceSubscriptionID` in `networkResourceTenantID`.
 
 For authentication methods, only Service Principal supports this feature, and `aadClientID` and `aadClientSecret` are used to authenticate with those two AAD Tenants and Subscriptions. Managed Identity and Client Certificate doesn't support this feature. Azure Stack doesn't support this feature.
+
+## Current default rate-limiting values
+
+The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [AKS-Engine](https://github.com/Azure/aks-engine) clusters prior to Kubernetes version v1.18.0.
+
+```json
+    "cloudProviderBackoffMode": "v2",
+    "cloudProviderBackoff": true,
+    "cloudProviderBackoffRetries": 6,
+    "cloudProviderBackoffDuration": 5,
+    "cloudProviderRatelimit": true,
+    "cloudProviderRateLimitQPS": 10,
+    "cloudProviderRateLimitBucket": 100,
+    "cloudProviderRatelimitQPSWrite": 10,
+    "cloudProviderRatelimitBucketWrite": 100,
+```
+
+For v1.18.0+ refer to [per client rate limit config](#per-client-rate-limiting)
