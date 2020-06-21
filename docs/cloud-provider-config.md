@@ -74,7 +74,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |cloudProviderBackoffExponent|Backoff exponent|Float value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffDuration|Backoff duration|Integer value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffJitter|Backoff jitter|Float value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default"|Default to "default"|
+|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default". Note that "v2" has been deprecated since v1.18.0. |Default to "default"|
 |cloudProviderRateLimit|Enable rate limiting|Boolean value, default to false|
 |cloudProviderRateLimitQPS|Rate limit QPS (Read)|Float value, valid if `cloudProviderRateLimit` is true|
 |cloudProviderRateLimitBucket|Rate limit Bucket Size|Integar value, valid if `cloudProviderRateLimit` is true|
@@ -181,25 +181,23 @@ Here is an example of per-client config:
 
 ```json
 {
-        // default rate limit (enabled).
-        "cloudProviderRatelimit": true,
-		"cloudProviderRateLimitBucket": 1,
-		"cloudProviderRateLimitBucketWrite": 1,
-		"cloudProviderRateLimitQPS": 1,
-		"cloudProviderRateLimitQPSWrite": 1,
-		"virtualMachineScaleSetRateLimit": {
-			// VMSS specific (enabled).
-			"cloudProviderRatelimit": true,
-			"cloudProviderRateLimitBucket": 2,
-			"CloudProviderRateLimitBucketWrite": 2,
-			"cloudProviderRateLimitQPS": 0,
-			"CloudProviderRateLimitQPSWrite": 0
-		},
-		"loadBalancerRateLimit": {
-			// LB specific (disabled)
-			"cloudProviderRatelimit": false
-		},
-        ... // other cloud provider configs
+  // default rate limit (enabled).
+  "cloudProviderRatelimit": true,
+  "cloudProviderRateLimitBucket": 1,
+  "cloudProviderRateLimitBucketWrite": 1,
+  "cloudProviderRateLimitQPS": 1,
+  "cloudProviderRateLimitQPSWrite": 1,
+  "virtualMachineScaleSetRateLimit": {  // VMSS specific (enabled).
+    "cloudProviderRatelimit": true,
+    "cloudProviderRateLimitBucket": 2,
+    "CloudProviderRateLimitBucketWrite": 2,
+    "cloudProviderRateLimitQPS": 0,
+    "CloudProviderRateLimitQPSWrite": 0
+  },
+  "loadBalancerRateLimit": {  // LB specific (disabled)
+    "cloudProviderRatelimit": false
+  },
+  ... // other cloud provider configs
 }
 ```
 
@@ -287,7 +285,6 @@ For authentication methods, only Service Principal supports this feature, and `a
 The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [AKS-Engine](https://github.com/Azure/aks-engine) clusters prior to Kubernetes version v1.18.0.
 
 ```json
-    "cloudProviderBackoffMode": "v2",
     "cloudProviderBackoff": true,
     "cloudProviderBackoffRetries": 6,
     "cloudProviderBackoffDuration": 5,
