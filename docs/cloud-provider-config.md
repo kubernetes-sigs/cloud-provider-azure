@@ -74,7 +74,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |cloudProviderBackoffExponent|Backoff exponent|Float value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffDuration|Backoff duration|Integer value, valid if `cloudProviderBackoff` is true|
 |cloudProviderBackoffJitter|Backoff jitter|Float value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default". Note that "v2" has been depracated since v1.18.0. |Default to "default"|
+|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default". Note that "v2" has been deprecated since v1.18.0. |Default to "default"|
 |cloudProviderRateLimit|Enable rate limiting|Boolean value, default to false|
 |cloudProviderRateLimitQPS|Rate limit QPS (Read)|Float value, valid if `cloudProviderRateLimit` is true|
 |cloudProviderRateLimitBucket|Rate limit Bucket Size|Integar value, valid if `cloudProviderRateLimit` is true|
