@@ -29,7 +29,8 @@ Because cross-RG nodes and unmanaged nodes won't be added to Azure load balancer
 
 Cross-RG nodes should register themselves with required labels together with cloud provider:
 
-- `alpha.service-controller.kubernetes.io/exclude-balancer=true`, which is used to exclude the node from load balancer.
+- `node.kubernetes.io/exclude-balancer`, which is used to exclude the node from load balancer.
+  - `alpha.service-controller.kubernetes.io/exclude-balancer=true` should be used if the cluster version is below v1.16.0.
 - `kubernetes.azure.com/resource-group=<rg-name>`, which provides external RG and is used to get node information.
 - cloud provider config
   - `--cloud-provider=azure` when using kube-controller-manager
@@ -41,16 +42,16 @@ For example,
 kubelet ... \
   --cloud-provider=azure \
   --cloud-config=/etc/kubernetes/azure.json \
-  --node-labels=alpha.service-controller.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/resource-group=<rg-name>
+  --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/resource-group=<rg-name>
 ```
 
 ## Unmanaged nodes
 
 On-prem nodes are different from Azure nodes, all Azure coupled features (such as load balancers and Azure managed disks) are not supported for them. To prevent the node being deleted, Azure cloud provider will always assumes the node existing.
 
-On-prem nodes should register themselves with labels `alpha.service-controller.kubernetes.io/exclude-balancer=true` and `kubernetes.azure.com/managed=false`:
+On-prem nodes should register themselves with labels `node.kubernetes.io/exclude-balancer=true` and `kubernetes.azure.com/managed=false`:
 
-- `alpha.service-controller.kubernetes.io/exclude-balancer=true`, which is used to exclude the node from load balancer.
+- `node.kubernetes.io/exclude-balancer=true`, which is used to exclude the node from load balancer.
 - `kubernetes.azure.com/managed=false`, which indicates the node is on-prem or on other clouds.
 
 For example,
@@ -58,7 +59,7 @@ For example,
 ```sh
 kubelet ...\
   --cloud-provider= \
-  --node-labels=alpha.service-controller.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/managed=false
+  --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/managed=false
 ```
 
 ## Reference
