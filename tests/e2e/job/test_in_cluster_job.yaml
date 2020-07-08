@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: run-e2e-all
+spec:
+  template:
+    metadata:
+      name: run-e2e-all
+    spec:
+      serviceAccountName: in-cluster-config-account
+      containers:
+        - name: run-e2e-all
+          image: docker.pkg.github.com/Kubernetes-sigs/cloud-provider-azure/ccm-e2e-full:1.0.0
+          command: ["/bin/bash", "tests/e2e/job/run.sh"]
+          env:
+            - name: K8S_AZURE_TENANTID
+              valueFrom:
+                secretKeyRef:
+                  name: envs
+                  key: tenantID
+            - name: K8S_AZURE_SUBSID
+              valueFrom:
+                secretKeyRef:
+                  name: envs
+                  key: subscription
+            - name: K8S_AZURE_SPID
+              valueFrom:
+                secretKeyRef:
+                  name: envs
+                  key: clientID
+            - name: K8S_AZURE_SPSEC
+              valueFrom:
+                secretKeyRef:
+                  name: envs
+                  key: clientSecret
+            - name: K8S_AZURE_LOCATION
+              valueFrom:
+                secretKeyRef:
+                  name: envs
+                  key: location
+      restartPolicy: Never

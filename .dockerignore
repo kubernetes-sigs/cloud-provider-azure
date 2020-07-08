@@ -7,3 +7,6 @@
 !cmd
 !pkg
 !bin
+!go.mod
+!go.sum
+!tests

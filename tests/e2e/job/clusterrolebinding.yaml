@@ -1,0 +1,33 @@
+# This is needed when in-cluster kube-config is enabled
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: in-cluster-config-account
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: in-cluster-config-account
+  namespace: default
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: envs
+type: Opaque
+data:
+  tenantID: <tenant-ID-base64>
+  subscription: <subscription-ID>
+  clientID: <client-ID>
+  clientSecret: <client-secret>
+  location: <location>

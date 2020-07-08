@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
@@ -28,16 +29,18 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
-	deletionTimeout       = 10 * time.Minute
-	poll                  = 2 * time.Second
-	singleCallTimeout     = 10 * time.Minute
-	vmssOperationInterval = 10 * time.Second
-	vmssOperationTimeout  = 20 * time.Minute
+	deletionTimeout             = 10 * time.Minute
+	poll                        = 2 * time.Second
+	singleCallTimeout           = 10 * time.Minute
+	vmssOperationInterval       = 10 * time.Second
+	vmssOperationTimeout        = 20 * time.Minute
+	recommendedConfigPathEnvVar = "KUBECONFIG"
 )
 
 func findExistingKubeConfig() string {
@@ -51,16 +54,32 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 	//TODO: It should implement only once
 	//rather than once per test
 	Logf("Creating a kubernetes client")
-	filename := findExistingKubeConfig()
-	c := clientcmd.GetConfigFromFileOrDie(filename)
-	restConfig, err := clientcmd.NewDefaultClientConfig(*c, &clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: ""}}).ClientConfig()
-	if err != nil {
-		return nil, err
+
+	var (
+		restConfig *rest.Config
+		err        error
+	)
+	if envVarFiles := os.Getenv(recommendedConfigPathEnvVar); len(envVarFiles) != 0 {
+		filename := findExistingKubeConfig()
+		Logf("Kubernetes configuration file name: %s", filename)
+		c := clientcmd.GetConfigFromFileOrDie(filename)
+		restConfig, err = clientcmd.NewDefaultClientConfig(*c, &clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: ""}}).ClientConfig()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		Logf("Cannot find %s env var, switch to use the in-cluster config", recommendedConfigPathEnvVar)
+		restConfig, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	clientSet, err := clientset.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
+
 	return clientSet, nil
 }
 
@@ -134,7 +153,7 @@ func DeleteNamespace(cs clientset.Interface, namespace string) error {
 	return err
 }
 
-// IsRetryableAPIError will judge whether an error retrable or not
+// IsRetryableAPIError will judge whether an error retryable or not
 func IsRetryableAPIError(err error) bool {
 	// These errors may indicate a transient error that we can retry in tests.
 	if apierrs.IsInternalError(err) || apierrs.IsTimeout(err) || apierrs.IsServerTimeout(err) ||
