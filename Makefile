@@ -56,9 +56,9 @@ NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
 NODE_MANAGER_WINDOWS_IMAGE_NAME=azure-cloud-node-manager-windows
 NODE_MANAGER_WINDOWS_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_WINDOWS_IMAGE_NAME):$(IMAGE_TAG)
 # ccm e2e test image
-CCM_E2E_TEST_IMAGE_NAME=ccm-e2e-full
+CCM_E2E_TEST_IMAGE_NAME=cloud-provider-azure-e2e
 CCM_E2E_TEST_IMAGE=$(IMAGE_REGISTRY)/$(CCM_E2E_TEST_IMAGE_NAME):$(IMAGE_TAG)
-CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/Kubernetes-sigs/cloud-provider-azure/ccm-e2e-full:$(IMAGE_TAG)
+CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/kubernetes-sigs/cloud-provider-azure/cloud-provider-azure-e2e:$(IMAGE_TAG)
 
 # Bazel variables
 BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
