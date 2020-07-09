@@ -10,7 +10,7 @@ spec:
       serviceAccountName: in-cluster-config-account
       containers:
         - name: run-e2e-all
-          image: docker.pkg.github.com/Kubernetes-sigs/cloud-provider-azure/ccm-e2e-full:1.0.0
+          image: docker.pkg.github.com/kubernetes-sigs/cloud-provider-azure/cloud-provider-azure-e2e:latest
           command: ["/bin/bash", "tests/e2e/job/run.sh"]
           env:
             - name: K8S_AZURE_TENANTID
