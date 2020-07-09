@@ -55,6 +55,10 @@ NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
 NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
 NODE_MANAGER_WINDOWS_IMAGE_NAME=azure-cloud-node-manager-windows
 NODE_MANAGER_WINDOWS_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_WINDOWS_IMAGE_NAME):$(IMAGE_TAG)
+# ccm e2e test image
+CCM_E2E_TEST_IMAGE_NAME=ccm-e2e-full
+CCM_E2E_TEST_IMAGE=$(IMAGE_REGISTRY)/$(CCM_E2E_TEST_IMAGE_NAME):$(IMAGE_TAG)
+CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/Kubernetes-sigs/cloud-provider-azure/ccm-e2e-full:$(IMAGE_TAG)
 
 # Bazel variables
 BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
@@ -93,6 +97,10 @@ build-node-image-windows:
 	go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe ./cmd/cloud-node-manager
 	docker build --platform windows/amd64 -t $(NODE_MANAGER_WINDOWS_IMAGE) -f cloud-node-manager-windows.Dockerfile .
 
+.PHONY: build-ccm-e2e-test-image
+build-ccm-e2e-test-image:
+	docker build -t $(CCM_E2E_TEST_IMAGE) -f ./e2e.Dockerfile .
+
 .PHONY: build-images
 build-images: build-ccm-image build-node-image
 
@@ -116,6 +124,11 @@ push: push-ccm-image push-node-image
 
 .PHONY: push-images
 push-images: push-ccm-image push-node-image
+
+.PHONY: release-ccm-e2e-test-image
+release-ccm-e2e-test-image: 
+	docker build -t $(CCM_E2E_TEST_RELEASE_IMAGE) -f ./e2e.Dockerfile .
+	docker push $(CCM_E2E_TEST_RELEASE_IMAGE)
 
 hyperkube:
 ifneq ($(K8S_BRANCH), )

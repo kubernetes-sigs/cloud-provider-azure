@@ -19,7 +19,6 @@ package autoscaling
 import (
 	"context"
 	"math"
-	"os"
 	"strconv"
 	"time"
 
@@ -54,12 +53,6 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		podCount       int // To make sure enough pods to exceed the temporary node volume
 		initNodesNames []string
 	)
-
-	testContext := &framework.TestContext
-	// Use kubectl binary in $PATH
-	testContext.KubectlPath = "kubectl"
-	testContext.KubeConfig = os.Getenv("KUBECONFIG")
-	framework.AfterReadingAllFlags(testContext)
 
 	BeforeEach(func() {
 		var err error
