@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: log-dump-node
-        image: fedora # Base image must have 'journalctl' binary
+        image: fedora:30 # Base image must have 'journalctl' binary
         args:
         - sleep
         - "3600"
