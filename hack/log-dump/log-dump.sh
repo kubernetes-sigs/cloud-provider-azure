@@ -96,7 +96,7 @@ function dump-log() {
   for log_file in "${log_files[@]}"; do
     if [[ "$(should-export-log "${log_file}" "${is_master}")" == "true" ]]; then
       echo "Dumping ${log_file}"
-      kubectl exec "${pod_name}" -- cat "${log_dir}/${log_file}" || true > "${dir}/${log_file}"
+      kubectl exec "${pod_name}" -- cat "${log_dir}/${log_file}" > "${dir}/${log_file}"
     fi
   done
 
@@ -111,7 +111,7 @@ function dump-systemd-log() {
   local -r dir="${2}"
   for systemd_service in "${systemd_services[@]}"; do
     echo "Dumping ${systemd_service}.log"
-    kubectl exec "${pod_name}" -- journalctl --output=short-precise -u "${systemd_service}" || true > "${dir}/${systemd_service}.log"
+    kubectl exec "${pod_name}" -- journalctl --output=short-precise -u "${systemd_service}" > "${dir}/${systemd_service}.log"
   done
 }
 
