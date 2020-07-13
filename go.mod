@@ -3,15 +3,14 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.13
 
 require (
-	github.com/Azure/azure-sdk-for-go v40.2.0+incompatible
+	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.9.6
 	github.com/Azure/go-autorest/autorest/adal v0.8.2
 	github.com/Azure/go-autorest/autorest/to v0.2.0
-	github.com/golangci/golangci-lint v1.25.0 // indirect
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.7.0
-	github.com/prometheus/client_golang v1.0.0
-	github.com/spf13/cobra v0.0.5
+	github.com/prometheus/client_golang v1.7.1
+	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
 	k8s.io/api v0.0.0
@@ -24,13 +23,13 @@ require (
 	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 	k8s.io/legacy-cloud-providers v0.0.0
-	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
+	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 )
 
 replace (
 	bitbucket.org/bertimus9/systemstat => bitbucket.org/bertimus9/systemstat v0.0.0-20180207000608-0eeff89b0690
 	cloud.google.com/go => cloud.google.com/go v0.38.0
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v40.2.0+incompatible
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v44.0.1-0.20200710185145-8277be38f5a2+incompatible
 	github.com/Azure/go-ansiterm => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 	github.com/Azure/go-autorest/autorest => github.com/Azure/go-autorest/autorest v0.9.6
 	github.com/Azure/go-autorest/autorest/adal => github.com/Azure/go-autorest/autorest/adal v0.8.2
@@ -134,7 +133,7 @@ replace (
 	github.com/go-kit/kit => github.com/go-kit/kit v0.8.0
 	github.com/go-lintpack/lintpack => github.com/go-lintpack/lintpack v0.5.2
 	github.com/go-logfmt/logfmt => github.com/go-logfmt/logfmt v0.3.0
-	github.com/go-logr/logr => github.com/go-logr/logr v0.1.0
+	github.com/go-logr/logr => github.com/go-logr/logr v0.2.0
 	github.com/go-ole/go-ole => github.com/go-ole/go-ole v1.2.1
 	github.com/go-openapi/analysis => github.com/go-openapi/analysis v0.19.5
 	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
@@ -293,9 +292,9 @@ replace (
 	github.com/pmezard/go-difflib => github.com/pmezard/go-difflib v1.0.0
 	github.com/pquerna/cachecontrol => github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021
 	github.com/pquerna/ffjson => github.com/pquerna/ffjson v0.0.0-20180717144149-af8b230fcd20
-	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.0.0
+	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model => github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/common => github.com/prometheus/common v0.4.1
+	github.com/prometheus/common => github.com/prometheus/common v0.10.0
 	github.com/prometheus/procfs => github.com/prometheus/procfs v0.0.2
 	github.com/quasilyte/go-consistent => github.com/quasilyte/go-consistent v0.0.0-20190521200055-c6f3937de18c
 	github.com/quobyte/api => github.com/quobyte/api v0.1.2
@@ -400,37 +399,37 @@ replace (
 	gotest.tools/v3 => gotest.tools/v3 v3.0.2
 	grpc.go4.org => grpc.go4.org v0.0.0-20170609214715-11d0a25b4919
 	honnef.co/go/tools => honnef.co/go/tools v0.0.1-2019.2.2
-	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200417064907-6652347ceea9
+	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200713040433-bb8a5d2ada10
 	k8s.io/apiextensions-apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20200417064907-6652347ceea9
-	k8s.io/apimachinery => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200417064907-6652347ceea9
-	k8s.io/apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200417064907-6652347ceea9
+	k8s.io/apimachinery => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200713040433-bb8a5d2ada10
+	k8s.io/apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200713040433-bb8a5d2ada10
 	k8s.io/cli-runtime => k8s.io/kubernetes/staging/src/k8s.io/cli-runtime v0.0.0-20200417064907-6652347ceea9
-	k8s.io/client-go => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200417064907-6652347ceea9
-	k8s.io/cloud-provider => k8s.io/kubernetes/staging/src/k8s.io/cloud-provider v0.0.0-20200417064907-6652347ceea9
+	k8s.io/client-go => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200713040433-bb8a5d2ada10
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20200711020125-52e5381d8dd1
 	k8s.io/cluster-bootstrap => k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200417064907-6652347ceea9
 	k8s.io/code-generator => k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200417064907-6652347ceea9
-	k8s.io/component-base => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200417064907-6652347ceea9
+	k8s.io/component-base => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200713040433-bb8a5d2ada10
 	k8s.io/cri-api => k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200417064907-6652347ceea9
 	k8s.io/csi-translation-lib => k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200417064907-6652347ceea9
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20200205140755-e0e292d8aa12
 	k8s.io/heapster => k8s.io/heapster v1.2.0-beta.1
 	k8s.io/klog => k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator => k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator v0.0.0-20200417064907-6652347ceea9
-	k8s.io/kube-controller-manager => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200417064907-6652347ceea9
+	k8s.io/kube-controller-manager => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200713040433-bb8a5d2ada10
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35
 	k8s.io/kube-proxy => k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20200417064907-6652347ceea9
 	k8s.io/kube-scheduler => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200417064907-6652347ceea9
 	k8s.io/kubectl => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200417064907-6652347ceea9
 	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200417064907-6652347ceea9
-	k8s.io/kubernetes => k8s.io/kubernetes v0.0.0-20200417064907-6652347ceea9
-	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200417064907-6652347ceea9
+	k8s.io/kubernetes => k8s.io/kubernetes v1.20.0-alpha.0.0.20200713040433-bb8a5d2ada10
+	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200713040433-bb8a5d2ada10
 	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200417064907-6652347ceea9
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.3
 	k8s.io/sample-apiserver => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200417064907-6652347ceea9
 	k8s.io/sample-cli-plugin => k8s.io/kubernetes/staging/src/k8s.io/sample-cli-plugin v0.0.0-20200417064907-6652347ceea9
 	k8s.io/sample-controller => k8s.io/kubernetes/staging/src/k8s.io/sample-controller v0.0.0-20200417064907-6652347ceea9
 	k8s.io/system-validators => k8s.io/system-validators v1.1.2
-	k8s.io/utils => k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
+	k8s.io/utils => k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	modernc.org/cc => modernc.org/cc v1.0.0
 	modernc.org/golex => modernc.org/golex v1.0.0
 	modernc.org/mathutil => modernc.org/mathutil v1.0.0
@@ -440,7 +439,7 @@ replace (
 	mvdan.cc/lint => mvdan.cc/lint v0.0.0-20170908181259-adc824a0674b
 	mvdan.cc/unparam => mvdan.cc/unparam v0.0.0-20190209190245-fbb59629db34
 	rsc.io/pdf => rsc.io/pdf v0.1.1
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.7
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
 	sigs.k8s.io/kustomize => sigs.k8s.io/kustomize v2.0.3+incompatible
 	sigs.k8s.io/structured-merge-diff/v3 => sigs.k8s.io/structured-merge-diff/v3 v3.0.0
 	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0

@@ -23,8 +23,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	cloudprovider "k8s.io/cloud-provider"
 	componentbaseconfig "k8s.io/component-base/config"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // Config is the main context object for the cloud node manager.
@@ -54,7 +54,7 @@ type Config struct {
 	EventRecorder record.EventRecorder
 
 	// ClientBuilder will provide a client for this controller to use
-	ClientBuilder controller.ControllerClientBuilder
+	ClientBuilder cloudprovider.ControllerClientBuilder
 
 	// VersionedClient will provide a client for informers
 	VersionedClient clientset.Interface
