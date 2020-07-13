@@ -38,6 +38,7 @@ var (
 type Config struct {
 	NS                  string
 	PVCs                []*v1.PersistentVolumeClaim
+	PVCsReadOnly        bool
 	InlineVolumeSources []*v1.VolumeSource
 	IsPrivileged        bool
 	Command             string
@@ -177,7 +178,7 @@ func MakeSecPod(podConfig *Config) (*v1.Pod, error) {
 	if len(podConfig.Command) == 0 {
 		podConfig.Command = "trap exit TERM; while true; do sleep 1; done"
 	}
-	podName := "security-context-" + string(uuid.NewUUID())
+	podName := "pod-" + string(uuid.NewUUID())
 	if podConfig.FsGroup == nil {
 		podConfig.FsGroup = func(i int64) *int64 {
 			return &i
@@ -224,7 +225,7 @@ func MakeSecPod(podConfig *Config) (*v1.Pod, error) {
 			volumeMounts = append(volumeMounts, v1.VolumeMount{Name: volumename, MountPath: "/mnt/" + volumename})
 		}
 
-		volumes[volumeIndex] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+		volumes[volumeIndex] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: podConfig.PVCsReadOnly}}}
 		volumeIndex++
 	}
 	for _, src := range podConfig.InlineVolumeSources {
