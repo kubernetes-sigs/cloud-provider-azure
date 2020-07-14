@@ -27,10 +27,11 @@ import (
 	"strings"
 
 	cloudprovider "k8s.io/cloud-provider"
+	nodecontroller "k8s.io/cloud-provider/controllers/node"
+	nodelifecyclecontroller "k8s.io/cloud-provider/controllers/nodelifecycle"
+	routecontroller "k8s.io/cloud-provider/controllers/route"
+	servicecontroller "k8s.io/cloud-provider/controllers/service"
 	"k8s.io/klog"
-	cloudcontrollers "k8s.io/kubernetes/pkg/controller/cloud"
-	routecontroller "k8s.io/kubernetes/pkg/controller/route"
-	servicecontroller "k8s.io/kubernetes/pkg/controller/service"
 	netutils "k8s.io/utils/net"
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 
@@ -40,7 +41,7 @@ import (
 
 func startCloudNodeController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the CloudNodeController
-	nodeController, err := cloudcontrollers.NewCloudNodeController(
+	nodeController, err := nodecontroller.NewCloudNodeController(
 		ctx.SharedInformers.Core().V1().Nodes(),
 		// cloud node controller uses existing cluster role from node-controller
 		ctx.ClientBuilder.ClientOrDie("node-controller"),
@@ -59,7 +60,7 @@ func startCloudNodeController(ctx *cloudcontrollerconfig.CompletedConfig, cloud 
 
 func startCloudNodeLifecycleController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the cloudNodeLifecycleController
-	cloudNodeLifecycleController, err := cloudcontrollers.NewCloudNodeLifecycleController(
+	cloudNodeLifecycleController, err := nodelifecyclecontroller.NewCloudNodeLifecycleController(
 		ctx.SharedInformers.Core().V1().Nodes(),
 		// cloud node lifecycle controller uses existing cluster role from node-controller
 		ctx.ClientBuilder.ClientOrDie("node-controller"),
@@ -84,6 +85,7 @@ func startServiceController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cl
 		ctx.SharedInformers.Core().V1().Services(),
 		ctx.SharedInformers.Core().V1().Nodes(),
 		ctx.ComponentConfig.KubeCloudShared.ClusterName,
+		utilfeature.DefaultFeatureGate,
 	)
 	if err != nil {
 		// This error shouldn't fail. It lives like this as a legacy.

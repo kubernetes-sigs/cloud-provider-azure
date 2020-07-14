@@ -36,11 +36,10 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/component-base/configz"
 	"k8s.io/component-base/term"
 	"k8s.io/klog"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
-	"k8s.io/kubernetes/pkg/util/configz"
-	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
@@ -66,7 +65,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 		Long: `The Cloud controller manager is a daemon that embeds the cloud specific control loops shipped with Kubernetes.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			verflag.PrintAndExitIfRequested("Cloud Provider Azure")
-			utilflag.PrintFlags(cmd.Flags())
+			cliflag.PrintFlags(cmd.Flags())
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
 			if err != nil {

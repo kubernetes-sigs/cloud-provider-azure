@@ -32,7 +32,6 @@ import (
 	"k8s.io/component-base/term"
 	"k8s.io/klog"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
-	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"
@@ -53,7 +52,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 		Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			verflag.PrintAndExitIfRequested("Cloud Node Manager")
-			utilflag.PrintFlags(cmd.Flags())
+			cliflag.PrintFlags(cmd.Flags())
 
 			c, err := s.Config()
 			if err != nil {

@@ -31,7 +31,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	azclients "k8s.io/legacy-cloud-providers/azure/clients"
 	"k8s.io/legacy-cloud-providers/azure/clients/armclient"
 	"k8s.io/legacy-cloud-providers/azure/metrics"
@@ -58,7 +58,7 @@ type Client struct {
 func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
 	authorizer := config.Authorizer
-	armClient := armclient.New(authorizer, baseURI, "", APIVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, baseURI, config.UserAgent, APIVersion, config.Location, config.Backoff)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	klog.V(2).Infof("Azure vmssVM client (read ops) using rate limit config: QPS=%g, bucket=%d",
