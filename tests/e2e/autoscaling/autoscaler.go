@@ -92,6 +92,7 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		utils.Logf("will create %v pods in a deployment, each pod requests %vm size", podCount, podSize)
 	})
 
+
 	AfterEach(func() {
 		err := utils.DeleteNamespace(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
