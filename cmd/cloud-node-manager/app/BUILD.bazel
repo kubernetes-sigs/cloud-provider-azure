@@ -21,6 +21,5 @@ go_library(
         "//vendor/k8s.io/component-base/term:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
         "//vendor/k8s.io/kubernetes/cmd/controller-manager/app:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/util/flag:go_default_library",
     ],
 )

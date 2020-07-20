@@ -7,11 +7,13 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/k8s.io/api/core/v1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/api/equality:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/fields:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/runtime:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/util/strategicpatch:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
         "//vendor/k8s.io/client-go/informers/core/v1:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
@@ -24,7 +26,6 @@ go_library(
         "//vendor/k8s.io/cloud-provider/api:go_default_library",
         "//vendor/k8s.io/cloud-provider/node/helpers:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/util/node:go_default_library",
     ],
 )
 
@@ -34,6 +35,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//pkg/nodemanager/mock:go_default_library",
+        "//pkg/util/controller/testutil:go_default_library",
         "//vendor/github.com/stretchr/testify/assert:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
@@ -45,6 +47,5 @@ go_test(
         "//vendor/k8s.io/cloud-provider:go_default_library",
         "//vendor/k8s.io/cloud-provider/api:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/controller/testutil:go_default_library",
     ],
 )
