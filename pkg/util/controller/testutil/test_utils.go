@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2020 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,19 +31,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	api "k8s.io/kubernetes/pkg/apis/core"
-	utilnode "k8s.io/kubernetes/pkg/util/node"
 
 	jsonpatch "github.com/evanphx/json-patch"
 )
@@ -86,10 +85,9 @@ type FakeLegacyHandler struct {
 func (m *FakeNodeHandler) GetUpdatedNodesCopy() []*v1.Node {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	updatedNodesCopy := make([]*v1.Node, len(m.UpdatedNodes), len(m.UpdatedNodes))
-	for i, ptr := range m.UpdatedNodes {
-		updatedNodesCopy[i] = ptr
-	}
+	updatedNodesCopy := make([]*v1.Node, len(m.UpdatedNodes))
+	copy(updatedNodesCopy, m.UpdatedNodes)
+
 	return updatedNodesCopy
 }
 
@@ -117,7 +115,7 @@ func (m *FakeNodeHandler) Create(_ context.Context, node *v1.Node, _ metav1.Crea
 	}()
 	for _, n := range m.Existing {
 		if n.Name == node.Name {
-			return nil, apierrors.NewAlreadyExists(api.Resource("nodes"), node.Name)
+			return nil, apierrors.NewAlreadyExists(Resource("nodes"), node.Name)
 		}
 	}
 	if m.CreateHook == nil || m.CreateHook(m, node) {
@@ -375,7 +373,7 @@ func (f *FakeRecorder) AnnotatedEventf(obj runtime.Object, annotations map[strin
 func (f *FakeRecorder) generateEvent(obj runtime.Object, timestamp metav1.Time, eventtype, reason, message string) {
 	f.Lock()
 	defer f.Unlock()
-	ref, err := ref.GetReference(legacyscheme.Scheme, obj)
+	ref, err := ref.GetReference(scheme.Scheme, obj)
 	if err != nil {
 		klog.Errorf("Encountered error while getting reference: %v", err)
 		return
@@ -478,7 +476,7 @@ func GetZones(nodeHandler *FakeNodeHandler) []string {
 	nodes, _ := nodeHandler.List(context.TODO(), metav1.ListOptions{})
 	zones := sets.NewString()
 	for _, node := range nodes.Items {
-		zones.Insert(utilnode.GetZoneKey(&node))
+		zones.Insert(GetZoneKey(&node))
 	}
 	return zones.List()
 }
@@ -510,4 +508,50 @@ func GetKey(obj interface{}, t *testing.T) string {
 		return ""
 	}
 	return key
+}
+
+// GroupName is the group name use in this package
+const GroupName = ""
+
+// SchemeGroupVersion is group version used to register these objects
+var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: runtime.APIVersionInternal}
+
+// Resource takes an unqualified resource and returns a Group qualified GroupResource
+func Resource(resource string) schema.GroupResource {
+	return SchemeGroupVersion.WithResource(resource).GroupResource()
+}
+
+// GetZoneKey is a helper function that builds a string identifier that is unique per failure-zone;
+// it returns empty-string for no zone.
+// Since there are currently two separate zone keys:
+//   * "failure-domain.beta.kubernetes.io/zone"
+//   * "topology.kubernetes.io/zone"
+// GetZoneKey will first check failure-domain.beta.kubernetes.io/zone and if not exists, will then check
+// topology.kubernetes.io/zone
+func GetZoneKey(node *v1.Node) string {
+	labels := node.Labels
+	if labels == nil {
+		return ""
+	}
+
+	// TODO: prefer stable labels for zone in v1.18
+	zone, ok := labels[v1.LabelZoneFailureDomain]
+	if !ok {
+		zone = labels[v1.LabelZoneFailureDomainStable]
+	}
+
+	// TODO: prefer stable labels for region in v1.18
+	region, ok := labels[v1.LabelZoneRegion]
+	if !ok {
+		region = labels[v1.LabelZoneRegionStable]
+	}
+
+	if region == "" && zone == "" {
+		return ""
+	}
+
+	// We include the null character just in case region or failureDomain has a colon
+	// (We do assume there's no null characters in a region or failureDomain)
+	// As a nice side-benefit, the null character is not printed by fmt.Print or glog
+	return region + ":\x00:" + zone
 }

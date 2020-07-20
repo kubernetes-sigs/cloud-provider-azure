@@ -7,6 +7,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.6
 	github.com/Azure/go-autorest/autorest/adal v0.8.2
 	github.com/Azure/go-autorest/autorest/to v0.2.0
+	github.com/evanphx/json-patch v4.2.0+incompatible
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.7.0
 	github.com/prometheus/client_golang v1.7.1
@@ -20,6 +21,7 @@ require (
 	k8s.io/cloud-provider v0.0.0
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.2.0
 	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 	k8s.io/legacy-cloud-providers v0.0.0

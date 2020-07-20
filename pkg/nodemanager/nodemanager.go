@@ -18,17 +18,20 @@ package nodemanager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -41,7 +44,6 @@ import (
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	"k8s.io/klog"
-	nodeutil "k8s.io/kubernetes/pkg/util/node"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -295,7 +297,7 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	}
 	newNode := node.DeepCopy()
 	newNode.Status.Addresses = nodeAddresses
-	_, _, err = nodeutil.PatchNodeStatus(cnc.kubeClient.CoreV1(), types.NodeName(node.Name), node, newNode)
+	_, _, err = PatchNodeStatus(cnc.kubeClient.CoreV1(), types.NodeName(node.Name), node, newNode)
 	if err != nil {
 		klog.Errorf("Error patching node with cloud ip addresses = [%v]", err)
 	}
@@ -580,4 +582,108 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 	}
 
 	return zone, nil
+}
+
+// PatchNodeStatus patches node status.
+func PatchNodeStatus(c v1core.CoreV1Interface, nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) (*v1.Node, []byte, error) {
+	patchBytes, err := preparePatchBytesforNodeStatus(nodeName, oldNode, newNode)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	updatedNode, err := c.Nodes().Patch(context.TODO(), string(nodeName), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to patch status %q for node %q: %v", patchBytes, nodeName, err)
+	}
+	return updatedNode, patchBytes, nil
+}
+
+func preparePatchBytesforNodeStatus(nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) ([]byte, error) {
+	oldData, err := json.Marshal(oldNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Marshal oldData for node %q: %v", nodeName, err)
+	}
+
+	// NodeStatus.Addresses is incorrectly annotated as patchStrategy=merge, which
+	// will cause strategicpatch.CreateTwoWayMergePatch to create an incorrect patch
+	// if it changed.
+	manuallyPatchAddresses := (len(oldNode.Status.Addresses) > 0) && !equality.Semantic.DeepEqual(oldNode.Status.Addresses, newNode.Status.Addresses)
+
+	// Reset spec to make sure only patch for Status or ObjectMeta is generated.
+	// Note that we don't reset ObjectMeta here, because:
+	// 1. This aligns with Nodes().UpdateStatus().
+	// 2. Some component does use this to update node annotations.
+	diffNode := newNode.DeepCopy()
+	diffNode.Spec = oldNode.Spec
+	if manuallyPatchAddresses {
+		diffNode.Status.Addresses = oldNode.Status.Addresses
+	}
+	newData, err := json.Marshal(diffNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Marshal newData for node %q: %v", nodeName, err)
+	}
+
+	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, v1.Node{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to CreateTwoWayMergePatch for node %q: %v", nodeName, err)
+	}
+	if manuallyPatchAddresses {
+		patchBytes, err = fixupPatchForNodeStatusAddresses(patchBytes, newNode.Status.Addresses)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fix up NodeAddresses in patch for node %q: %v", nodeName, err)
+		}
+	}
+
+	return patchBytes, nil
+}
+
+// fixupPatchForNodeStatusAddresses adds a replace-strategy patch for Status.Addresses to
+// the existing patch
+func fixupPatchForNodeStatusAddresses(patchBytes []byte, addresses []v1.NodeAddress) ([]byte, error) {
+	// Given patchBytes='{"status": {"conditions": [ ... ], "phase": ...}}' and
+	// addresses=[{"type": "InternalIP", "address": "10.0.0.1"}], we need to generate:
+	//
+	//   {
+	//     "status": {
+	//       "conditions": [ ... ],
+	//       "phase": ...,
+	//       "addresses": [
+	//         {
+	//           "type": "InternalIP",
+	//           "address": "10.0.0.1"
+	//         },
+	//         {
+	//           "$patch": "replace"
+	//         }
+	//       ]
+	//     }
+	//   }
+
+	var patchMap map[string]interface{}
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		return nil, err
+	}
+
+	addrBytes, err := json.Marshal(addresses)
+	if err != nil {
+		return nil, err
+	}
+	var addrArray []interface{}
+	if err := json.Unmarshal(addrBytes, &addrArray); err != nil {
+		return nil, err
+	}
+	addrArray = append(addrArray, map[string]interface{}{"$patch": "replace"})
+
+	status := patchMap["status"]
+	if status == nil {
+		status = map[string]interface{}{}
+		patchMap["status"] = status
+	}
+	statusMap, ok := status.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected data in patch")
+	}
+	statusMap["addresses"] = addrArray
+
+	return json.Marshal(patchMap)
 }

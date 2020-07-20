@@ -33,8 +33,9 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/pkg/controller/testutil"
+
 	mocknodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager/mock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
 
 	"github.com/stretchr/testify/assert"
 )

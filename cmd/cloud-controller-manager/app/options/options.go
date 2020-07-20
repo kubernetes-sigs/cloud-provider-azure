@@ -24,6 +24,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -33,17 +34,17 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	cloudprovider "k8s.io/cloud-provider"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog"
 	cmoptions "k8s.io/kubernetes/cmd/controller-manager/app/options"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/master/ports"
 	azureprovider "k8s.io/legacy-cloud-providers/azure"
+
 	ccmconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
 	ccmconfigscheme "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/scheme"
 	ccmconfigv1alpha1 "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/v1alpha1"
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller"
 
 	// add the kubernetes feature gates
 	_ "k8s.io/kubernetes/pkg/features"
@@ -54,6 +55,10 @@ const (
 	CloudControllerManagerUserAgent = "cloud-controller-manager"
 	// DefaultInsecureCloudControllerManagerPort is the default insecure cloud-controller manager port.
 	DefaultInsecureCloudControllerManagerPort = 0
+
+	// CloudControllerManagerPort is the default port for the cloud controller manager server.
+	// This value may be overridden by a flag at startup.
+	CloudControllerManagerPort = cloudprovider.CloudControllerManagerPort
 )
 
 // CloudControllerManagerOptions is the main context object for the controller manager.
@@ -109,7 +114,7 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	s.SecureServing.ServerCert.CertDirectory = ""
 	s.SecureServing.ServerCert.PairName = "cloud-controller-manager"
-	s.SecureServing.BindPort = ports.CloudControllerManagerPort
+	s.SecureServing.BindPort = CloudControllerManagerPort
 
 	s.Generic.LeaderElection.ResourceName = "cloud-controller-manager"
 	s.Generic.LeaderElection.ResourceNamespace = "kube-system"
@@ -277,5 +282,5 @@ func createRecorder(kubeClient clientset.Interface, userAgent string) record.Eve
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	// TODO: remove dependence on the legacyscheme
-	return eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: userAgent})
+	return eventBroadcaster.NewRecorder(runtime.NewScheme(), v1.EventSource{Component: userAgent})
 }

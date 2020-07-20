@@ -29,6 +29,7 @@ import (
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -36,9 +37,12 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/controller"
+
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller"
+
+	// add the kubernetes feature gates
+	_ "k8s.io/kubernetes/pkg/features"
 )
 
 const (
@@ -205,5 +209,5 @@ func createRecorder(kubeClient clientset.Interface, userAgent string) record.Eve
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	// TODO: remove dependence on the legacyscheme
-	return eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: userAgent})
+	return eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: userAgent})
 }

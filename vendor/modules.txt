@@ -928,7 +928,6 @@ k8s.io/kubernetes/pkg/controller/serviceaccount/config
 k8s.io/kubernetes/pkg/controller/serviceaccount/config/v1alpha1
 k8s.io/kubernetes/pkg/controller/statefulset/config
 k8s.io/kubernetes/pkg/controller/statefulset/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/testutil
 k8s.io/kubernetes/pkg/controller/ttlafterfinished/config
 k8s.io/kubernetes/pkg/controller/ttlafterfinished/config/v1alpha1
 k8s.io/kubernetes/pkg/controller/volume/attachdetach/config
@@ -945,7 +944,6 @@ k8s.io/kubernetes/pkg/security/apparmor
 k8s.io/kubernetes/pkg/serviceaccount
 k8s.io/kubernetes/pkg/util/hash
 k8s.io/kubernetes/pkg/util/labels
-k8s.io/kubernetes/pkg/util/node
 k8s.io/kubernetes/pkg/util/parsers
 k8s.io/kubernetes/pkg/util/taints
 k8s.io/kubernetes/test/e2e/framework
