@@ -41,6 +41,7 @@ import (
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	"k8s.io/klog"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -551,7 +552,7 @@ func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool
 func ensureNodeProvidedIPExists(node *v1.Node, nodeAddresses []v1.NodeAddress) (*v1.NodeAddress, bool) {
 	var nodeIP *v1.NodeAddress
 	nodeIPExists := false
-	if providedIP, ok := node.ObjectMeta.Annotations[cloudproviderapi.AnnotationAlphaProvidedIPAddr]; ok {
+	if providedIP, ok := node.ObjectMeta.Annotations[kubeletapis.AnnotationProvidedIPAddr]; ok {
 		nodeIPExists = true
 		for i := range nodeAddresses {
 			if nodeAddresses[i].Address == providedIP {
