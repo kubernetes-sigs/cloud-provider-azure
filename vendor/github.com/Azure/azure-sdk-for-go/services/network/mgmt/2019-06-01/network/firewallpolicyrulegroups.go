@@ -36,9 +36,7 @@ func NewFirewallPolicyRuleGroupsClient(subscriptionID string) FirewallPolicyRule
 	return NewFirewallPolicyRuleGroupsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewFirewallPolicyRuleGroupsClientWithBaseURI creates an instance of the FirewallPolicyRuleGroupsClient client using
-// a custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign
-// clouds, Azure stack).
+// NewFirewallPolicyRuleGroupsClientWithBaseURI creates an instance of the FirewallPolicyRuleGroupsClient client.
 func NewFirewallPolicyRuleGroupsClientWithBaseURI(baseURI string, subscriptionID string) FirewallPolicyRuleGroupsClient {
 	return FirewallPolicyRuleGroupsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -65,7 +63,7 @@ func (client FirewallPolicyRuleGroupsClient) CreateOrUpdate(ctx context.Context,
 			Constraints: []validation.Constraint{{Target: "parameters.FirewallPolicyRuleGroupProperties", Name: validation.Null, Rule: false,
 				Chain: []validation.Constraint{{Target: "parameters.FirewallPolicyRuleGroupProperties.Priority", Name: validation.Null, Rule: false,
 					Chain: []validation.Constraint{{Target: "parameters.FirewallPolicyRuleGroupProperties.Priority", Name: validation.InclusiveMaximum, Rule: int64(65000), Chain: nil},
-						{Target: "parameters.FirewallPolicyRuleGroupProperties.Priority", Name: validation.InclusiveMinimum, Rule: int64(100), Chain: nil},
+						{Target: "parameters.FirewallPolicyRuleGroupProperties.Priority", Name: validation.InclusiveMinimum, Rule: 100, Chain: nil},
 					}},
 				}}}}}); err != nil {
 		return result, validation.NewError("network.FirewallPolicyRuleGroupsClient", "CreateOrUpdate", err.Error())
@@ -115,8 +113,9 @@ func (client FirewallPolicyRuleGroupsClient) CreateOrUpdatePreparer(ctx context.
 // CreateOrUpdateSender sends the CreateOrUpdate request. The method will close the
 // http.Response Body if it receives an error.
 func (client FirewallPolicyRuleGroupsClient) CreateOrUpdateSender(req *http.Request) (future FirewallPolicyRuleGroupsCreateOrUpdateFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -193,8 +192,9 @@ func (client FirewallPolicyRuleGroupsClient) DeletePreparer(ctx context.Context,
 // DeleteSender sends the Delete request. The method will close the
 // http.Response Body if it receives an error.
 func (client FirewallPolicyRuleGroupsClient) DeleteSender(req *http.Request) (future FirewallPolicyRuleGroupsDeleteFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -276,7 +276,8 @@ func (client FirewallPolicyRuleGroupsClient) GetPreparer(ctx context.Context, re
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client FirewallPolicyRuleGroupsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -353,7 +354,8 @@ func (client FirewallPolicyRuleGroupsClient) ListPreparer(ctx context.Context, r
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client FirewallPolicyRuleGroupsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always

@@ -36,8 +36,7 @@ func NewUsagesClient(subscriptionID string) UsagesClient {
 	return NewUsagesClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewUsagesClientWithBaseURI creates an instance of the UsagesClient client using a custom endpoint.  Use this when
-// interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure stack).
+// NewUsagesClientWithBaseURI creates an instance of the UsagesClient client.
 func NewUsagesClientWithBaseURI(baseURI string, subscriptionID string) UsagesClient {
 	return UsagesClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -106,7 +105,8 @@ func (client UsagesClient) ListByLocationPreparer(ctx context.Context, location 
 // ListByLocationSender sends the ListByLocation request. The method will close the
 // http.Response Body if it receives an error.
 func (client UsagesClient) ListByLocationSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListByLocationResponder handles the response to the ListByLocation request. The method always

@@ -26,10 +26,8 @@ import (
 )
 
 // ResourceQuotaLister helps list ResourceQuotas.
-// All objects returned here must be treated as read-only.
 type ResourceQuotaLister interface {
 	// List lists all ResourceQuotas in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ResourceQuota, err error)
 	// ResourceQuotas returns an object that can list and get ResourceQuotas.
 	ResourceQuotas(namespace string) ResourceQuotaNamespaceLister
@@ -60,13 +58,10 @@ func (s *resourceQuotaLister) ResourceQuotas(namespace string) ResourceQuotaName
 }
 
 // ResourceQuotaNamespaceLister helps list and get ResourceQuotas.
-// All objects returned here must be treated as read-only.
 type ResourceQuotaNamespaceLister interface {
 	// List lists all ResourceQuotas in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ResourceQuota, err error)
 	// Get retrieves the ResourceQuota from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.ResourceQuota, error)
 	ResourceQuotaNamespaceListerExpansion
 }

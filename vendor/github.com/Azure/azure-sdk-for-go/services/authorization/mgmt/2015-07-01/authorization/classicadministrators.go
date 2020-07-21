@@ -38,9 +38,7 @@ func NewClassicAdministratorsClient(subscriptionID string) ClassicAdministrators
 	return NewClassicAdministratorsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewClassicAdministratorsClientWithBaseURI creates an instance of the ClassicAdministratorsClient client using a
-// custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds,
-// Azure stack).
+// NewClassicAdministratorsClientWithBaseURI creates an instance of the ClassicAdministratorsClient client.
 func NewClassicAdministratorsClientWithBaseURI(baseURI string, subscriptionID string) ClassicAdministratorsClient {
 	return ClassicAdministratorsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -101,7 +99,8 @@ func (client ClassicAdministratorsClient) ListPreparer(ctx context.Context) (*ht
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client ClassicAdministratorsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always

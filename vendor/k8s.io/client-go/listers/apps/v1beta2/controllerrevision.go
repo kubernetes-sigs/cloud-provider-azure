@@ -26,10 +26,8 @@ import (
 )
 
 // ControllerRevisionLister helps list ControllerRevisions.
-// All objects returned here must be treated as read-only.
 type ControllerRevisionLister interface {
 	// List lists all ControllerRevisions in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta2.ControllerRevision, err error)
 	// ControllerRevisions returns an object that can list and get ControllerRevisions.
 	ControllerRevisions(namespace string) ControllerRevisionNamespaceLister
@@ -60,13 +58,10 @@ func (s *controllerRevisionLister) ControllerRevisions(namespace string) Control
 }
 
 // ControllerRevisionNamespaceLister helps list and get ControllerRevisions.
-// All objects returned here must be treated as read-only.
 type ControllerRevisionNamespaceLister interface {
 	// List lists all ControllerRevisions in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta2.ControllerRevision, err error)
 	// Get retrieves the ControllerRevision from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1beta2.ControllerRevision, error)
 	ControllerRevisionNamespaceListerExpansion
 }

@@ -28,8 +28,7 @@ const (
 	StorageTypeUnset = ""
 	StorageTypeETCD3 = "etcd3"
 
-	DefaultCompactInterval      = 5 * time.Minute
-	DefaultDBMetricPollInterval = 30 * time.Second
+	DefaultCompactInterval = 5 * time.Minute
 )
 
 // TransportConfig holds all connection related info,  i.e. equal TransportConfig means equal servers we talk to.
@@ -72,16 +71,13 @@ type Config struct {
 	CompactionInterval time.Duration
 	// CountMetricPollPeriod specifies how often should count metric be updated
 	CountMetricPollPeriod time.Duration
-	// DBMetricPollInterval specifies how often should storage backend metric be updated.
-	DBMetricPollInterval time.Duration
 }
 
 func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
 	return &Config{
-		Paging:               true,
-		Prefix:               prefix,
-		Codec:                codec,
-		CompactionInterval:   DefaultCompactInterval,
-		DBMetricPollInterval: DefaultDBMetricPollInterval,
+		Paging:             true,
+		Prefix:             prefix,
+		Codec:              codec,
+		CompactionInterval: DefaultCompactInterval,
 	}
 }

@@ -35,9 +35,7 @@ func NewResourceNavigationLinksClient(subscriptionID string) ResourceNavigationL
 	return NewResourceNavigationLinksClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewResourceNavigationLinksClientWithBaseURI creates an instance of the ResourceNavigationLinksClient client using a
-// custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds,
-// Azure stack).
+// NewResourceNavigationLinksClientWithBaseURI creates an instance of the ResourceNavigationLinksClient client.
 func NewResourceNavigationLinksClientWithBaseURI(baseURI string, subscriptionID string) ResourceNavigationLinksClient {
 	return ResourceNavigationLinksClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -104,7 +102,8 @@ func (client ResourceNavigationLinksClient) ListPreparer(ctx context.Context, re
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client ResourceNavigationLinksClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always

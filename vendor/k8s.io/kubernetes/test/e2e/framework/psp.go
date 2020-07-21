@@ -29,21 +29,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/kubernetes/pkg/security/podsecuritypolicy/seccomp"
 
 	"github.com/onsi/ginkgo"
 
 	// TODO: Remove the following imports (ref: https://github.com/kubernetes/kubernetes/issues/81245)
-	e2eauth "k8s.io/kubernetes/test/e2e/framework/auth"
+	"k8s.io/kubernetes/test/e2e/framework/auth"
 )
 
 const (
 	podSecurityPolicyPrivileged = "e2e-test-privileged-psp"
-
-	// allowAny is the wildcard used to allow any profile.
-	allowAny = "*"
-
-	// allowedProfilesAnnotationKey specifies the allowed seccomp profiles.
-	allowedProfilesAnnotationKey = "seccomp.security.alpha.kubernetes.io/allowedProfileNames"
 )
 
 var (
@@ -57,7 +52,7 @@ func privilegedPSP(name string) *policyv1beta1.PodSecurityPolicy {
 	return &policyv1beta1.PodSecurityPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
-			Annotations: map[string]string{allowedProfilesAnnotationKey: allowAny},
+			Annotations: map[string]string{seccomp.AllowedProfilesAnnotationKey: seccomp.AllowAny},
 		},
 		Spec: policyv1beta1.PodSecurityPolicySpec{
 			Privileged:               true,
@@ -128,7 +123,7 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 			ExpectNoError(err, "Failed to create PSP %s", podSecurityPolicyPrivileged)
 		}
 
-		if e2eauth.IsRBACEnabled(kubeClient.RbacV1()) {
+		if auth.IsRBACEnabled(kubeClient.RbacV1()) {
 			// Create the Role to bind it to the namespace.
 			_, err = kubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{Name: podSecurityPolicyPrivileged},
@@ -145,10 +140,10 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 		}
 	})
 
-	if e2eauth.IsRBACEnabled(kubeClient.RbacV1()) {
+	if auth.IsRBACEnabled(kubeClient.RbacV1()) {
 		ginkgo.By(fmt.Sprintf("Binding the %s PodSecurityPolicy to the default service account in %s",
 			podSecurityPolicyPrivileged, namespace))
-		err := e2eauth.BindClusterRoleInNamespace(kubeClient.RbacV1(),
+		err := auth.BindClusterRoleInNamespace(kubeClient.RbacV1(),
 			podSecurityPolicyPrivileged,
 			namespace,
 			rbacv1.Subject{
@@ -157,7 +152,7 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 				Name:      "default",
 			})
 		ExpectNoError(err)
-		ExpectNoError(e2eauth.WaitForNamedAuthorizationUpdate(kubeClient.AuthorizationV1(),
+		ExpectNoError(auth.WaitForNamedAuthorizationUpdate(kubeClient.AuthorizationV1(),
 			serviceaccount.MakeUsername(namespace, "default"), namespace, "use", podSecurityPolicyPrivileged,
 			schema.GroupResource{Group: "extensions", Resource: "podsecuritypolicies"}, true))
 	}

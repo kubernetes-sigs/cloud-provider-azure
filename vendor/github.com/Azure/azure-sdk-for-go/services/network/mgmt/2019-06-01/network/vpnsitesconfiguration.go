@@ -36,9 +36,7 @@ func NewVpnSitesConfigurationClient(subscriptionID string) VpnSitesConfiguration
 	return NewVpnSitesConfigurationClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewVpnSitesConfigurationClientWithBaseURI creates an instance of the VpnSitesConfigurationClient client using a
-// custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds,
-// Azure stack).
+// NewVpnSitesConfigurationClientWithBaseURI creates an instance of the VpnSitesConfigurationClient client.
 func NewVpnSitesConfigurationClientWithBaseURI(baseURI string, subscriptionID string) VpnSitesConfigurationClient {
 	return VpnSitesConfigurationClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -106,8 +104,9 @@ func (client VpnSitesConfigurationClient) DownloadPreparer(ctx context.Context, 
 // DownloadSender sends the Download request. The method will close the
 // http.Response Body if it receives an error.
 func (client VpnSitesConfigurationClient) DownloadSender(req *http.Request) (future VpnSitesConfigurationDownloadFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}

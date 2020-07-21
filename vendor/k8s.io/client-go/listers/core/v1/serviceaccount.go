@@ -26,10 +26,8 @@ import (
 )
 
 // ServiceAccountLister helps list ServiceAccounts.
-// All objects returned here must be treated as read-only.
 type ServiceAccountLister interface {
 	// List lists all ServiceAccounts in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ServiceAccount, err error)
 	// ServiceAccounts returns an object that can list and get ServiceAccounts.
 	ServiceAccounts(namespace string) ServiceAccountNamespaceLister
@@ -60,13 +58,10 @@ func (s *serviceAccountLister) ServiceAccounts(namespace string) ServiceAccountN
 }
 
 // ServiceAccountNamespaceLister helps list and get ServiceAccounts.
-// All objects returned here must be treated as read-only.
 type ServiceAccountNamespaceLister interface {
 	// List lists all ServiceAccounts in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ServiceAccount, err error)
 	// Get retrieves the ServiceAccount from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.ServiceAccount, error)
 	ServiceAccountNamespaceListerExpansion
 }
