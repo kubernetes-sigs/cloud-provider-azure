@@ -36,9 +36,7 @@ func NewDiskEncryptionSetsClient(subscriptionID string) DiskEncryptionSetsClient
 	return NewDiskEncryptionSetsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewDiskEncryptionSetsClientWithBaseURI creates an instance of the DiskEncryptionSetsClient client using a custom
-// endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure
-// stack).
+// NewDiskEncryptionSetsClientWithBaseURI creates an instance of the DiskEncryptionSetsClient client.
 func NewDiskEncryptionSetsClientWithBaseURI(baseURI string, subscriptionID string) DiskEncryptionSetsClient {
 	return DiskEncryptionSetsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -114,8 +112,9 @@ func (client DiskEncryptionSetsClient) CreateOrUpdatePreparer(ctx context.Contex
 // CreateOrUpdateSender sends the CreateOrUpdate request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) CreateOrUpdateSender(req *http.Request) (future DiskEncryptionSetsCreateOrUpdateFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -192,8 +191,9 @@ func (client DiskEncryptionSetsClient) DeletePreparer(ctx context.Context, resou
 // DeleteSender sends the Delete request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) DeleteSender(req *http.Request) (future DiskEncryptionSetsDeleteFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -275,7 +275,8 @@ func (client DiskEncryptionSetsClient) GetPreparer(ctx context.Context, resource
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -347,7 +348,8 @@ func (client DiskEncryptionSetsClient) ListPreparer(ctx context.Context) (*http.
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always
@@ -459,7 +461,8 @@ func (client DiskEncryptionSetsClient) ListByResourceGroupPreparer(ctx context.C
 // ListByResourceGroupSender sends the ListByResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) ListByResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListByResourceGroupResponder handles the response to the ListByResourceGroup request. The method always
@@ -572,8 +575,9 @@ func (client DiskEncryptionSetsClient) UpdatePreparer(ctx context.Context, resou
 // UpdateSender sends the Update request. The method will close the
 // http.Response Body if it receives an error.
 func (client DiskEncryptionSetsClient) UpdateSender(req *http.Request) (future DiskEncryptionSetsUpdateFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}

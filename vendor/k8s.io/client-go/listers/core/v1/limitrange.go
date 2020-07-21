@@ -26,10 +26,8 @@ import (
 )
 
 // LimitRangeLister helps list LimitRanges.
-// All objects returned here must be treated as read-only.
 type LimitRangeLister interface {
 	// List lists all LimitRanges in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.LimitRange, err error)
 	// LimitRanges returns an object that can list and get LimitRanges.
 	LimitRanges(namespace string) LimitRangeNamespaceLister
@@ -60,13 +58,10 @@ func (s *limitRangeLister) LimitRanges(namespace string) LimitRangeNamespaceList
 }
 
 // LimitRangeNamespaceLister helps list and get LimitRanges.
-// All objects returned here must be treated as read-only.
 type LimitRangeNamespaceLister interface {
 	// List lists all LimitRanges in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.LimitRange, err error)
 	// Get retrieves the LimitRange from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.LimitRange, error)
 	LimitRangeNamespaceListerExpansion
 }

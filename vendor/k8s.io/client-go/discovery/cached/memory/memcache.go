@@ -24,7 +24,7 @@ import (
 	"sync"
 	"syscall"
 
-	openapi_v2 "github.com/googleapis/gnostic/openapiv2"
+	"github.com/googleapis/gnostic/OpenAPIv2"
 
 	errorsutil "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

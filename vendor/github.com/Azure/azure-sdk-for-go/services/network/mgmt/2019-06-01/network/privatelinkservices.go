@@ -35,9 +35,7 @@ func NewPrivateLinkServicesClient(subscriptionID string) PrivateLinkServicesClie
 	return NewPrivateLinkServicesClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewPrivateLinkServicesClientWithBaseURI creates an instance of the PrivateLinkServicesClient client using a custom
-// endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure
-// stack).
+// NewPrivateLinkServicesClientWithBaseURI creates an instance of the PrivateLinkServicesClient client.
 func NewPrivateLinkServicesClientWithBaseURI(baseURI string, subscriptionID string) PrivateLinkServicesClient {
 	return PrivateLinkServicesClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -103,7 +101,8 @@ func (client PrivateLinkServicesClient) CheckPrivateLinkServiceVisibilityPrepare
 // CheckPrivateLinkServiceVisibilitySender sends the CheckPrivateLinkServiceVisibility request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) CheckPrivateLinkServiceVisibilitySender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // CheckPrivateLinkServiceVisibilityResponder handles the response to the CheckPrivateLinkServiceVisibility request. The method always
@@ -182,7 +181,8 @@ func (client PrivateLinkServicesClient) CheckPrivateLinkServiceVisibilityByResou
 // CheckPrivateLinkServiceVisibilityByResourceGroupSender sends the CheckPrivateLinkServiceVisibilityByResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) CheckPrivateLinkServiceVisibilityByResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // CheckPrivateLinkServiceVisibilityByResourceGroupResponder handles the response to the CheckPrivateLinkServiceVisibilityByResourceGroup request. The method always
@@ -255,8 +255,9 @@ func (client PrivateLinkServicesClient) CreateOrUpdatePreparer(ctx context.Conte
 // CreateOrUpdateSender sends the CreateOrUpdate request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) CreateOrUpdateSender(req *http.Request) (future PrivateLinkServicesCreateOrUpdateFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -331,8 +332,9 @@ func (client PrivateLinkServicesClient) DeletePreparer(ctx context.Context, reso
 // DeleteSender sends the Delete request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) DeleteSender(req *http.Request) (future PrivateLinkServicesDeleteFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -408,8 +410,9 @@ func (client PrivateLinkServicesClient) DeletePrivateEndpointConnectionPreparer(
 // DeletePrivateEndpointConnectionSender sends the DeletePrivateEndpointConnection request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) DeletePrivateEndpointConnectionSender(req *http.Request) (future PrivateLinkServicesDeletePrivateEndpointConnectionFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -493,7 +496,8 @@ func (client PrivateLinkServicesClient) GetPreparer(ctx context.Context, resourc
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) GetSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -568,7 +572,8 @@ func (client PrivateLinkServicesClient) ListPreparer(ctx context.Context, resour
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always
@@ -681,7 +686,8 @@ func (client PrivateLinkServicesClient) ListAutoApprovedPrivateLinkServicesPrepa
 // ListAutoApprovedPrivateLinkServicesSender sends the ListAutoApprovedPrivateLinkServices request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) ListAutoApprovedPrivateLinkServicesSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListAutoApprovedPrivateLinkServicesResponder handles the response to the ListAutoApprovedPrivateLinkServices request. The method always
@@ -796,7 +802,8 @@ func (client PrivateLinkServicesClient) ListAutoApprovedPrivateLinkServicesByRes
 // ListAutoApprovedPrivateLinkServicesByResourceGroupSender sends the ListAutoApprovedPrivateLinkServicesByResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) ListAutoApprovedPrivateLinkServicesByResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListAutoApprovedPrivateLinkServicesByResourceGroupResponder handles the response to the ListAutoApprovedPrivateLinkServicesByResourceGroup request. The method always
@@ -905,7 +912,8 @@ func (client PrivateLinkServicesClient) ListBySubscriptionPreparer(ctx context.C
 // ListBySubscriptionSender sends the ListBySubscription request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) ListBySubscriptionSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListBySubscriptionResponder handles the response to the ListBySubscription request. The method always
@@ -1026,7 +1034,8 @@ func (client PrivateLinkServicesClient) UpdatePrivateEndpointConnectionPreparer(
 // UpdatePrivateEndpointConnectionSender sends the UpdatePrivateEndpointConnection request. The method will close the
 // http.Response Body if it receives an error.
 func (client PrivateLinkServicesClient) UpdatePrivateEndpointConnectionSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // UpdatePrivateEndpointConnectionResponder handles the response to the UpdatePrivateEndpointConnection request. The method always

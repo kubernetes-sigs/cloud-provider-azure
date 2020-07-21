@@ -36,9 +36,7 @@ func NewExpressRouteCircuitPeeringsClient(subscriptionID string) ExpressRouteCir
 	return NewExpressRouteCircuitPeeringsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewExpressRouteCircuitPeeringsClientWithBaseURI creates an instance of the ExpressRouteCircuitPeeringsClient client
-// using a custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign
-// clouds, Azure stack).
+// NewExpressRouteCircuitPeeringsClientWithBaseURI creates an instance of the ExpressRouteCircuitPeeringsClient client.
 func NewExpressRouteCircuitPeeringsClientWithBaseURI(baseURI string, subscriptionID string) ExpressRouteCircuitPeeringsClient {
 	return ExpressRouteCircuitPeeringsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -65,7 +63,7 @@ func (client ExpressRouteCircuitPeeringsClient) CreateOrUpdate(ctx context.Conte
 			Constraints: []validation.Constraint{{Target: "peeringParameters.ExpressRouteCircuitPeeringPropertiesFormat", Name: validation.Null, Rule: false,
 				Chain: []validation.Constraint{{Target: "peeringParameters.ExpressRouteCircuitPeeringPropertiesFormat.PeerASN", Name: validation.Null, Rule: false,
 					Chain: []validation.Constraint{{Target: "peeringParameters.ExpressRouteCircuitPeeringPropertiesFormat.PeerASN", Name: validation.InclusiveMaximum, Rule: int64(4294967295), Chain: nil},
-						{Target: "peeringParameters.ExpressRouteCircuitPeeringPropertiesFormat.PeerASN", Name: validation.InclusiveMinimum, Rule: int64(1), Chain: nil},
+						{Target: "peeringParameters.ExpressRouteCircuitPeeringPropertiesFormat.PeerASN", Name: validation.InclusiveMinimum, Rule: 1, Chain: nil},
 					}},
 				}}}}}); err != nil {
 		return result, validation.NewError("network.ExpressRouteCircuitPeeringsClient", "CreateOrUpdate", err.Error())
@@ -115,8 +113,9 @@ func (client ExpressRouteCircuitPeeringsClient) CreateOrUpdatePreparer(ctx conte
 // CreateOrUpdateSender sends the CreateOrUpdate request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitPeeringsClient) CreateOrUpdateSender(req *http.Request) (future ExpressRouteCircuitPeeringsCreateOrUpdateFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -193,8 +192,9 @@ func (client ExpressRouteCircuitPeeringsClient) DeletePreparer(ctx context.Conte
 // DeleteSender sends the Delete request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitPeeringsClient) DeleteSender(req *http.Request) (future ExpressRouteCircuitPeeringsDeleteFuture, err error) {
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
 	var resp *http.Response
-	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	resp, err = autorest.SendWithSender(client, req, sd...)
 	if err != nil {
 		return
 	}
@@ -276,7 +276,8 @@ func (client ExpressRouteCircuitPeeringsClient) GetPreparer(ctx context.Context,
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitPeeringsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -353,7 +354,8 @@ func (client ExpressRouteCircuitPeeringsClient) ListPreparer(ctx context.Context
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitPeeringsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListResponder handles the response to the List request. The method always

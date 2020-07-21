@@ -98,9 +98,8 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 		klog.Errorf("jwt validator expected private claim of type *privateClaims but got: %T", privateObj)
 		return nil, errors.New("Token could not be validated.")
 	}
-	nowTime := now()
 	err := public.Validate(jwt.Expected{
-		Time: nowTime,
+		Time: now(),
 	})
 	switch {
 	case err == nil:
@@ -111,8 +110,6 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 		return nil, errors.New("Token could not be validated.")
 	}
 
-	// consider things deleted prior to now()-leeway to be invalid
-	invalidIfDeletedBefore := nowTime.Add(-jwt.DefaultLeeway)
 	namespace := private.Kubernetes.Namespace
 	saref := private.Kubernetes.Svcacct
 	podref := private.Kubernetes.Pod
@@ -123,7 +120,7 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 		klog.V(4).Infof("Could not retrieve service account %s/%s: %v", namespace, saref.Name, err)
 		return nil, err
 	}
-	if serviceAccount.DeletionTimestamp != nil && serviceAccount.DeletionTimestamp.Time.Before(invalidIfDeletedBefore) {
+	if serviceAccount.DeletionTimestamp != nil {
 		klog.V(4).Infof("Service account has been deleted %s/%s", namespace, saref.Name)
 		return nil, fmt.Errorf("ServiceAccount %s/%s has been deleted", namespace, saref.Name)
 	}
@@ -139,7 +136,7 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 			klog.V(4).Infof("Could not retrieve bound secret %s/%s for service account %s/%s: %v", namespace, secref.Name, namespace, saref.Name, err)
 			return nil, errors.New("Token has been invalidated")
 		}
-		if secret.DeletionTimestamp != nil && secret.DeletionTimestamp.Time.Before(invalidIfDeletedBefore) {
+		if secret.DeletionTimestamp != nil {
 			klog.V(4).Infof("Bound secret is deleted and awaiting removal: %s/%s for service account %s/%s", namespace, secref.Name, namespace, saref.Name)
 			return nil, errors.New("Token has been invalidated")
 		}
@@ -157,7 +154,7 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 			klog.V(4).Infof("Could not retrieve bound pod %s/%s for service account %s/%s: %v", namespace, podref.Name, namespace, saref.Name, err)
 			return nil, errors.New("Token has been invalidated")
 		}
-		if pod.DeletionTimestamp != nil && pod.DeletionTimestamp.Time.Before(invalidIfDeletedBefore) {
+		if pod.DeletionTimestamp != nil {
 			klog.V(4).Infof("Bound pod is deleted and awaiting removal: %s/%s for service account %s/%s", namespace, podref.Name, namespace, saref.Name)
 			return nil, errors.New("Token has been invalidated")
 		}

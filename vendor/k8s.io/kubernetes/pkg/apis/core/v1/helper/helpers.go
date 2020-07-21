@@ -131,25 +131,22 @@ func IsOvercommitAllowed(name v1.ResourceName) bool {
 		!IsHugePageResourceName(name)
 }
 
-// IsAttachableVolumeResourceName returns true when the resource name is prefixed in attachable volume
 func IsAttachableVolumeResourceName(name v1.ResourceName) bool {
 	return strings.HasPrefix(string(name), v1.ResourceAttachableVolumesPrefix)
 }
 
-// IsScalarResourceName validates the resource for Extended, Hugepages, Native and AttachableVolume resources
+// Extended and Hugepages resources
 func IsScalarResourceName(name v1.ResourceName) bool {
 	return IsExtendedResourceName(name) || IsHugePageResourceName(name) ||
 		IsPrefixedNativeResource(name) || IsAttachableVolumeResourceName(name)
 }
 
-// IsServiceIPSet aims to check if the service's ClusterIP is set or not
+// this function aims to check if the service's ClusterIP is set or not
 // the objective is not to perform validation here
 func IsServiceIPSet(service *v1.Service) bool {
 	return service.Spec.ClusterIP != v1.ClusterIPNone && service.Spec.ClusterIP != ""
 }
 
-// LoadBalancerStatusEqual evaluates the given load balancers' ingress IP addresses
-// and hostnames and returns true if equal or false if otherwise
 // TODO: make method on LoadBalancerStatus?
 func LoadBalancerStatusEqual(l, r *v1.LoadBalancerStatus) bool {
 	return ingressSliceEqual(l.Ingress, r.Ingress)
@@ -194,7 +191,7 @@ func GetAccessModesAsString(modes []v1.PersistentVolumeAccessMode) string {
 	return strings.Join(modesStr, ",")
 }
 
-// GetAccessModesFromString returns an array of AccessModes from a string created by GetAccessModesAsString
+// GetAccessModesAsString returns an array of AccessModes from a string created by GetAccessModesAsString
 func GetAccessModesFromString(modes string) []v1.PersistentVolumeAccessMode {
 	strmodes := strings.Split(modes, ",")
 	accessModes := []v1.PersistentVolumeAccessMode{}
@@ -470,7 +467,7 @@ func getFilteredTaints(taints []v1.Taint, inclusionFilter taintsFilterFunc) []v1
 	return filteredTaints
 }
 
-// GetMatchingTolerations returns true and list of Tolerations matching all Taints if all are tolerated, or false otherwise.
+// Returns true and list of Tolerations matching all Taints if all are tolerated, or false otherwise.
 func GetMatchingTolerations(taints []v1.Taint, tolerations []v1.Toleration) (bool, []v1.Toleration) {
 	if len(taints) == 0 {
 		return true, []v1.Toleration{}
@@ -495,8 +492,6 @@ func GetMatchingTolerations(taints []v1.Taint, tolerations []v1.Toleration) (boo
 	return true, result
 }
 
-// GetAvoidPodsFromNodeAnnotations scans the list of annotations and
-// returns the pods that needs to be avoided for this node from scheduling
 func GetAvoidPodsFromNodeAnnotations(annotations map[string]string) (v1.AvoidPods, error) {
 	var avoidPods v1.AvoidPods
 	if len(annotations) > 0 && annotations[v1.PreferAvoidPodsAnnotationKey] != "" {

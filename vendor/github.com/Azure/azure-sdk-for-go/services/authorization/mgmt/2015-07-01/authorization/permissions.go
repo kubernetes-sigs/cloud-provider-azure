@@ -38,8 +38,7 @@ func NewPermissionsClient(subscriptionID string) PermissionsClient {
 	return NewPermissionsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewPermissionsClientWithBaseURI creates an instance of the PermissionsClient client using a custom endpoint.  Use
-// this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure stack).
+// NewPermissionsClientWithBaseURI creates an instance of the PermissionsClient client.
 func NewPermissionsClientWithBaseURI(baseURI string, subscriptionID string) PermissionsClient {
 	return PermissionsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -111,7 +110,8 @@ func (client PermissionsClient) ListForResourcePreparer(ctx context.Context, res
 // ListForResourceSender sends the ListForResource request. The method will close the
 // http.Response Body if it receives an error.
 func (client PermissionsClient) ListForResourceSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListForResourceResponder handles the response to the ListForResource request. The method always
@@ -223,7 +223,8 @@ func (client PermissionsClient) ListForResourceGroupPreparer(ctx context.Context
 // ListForResourceGroupSender sends the ListForResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client PermissionsClient) ListForResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // ListForResourceGroupResponder handles the response to the ListForResourceGroup request. The method always

@@ -407,7 +407,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 				if pipID == nil {
 					return nil, fmt.Errorf("get(%s): lb(%s) - failed to get LB PublicIPAddress ID is Nil", serviceName, *lb.Name)
 				}
-				pipName, err := getLastSegment(*pipID)
+				pipName, err := getLastSegment(*pipID, "/")
 				if err != nil {
 					return nil, fmt.Errorf("get(%s): lb(%s) - failed to get LB PublicIPAddress Name from ID(%s)", serviceName, *lb.Name, *pipID)
 				}
@@ -1082,14 +1082,8 @@ func (az *Cloud) reconcileLoadBalancerRule(
 					BackendPort:         to.Int32Ptr(port.Port),
 					DisableOutboundSnat: to.BoolPtr(az.disableLoadBalancerOutboundSNAT()),
 					EnableTCPReset:      enableTCPReset,
+					EnableFloatingIP:    to.BoolPtr(true),
 				},
-			}
-			// LB does not support floating IPs for IPV6 rules
-			if utilnet.IsIPv6String(service.Spec.ClusterIP) {
-				expectedRule.BackendPort = to.Int32Ptr(port.NodePort)
-				expectedRule.EnableFloatingIP = to.BoolPtr(false)
-			} else {
-				expectedRule.EnableFloatingIP = to.BoolPtr(true)
 			}
 
 			if protocol == v1.ProtocolTCP {

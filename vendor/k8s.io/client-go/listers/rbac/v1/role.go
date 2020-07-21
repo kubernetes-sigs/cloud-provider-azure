@@ -26,10 +26,8 @@ import (
 )
 
 // RoleLister helps list Roles.
-// All objects returned here must be treated as read-only.
 type RoleLister interface {
 	// List lists all Roles in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Role, err error)
 	// Roles returns an object that can list and get Roles.
 	Roles(namespace string) RoleNamespaceLister
@@ -60,13 +58,10 @@ func (s *roleLister) Roles(namespace string) RoleNamespaceLister {
 }
 
 // RoleNamespaceLister helps list and get Roles.
-// All objects returned here must be treated as read-only.
 type RoleNamespaceLister interface {
 	// List lists all Roles in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Role, err error)
 	// Get retrieves the Role from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.Role, error)
 	RoleNamespaceListerExpansion
 }

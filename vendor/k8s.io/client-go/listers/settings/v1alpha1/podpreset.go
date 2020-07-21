@@ -26,10 +26,8 @@ import (
 )
 
 // PodPresetLister helps list PodPresets.
-// All objects returned here must be treated as read-only.
 type PodPresetLister interface {
 	// List lists all PodPresets in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.PodPreset, err error)
 	// PodPresets returns an object that can list and get PodPresets.
 	PodPresets(namespace string) PodPresetNamespaceLister
@@ -60,13 +58,10 @@ func (s *podPresetLister) PodPresets(namespace string) PodPresetNamespaceLister 
 }
 
 // PodPresetNamespaceLister helps list and get PodPresets.
-// All objects returned here must be treated as read-only.
 type PodPresetNamespaceLister interface {
 	// List lists all PodPresets in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.PodPreset, err error)
 	// Get retrieves the PodPreset from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.PodPreset, error)
 	PodPresetNamespaceListerExpansion
 }

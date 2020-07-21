@@ -31,7 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/kubectl/pkg/util/podutils"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/kubernetes/pkg/kubelet/events"
+	"k8s.io/kubernetes/pkg/kubelet/sysctl"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -40,22 +42,8 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 )
 
-const (
-	// DefaultPodDeletionTimeout is the default timeout for deleting pod
-	DefaultPodDeletionTimeout = 3 * time.Minute
-
-	// the status of container event, copied from k8s.io/kubernetes/pkg/kubelet/events
-	killingContainer = "Killing"
-
-	// the status of container event, copied from k8s.io/kubernetes/pkg/kubelet/events
-	failedToCreateContainer = "Failed"
-
-	// the status of container event, copied from k8s.io/kubernetes/pkg/kubelet/events
-	startedContainer = "Started"
-
-	// it is copied from k8s.io/kubernetes/pkg/kubelet/sysctl
-	forbiddenReason = "SysctlForbidden"
-)
+// DefaultPodDeletionTimeout is the default timeout for deleting pod
+const DefaultPodDeletionTimeout = 3 * time.Minute
 
 // ImageWhiteList is the images used in the current test suite. It should be initialized in test suite and
 // the images in the white list should be pre-pulled in the test suite.  Currently, this is only used by
@@ -239,10 +227,10 @@ func (c *PodClient) WaitForErrorEventOrSuccess(pod *v1.Pod) (*v1.Event, error) {
 		}
 		for _, e := range evnts.Items {
 			switch e.Reason {
-			case killingContainer, failedToCreateContainer, forbiddenReason:
+			case events.KillingContainer, events.FailedToCreateContainer, sysctl.ForbiddenReason:
 				ev = &e
 				return true, nil
-			case startedContainer:
+			case events.StartedContainer:
 				return true, nil
 			default:
 				// ignore all other errors
@@ -274,5 +262,5 @@ func (c *PodClient) MatchContainerOutput(name string, containerName string, expe
 func (c *PodClient) PodIsReady(name string) bool {
 	pod, err := c.Get(context.TODO(), name, metav1.GetOptions{})
 	ExpectNoError(err)
-	return podutils.IsPodReady(pod)
+	return podutil.IsPodReady(pod)
 }

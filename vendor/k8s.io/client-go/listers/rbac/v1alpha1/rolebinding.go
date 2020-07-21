@@ -26,10 +26,8 @@ import (
 )
 
 // RoleBindingLister helps list RoleBindings.
-// All objects returned here must be treated as read-only.
 type RoleBindingLister interface {
 	// List lists all RoleBindings in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.RoleBinding, err error)
 	// RoleBindings returns an object that can list and get RoleBindings.
 	RoleBindings(namespace string) RoleBindingNamespaceLister
@@ -60,13 +58,10 @@ func (s *roleBindingLister) RoleBindings(namespace string) RoleBindingNamespaceL
 }
 
 // RoleBindingNamespaceLister helps list and get RoleBindings.
-// All objects returned here must be treated as read-only.
 type RoleBindingNamespaceLister interface {
 	// List lists all RoleBindings in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.RoleBinding, err error)
 	// Get retrieves the RoleBinding from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.RoleBinding, error)
 	RoleBindingNamespaceListerExpansion
 }
