@@ -56,7 +56,9 @@
     git clone https://github.com/kubernetes-sigs/cloud-provider-azure $GOPATH/src/sigs.k8s.io/cloud-provider-azure
     cd $GOPATH/src/sigs.k8s.io/cloud-provider-azure
     export IMAGE_REGISTRY=<username>
-    make image push
+    export IMAGE_TAG=<tag>
+    make build-images
+    make push-images # or manually `docker push` 
     ```
 
 3. Deploy a Kubernetes cluster with the above `azure-cloud-controller-manager` image.
@@ -71,6 +73,9 @@
     export K8S_AZURE_SPSEC=<client secret>
     export K8S_AZURE_TENANTID=<tenant id>
     export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
+    export K8S_RELEASE_VERSION=<k8s release version>
+    export CCM_IMAGE=<image of the cloud controller manager>
+    export CNM_IMAGE=<image of the cloud node manager>
 
     make deploy
     ```
