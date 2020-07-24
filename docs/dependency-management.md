@@ -50,4 +50,4 @@ See golang's [go.mod], [Using Go Modules] and [Kubernetes Go modules] docs for m
 [go modules]: https://github.com/golang/go/wiki/Modules
 [`hack/update-dependencies.sh`]: hack/update-dependencies.sh
 [Using Go Modules]: https://blog.golang.org/using-go-modules
-[[Kubernetes Go modules]: https://github.com/kubernetes/enhancements/blob/master/keps/sig-architecture/2019-03-19-go-modules.md
+[Kubernetes Go modules]: https://github.com/kubernetes/enhancements/blob/master/keps/sig-architecture/2019-03-19-go-modules.md

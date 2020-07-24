@@ -29,12 +29,8 @@ USE_CSI_DEFAULT_STORAGECLASS=${USE_CSI_DEFAULT_STORAGECLASS:-""}
 ENABLE_AVAILABILITY_ZONE=${ENABLE_AVAILABILITY_ZONE:-""}
 
 # Check for variables is initialized or not
-if [ -z "${LOCATION}" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ]; then
-  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET ,LOCATION and USE_CSI_DEFAULT_STORAGECLASS must be specified"
-  exit 1
-fi
-if [ -z "${IMAGE}" ] || [ -z "${HYPERKUBE_IMAGE}" ]; then
-  echo "Please deploy the cluster by running 'IMAGE_REGISTRY=<your-registry> make deploy'."
+if [ -z "${LOCATION}" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ] || [ -z "${K8S_RELEASE_VERSION}" ] || [ -z "${CCM_IMAGE}" ] || [ -z "${CNM_IMAGE}" ]; then
+  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET ,LOCATION, USE_CSI_DEFAULT_STORAGECLASS, K8S_RELEASE_VERSION, CCM_IMAGE and CNM_IMAGE must be specified"
   exit 1
 fi
 
@@ -74,8 +70,8 @@ fi
 
 # Configure the manifests for aks-engine
 cat ${base_manifest} | \
-  jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${IMAGE}\"" | \
-  jq ".properties.orchestratorProfile.kubernetesConfig.customHyperkubeImage=\"${HYPERKUBE_IMAGE}\"" | \
+  jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${CCM_IMAGE}\"" | \
+  jq ".properties.orchestratorProfile.kubernetesConfig.addons[0].containers[0].image=\"${CNM_IMAGE}\""
   jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
   jq ".properties.servicePrincipalProfile.secret=\"${CLIENT_SECRET}\"" \
   > ${manifest_file}

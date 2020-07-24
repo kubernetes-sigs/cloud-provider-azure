@@ -4,31 +4,43 @@
     "properties": {
         "orchestratorProfile": {
             "orchestratorType": "Kubernetes",
-            "orchestratorRelease": "1.15",
+            "orchestratorRelease": "",
             "kubernetesConfig": {
-                "useCloudControllerManager": true,
-                "customCcmImage": "gcrio.azureedge.net/google_containers/cloud-controller-manager-amd64:v1.15.0",
-                "customHyperkubeImage": "gcrio.azureedge.net/google_containers/hyperkube-amd64:v1.15.0",
+                "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
+                "apiServerConfig": {
+                    "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
+                },
                 "controllerManagerConfig": {
                     "--feature-gates": "CSIInlineVolume=true,LocalStorageCapacityIsolation=true,ServiceNodeExclusion=true"
                 },
-                "apiServerConfig": {
-                    "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
-                }
+                "useCloudControllerManager": true,
+                "customCcmImage": "",
+                "addons": [
+                    {
+                        "name": "cloud-node-manager",
+                        "enabled": true,
+                        "containers": [
+                            {
+                                "name": "cloud-node-manager",
+                                "image": ""
+                            }
+                        ]
+                    }
+                ]
             }
         },
         "masterProfile": {
             "count": 1,
-            "dnsPrefix": "k8s",
-            "vmSize": "Standard_D2_v3"
+            "dnsPrefix": "k8s-with-custom-ccm",
+            "vmSize": "Standard_D4s_v3"
         },
         "agentPoolProfiles": [
             {
                 "name": "agentpool1",
-                "count": 3,
-                "vmSize": "Standard_D2_v3",
+                "count": 1,
+                "vmSize": "Standard_D4s_v3",
                 "availabilityProfile": "VirtualMachineScaleSets",
                 "storageProfile": "ManagedDisks"
             }
@@ -37,8 +49,8 @@
             "adminUsername": "azureuser"
         },
         "servicePrincipalProfile": {
-            "clientID": "{servicePrincipalClientID}",
-            "secret": "{servicePrincipalClientSecret}"
+            "clientID": "",
+            "secret": ""
         }
     }
 }
