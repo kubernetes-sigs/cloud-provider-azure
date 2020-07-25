@@ -157,7 +157,7 @@ def file_extension(filename):
 
 skipped_dirs = ['Godeps', 'third_party', '_gopath', '_output', '.git', 'cluster/env.sh',
                 "vendor", "test/e2e/generated/bindata.go", "hack/boilerplate/test",
-                "staging/src/k8s.io/kubectl/pkg/generated/bindata.go"]
+                "staging/src/k8s.io/kubectl/pkg/generated/bindata.go", "site"]
 
 # list all the files contain 'DO NOT EDIT', but are not generated
 skipped_ungenerated_files = [
