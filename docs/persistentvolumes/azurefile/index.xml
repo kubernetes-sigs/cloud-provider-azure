@@ -1,0 +1,327 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – AzureFile</title><link>https://nilo19.github.io/cloud-provider-azure/docs/persistentvolumes/azurefile/</link><description>Recent content in AzureFile on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://nilo19.github.io/cloud-provider-azure/docs/persistentvolumes/azurefile/index.xml" rel="self" type="application/rss+xml"/><item><title>Docs: Azure File Plugin Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/docs/persistentvolumes/azurefile/issues/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://nilo19.github.io/cloud-provider-azure/docs/persistentvolumes/azurefile/issues/</guid><description>
+&lt;!-- TOC -->
+&lt;ul>
+&lt;li>&lt;a href="#azure-file-plugin-known-issues">azure file plugin known issues&lt;/a>
+&lt;ul>
+&lt;li>&lt;a href="#recommended-stable-version-for-azure-file">Recommended stable version for azure file&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#1-azure-file-mountoptions-setting">1. azure file mountOptions setting&lt;/a>
+&lt;ul>
+&lt;li>&lt;a href="#filedir-mode-setting">file/dir mode setting:&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#other-useful-mountoptions-setting">other useful &lt;code>mountOptions&lt;/code> setting:&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>&lt;a href="#2-permission-issue-of-azure-file-dynamic-provision-in-aks-engine">2. permission issue of azure file dynamic provision in aks-engine&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#3-azure-file-support-on-sovereign-cloud">3. Azure file support on Sovereign Cloud&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#4-azure-file-dynamic-provision-failed-due-to-cluster-name-length-issue">4. azure file dynamic provision failed due to cluster name length issue&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#5-azure-file-dynamic-provision-failed-due-to-no-storage-account-in-current-resource-group">5. azure file dynamic provision failed due to no storage account in current resource group&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#6-azure-file-plugin-on-windows-does-not-work-after-node-restart">6. azure file plugin on Windows does not work after node restart&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#7-file-permission-could-not-be-changed-using-azure-file-eg-postgresql">7. file permission could not be changed using azure file, e.g. postgresql&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#8-could-not-delete-pod-with-azurefile-volume-if-storage-account-key-changed">8. Could not delete pod with AzureFile volume if storage account key changed&lt;/a>&lt;/li>
+&lt;li>&lt;a href="#9-long-latency-compared-to-disk-when-handling-lots-of-small-files">9. Long latency when handling lots of small files&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;!-- /TOC -->
+&lt;h2 id="recommended-stable-version-for-azure-file">Recommended stable version for azure file&lt;/h2>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>k8s version&lt;/th>
+&lt;th>stable version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.7&lt;/td>
+&lt;td>1.7.14 or later&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8&lt;/td>
+&lt;td>1.8.11 or later&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.9&lt;/td>
+&lt;td>1.9.7 or later&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.10&lt;/td>
+&lt;td>1.10.2 or later&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="1-azure-file-mountoptions-setting">1. azure file mountOptions setting&lt;/h2>
+&lt;h3 id="filedir-mode-setting">file/dir mode setting:&lt;/h3>
+&lt;p>&lt;strong>Issue details&lt;/strong>:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>fileMode&lt;/code>, &lt;code>dirMode&lt;/code> value would be different in different versions, in latest master branch, it's &lt;code>0755&lt;/code> by default, to set a different value, follow this &lt;a href="https://github.com/andyzhangx/Demo/blob/master/linux/azurefile/azurefile-mountoptions.md">mount options support of azure file&lt;/a> (available from v1.8.5).&lt;/li>
+&lt;li>For version v1.8.0-v1.8.4, since &lt;a href="https://github.com/andyzhangx/Demo/blob/master/linux/azurefile/azurefile-mountoptions.md">mount options support of azure file&lt;/a> is not available, as a workaround, &lt;a href="https://kubernetes.io/docs/tasks/configure-pod-container/security-context/">securityContext&lt;/a> could be specified for the pod, &lt;a href="https://github.com/andyzhangx/Demo/blob/master/linux/azurefile/demo-azurefile-securitycontext.yaml">detailed pod example&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-yaml" data-lang="yaml">&lt;span style="color:#f8f8f8;text-decoration:underline"> &lt;/span>securityContext&lt;span style="color:#000;font-weight:bold">:&lt;/span>&lt;span style="color:#f8f8f8;text-decoration:underline">
+&lt;/span>&lt;span style="color:#f8f8f8;text-decoration:underline"> &lt;/span>runAsUser&lt;span style="color:#000;font-weight:bold">:&lt;/span>&lt;span style="color:#f8f8f8;text-decoration:underline"> &lt;/span>XXX&lt;span style="color:#f8f8f8;text-decoration:underline">
+&lt;/span>&lt;span style="color:#f8f8f8;text-decoration:underline"> &lt;/span>fsGroup&lt;span style="color:#000;font-weight:bold">:&lt;/span>&lt;span style="color:#f8f8f8;text-decoration:underline"> &lt;/span>XXX&lt;span style="color:#f8f8f8;text-decoration:underline">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>version&lt;/th>
+&lt;th>&lt;code>fileMode&lt;/code>, &lt;code>dirMode&lt;/code> value&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.6.x, v1.7.x&lt;/td>
+&lt;td>0777&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8.0 ~ v1.8.5, v1.9.0&lt;/td>
+&lt;td>0700&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8.6 or later, v1.9.1 ~ v1.10.9, v1.11.0 ~ v1.11.3, v1.12.0 ~ v.12.1&lt;/td>
+&lt;td>0755&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.10.10 or later&lt;/td>
+&lt;td>0777&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.11.4 or later&lt;/td>
+&lt;td>0777&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.12.2 or later&lt;/td>
+&lt;td>0777&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.13.x&lt;/td>
+&lt;td>0777&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h3 id="other-useful-mountoptions-setting">other useful &lt;code>mountOptions&lt;/code> setting:&lt;/h3>
+&lt;ul>
+&lt;li>&lt;code>mfsymlinks&lt;/code>: make azure file(cifs) mount supports symbolic link&lt;/li>
+&lt;li>&lt;code>nobrl&lt;/code>: Do not send byte range lock requests to the server. This is necessary for certain applications that break with cifs style mandatory byte range locks (and most cifs servers do not yet support requesting advisory byte range locks). Error message could be like following:&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">Error: SQLITE_BUSY: database is locked
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/54610">azureFile volume mode too strict for container with non root user&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/59755">Unable to connect to SQL-lite db mounted on AzureFile/AzureDisks [SQLITE_BUSY: database is locked]&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/61767">Allow nobrl parameter like docker to use sqlite over network drive&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/58308">Error to deploy mongo with azure file storage&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h2 id="2-permission-issue-of-azure-file-dynamic-provision-in-aks-engine">2. permission issue of azure file dynamic provision in aks-engine&lt;/h2>
+&lt;p>&lt;strong>Issue details&lt;/strong>:&lt;/p>
+&lt;p>From acs-engine v0.12.0, RBAC is enabled, azure file dynamic provision does not work from this version&lt;/p>
+&lt;p>&lt;strong>error logs&lt;/strong>:&lt;/p>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">Events:
+Type Reason Age From Message
+---- ------ ---- ---- -------
+Warning ProvisioningFailed 8s persistentvolume-controller Failed to provision volume with StorageClass &lt;span style="color:#4e9a06">&amp;#34;azurefile&amp;#34;&lt;/span>: Couldn&lt;span style="color:#a40000">&amp;#39;&lt;/span>t create secret secrets is forbidden: User &lt;span style="color:#4e9a06">&amp;#34;system:serviceaccount:kube-syste
+&lt;/span>&lt;span style="color:#4e9a06">m:persistent-volume-binder&amp;#34;&lt;/span> cannot create secrets in the namespace &lt;span style="color:#4e9a06">&amp;#34;default&amp;#34;&lt;/span>
+Warning ProvisioningFailed 8s persistentvolume-controller Failed to provision volume with StorageClass &lt;span style="color:#4e9a06">&amp;#34;azurefile&amp;#34;&lt;/span>: failed to find a matching storage account
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/59543">azure file PVC need secrets create permission for persistent-volume-binder&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>Workaround&lt;/strong>:&lt;/p>
+&lt;ul>
+&lt;li>Add a ClusterRole and ClusterRoleBinding for &lt;a href="https://github.com/andyzhangx/Demo/tree/master/linux/azurefile#dynamic-provisioning-for-azure-file-in-linux-support-from-v170">azure file dynamic privision&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">kubectl create -f https://raw.githubusercontent.com/andyzhangx/Demo/master/acs-engine/rbac/azure-cloud-provider-deployment.yaml
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>delete the original PVC and recreate PVC&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>Fix&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>PR in acs-engine: &lt;a href="https://github.com/Azure/acs-engine/pull/2238">fix azure file dynamic provision permission issue&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h2 id="3-azure-file-support-on-sovereign-cloud">3. Azure file support on Sovereign Cloud&lt;/h2>
+&lt;p>&lt;a href="https://github.com/kubernetes/kubernetes/pull/48460">Azure file on Sovereign Cloud&lt;/a> is supported from v1.7.11, v1.8.0&lt;/p>
+&lt;h2 id="4-azure-file-dynamic-provision-failed-due-to-cluster-name-length-issue">4. azure file dynamic provision failed due to cluster name length issue&lt;/h2>
+&lt;p>&lt;strong>Issue details&lt;/strong>:
+k8s cluster name length must be less than 16 characters, otherwise following error will be received when creating dynamic privisioning azure file pvc, this bug exists in [v1.7.0, v1.7.10]:&lt;/p>
+&lt;blockquote>
+&lt;p>Note: check &lt;code>cluster-name&lt;/code> by running &lt;code>grep cluster-name /etc/kubernetes/manifests/kube-controller-manager.yaml&lt;/code> on master node&lt;/p>
+&lt;/blockquote>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">persistentvolume-controller Warning ProvisioningFailed Failed to provision volume with StorageClass &lt;span style="color:#4e9a06">&amp;#34;azurefile&amp;#34;&lt;/span>: failed to find a matching storage account
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Fix&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>PR &lt;a href="https://github.com/kubernetes/kubernetes/pull/48326">Fix share name generation in azure file provisioner&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>k8s version&lt;/th>
+&lt;th>fixed version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.7&lt;/td>
+&lt;td>1.7.11&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8&lt;/td>
+&lt;td>1.8.0&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.9&lt;/td>
+&lt;td>1.9.0&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="5-azure-file-dynamic-provision-failed-due-to-no-storage-account-in-current-resource-group">5. azure file dynamic provision failed due to no storage account in current resource group&lt;/h2>
+&lt;p>&lt;strong>Issue details&lt;/strong>:&lt;/p>
+&lt;p>When create an azure file PVC, there will be error if there is no storage account in current resource group, error info would be like following:&lt;/p>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">Events:
+Type Reason Age From Message
+---- ------ ---- ---- -------
+Warning ProvisioningFailed 10s &lt;span style="color:#ce5c00;font-weight:bold">(&lt;/span>x5 over 1m&lt;span style="color:#ce5c00;font-weight:bold">)&lt;/span> persistentvolume-controller Failed to provision volume with StorageClass &lt;span style="color:#4e9a06">&amp;#34;azurefile-premium&amp;#34;&lt;/span>: failed to find a matching storage account
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/56556">failed to create azure file pvc if there is no storage account in current resource group&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>Workaround&lt;/strong>:
+specify a storage account in azure file dynamic provision, you should make sure the specified storage account is in the same resource group as your k8s cluster. In AKS, the specified storage account should be in &lt;code>shadow resource group&lt;/code>(naming as &lt;code>MC_+{RESOUCE-GROUP-NAME}+{CLUSTER-NAME}+{REGION}&lt;/code>) which contains all resources of your aks cluster.&lt;/p>
+&lt;p>&lt;strong>Fix&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>PR &lt;a href="https://github.com/kubernetes/kubernetes/pull/56557">fix the create azure file pvc failure if there is no storage account in current resource group&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>k8s version&lt;/th>
+&lt;th>fixed version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.7&lt;/td>
+&lt;td>1.7.14&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8&lt;/td>
+&lt;td>1.8.9&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.9&lt;/td>
+&lt;td>1.9.4&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.10&lt;/td>
+&lt;td>1.10.0&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="6-azure-file-plugin-on-windows-does-not-work-after-node-restart">6. azure file plugin on Windows does not work after node restart&lt;/h2>
+&lt;p>&lt;strong>Issue details&lt;/strong>:
+azure file plugin on Windows does not work after node restart, this is due to &lt;code>New-SmbGlobalMapping&lt;/code> cmdlet has lost account name/key after reboot&lt;/p>
+&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/60624">azure file plugin on Windows does not work after node restart&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>Workaround&lt;/strong>:&lt;/p>
+&lt;ul>
+&lt;li>delete the original pod with azure file mount&lt;/li>
+&lt;li>create the pod again&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>Fix&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>PR &lt;a href="https://github.com/kubernetes/kubernetes/pull/60625">fix azure file plugin failure issue on Windows after node restart&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>k8s version&lt;/th>
+&lt;th>fixed version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.7&lt;/td>
+&lt;td>not support in upstream&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8&lt;/td>
+&lt;td>1.8.10&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.9&lt;/td>
+&lt;td>1.9.7&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.10&lt;/td>
+&lt;td>1.10.0&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;h2 id="7-file-permission-could-not-be-changed-using-azure-file-eg-postgresql">7. file permission could not be changed using azure file, e.g. postgresql&lt;/h2>
+&lt;p>&lt;strong>error logs&lt;/strong> when running postgresql on azure file plugin:&lt;/p>
+&lt;pre>&lt;code>initdb: could not change permissions of directory &amp;quot;/var/lib/postgresql/data&amp;quot;: Operation not permitted
+fixing permissions on existing directory /var/lib/postgresql/data
+&lt;/code>&lt;/pre>&lt;p>&lt;strong>Issue details&lt;/strong>:
+azure file plugin is using cifs/SMB protocol, file/dir permission could not be changed after mounting&lt;/p>
+&lt;p>&lt;strong>Workaround&lt;/strong>:
+Use &lt;code>subPath&lt;/code> together with azure disk plugin (for ext3/4 disk type, there is a &lt;code>lost+found&lt;/code> directory after disk format)&lt;/p>
+&lt;p>&lt;strong>Related issues&lt;/strong>
+&lt;a href="https://github.com/Azure/AKS/issues/225">Persistent Volume Claim permissions&lt;/a>&lt;/p>
+&lt;h2 id="8-could-not-delete-pod-with-azurefile-volume-if-storage-account-key-changed">8. Could not delete pod with AzureFile volume if storage account key changed&lt;/h2>
+&lt;p>&lt;strong>Issue details&lt;/strong>:&lt;/p>
+&lt;ul>
+&lt;li>kubelet fails to umount azurefile volume when there is azure file connection, below is an easy repro:
+&lt;ul>
+&lt;li>create a pod with azure file mount&lt;/li>
+&lt;li>regenerate the account key of the storage account&lt;/li>
+&lt;li>delete the pod, and the pod will never be deleted due to &lt;code>UnmountVolume.TearDown&lt;/code> error&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>&lt;strong>error logs&lt;/strong>&lt;/p>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">nestedpendingoperations.go:263&lt;span style="color:#ce5c00;font-weight:bold">]&lt;/span> Operation &lt;span style="color:#204a87;font-weight:bold">for&lt;/span> &lt;span style="color:#4e9a06">&amp;#34;\&amp;#34;kubernetes.io/azure-file/cc5c86cd-422a-11e8-91d7-000d3a03ee84-myvolume\&amp;#34; (\&amp;#34;cc5c86cd-422a-11e8-91d7-000d3a03ee84\&amp;#34;)&amp;#34;&lt;/span> failed. No retries permitted &lt;span style="color:#204a87;font-weight:bold">until&lt;/span> 2018-04-17 10:35:40.240272223 +0000 UTC &lt;span style="color:#000">m&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>+1185722.391925424 &lt;span style="color:#ce5c00;font-weight:bold">(&lt;/span>durationBeforeRetry 500ms&lt;span style="color:#ce5c00;font-weight:bold">)&lt;/span>. Error: &lt;span style="color:#4e9a06">&amp;#34;UnmountVolume.TearDown failed for volume \&amp;#34;myvolume\&amp;#34; (UniqueName: \&amp;#34;kubernetes.io/azure-file/cc5c86cd-422a-11e8-91d7-000d3a03ee84-myvolume\&amp;#34;) pod \&amp;#34;cc5c86cd-422a-11e8-91d7-000d3a03ee84\&amp;#34; (UID: \&amp;#34;cc5c86cd-422a-11e8-91d7-000d3a03ee84\&amp;#34;) : Error checking if path exists: stat /var/lib/kubelet/pods/cc5c86cd-422a-11e8-91d7-000d3a03ee84/volumes/kubernetes.io~azure-file/myvolume: resource temporarily unavailable
+&lt;/span>&lt;span style="color:#4e9a06">...
+&lt;/span>&lt;span style="color:#4e9a06">kubelet_volumes.go:128] Orphaned pod &amp;#34;&lt;/span>380b02f3-422b-11e8-91d7-000d3a03ee84&lt;span style="color:#4e9a06">&amp;#34;&lt;/span>&lt;span style="color:#4e9a06"> found, but volume paths are still present on disk
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Workaround&lt;/strong>:&lt;/p>
+&lt;p>manually umount the azure file mount path on the agent node and then the pod will be deleted right after that&lt;/p>
+&lt;div class="highlight">&lt;pre style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-sh" data-lang="sh">sudo umount /var/lib/kubelet/pods/cc5c86cd-422a-11e8-91d7-000d3a03ee84/volumes/kubernetes.io~azure-file/myvolume
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>Fix&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>PR &lt;a href="https://github.com/kubernetes/kubernetes/pull/52324">Fix bug:Kubelet failure to umount mount points&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>k8s version&lt;/th>
+&lt;th>fixed version&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>v1.7&lt;/td>
+&lt;td>no fix(no cherry-pick fix is allowed)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.8&lt;/td>
+&lt;td>1.8.8&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.9&lt;/td>
+&lt;td>1.9.7&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>v1.10&lt;/td>
+&lt;td>1.10.0&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/62824">UnmountVolume.TearDown fails for AzureFile volume, locks up node&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/kubernetes/kubernetes/issues/41141">Kubelet failure to umount glusterfs mount points&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h2 id="9-long-latency-compared-to-disk-when-handling-lots-of-small-files">9. Long latency compared to disk when handling lots of small files&lt;/h2>
+&lt;p>&lt;strong>Related issues&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://github.com/Azure/AKS/issues/223">&lt;code>azurefile&lt;/code> is very slow&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/helm/charts/issues/5751">Can't roll out Wordpress chart with PV on AzureFile&lt;/a>&lt;/li>
+&lt;/ul></description></item></channel></rss>
