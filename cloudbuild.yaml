@@ -13,6 +13,7 @@ steps:
       - TAG=${_GIT_TAG}
       - PULL_BASE_REF=${_PULL_BASE_REF}
       - PROJECT=${_STAGING_PROJECT}
+      - ENABLE_GIT_COMMAND=false
     args:
       - release-staging
 substitutions:
