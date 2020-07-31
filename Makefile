@@ -86,11 +86,11 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-co
 
 .PHONY: build-ccm-image
 build-ccm-image:
-	docker build -t $(IMAGE) .
+	docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image
 build-node-image:
-	docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile .
+	docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image-windows
 build-node-image-windows:
@@ -126,7 +126,7 @@ push: push-ccm-image push-node-image
 push-images: push-ccm-image push-node-image
 
 .PHONY: release-ccm-e2e-test-image
-release-ccm-e2e-test-image: 
+release-ccm-e2e-test-image:
 	docker build -t $(CCM_E2E_TEST_RELEASE_IMAGE) -f ./e2e.Dockerfile .
 	docker push $(CCM_E2E_TEST_RELEASE_IMAGE)
 

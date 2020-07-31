@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG ENABLE_GIT_COMMAND=true
 FROM golang:1.13.9-stretch AS builder
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
-RUN make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=true
+RUN make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
 
 FROM gcr.io/distroless/static@sha256:c6d5981545ce1406d33e61434c61e9452dad93ecd8397c41e89036ef977a88f4
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager
