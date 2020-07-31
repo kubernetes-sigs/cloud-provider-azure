@@ -10,7 +10,7 @@ steps:
   - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20200713-e9b3d9d"
     entrypoint: make
     env:
-      - GIT_TAG=${_GIT_TAG}
+      - TAG=${_GIT_TAG}
       - PULL_BASE_REF=${_PULL_BASE_REF}
       - PROJECT=${_STAGING_PROJECT}
     args:
