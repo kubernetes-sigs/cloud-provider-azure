@@ -28,8 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var vmssVMRE = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
-var errVMSSNotFound = fmt.Errorf("cannot find any VMSS")
+var (
+	vmssVMRE        = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
+	errVMSSNotFound = fmt.Errorf("cannot find any VMSS")
+)
 
 // FindTestVMSS returns the first VMSS in the resource group,
 // assume the VMSS is in the cluster
@@ -220,4 +222,9 @@ func GetVMSSVMComputerName(vm *azcompute.VirtualMachineScaleSetVM) (string, erro
 	}
 
 	return *vm.OsProfile.ComputerName, nil
+}
+
+// IsSpotVMSS checks whether the vmss support azure spot vm instance
+func IsSpotVMSS(vmss *azcompute.VirtualMachineScaleSet) bool {
+	return vmss.VirtualMachineProfile.Priority == azcompute.Spot
 }

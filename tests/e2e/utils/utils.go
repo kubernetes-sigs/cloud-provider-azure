@@ -180,8 +180,8 @@ func obtainConfig() *clientcmdapi.Config {
 	return c
 }
 
-// stringInSlice check if string in a list
-func stringInSlice(s string, list []string) bool {
+// StringInSlice check if string in a list
+func StringInSlice(s string, list []string) bool {
 	for _, item := range list {
 		if item == s {
 			return true
