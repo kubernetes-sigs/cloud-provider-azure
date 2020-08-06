@@ -18,7 +18,9 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -32,7 +34,20 @@ import (
 const (
 	nodeLabelRole = "kubernetes.io/role"
 	typeLabel     = "type"
+
+	// GPUResourceKey is the key of the GPU in the resource map of a node
+	GPUResourceKey = "nvidia.com/gpu"
 )
+
+// GetGPUResource checks whether the node can provide GPU resource.
+// If so, returns the capacity.
+func GetGPUResource(node *v1.Node) (bool, int64) {
+	if gpuQuantity, ok := node.Status.Capacity[GPUResourceKey]; ok {
+		return true, gpuQuantity.MilliValue()
+	}
+
+	return false, 0
+}
 
 // GetNode returns the node with the input name
 func GetNode(cs clientset.Interface, nodeName string) (*v1.Node, error) {
@@ -99,9 +114,9 @@ func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	return nodes, nil
 }
 
-// GetAvailableNodeCapacity will calculate the overall quantity of
-// cpu requested by all running pods in all namespaces
-func GetAvailableNodeCapacity(cs clientset.Interface, agentNodeNames []string) (resource.Quantity, error) {
+// GetNodeRunningQuantity will calculate the overall quantity of
+// cpu requested by all running pods in all namespaces on the node
+func GetNodeRunningQuantity(cs clientset.Interface, nodeName string) (resource.Quantity, error) {
 	var result resource.Quantity
 	namespaceList, err := getNamespaceList(cs)
 	if err != nil {
@@ -109,7 +124,7 @@ func GetAvailableNodeCapacity(cs clientset.Interface, agentNodeNames []string) (
 	}
 
 	for _, namespace := range namespaceList.Items {
-		podList, err := getPodList(cs, namespace.Name)
+		podList, err := GetPodList(cs, namespace.Name)
 		if err != nil {
 			// will not abort, just ignore this namespace
 			Logf("Ignore pods resource request in namespace %s", namespace.Name)
@@ -118,7 +133,7 @@ func GetAvailableNodeCapacity(cs clientset.Interface, agentNodeNames []string) (
 		for _, pod := range podList.Items {
 			var cpuRequest resource.Quantity
 			if pod.Status.Phase == v1.PodRunning {
-				if stringInSlice(pod.Spec.NodeName, agentNodeNames) {
+				if strings.EqualFold(pod.Spec.NodeName, nodeName) {
 					for _, container := range pod.Spec.Containers {
 						cpuRequest.Add(container.Resources.Requests[v1.ResourceCPU])
 					}
@@ -166,7 +181,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 	var err error
 	poll := 60 * time.Second
 	autoScaleTimeOut := 50 * time.Minute
-	if wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
+	if err = wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {
 			if IsRetryableAPIError(err) {
@@ -179,8 +194,13 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 			return false, err
 		}
 		Logf("Detect %v nodes, target %v", len(nodes), targetNodeCount)
+		if len(nodes) > targetNodeCount && !isScaleDown {
+			Logf("error: more nodes than expected")
+			err = fmt.Errorf("there are more nodes than expected")
+			return false, err
+		}
 		return (targetNodeCount > len(nodes) && isScaleDown) || targetNodeCount == len(nodes), nil
-	}) == wait.ErrWaitTimeout {
+	}); errors.Is(err, wait.ErrWaitTimeout) {
 		return fmt.Errorf("Fail to get target node count in limited time")
 	}
 	return err

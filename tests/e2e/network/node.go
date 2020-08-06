@@ -35,11 +35,16 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var vmProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)`)
-var vmssVMProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(\d+)`)
-var vmNameRE = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
-var vmssVMZoneLabelKey = "failure-domain.beta.kubernetes.io/zone"
-var vmssScaleUpCelling = 10
+const (
+	vmssVMZoneLabelKey = "failure-domain.beta.kubernetes.io/zone"
+	vmssScaleUpCelling = 10
+)
+
+var (
+	vmProviderIDRE     = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)`)
+	vmssVMProviderIDRE = regexp.MustCompile(`azure:///subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(\d+)`)
+	vmNameRE           = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
+)
 
 var _ = Describe("Azure node resources", func() {
 	basename := "node-resources"

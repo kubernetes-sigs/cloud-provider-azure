@@ -36,22 +36,30 @@ import (
 )
 
 const (
-	podSize     int64 = 200 //podSize to create, 200m, 0.2 core
+	podSize     int64 = 200 // podSize to create, 200m, 0.2 core
 	poll              = 10 * time.Second
 	pollTimeout       = 10 * time.Minute
 	execTimeout       = 10 * time.Second
+
+	agentpoolLabelKey               = "agentpool"
+	kubeSystemNamespace             = "kube-system"
+	caDeploymentName                = "cluster-autoscaler"
+	balanceNodeGroupsFlag           = "--balance-similar-node-groups=true"
+	clusterAutoscalerDeploymentName = "cluster-autoscaler"
 )
 
 // Cluster autoscaling cannot run in parallel, since multiple threads will infect the count of nodes
 // It is slow, where at most 30 minutes are required to complete a single up or down scale
-var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
+var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", func() {
 	var (
-		basename       = "autoscaler"
-		cs             clientset.Interface
-		ns             *v1.Namespace
-		initNodeCount  int
-		podCount       int // To make sure enough pods to exceed the temporary node volume
-		initNodesNames []string
+		basename            = "autoscaler"
+		cs                  clientset.Interface
+		ns                  *v1.Namespace
+		tc                  *utils.AzureTestClient
+		initNodeCount       int
+		podCount            int32 // To make sure enough pods to exceed the temporary node volume
+		nodes               []v1.Node
+		initNodepoolNodeMap map[string][]string
 	)
 
 	BeforeEach(func() {
@@ -60,36 +68,35 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		cs, err = utils.CreateKubeClientSet()
 		Expect(err).NotTo(HaveOccurred())
 
+		ready, err := isCAEnabled(cs)
+		if err != nil {
+			Skip("unexpected error %w occurs when getting cluster autoscaler deployment")
+		}
+		Expect(ready).To(BeTrue())
+
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
 		ns, err = utils.CreateTestingNamespace(basename, cs)
 		Expect(err).NotTo(HaveOccurred())
 
-		nodes, err := utils.GetAgentNodes(cs)
+		nodes, err = utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 
 		initNodeCount = len(nodes)
 		utils.Logf("Initial number of schedulable nodes: %v", initNodeCount)
 
+		initNodepoolNodeMap = getNodepoolNodeMap(&nodes)
+		utils.Logf("found %d node pools", len(initNodepoolNodeMap))
+
 		// TODO:
 		// There should be a judgement that the initNodeCount should be smaller than the max nodes property
 		// of the cluster, otherwise skip the test
 
-		var initNodeCapacity resource.Quantity
 		for _, node := range nodes {
-			initNodesNames = append(initNodesNames, node.Name)
-			quantity := node.Status.Capacity[v1.ResourceCPU]
-			initNodeCapacity.Add(quantity)
+			podCount += calculateNewPodCountOnNode(cs, &node)
 		}
-		utils.Logf("Initial number of cores: %vm", initNodeCapacity.MilliValue())
-
-		runningQuantity, err := utils.GetAvailableNodeCapacity(cs, initNodesNames)
-		Expect(err).NotTo(HaveOccurred())
-		emptyQuantity := initNodeCapacity.DeepCopy()
-		emptyQuantity.Sub(runningQuantity)
-
-		// Calculate the number of pods needed in a deployment to trigger a scale up operation
-		podCount = int(math.Ceil(float64(emptyQuantity.MilliValue())/float64(podSize))) + 1
-		utils.Logf("%vm space are already in use", runningQuantity.MilliValue())
-		utils.Logf("will create %v pods in a deployment, each pod requests %vm size", podCount, podSize)
+		utils.Logf("create %d new pods will saturate the space", podCount)
 	})
 
 	AfterEach(func() {
@@ -99,41 +106,58 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 		//delete extra nodes
 		nodes, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
-		var nodesToDelete []string
-		for _, n := range nodes {
-			if !stringInSlice(n.Name, initNodesNames) {
-				nodesToDelete = append(nodesToDelete, n.Name)
+
+		nodesNotToBeDeleted := make([]string, 0)
+		for _, nodes := range initNodepoolNodeMap {
+			nodesNotToBeDeleted = append(nodesNotToBeDeleted, nodes...)
+		}
+
+		nodesToBeDeleted := make([]string, 0)
+		nodeToBeDeletedCount := 0
+		if len(nodes)-initNodeCount > 0 {
+			nodeToBeDeletedCount = len(nodes) - initNodeCount
+		}
+
+		for _, node := range nodes {
+			if nodeToBeDeletedCount == 0 {
+				break
+			}
+
+			if !utils.StringInSlice(node.Name, nodesNotToBeDeleted) {
+				nodesToBeDeleted = append(nodesToBeDeleted, node.Name)
+				nodeToBeDeletedCount--
 			}
 		}
-		err = utils.DeleteNodes(cs, nodesToDelete)
+
+		err = utils.DeleteNodes(cs, nodesToBeDeleted)
 		Expect(err).NotTo(HaveOccurred())
 
 		// clean up
 		cs = nil
-		initNodesNames = nil
 		ns = nil
 		initNodeCount = 0
 		podCount = 0
+		initNodepoolNodeMap = nil
 	})
 
-	It("should scale up or down if deployment replicas leave nodes busy or idle [Feature:Autoscaling]", func() {
+	It("should scale up or down if deployment replicas leave nodes busy or idle", func() {
 		utils.Logf("Create a deployment that will trigger a scale up operation")
-		replicas := int32(podCount)
-		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename})
+		replicas := podCount + 1
+		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		waitForScaleUpToComplete(cs, ns, initNodeCount)
+		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
 		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
 	})
 
-	It("should scale up, deploy a statefulset with disks attached, scale down, and certain pods + disks should be evicted to a new node [Feature:Autoscaling]", func() {
+	It("should scale up, deploy a statefulset with disks attached, scale down, and certain pods + disks should be evicted to a new node", func() {
 		By("Creating a deployment that will trigger a scale up operation")
-		replicas := int32(podCount)
-		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename + "-deployment"})
+		replicas := podCount + 1
+		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		waitForScaleUpToComplete(cs, ns, initNodeCount)
+		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
 
 		By("Deploying a StatefulSet")
 		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(5), map[string]string{"app": basename + "-statefulset"})
@@ -181,11 +205,175 @@ var _ = Describe("Cluster size autoscaler [Serial][Slow]", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
+
+	It("should balance the sizes of multiple node group if the `--balance-node-groups` is set to true [Multi-Nodepool]", func() {
+		By("Checking the number of node pools")
+		if len(initNodepoolNodeMap) < 2 {
+			Skip("multiple node pools are needed in this scenario")
+		}
+
+		By("Checking the `--balance-node-groups flag`")
+		caDeployment, err := cs.AppsV1().Deployments(kubeSystemNamespace).Get(context.TODO(), caDeploymentName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		commands := caDeployment.Spec.Template.Spec.Containers[0].Command
+		if !utils.StringInSlice(balanceNodeGroupsFlag, commands) {
+			Skip("`--balance-similar-node-groups=true` needs to be set in this scenario")
+		}
+
+		By("Saturating the free space")
+		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Scaling out 10 new nodes")
+		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
+		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
+		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 10, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		waitForScaleUpToComplete(cs, ns, len(nodes)+10)
+
+		By("Checking the balancing state of the node groups")
+		nodes, err = utils.GetAgentNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+
+		isBalance := checkNodeGroupsBalance(&nodes)
+		Expect(isBalance).To(BeTrue())
+
+		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
+	})
+
+	It("should support one node pool with slow scaling [Single Nodepool]", func() {
+		By("Checking the number of node pools")
+		if len(initNodepoolNodeMap) != 1 {
+			Skip("multiple node pools are needed in this scenario")
+		}
+
+		By("Saturating the free space")
+		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Scaling up, 5 nodes at a time until reaches 50 nodes")
+		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
+		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
+		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		targetNodeCount := initNodeCount
+		for {
+			*scaleUpDeployment.Spec.Replicas += 5
+			targetNodeCount += 5
+			_, err = cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), scaleUpDeployment, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			waitForScaleUpToComplete(cs, ns, targetNodeCount)
+
+			nodes, err := utils.GetAgentNodes(cs)
+			Expect(err).NotTo(HaveOccurred())
+			if len(nodes) > 50 {
+				break
+			}
+		}
+
+		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
+	})
+
+	It("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
+		By("Checking the number of node pools")
+		if len(initNodepoolNodeMap) < 2 {
+			Skip("multiple node pools are needed in this scenario")
+		}
+
+		By("Saturating the free space")
+		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Scaling up, 50 nodes at a time until reaches 500 nodes")
+		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
+		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
+		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		targetNodeCount := initNodeCount
+		for {
+			*scaleUpDeployment.Spec.Replicas += 50
+			targetNodeCount += 50
+			_, err = cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), scaleUpDeployment, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			waitForScaleUpToComplete(cs, ns, targetNodeCount)
+
+			nodes, err := utils.GetAgentNodes(cs)
+			Expect(err).NotTo(HaveOccurred())
+			if len(nodes) > 500 {
+				break
+			}
+		}
+
+		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
+	})
+
+	It("should support scaling up or down Azure Spot VM [VMSS][Spot VM]", func() {
+		By("Checking the spot vms")
+		scaleSets, err := utils.ListVMSSes(tc)
+		Expect(err).NotTo(HaveOccurred())
+
+		if len(*scaleSets) == 0 {
+			Skip("At least one VMSS is needed in this scenario")
+		}
+
+		foundSpotVMSS := false
+		for _, scaleSet := range *scaleSets {
+			if utils.IsSpotVMSS(&scaleSet) {
+				foundSpotVMSS = true
+				break
+			}
+		}
+		if !foundSpotVMSS {
+			Skip("At least one azure spot vm is needed in this scenario")
+		}
+
+		utils.Logf("Create a deployment that will trigger a scale up operation")
+		replicas := podCount + 1
+		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
+		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
+	})
+
+	It("should support scaling up or down due to the consuming of GPU resource", func() {
+		utils.Logf("Checking gpu nodes")
+		foundGPUNode := false
+		gpuCap := int64(0)
+		for _, node := range nodes {
+			found, capacity := utils.GetGPUResource(&node)
+			if found {
+				gpuCap = capacity
+				foundGPUNode = true
+				break
+			}
+		}
+		if !foundGPUNode {
+			Skip("at least one gpu node is required in this scenario")
+		}
+
+		replicas := initNodeCount + 1
+		deployment := createDeploymentManifest(basename+"-deployment", int32(replicas), map[string]string{"app": basename}, gpuCap, true)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
+		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
+	})
 })
 
-func waitForScaleUpToComplete(cs clientset.Interface, ns *v1.Namespace, initNodeCount int) {
+func waitForScaleUpToComplete(cs clientset.Interface, ns *v1.Namespace, targetNodeCount int) {
 	By("Waiting for a scale up operation to happen")
-	targetNodeCount := initNodeCount + 1
 	err := utils.WaitAutoScaleNodes(cs, targetNodeCount, false)
 	Expect(err).NotTo(HaveOccurred())
 	err = utils.LogPodStatus(cs, ns.Name)
@@ -206,7 +394,7 @@ func waitForScaleDownToComplete(cs clientset.Interface, ns *v1.Namespace, initNo
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func createPodSpec(requestedCPU int64) (result v1.PodSpec) {
+func createPodSpec(requestCPU int64) (result v1.PodSpec) {
 	result = v1.PodSpec{
 		Containers: []v1.Container{
 			{
@@ -215,19 +403,49 @@ func createPodSpec(requestedCPU int64) (result v1.PodSpec) {
 			},
 		},
 	}
-	if requestedCPU != 0 {
+	if requestCPU != 0 {
 		result.Containers[0].Resources = v1.ResourceRequirements{
 			Requests: v1.ResourceList{
 				v1.ResourceCPU: resource.MustParse(
-					strconv.FormatInt(requestedCPU, 10) + "m"),
+					strconv.FormatInt(requestCPU, 10) + "m"),
 			},
 		}
 	}
 	return
 }
 
-func createDeploymentManifest(name string, replicas int32, label map[string]string) (result *appsv1.Deployment) {
-	spec := createPodSpec(podSize)
+func createGPUPodSpec(requestGPU int64) (result v1.PodSpec) {
+	result = v1.PodSpec{
+		Containers: []v1.Container{
+			{
+				Name:  "container",
+				Image: "nginx:1.15",
+			},
+		},
+	}
+	if requestGPU != 0 {
+		result.Containers[0].Resources = v1.ResourceRequirements{
+			Requests: v1.ResourceList{
+				utils.GPUResourceKey: resource.MustParse(
+					strconv.FormatInt(requestGPU, 10) + "m"),
+			},
+			Limits: v1.ResourceList{
+				utils.GPUResourceKey: resource.MustParse(
+					strconv.FormatInt(requestGPU, 10) + "m"),
+			},
+		}
+	}
+	return
+}
+
+func createDeploymentManifest(name string, replicas int32, label map[string]string, podSize int64, requestGPU bool) (result *appsv1.Deployment) {
+	var spec v1.PodSpec
+	if requestGPU {
+		spec = createGPUPodSpec(podSize)
+	} else {
+		spec = createPodSpec(podSize)
+	}
+
 	result = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -315,12 +533,56 @@ func waitForStatefulSetComplete(cs clientset.Interface, ns *v1.Namespace, ss *ap
 	return err
 }
 
-// stringInSlice check if string in a list
-func stringInSlice(s string, list []string) bool {
-	for _, item := range list {
-		if item == s {
-			return true
+func calculateNewPodCountOnNode(cs clientset.Interface, node *v1.Node) int32 {
+	quantity := node.Status.Capacity[v1.ResourceCPU]
+	runningQuantityOnNode, err := utils.GetNodeRunningQuantity(cs, node.Name)
+	Expect(err).NotTo(HaveOccurred())
+	emptyQuantity := quantity.DeepCopy()
+	emptyQuantity.Sub(runningQuantityOnNode)
+	podCountOnNode := int32(math.Floor(float64(emptyQuantity.MilliValue()) / float64(podSize)))
+	utils.Logf("found %vm free space on node %s, create %d new pods will saturate the space",
+		emptyQuantity.MilliValue(), node.Name, podCountOnNode)
+
+	return podCountOnNode
+}
+
+func getNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
+	nodepoolNodeMap := make(map[string][]string)
+	for _, node := range *nodes {
+		labels := node.ObjectMeta.Labels
+		if nodepool, ok := labels[agentpoolLabelKey]; ok {
+			if nodepoolNodeMap[nodepool] == nil {
+				nodepoolNodeMap[nodepool] = make([]string, 0)
+			} else {
+				nodepoolNodeMap[nodepool] = append(nodepoolNodeMap[nodepool], node.Name)
+			}
 		}
 	}
-	return false
+
+	return nodepoolNodeMap
+}
+
+func checkNodeGroupsBalance(nodes *[]v1.Node) bool {
+	nodepoolSizeMap := getNodepoolNodeMap(nodes)
+	min, max := math.MaxInt32, math.MinInt32
+	for _, nodes := range nodepoolSizeMap {
+		size := len(nodes)
+		if size < min {
+			min = size
+		}
+		if size > max {
+			max = size
+		}
+	}
+
+	return math.Abs(float64(min-max)) <= 1
+}
+
+func isCAEnabled(cs clientset.Interface) (bool, error) {
+	deploy, err := cs.AppsV1().Deployments(kubeSystemNamespace).Get(context.TODO(), clusterAutoscalerDeploymentName, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	return deploy.Status.ReadyReplicas > 0, nil
 }

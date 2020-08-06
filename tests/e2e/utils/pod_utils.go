@@ -36,8 +36,8 @@ const (
 // PodIPRE tests if there's a valid IP in a easy way
 var PodIPRE = regexp.MustCompile(`\d{0,3}\.\d{0,3}\.\d{0,3}\.\d{0,3}`)
 
-// getPodList is a wrapper around listing pods
-func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
+// GetPodList is a wrapper around listing pods
+func GetPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	var pods *v1.PodList
 	var err error
 	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
@@ -57,7 +57,7 @@ func getPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 
 // LogPodStatus logs the rate of pending
 func LogPodStatus(cs clientset.Interface, ns string) error {
-	pods, err := getPodList(cs, ns)
+	pods, err := GetPodList(cs, ns)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func LogPodStatus(cs clientset.Interface, ns string) error {
 // DeletePodsInNamespace deletes all pods in the namespace
 func DeletePodsInNamespace(cs clientset.Interface, ns string) error {
 	Logf("Deleting all pods in namespace %s", ns)
-	pods, err := getPodList(cs, ns)
+	pods, err := GetPodList(cs, ns)
 	if err != nil {
 		return err
 	}
