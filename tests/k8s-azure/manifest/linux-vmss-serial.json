@@ -14,7 +14,8 @@
                 },
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
-                }
+                },
+                "loadBalancerSku": "basic"
             }
         },
         "masterProfile": {
