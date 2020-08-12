@@ -276,9 +276,11 @@ var _ = Describe("Azure nodes", func() {
 	basename := "azure-nodes"
 	serviceName := "servicelb-test"
 
-	var cs clientset.Interface
-	var ns *v1.Namespace
-	var tc *utils.AzureTestClient
+	var (
+		cs clientset.Interface
+		ns *v1.Namespace
+		tc *utils.AzureTestClient
+	)
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -314,6 +316,7 @@ var _ = Describe("Azure nodes", func() {
 
 		cs = nil
 		ns = nil
+		tc = nil
 	})
 
 	It("should expose zones correctly after created [VMSS][Serial][Slow]", func() {
@@ -381,8 +384,8 @@ var _ = Describe("Azure nodes", func() {
 		Expect(ok).To(BeTrue())
 		Expect(nodeRG).NotTo(Equal(rgMaster))
 
-		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
-		lb := getAzureLoadBalancerFromPIP(publicIP, rgMaster, rgMaster)
+		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgMaster, rgMaster)
 
 		utils.Logf("finding NIC of the node %s, assuming it's in the same rg as master", nodeNotInRGMaster.Name)
 		nodeNamePrefix, err := getNodeNamePrefix(nodeNotInRGMaster.Name)
