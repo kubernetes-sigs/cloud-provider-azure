@@ -59,8 +59,11 @@ var _ = Describe("Service with annotation", func() {
 	basename := "service"
 	serviceName := "annotation-test"
 
-	var cs clientset.Interface
-	var ns *v1.Namespace
+	var (
+		cs clientset.Interface
+		tc *utils.AzureTestClient
+		ns *v1.Namespace
+	)
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -82,6 +85,10 @@ var _ = Describe("Service with annotation", func() {
 		deployment := createNginxDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating Azure clients")
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -93,9 +100,10 @@ var _ = Describe("Service with annotation", func() {
 
 		cs = nil
 		ns = nil
+		tc = nil
 	})
 
-	It("can be accessed by domain name", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-dns-label-name'", func() {
 		By("Create service")
 		serviceDomainNamePrefix := serviceName + string(uuid.NewUUID())
 
@@ -104,7 +112,7 @@ var _ = Describe("Service with annotation", func() {
 		}
 
 		// create service with given annotation and wait it to expose
-		_ = createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		_ = createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		By("Validating External domain name")
 		var code int
@@ -133,13 +141,13 @@ var _ = Describe("Service with annotation", func() {
 		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
 	})
 
-	It("can be bound to an internal load balancer", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ip := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		By("Validating whether the load balancer is internal")
 		url := fmt.Sprintf("%s:%v", ip, ports[0].Port)
@@ -147,14 +155,11 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("can specify which subnet the internal load balancer should be bound to", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
 		By("creating environment")
 		subnetName := "lb-subnet"
 
-		azureTestClient, err := utils.CreateAzureTestClient()
-		Expect(err).NotTo(HaveOccurred())
-
-		vNet, err := azureTestClient.GetClusterVirtualNetwork()
+		vNet, err := tc.GetClusterVirtualNetwork()
 		Expect(err).NotTo(HaveOccurred())
 
 		var newSubnetCIDR string
@@ -170,8 +175,15 @@ var _ = Describe("Service with annotation", func() {
 			By("Test subnet doesn't exist. Creating a new one...")
 			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet)
 			Expect(err).NotTo(HaveOccurred())
-			err = azureTestClient.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
+			err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err = utils.DeleteService(cs, ns.Name, serviceName)
+
+				utils.Logf("cleaning up test subnet %s", subnetName)
+				err = tc.DeleteSubnet(*vNet.Name, subnetName)
+				Expect(err).NotTo(HaveOccurred())
+			}()
 		}
 
 		annotation := map[string]string{
@@ -180,25 +192,25 @@ var _ = Describe("Service with annotation", func() {
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ip := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 		utils.Logf("Get External IP: %s", ip)
 
 		By("Validating external ip in target subnet")
 		ret, err := utils.ValidateIPInCIDR(ip, newSubnetCIDR)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ret).To(Equal(true), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
+		Expect(ret).To(BeTrue(), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
 	})
 
-	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerIdleTimeout'", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-shared-securityrule'", func() {
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerIdleTimeout: "5",
 		}
 
 		// create service with given annotation and wait it to expose
-		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		// get lb from azure client
-		lb := getAzureLoadBalancer(publicIP)
+		lb := getAzureLoadBalancer(tc, publicIP)
 
 		var idleTimeout *int32
 		for _, rule := range *lb.LoadBalancingRules {
@@ -209,13 +221,13 @@ var _ = Describe("Service with annotation", func() {
 		Expect(*idleTimeout).To(Equal(int32(5)))
 	})
 
-	// It("should support load balancer annotation 'ServiceAnnotationLoadBalancerMixedProtocols'", func() {
+	// It("should support service annotation 'ServiceAnnotationLoadBalancerMixedProtocols'", func() {
 	// 	annotation := map[string]string{
 	// 		azure.ServiceAnnotationLoadBalancerMixedProtocols: "true",
 	// 	}
 
 	// 	// create service with given annotation and wait it to expose
-	// 	publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+	// 	publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 	// 	// get lb from azure client
 	// 	lb := getAzureLoadBalancer(publicIP)
@@ -229,11 +241,7 @@ var _ = Describe("Service with annotation", func() {
 	// 	Expect(len(existingProtocols)).To(Equal(2))
 	// })
 
-	It("should support load balancer annotation 'ServiceAnnotationLoadBalancerResourceGroup'", func() {
-		By("Creating Azure clients")
-		tc, err := utils.CreateAzureTestClient()
-		Expect(err).NotTo(HaveOccurred())
-
+	It("should support service annotation 'ServiceAnnotationLoadBalancerResourceGroup'", func() {
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
 		defer cleanup(to.String(rg.Name))
@@ -265,17 +273,51 @@ var _ = Describe("Service with annotation", func() {
 		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
 
-		lb := getAzureLoadBalancerFromPIP(*pip.IPAddress, *rg.Name, "")
+		lb := getAzureLoadBalancerFromPIP(tc, *pip.IPAddress, *rg.Name, "")
 		Expect(lb).NotTo(BeNil())
+	})
+
+	It("should support service annotation `ServiceAnnotationSharedSecurityRule`", func() {
+		By("Exposing two services with shared security rule")
+		annotation := map[string]string{
+			azure.ServiceAnnotationSharedSecurityRule: "true",
+		}
+		ip1, err := createAndWaitServiceExposure(cs, ns.Name, serviceName, annotation, labels, ports)
+
+		defer func() {
+			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		serviceName2 := serviceName + "-share"
+		ip2, err := createAndWaitServiceExposure(cs, ns.Name, serviceName2, annotation, labels, ports)
+		defer func() {
+			By("Cleaning up")
+			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Validate shared security rule exists")
+		port := fmt.Sprintf("%v", nginxPort)
+		nsg, err := tc.GetClusterSecurityGroup()
+		Expect(err).NotTo(HaveOccurred())
+
+		ipList := []string{ip1, ip2}
+		Expect(validateSharedSecurityRuleExists(nsg, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 	})
 })
 
-var _ = Describe("[MultipleAgentPools][VMSS]", func() {
+var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 	basename := "service"
 	serviceName := "annotation-test"
 
-	var cs clientset.Interface
-	var ns *v1.Namespace
+	var (
+		cs clientset.Interface
+		tc *utils.AzureTestClient
+		ns *v1.Namespace
+	)
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -297,6 +339,10 @@ var _ = Describe("[MultipleAgentPools][VMSS]", func() {
 		deployment := createNginxDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating Azure clients")
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -308,9 +354,10 @@ var _ = Describe("[MultipleAgentPools][VMSS]", func() {
 
 		cs = nil
 		ns = nil
+		tc = nil
 	})
 
-	It("should bound to the specified load balancer from azure-load-balancer-mode", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-load-balancer-mode`", func() {
 		//get nodelist and providerID specific to an agentnodes
 		By("Getting agent nodes list")
 		nodes, err := utils.GetAgentNodes(cs)
@@ -342,22 +389,18 @@ var _ = Describe("[MultipleAgentPools][VMSS]", func() {
 
 		vmssList := vmssNames.List()[:2]
 		for _, vmss := range vmssList {
-			validateLoadBalancerBackendPools(vmss, cs, serviceName, labels, ns.Name, ports, resourceGroupName)
+			validateLoadBalancerBackendPools(tc, vmss, cs, serviceName, labels, ns.Name, ports, resourceGroupName)
 		}
 	})
 })
 
-func getAzureLoadBalancer(pip string) *network.LoadBalancer {
-	By("Creating Azure clients")
-	azureTestClient, err := utils.CreateAzureTestClient()
+func getAzureLoadBalancer(tc *utils.AzureTestClient, pip string) *network.LoadBalancer {
+	resourceGroupName := tc.GetResourceGroup()
+	utils.Logf("Getting public IPs in the resourceGroup " + resourceGroupName)
+	pipList, err := tc.ListPublicIPs(resourceGroupName)
 	Expect(err).NotTo(HaveOccurred())
 
-	resourceGroupName := azureTestClient.GetResourceGroup()
-	By("Getting public IPs in the resourceGroup " + resourceGroupName)
-	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
-	Expect(err).NotTo(HaveOccurred())
-
-	By("Getting public IP frontend configuration ID")
+	utils.Logf("Getting public IP frontend configuration ID")
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
 		if ip.PublicIPAddressPropertiesFormat != nil &&
@@ -370,33 +413,29 @@ func getAzureLoadBalancer(pip string) *network.LoadBalancer {
 		}
 	}
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
-	By(fmt.Sprintf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID))
+	utils.Logf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID)
 
-	By("Getting loadBalancer name from pipFrontendConfigurationID")
+	utils.Logf("Getting loadBalancer name from pipFrontendConfigurationID")
 	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
 	Expect(len(match)).To(Equal(2))
 	loadBalancerName := match[1]
 	Expect(loadBalancerName).NotTo(Equal(""))
 	utils.Logf("Got loadBalancerName %q", loadBalancerName)
 
-	By("Getting loadBalancer")
-	lb, err := azureTestClient.GetLoadBalancer(resourceGroupName, loadBalancerName)
+	utils.Logf("Getting loadBalancer")
+	lb, err := tc.GetLoadBalancer(resourceGroupName, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(lb.LoadBalancingRules).NotTo(BeNil())
 
 	return &lb
 }
 
-func getAzureLoadBalancerFromPIP(pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
-	By("Creating Azure clients")
-	azureTestClient, err := utils.CreateAzureTestClient()
+func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
+	utils.Logf("Getting public IPs in the resourceGroup " + pipResourceGroup)
+	pipList, err := tc.ListPublicIPs(pipResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
 
-	By("Getting public IPs in the resourceGroup " + pipResourceGroup)
-	pipList, err := azureTestClient.ListPublicIPs(pipResourceGroup)
-	Expect(err).NotTo(HaveOccurred())
-
-	By("Getting public IP frontend configuration ID")
+	utils.Logf("Getting public IP frontend configuration ID")
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
 		if ip.PublicIPAddressPropertiesFormat != nil &&
@@ -409,35 +448,35 @@ func getAzureLoadBalancerFromPIP(pip, pipResourceGroup, lbResourceGroup string) 
 		}
 	}
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
-	By(fmt.Sprintf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID))
+	utils.Logf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID)
 
-	By("Getting loadBalancer name from pipFrontendConfigurationID")
+	utils.Logf("Getting loadBalancer name from pipFrontendConfigurationID")
 	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
 	Expect(len(match)).To(Equal(2))
 	loadBalancerName := match[1]
 	Expect(loadBalancerName).NotTo(Equal(""))
 	utils.Logf("Got loadBalancerName %q", loadBalancerName)
 
-	By("Getting loadBalancer")
+	utils.Logf("Getting loadBalancer")
 	if lbResourceGroup == "" {
-		lbResourceGroup = azureTestClient.GetResourceGroup()
+		lbResourceGroup = tc.GetResourceGroup()
 	}
-	lb, err := azureTestClient.GetLoadBalancer(lbResourceGroup, loadBalancerName)
+	lb, err := tc.GetLoadBalancer(lbResourceGroup, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(lb.LoadBalancingRules).NotTo(BeNil())
 
 	return &lb
 }
 
-func createServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
-	By("Creating service " + serviceName + " in namespace " + nsName)
+func createDefaultServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
+	utils.Logf("Creating service " + serviceName + " in namespace " + nsName)
 	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, nsName, ports)
 	_, err := cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
 
 	//wait and get service's public IP Address
-	By("Waiting service to expose...")
+	utils.Logf("Waiting service to expose...")
 	publicIP, err := utils.WaitServiceExposure(cs, nsName, serviceName)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -548,7 +587,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 	return err
 }
 
-func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, serviceName string, labels map[string]string, ns string, ports []v1.ServicePort, resourceGroupName string) {
+func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string, cs clientset.Interface, serviceName string, labels map[string]string, ns string, ports []v1.ServicePort, resourceGroupName string) {
 	serviceName = fmt.Sprintf("%s-%s", serviceName, vmssName)
 
 	// create annotation for LoadBalancer service
@@ -566,13 +605,9 @@ func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, s
 	publicIP, err := utils.WaitServiceExposure(cs, ns, serviceName)
 	Expect(err).NotTo(HaveOccurred())
 
-	By("Creating Azure clients")
-	azureTestClient, err := utils.CreateAzureTestClient()
-	Expect(err).NotTo(HaveOccurred())
-
 	// Invoking azure network client to get list of public IP Addresses
 	By("Getting public IPs in the resourceGroup " + resourceGroupName)
-	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	pipList, err := tc.ListPublicIPs(resourceGroupName)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Getting public IP frontend configuration ID")
@@ -599,7 +634,7 @@ func validateLoadBalancerBackendPools(vmssName string, cs clientset.Interface, s
 
 	//Get backendpools list
 	By("Getting loadBalancer")
-	lb, err := azureTestClient.GetLoadBalancer(resourceGroupName, loadBalancerName)
+	lb, err := tc.GetLoadBalancer(resourceGroupName, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(lb.BackendAddressPools).NotTo(BeNil())
 	Expect(lb.LoadBalancingRules).NotTo(BeNil())

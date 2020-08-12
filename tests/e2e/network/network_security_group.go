@@ -42,7 +42,7 @@ var _ = Describe("Network security group", func() {
 
 	var cs clientset.Interface
 	var ns *v1.Namespace
-	var azureTestClient *utils.AzureTestClient
+	var tc *utils.AzureTestClient
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -60,7 +60,7 @@ var _ = Describe("Network security group", func() {
 		ns, err = utils.CreateTestingNamespace(basename, cs)
 		Expect(err).NotTo(HaveOccurred())
 
-		azureTestClient, err = utils.CreateAzureTestClient()
+		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
@@ -78,7 +78,7 @@ var _ = Describe("Network security group", func() {
 
 		cs = nil
 		ns = nil
-		azureTestClient = nil
+		tc = nil
 	})
 
 	It("should add the rule when expose a service", func() {
@@ -93,7 +93,7 @@ var _ = Describe("Network security group", func() {
 
 		By("Validating ip exists in Security Group")
 		port := fmt.Sprintf("%v", nginxPort)
-		nsg, err := azureTestClient.GetClusterSecurityGroup()
+		nsg, err := tc.GetClusterSecurityGroup()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(validateUnsharedSecurityRuleExists(nsg, ip, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 
@@ -122,7 +122,7 @@ var _ = Describe("Network security group", func() {
 		Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
 		isDeleted := false
 		for i := 1; i <= 30; i++ {
-			nsg, err := azureTestClient.GetClusterSecurityGroup()
+			nsg, err := tc.GetClusterSecurityGroup()
 			Expect(err).NotTo(HaveOccurred())
 			if !validateUnsharedSecurityRuleExists(nsg, ip, port) {
 				utils.Logf("Target rule successfully deleted")
@@ -158,7 +158,7 @@ var _ = Describe("Network security group", func() {
 
 		By("Validate shared security rule exists")
 		port := fmt.Sprintf("%v", nginxPort)
-		nsg, err := azureTestClient.GetClusterSecurityGroup()
+		nsg, err := tc.GetClusterSecurityGroup()
 		Expect(err).NotTo(HaveOccurred())
 
 		ipList := []string{ip1, ip2}
@@ -174,7 +174,7 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating if the corresponding IP prefix existing in nsg")
-		nsg, err := azureTestClient.GetClusterSecurityGroup()
+		nsg, err := tc.GetClusterSecurityGroup()
 		Expect(err).NotTo(HaveOccurred())
 
 		rules := nsg.SecurityRules

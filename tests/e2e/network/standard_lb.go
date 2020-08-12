@@ -34,9 +34,11 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	basename := "service-lb"
 	serviceName := "servicelb-test"
 
-	var cs clientset.Interface
-	var ns *v1.Namespace
-	var tc *utils.AzureTestClient
+	var (
+		cs clientset.Interface
+		ns *v1.Namespace
+		tc *utils.AzureTestClient
+	)
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -72,12 +74,13 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		cs = nil
 		ns = nil
+		tc = nil
 	})
 
 	It("should add all nodes in different agent pools to backends [MultipleAgentPools]", func() {
 		rgName := tc.GetResourceGroup()
-		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
-		lb := getAzureLoadBalancerFromPIP(publicIP, rgName, rgName)
+		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
 			utils.Logf("sku: %s", lb.Sku.Name)
@@ -115,8 +118,8 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
 		rgName := tc.GetResourceGroup()
-		publicIP := createServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
-		lb := getAzureLoadBalancerFromPIP(publicIP, rgName, rgName)
+		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
 			utils.Logf("sku: %s", lb.Sku.Name)
