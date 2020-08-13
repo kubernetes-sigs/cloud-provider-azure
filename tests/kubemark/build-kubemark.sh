@@ -104,17 +104,17 @@ if ! command -v az > /dev/null; then
 
     echo "getting packages needed for the install process"
     AZ_VERSION=2.0.81~bionic
-    sudo apt update >> /dev/null
-    sudo apt install -y ca-certificates curl apt-transport-https lsb-release gnupg >> /dev/null
+    apt update >> /dev/null
+    apt install -y ca-certificates curl apt-transport-https lsb-release gnupg >> /dev/null
 
     echo "downloading and installing the Microsoft signing key"
-    curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg > /dev/null
+    curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg > /dev/null
     AZ_REPO=$(lsb_release -cs)
-    echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+    echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | tee /etc/apt/sources.list.d/azure-cli.list
 
     echo "updating repository information and install the azure-cli package"
-    sudo apt update >> /dev/null
-    sudo apt install azure-cli=${AZ_VERSION}
+    apt update >> /dev/null
+    apt install azure-cli=${AZ_VERSION}
 fi
 
 # read azure credentials
