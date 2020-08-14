@@ -19,7 +19,7 @@ set -u
 
 WORKING_DIR=$(dirname "${BASH_SOURCE[0]}")
 
-while [ -n "${1-}" ]  
+while [ -n "${1-}" ]
 do  
   case "$1" in   
     --kubemark-rg)  
@@ -97,13 +97,10 @@ PRIVATE_KEY="${PRIVATE_KEY:-${WORKING_DIR}/id_rsa}"
 PUBLIC_KEY="${PUBLIC_KEY:-${WORKING_DIR}/id_rsa.pub}"
 
 # install azure cli
-# use version 2.0.81 here to avoid `invalid template error`
-# ref https://github.com/kubernetes-sigs/cloud-provider-azure/pull/339
 if ! command -v az > /dev/null; then
     echo "installing azure cli"
 
     echo "getting packages needed for the install process"
-    AZ_VERSION=2.0.81~bionic
     apt update >> /dev/null
     apt install -y ca-certificates curl apt-transport-https lsb-release gnupg >> /dev/null
 
@@ -114,7 +111,7 @@ if ! command -v az > /dev/null; then
 
     echo "updating repository information and install the azure-cli package"
     apt update >> /dev/null
-    apt install azure-cli=${AZ_VERSION}
+    apt install azure-cli
 fi
 
 # read azure credentials
@@ -149,11 +146,12 @@ function build_kubemark_cluster {
     "${AKS_ENGINE}" generate "$1"
 
     echo "deploying kubemark cluster"
-    KUBEMARK_CLUSTER_DNS_PREFIX=$(jq -r '.properties.masterProfile.dnsPrefix' "$1")
-    az group deployment create \
-      -g "${KUBEMARK_CLUSTER_RESOURCE_GROUP}" \
-      --template-file "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/azuredeploy.json" \
-      --parameters "${WORKING_DIR}/_output/${KUBEMARK_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json" > /dev/null
+    "${AKS_ENGINE}" deploy --api-model "$1" \
+      --location "${LOCATION}" \
+      --client-id "${ClientID}" \
+      --client-secret "${ClientSecret}" \
+      --resource-group "${KUBEMARK_CLUSTER_RESOURCE_GROUP}" \
+      --force-overwrite
 
     get_master_ip "${KUBEMARK_CLUSTER_RESOURCE_GROUP}"
 
@@ -167,11 +165,12 @@ function build_external_cluster {
     "${AKS_ENGINE}" generate "$1"
 
     echo "deploying external cluster"
-    EXTERNAL_CLUSTER_DNS_PREFIX=$(jq -r '.properties.masterProfile.dnsPrefix' "$1")
-    az group deployment create \
-      -g "${EXTERNAL_CLUSTER_RESOURCE_GROUP}" \
-      --template-file "${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/azuredeploy.json" \
-      --parameters "${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/azuredeploy.parameters.json" > /dev/null
+    "${AKS_ENGINE}" deploy --api-model "$1" \
+      --location "${LOCATION}" \
+      --client-id "${ClientID}" \
+      --client-secret "${ClientSecret}" \
+      --resource-group "${EXTERNAL_CLUSTER_RESOURCE_GROUP}" \
+      --force-overwrite
     
     echo "building external cluster"
     export KUBECONFIG="${WORKING_DIR}/_output/${EXTERNAL_CLUSTER_DNS_PREFIX}/kubeconfig/kubeconfig.${LOCATION}.json"
