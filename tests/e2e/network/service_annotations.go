@@ -113,6 +113,11 @@ var _ = Describe("Service with annotation", func() {
 
 		// create service with given annotation and wait it to expose
 		_ = createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			utils.Logf("cleaning up test service %s", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 
 		By("Validating External domain name")
 		var code int
@@ -148,6 +153,11 @@ var _ = Describe("Service with annotation", func() {
 
 		// create service with given annotation and wait it to expose
 		ip := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			utils.Logf("cleaning up test service %s", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 
 		By("Validating whether the load balancer is internal")
 		url := fmt.Sprintf("%s:%v", ip, ports[0].Port)
@@ -178,8 +188,6 @@ var _ = Describe("Service with annotation", func() {
 			err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				err = utils.DeleteService(cs, ns.Name, serviceName)
-
 				utils.Logf("cleaning up test subnet %s", subnetName)
 				err = tc.DeleteSubnet(*vNet.Name, subnetName)
 				Expect(err).NotTo(HaveOccurred())
@@ -193,6 +201,11 @@ var _ = Describe("Service with annotation", func() {
 
 		// create service with given annotation and wait it to expose
 		ip := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			utils.Logf("cleaning up test service %s", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		utils.Logf("Get External IP: %s", ip)
 
 		By("Validating external ip in target subnet")
@@ -201,7 +214,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(ret).To(BeTrue(), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
 	})
 
-	It("should support service annotation 'service.beta.kubernetes.io/azure-shared-securityrule'", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout'", func() {
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerIdleTimeout: "5",
 		}
@@ -241,7 +254,7 @@ var _ = Describe("Service with annotation", func() {
 	// 	Expect(len(existingProtocols)).To(Equal(2))
 	// })
 
-	It("should support service annotation 'ServiceAnnotationLoadBalancerResourceGroup'", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-resource-group'", func() {
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
 		defer cleanup(to.String(rg.Name))
@@ -277,27 +290,25 @@ var _ = Describe("Service with annotation", func() {
 		Expect(lb).NotTo(BeNil())
 	})
 
-	It("should support service annotation `ServiceAnnotationSharedSecurityRule`", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
 		By("Exposing two services with shared security rule")
 		annotation := map[string]string{
 			azure.ServiceAnnotationSharedSecurityRule: "true",
 		}
-		ip1, err := createAndWaitServiceExposure(cs, ns.Name, serviceName, annotation, labels, ports)
+		ip1 := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		defer func() {
-			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		Expect(err).NotTo(HaveOccurred())
 
 		serviceName2 := serviceName + "-share"
-		ip2, err := createAndWaitServiceExposure(cs, ns.Name, serviceName2, annotation, labels, ports)
+		ip2 := createDefaultServiceWithAnnotation(cs, serviceName2, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up")
-			err = utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
+			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		Expect(err).NotTo(HaveOccurred())
 
 		By("Validate shared security rule exists")
 		port := fmt.Sprintf("%v", nginxPort)
