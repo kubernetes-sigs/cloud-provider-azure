@@ -100,6 +100,21 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 		if err != nil {
 			return false, nil
 		}
+
+		_, err = subnetClient.Get(
+			context.Background(),
+			azureTestClient.GetResourceGroup(),
+			vnetName,
+			subnetName,
+			"")
+		if err == nil {
+			Logf("subnet %s still exists, will retry", subnetName)
+			return false, nil
+		} else if strings.Contains(err.Error(), "StatusCode=404") {
+			Logf("subnet %s has been deleted", subnetName)
+			return true, nil
+		}
+		Logf("encountered unexpected error %v during deleting subnet %s", err, subnetName)
 		return true, nil
 	})
 }
@@ -125,6 +140,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
+			Logf("error when listing sgs: %v", err)
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
@@ -141,6 +157,8 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwor
 	if err != nil {
 		return
 	}
+	Logf("got sg list, length = %d", len(securityGroupsList.Values()))
+
 	// Assume there is only one cluster in one resource group
 	if len(securityGroupsList.Values()) != 1 {
 		err = fmt.Errorf("Found no or more than 1 virtual network in resource group same as cluster name")
@@ -209,7 +227,7 @@ func WaitCreateNewPIP(azureTestClient *AzureTestClient, ipName, rgName string, i
 	return pip, err
 }
 
-// DeletePIPWithRetry tries to delete a pulic ip resourc
+// DeletePIPWithRetry tries to delete a public ip resource
 func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
 	if rgName == "" {
 		rgName = azureTestClient.GetResourceGroup()
