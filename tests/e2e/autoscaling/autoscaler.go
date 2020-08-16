@@ -224,6 +224,8 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling out 10 new nodes")
 		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
@@ -246,12 +248,14 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 	It("should support one node pool with slow scaling [Single Nodepool]", func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) != 1 {
-			Skip("multiple node pools are needed in this scenario")
+			Skip("single node pool is needed in this scenario")
 		}
 
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling up, 5 nodes at a time until reaches 50 nodes")
@@ -279,7 +283,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
 	})
 
-	It("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
+	FIt("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) < 2 {
 			Skip("multiple node pools are needed in this scenario")
@@ -288,6 +292,8 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling up, 50 nodes at a time until reaches 500 nodes")

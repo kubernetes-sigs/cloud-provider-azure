@@ -55,19 +55,43 @@ func GetPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	return pods, nil
 }
 
-// LogPodStatus logs the rate of pending
-func LogPodStatus(cs clientset.Interface, ns string) error {
+// CountPendingPods counts how many pods is in the `pending` state
+func CountPendingPods(cs clientset.Interface, ns string) (int, error) {
 	pods, err := GetPodList(cs, ns)
 	if err != nil {
-		return err
+		return -1, err
 	}
+
 	pendingPodCount := 0
 	for _, p := range pods.Items {
 		if p.Status.Phase == v1.PodPending {
 			pendingPodCount++
 		}
 	}
-	Logf("%d of %d pods in namespace %s are pending", pendingPodCount, len(pods.Items), ns)
+
+	return pendingPodCount, nil
+}
+
+func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
+	return wait.PollImmediate(pullInterval, pullTimeout, func() (done bool, err error) {
+		pendingPodCount, err := CountPendingPods(cs, ns)
+		if err != nil {
+			Logf("unexpected error: %v", err)
+			return false, err
+		}
+
+		Logf("%d pods in namespace %s are pending", pendingPodCount, ns)
+		return pendingPodCount == 0, nil
+	})
+}
+
+// LogPodStatus logs the rate of pending
+func LogPodStatus(cs clientset.Interface, ns string) error {
+	pendingPodCount, err := CountPendingPods(cs, ns)
+	if err != nil {
+		return err
+	}
+	Logf("%d pods in namespace %s are pending", pendingPodCount, ns)
 	return nil
 }
 
