@@ -7,6 +7,8 @@ _artifacts
 _report
 _output/
 translations/
+node_modules/
+public/
 
 # bazel
 /bazel-bin
