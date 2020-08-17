@@ -2,7 +2,7 @@
 title: "Issues and pull requests migration"
 linkTitle: "Issues and PRs"
 type: docs
-weight: 98
+weight: 2
 description: >
     Developer guidance for how to contribute using issues and PRs.
 ---
@@ -36,7 +36,7 @@ In your kubernetes repository, run following to generate a patch for your PR.
 - PR_ID: Pull Request ID in kubernetes repository
 - UPSTREAM_BRANCH: Branch name pointing to upstream, basically the branch with url `https://github.com/kubernetes/kubernetes.git` or `https://k8s.io/kubernetes`
 
-```
+```shell script
 PR_ID=
 UPSTREAM_BRANCH=origin
 PR_BRANCH_LOCAL=PR$PR_ID

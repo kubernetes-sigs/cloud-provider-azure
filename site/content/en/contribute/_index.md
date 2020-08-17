@@ -1,9 +1,8 @@
 ---
-title: Contributing
+title: Contribution
+linkTitle: Contribution
 type: docs
 menu:
   main:
-    weight: 40
+    weight: 4
 ---
-
-<!--add blocks of content here to add more sections to the community page -->

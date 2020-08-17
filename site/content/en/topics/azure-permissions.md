@@ -1,15 +1,15 @@
 ---
 title: "Azure Permissions"
 linkTitle: "Azure Permissions"
-weight: 98
+weight: 3
 type: docs
 description: >
-    Azure cloud provider configs and settings
+    Permissions required to set up Azure resources.
 ---
 
 Azure cloud provider requires a set of permissions to manage the Azure resources. Here is a list of all permissions and reasons of why they're required.
 
-```go
+```
 // Required to create, delete or update LoadBalancer for LoadBalancer service
 Microsoft.Network/loadBalancers/delete
 Microsoft.Network/loadBalancers/read

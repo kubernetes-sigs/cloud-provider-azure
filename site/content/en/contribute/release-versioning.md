@@ -2,17 +2,17 @@
 title: "Release Versioning"
 linkTitle: "Release Versioning"
 type: docs
-weight: 98
+weight: 3
 description: >
     Introduce rules related to release.
 ---
 
 ## Release source
-There're two major code change sources for this project, either may push forward a new release for `Kubernetes azure-cloud-controller-manager`:
+There are two major code change sources for this project, either may push forward a new release for `Kubernetes azure-cloud-controller-manager`:
 1. Changes in [Kubernetes cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/components/#cloud-controller-manager), which happens in [Kubernetes repository](https://github.com/kubernetes/kubernetes)
    Since this project dependes on `Kubernetes cloud-controller-manager`, we'll periodically sync changes from Kubernetes upstream repository. When upstream shipped a new release tag, we may consider publishing a new release
 
-2. Changes in [Azure cloud provider](../cloud-controller-manager/azureprovider), which happens directly in this repository
+2. Changes in [Azure cloud provider](https://github.com/kubernetes-sigs/cloud-provider-azure), which happens directly in this repository
    Azure cloud provider also accepts new features and bug changes. In cases when a security fix is required or when the changes accumulated to certain amount, we may also consider publishing a new release, even if there is no change from Kubernetes upstream.
 
 ## Versioning
@@ -23,14 +23,14 @@ The basic rule is:
 2. For `MAJOR.MINOR`, it keeps same value as the Kubernetes upstream
 3. For `PATCH`, it is calculated independently:
     - If upstream Kubernetes has a new a [patch release](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/release/versioning.md#patch-releases), which introduces change in `cloud-controller-manager` or any component we depend on, then sync the change and increase the `PATCH` number.
-    - If any code change happens in [Azure cloud provider](../cloud-controller-manager/azureprovider) or other dependency projects, which becomes eligible for a new release, then increase the `PATCH` number.
+    - If any code change happens in [Azure cloud provider](https://github.com/kubernetes-sigs/cloud-provider-azure) or other dependency projects, which becomes eligible for a new release, then increase the `PATCH` number.
 
 References:
 - [Kubernetes Release Versioning](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/release/versioning.md)
 - [Semantic Versioning](http://semver.org/)
 
 ### Branch and version scheme
-This project uses golang's vendoring mechanism for managing dependencies (see [Dependency management](docs/dependency-management.md) for detail). When talking about 'sync from Kubernetes upstream', it actually means vendoring Kubernetes repository code under the vendor directory.
+This project uses golang's vendoring mechanism for managing dependencies (see [Dependency management](../../development/dependencies) for detail). When talking about 'sync from Kubernetes upstream', it actually means vendoring Kubernetes repository code under the vendor directory.
 
 During each sync from upstream, it is usually fine to sync to latest commit. But if there is a new tagged commit in upstream that we haven't vendored, we should sync to that tagged commit first, and apply a version tag correspondingly if applicable. The version tag mechanism is a bit different on master branch and releasing branch, please see below for detail.
 
@@ -71,6 +71,6 @@ Version tags:
   - Testing and release process follows same rule as `X.Y.0`
 
 ### CI and dev version scheme
-We use [git-describe](https://git-scm.com/docs/git-describe) as versioning source, please check [version](../cloud-controller-manager/version) for detail.
+We use [git-describe](https://git-scm.com/docs/git-describe) as versioning source, please check [version](https://github.com/kubernetes-sigs/cloud-provider-azure/tree/master/pkg/version) for detail.
 
 In this case, for commits that does not have a certain tag, the result version would be something like 'v0.1.0-alpha.0-25-gd7999d10'.

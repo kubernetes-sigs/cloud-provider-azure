@@ -1,13 +1,13 @@
 ---
-title: "Cloud controller manager for Azure"
-linkTitle: "Cloud controller manager"
+title: "Deploy Cloud Controller Manager"
+linkTitle: "Azure Cloud Controller Manager"
 type: docs
-weight: 1
+weight: 2
 description: >
-    Usage and developing guidance of Azure Cloud Controller Manager
+    The configurations for using Azure Cloud Controller Manager.
 ---
 
-`azure-cloud-controller-manager` is a Kubernetes component that provides interoperability with Azure API, and will be used by Kubernetes clusters running on Azure. It runs together with other components to provide the Kubernetes cluster’s control plane.
+`azure-cloud-controller-manager` is a Kubernetes component which provides interoperability with Azure API, and will be used by Kubernetes clusters running on Azure. It runs together with other components to provide the Kubernetes cluster’s control plane.
 
 Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/components/#cloud-controller-manager) is a new alpha feature for Kubernetes since v1.14. `cloud-controller-manager` runs cloud provider related controller loops, which used to be run by `controller-manager`.
 
@@ -44,7 +44,7 @@ To use cloud controller manager, the following components need to be configured:
     |Flag|Value|Remark|
     |---|---|---|
     |--cloud-provider|azure|cloud-provider should be set azure|
-    |--cloud-config|/etc/kubernetes/azure.json|Path for [cloud provider config](../config)|
+    |--cloud-config|/etc/kubernetes/azure.json|Path for [cloud provider config](../configs)|
 
     For other flags such as `--allocate-node-cidrs`, `--configure-cloud-routes`, `--cluster-cidr`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
@@ -141,7 +141,7 @@ Run unit tests:
 make test-unit
 ```
 
-Updating dependency: (please check [Dependency management](../dep) for additional information)
+Updating dependency: (please check [Dependency management](../../development/dependencies) for additional information)
 
 ```sh
 make update
@@ -150,3 +150,4 @@ make update
 ## Limitations
 
 Because [CSI](https://kubernetes-csi.github.io/docs/) is not ready on Windows, AzureDisk/AzureFile CSI drivers don't support Windows either. If you have Windows nodes in the cluster, please use kube-controller-manager instead of cloud-controller-manager.
+

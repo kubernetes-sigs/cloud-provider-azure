@@ -1,3 +1,3 @@
 # AzureDisk
 
-Azure disk Container Storage Interface (CSI) Storage Plugin is moved to <https://github.com/kubernetes-sigs/azuredisk-csi-driver>. Please check the github [link](https://github.com/kubernetes-sigs/azuredisk-csi-driver) for documentation.
+This doc has been moved to the project website. Checkout [this page](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azuredisk/) to get more information.

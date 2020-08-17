@@ -81,7 +81,6 @@ Please check the following documents for e2e tests:
 
 ## Documentation
 
-- [Component versioning](docs/component-versioning.md)
 - [Dependency management](docs/dependency-management.md)
 - [Cloud provider config](docs/cloud-provider-config.md)
 - [Azure load balancer and annotations](docs/services/README.md)

@@ -1,12 +1,11 @@
 ---
-title: "Dependency management"
-linkTitle: "Dependencies"
+title: "Dependency Management"
+linkTitle: "Dependency Management"
 type: docs
-weight: 98
+weight: 2
 description: >
-    Developer guidance for how to manage and update dependencies in the code base.
+    Manage Cloud Provider Azure dependencies using go modules.
 ---
-
 
 cloud-provider-azure uses [go modules] for Go dependency management.
 
@@ -31,7 +30,7 @@ You can also manually editing `go.mod` and update the versions in `require` and 
 Because of staging in Kubernetes, manually `go.mod` updating is required for Kubernetes and
 its staging packages. In cloud-provider-azure, their versions are set in `replace` part, e.g.
 
-```go
+```go.mod
 replace (
     ...
     k8s.io/kubernetes => k8s.io/kubernetes v0.0.0-20190815230911-4e7fd98763aa
@@ -59,3 +58,4 @@ See golang's [go.mod], [Using Go Modules] and [Kubernetes Go modules] docs for m
 [`hack/update-dependencies.sh`]: https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/hack/update-dependencies.sh
 [Using Go Modules]: https://blog.golang.org/using-go-modules
 [Kubernetes Go modules]: https://github.com/kubernetes/enhancements/blob/master/keps/sig-architecture/2019-03-19-go-modules.md
+
