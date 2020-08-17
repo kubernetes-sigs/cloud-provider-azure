@@ -1,6 +1,6 @@
 ---
-title: "Azure Disk Plugin Known Issues"
-linkTitle: "Known Issues"
+title: "AzureDisk CSI Driver Known Issues"
+linkTitle: "AzureDisk"
 type: docs
 ---
 

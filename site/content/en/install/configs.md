@@ -1,10 +1,10 @@
 ---
-title: "Cloud Provider Config"
-linkTitle: "Cloud Provider Config"
+title: "Configure Cloud Provider"
+linkTitle: "Configurations"
 type: docs
-weight: 98
+weight: 1
 description: >
-    Configs for Cloud Provider Azure
+    The configurations for Cloud Provider Azure.
 ---
 
 This doc describes cloud provider config file, which is to be used via the `--cloud-config` flag of azure-cloud-controller-manager.
@@ -277,7 +277,7 @@ The configuration parameters of this file:
 }
 ```
 
-The full list of existing settings for the `AzureChinaCloud`, `AzureGermanCloud`, `AzurePublicCloud` and `AzureUSGovernmentCloud` is available in the source code at https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go#L51
+The full list of existing settings for the `AzureChinaCloud`, `AzureGermanCloud`, `AzurePublicCloud` and `AzureUSGovernmentCloud` is available in the source code at https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go#L51.
 
 ## Host Network Resources in different AAD Tenant and Subscription
 

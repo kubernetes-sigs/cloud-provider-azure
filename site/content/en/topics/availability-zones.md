@@ -1,9 +1,10 @@
 ---
-title: "How to Use Availability Zones"
+title: "Use Availability Zones"
 linkTitle: "Availability Zones"
+weight: 4
 type: docs
 description: >
-    How to use availability zones in provider azure.
+    Use availability zones in provider azure.
 ---
 
 **Feature Status:** Alpha since v1.12.
@@ -112,7 +113,7 @@ allowedTopologies:
 
 When feature gate `VolumeScheduling` disabled, no `NodeAffinity` set for zoned PV:
 
-```sh
+```shell script
 $ kubectl describe pv
 Name:              pvc-d30dad05-9ad8-11e8-94f2-000d3a07de8c
 Labels:            failure-domain.beta.kubernetes.io/region=southeastasia
@@ -145,7 +146,7 @@ Events:           <none>
 
 When feature gate `VolumeScheduling` enabled, `NodeAffinity` will be populated for zoned PV:
 
-```sh
+```shell script
 $ kubectl describe pv
 Name:              pvc-0284337b-9ada-11e8-a7f6-000d3a07de8c
 Labels:            failure-domain.beta.kubernetes.io/region=southeastasia
@@ -178,7 +179,7 @@ Events:           <none>
 
 While unzoned disks are not able to attach in zoned nodes, `NodeAffinity` will also be set for them so that they will only be scheduled to unzoned nodes:
 
-```sh
+```shell script
 $ kubectl describe pv pvc-bdf93a67-9c45-11e8-ba6f-000d3a07de8c
 Name:              pvc-bdf93a67-9c45-11e8-ba6f-000d3a07de8c
 Labels:            <none>
@@ -219,7 +220,7 @@ Note that unlike most cases, fault domain and availability zones mean different 
 - A Fault Domain (FD) is essentially a rack of servers. It consumes subsystems like network, power, cooling etc.
 - Availability Zones are unique physical locations within an Azure region. Each zone is made up of one or more data centers equipped with independent power, cooling, and networking.
 
-An Availability Zone in an Azure region is a combination of a fault domain and an update domain (Same like FD, but for updates. When upgrading a deployment, it is carried out one update domain at a time). For example, if you create three or more VMs across three zones in an Azure region, your VMs are effectively distributed across three fault domains and three update domains.
+An Availability Zone in an Azure region is a combination of a fault domain, and an update domain (Same like FD, but for updates. When upgrading a deployment, it is carried out one update domain at a time). For example, if you create three or more VMs across three zones in an Azure region, your VMs are effectively distributed across three fault domains and three update domains.
 
 ## Reference
 

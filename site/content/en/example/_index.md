@@ -4,8 +4,5 @@ linkTitle: Example
 type: docs
 menu:
   main:
-    weight: 30
+    weight: 5
 ---
-
-
-To be completed.

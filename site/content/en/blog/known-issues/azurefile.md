@@ -1,6 +1,6 @@
 ---
-title: "Azure File Plugin Known Issues"
-linkTitle: "Known Issues"
+title: "AzureFile CSI Driver Known Issues"
+linkTitle: "AzureFile"
 type: docs
 ---
 

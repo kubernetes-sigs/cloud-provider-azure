@@ -2,7 +2,7 @@
 title: "Contributing"
 linkTitle: "Contributing"
 type: docs
-weight: 97
+weight: 1
 description: >
     Developer guidance.
 ---

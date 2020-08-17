@@ -1,9 +1,10 @@
 ---
-title: "How to Deploy Cross Resource Group Nodes"
+title: "Deploy Cross Resource Group Nodes"
 linkTitle: "Cross Resource Group Nodes"
+weight: 5
 type: docs
 description: >
-    How to deploy cross resource group nodes.
+    Deploy cross resource group nodes.
 ---
 
 **Feature status:** Alpha since v1.12.
@@ -44,7 +45,7 @@ Cross-RG nodes should register themselves with required labels together with clo
 
 For example,
 
-```sh
+```shell script
 kubelet ... \
   --cloud-provider=azure \
   --cloud-config=/etc/kubernetes/azure.json \
@@ -62,7 +63,7 @@ On-prem nodes should register themselves with labels `node.kubernetes.io/exclude
 
 For example,
 
-```sh
+```shell script
 kubelet ...\
   --cloud-provider= \
   --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/managed=false
