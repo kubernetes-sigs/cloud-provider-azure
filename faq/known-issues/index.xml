@@ -1,4 +1,4 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/blog/known-issues/</link><description>Recent content in Known Issues on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://nilo19.github.io/cloud-provider-azure/blog/known-issues/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: AzureDisk CSI Driver Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/blog/1/01/01/azuredisk-csi-driver-known-issues/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://nilo19.github.io/cloud-provider-azure/blog/1/01/01/azuredisk-csi-driver-known-issues/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/faq/known-issues/</link><description>Recent content in Known Issues on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://nilo19.github.io/cloud-provider-azure/faq/known-issues/index.xml" rel="self" type="application/rss+xml"/><item><title>FAQ: AzureDisk CSI Driver Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/faq/known-issues/azuredisk/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://nilo19.github.io/cloud-provider-azure/faq/known-issues/azuredisk/</guid><description>
 &lt;!-- TOC -->
 &lt;ul>
 &lt;li>&lt;a href="#azure-disk-plugin-known-issues">azure disk plugin known issues&lt;/a>
@@ -670,7 +670,7 @@ Warning ProvisioningFailed 31m persistentvolume-controller Failed to provision v
 &lt;ul>
 &lt;li>if there is attach disk failure for long time, restart controller manager may work&lt;/li>
 &lt;li>if there is disk not detached for long time, detach that disk manually&lt;/li>
-&lt;/ul></description></item><item><title>Blog: AzureFile CSI Driver Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/blog/1/01/01/azurefile-csi-driver-known-issues/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://nilo19.github.io/cloud-provider-azure/blog/1/01/01/azurefile-csi-driver-known-issues/</guid><description>
+&lt;/ul></description></item><item><title>FAQ: AzureFile CSI Driver Known Issues</title><link>https://nilo19.github.io/cloud-provider-azure/faq/known-issues/azurefile/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://nilo19.github.io/cloud-provider-azure/faq/known-issues/azurefile/</guid><description>
 &lt;!-- TOC -->
 &lt;ul>
 &lt;li>&lt;a href="#azure-file-plugin-known-issues">azure file plugin known issues&lt;/a>
