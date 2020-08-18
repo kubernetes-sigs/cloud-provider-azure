@@ -296,7 +296,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Scaling up, 50 nodes at a time until reaches 500 nodes")
+		By("Scaling up, 25 nodes at a time until reaches 50 nodes")
 		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
@@ -305,8 +305,8 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 
 		targetNodeCount := initNodeCount
 		for {
-			*scaleUpDeployment.Spec.Replicas += 50
-			targetNodeCount += 50
+			*scaleUpDeployment.Spec.Replicas += 25
+			targetNodeCount += 25
 			_, err = cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), scaleUpDeployment, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -314,7 +314,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 
 			nodes, err := utils.GetAgentNodes(cs)
 			Expect(err).NotTo(HaveOccurred())
-			if len(nodes) > 500 {
+			if len(nodes) > 50 {
 				break
 			}
 		}
