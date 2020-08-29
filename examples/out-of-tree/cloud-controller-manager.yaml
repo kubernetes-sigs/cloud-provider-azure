@@ -146,7 +146,7 @@ spec:
       effect: NoSchedule
   containers:
     - name: cloud-controller-manager
-      image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.0
+      image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.1
       imagePullPolicy: IfNotPresent
       command: ["cloud-controller-manager"]
       args:
@@ -168,6 +168,20 @@ spec:
         limits:
           cpu: "4"
           memory: 2Gi
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 10258
+        initialDelaySeconds: 20
+        periodSeconds: 10
+        timeoutSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: 10258
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 10
       volumeMounts:
         - name: etc-kubernetes
           mountPath: /etc/kubernetes
