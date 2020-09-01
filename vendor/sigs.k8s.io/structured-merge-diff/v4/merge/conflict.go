@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"sigs.k8s.io/structured-merge-diff/v3/fieldpath"
+	"sigs.k8s.io/structured-merge-diff/v4/fieldpath"
 )
 
 // Conflict is a conflict on a specific field with the current manager of
@@ -93,6 +93,15 @@ func (c Conflicts) Equals(c2 Conflicts) bool {
 		}
 	}
 	return true
+}
+
+// ToSet aggregates conflicts for all managers into a single Set.
+func (c Conflicts) ToSet() *fieldpath.Set {
+	set := fieldpath.NewSet()
+	for _, conflict := range []Conflict(c) {
+		set.Insert(conflict.Path)
+	}
+	return set
 }
 
 // ConflictsFromManagers creates a list of conflicts given Managers sets.
