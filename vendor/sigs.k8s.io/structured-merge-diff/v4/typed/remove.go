@@ -14,9 +14,9 @@ limitations under the License.
 package typed
 
 import (
-	"sigs.k8s.io/structured-merge-diff/v3/fieldpath"
-	"sigs.k8s.io/structured-merge-diff/v3/schema"
-	"sigs.k8s.io/structured-merge-diff/v3/value"
+	"sigs.k8s.io/structured-merge-diff/v4/fieldpath"
+	"sigs.k8s.io/structured-merge-diff/v4/schema"
+	"sigs.k8s.io/structured-merge-diff/v4/value"
 )
 
 type removingWalker struct {
@@ -95,10 +95,9 @@ func (w *removingWalker) doMap(t *schema.Map) ValidationErrors {
 		fieldType := t.ElementType
 		if ft, ok := fieldTypes[k]; ok {
 			fieldType = ft
-		} else {
-			if w.toRemove.Has(path) {
-				return true
-			}
+		}
+		if w.toRemove.Has(path) {
+			return true
 		}
 		if subset := w.toRemove.WithPrefix(pe); !subset.Empty() {
 			val = removeItemsWithSchema(val, subset, w.schema, fieldType)
