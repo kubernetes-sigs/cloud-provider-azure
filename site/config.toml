@@ -1,4 +1,4 @@
-baseURL = "https://nilo19.github.io/cloud-provider-azure/"
+baseURL = "https://kubernetes-sigs.github.io/cloud-provider-azure/"
 title = "Cloud Provider Azure"
 
 publishDir = "../public"
@@ -104,7 +104,7 @@ github_repo = "https://github.com/kubernetes-sigs/cloud-provider-azure"
 github_project_repo = "https://github.com/kubernetes-sigs/cloud-provider-azure"
 
 # Specify a value here if your content directory is not in your repo's root directory
-# github_subdir = ""
+github_subdir = "site"
 
 # Google Custom Search Engine ID. Remove or comment out to disable search.
 # gcs_engine_id = "011737558837375720776:fsdu1nryfng"
