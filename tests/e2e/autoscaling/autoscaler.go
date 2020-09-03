@@ -36,10 +36,10 @@ import (
 )
 
 const (
-	podSize     int64 = 200 // podSize to create, 200m, 0.2 core
-	poll              = 10 * time.Second
-	pollTimeout       = 10 * time.Minute
-	execTimeout       = 10 * time.Second
+	podSize            int64 = 200 // podSize to create, 200m, 0.2 core
+	poll                     = 10 * time.Second
+	statefulSetTimeout       = 30 * time.Minute
+	execTimeout              = 10 * time.Second
 
 	agentpoolLabelKey               = "agentpool"
 	kubeSystemNamespace             = "kube-system"
@@ -523,7 +523,7 @@ func createStatefulSetWithPVCManifest(name string, replicas int32, label map[str
 }
 
 func waitForStatefulSetComplete(cs clientset.Interface, ns *v1.Namespace, ss *appsv1.StatefulSet) error {
-	err := wait.PollImmediate(poll, pollTimeout, func() (bool, error) {
+	err := wait.PollImmediate(poll, statefulSetTimeout, func() (bool, error) {
 		var err error
 		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Get(context.TODO(), ss.Name, metav1.GetOptions{})
 		if err != nil {
