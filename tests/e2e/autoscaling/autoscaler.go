@@ -284,7 +284,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
 	})
 
-	FIt("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
+	It("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) < 2 {
 			Skip("multiple node pools are needed in this scenario")
