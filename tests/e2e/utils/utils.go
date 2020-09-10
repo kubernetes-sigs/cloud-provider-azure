@@ -39,7 +39,7 @@ const (
 	poll                        = 2 * time.Second
 	singleCallTimeout           = 10 * time.Minute
 	vmssOperationInterval       = 30 * time.Second
-	vmssOperationTimeout        = 20 * time.Minute
+	vmssOperationTimeout        = 30 * time.Minute
 	recommendedConfigPathEnvVar = "KUBECONFIG"
 )
 

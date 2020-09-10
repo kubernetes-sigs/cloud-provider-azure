@@ -239,10 +239,11 @@ var _ = Describe("Azure node resources", func() {
 		utils.Logf("getting route table")
 		routeTables, err := utils.ListRouteTables(tc)
 		if err != nil {
-			if err == fmt.Errorf("no route table found") {
+			if strings.EqualFold(err.Error(), "no route table found") {
+				utils.Logf("got error, error string is: %q", err.Error())
 				Skip("only test cluster with Kubenet network")
 			} else {
-				Fail(fmt.Sprintf("Unexpected err %v happens", err))
+				Fail(fmt.Sprintf("Unexpected err %+v happens", err))
 			}
 		}
 
