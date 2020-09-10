@@ -18,6 +18,7 @@ package autoscaling
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -70,7 +71,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 
 		ready, err := isCAEnabled(cs)
 		if err != nil {
-			Skip("unexpected error %w occurs when getting cluster autoscaler deployment")
+			Skip(fmt.Sprintf("unexpected error %v occurs when getting cluster autoscaler deployment", err))
 		}
 		Expect(ready).To(BeTrue())
 
