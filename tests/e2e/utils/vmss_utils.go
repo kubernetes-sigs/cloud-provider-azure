@@ -140,6 +140,7 @@ func waitVMSSVMCountToEqual(tc *AzureTestClient, expected int, vmssName string) 
 			count++
 		}
 
+		Logf("current = %d, expected = %d", count, expected)
 		return count == expected, nil
 	})
 
