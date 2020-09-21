@@ -153,6 +153,8 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error
 		if _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
 			return err
 		}
+
+		healthz.InstallReadyzHandler(unsecuredMux, checks...)
 	}
 	if c.InsecureServing != nil {
 		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, checks...)
@@ -161,6 +163,8 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error
 		if err := c.InsecureServing.Serve(handler, 0, stopCh); err != nil {
 			return err
 		}
+
+		healthz.InstallReadyzHandler(unsecuredMux, checks...)
 	}
 
 	run := func(ctx context.Context) {
