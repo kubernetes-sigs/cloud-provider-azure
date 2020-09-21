@@ -171,17 +171,10 @@ spec:
       livenessProbe:
         httpGet:
           path: /healthz
-          port: 10258
+          port: 10267
         initialDelaySeconds: 20
         periodSeconds: 10
-        timeoutSeconds: 10
-      readinessProbe:
-        httpGet:
-          path: /readyz
-          port: 10258
-        initialDelaySeconds: 10
-        periodSeconds: 10
-        timeoutSeconds: 10
+        timeoutSeconds: 5
       volumeMounts:
         - name: etc-kubernetes
           mountPath: /etc/kubernetes
