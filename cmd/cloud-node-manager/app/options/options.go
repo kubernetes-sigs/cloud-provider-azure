@@ -133,6 +133,9 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 		return err
 	}
 	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
+		o.Authentication.RemoteKubeConfigFile = o.Kubeconfig
+		o.Authorization.RemoteKubeConfigFile = o.Kubeconfig
+
 		if err = o.Authentication.ApplyTo(&c.Authentication, c.SecureServing, nil); err != nil {
 			return err
 		}
