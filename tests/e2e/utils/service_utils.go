@@ -101,7 +101,7 @@ func WaitUpdateServiceExposure(cs clientset.Interface, namespace string, name st
 	var service *v1.Service
 	var err error
 	poll := 10 * time.Second
-	timeout := 30 * time.Minute
+	timeout := 10 * time.Minute
 
 	return wait.PollImmediate(poll, timeout, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
