@@ -42,6 +42,8 @@ const (
 
 	// operationCanceledErrorMessage means the operation is canceled by another new operation.
 	operationCanceledErrorMessage = "canceledandsupersededduetoanotheroperation"
+
+	cannotDeletePublicIPErrorMessageCode = "PublicIPAddressCannotBeDeleted"
 )
 
 // RequestBackoff if backoff is disabled in cloud provider it
@@ -111,7 +113,7 @@ func (az *Cloud) getPrivateIPsForMachineWithRetry(nodeName types.NodeName) ([]st
 	var privateIPs []string
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		var retryErr error
-		privateIPs, retryErr = az.vmSet.GetPrivateIPsByNodeName(string(nodeName))
+		privateIPs, retryErr = az.VMSet.GetPrivateIPsByNodeName(string(nodeName))
 		if retryErr != nil {
 			// won't retry since the instance doesn't exist on Azure.
 			if retryErr == cloudprovider.InstanceNotFound {
@@ -135,7 +137,7 @@ func (az *Cloud) GetIPForMachineWithRetry(name types.NodeName) (string, string, 
 	var ip, publicIP string
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (bool, error) {
 		var retryErr error
-		ip, publicIP, retryErr = az.vmSet.GetIPByNodeName(string(name))
+		ip, publicIP, retryErr = az.VMSet.GetIPByNodeName(string(name))
 		if retryErr != nil {
 			klog.Errorf("GetIPForMachineWithRetry(%s): backoff failure, will retry,err=%v", name, retryErr)
 			return false, nil
@@ -275,6 +277,11 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	if rerr != nil {
 		klog.Errorf("PublicIPAddressesClient.Delete(%s) failed: %s", pipName, rerr.Error().Error())
 		az.Event(service, v1.EventTypeWarning, "DeletePublicIPAddress", rerr.Error().Error())
+
+		if strings.Contains(rerr.Error().Error(), cannotDeletePublicIPErrorMessageCode) {
+			klog.Warningf("DeletePublicIP for public IP %s failed with error %v, this is because other resources are referencing the public IP. The deletion of the service will continue.", pipName, rerr.Error())
+			return nil
+		}
 		return rerr.Error()
 	}
 

@@ -3,10 +3,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["dump.go"],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/util/flowcontrol/debug",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/util/flowcontrol/debug",
     importpath = "k8s.io/apiserver/pkg/util/flowcontrol/debug",
     visibility = ["//visibility:public"],
-    deps = ["//staging/src/k8s.io/apiserver/pkg/endpoints/request:go_default_library"],
+    deps = ["//vendor/k8s.io/apiserver/pkg/endpoints/request:go_default_library"],
 )
 
 filegroup(

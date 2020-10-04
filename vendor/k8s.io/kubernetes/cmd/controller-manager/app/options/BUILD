@@ -9,16 +9,17 @@ go_library(
         "kubecloudshared.go",
         "servicecontroller.go",
     ],
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/cmd/controller-manager/app/options",
     importpath = "k8s.io/kubernetes/cmd/controller-manager/app/options",
     visibility = ["//visibility:public"],
     deps = [
-        "//pkg/controller/apis/config:go_default_library",
-        "//pkg/controller/service/config:go_default_library",
-        "//staging/src/k8s.io/apimachinery/pkg/util/sets:go_default_library",
-        "//staging/src/k8s.io/component-base/cli/flag:go_default_library",
-        "//staging/src/k8s.io/component-base/config:go_default_library",
-        "//staging/src/k8s.io/component-base/config/options:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
+        "//vendor/k8s.io/component-base/cli/flag:go_default_library",
+        "//vendor/k8s.io/component-base/config:go_default_library",
+        "//vendor/k8s.io/component-base/config/options:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/controller/apis/config:go_default_library",
+        "//vendor/k8s.io/kubernetes/pkg/controller/service/config:go_default_library",
     ],
 )
 

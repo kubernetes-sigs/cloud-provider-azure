@@ -7,9 +7,10 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config",
     importpath = "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config",
     visibility = ["//visibility:public"],
-    deps = ["//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library"],
+    deps = ["//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library"],
 )
 
 filegroup(

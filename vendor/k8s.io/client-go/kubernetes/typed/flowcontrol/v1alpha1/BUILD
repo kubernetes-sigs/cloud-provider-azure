@@ -9,16 +9,16 @@ go_library(
         "generated_expansion.go",
         "prioritylevelconfiguration.go",
     ],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/kubernetes/typed/flowcontrol/v1alpha1",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/kubernetes/typed/flowcontrol/v1alpha1",
     importpath = "k8s.io/client-go/kubernetes/typed/flowcontrol/v1alpha1",
     visibility = ["//visibility:public"],
     deps = [
-        "//staging/src/k8s.io/api/flowcontrol/v1alpha1:go_default_library",
-        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
-        "//staging/src/k8s.io/apimachinery/pkg/types:go_default_library",
-        "//staging/src/k8s.io/apimachinery/pkg/watch:go_default_library",
-        "//staging/src/k8s.io/client-go/kubernetes/scheme:go_default_library",
-        "//staging/src/k8s.io/client-go/rest:go_default_library",
+        "//vendor/k8s.io/api/flowcontrol/v1alpha1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/watch:go_default_library",
+        "//vendor/k8s.io/client-go/kubernetes/scheme:go_default_library",
+        "//vendor/k8s.io/client-go/rest:go_default_library",
     ],
 )
 

@@ -3,21 +3,14 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
-    "go_test",
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["generate_test.go"],
-    embed = [":go_default_library"],
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["generate.go"],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/storage/names",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/names",
     importpath = "k8s.io/apiserver/pkg/storage/names",
-    deps = ["//staging/src/k8s.io/apimachinery/pkg/util/rand:go_default_library"],
+    deps = ["//vendor/k8s.io/apimachinery/pkg/util/rand:go_default_library"],
 )
 
 filegroup(

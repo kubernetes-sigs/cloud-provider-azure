@@ -4,8 +4,8 @@ go 1.13
 
 require (
 	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
-	github.com/Azure/go-autorest/autorest v0.9.6
-	github.com/Azure/go-autorest/autorest/adal v0.8.2
+	github.com/Azure/go-autorest/autorest v0.11.1
+	github.com/Azure/go-autorest/autorest/adal v0.9.0
 	github.com/Azure/go-autorest/autorest/to v0.2.0
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/onsi/ginkgo v1.11.0
@@ -424,7 +424,7 @@ replace (
 	k8s.io/kubectl => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200831051421-70a682345e3b
 	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200831051421-70a682345e3b
 	k8s.io/kubernetes => k8s.io/kubernetes v1.20.0-alpha.0.0.20200713040433-bb8a5d2ada10
-	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20200831051421-70a682345e3b
+	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201003225305-90c9f7b3e198
 	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200831051421-70a682345e3b
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.3
 	k8s.io/sample-apiserver => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200831051421-70a682345e3b

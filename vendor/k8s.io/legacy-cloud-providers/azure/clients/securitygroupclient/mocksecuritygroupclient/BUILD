@@ -6,13 +6,13 @@ go_library(
         "doc.go",
         "interface.go",
     ],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/legacy-cloud-providers/azure/clients/securitygroupclient/mocksecuritygroupclient",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure/clients/securitygroupclient/mocksecuritygroupclient",
     importpath = "k8s.io/legacy-cloud-providers/azure/clients/securitygroupclient/mocksecuritygroupclient",
     visibility = ["//visibility:public"],
     deps = [
-        "//staging/src/k8s.io/legacy-cloud-providers/azure/retry:go_default_library",
         "//vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network:go_default_library",
         "//vendor/github.com/golang/mock/gomock:go_default_library",
+        "//vendor/k8s.io/legacy-cloud-providers/azure/retry:go_default_library",
     ],
 )
 
