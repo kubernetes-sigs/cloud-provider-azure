@@ -1,22 +1,15 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
     srcs = ["lockingpromise.go"],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/promise/lockingpromise",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/promise/lockingpromise",
     importpath = "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/promise/lockingpromise",
     visibility = ["//visibility:public"],
     deps = [
-        "//staging/src/k8s.io/apiserver/pkg/util/flowcontrol/counter:go_default_library",
-        "//staging/src/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/promise:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/util/flowcontrol/counter:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/promise:go_default_library",
     ],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["lockingpromise_test.go"],
-    embed = [":go_default_library"],
-    deps = ["//staging/src/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/testing/clock:go_default_library"],
 )
 
 filegroup(

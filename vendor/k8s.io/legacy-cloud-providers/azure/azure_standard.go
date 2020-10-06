@@ -38,10 +38,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 	azcache "k8s.io/legacy-cloud-providers/azure/cache"
-
-	"k8s.io/component-base/featuregate"
+	"k8s.io/legacy-cloud-providers/azure/metrics"
 	utilnet "k8s.io/utils/net"
 )
 
@@ -135,7 +135,7 @@ func (az *Cloud) getNetworkResourceSubscriptionID() string {
 func (az *Cloud) mapLoadBalancerNameToVMSet(lbName string, clusterName string) (vmSetName string) {
 	vmSetName = strings.TrimSuffix(lbName, InternalLoadBalancerNameSuffix)
 	if strings.EqualFold(clusterName, vmSetName) {
-		vmSetName = az.vmSet.GetPrimaryVMSetName()
+		vmSetName = az.VMSet.GetPrimaryVMSetName()
 	}
 
 	return vmSetName
@@ -150,7 +150,7 @@ func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, 
 		clusterName = az.LoadBalancerName
 	}
 	lbNamePrefix := vmSetName
-	if strings.EqualFold(vmSetName, az.vmSet.GetPrimaryVMSetName()) || az.useStandardLoadBalancer() {
+	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || az.useStandardLoadBalancer() {
 		lbNamePrefix = clusterName
 	}
 	if isInternal {
@@ -262,7 +262,7 @@ func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
 }
 
 // getBackendPoolName the LB BackendPool name for a service.
-// to ensure backword and forward compat:
+// to ensure backward and forward compat:
 // SingleStack -v4 (pre v1.16) => BackendPool name == clusterName
 // SingleStack -v6 => BackendPool name == <clusterName>-IPv6 (all cluster bootstrap uses this name)
 // DualStack
@@ -327,12 +327,59 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))
 }
 
-func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) bool {
+// There are two cases when a service owns the frontend IP config:
+// 1. The primary service, which means the frontend IP config is created after the creation of the service.
+// This means the name of the config can be tracked by the service UID.
+// 2. The secondary services must have their loadBalancer IP set if they want to share the same config as the primary
+// service. Hence, it can be tracked by the loadBalancer IP.
+func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) (bool, bool, error) {
+	var isPrimaryService bool
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
-	return strings.HasPrefix(*fip.Name, baseName)
+	if strings.HasPrefix(to.String(fip.Name), baseName) {
+		klog.V(6).Infof("serviceOwnsFrontendIP: found primary service %s of the "+
+			"frontend IP config %s", service.Name, *fip.Name)
+		isPrimaryService = true
+		return true, isPrimaryService, nil
+	}
+
+	loadBalancerIP := service.Spec.LoadBalancerIP
+	if loadBalancerIP == "" {
+		// it is a must that the secondary services set the loadBalancer IP
+		return false, isPrimaryService, nil
+	}
+
+	// for external secondary service the public IP address should be checked
+	if !requiresInternalLoadBalancer(service) {
+		pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+		pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
+		if err != nil {
+			klog.Errorf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerLP %s", service.Name, loadBalancerIP)
+			return false, isPrimaryService, nil
+		}
+
+		if pip != nil && pip.ID != nil && pip.PublicIPAddressPropertiesFormat != nil && pip.IPAddress != nil {
+			if strings.EqualFold(*pip.ID, *fip.PublicIPAddress.ID) {
+				klog.V(4).Infof("serviceOwnsFrontendIP: found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
+
+				return true, isPrimaryService, nil
+			}
+			klog.V(4).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s", *pip.ID, *pip.IPAddress)
+
+			return false, isPrimaryService, nil
+		}
+
+		return false, isPrimaryService, fmt.Errorf("serviceOwnsFrontendIP: wrong parameters")
+	}
+
+	// for internal secondary service the private IP address on the frontend IP config should be checked
+	if fip.PrivateIPAddress == nil {
+		return false, isPrimaryService, nil
+	}
+
+	return strings.EqualFold(*fip.PrivateIPAddress, loadBalancerIP), isPrimaryService, nil
 }
 
-func (az *Cloud) getFrontendIPConfigName(service *v1.Service) string {
+func (az *Cloud) getDefaultFrontendIPConfigName(service *v1.Service) string {
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
 	subnetName := subnet(service)
 	if subnetName != nil {
@@ -732,7 +779,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 			return "", "", "", nil, nil
 		}
 
-		klog.Errorf("error: az.EnsureHostInPool(%s), az.vmSet.GetPrimaryInterface.Get(%s, %s), err=%v", nodeName, vmName, vmSetName, err)
+		klog.Errorf("error: az.EnsureHostInPool(%s), az.VMSet.GetPrimaryInterface.Get(%s, %s), err=%v", nodeName, vmName, vmSetName, err)
 		return "", "", "", nil, err
 	}
 
@@ -808,6 +855,12 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
 func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string, isInternal bool) error {
+	mc := metrics.NewMetricContext("services", "vmas_ensure_hosts_in_pool", as.ResourceGroup, as.SubscriptionID, service.Name)
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
+
 	hostUpdates := make([]func() error, 0, len(nodes))
 	for _, node := range nodes {
 		localNodeName := node.Name
@@ -836,6 +889,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 		return utilerrors.Flatten(errs)
 	}
 
+	isOperationSucceeded = true
 	return nil
 }
 

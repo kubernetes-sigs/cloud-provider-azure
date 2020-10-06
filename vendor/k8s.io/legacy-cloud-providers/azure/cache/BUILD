@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
@@ -6,17 +6,10 @@ go_library(
         "azure_cache.go",
         "doc.go",
     ],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/legacy-cloud-providers/azure/cache",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure/cache",
     importpath = "k8s.io/legacy-cloud-providers/azure/cache",
     visibility = ["//visibility:public"],
-    deps = ["//staging/src/k8s.io/client-go/tools/cache:go_default_library"],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["azure_cache_test.go"],
-    embed = [":go_default_library"],
-    deps = ["//vendor/github.com/stretchr/testify/assert:go_default_library"],
+    deps = ["//vendor/k8s.io/client-go/tools/cache:go_default_library"],
 )
 
 filegroup(

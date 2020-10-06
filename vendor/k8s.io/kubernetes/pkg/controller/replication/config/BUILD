@@ -7,6 +7,7 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/controller/replication/config",
     importpath = "k8s.io/kubernetes/pkg/controller/replication/config",
     visibility = ["//visibility:public"],
 )
