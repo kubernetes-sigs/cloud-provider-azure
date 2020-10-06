@@ -89,8 +89,6 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |cloudProviderRateLimitBucketWrite|Rate limit Bucket Size|Integer value, valid if `cloudProviderRateLimit` is true|
 |useInstanceMetadata|Use instance metadata service where possible|Boolean value, default to false|
 |loadBalancerSku|Sku of Load Balancer and Public IP. Candidate values are: `basic` and `standard`.|Default to `basic`.|
-|loadBalancerResourceGroup|Resource group name of the load balancer user want to use, default value is the name of cluster's resource group|String value of rg's name, optional|
-|loadBalancerName|The name of the load balancer user want to use. If not set, default naming pattern is used.|String value, optional|
 |excludeMasterFromStandardLB|ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.|Boolean value, default to true.|
 |disableOutboundSNAT| Disable outbound SNAT for SLB | Default to false and available since v1.11.9, v1.12.7, v1.13.5 and v1.14.0|
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
