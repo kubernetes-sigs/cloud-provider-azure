@@ -6,5 +6,3 @@ weight: 4
 description: >
     Design Docs and KEPs related to this project.
 ---
-
-To be completed.
