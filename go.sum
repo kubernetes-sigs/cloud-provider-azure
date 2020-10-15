@@ -437,8 +437,8 @@ k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200831051421-70a682
 k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200831051421-70a682345e3b h1:JTJQfAoy+VPHFaOfz43bzybBQAuadVmmk3ecQUnZJA4=
 k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200831051421-70a682345e3b/go.mod h1:jF57QafZUIyhkboHp3NUlPdpozl8NA4uvyG5FdjbEbU=
 k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200831051421-70a682345e3b/go.mod h1:xgsxxK8T8eljLwrh87vAyytjDFMbBsrM95vgHrf1OUg=
-k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201003225305-90c9f7b3e198 h1:vsIog4m3S7ngcncTwra7GQiYI8kkDFwExhtDfycBTCU=
-k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201003225305-90c9f7b3e198/go.mod h1:97z0zVzQg4i1czg4JUnvaY0IWUc7uANLTdXHji88NgA=
+k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201015083824-d7e0cb0e35db h1:Rwc227X3S4/xB+34z3k7orHkC4Mb/3AG1UH8Acl+Png=
+k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201015083824-d7e0cb0e35db/go.mod h1:2s9amMwTdNo4X2/5AYoZ2PV3r6IqK56MnTN6ayKtX+I=
 k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200831051421-70a682345e3b/go.mod h1:HZHgmugH8oA4ZxTPt9R8HYJBWEeLDegmaGoPo3HDK3I=
 k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200831051421-70a682345e3b/go.mod h1:tl3x2SPSVsIqnioD4z87jXFemilbRh1EYDm3KirMsjI=
 k8s.io/system-validators v1.1.2/go.mod h1:bPldcLgkIUK22ALflnsXk8pvkTEndYdNuaHH6gRrl0Q=
