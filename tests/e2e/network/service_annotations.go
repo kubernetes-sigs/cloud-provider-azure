@@ -53,6 +53,7 @@ const (
 	nginxStatusCode = 200
 	pullInterval    = 20 * time.Second
 	pullTimeout     = 10 * time.Minute
+	testingPort     = 81
 )
 
 var _ = Describe("Service with annotation", func() {
@@ -275,7 +276,7 @@ var _ = Describe("Service with annotation", func() {
 			azure.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
-		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		service.Spec.LoadBalancerIP = *pip.IPAddress
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -481,7 +482,7 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGrou
 
 func createDefaultServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
 	utils.Logf("Creating service " + serviceName + " in namespace " + nsName)
-	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, nsName, ports)
+	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, nsName, ports)
 	_, err := cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
@@ -606,7 +607,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	annotation := map[string]string{
 		azure.ServiceAnnotationLoadBalancerMode: vmssName,
 	}
-	service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns, ports)
+	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns, ports)
 	_, err := cs.CoreV1().Services(ns).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)

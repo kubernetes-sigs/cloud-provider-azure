@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -88,7 +89,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		}
 		ipName := basename + "-public-none-IP" + string(uuid.NewUUID())[0:4]
 
-		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
@@ -132,7 +133,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		ip1, err := utils.SelectAvailablePrivateIP(tc)
 		Expect(err).NotTo(HaveOccurred())
 
-		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceBalanceIP(service, true, ip1)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -174,7 +175,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		}
 		ipName := basename + "-internal-none-public-IP" + string(uuid.NewUUID())[0:4]
 
-		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
@@ -214,7 +215,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should have no operation since no change in service when update", func() {
+	It("should have no operation since no change in service when update [Slow]", func() {
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerInternal: "false",
 		}
@@ -223,7 +224,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
-		service := utils.CreateLoadBalancerServiceManifest(cs, serviceName, annotation, labels, ns.Name, ports)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		service = updateServiceBalanceIP(service, false, targetIP)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -242,7 +243,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update without changing the service and wait for a while")
-		utils.Logf("Exteral IP is now %s", targetIP)
+		utils.Logf("External IP is now %s", targetIP)
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		service.Annotations[azure.ServiceAnnotationDNSLabelName] = "testlabel"
 		utils.Logf(service.Annotations[azure.ServiceAnnotationDNSLabelName])
@@ -252,6 +253,120 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		//Wait for 10 minutes, there should return timeout err, since external ip should not change
 		err = utils.WaitUpdateServiceExposure(cs, ns.Name, serviceName, targetIP, false /*expectSame*/)
 		Expect(err).To(Equal(wait.ErrWaitTimeout))
+	})
+
+	It("should support multiple external services sharing one preset public IP address", func() {
+		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
+		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := to.String(pip.IPAddress)
+
+		service1 := utils.CreateLoadBalancerServiceManifest("service1", nil, labels, ns.Name, ports)
+		service1 = updateServiceBalanceIP(service1, false, targetIP)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposure(cs, ns.Name, "service1")
+		Expect(ip).To(Equal(targetIP))
+		utils.Logf("Successfully created LoadBalancer service1 in namespace %s with IP %s", ns.Name, ip)
+
+		ports2 := []v1.ServicePort{{
+			Port:       testingPort,
+			TargetPort: intstr.FromInt(testingPort),
+		}}
+		service2 := utils.CreateLoadBalancerServiceManifest("service2", nil, labels, ns.Name, ports2)
+		service2 = updateServiceBalanceIP(service2, false, targetIP)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err = utils.WaitServiceExposure(cs, ns.Name, "service2")
+		Expect(ip).To(Equal(targetIP))
+		utils.Logf("Successfully created LoadBalancer service2 in namespace %s with IP %s", ns.Name, ip)
+
+		defer func() {
+			By("Cleaning up")
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service1", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service2", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
+			Expect(err).NotTo(HaveOccurred())
+		}()
+	})
+
+	It("should support multiple external services sharing one newly created public IP address", func() {
+		service1 := utils.CreateLoadBalancerServiceManifest("service1", nil, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposure(cs, ns.Name, "service1")
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service1 in namespace %s with IP %s", ns.Name, ip)
+
+		ports2 := []v1.ServicePort{{
+			Port:       testingPort,
+			TargetPort: intstr.FromInt(testingPort),
+		}}
+		service2 := utils.CreateLoadBalancerServiceManifest("service2", nil, labels, ns.Name, ports2)
+		service2 = updateServiceBalanceIP(service2, false, ip)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip2, err := utils.WaitServiceExposure(cs, ns.Name, "service2")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip2).To(Equal(ip))
+		utils.Logf("Successfully created LoadBalancer service2 in namespace %s with IP %s", ns.Name, ip)
+
+		By("Deleting services")
+		err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service1", metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service2", metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking if the public IP has been deleted")
+		err = wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+			pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
+			if err != nil {
+				return false, err
+			}
+
+			for _, pip := range pips {
+				if strings.EqualFold(*pip.IPAddress, ip) {
+					utils.Logf("the public IP with address %s still exists", ip)
+					return false, nil
+				}
+			}
+
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should support multiple internal services sharing one IP address", func() {
+		annotation := map[string]string{
+			azure.ServiceAnnotationLoadBalancerInternal: "true",
+		}
+		service1 := utils.CreateLoadBalancerServiceManifest("service1", annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposure(cs, ns.Name, "service1")
+		utils.Logf("Successfully created LoadBalancer service1 in namespace %s with IP %s", ns.Name, ip)
+
+		ports2 := []v1.ServicePort{{
+			Port:       testingPort,
+			TargetPort: intstr.FromInt(testingPort),
+		}}
+		service2 := utils.CreateLoadBalancerServiceManifest("service2", annotation, labels, ns.Name, ports2)
+		service2.Spec.LoadBalancerIP = ip
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip2, err := utils.WaitServiceExposure(cs, ns.Name, "service2")
+		Expect(ip2).To(Equal(ip))
+		utils.Logf("Successfully created LoadBalancer service2 in namespace %s with IP %s", ns.Name, ip)
+
+		defer func() {
+			By("Cleaning up")
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service1", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service2", metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 	})
 })
 
