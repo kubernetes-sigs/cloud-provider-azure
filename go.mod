@@ -424,7 +424,7 @@ replace (
 	k8s.io/kubectl => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200831051421-70a682345e3b
 	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200831051421-70a682345e3b
 	k8s.io/kubernetes => k8s.io/kubernetes v1.20.0-alpha.0.0.20200713040433-bb8a5d2ada10
-	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201003225305-90c9f7b3e198
+	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201015083824-d7e0cb0e35db
 	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200831051421-70a682345e3b
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.3
 	k8s.io/sample-apiserver => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200831051421-70a682345e3b
