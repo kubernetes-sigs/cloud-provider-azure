@@ -94,9 +94,16 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
 |routeTableResourceGroup| The resource group name for routeTable | Default same as resourceGroup and available since v1.15.0 |
 |cloudConfigType| The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.| Default to `merge`.  and available since v1.15.0 |
-|loadBalancerName| Working together with loadBalancerResourceGroup to determine the LB name in a different resource group | Since v1.18.0 | String value, default is cluster name setting on kube-controller-manager|
-|loadBalancerResourceGroup | The load balancer resource group name, which is different from node resource group | Since v1.18.0 | String value, default is same as resourceGroup|
-|disableAvailabilitySetNodes| Disable supporting for AvailabilitySet virtual machines in vmss cluster. It should be only used when vmType is "vmss" and all the nodes (including master) are VMSS virtual machines | Since v1.18.0 | Boolean value, default to false|
+|loadBalancerName| Working together with loadBalancerResourceGroup to determine the LB name in a different resource group | Since v1.18.0, default is cluster name setting on kube-controller-manager|
+|loadBalancerResourceGroup | The load balancer resource group name, which is different from node resource group | Since v1.18.0, default is same as resourceGroup|
+|disableAvailabilitySetNodes| Disable supporting for AvailabilitySet virtual machines in vmss cluster. It should be only used when vmType is "vmss" and all the nodes (including master) are VMSS virtual machines | Since v1.18.0, default is false|
+|availabilitySetNodesCacheTTLInSeconds|Cache TTL in seconds for availabilitySet Nodes|Since v1.18.0, default is 900|
+|vmssCacheTTLInSeconds|Cache TTL in seconds for VMSS|Since v1.18.0, default is 600|
+|vmssVirtualMachinesCacheTTLInSeconds|Cache TTL in seconds for VMSS virtual machines|Since v1.18.0, default is 600|
+|vmCacheTTLInSeconds|Cache TTL in seconds for virtual machines|Since v1.18.0, default is 60|
+|loadBalancerCacheTTLInSeconds|Cache TTL in seconds for load balancers|Since v1.18.0, default is 120|
+|nsgCacheTTLInSeconds|Cache TTL in seconds for network security group|Since v1.18.0, default is 120|
+|routeTableCacheTTLInSeconds|Cache TTL in seconds for route table|Since v1.18.0, default is 120|
 
 ### primaryAvailabilitySetName
 
@@ -177,7 +184,7 @@ Since v1.18.0, the original global rate limiting has been switched to per-client
 - StorageAccountRateLimit
 - DiskRateLimit
 - SnapshotRateLimit
-- VirtualMachineScaleSetRateLimit 
+- VirtualMachineScaleSetRateLimit
 - VirtualMachineSizeRateLimit
 
 The original rate limiting options ("cloudProviderRateLimitBucket", "cloudProviderRateLimitBucketWrite", "cloudProviderRateLimitQPS", "cloudProviderRateLimitQPSWrite") are still supported, and they would be the default values if per-client rate limiting is not configured.
