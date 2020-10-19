@@ -313,9 +313,14 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(ip2).To(Equal(ip))
 		utils.Logf("Successfully created LoadBalancer service2 in namespace %s with IP %s", ns.Name, ip)
 
-		By("Deleting services")
+		By("Deleting one service and check if the other service works well")
 		err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service1", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		ip3, err := utils.WaitServiceExposure(cs, ns.Name, "service2")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip3).To(Equal(ip))
+
+		By("Deleting all services")
 		err = cs.CoreV1().Services(ns.Name).Delete(context.TODO(), "service2", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -368,7 +373,47 @@ var _ = Describe("Ensure LoadBalancer", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}()
 	})
+
+	It("should support node label `node.kubernetes.io/exclude-from-external-load-balancers`", func() {
+		By("Creating a service to trigger the LB reconcile")
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		publicIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking the initial node number in the LB backend pool")
+		lb := getAzureLoadBalancer(tc, publicIP)
+		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
+		nodes, err := utils.GetAgentNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(*lbBackendPoolIPConfigs)).To(Equal(len(nodes)))
+
+		By("Labeling node")
+		node, err := utils.LabelNode(cs, &nodes[0], "node.kubernetes.io/exclude-from-external-load-balancers", false)
+		Expect(err).NotTo(HaveOccurred())
+		err = waitForNodesInLBBackendPool(tc, publicIP, len(nodes)-1)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Unlabeling node")
+		_, err = utils.LabelNode(cs, node, "node.kubernetes.io/exclude-from-external-load-balancers", true)
+		Expect(err).NotTo(HaveOccurred())
+		err = waitForNodesInLBBackendPool(tc, publicIP, len(nodes))
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
+
+func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
+	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
+		lb := getAzureLoadBalancer(tc, ip)
+		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
+		if len(*lbBackendPoolIPConfigs) == expectedNum {
+			return true, nil
+		}
+		utils.Logf("There are %d nodes in the LB backend pool, will retry soon", len(*lbBackendPoolIPConfigs))
+		return false, nil
+	})
+}
 
 func judgeInternal(service v1.Service) bool {
 	return service.Annotations[azure.ServiceAnnotationLoadBalancerInternal] == "true"

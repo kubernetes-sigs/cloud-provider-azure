@@ -222,3 +222,18 @@ func isVirtualKubeletNode(node *v1.Node) bool {
 	}
 	return false
 }
+
+func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete bool) (*v1.Node, error) {
+	if _, ok := node.Labels[label]; ok {
+		if isDelete {
+			delete(node.Labels, label)
+			node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+			return node, err
+		}
+		Logf("Found label %s on node %s, do nothing", label, node.Name)
+		return node, nil
+	}
+	node.Labels[label] = "true"
+	node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+	return node, err
+}
