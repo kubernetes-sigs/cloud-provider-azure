@@ -77,3 +77,13 @@ Here is the recommended way to define the [outbound rules](https://docs.microsof
 * Create a separate IP (or multiple IPs for scale) in a standard SKU for outbound rules. Make use of the [allocatedOutboundPorts](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview#snatports) parameter to allocate sufficient ports for your desired scenario scale.
 * Create a separate pool definition for outbound, and ensure all virtual machines or VMSS virtual machines are in this pool. Azure cloud provider will manage the load balancer rules with another pool, so that provisioning tools and the Azure cloud provider won't affect each other.
 * Define inbound with load balancing rules and inbound NAT rules as needed, and set `disableOutboundSNAT` to true on the load balancing rule(s).  Don't rely on the side effect from these rules for outbound connectivity. It makes it messier than it needs to be and limits your options.  Use inbound NAT rules to create port forwarding mappings for SSH access to the VM's rather than burning public IPs per instance.
+
+## Exclude nodes from the load balancer (v1.20.0)
+
+The kubernetes controller manager supports excluding nodes from the load balancer backend pools by enabling the feature gate `ServiceNodeExclusion`, which is in beta state since v1.19. This PR let users to exclude nodes from the LB by labeling `node.kubernetes.io/exclude-from-external-load-balancers=true` on the nodes. There are several things that need to be mentioned.
+
+1. To use the feature, the feature gate `ServiceNodeExclusion` should be on.
+
+2. The labeled nodes would be excluded from the LB in the next LB reconcile loop, which needs one or more LB typed services to trigger. Basically, users could trigger the update by creating a service. If there are one or more LB typed services existing, no extra operations are needed.
+
+3. To re-include the nodes, just remove the label and the update would be operated in the next LB reconcile loop.
