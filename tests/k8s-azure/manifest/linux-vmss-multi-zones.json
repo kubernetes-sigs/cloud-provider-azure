@@ -22,7 +22,6 @@
             "count": 5,
             "dnsPrefix": "{dnsPrefix}",
             "vmSize": "Standard_DS3_v2",
-            "availabilityProfile": "VirtualMachineScaleSets",
             "availabilityZones": [
                 "1",
                 "2"
