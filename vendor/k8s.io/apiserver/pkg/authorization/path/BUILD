@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -6,12 +6,12 @@ go_library(
         "doc.go",
         "path.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/authorization/path",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/authorization/path",
     importpath = "k8s.io/apiserver/pkg/authorization/path",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/authorization/authorizer:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/util/sets:go_default_library",
+        "//staging/src/k8s.io/apiserver/pkg/authorization/authorizer:go_default_library",
     ],
 )
 
@@ -27,4 +27,11 @@ filegroup(
     srcs = [":package-srcs"],
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["path_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//staging/src/k8s.io/apiserver/pkg/authorization/authorizer:go_default_library"],
 )

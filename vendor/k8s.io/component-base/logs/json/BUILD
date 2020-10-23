@@ -1,15 +1,30 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = ["json.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/component-base/logs/json",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/component-base/logs/json",
     importpath = "k8s.io/component-base/logs/json",
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/github.com/go-logr/logr:go_default_library",
         "//vendor/go.uber.org/zap:go_default_library",
         "//vendor/go.uber.org/zap/zapcore:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "json_benchmark_test.go",
+        "json_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//vendor/github.com/stretchr/testify/assert:go_default_library",
+        "//vendor/go.uber.org/zap:go_default_library",
+        "//vendor/go.uber.org/zap/zapcore:go_default_library",
+        "//vendor/k8s.io/klog/v2:go_default_library",
     ],
 )
 

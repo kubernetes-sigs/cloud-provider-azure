@@ -817,14 +817,20 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/cloud-provider v0.0.0 => k8s.io/cloud-provider v0.0.0-20200711020125-52e5381d8dd1
+# k8s.io/cloud-provider v0.0.0 => k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013
 k8s.io/cloud-provider
 k8s.io/cloud-provider/api
+k8s.io/cloud-provider/app/apis/config
+k8s.io/cloud-provider/app/apis/config/scheme
+k8s.io/cloud-provider/app/apis/config/v1alpha1
 k8s.io/cloud-provider/controllers/node
 k8s.io/cloud-provider/controllers/nodelifecycle
 k8s.io/cloud-provider/controllers/route
 k8s.io/cloud-provider/controllers/service
 k8s.io/cloud-provider/node/helpers
+k8s.io/cloud-provider/options
+k8s.io/cloud-provider/service/config
+k8s.io/cloud-provider/service/config/v1alpha1
 k8s.io/cloud-provider/service/helpers
 k8s.io/cloud-provider/volume
 k8s.io/cloud-provider/volume/errors
@@ -849,12 +855,15 @@ k8s.io/component-base/metrics/prometheus/workqueue
 k8s.io/component-base/metrics/testutil
 k8s.io/component-base/term
 k8s.io/component-base/version
+# k8s.io/controller-manager v0.0.0 => k8s.io/controller-manager v0.20.0-alpha.1.0.20201020203003-828015992afa
+k8s.io/controller-manager/app
+k8s.io/controller-manager/config
+k8s.io/controller-manager/config/v1alpha1
+k8s.io/controller-manager/options
 # k8s.io/klog v1.0.0 => k8s.io/klog v1.0.0
 k8s.io/klog
 # k8s.io/klog/v2 v2.2.0
 k8s.io/klog/v2
-# k8s.io/kube-controller-manager v0.0.0 => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200831051421-70a682345e3b
-k8s.io/kube-controller-manager/config/v1alpha1
 # k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6 => k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6
 k8s.io/kube-openapi/pkg/builder
 k8s.io/kube-openapi/pkg/common
@@ -866,8 +875,6 @@ k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kubectl/pkg/scale
 k8s.io/kubectl/pkg/util/podutils
 # k8s.io/kubernetes v0.0.0-00010101000000-000000000000 => k8s.io/kubernetes v1.20.0-alpha.0.0.20200713040433-bb8a5d2ada10
-k8s.io/kubernetes/cmd/controller-manager/app
-k8s.io/kubernetes/cmd/controller-manager/app/options
 k8s.io/kubernetes/pkg/api/legacyscheme
 k8s.io/kubernetes/pkg/api/service
 k8s.io/kubernetes/pkg/api/v1/pod
@@ -887,53 +894,7 @@ k8s.io/kubernetes/pkg/apis/policy
 k8s.io/kubernetes/pkg/apis/scheduling
 k8s.io/kubernetes/pkg/capabilities
 k8s.io/kubernetes/pkg/controller
-k8s.io/kubernetes/pkg/controller/apis/config
-k8s.io/kubernetes/pkg/controller/apis/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/certificates/signer/config
-k8s.io/kubernetes/pkg/controller/certificates/signer/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/daemon/config
-k8s.io/kubernetes/pkg/controller/daemon/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/deployment/config
-k8s.io/kubernetes/pkg/controller/deployment/config/v1alpha1
 k8s.io/kubernetes/pkg/controller/deployment/util
-k8s.io/kubernetes/pkg/controller/endpoint/config
-k8s.io/kubernetes/pkg/controller/endpoint/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/endpointslice/config
-k8s.io/kubernetes/pkg/controller/endpointslice/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/endpointslicemirroring/config
-k8s.io/kubernetes/pkg/controller/endpointslicemirroring/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/garbagecollector/config
-k8s.io/kubernetes/pkg/controller/garbagecollector/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/job/config
-k8s.io/kubernetes/pkg/controller/job/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/namespace/config
-k8s.io/kubernetes/pkg/controller/namespace/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/nodeipam/config
-k8s.io/kubernetes/pkg/controller/nodeipam/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/nodelifecycle/config
-k8s.io/kubernetes/pkg/controller/nodelifecycle/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/podautoscaler/config
-k8s.io/kubernetes/pkg/controller/podautoscaler/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/podgc/config
-k8s.io/kubernetes/pkg/controller/podgc/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/replicaset/config
-k8s.io/kubernetes/pkg/controller/replicaset/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/replication/config
-k8s.io/kubernetes/pkg/controller/replication/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/resourcequota/config
-k8s.io/kubernetes/pkg/controller/resourcequota/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/service/config
-k8s.io/kubernetes/pkg/controller/service/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/serviceaccount/config
-k8s.io/kubernetes/pkg/controller/serviceaccount/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/statefulset/config
-k8s.io/kubernetes/pkg/controller/statefulset/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/ttlafterfinished/config
-k8s.io/kubernetes/pkg/controller/ttlafterfinished/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/volume/attachdetach/config
-k8s.io/kubernetes/pkg/controller/volume/attachdetach/config/v1alpha1
-k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config
-k8s.io/kubernetes/pkg/controller/volume/persistentvolume/config/v1alpha1
 k8s.io/kubernetes/pkg/features
 k8s.io/kubernetes/pkg/fieldpath
 k8s.io/kubernetes/pkg/kubelet/apis/config

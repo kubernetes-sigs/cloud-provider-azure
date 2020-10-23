@@ -3,15 +3,25 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["util.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/api/service",
     importpath = "k8s.io/kubernetes/pkg/api/service",
     deps = [
-        "//vendor/k8s.io/kubernetes/pkg/apis/core:go_default_library",
+        "//pkg/apis/core:go_default_library",
+        "//vendor/k8s.io/utils/net:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["util_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//pkg/apis/core:go_default_library",
         "//vendor/k8s.io/utils/net:go_default_library",
     ],
 )

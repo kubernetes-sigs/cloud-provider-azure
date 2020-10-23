@@ -12,15 +12,15 @@ go_library(
         "fake_authentication_client.go",
         "fake_tokenreview.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/kubernetes/typed/authentication/v1/fake",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/kubernetes/typed/authentication/v1/fake",
     importpath = "k8s.io/client-go/kubernetes/typed/authentication/v1/fake",
     deps = [
-        "//vendor/k8s.io/api/authentication/v1:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
-        "//vendor/k8s.io/client-go/kubernetes/typed/authentication/v1:go_default_library",
-        "//vendor/k8s.io/client-go/rest:go_default_library",
-        "//vendor/k8s.io/client-go/testing:go_default_library",
+        "//staging/src/k8s.io/api/authentication/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//staging/src/k8s.io/client-go/kubernetes/typed/authentication/v1:go_default_library",
+        "//staging/src/k8s.io/client-go/rest:go_default_library",
+        "//staging/src/k8s.io/client-go/testing:go_default_library",
     ],
 )
 

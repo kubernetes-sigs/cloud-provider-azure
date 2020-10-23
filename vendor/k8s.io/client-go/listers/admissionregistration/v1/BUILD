@@ -7,14 +7,14 @@ go_library(
         "mutatingwebhookconfiguration.go",
         "validatingwebhookconfiguration.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/listers/admissionregistration/v1",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/listers/admissionregistration/v1",
     importpath = "k8s.io/client-go/listers/admissionregistration/v1",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/k8s.io/api/admissionregistration/v1:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/labels:go_default_library",
-        "//vendor/k8s.io/client-go/tools/cache:go_default_library",
+        "//staging/src/k8s.io/api/admissionregistration/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/api/errors:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/labels:go_default_library",
+        "//staging/src/k8s.io/client-go/tools/cache:go_default_library",
     ],
 )
 

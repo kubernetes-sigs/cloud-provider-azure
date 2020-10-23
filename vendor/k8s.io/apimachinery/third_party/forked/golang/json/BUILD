@@ -3,13 +3,20 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["fields.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/third_party/forked/golang/json",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apimachinery/third_party/forked/golang/json",
     importpath = "k8s.io/apimachinery/third_party/forked/golang/json",
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["fields_test.go"],
+    embed = [":go_default_library"],
 )
 
 filegroup(

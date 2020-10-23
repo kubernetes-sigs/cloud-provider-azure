@@ -11,7 +11,7 @@ go_library(
         "doc.go",
         "user.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/authentication/user",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/authentication/user",
     importpath = "k8s.io/apiserver/pkg/authentication/user",
 )
 
