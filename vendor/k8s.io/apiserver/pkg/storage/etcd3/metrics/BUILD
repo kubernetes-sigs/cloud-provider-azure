@@ -8,11 +8,11 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["metrics.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/etcd3/metrics",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/storage/etcd3/metrics",
     importpath = "k8s.io/apiserver/pkg/storage/etcd3/metrics",
     deps = [
-        "//vendor/k8s.io/component-base/metrics:go_default_library",
-        "//vendor/k8s.io/component-base/metrics/legacyregistry:go_default_library",
+        "//staging/src/k8s.io/component-base/metrics:go_default_library",
+        "//staging/src/k8s.io/component-base/metrics/legacyregistry:go_default_library",
     ],
 )
 

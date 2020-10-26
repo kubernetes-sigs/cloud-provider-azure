@@ -3,6 +3,17 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "helpers_test.go",
+        "types_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = ["//vendor/sigs.k8s.io/yaml:go_default_library"],
 )
 
 go_library(
@@ -14,11 +25,11 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/tools/clientcmd/api",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/tools/clientcmd/api",
     importpath = "k8s.io/client-go/tools/clientcmd/api",
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
     ],
 )
 

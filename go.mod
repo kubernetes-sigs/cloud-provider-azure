@@ -20,9 +20,9 @@ require (
 	k8s.io/client-go v0.0.0
 	k8s.io/cloud-provider v0.0.0
 	k8s.io/component-base v0.0.0
+	k8s.io/controller-manager v0.0.0
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.2.0
-	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 	k8s.io/legacy-cloud-providers v0.0.0
 	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
@@ -407,10 +407,11 @@ replace (
 	k8s.io/apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200831051421-70a682345e3b
 	k8s.io/cli-runtime => k8s.io/kubernetes/staging/src/k8s.io/cli-runtime v0.0.0-20200831051421-70a682345e3b
 	k8s.io/client-go => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200831051421-70a682345e3b
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20200711020125-52e5381d8dd1
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013
 	k8s.io/cluster-bootstrap => k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200831051421-70a682345e3b
 	k8s.io/code-generator => k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200831051421-70a682345e3b
 	k8s.io/component-base => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200831051421-70a682345e3b
+	k8s.io/controller-manager => k8s.io/controller-manager v0.20.0-alpha.1.0.20201020203003-828015992afa
 	k8s.io/cri-api => k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200831051421-70a682345e3b
 	k8s.io/csi-translation-lib => k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200831051421-70a682345e3b
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20200205140755-e0e292d8aa12

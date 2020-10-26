@@ -1,15 +1,25 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = ["feature_gate.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/component-base/featuregate",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/component-base/featuregate",
     importpath = "k8s.io/component-base/featuregate",
     visibility = ["//visibility:public"],
     deps = [
+        "//staging/src/k8s.io/apimachinery/pkg/util/naming:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/util/naming:go_default_library",
         "//vendor/k8s.io/klog/v2:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["feature_gate_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//vendor/github.com/spf13/pflag:go_default_library",
+        "//vendor/github.com/stretchr/testify/assert:go_default_library",
     ],
 )
 

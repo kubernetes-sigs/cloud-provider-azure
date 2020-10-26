@@ -6,14 +6,14 @@ go_library(
         "expansion_generated.go",
         "horizontalpodautoscaler.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/listers/autoscaling/v2beta2",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/listers/autoscaling/v2beta2",
     importpath = "k8s.io/client-go/listers/autoscaling/v2beta2",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/k8s.io/api/autoscaling/v2beta2:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/labels:go_default_library",
-        "//vendor/k8s.io/client-go/tools/cache:go_default_library",
+        "//staging/src/k8s.io/api/autoscaling/v2beta2:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/api/errors:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/labels:go_default_library",
+        "//staging/src/k8s.io/client-go/tools/cache:go_default_library",
     ],
 )
 

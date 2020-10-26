@@ -3,6 +3,17 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["negotiate_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+    ],
 )
 
 go_library(
@@ -12,13 +23,13 @@ go_library(
         "errors.go",
         "negotiate.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/handlers/negotiation",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/endpoints/handlers/negotiation",
     importpath = "k8s.io/apiserver/pkg/endpoints/handlers/negotiation",
     deps = [
+        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
         "//vendor/github.com/munnerz/goautoneg:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
     ],
 )
 

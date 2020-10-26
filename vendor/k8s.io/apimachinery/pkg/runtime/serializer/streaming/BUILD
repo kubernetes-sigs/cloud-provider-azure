@@ -3,16 +3,28 @@ package(default_visibility = ["//visibility:public"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["streaming_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/util/framer:go_default_library",
+    ],
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["streaming.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/runtime/serializer/streaming",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apimachinery/pkg/runtime/serializer/streaming",
     importpath = "k8s.io/apimachinery/pkg/runtime/serializer/streaming",
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
     ],
 )
 

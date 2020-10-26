@@ -35,14 +35,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
+	ccmconfig "k8s.io/cloud-provider/app/apis/config"
+	ccmconfigscheme "k8s.io/cloud-provider/app/apis/config/scheme"
+	ccmconfigv1alpha1 "k8s.io/cloud-provider/app/apis/config/v1alpha1"
+	cpoptions "k8s.io/cloud-provider/options"
 	cliflag "k8s.io/component-base/cli/flag"
+	cmoptions "k8s.io/controller-manager/options"
 	"k8s.io/klog"
-	cmoptions "k8s.io/kubernetes/cmd/controller-manager/app/options"
 	azureprovider "k8s.io/legacy-cloud-providers/azure"
 
-	ccmconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config"
-	ccmconfigscheme "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/scheme"
-	ccmconfigv1alpha1 "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/apis/config/v1alpha1"
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller"
 
@@ -64,8 +65,8 @@ const (
 // CloudControllerManagerOptions is the main context object for the controller manager.
 type CloudControllerManagerOptions struct {
 	Generic           *cmoptions.GenericControllerManagerConfigurationOptions
-	KubeCloudShared   *cmoptions.KubeCloudSharedOptions
-	ServiceController *cmoptions.ServiceControllerOptions
+	KubeCloudShared   *cpoptions.KubeCloudSharedOptions
+	ServiceController *cpoptions.ServiceControllerOptions
 
 	SecureServing *apiserveroptions.SecureServingOptionsWithLoopback
 	// TODO: remove insecure serving mode
@@ -89,8 +90,8 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 
 	s := CloudControllerManagerOptions{
 		Generic:         cmoptions.NewGenericControllerManagerConfigurationOptions(&componentConfig.Generic),
-		KubeCloudShared: cmoptions.NewKubeCloudSharedOptions(&componentConfig.KubeCloudShared),
-		ServiceController: &cmoptions.ServiceControllerOptions{
+		KubeCloudShared: cpoptions.NewKubeCloudSharedOptions(&componentConfig.KubeCloudShared),
+		ServiceController: &cpoptions.ServiceControllerOptions{
 			ServiceControllerConfiguration: &componentConfig.ServiceController,
 		},
 		SecureServing: apiserveroptions.NewSecureServingOptions().WithLoopback(),

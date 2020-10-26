@@ -15,13 +15,13 @@ go_library(
         "zz_generated.conversion.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/tools/clientcmd/api/v1",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/tools/clientcmd/api/v1",
     importpath = "k8s.io/client-go/tools/clientcmd/api/v1",
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/conversion:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
-        "//vendor/k8s.io/client-go/tools/clientcmd/api:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/conversion:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//staging/src/k8s.io/client-go/tools/clientcmd/api:go_default_library",
     ],
 )
 

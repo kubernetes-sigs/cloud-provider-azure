@@ -2,22 +2,26 @@
 
 module k8s.io/cloud-provider
 
-go 1.13
+go 1.15
 
 require (
 	github.com/google/go-cmp v0.4.0
+	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	k8s.io/api v0.0.0-20200711010759-67a68481e276
-	k8s.io/apimachinery v0.0.0-20200711010416-9894919f2c6e
-	k8s.io/client-go v0.0.0-20200711011221-2cf22cd48886
-	k8s.io/component-base v0.0.0-20200711012104-12d9255b32a9
+	k8s.io/api v0.0.0-20201020200614-54bcc311e327
+	k8s.io/apimachinery v0.0.0-20201020200440-554eef9dbf66
+	k8s.io/client-go v0.0.0-20201020200834-d1a4fe5f2d96
+	k8s.io/component-base v0.0.0-20201020201314-b8c7ac1518d8
+	k8s.io/controller-manager v0.0.0-20201020203003-828015992afa
 	k8s.io/klog/v2 v2.2.0
-	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
+	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 )
 
 replace (
-	k8s.io/api => k8s.io/api v0.0.0-20200711010759-67a68481e276
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20200711010416-9894919f2c6e
-	k8s.io/client-go => k8s.io/client-go v0.0.0-20200711011221-2cf22cd48886
-	k8s.io/component-base => k8s.io/component-base v0.0.0-20200711012104-12d9255b32a9
+	k8s.io/api => k8s.io/api v0.0.0-20201020200614-54bcc311e327
+	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20201020200440-554eef9dbf66
+	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20201020201555-2ae8708a5843
+	k8s.io/client-go => k8s.io/client-go v0.0.0-20201020200834-d1a4fe5f2d96
+	k8s.io/component-base => k8s.io/component-base v0.0.0-20201020201314-b8c7ac1518d8
+	k8s.io/controller-manager => k8s.io/controller-manager v0.0.0-20201020203003-828015992afa
 )

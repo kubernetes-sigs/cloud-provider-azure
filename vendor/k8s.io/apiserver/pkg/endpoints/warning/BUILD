@@ -3,12 +3,12 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["warning.go"],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/endpoints/warning",
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/endpoints/warning",
     importpath = "k8s.io/apiserver/pkg/endpoints/warning",
     visibility = ["//visibility:public"],
     deps = [
+        "//staging/src/k8s.io/apiserver/pkg/warning:go_default_library",
         "//vendor/github.com/emicklei/go-restful:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/warning:go_default_library",
     ],
 )
 
