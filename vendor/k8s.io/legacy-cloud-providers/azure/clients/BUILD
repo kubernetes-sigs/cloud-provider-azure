@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
@@ -6,13 +6,13 @@ go_library(
         "azure_client_config.go",
         "doc.go",
     ],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/legacy-cloud-providers/azure/clients",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/legacy-cloud-providers/azure/clients",
     importpath = "k8s.io/legacy-cloud-providers/azure/clients",
     visibility = ["//visibility:public"],
     deps = [
-        "//staging/src/k8s.io/client-go/util/flowcontrol:go_default_library",
-        "//staging/src/k8s.io/legacy-cloud-providers/azure/retry:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest:go_default_library",
+        "//vendor/k8s.io/client-go/util/flowcontrol:go_default_library",
+        "//vendor/k8s.io/legacy-cloud-providers/azure/retry:go_default_library",
     ],
 )
 
@@ -48,14 +48,4 @@ filegroup(
     ],
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["azure_client_config_test.go"],
-    embed = [":go_default_library"],
-    deps = [
-        "//staging/src/k8s.io/client-go/util/flowcontrol:go_default_library",
-        "//vendor/github.com/stretchr/testify/assert:go_default_library",
-    ],
 )
