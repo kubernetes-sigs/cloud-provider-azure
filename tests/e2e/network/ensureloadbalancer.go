@@ -94,7 +94,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 		utils.Logf("PIP to %s", targetIP)
@@ -180,7 +180,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
@@ -220,7 +220,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 			azure.ServiceAnnotationLoadBalancerInternal: "false",
 		}
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
-		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
@@ -257,7 +257,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	It("should support multiple external services sharing one preset public IP address", func() {
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
-		pip, err := utils.WaitCreatePIP(tc, ipName, defaultPublicIPAddress(ipName))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
@@ -383,7 +383,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking the initial node number in the LB backend pool")
-		lb := getAzureLoadBalancer(tc, publicIP)
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
 		nodes, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
@@ -405,7 +405,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
-		lb := getAzureLoadBalancer(tc, ip)
+		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
 		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
 		if len(*lbBackendPoolIPConfigs) == expectedNum {
 			return true, nil

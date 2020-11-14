@@ -385,7 +385,7 @@ var _ = Describe("Azure nodes", func() {
 		Expect(ok).To(BeTrue())
 		Expect(nodeRG).NotTo(Equal(rgMaster))
 
-		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgMaster, rgMaster)
 
 		utils.Logf("finding NIC of the node %s, assuming it's in the same rg as master", nodeNotInRGMaster.Name)
