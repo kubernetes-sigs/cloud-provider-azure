@@ -6,7 +6,7 @@ go_library(
         "service.pb.go",
         "v1beta1.go",
     ],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope/v1beta1",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope/v1beta1",
     importpath = "k8s.io/apiserver/pkg/storage/value/encrypt/envelope/v1beta1",
     visibility = ["//visibility:public"],
     deps = [

@@ -1,9 +1,9 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
     srcs = ["from_stack.go"],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/apimachinery/pkg/util/naming",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/apimachinery/pkg/util/naming",
     importpath = "k8s.io/apimachinery/pkg/util/naming",
     visibility = ["//visibility:public"],
 )
@@ -20,10 +20,4 @@ filegroup(
     srcs = [":package-srcs"],
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["from_stack_test.go"],
-    embed = [":go_default_library"],
 )

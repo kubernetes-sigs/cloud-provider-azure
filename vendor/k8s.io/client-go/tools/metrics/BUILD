@@ -8,7 +8,7 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["metrics.go"],
-    importmap = "k8s.io/kubernetes/vendor/k8s.io/client-go/tools/metrics",
+    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/client-go/tools/metrics",
     importpath = "k8s.io/client-go/tools/metrics",
 )
 
