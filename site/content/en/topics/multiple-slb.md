@@ -1,10 +1,8 @@
 ---
-title: "Design proposal: Support multiple Standard LoadBalancer in one cluster"
-linkTitle: "Design proposal: Support multiple Standard LoadBalancer in one cluster"
-weight: 6
+title: "Multiple Standard LoadBalancer in the same cluster"
+linkTitle: "Multiple Standard LoadBalancer in the same cluster"
+weight: 8
 type: docs
-description: >
-    Support multiple Standard LoadBalancer in one cluster.
 ---
 
 ## Scenarios
