@@ -7,7 +7,7 @@ description: >
     Bind one IP address to multiple services.
 ---
 
-> Note that this feature is supported since v1.20.0.
+> This feature is supported since v1.20.0.
 
 Provider Azure supports sharing one IP address among multiple load balancer typed external or internal services. To share an IP address among multiple public services, a public IP resource is needed. This public IP could be created in advance or let the cloud provider provision it when creating the first external service. Specifically, Azure would create a public IP resource automatically when an external service is discovered.
 

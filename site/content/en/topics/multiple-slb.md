@@ -5,6 +5,8 @@ weight: 8
 type: docs
 ---
 
+> This feature is supported since v1.20.0.
+
 ## Scenarios
 
 Currently, there are three ways to determine which basic LB should be used by a load balancer typed service: default mode, auto mode, and `as1,as2` mode (for more information: https://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/). However, the standard LB doesn't support the mode selection annotation. The reason is that every vm in the vnet could be added to the backend pool of the SLB, including vms from different node pools (VMAS/VMSS). Hence, for SLB the selection is not needed.
