@@ -5,6 +5,8 @@ weight: 7
 type: docs
 ---
 
+> This feature is supported since v1.20.0.
+
 We could use tags to organize your Azure resources and management hierarchy. Cloud Provider Azure supports tagging managed resource through configuration file or service annotation.
 
 Specifically, the shared resources (load balancer, route table and security group) could be tagged by setting `tags` in `azure.json`:
