@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -28,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	clientset "k8s.io/client-go/kubernetes"
 )
 
 const k8sVNetPrefix = "k8s-vnet-"
@@ -182,30 +184,8 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 	}
 }
 
-// WaitCreatePIP waits to create a public ip resource
-func WaitCreatePIP(azureTestClient *AzureTestClient, ipName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
-	Logf("Creating public IP resource named %s", ipName)
-	pipClient := azureTestClient.createPublicIPAddressesClient()
-	_, err := pipClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), ipName, ipParameter)
-	var pip aznetwork.PublicIPAddress
-	if err != nil {
-		return pip, err
-	}
-	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		pip, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, "")
-		if err != nil {
-			if !IsRetryableAPIError(err) {
-				return false, err
-			}
-			return false, nil
-		}
-		return pip.IPAddress != nil, nil
-	})
-	return pip, err
-}
-
-// WaitCreateNewPIP waits to create a public ip resource in a specific resource group
-func WaitCreateNewPIP(azureTestClient *AzureTestClient, ipName, rgName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
+// WaitCreatePIP waits to create a public ip resource in a specific resource group
+func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipParameter aznetwork.PublicIPAddress) (aznetwork.PublicIPAddress, error) {
 	Logf("Creating public IP resource named %s", ipName)
 	pipClient := azureTestClient.createPublicIPAddressesClient()
 	_, err := pipClient.CreateOrUpdate(context.Background(), rgName, ipName, ipParameter)
@@ -245,10 +225,10 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string)
 }
 
 // WaitGetPIP waits to get a specific public ip resource
-func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (err error) {
+func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (pip aznetwork.PublicIPAddress, err error) {
 	pipClient := azureTestClient.createPublicIPAddressesClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		_, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, "")
+		pip, err = pipClient.Get(context.Background(), azureTestClient.GetResourceGroup(), ipName, "")
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
@@ -316,4 +296,14 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
 	lbClient := azureTestClient.creteLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
+}
+
+func WaitServiceIPEqualTo(cs clientset.Interface, expectedIP, serviceName, namespace string) error {
+	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
+		ip, err := WaitServiceExposure(cs, namespace, serviceName)
+		if err != nil {
+			return false, err
+		}
+		return strings.EqualFold(ip, expectedIP), nil
+	})
 }

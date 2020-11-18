@@ -83,7 +83,7 @@ var _ = Describe("Network security group", func() {
 
 	It("should add the rule when expose a service", func() {
 		By("Creating a service and expose it")
-		ip := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
@@ -139,7 +139,7 @@ var _ = Describe("Network security group", func() {
 		annotation := map[string]string{
 			azure.ServiceAnnotationAllowedServiceTag: "AzureCloud",
 		}
-		_ = createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		By("Validating if the corresponding IP prefix existing in nsg")
 		nsg, err := tc.GetClusterSecurityGroup()

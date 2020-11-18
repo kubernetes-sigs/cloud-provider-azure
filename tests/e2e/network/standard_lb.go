@@ -79,7 +79,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 	It("should add all nodes in different agent pools to backends [MultipleAgentPools]", func() {
 		rgName := tc.GetResourceGroup()
-		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
@@ -118,7 +118,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
 		rgName := tc.GetResourceGroup()
-		publicIP := createDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
