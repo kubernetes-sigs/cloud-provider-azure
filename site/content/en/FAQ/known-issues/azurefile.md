@@ -376,7 +376,7 @@ When starting pods with AFS volumes, there is an initial delay of five seconds u
 | k8s version | fixed version |
 | ---- | ---- |
 | v1.15 | no fix |
-| v1.16 | in cherry-pick |
-| v1.17 | in cherry-pick |
-| v1.18 | in cherry-pick |
+| v1.16 | 1.16.14 |
+| v1.17 | 1.17.10 |
+| v1.18 | 1.18.7 |
 | v1.19 | 1.19.0 |
