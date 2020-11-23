@@ -11,7 +11,7 @@ type: docs
     - [1. azure file mountOptions setting](#1-azure-file-mountoptions-setting)
         - [file/dir mode setting:](#filedir-mode-setting)
         - [other useful `mountOptions` setting:](#other-useful-mountoptions-setting)
-    - [2. permission issue of azure file dynamic provision in aks-engine](#2-permission-issue-of-azure-file-dynamic-provision-in-aks-engine)
+    - [2. permission issue of azure file dynamic provision in acs-engine](#2-permission-issue-of-azure-file-dynamic-provision-in-acs-engine)
     - [3. Azure file support on Sovereign Cloud](#3-azure-file-support-on-sovereign-cloud)
     - [4. azure file dynamic provision failed due to cluster name length issue](#4-azure-file-dynamic-provision-failed-due-to-cluster-name-length-issue)
     - [5. azure file dynamic provision failed due to no storage account in current resource group](#5-azure-file-dynamic-provision-failed-due-to-no-storage-account-in-current-resource-group)
@@ -19,17 +19,25 @@ type: docs
     - [7. file permission could not be changed using azure file, e.g. postgresql](#7-file-permission-could-not-be-changed-using-azure-file-eg-postgresql)
     - [8. Could not delete pod with AzureFile volume if storage account key changed](#8-could-not-delete-pod-with-azurefile-volume-if-storage-account-key-changed)
     - [9. Long latency when handling lots of small files](#9-long-latency-compared-to-disk-when-handling-lots-of-small-files)
-    
+    - [10. `allow access from selected network` setting on storage account will break azure file dynamic provisioning](#10-allow-access-from-selected-network-setting-on-storage-account-will-break-azure-file-dynamic-provisioning)
+    - [11. azure file remount on Windows in same node would fail](#11-azure-file-remount-on-windows-in-same-node-would-fail)
+    - [12. update azure file secret if azure storage account key changed](#12-update-azure-file-secret-if-azure-storage-account-key-changed)
+    - [13. Create Azure Files PV AuthorizationFailure when using advanced networking](#13-create-azure-files-pv-authorizationfailure-when-using-advanced-networking)
+    - [14. initial delay(5s) in mounting azure file](#14-initial-delay5s-in-mounting-azure-file)
 <!-- /TOC -->
 
 ## Recommended stable version for azure file
 
 | k8s version | stable version |
 | ---- | ---- |
-| v1.7 | 1.7.14 or later |
-| v1.8 | 1.8.11 or later |
-| v1.9 | 1.9.7 or later |
-| v1.10 | 1.10.2 or later|
+| v1.7 | 1.7.14+ |
+| v1.8 | 1.8.11+ |
+| v1.9 | 1.9.7+ |
+| v1.10 | 1.10.2+ |
+| v1.11 | 1.11.8+ |
+| v1.12 | 1.12.6+ |
+| v1.13 | 1.13.4+ |
+| v1.14 | 1.14.0+ |
 
 ## 1. azure file mountOptions setting
 
@@ -72,7 +80,7 @@ Error: SQLITE_BUSY: database is locked
 - [Allow nobrl parameter like docker to use sqlite over network drive](https://github.com/kubernetes/kubernetes/issues/61767)
 - [Error to deploy mongo with azure file storage](https://github.com/kubernetes/kubernetes/issues/58308)
 
-## 2. permission issue of azure file dynamic provision in aks-engine
+## 2. permission issue of azure file dynamic provision in acs-engine
 
 **Issue details**:
 
@@ -98,7 +106,7 @@ m:persistent-volume-binder" cannot create secrets in the namespace "default"
 - Add a ClusterRole and ClusterRoleBinding for [azure file dynamic privision](https://github.com/andyzhangx/Demo/tree/master/linux/azurefile#dynamic-provisioning-for-azure-file-in-linux-support-from-v170)
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/andyzhangx/Demo/master/acs-engine/rbac/azure-cloud-provider-deployment.yaml
+kubectl create -f https://raw.githubusercontent.com/andyzhangx/Demo/master/aks-engine/rbac/azure-cloud-provider-deployment.yaml
 ```
 - delete the original PVC and recreate PVC
 
@@ -198,7 +206,20 @@ fixing permissions on existing directory /var/lib/postgresql/data
 azure file plugin is using cifs/SMB protocol, file/dir permission could not be changed after mounting
 
 **Workaround**:
-Use `subPath` together with azure disk plugin (for ext3/4 disk type, there is a `lost+found` directory after disk format)
+
+Use `mountOptions` with `dir_mode`, `file_mode` set as `0777`:
+
+```yaml
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azurefile
+provisioner: kubernetes.io/azure-file
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+```
+> follow detailed config [here](../linux/azurefile/postgresql)
 
 **Related issues**
 [Persistent Volume Claim permissions](https://github.com/Azure/AKS/issues/225)
@@ -249,3 +270,113 @@ sudo umount /var/lib/kubelet/pods/cc5c86cd-422a-11e8-91d7-000d3a03ee84/volumes/k
 **Related issues**
  - [`azurefile` is very slow](https://github.com/Azure/AKS/issues/223)
  - [Can't roll out Wordpress chart with PV on AzureFile](https://github.com/helm/charts/issues/5751)
+ 
+ 
+ ## 10. `allow access from selected network` setting on storage account will break azure file dynamic provisioning
+ When set `allow access from selected network` on storage account and will get following error when creating a file share by k8s:
+ ```
+ persistentvolume-controller (combined from similar events): Failed to provision volume with StorageClass "azurefile": failed to create share kubernetes-dynamic-pvc-xxx in account xxx: failed to create file share, err: storage: service returned error: StatusCode=403, ErrorCode=AuthorizationFailure, ErrorMessage=This request is not authorized to perform this operation.
+ ```
+
+That's because k8s `persistentvolume-controller` is on master node which is not in the selected network, and that's why it could not create file share on that storage account.
+
+**Workaround**:
+
+use azure file static provisioning instead
+ - create azure file share in advance, and then provide storage account and file share name in k8s, here is an [example](https://docs.microsoft.com/en-us/azure/aks/azure-files-volume)
+ 
+ **Related issues**
+  - [Azure Files PV AuthorizationFailure when using advanced networking ](https://github.com/Azure/AKS/issues/804)
+
+## 11. azure file remount on Windows in same node would fail
+
+**Issue details**:
+
+If user delete a pod with azure file mount in deployment and it would probably schedule a pod on same node, azure file mount will fail since `New-SmbGlobalMapping` command would fail if file share is already mounted on the node.
+
+**error logs**
+
+Error logs would be like following:
+```
+E0118 08:15:52.041014    2112 nestedpendingoperations.go:267] Operation for "\"kubernetes.io/azure-file/42c0ea39-1af9-11e9-8941-000d3af95268-pvc-d7e1b5f9-1af3-11e9-8941-000d3af95268\" (\"42c0ea39-1af9-11e9-8941-000d3af95268\")" failed. No retries permitted until 2019-01-18 08:15:53.0410149 +0000 GMT m=+732.446642701 (durationBeforeRetry 1s). Error: "MountVolume.SetUp failed for volume \"pvc-d7e1b5f9-1af3-11e9-8941-000d3af95268\" (UniqueName: \"kubernetes.io/azure-file/42c0ea39-1af9-11e9-8941-000d3af95268-pvc-d7e1b5f9-1af3-11e9-8941-000d3af95268\") pod \"deployment-azurefile-697f98d559-6zrlf\" (UID: \"42c0ea39-1af9-11e9-8941-000d3af95268\") : azureMount: SmbGlobalMapping failed: exit status 1, only SMB mount is supported now, output: \"New-SmbGlobalMapping : Generic failure \\r\\nAt line:1 char:190\\r\\n+ ... ser, $PWord;New-SmbGlobalMapping -RemotePath $Env:smbremotepath -Cred ...\\r\\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\\r\\n    + CategoryInfo          : NotSpecified: (MSFT_SmbGlobalMapping:ROOT/Microsoft/...mbGlobalMapping) [New-SmbGlobalMa \\r\\n   pping], CimException\\r\\n    + FullyQualifiedErrorId : HRESULT 0x80041001,New-SmbGlobalMapping\\r\\n \\r\\n\""
+```
+
+**Fix**
+
+- PR [fix smb remount issue on Windows](https://github.com/kubernetes/kubernetes/pull/73661)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.10 | no fix |
+| v1.11 | 1.11.8 |
+| v1.12 | 1.12.6 |
+| v1.13 | 1.13.4 |
+| v1.14 | 1.14.0 |
+
+**Related issues**
+
+- [azure file remount on Windows in same node would fail](https://github.com/kubernetes/kubernetes/issues/73087)
+- [Mounting volume to pods fails randomly](https://github.com/Azure/aks-engine/issues/327)
+
+## 12. update azure file secret if azure storage account key changed
+
+**Issue details**: 
+There would be azure file mount failure if azure storage account key changed
+
+**Workaround**:
+User needs to update `azurestorageaccountkey` field manually in azure file secret(secret name format: `azure-storage-account-{storage-account-name}-secret` in `default` namespace):
+```
+kubectl delete secret azure-storage-account-{storage-account-name}-secret
+kubectl create secret generic azure-storage-account-{storage-account-name}-secret --from-literal azurestorageaccountname=... --from-literal azurestorageaccountkey="..." --type=Opaque
+```
+ > make sure there is no `\r` in the account name and key, here is a [failed case](https://github.com/MicrosoftDocs/azure-docs/issues/61650#issuecomment-683274588)
+ - delete original pod(may use `--force --grace-period=0`) and wait a few minutes for new pod retry azure file mount
+ 
+## 13. Create Azure Files PV AuthorizationFailure when using advanced networking
+
+**Issue details**: 
+
+When create an azure file PV using advanced networking, user may hit following error:
+```
+err: storage: service returned error: StatusCode=403, ErrorCode=AuthorizationFailure, ErrorMessage=This request is not authorized to perform this operation
+```
+
+Before api-version `2019-06-01`, create file share action is considered as data-path operation, since `2019-06-01`, it would be considered as control-path operation, not blocked by advanced networking any more.
+
+**Related issues**
+ - [Azure Files PV AuthorizationFailure when using advanced networking](https://github.com/Azure/AKS/issues/804)
+ - [Azure Files PV AuthorizationFailure when using advanced networking](https://github.com/kubernetes/kubernetes/issues/85354)
+
+ **Fix**
+
+- PR [Switch to use AzureFile management SDK](https://github.com/kubernetes/kubernetes/pull/90350)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.18 | no fix |
+| v1.19 | 1.19.0 |
+
+**Workaround**:
+
+Shut down the advanced networking when create azure file PV.
+ 
+## 14. initial delay(5s) in mounting azure file
+
+**Issue details**: 
+
+When starting pods with AFS volumes, there is an initial delay of five seconds until the pod is transitioning from the "Scheduled" state. The reason for this is that currently the volume mounting happens inside a wait.Poll which will initially wait a specified interval(currently 5 seconds) before execution. This issue is introduced by PR [fix: azure file mount timeout issue](https://github.com/kubernetes/kubernetes/pull/88610) with v1.15.11+, v1.16.8+, v1.17.4+, v1.18.0+
+
+ **Fix**
+ - [initial delay(5s) when starting Pods with Azure File volumes](https://github.com/kubernetes/kubernetes/issues/93025)
+
+ **Fix**
+
+- PR [fix: initial delay in mounting azure disk & file](https://github.com/kubernetes/kubernetes/pull/93052)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.15 | no fix |
+| v1.16 | in cherry-pick |
+| v1.17 | in cherry-pick |
+| v1.18 | in cherry-pick |
+| v1.19 | 1.19.0 |
