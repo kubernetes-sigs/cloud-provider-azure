@@ -4,8 +4,6 @@ linkTitle: "AzureDisk"
 type: docs
 ---
 
-<!-- TOC -->
-
 - [azure disk plugin known issues](#azure-disk-plugin-known-issues)
     - [Recommended stable version for azure disk](#recommended-stable-version-for-azure-disk)
     - [1. disk attach error](#1-disk-attach-error)
@@ -22,6 +20,19 @@ type: docs
     - [12. create azure disk PVC failed due to account creation failure](#12-create-azure-disk-pvc-failed-due-to-account-creation-failure)
     - [13. cannot find Lun for disk](#13-cannot-find-Lun-for-disk)
     - [14. azure disk attach/detach failure, mount issue, i/o error](#14-azure-disk-attachdetach-failure-mount-issue-io-error)
+    - [15. azure disk could be not detached forever](#15-azure-disk-could-be-not-detached-forever)
+    - [16. potential race condition issue due to detach disk failure retry](#16-potential-race-condition-issue-due-to-detach-disk-failure-retry)
+    - [17. very slow disk attach/detach issue when disk num is large](#17-very-slow-disk-attachdetach-issue-when-disk-num-is-large)
+    - [18. detach azure disk make VM run into a limbo state](#18-detach-azure-disk-make-vm-run-into-a-limbo-state)
+    - [19. disk attach/detach self-healing on VMAS](#19-disk-attachdetach-self-healing-on-vmas)
+    - [20. azure disk detach failure if node not exists](#20-azure-disk-detach-failure-if-node-not-exists)
+    - [21. invalid disk URI error](#21-invalid-disk-URI-error)
+    - [22. vmss dirty cache issue](#22-vmss-dirty-cache-issue)
+    - [23. race condition when delete disk right after attach disk](#23-race-condition-when-delete-disk-right-after-attach-disk)
+    - [24. attach disk costs 10min](#24-attach-disk-costs-10min)
+    - [25. Multi-Attach error](#25-multi-attach-error)
+    - [26. attached non-existing disk volume on agent node](#26-attached-non-existing-disk-volume-on-agent-node)
+    - [27. failed to get azure instance id for node (not a vmss instance)](#27-failed-to-get-azure-instance-id-for-node-not-a-vmss-instance)
 
 <!-- /TOC -->
 
@@ -29,13 +40,11 @@ type: docs
 
 | k8s version | stable version |
 | ---- | ---- |
-| v1.7 | 1.7.14 or later |
-| v1.8 | 1.8.13 or later |
-| v1.9 | 1.9.7 or later (1.9.6 on AKS) |
-| v1.10 | 1.10.12 or later |
-| v1.11 | 1.11.6 or later |
-| v1.12 | 1.12.4 or later |
-| v1.13 | 1.13.0 |
+| v1.15 | 1.15.11+ |
+| v1.16 | 1.16.10+ |
+| v1.17 | 1.17.6+ |
+| v1.18 | 1.18.3+ |
+| v1.19 | 1.19.0+ |
 
 ## 1. disk attach error
 
@@ -87,7 +96,7 @@ az vm update -g <group> -n <name>
 
 | k8s version | fixed version |
 | ---- | ---- |
-| v1.6 | no fix since v1.6 does not accept any cherry-pick |
+| v1.6 | no fix |
 | v1.7 | 1.7.14 |
 | v1.8 | 1.8.9 |
 | v1.9 | 1.9.5 |
@@ -171,7 +180,7 @@ parameters:
 
 ## 4. Time cost for Azure Disk PVC mount
 
-Original time cost for Azure Disk PVC mount on a standard node size(e.g. Standard_D2_V2) is around 1 minute, `podAttachAndMountTimeout` is [2 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L76), total `waitForAttachTimeout` is [10 minutes](https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/kubelet/volumemanager/volume_manager.go#L88), so a disk remount(detach and attach in sequential) would possibly cost more than 2min, thus may fail.
+Original time cost for Azure Disk PVC mount on a standard node size(e.g. Standard_D2_V2) is around 1 minute, `podAttachAndMountTimeout` is [2 minutes](https://github.com/kubernetes/kubernetes/blob/b812eaa172804739283e6e8723cbca3ed293e7ff/pkg/kubelet/volumemanager/volume_manager.go#L78), total `waitForAttachTimeout` is [10 minutes](https://github.com/kubernetes/kubernetes/blob/b812eaa172804739283e6e8723cbca3ed293e7ff/pkg/kubelet/volumemanager/volume_manager.go#L86), so a disk remount(detach and attach in sequential) would possibly cost more than 2min, thus may fail.
 
 > Note: for some smaller VM size which has only 1 CPU core, time cost would be much bigger(e.g. > 10min) since container is hard to get CPU slot.
 
@@ -190,6 +199,7 @@ Original time cost for Azure Disk PVC mount on a standard node size(e.g. Standar
 | v1.10 | 1.10.0 |
 
 ## 5. Azure disk PVC `Multi-Attach error`, makes disk mount very slow or mount failure forever
+ > 💡 NOTE: AKS and current aks-engine won't have this issue since it's **not** using containerized kubelet
 
 **Issue details**:
 
@@ -286,14 +296,20 @@ MountVolume.WaitForAttach failed for volume "pvc-f1562ecb-3e5f-11e8-ab6b-000d3af
 Unlike azure file mountOptions, you will get following failure if set `mountOptions` like `uid=999,gid=999` in azure disk mount:
 
 ```
-azureDisk - mountDevice:FormatAndMount failed with exit status 32
+Warning  FailedMount             63s                  kubelet, aks-nodepool1-29460110-0  MountVolume.MountDevice failed for volume "pvc-d783d0e4-85a1-11e9-8a90-369885447933" : azureDisk - mountDevice:FormatAndMount failed with mount failed: exit status 32
+Mounting command: systemd-run
+Mounting arguments: --description=Kubernetes transient mount for /var/lib/kubelet/plugins/kubernetes.io/azure-disk/mounts/m436970985 --scope -- mount -t xfs -o dir_mode=0777,file_mode=0777,uid=1000,gid=1000,defaults /dev/disk/azure/scsi1/lun2 /var/lib/kubelet/plugins/kubernetes.io/azure-disk/mounts/m436970985
+Output: Running scope as unit run-rb21966413ab449b3a242ae9b0fbc9398.scope.
+mount: wrong fs type, bad option, bad superblock on /dev/sde,
+       missing codepage or helper program, or other error
 ```
 
-That's because azureDisk use ext4 file system by default, mountOptions like [uid=x,gid=x] could not be set in mount time.
+That's because azureDisk use ext4,xfs file system by default, mountOptions like [uid=x,gid=x] could not be set in mount time.
 
 **Related issues**
-
-- [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014)
+- [Timeout expired waiting for volumes to attach](https://github.com/kubernetes/kubernetes/issues/67014#issuecomment-589915496)
+- [Pod failed mounting xfs format volume with mountOptions](https://github.com/Azure/AKS/issues/1030)
+- [Allow volume ownership to be only set after fs formatting](https://github.com/kubernetes/kubernetes/issues/69699#issuecomment-558861917)
 
 **Solution**:
 
@@ -324,6 +340,8 @@ initContainers:
     mountPath: /data
 ```
 
+ - new upstream feature to address this: [Allow volume ownership to be only set after fs formatting](https://github.com/kubernetes/kubernetes/issues/69699)
+
 ## 8. `Addition of a blob based disk to VM with managed disks is not supported`
 
 **Issue details**:
@@ -338,7 +356,7 @@ This issue is by design as in Azure, there are two kinds of disks, blob based(un
 
 **Solution**:
 
-Use `default` azure disk storage class in aks-engine, as `default` will always be identical to the agent pool, that is, if VM is managed, it will be managed azure disk class, if unmanaged, then it's unmanaged disk class.
+Use `default` azure disk storage class in acs-engine, as `default` will always be identical to the agent pool, that is, if VM is managed, it will be managed azure disk class, if unmanaged, then it's unmanaged disk class.
 
 ## 9. dynamic azure disk PVC try to access wrong storage account (of other resource group)
 
@@ -366,7 +384,7 @@ Failed to provision volume with StorageClass "default": azureDisk - account ds6c
 
 **Work around**:
 
-this bug only exists in blob based VM in v1.8.x, v1.9.x, so if specify `ManagedDisks` when creating k8s cluster in aks-engine(AKS is using managed disk by default), it won't have this issue:
+this bug only exists in blob based VM in v1.8.x, v1.9.x, so if specify `ManagedDisks` when creating k8s cluster in acs-engine(AKS is using managed disk by default), it won't have this issue:
 
 ```json
     "agentPoolProfiles": [
@@ -541,3 +559,406 @@ We changed the azure disk attach/detach retry logic in k8s v1.13, switch to use 
  - if there is attach disk failure for long time, restart controller manager may work
  - if there is disk not detached for long time, detach that disk manually
 
+**Related issues**
+ - [Multi Attach Error](https://github.com/Azure/AKS/issues/477)
+
+## 15. azure disk could be not detached forever
+
+**Issue details**:
+
+In some condition when first detach azure disk operation failed, it won't retry and the azure disk would be still attached to the original VM node.
+
+Following error may occur when move one disk from one node to another(keyword: `ConflictingUserInput`):
+```
+[Warning] AttachVolume.Attach failed for volume “pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9” : Attach volume “kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9" to instance “/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-0” failed with compute.VirtualMachinesClient#CreateOrUpdate: Failure sending request: StatusCode=0 -- Original Error: autorest/azure: Service returned an error. Status= Code=“ConflictingUserInput” Message=“Disk ‘/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/disks/kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9’ cannot be attached as the disk is already owned by VM ‘/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-1’.”
+```
+
+**Fix**
+
+We added retry logic for detach azure disk:
+- PR [add retry for detach azure disk](https://github.com/kubernetes/kubernetes/pull/74398)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.10 | N/A |
+| v1.11 | 1.11.9 |
+| v1.12 | 1.12.7 |
+| v1.13 | 1.13.4 |
+| v1.14 | 1.14.0 |
+| v1.15 | 1.15.0 |
+
+**Work around**:
+ - if there is disk not detached for long time, detach that disk manually
+ 
+## 16. potential race condition issue due to detach disk failure retry
+ 
+**Issue details**:
+
+In some error condition when detach azure disk failed, azure cloud provider will retry 6 times at most with exponential backoff, it will hold the data disk list for about 3 minutes with a node level lock, and in that time period, if customer update data disk list manually (e.g. need manual operationto attach/detach another disk since there is attach/detach error, ) , the data disk list will be obselete(dirty data), then weird VM status happens, e.g. attach a non-existing disk, we should split those retry operations, every retry should get a fresh data disk list in the beginning.
+
+**Fix**
+
+Following PR refined detach azure disk retry operation, make every detach azure disk operation in a standalone function
+- PR [fix detach azure disk back off issue which has too big lock in failure retry condition](https://github.com/kubernetes/kubernetes/pull/76573)
+- PR [fix azure disk list corruption issue](https://github.com/kubernetes/kubernetes/pull/77187)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.10 | N/A |
+| v1.11 | no fix |
+| v1.12 | 1.12.9 |
+| v1.13 | 1.13.6 |
+| v1.14 | 1.14.2 |
+| v1.15 | 1.15.0 |
+
+**Work around**:
+
+Detach all the non-existing disks from VM (could do that in azure portal by bulk update)
+ > Detaching disk one by one using cli may fail since they are already non-existing disks.
+
+## 17. very slow disk attach/detach issue when disk num is large
+ 
+**Issue details**:
+
+We hit very slow disk attach/detach issue when disk num is large(> 10 disks on one VM)
+
+**Fix**
+
+Azure disk team are fixing this issue.
+
+**Work around**:
+
+No workaround.
+
+## 18. detach azure disk make VM run into a limbo state
+ 
+**Issue details**:
+
+In some corner condition, detach azure disk would sometimes make VM run into a limbo state
+
+**Fix**
+
+Following two PRs would fix this issue by retry update VM if detach disk partially fail:
+ - [fix azure retry issue when return 2XX with error](https://github.com/kubernetes/kubernetes/pull/78298)
+ - [fix: retry detach azure disk issue](https://github.com/kubernetes/kubernetes/pull/78700)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.11 | no fix |
+| v1.12 | 1.12.10 |
+| v1.13 | 1.13.8 |
+| v1.14 | 1.14.4 |
+| v1.15 | 1.15.0 |
+
+**Work around**:
+
+Update VM status manually would solve the problem:
+ - Update Availability Set VM
+ ```
+ az vm update -n <VM_NAME> -g <RESOURCE_GROUP_NAME>
+ ```
+ - Update Scale Set VM
+ ```
+ az vmss update-instances -g <RESOURCE_GROUP_NAME> --name <VMSS_NAME> --instance-id <ID(number)>
+ ```
+
+## 19. disk attach/detach self-healing on VMAS
+
+**Issue details**:
+There could be disk detach failure due to many reasons(e.g. disk RP busy, controller manager crash, etc.), and it would fail when attach one disk to other node if that disk is still attached to the old node, user needs to manually detach disk in problem in the before, with this fix, azure cloud provider would check and detach this disk if it's already attached to the other node, that's like self-healing. This PR could fix lots of such disk attachment issue.
+
+**Fix**
+
+Following PR would first check whether current disk is already attached to other node, if so, it would trigger a dangling error and k8s controller would detach disk first, and then do the attach volume operation.
+
+This PR would also fix a "disk not found" issue when detach azure disk due to disk URI case sensitive case, error logs are like following(without this PR):
+```
+azure_controller_standard.go:134] detach azure disk: disk  not found, diskURI: /subscriptions/xxx/resourceGroups/andy-mg1160alpha3/providers/Microsoft.Compute/disks/xxx-dynamic-pvc-41a31580-f5b9-4f08-b0ea-0adcba15b6db
+```
+**Fix**
+ - Fix on VMAS
+   - [fix: detach azure disk issue using dangling error](https://github.com/kubernetes/kubernetes/pull/81266)
+   - [fix: azure disk name matching issue](https://github.com/kubernetes/kubernetes/pull/81720)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.12 | no fix |
+| v1.13 | 1.13.11 |
+| v1.14 | 1.14.7 |
+| v1.15 | 1.15.4 |
+| v1.15 | 1.16.0 |
+
+ - Fix on VMSS
+   - [fix: azure disk dangling attach issue on VMSS which would cause API throttling](https://github.com/kubernetes/kubernetes/pull/90749)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.15 | no fix |
+| v1.16 | 1.16.9 |
+| v1.17 | 1.17.6 |
+| v1.18 | 1.18.3 |
+| v1.19 | 1.19.0 |
+
+**Work around**:
+
+manually detach disk in problem and wait for disk attachment happen automatically
+
+## 20. azure disk detach failure if node not exists
+
+**Issue details**:
+If a node with a Azure Disk attached is deleted (before the volume is detached), subsequent attempts by the attach/detach controller to detach it continuously fail, and prevent the controller from attaching the volume to another node.
+
+**Fix**
+
+ - [fix: azure disk detach failure if node not exists](https://github.com/kubernetes/kubernetes/pull/82640)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.12 | no fix |
+| v1.13 | 1.13.9 |
+| v1.14 | 1.14.8 |
+| v1.15 | 1.15.5 |
+| v1.16 | 1.16.1 |
+| v1.16 | 1.17.0 |
+
+**Work around**:
+
+Restart kube-controller-manager on master node.
+
+## 21. invalid disk URI error
+
+**Issue details**:
+
+When user use an existing disk in static provisioning, may hit following error:
+```
+AttachVolume.Attach failed for volume "azure" : invalid disk URI: /subscriptions/xxx/resourcegroups/xxx/providers/Microsoft.Compute/disks/Test_Resize_1/”
+```
+
+
+**Fix**
+
+ - [fix: make azure disk URI as case insensitive](https://github.com/kubernetes/kubernetes/pull/79020)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.13 | no fix |
+| v1.14 | 1.14.9 |
+| v1.15 | 1.15.6 |
+| v1.16 | 1.16.0 |
+| v1.17 | 1.17.0 |
+
+**Work around**:
+
+Use `resourceGroups` instead of `resourcegroups` in disk PV configuration
+
+## 22. vmss dirty cache issue
+
+**Issue details**:
+
+clean vmss cache should happen after disk attach/detach operation, now it's before those operations, which would lead to dirty cache.
+since update operation may cost 30s or more, and at that time period, if there is another get vmss operation, it would get the old data disk list
+
+ - [VMSS disk attach/detach issues w/ v1.13.12, v1.14.8, v1.15.5, v1.16.2](https://github.com/Azure/aks-engine/issues/2312)
+ - [Disk attachment/mounting problems, all pods with PVCs stuck in ContainerCreating](https://github.com/Azure/AKS/issues/1278) 
+
+**Fix**
+
+ - [fix vmss dirty cache issue](https://github.com/kubernetes/kubernetes/pull/85158)
+
+| k8s version | fixed version | notes |
+| ---- | ---- | ---- |
+| v1.13 | no fix | regression since 1.13.12 (hotfixed in AKS release) |
+| v1.14 | 1.14.10 | regression only in 1.14.8, 1.14.9 (hotfixed in AKS release) |
+| v1.15 | 1.15.7 | regression only in 1.15.5, 1.15.6 (hotfixed in AKS release)  |
+| v1.16 | 1.16.4 | regression only in 1.16.2, 1.16.3 (hotfixed in AKS release)  |
+| v1.17 | 1.17.0 | |
+
+**Work around**:
+
+Detach disk in problem manually
+
+## 23. race condition when delete disk right after attach disk
+
+**Issue details**:
+
+There is condition that attach and delete disk happens in same time, azure CRP don't check such race condition
+
+ - [should not delete an azure disk when that disk is being attached](https://github.com/kubernetes/kubernetes/issues/82714)
+
+**Fix**
+
+ - [fix race condition when delete azure disk right after attach azure disk](https://github.com/kubernetes/kubernetes/pull/84917)
+
+| k8s version | fixed version | notes |
+| ---- | ---- | ---- |
+| v1.13 | no fix | hotfixed in AKS release since 1.13.12 |
+| v1.14 | 1.14.10 | hotfixed in AKS release in 1.14.8, 1.14.9 |
+| v1.15 | 1.15.7 | hotfixed in AKS release in 1.15.5, 1.15.6  |
+| v1.16 | 1.16.4 | hotfixed in AKS release in 1.16.2, 1.16.3  |
+| v1.17 | 1.17.0 | |
+
+**Work around**:
+
+Detach disk in problem manually
+
+## 24. attach disk costs 10min
+
+**Issue details**:
+
+PR [Fix aggressive VM calls for Azure VMSS](https://github.com/kubernetes/kubernetes/pull/83102) change getVMSS cache TTL from 1min to 10min, getVMAS cache TTL from 5min to 10min, that will cause error `WaitForAttach ... Cannot find Lun for disk`, and it would make attach disk opeation costs 10min on VMSS and 15min on VMAS, detailed error would be like following:
+```
+Events:
+  Type     Reason                  Age                 From                                        Message
+  ----     ------                  ----                ----                                        -------
+  Normal   Scheduled               29m                 default-scheduler                           Successfully assigned authentication/authentication-mssql-statefulset-0 to aks-nodepool1-29122124-vmss000004
+  Normal   SuccessfulAttachVolume  28m                 attachdetach-controller                     AttachVolume.Attach succeeded for volume "pvc-8d9f0ade-1825-11ea-83a0-22ced17d4a3d"
+  Warning  FailedMount             23m (x10 over 27m)  kubelet, aks-nodepool1-29122124-vmss000004  MountVolume.WaitForAttach failed for volume "pvc-8d9f0ade-1825-11ea-83a0-22ced17d4a3d" : Cannot find Lun for disk kubernetes-dynamic-pvc-8d9f0ade-1825-11ea-83a0-22ced17d4a3d
+  Warning  FailedMount             23m (x3 over 27m)   kubelet, aks-nodepool1-29122124-vmss000004  Unable to mount volumes for pod "authentication-mssql-statefulset-0_authentication(8df467e7-1825-11ea-83a0-22ced17d4a3d)": timeout expired waiting for volumes to attach or mount for pod "authentication"/"authentication-mssql-statefulset-0". list of unmounted volumes=[authentication-mssql-persistent-data-storage]. list of unattached volumes=[authentication-mssql-persistent-data-storage default-token-b7spv]
+  Normal   Pulled                  21m                 kubelet, aks-nodepool1-29122124-vmss000004  Container image "mcr.microsoft.com/mssql/server:2019-CTP3.2-ubuntu" already present on machine
+  Normal   Created                 21m                 kubelet, aks-nodepool1-29122124-vmss000004  Created container authentication-mssql
+  Normal   Started                 21m                 kubelet, aks-nodepool1-29122124-vmss000004  Started container authentication-mssql
+```
+
+This slow disk attachment issue only exists on `1.13.12+`, `1.14.8+`, fortunately, from k8s 1.15.0, this issue won't happen, since getDiskLUN logic has already been refactored (already has PR:[fix azure disk lun error](https://github.com/kubernetes/kubernetes/pull/77912), won't depend on getVMSS operation to get disk LUN.
+
+**Relate issues**:
+ - [GetAzureDiskLun sometimes costs 10min which is too long time](https://github.com/kubernetes/kubernetes/issues/69262#issuecomment-562567413)
+
+**Fix**
+
+ - [fix azure disk lun error](https://github.com/kubernetes/kubernetes/pull/77912)
+
+| k8s version | fixed version | notes |
+| ---- | ---- | ---- |
+| v1.13 | no fix | need to hotfix in AKS release since 1.13.12 (slow disk attachment exists on `1.13.12+`) |
+| v1.14 | in cherry-pick | need to hotfix in AKS release in 1.14.8, 1.14.9 (slow disk attachment exists on `1.14.8+`) |
+| v1.15 | 1.15.0 | |
+| v1.16 | 1.16.0 | |
+
+**Work around**:
+
+Wait for about 10min or 15min, `MountVolume.WaitForAttach` operation would retry and would finally succeed
+
+## 25. Multi-Attach error
+
+**Issue details**:
+
+If two pods on different node are using same disk PVC(this issue may also happen when doing rollingUpdate in Deployment using one replica), would probably hit following error:
+```
+Events:
+Warning  FailedAttachVolume  9m                attachdetach-controller                     Multi-Attach error for volume "pvc-fc0bed38-48bf-43f1-a7e4-255eef48ffb9" Volume is already used by pod(s) sqlserver3-5b8449449-5chzx
+Warning  FailedMount         42s (x4 over 7m)  kubelet, aks-nodepool1-15915763-vmss000001  Unable to mount volumes for pod "sqlserver3-55754785bb-jjr6d_default(55381f38-9640-43a9-888d-096387cbb780)": timeout expired waiting for volumes to attach or mount for pod "default"/"sqlserver3-55754785bb-jjr6d". list of unmounted volumes=[mssqldb]. list of unattached volumes=[mssqldb default-token-q7cw9]
+```
+
+The above issue is upstream issue([detailed error code](https://github.com/kubernetes/kubernetes/blob/20c265fef0741dd71a66480e35bd69f18351daea/pkg/controller/volume/attachdetach/reconciler/reconciler.go#L351)), it could be due to following reasons:
+ - two pods are using same disk PVC, this issue could happen even using `Deployment` with one replica(see below workaround)
+ - one node is in Shutdown(deallocated) state, this is by design now and there is on-going upstream work to fix this issue
+   - [Propose to taint node "shutdown" condition](https://github.com/kubernetes/kubernetes/issues/58635)
+   - [add node shutdown KEP](https://github.com/kubernetes/enhancements/pull/1116)   
+ >  - workaround: user could use set `terminationGracePeriodSeconds: 0` in deployment or `kubectl delete pod PODNAME --grace-period=0 --force` to delete pod on the deallocated node
+ >  - Azure cloud provider solution: delete shutdown node(in `InstanceExistsByProviderID`) like what [other cloud provider does today](https://github.com/kubernetes/kubernetes/blob/d8febccacfc9d51a017be9531247689e0e36df04/staging/src/k8s.io/legacy-cloud-providers/aws/aws.go#L1623-L1627), while it may lead to other problem(e.g. node label loss), see details: [Common handling of stopped instances across cloud providers.
+](https://github.com/kubernetes/kubernetes/issues/46442) 
+
+since azure disk PVC could not be attached to one node.
+
+**Relate issues**:
+ - [Trouble attaching volume](https://github.com/Azure/AKS/issues/884#issuecomment-571165826)
+ 
+**Work around**:
+
+When using disk PVC config in deployment, `maxSurge: 0` could make sure there would not be no more than two pods in `Running/ContainerCreating` state when doing rollingUpdate:
+```
+template:
+...
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+```
+
+Refer to [Rolling Updates with Kubernetes Deployments](https://tachingchen.com/blog/kubernetes-rolling-update-with-deployment/) for more detailed rollingUpdate config, and you could find `maxSurge: 0` setting example [here](https://github.com/andyzhangx/demo/blob/c3199932c4c00ca1095481e845642a0ec4bda598/linux/azuredisk/attach-stress-test/deployment/deployment-azuredisk1.yaml#L45-L49)
+
+**Note**
+
+ - error messages:
+   - `Multi-Attach error for volume "pvc-e9b72e86-129a-11ea-9a02-9abdbf393c78" Volume is already used by pod(s)`
+
+two pods are using same disk PVC, this issue could happen even using `Deployment` with one replica, check detailed explanation and workaround here with above explanation
+
+   - `Multi-Attach error for volume "pvc-0d7740b9-3a43-11e9-93d5-dee1946e6ce9" Volume is already exclusively attached to one node and can't be attached to another`
+
+This could be a transient error when move volume from one node to another, use following command to find attached node:
+```console  
+kubectl get no -o yaml | grep volumesAttached -A 15 | grep pvc-0d7740b9-3a43-11e9-93d5-dee1946e6ce9 -B 10 -A 15
+```
+
+related code: [reportMultiAttachError](https://github.com/kubernetes/kubernetes/blob/36e40fb850293076b415ae3d376f5f81dc897105/pkg/controller/volume/attachdetach/reconciler/reconciler.go#L300)
+
+## 26. attached non-existing disk volume on agent node
+
+**Issue details**:
+
+There is little possibility that attach/detach disk and disk deletion happened in same time, that would cause race condition. This PR add remediation when attach/detach disk, if returned 404 error, it will filter out all non-existing disks and try attach/detach operation again.
+
+**Fix**
+
+ - [fix: add remediation in azure disk attach/detach](https://github.com/kubernetes/kubernetes/pull/88444)
+ - [fix: azure disk remediation issue](https://github.com/kubernetes/kubernetes/pull/88620)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.14 | no fix |
+| v1.15 | 1.15.11 |
+| v1.16 | 1.16.8 |
+| v1.17 | 1.17.4 |
+| v1.18 | 1.18.0 |
+
+**Work around**:
+
+Detach disk in problem manually
+
+## 27. failed to get azure instance id for node (not a vmss instance)
+
+**Issue details**:
+
+[PR#81266](https://github.com/kubernetes/kubernetes/pull/81266) does not convert the VMSS node name which causes error like this:
+```
+failed to get azure instance id for node \"k8s-agentpool1-32474172-vmss_1216\" (not a vmss instance)
+```
+That will make dangling attach return error, and k8s volume attach/detach controller will getVmssInstance, and since the nodeName is in an incorrect format, it will always clean vmss cache if node not found, thus incur a get vmss API call storm.
+
+**Fix**
+
+ - [fix: azure disk dangling attach issue on VMSS which would cause API throttling](https://github.com/kubernetes/kubernetes/pull/90749)
+
+| k8s version | fixed version |
+| ---- | ---- |
+| v1.14 | only hotfixed with image `mcr.microsoft.com/oss/kubernetes/hyperkube:v1.14.8-hotfix.20200529.1` |
+| v1.15 | only hotfixed with image `mcr.microsoft.com/oss/kubernetes/hyperkube:v1.15.11-hotfix.20200529.1`, `mcr.microsoft.com/oss/kubernetes/hyperkube:v1.15.12-hotfix.20200603` |
+| v1.16 | 1.16.10 (also hotfixed with image `mcr.microsoft.com/oss/kubernetes/hyperkube:v1.16.9-hotfix.20200529.1`) |
+| v1.17 | 1.17.6 |
+| v1.18 | 1.18.3 |
+| v1.19 | 1.19.0 |
+
+**Work around**:
+
+1.	Stop kube-controller-manager
+2.	detach disk in problem from that vmss node manually
+```console
+az vmss disk detach -g <RESOURCE_GROUP_NAME> --name <VMSS_NAME> --instance-id <ID(number)> --lun number
+```
+
+e.g. per below logs, 
+```
+E0501 11:15:40.981758       1 attacher.go:277] failed to detach azure disk "/subscriptions/xxx/resourceGroups/rg/providers/Microsoft.Compute/disks/rg-dynamic-pvc-dc282131-b669-47db-8d57-cb3b9789ac3e", err failed to get azure instance id for node "k8s-agentpool1-32474172-vmss_1216" (not a vmss instance)
+```
+ - find lun number of disk `rg-dynamic-pvc-dc282131-b669-47db-8d57-cb3b9789ac3e`:
+```console
+az vmss show -g rg --name k8s-agentpool1-32474172-vmss --instance-id 1216
+```
+ - detach vmss disk manually:
+```console
+az vmss disk detach -g rg --name k8s-agentpool1-32474172-vmss --instance-id 1216 --lun number
+```
+3.	Start kube-controller-manager
