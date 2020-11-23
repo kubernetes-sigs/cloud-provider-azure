@@ -1808,15 +1808,15 @@ kubectl create secret generic azure-storage-account-{storage-account-name}-secre
 &lt;/tr>
 &lt;tr>
 &lt;td>v1.16&lt;/td>
-&lt;td>in cherry-pick&lt;/td>
+&lt;td>1.16.14&lt;/td>
 &lt;/tr>
 &lt;tr>
 &lt;td>v1.17&lt;/td>
-&lt;td>in cherry-pick&lt;/td>
+&lt;td>1.17.10&lt;/td>
 &lt;/tr>
 &lt;tr>
 &lt;td>v1.18&lt;/td>
-&lt;td>in cherry-pick&lt;/td>
+&lt;td>1.18.7&lt;/td>
 &lt;/tr>
 &lt;tr>
 &lt;td>v1.19&lt;/td>
