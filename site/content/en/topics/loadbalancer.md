@@ -32,6 +32,7 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-pip-tags` | Tags of the PIP | Specify the tags of the PIP that will be associated to the load balancer typed service. [Doc](../tagging-resources) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service. [Doc](../custom-health-probe) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe. [Doc](../custom-health-probe) | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports` | Enable [high availability ports](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-ha-ports-overview) on internal SLB, required when applications require IP fragments | v1.20 and later |
 
 ### Load balancer selection modes
 
