@@ -30,9 +30,9 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-pip-name` | Name of PIP | Specify the PIP that will be applied to load balancer | v1.16 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset` | `true` | Disable `enableTcpReset` for SLB | v1.16-v1.18. The annotation has been deprecated and would be removed in a future release. |
 | `service.beta.kubernetes.io/azure-pip-tags` | Tags of the PIP | Specify the tags of the PIP that will be associated to the load balancer typed service. [Doc](../tagging-resources) | v1.20 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service. [Doc](../custom-health-probe) | v1.20 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe. [Doc](../custom-health-probe) | v1.20 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports` | Enable [high availability ports](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-ha-ports-overview) on internal SLB, required when applications require IP fragments | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service | Refer the detailed docs [here](../custom-health-probe) | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer the detailed docs [here](../custom-health-probe) | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports` | Enable [high availability ports](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-ha-ports-overview) on internal SLB | HA ports is required when applications require IP fragments | v1.20 and later |
 
 ### Load balancer selection modes
 
