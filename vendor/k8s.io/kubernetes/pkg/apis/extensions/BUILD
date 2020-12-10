@@ -13,15 +13,14 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
-    importmap = "sigs.k8s.io/cloud-provider-azure/vendor/k8s.io/kubernetes/pkg/apis/extensions",
     importpath = "k8s.io/kubernetes/pkg/apis/extensions",
     deps = [
-        "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/apis/apps:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/apis/autoscaling:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/apis/networking:go_default_library",
-        "//vendor/k8s.io/kubernetes/pkg/apis/policy:go_default_library",
+        "//pkg/apis/apps:go_default_library",
+        "//pkg/apis/autoscaling:go_default_library",
+        "//pkg/apis/networking:go_default_library",
+        "//pkg/apis/policy:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
     ],
 )
 

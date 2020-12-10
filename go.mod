@@ -10,8 +10,7 @@ require (
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.7.0
-	github.com/prometheus/client_golang v1.7.1
-	github.com/spf13/cobra v1.0.0
+	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	k8s.io/api v0.0.0
@@ -364,7 +363,7 @@ replace (
 	golang.org/x/lint => golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/mobile => golang.org/x/mobile v0.0.0-20190312151609-d3739f865fa6
 	golang.org/x/mod => golang.org/x/mod v0.0.0-20190513183733-4bf6d317e70e
-	golang.org/x/net => golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/net => golang.org/x/net v0.0.0-20201209123823-ac852fbbde11
 	golang.org/x/oauth2 => golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/perf => golang.org/x/perf v0.0.0-20180704124530-6e6d33e29852
 	golang.org/x/sync => golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
@@ -401,36 +400,38 @@ replace (
 	gotest.tools/v3 => gotest.tools/v3 v3.0.2
 	grpc.go4.org => grpc.go4.org v0.0.0-20170609214715-11d0a25b4919
 	honnef.co/go/tools => honnef.co/go/tools v0.0.1-2019.2.2
-	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200831051421-70a682345e3b
-	k8s.io/apiextensions-apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20200831051421-70a682345e3b
-	k8s.io/apimachinery => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200831051421-70a682345e3b
-	k8s.io/apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200831051421-70a682345e3b
-	k8s.io/cli-runtime => k8s.io/kubernetes/staging/src/k8s.io/cli-runtime v0.0.0-20200831051421-70a682345e3b
-	k8s.io/client-go => k8s.io/kubernetes/staging/src/k8s.io/client-go v0.0.0-20200831051421-70a682345e3b
+	k8s.io/api => k8s.io/api v0.0.0-20201209045733-fcac651617f2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20201114091224-a7ee1efe41fc
+	k8s.io/apimachinery => k8s.io/apimachinery v0.21.0-alpha.0.0.20201209085528-15c5dba13c59
+	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20201209130508-aed7ab078321
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.0.0-20201209051923-2e4b259e04ba
+	k8s.io/client-go => k8s.io/client-go v0.0.0-20201209050023-e24efdc77f15
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013
-	k8s.io/cluster-bootstrap => k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap v0.0.0-20200831051421-70a682345e3b
-	k8s.io/code-generator => k8s.io/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20200831051421-70a682345e3b
-	k8s.io/component-base => k8s.io/kubernetes/staging/src/k8s.io/component-base v0.0.0-20200831051421-70a682345e3b
-	k8s.io/controller-manager => k8s.io/controller-manager v0.20.0-alpha.1.0.20201020203003-828015992afa
-	k8s.io/cri-api => k8s.io/kubernetes/staging/src/k8s.io/cri-api v0.0.0-20200831051421-70a682345e3b
-	k8s.io/csi-translation-lib => k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib v0.0.0-20200831051421-70a682345e3b
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.0.0-20201114092228-614b98eee358
+	k8s.io/code-generator => k8s.io/code-generator v0.21.0-alpha.0
+	k8s.io/component-base => k8s.io/component-base v0.0.0-20201114090208-1e84b325f5ba
+	k8s.io/component-helpers => k8s.io/component-helpers v0.20.0-alpha.2.0.20201114090304-7cb42b694587
+	k8s.io/controller-manager => k8s.io/controller-manager v0.20.0-alpha.1.0.20201209052538-b2c380a1dc86
+	k8s.io/cri-api => k8s.io/cri-api v0.21.0-alpha.0
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.0.0-20201114092327-833303372de1
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20200205140755-e0e292d8aa12
 	k8s.io/heapster => k8s.io/heapster v1.2.0-beta.1
 	k8s.io/klog => k8s.io/klog v1.0.0
-	k8s.io/kube-aggregator => k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kube-controller-manager => k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6
-	k8s.io/kube-proxy => k8s.io/kubernetes/staging/src/k8s.io/kube-proxy v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kube-scheduler => k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kubectl => k8s.io/kubernetes/staging/src/k8s.io/kubectl v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kubelet => k8s.io/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20200831051421-70a682345e3b
-	k8s.io/kubernetes => k8s.io/kubernetes v1.20.0-alpha.0.0.20200713040433-bb8a5d2ada10
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.0.0-20201126170540-6c47de442a82
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.0.0-20201114092129-18c28a4120de
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.0.0-20201114091637-deb12d4b202f
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.0.0-20201114091838-0f62d3991af1
+	k8s.io/kubectl => k8s.io/kubectl v0.0.0-20201210013108-5cfbd4019670
+	k8s.io/kubelet => k8s.io/kubelet v0.0.0-20201114091737-92ded5ee6b96
+	k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
 	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201114063503-05d1b94a701d
-	k8s.io/metrics => k8s.io/kubernetes/staging/src/k8s.io/metrics v0.0.0-20200831051421-70a682345e3b
+	k8s.io/metrics => k8s.io/metrics v0.0.0-20201114091333-d70c0e0c6aa5
+	k8s.io/mount-utils => k8s.io/mount-utils v0.21.0-alpha.0
 	k8s.io/repo-infra => k8s.io/repo-infra v0.0.3
-	k8s.io/sample-apiserver => k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20200831051421-70a682345e3b
-	k8s.io/sample-cli-plugin => k8s.io/kubernetes/staging/src/k8s.io/sample-cli-plugin v0.0.0-20200831051421-70a682345e3b
-	k8s.io/sample-controller => k8s.io/kubernetes/staging/src/k8s.io/sample-controller v0.0.0-20200831051421-70a682345e3b
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20201114090814-1f4e6a92d4b8
+	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.0.0-20201114091536-307712dacc73
+	k8s.io/sample-controller => k8s.io/sample-controller v0.0.0-20201114091033-7644cdf6adcd
 	k8s.io/system-validators => k8s.io/system-validators v1.1.2
 	k8s.io/utils => k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	modernc.org/cc => modernc.org/cc v1.0.0

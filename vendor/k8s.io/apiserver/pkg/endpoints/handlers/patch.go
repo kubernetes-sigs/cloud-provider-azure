@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -49,7 +50,6 @@ import (
 	"k8s.io/apiserver/pkg/util/dryrun"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utiltrace "k8s.io/utils/trace"
-	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -61,7 +61,7 @@ const (
 func PatchResource(r rest.Patcher, scope *RequestScope, admit admission.Interface, patchTypes []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		// For performance tracking purposes.
-		trace := utiltrace.New("Patch", utiltrace.Field{Key: "url", Value: req.URL.Path}, utiltrace.Field{Key: "user-agent", Value: &lazyTruncatedUserAgent{req}}, utiltrace.Field{Key: "client", Value: &lazyClientIP{req}})
+		trace := utiltrace.New("Patch", traceFields(req)...)
 		defer trace.LogIfLong(500 * time.Millisecond)
 
 		if isDryRun(req.URL) && !utilfeature.DefaultFeatureGate.Enabled(features.DryRun) {
@@ -337,15 +337,6 @@ func (p *jsonPatcher) createNewObject() (runtime.Object, error) {
 func (p *jsonPatcher) applyJSPatch(versionedJS []byte) (patchedJS []byte, retErr error) {
 	switch p.patchType {
 	case types.JSONPatchType:
-		// sanity check potentially abusive patches
-		// TODO(liggitt): drop this once golang json parser limits stack depth (https://github.com/golang/go/issues/31789)
-		if len(p.patchBytes) > 1024*1024 {
-			v := []interface{}{}
-			if err := json.Unmarshal(p.patchBytes, &v); err != nil {
-				return nil, errors.NewBadRequest(fmt.Sprintf("error decoding patch: %v", err))
-			}
-		}
-
 		patchObj, err := jsonpatch.DecodePatch(p.patchBytes)
 		if err != nil {
 			return nil, errors.NewBadRequest(err.Error())
@@ -361,15 +352,6 @@ func (p *jsonPatcher) applyJSPatch(versionedJS []byte) (patchedJS []byte, retErr
 		}
 		return patchedJS, nil
 	case types.MergePatchType:
-		// sanity check potentially abusive patches
-		// TODO(liggitt): drop this once golang json parser limits stack depth (https://github.com/golang/go/issues/31789)
-		if len(p.patchBytes) > 1024*1024 {
-			v := map[string]interface{}{}
-			if err := json.Unmarshal(p.patchBytes, &v); err != nil {
-				return nil, errors.NewBadRequest(fmt.Sprintf("error decoding patch: %v", err))
-			}
-		}
-
 		return jsonpatch.MergePatch(versionedJS, p.patchBytes)
 	default:
 		// only here as a safety net - go-restful filters content-type
@@ -576,9 +558,14 @@ func (p *patcher) patchResource(ctx context.Context, scope *RequestScope) (runti
 	default:
 		return nil, false, fmt.Errorf("%v: unimplemented patch type", p.patchType)
 	}
+	dedupOwnerReferencesTransformer := func(_ context.Context, obj, _ runtime.Object) (runtime.Object, error) {
+		// Dedup owner references after mutating admission happens
+		dedupOwnerReferencesAndAddWarning(obj, ctx, true)
+		return obj, nil
+	}
 
 	wasCreated := false
-	p.updatedObjectInfo = rest.DefaultUpdatedObjectInfo(nil, p.applyPatch, p.applyAdmission)
+	p.updatedObjectInfo = rest.DefaultUpdatedObjectInfo(nil, p.applyPatch, p.applyAdmission, dedupOwnerReferencesTransformer)
 	requestFunc := func() (runtime.Object, error) {
 		// Pass in UpdateOptions to override UpdateStrategy.AllowUpdateOnCreate
 		options := patchToUpdateOptions(p.options)
@@ -592,11 +579,15 @@ func (p *patcher) patchResource(ctx context.Context, scope *RequestScope) (runti
 		// it is safe to remove managedFields (which can be large) and try again.
 		if isTooLargeError(err) && p.patchType != types.ApplyPatchType {
 			if _, accessorErr := meta.Accessor(p.restPatcher.New()); accessorErr == nil {
-				p.updatedObjectInfo = rest.DefaultUpdatedObjectInfo(nil, p.applyPatch, p.applyAdmission, func(_ context.Context, obj, _ runtime.Object) (runtime.Object, error) {
-					accessor, _ := meta.Accessor(obj)
-					accessor.SetManagedFields(nil)
-					return obj, nil
-				})
+				p.updatedObjectInfo = rest.DefaultUpdatedObjectInfo(nil,
+					p.applyPatch,
+					p.applyAdmission,
+					dedupOwnerReferencesTransformer,
+					func(_ context.Context, obj, _ runtime.Object) (runtime.Object, error) {
+						accessor, _ := meta.Accessor(obj)
+						accessor.SetManagedFields(nil)
+						return obj, nil
+					})
 				result, err = requestFunc()
 			}
 		}
