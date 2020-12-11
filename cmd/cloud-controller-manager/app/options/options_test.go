@@ -26,6 +26,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/wait"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	cpconfig "k8s.io/cloud-provider/app/apis/config"
 	cpoptions "k8s.io/cloud-provider/options"
@@ -113,12 +114,16 @@ func TestDefaultFlags(t *testing.T) {
 				ExtraHeaderPrefixes: []string{"x-remote-extra-"},
 			},
 			RemoteKubeConfigFileOptional: true,
+			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
+			ClientTimeout:                10 * time.Second,
 		},
 		Authorization: &apiserveroptions.DelegatingAuthorizationOptions{
 			AllowCacheTTL:                10 * time.Second,
 			DenyCacheTTL:                 10 * time.Second,
 			RemoteKubeConfigFileOptional: true,
 			AlwaysAllowPaths:             []string{"/healthz"}, // note: this does not match /healthz/ or
+			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
+			ClientTimeout:                10 * time.Second,
 		},
 		Kubeconfig:                "",
 		Master:                    "",
@@ -247,12 +252,16 @@ func TestAddFlags(t *testing.T) {
 				ExtraHeaderPrefixes: []string{"x-remote-extra-"},
 			},
 			RemoteKubeConfigFileOptional: true,
+			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
+			ClientTimeout:                10 * time.Second,
 		},
 		Authorization: &apiserveroptions.DelegatingAuthorizationOptions{
 			AllowCacheTTL:                10 * time.Second,
 			DenyCacheTTL:                 10 * time.Second,
 			RemoteKubeConfigFileOptional: true,
 			AlwaysAllowPaths:             []string{"/healthz"}, // note: this does not match /healthz/ or
+			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
+			ClientTimeout:                10 * time.Second,
 		},
 		Kubeconfig:                "/kubeconfig",
 		Master:                    "192.168.4.20",

@@ -36,10 +36,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	cliflag "k8s.io/component-base/cli/flag"
 	componentbaseconfig "k8s.io/component-base/config"
+	"k8s.io/controller-manager/pkg/clientbuilder"
 	"k8s.io/klog"
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
-	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller"
 
 	// add the kubernetes feature gates
 	_ "k8s.io/kubernetes/pkg/features"
@@ -163,7 +163,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 	}
 
 	c.EventRecorder = createRecorder(c.Client, userAgent)
-	c.ClientBuilder = controller.SimpleControllerClientBuilder{
+	c.ClientBuilder = clientbuilder.SimpleControllerClientBuilder{
 		ClientConfig: c.Kubeconfig,
 	}
 	c.VersionedClient = c.ClientBuilder.ClientOrDie("shared-informers")
