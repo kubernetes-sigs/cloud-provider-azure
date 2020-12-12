@@ -37,7 +37,7 @@ import (
 const (
 	deletionTimeout             = 10 * time.Minute
 	poll                        = 2 * time.Second
-	singleCallTimeout           = 10 * time.Minute
+	singleCallTimeout           = 20 * time.Minute
 	vmssOperationInterval       = 30 * time.Second
 	vmssOperationTimeout        = 30 * time.Minute
 	recommendedConfigPathEnvVar = "KUBECONFIG"
