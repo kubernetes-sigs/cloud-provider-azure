@@ -34,7 +34,6 @@ its staging packages. In cloud-provider-azure, their versions are set in `replac
 replace (
     ...
     k8s.io/kubernetes => k8s.io/kubernetes v0.0.0-20190815230911-4e7fd98763aa
-    k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20190815230911-4e7fd98763aa
 )
 ```
 

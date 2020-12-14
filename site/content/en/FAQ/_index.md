@@ -9,7 +9,7 @@ menu:
 
 ## What is Cloud Provider Azure?
 
-A Kubernetes `Cloud Provider` consists of two parts: a provider-specified `cloud-controller-manager` (or `kube-controller-manager` for in-tree version) and a provider-specified implementation of Kubernetes [cloud provider interface](https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/cloud-provider/cloud.go). Currently, the Azure `cloud-controller-manager` is outside of [Kubernetes repo](https://github.com/kubernetes/kubernetes) and the cloud provider interface implementation is still in [k/k](https://github.com/kubernetes/kubernetes/staging/src/k8s.io/legacy-cloud-providers/azure) (will be moved outside of the repo in the future). 
+A Kubernetes `Cloud Provider` consists of two parts: a provider-specified `cloud-controller-manager` (or `kube-controller-manager` for in-tree version) and a provider-specified implementation of Kubernetes [cloud provider interface](https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/cloud-provider/cloud.go). Currently, the Azure `cloud-controller-manager` is outside of [Kubernetes repo](https://github.com/kubernetes/kubernetes) and the cloud provider interface implementation is in `pkg/provider`. 
 
 The `cloud-controller-manager` is a Kubernetes [control plane](https://kubernetes.io/docs/reference/glossary/?all=true#term-control-plane) component which embeds cloud-specific control logic. It lets you link your cluster into your cloud provider's API, and separates out the components that interact with that cloud platform from components that just interact with your cluster.
 

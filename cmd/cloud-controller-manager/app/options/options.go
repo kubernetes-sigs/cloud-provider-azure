@@ -43,9 +43,10 @@ import (
 	cmoptions "k8s.io/controller-manager/options"
 	"k8s.io/controller-manager/pkg/clientbuilder"
 	"k8s.io/klog"
-	azureprovider "k8s.io/legacy-cloud-providers/azure"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
+	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+
 	// add the kubernetes feature gates
 	_ "k8s.io/kubernetes/pkg/features"
 )

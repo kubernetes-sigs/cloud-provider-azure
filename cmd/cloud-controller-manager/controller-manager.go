@@ -28,7 +28,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
 
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
-	_ "k8s.io/legacy-cloud-providers/azure"
+
+	_ "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 func main() {
