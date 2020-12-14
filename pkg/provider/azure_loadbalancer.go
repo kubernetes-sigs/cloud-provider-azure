@@ -1479,7 +1479,9 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		// Add the machines to the backend pool if they're not already
 		vmSetName := az.mapLoadBalancerNameToVMSet(lbName, clusterName)
 		// Etag would be changed when updating backend pools, so invalidate lbCache after it.
-		defer az.lbCache.Delete(lbName)
+		defer func() {
+			_ = az.lbCache.Delete(lbName)
+		}()
 		err := az.VMSet.EnsureHostsInPool(service, nodes, lbBackendPoolID, vmSetName, isInternal)
 		if err != nil {
 			return nil, err
@@ -1763,9 +1765,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 	}
 	serviceTags := getServiceTags(service)
 	if len(serviceTags) != 0 {
-		if _, ok := sourceRanges[defaultLoadBalancerSourceRanges]; ok {
-			delete(sourceRanges, defaultLoadBalancerSourceRanges)
-		}
+		delete(sourceRanges, defaultLoadBalancerSourceRanges)
 	}
 
 	var sourceAddressPrefixes []string
@@ -1930,7 +1930,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 			return nil, err
 		}
 		klog.V(10).Infof("CreateOrUpdateSecurityGroup(%q): end", *sg.Name)
-		az.nsgCache.Delete(to.String(sg.Name))
+		_ = az.nsgCache.Delete(to.String(sg.Name))
 	}
 	return &sg, nil
 }
@@ -2067,7 +2067,7 @@ func deduplicate(collection *[]string) *[]string {
 	result := make([]string, 0, len(*collection))
 
 	for _, v := range *collection {
-		if seen[v] == true {
+		if seen[v] {
 			// skip this element
 		} else {
 			seen[v] = true

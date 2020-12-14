@@ -94,7 +94,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, publicIPAddr
 	}
 
 	result, rerr := c.getPublicIPAddress(ctx, resourceGroupName, publicIPAddressName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -155,7 +155,7 @@ func (c *Client) GetVirtualMachineScaleSetPublicIPAddress(ctx context.Context, r
 	}
 
 	result, rerr := c.getVMSSPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -228,7 +228,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 	}
 
 	result, rerr := c.listPublicIPAddress(ctx, resourceGroupName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -299,7 +299,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, p
 	}
 
 	rerr := c.createOrUpdatePublicIP(ctx, resourceGroupName, publicIPAddressName, parameters)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -367,7 +367,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, publicIPA
 	}
 
 	rerr := c.deletePublicIP(ctx, resourceGroupName, publicIPAddressName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

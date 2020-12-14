@@ -93,7 +93,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, networkInter
 	}
 
 	result, rerr := c.getNetworkInterface(ctx, resourceGroupName, networkInterfaceName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -154,7 +154,7 @@ func (c *Client) GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, 
 	}
 
 	result, rerr := c.getVMSSNetworkInterface(ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -225,7 +225,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, n
 	}
 
 	rerr := c.createOrUpdateInterface(ctx, resourceGroupName, networkInterfaceName, parameters)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -292,7 +292,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, networkIn
 	}
 
 	rerr := c.deleteInterface(ctx, resourceGroupName, networkInterfaceName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

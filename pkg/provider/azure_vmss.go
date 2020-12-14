@@ -133,7 +133,7 @@ func (ss *scaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*c
 	}
 
 	klog.V(2).Infof("Couldn't find VMSS with name %s, refreshing the cache", vmssName)
-	ss.vmssCache.Delete(vmssKey)
+	_ = ss.vmssCache.Delete(vmssKey)
 	vmss, err = getter(vmssName)
 	if err != nil {
 		return nil, err
@@ -432,7 +432,7 @@ func (ss *scaleSet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
 	} else {
 		err = fmt.Errorf("failed to get zone info")
 		klog.Errorf("GetZoneByNodeName: got unexpected error %v", err)
-		ss.deleteCacheForNode(name)
+		_ = ss.deleteCacheForNode(name)
 		return cloudprovider.Zone{}, err
 	}
 
@@ -763,7 +763,7 @@ func (ss *scaleSet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (vmSetN
 	sort.Strings(*scaleSetNames)
 
 	if !isAuto {
-		if serviceVMSetNames == nil || len(serviceVMSetNames) == 0 {
+		if len(serviceVMSetNames) == 0 {
 			return nil, fmt.Errorf("service annotation for LoadBalancerMode is empty, it should have __auto__ or availability sets value")
 		}
 		// validate scale set exists
@@ -868,7 +868,7 @@ func (ss *scaleSet) getPrimaryNetworkInterfaceConfiguration(networkConfiguration
 
 	for idx := range networkConfigurations {
 		networkConfig := &networkConfigurations[idx]
-		if networkConfig.Primary != nil && *networkConfig.Primary == true {
+		if networkConfig.Primary != nil && *networkConfig.Primary {
 			return networkConfig, nil
 		}
 	}
@@ -884,7 +884,7 @@ func (ss *scaleSet) getPrimaryNetworkInterfaceConfigurationForScaleSet(networkCo
 
 	for idx := range networkConfigurations {
 		networkConfig := &networkConfigurations[idx]
-		if networkConfig.Primary != nil && *networkConfig.Primary == true {
+		if networkConfig.Primary != nil && *networkConfig.Primary {
 			return networkConfig, nil
 		}
 	}
@@ -900,7 +900,7 @@ func getPrimaryIPConfigFromVMSSNetworkConfig(config *compute.VirtualMachineScale
 
 	for idx := range ipConfigurations {
 		ipConfig := &ipConfigurations[idx]
-		if ipConfig.Primary != nil && *ipConfig.Primary == true {
+		if ipConfig.Primary != nil && *ipConfig.Primary {
 			return ipConfig, nil
 		}
 	}
@@ -1264,7 +1264,9 @@ func (ss *scaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 		}
 
 		// Invalidate the cache since the VMSS VM would be updated.
-		defer ss.deleteCacheForNode(localNodeName)
+		defer func() {
+			_ = ss.deleteCacheForNode(localNodeName)
+		}()
 	}
 
 	// Update VMs with best effort that have already been added to nodeUpdates.
@@ -1573,7 +1575,9 @@ func (ss *scaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 		}
 
 		// Invalidate the cache since the VMSS VM would be updated.
-		defer ss.deleteCacheForNode(nodeName)
+		defer func() {
+			_ = ss.deleteCacheForNode(nodeName)
+		}()
 	}
 
 	// Update VMs with best effort that have already been added to nodeUpdates.

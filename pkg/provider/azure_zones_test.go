@@ -161,7 +161,7 @@ func TestGetZone(t *testing.T) {
 			fmt.Fprint(w, respString)
 		}))
 		go func() {
-			http.Serve(listener, mux)
+			_ = http.Serve(listener, mux)
 		}()
 		defer listener.Close()
 

@@ -94,7 +94,9 @@ func (as *availabilitySet) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	defer cancel()
 
 	// Invalidate the cache right after updating
-	defer as.cloud.vmCache.Delete(vmName)
+	defer func() {
+		_ = as.cloud.vmCache.Delete(vmName)
+	}()
 
 	rerr := as.VirtualMachinesClient.Update(ctx, nodeResourceGroup, vmName, newVM, "attach_disk")
 	if rerr != nil {
@@ -167,7 +169,9 @@ func (as *availabilitySet) DetachDisk(diskName, diskURI string, nodeName types.N
 	defer cancel()
 
 	// Invalidate the cache right after updating
-	defer as.cloud.vmCache.Delete(vmName)
+	defer func() {
+		_ = as.cloud.vmCache.Delete(vmName)
+	}()
 
 	rerr := as.VirtualMachinesClient.Update(ctx, nodeResourceGroup, vmName, newVM, "detach_disk")
 	if rerr != nil {

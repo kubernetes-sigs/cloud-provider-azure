@@ -163,20 +163,20 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 	klog.V(10).Infof("SecurityGroupsClient.CreateOrUpdate(%s): end", *sg.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		az.nsgCache.Delete(*sg.Name)
+		_ = az.nsgCache.Delete(*sg.Name)
 		return nil
 	}
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
-		az.nsgCache.Delete(*sg.Name)
+		_ = az.nsgCache.Delete(*sg.Name)
 	}
 
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
 		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", *sg.Name)
-		az.nsgCache.Delete(*sg.Name)
+		_ = az.nsgCache.Delete(*sg.Name)
 	}
 
 	return rerr.Error()
@@ -192,21 +192,21 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	klog.V(10).Infof("LoadBalancerClient.CreateOrUpdate(%s): end", *lb.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		az.lbCache.Delete(*lb.Name)
+		_ = az.lbCache.Delete(*lb.Name)
 		return nil
 	}
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", to.String(lb.Name))
-		az.lbCache.Delete(*lb.Name)
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), operationCanceledErrorMessage) {
 		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", to.String(lb.Name))
-		az.lbCache.Delete(*lb.Name)
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	// The LB update may fail because the referenced PIP is not in the Succeeded provisioning state
@@ -231,7 +231,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 		}
 		// Invalidate the LB cache, return the error, and the controller manager
 		// would retry the LB update in the next reconcile loop
-		az.lbCache.Delete(*lb.Name)
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	return rerr.Error()
@@ -330,7 +330,7 @@ func (az *Cloud) DeleteLB(service *v1.Service, lbName string) error {
 	rerr := az.LoadBalancerClient.Delete(ctx, rgName, lbName)
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		az.lbCache.Delete(lbName)
+		_ = az.lbCache.Delete(lbName)
 		return nil
 	}
 
@@ -347,19 +347,19 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 	rerr := az.RouteTablesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, routeTable, to.String(routeTable.Etag))
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		az.rtCache.Delete(*routeTable.Name)
+		_ = az.rtCache.Delete(*routeTable.Name)
 		return nil
 	}
 
 	// Invalidate the cache because etag mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("Route table cache for %s is cleanup because of http.StatusPreconditionFailed", *routeTable.Name)
-		az.rtCache.Delete(*routeTable.Name)
+		_ = az.rtCache.Delete(*routeTable.Name)
 	}
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
 		klog.V(3).Infof("Route table cache for %s is cleanup because CreateOrUpdateRouteTable is canceled by another operation", *routeTable.Name)
-		az.rtCache.Delete(*routeTable.Name)
+		_ = az.rtCache.Delete(*routeTable.Name)
 	}
 	klog.Errorf("RouteTablesClient.CreateOrUpdate(%s) failed: %v", az.RouteTableName, rerr.Error())
 	return rerr.Error()
@@ -373,18 +373,18 @@ func (az *Cloud) CreateOrUpdateRoute(route network.Route) error {
 	rerr := az.RoutesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, *route.Name, route, to.String(route.Etag))
 	klog.V(10).Infof("RoutesClient.CreateOrUpdate(%s): end", *route.Name)
 	if rerr == nil {
-		az.rtCache.Delete(az.RouteTableName)
+		_ = az.rtCache.Delete(az.RouteTableName)
 		return nil
 	}
 
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("Route cache for %s is cleanup because of http.StatusPreconditionFailed", *route.Name)
-		az.rtCache.Delete(az.RouteTableName)
+		_ = az.rtCache.Delete(az.RouteTableName)
 	}
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
 		klog.V(3).Infof("Route cache for %s is cleanup because CreateOrUpdateRouteTable is canceled by another operation", *route.Name)
-		az.rtCache.Delete(az.RouteTableName)
+		_ = az.rtCache.Delete(az.RouteTableName)
 	}
 	return rerr.Error()
 }

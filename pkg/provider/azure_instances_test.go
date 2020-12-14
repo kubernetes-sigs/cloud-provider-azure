@@ -215,7 +215,7 @@ func TestInstanceID(t *testing.T) {
 			}
 		}))
 		go func() {
-			http.Serve(listener, mux)
+			_ = http.Serve(listener, mux)
 		}()
 		defer listener.Close()
 
@@ -539,7 +539,7 @@ func TestNodeAddresses(t *testing.T) {
 			}
 		}))
 		go func() {
-			http.Serve(listener, mux)
+			_ = http.Serve(listener, mux)
 		}()
 		defer listener.Close()
 
@@ -759,7 +759,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 			fmt.Fprintf(w, metadataTemplate, test.nodeName, test.ipV4, test.ipV4Public, test.ipV6, test.ipV6Public)
 		}))
 		go func() {
-			http.Serve(listener, mux)
+			_ = http.Serve(listener, mux)
 		}()
 		defer listener.Close()
 

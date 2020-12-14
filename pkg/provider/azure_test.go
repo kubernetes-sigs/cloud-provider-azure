@@ -1162,7 +1162,7 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &service1, clusterResources.nodes, true)
-	az.reconcileLoadBalancer(testClusterName, &service2, clusterResources.nodes, true)
+	_, _ = az.reconcileLoadBalancer(testClusterName, &service2, clusterResources.nodes, true)
 
 	lbStatus, _ := az.getServiceLoadBalancerStatus(&service1, lb)
 

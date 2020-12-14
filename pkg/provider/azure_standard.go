@@ -426,7 +426,7 @@ var polyTable = crc32.MakeTable(crc32.Koopman)
 //MakeCRC32 : convert string to CRC32 format
 func MakeCRC32(str string) string {
 	crc := crc32.New(polyTable)
-	crc.Write([]byte(str))
+	_, _ = crc.Write([]byte(str))
 	hash := crc.Sum32()
 	return strconv.FormatUint(uint64(hash), 10)
 }
@@ -684,7 +684,7 @@ func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) 
 	// sort the list to have deterministic selection
 	sort.Strings(*availabilitySetNames)
 	if !isAuto {
-		if serviceAvailabilitySetNames == nil || len(serviceAvailabilitySetNames) == 0 {
+		if len(serviceAvailabilitySetNames) == 0 {
 			return nil, fmt.Errorf("service annotation for LoadBalancerMode is empty, it should have __auto__ or availability sets value")
 		}
 		// validate availability set exists

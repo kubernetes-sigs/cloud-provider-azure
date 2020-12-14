@@ -116,7 +116,7 @@ func (t *TimedCache) getInternal(key string) (*AzureCacheEntry, error) {
 		Key:  key,
 		Data: nil,
 	}
-	t.Store.Add(newEntry)
+	_ = t.Store.Add(newEntry)
 	return newEntry, nil
 }
 
@@ -167,7 +167,7 @@ func (t *TimedCache) Delete(key string) error {
 // Set sets the data cache for the key.
 // It is only used for testing.
 func (t *TimedCache) Set(key string, data interface{}) {
-	t.Store.Add(&AzureCacheEntry{
+	_ = t.Store.Add(&AzureCacheEntry{
 		Key:       key,
 		Data:      data,
 		CreatedOn: time.Now().UTC(),

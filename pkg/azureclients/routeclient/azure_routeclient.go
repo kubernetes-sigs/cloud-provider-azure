@@ -92,7 +92,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, r
 	}
 
 	rerr := c.createOrUpdateRoute(ctx, resourceGroupName, routeTableName, routeName, routeParameters, etag)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -169,7 +169,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, routeTabl
 	}
 
 	rerr := c.deleteRoute(ctx, resourceGroupName, routeTableName, routeName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

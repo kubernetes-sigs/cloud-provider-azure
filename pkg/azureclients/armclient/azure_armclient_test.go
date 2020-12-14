@@ -248,7 +248,7 @@ func TestGetResource(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 		assert.Equal(t, expectedURI, r.URL.String())
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{data: testPIP}"))
+		_, _ = w.Write([]byte("{data: testPIP}"))
 		count++
 	}))
 
@@ -273,7 +273,7 @@ func TestGetResourceWithDecorators(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 		assert.Equal(t, expectedURI, r.URL.String())
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{data: testPIP}"))
+		_, _ = w.Write([]byte("{data: testPIP}"))
 		count++
 	}))
 
@@ -305,7 +305,7 @@ func TestPutResource(t *testing.T) {
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PUT", req.Method)
 			assert.Equal(t, expectedURI, req.URL.String())
-			rw.Header().Set(http.CanonicalHeaderKey("Azure-AsyncOperation"),
+			rw.Header().Set("Azure-AsyncOperation",
 				fmt.Sprintf("http://%s%s", req.Host, operationURI))
 			rw.WriteHeader(http.StatusCreated)
 		},
@@ -315,7 +315,7 @@ func TestPutResource(t *testing.T) {
 			assert.Equal(t, operationURI, req.URL.String())
 
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
 		},
 	}
 
@@ -345,14 +345,14 @@ func TestPutResources(t *testing.T) {
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PUT", req.Method)
 
-			rw.Header().Set(http.CanonicalHeaderKey("Azure-AsyncOperation"),
+			rw.Header().Set("Azure-AsyncOperation",
 				fmt.Sprintf("http://%s%s", req.Host, "/id/1?api-version=2019-01-01"))
 			rw.WriteHeader(http.StatusCreated)
 		},
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PUT", req.Method)
 
-			rw.Header().Set(http.CanonicalHeaderKey("Azure-AsyncOperation"),
+			rw.Header().Set("Azure-AsyncOperation",
 				fmt.Sprintf("http://%s%s", req.Host, "/id/2?api-version=2019-01-01"))
 			rw.WriteHeader(http.StatusInternalServerError)
 		},
@@ -360,13 +360,13 @@ func TestPutResources(t *testing.T) {
 			assert.Equal(t, "GET", req.Method)
 
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
 		},
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "GET", req.Method)
 
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
 		},
 	}
 
@@ -443,7 +443,7 @@ func TestPatchResource(t *testing.T) {
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PATCH", req.Method)
 			assert.Equal(t, expectedURI, req.URL.String())
-			rw.Header().Set(http.CanonicalHeaderKey("Azure-AsyncOperation"),
+			rw.Header().Set("Azure-AsyncOperation",
 				fmt.Sprintf("http://%s%s", req.Host, operationURI))
 			rw.WriteHeader(http.StatusCreated)
 		},
@@ -453,7 +453,7 @@ func TestPatchResource(t *testing.T) {
 			assert.Equal(t, operationURI, req.URL.String())
 
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
 		},
 	}
 

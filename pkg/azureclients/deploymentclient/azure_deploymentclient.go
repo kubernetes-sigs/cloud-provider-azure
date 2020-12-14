@@ -94,7 +94,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, deploymentNa
 	}
 
 	result, rerr := c.getDeployment(ctx, resourceGroupName, deploymentName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -155,7 +155,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]resource
 	}
 
 	result, rerr := c.listDeployment(ctx, resourceGroupName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -316,7 +316,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, d
 	}
 
 	rerr := c.createOrUpdateDeployment(ctx, resourceGroupName, deploymentName, parameters, etag)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -390,7 +390,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, deploymen
 	}
 
 	rerr := c.deleteDeployment(ctx, resourceGroupName, deploymentName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

@@ -94,7 +94,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, VMName strin
 	}
 
 	result, rerr := c.getVM(ctx, resourceGroupName, VMName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -155,7 +155,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 	}
 
 	result, rerr := c.listVM(ctx, resourceGroupName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -228,7 +228,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName st
 	}
 
 	rerr := c.updateVM(ctx, resourceGroupName, VMName, parameters, source)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -389,7 +389,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, V
 	}
 
 	rerr := c.createOrUpdateVM(ctx, resourceGroupName, VMName, parameters, source)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -458,7 +458,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, VMName st
 	}
 
 	rerr := c.deleteVM(ctx, resourceGroupName, VMName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

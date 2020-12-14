@@ -131,7 +131,7 @@ func TestCacheDelete(t *testing.T) {
 	assert.Equal(t, val, v, "cache should get correct data")
 
 	dataSource.set(nil)
-	cache.Delete(key)
+	_ = cache.Delete(key)
 	v, err = cache.Get(key, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)

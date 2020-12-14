@@ -41,7 +41,7 @@ func TestCreateManagedDisk(t *testing.T) {
 
 	maxShare := int32(2)
 	goodDiskEncryptionSetID := fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/diskEncryptionSets/%s", "diskEncryptionSet-name")
-	badDiskEncryptionSetID := fmt.Sprintf("badDiskEncryptionSetID")
+	badDiskEncryptionSetID := "badDiskEncryptionSetID"
 	testTags := make(map[string]*string)
 	testTags[WriteAcceleratorEnabled] = to.StringPtr("true")
 	testCases := []struct {

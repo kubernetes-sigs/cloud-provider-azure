@@ -95,7 +95,9 @@ func (ss *scaleSet) AttachDisk(isManagedDisk bool, diskName, diskURI string, nod
 	defer cancel()
 
 	// Invalidate the cache right after updating
-	defer ss.deleteCacheForNode(vmName)
+	defer func() {
+		_ = ss.deleteCacheForNode(vmName)
+	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk(%s, %s) with DiskEncryptionSetID(%s)", nodeResourceGroup, nodeName, diskName, diskURI, diskEncryptionSetID)
 	rerr := ss.VirtualMachineScaleSetVMsClient.Update(ctx, nodeResourceGroup, ssName, instanceID, newVM, "attach_disk")
@@ -169,7 +171,9 @@ func (ss *scaleSet) DetachDisk(diskName, diskURI string, nodeName types.NodeName
 	defer cancel()
 
 	// Invalidate the cache right after updating
-	defer ss.deleteCacheForNode(vmName)
+	defer func() {
+		_ = ss.deleteCacheForNode(vmName)
+	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk(%s, %s)", nodeResourceGroup, nodeName, diskName, diskURI)
 	rerr := ss.VirtualMachineScaleSetVMsClient.Update(ctx, nodeResourceGroup, ssName, instanceID, newVM, "detach_disk")

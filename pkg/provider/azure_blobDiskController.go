@@ -187,7 +187,7 @@ func (c *BlobDiskController) createVHDBlobDisk(blobClient azstorage.BlobStorageC
 	// add VHD signature to the blob
 	h, err := createVHDHeader(uint64(size))
 	if err != nil {
-		blob.DeleteIfExists(nil)
+		_, _ = blob.DeleteIfExists(nil)
 		return "", "", fmt.Errorf("failed to create vhd header, err: %v", err)
 	}
 
@@ -355,7 +355,7 @@ func (c *BlobDiskController) ensureDefaultContainer(storageAccountName string) e
 		// we don't want many attempts to validate the account readiness
 		// here hence we are locking
 		counter := 1
-		for swapped := atomic.CompareAndSwapInt32(&c.accounts[storageAccountName].isValidating, 0, 1); swapped != true; {
+		for swapped := atomic.CompareAndSwapInt32(&c.accounts[storageAccountName].isValidating, 0, 1); !swapped; {
 			time.Sleep(3 * time.Second)
 			counter = counter + 1
 			// check if we passed the max sleep

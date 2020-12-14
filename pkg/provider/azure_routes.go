@@ -321,7 +321,7 @@ func (az *Cloud) createRouteTable() error {
 	}
 
 	// Invalidate the cache right after updating
-	az.rtCache.Delete(az.RouteTableName)
+	_ = az.rtCache.Delete(az.RouteTableName)
 	return nil
 }
 
@@ -464,7 +464,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 // Azure does not let you put tags/descriptions on the Route itself.
 func mapNodeNameToRouteName(ipv6DualStackEnabled bool, nodeName types.NodeName, cidr string) string {
 	if !ipv6DualStackEnabled {
-		return fmt.Sprintf("%s", nodeName)
+		return string(nodeName)
 	}
 	return fmt.Sprintf(routeNameFmt, nodeName, cidrtoRfc1035(cidr))
 }

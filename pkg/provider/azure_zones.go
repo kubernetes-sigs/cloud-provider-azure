@@ -59,7 +59,7 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 		}
 
 		if metadata.Compute == nil {
-			az.metadata.imsCache.Delete(metadataCacheKey)
+			_ = az.metadata.imsCache.Delete(metadataCacheKey)
 			return cloudprovider.Zone{}, fmt.Errorf("failure of getting compute information from instance metadata")
 		}
 

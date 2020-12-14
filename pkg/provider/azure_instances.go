@@ -147,7 +147,7 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []NetworkInterface,
 
 	if len(addresses) == 1 {
 		// No IP addresses is got from instance metadata service, clean up cache and report errors.
-		az.metadata.imsCache.Delete(metadataCacheKey)
+		_ = az.metadata.imsCache.Delete(metadataCacheKey)
 		return nil, fmt.Errorf("get empty IP addresses from instance metadata service")
 	}
 	return addresses, nil

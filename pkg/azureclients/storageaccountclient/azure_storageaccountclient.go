@@ -99,7 +99,7 @@ func (c *Client) GetProperties(ctx context.Context, resourceGroupName string, ac
 	}
 
 	result, rerr := c.getStorageAccount(ctx, resourceGroupName, accountName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -160,7 +160,7 @@ func (c *Client) ListKeys(ctx context.Context, resourceGroupName string, account
 	}
 
 	result, rerr := c.listStorageAccountKeys(ctx, resourceGroupName, accountName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -221,7 +221,7 @@ func (c *Client) Create(ctx context.Context, resourceGroupName string, accountNa
 	}
 
 	rerr := c.createStorageAccount(ctx, resourceGroupName, accountName, parameters)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -289,7 +289,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, accountNa
 	}
 
 	rerr := c.deleteStorageAccount(ctx, resourceGroupName, accountName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -332,7 +332,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 	}
 
 	result, rerr := c.ListStorageAccountByResourceGroup(ctx, resourceGroupName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

@@ -93,7 +93,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, virtualNetwo
 	}
 
 	result, rerr := c.getSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName, expand)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -156,7 +156,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualNetw
 	}
 
 	result, rerr := c.listSubnet(ctx, resourceGroupName, virtualNetworkName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -231,7 +231,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, v
 	}
 
 	rerr := c.createOrUpdateSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName, subnetParameters)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -300,7 +300,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, virtualNe
 	}
 
 	rerr := c.deleteSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

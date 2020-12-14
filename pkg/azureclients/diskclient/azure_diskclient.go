@@ -99,7 +99,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, diskName str
 	}
 
 	result, rerr := c.getDisk(ctx, resourceGroupName, diskName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -160,7 +160,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, d
 	}
 
 	rerr := c.createOrUpdateDisk(ctx, resourceGroupName, diskName, diskParameter)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -228,7 +228,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, diskName 
 	}
 
 	rerr := c.updateDisk(ctx, resourceGroupName, diskName, diskParameter)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -296,7 +296,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, diskName 
 	}
 
 	rerr := c.deleteDisk(ctx, resourceGroupName, diskName)
-	mc.Observe(rerr.Error())
+	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
