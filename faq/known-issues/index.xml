@@ -1167,7 +1167,7 @@ Normal Started 21m kubelet, aks-nodepool1-29122124-vmss000004 Started container 
 &lt;p>Wait for about 10min or 15min, &lt;code>MountVolume.WaitForAttach&lt;/code> operation would retry and would finally succeed&lt;/p>
 &lt;h2 id="25-multi-attach-error">25. Multi-Attach error&lt;/h2>
 &lt;p>&lt;strong>Issue details&lt;/strong>:&lt;/p>
-&lt;p>If two pods on different node are using same disk PVC(this issue may also happen when doing rollingUpdate in Deployment using one replica), would probably hit following error:&lt;/p>
+&lt;p>If two pods on different nodes are using same disk PVC(this issue may also happen when doing rollingUpdate in Deployment using one replica), would probably hit following error:&lt;/p>
 &lt;pre>&lt;code>Events:
 Warning FailedAttachVolume 9m attachdetach-controller Multi-Attach error for volume &amp;quot;pvc-fc0bed38-48bf-43f1-a7e4-255eef48ffb9&amp;quot; Volume is already used by pod(s) sqlserver3-5b8449449-5chzx
 Warning FailedMount 42s (x4 over 7m) kubelet, aks-nodepool1-15915763-vmss000001 Unable to mount volumes for pod &amp;quot;sqlserver3-55754785bb-jjr6d_default(55381f38-9640-43a9-888d-096387cbb780)&amp;quot;: timeout expired waiting for volumes to attach or mount for pod &amp;quot;default&amp;quot;/&amp;quot;sqlserver3-55754785bb-jjr6d&amp;quot;. list of unmounted volumes=[mssqldb]. list of unattached volumes=[mssqldb default-token-q7cw9]
