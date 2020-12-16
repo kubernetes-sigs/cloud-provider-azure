@@ -843,7 +843,7 @@ Wait for about 10min or 15min, `MountVolume.WaitForAttach` operation would retry
 
 **Issue details**:
 
-If two pods on different node are using same disk PVC(this issue may also happen when doing rollingUpdate in Deployment using one replica), would probably hit following error:
+If two pods on different nodes are using same disk PVC(this issue may also happen when doing rollingUpdate in Deployment using one replica), would probably hit following error:
 ```
 Events:
 Warning  FailedAttachVolume  9m                attachdetach-controller                     Multi-Attach error for volume "pvc-fc0bed38-48bf-43f1-a7e4-255eef48ffb9" Volume is already used by pod(s) sqlserver3-5b8449449-5chzx

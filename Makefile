@@ -143,7 +143,7 @@ endif
 .PHONY: test-unit
 test-unit: $(PKG_CONFIG)
 	mkdir -p $(TEST_RESULTS_DIR)
-	cd ./cmd/cloud-controller-manager && go test $(PKG_CONFIG_CONTENT) -v ./... | tee ../../$(TEST_RESULTS_DIR)/unittest.txt
+	hack/test-unit.sh | tee -a $(TEST_RESULTS_DIR)/unittest.txt
 ifdef JUNIT
 	hack/convert-test-report.pl $(TEST_RESULTS_DIR)/unittest.txt > $(TEST_RESULTS_DIR)/unittest.xml
 endif

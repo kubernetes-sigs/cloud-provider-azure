@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
-	azureprovider "k8s.io/legacy-cloud-providers/azure"
+	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 // IMDSNodeProvider implements nodemanager.NodeProvider.

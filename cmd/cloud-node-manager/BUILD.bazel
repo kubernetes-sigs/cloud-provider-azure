@@ -7,9 +7,9 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//cmd/cloud-node-manager/app:go_default_library",
+        "//pkg/provider:go_default_library",
         "//vendor/k8s.io/component-base/logs:go_default_library",
         "//vendor/k8s.io/component-base/metrics/prometheus/clientgo:go_default_library",
-        "//vendor/k8s.io/legacy-cloud-providers/azure:go_default_library",
     ],
 )
 

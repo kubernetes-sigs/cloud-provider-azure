@@ -1,18 +1,24 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.13
+go 1.15
 
 require (
 	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.1
 	github.com/Azure/go-autorest/autorest/adal v0.9.5
+	github.com/Azure/go-autorest/autorest/mocks v0.4.1
 	github.com/Azure/go-autorest/autorest/to v0.2.0
+	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible
+	github.com/golang/mock v1.4.1
+	github.com/golangci/golangci-lint v1.25.0 // indirect
 	github.com/onsi/ginkgo v1.11.0
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/gomega v1.8.1
+	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
+	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/apiserver v0.0.0
@@ -23,8 +29,8 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
-	k8s.io/legacy-cloud-providers v0.0.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+	sigs.k8s.io/yaml v1.2.0
 )
 
 replace (
@@ -127,7 +133,6 @@ replace (
 	k8s.io/cri-api => k8s.io/cri-api v0.21.0-alpha.0
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.0.0-20201114092327-833303372de1
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20200205140755-e0e292d8aa12
-	k8s.io/heapster => k8s.io/heapster v1.2.0-beta.1
 	k8s.io/klog => k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.0.0-20201126170540-6c47de442a82
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.0.0-20201114092129-18c28a4120de
@@ -140,25 +145,8 @@ replace (
 	k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201114063503-05d1b94a701d
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20201114091333-d70c0e0c6aa5
 	k8s.io/mount-utils => k8s.io/mount-utils v0.21.0-alpha.0
-	k8s.io/repo-infra => k8s.io/repo-infra v0.0.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20201114090814-1f4e6a92d4b8
-	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.0.0-20201114091536-307712dacc73
-	k8s.io/sample-controller => k8s.io/sample-controller v0.0.0-20201114091033-7644cdf6adcd
-	k8s.io/system-validators => k8s.io/system-validators v1.1.2
 	k8s.io/utils => k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
-	modernc.org/cc => modernc.org/cc v1.0.0
-	modernc.org/golex => modernc.org/golex v1.0.0
-	modernc.org/mathutil => modernc.org/mathutil v1.0.0
-	modernc.org/strutil => modernc.org/strutil v1.0.0
-	modernc.org/xc => modernc.org/xc v1.0.0
-	mvdan.cc/interfacer => mvdan.cc/interfacer v0.0.0-20180901003855-c20040233aed
-	mvdan.cc/lint => mvdan.cc/lint v0.0.0-20170908181259-adc824a0674b
-	mvdan.cc/unparam => mvdan.cc/unparam v0.0.0-20190209190245-fbb59629db34
-	rsc.io/pdf => rsc.io/pdf v0.1.1
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
-	sigs.k8s.io/kustomize => sigs.k8s.io/kustomize v2.0.3+incompatible
-	sigs.k8s.io/structured-merge-diff/v3 => sigs.k8s.io/structured-merge-diff/v3 v3.0.0
 	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
-	sourcegraph.com/sqs/pbtypes => sourcegraph.com/sqs/pbtypes v0.0.0-20180604144634-d3ebe8f20ae4
-	vbom.ml/util => vbom.ml/util v0.0.0-20160121211510-db5cfe13f5cc
 )
