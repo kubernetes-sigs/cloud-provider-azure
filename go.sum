@@ -850,6 +850,7 @@ k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725 h1:zDSrjDDKNWvXy
 k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725/go.mod h1:/xrHGNfoQphtkhZvyd5bA1lRmz+QkDVmBZu+O8QMoek=
 k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201114063503-05d1b94a701d h1:rwc1TNXTbGVMZGt7RN7zwU/SsMk4Bq+H69CTPbSra2g=
 k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201114063503-05d1b94a701d/go.mod h1:Ar3mk1+4I10WJg8SwpYKlK7hzsa9BPd8W0Stzxr90Q0=
+k8s.io/legacy-cloud-providers v0.0.0-20201211092501-716c3daa6bc8/go.mod h1:OAxjIcJ5F1tLzDTB4VuGWa+a7M/u6molGqmfeLKpag0=
 k8s.io/metrics v0.0.0-20201114091333-d70c0e0c6aa5/go.mod h1:mmFV2auUNVgJaXJsUmjIUzRo1HhMxlNIEi5dwlXCP5A=
 k8s.io/mount-utils v0.21.0-alpha.0/go.mod h1:Jv9NRZ5L2LF87A17GaGlArD+r3JAJdZFvo4XD1cG4Kc=
 k8s.io/sample-apiserver v0.0.0-20201114090814-1f4e6a92d4b8/go.mod h1:0dzWij2nZIVF+WGzkBWhYp5voKDkT+XcxGOlATSkkH0=
