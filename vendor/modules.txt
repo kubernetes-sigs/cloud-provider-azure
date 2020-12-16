@@ -914,7 +914,7 @@ k8s.io/kubectl/pkg/scale
 k8s.io/kubectl/pkg/util/podutils
 # k8s.io/kubelet v0.0.0 => k8s.io/kubelet v0.0.0-20201114091737-92ded5ee6b96
 k8s.io/kubelet/pkg/apis/stats/v1alpha1
-# k8s.io/kubernetes v0.0.0-00010101000000-000000000000 => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
+# k8s.io/kubernetes v0.0.0 => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
 ## explicit
 k8s.io/kubernetes/pkg/api/legacyscheme
 k8s.io/kubernetes/pkg/api/service
