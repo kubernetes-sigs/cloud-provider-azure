@@ -914,7 +914,7 @@ k8s.io/kubectl/pkg/scale
 k8s.io/kubectl/pkg/util/podutils
 # k8s.io/kubelet v0.0.0 => k8s.io/kubelet v0.0.0-20201114091737-92ded5ee6b96
 k8s.io/kubelet/pkg/apis/stats/v1alpha1
-# k8s.io/kubernetes v0.0.0-00010101000000-000000000000 => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
+# k8s.io/kubernetes v0.0.0 => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
 ## explicit
 k8s.io/kubernetes/pkg/api/legacyscheme
 k8s.io/kubernetes/pkg/api/service
@@ -1087,7 +1087,7 @@ sigs.k8s.io/yaml
 # k8s.io/kubectl => k8s.io/kubectl v0.0.0-20201210013108-5cfbd4019670
 # k8s.io/kubelet => k8s.io/kubelet v0.0.0-20201114091737-92ded5ee6b96
 # k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
-# k8s.io/legacy-cloud-providers => k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20201114063503-05d1b94a701d
+# k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20201211092501-716c3daa6bc8
 # k8s.io/metrics => k8s.io/metrics v0.0.0-20201114091333-d70c0e0c6aa5
 # k8s.io/mount-utils => k8s.io/mount-utils v0.21.0-alpha.0
 # k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20201114090814-1f4e6a92d4b8
