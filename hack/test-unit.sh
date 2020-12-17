@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 DIR_LIST=$(go list ./... | grep -v tests/e2e)
 for DIR in $DIR_LIST
 do
