@@ -91,3 +91,37 @@ The kubernetes controller manager supports excluding nodes from the load balance
 2. The labeled nodes would be excluded from the LB in the next LB reconcile loop, which needs one or more LB typed services to trigger. Basically, users could trigger the update by creating a service. If there are one or more LB typed services existing, no extra operations are needed.
 
 3. To re-include the nodes, just remove the label and the update would be operated in the next LB reconcile loop.
+
+## Load balancer limits
+
+The limits of the load balancer related resources are listed below:
+
+**Standard Load Balancer**
+
+| Resource                                | Limit         |
+|-----------------------------------------|-------------------------------|
+| Load balancers                          | 1,000                         |
+| Rules per resource                      | 1,500                         |
+| Rules per NIC (across all IPs on a NIC) | 300                           |
+| Frontend IP configurations              | 600                           |
+| Backend pool size                       | 1,000 IP configurations, single virtual network |
+| Backend resources per Load Balancer     | 150                   |
+| High-availability ports                 | 1 per internal frontend       |
+| Outbound rules per Load Balancer        | 600                           |
+| Load Balancers per VM                   | 2 (1 Public and 1 internal)   |
+
+The limit is up to 150 resources, in any combination of standalone virtual machine resources, availability set resources, and virtual machine scale-set placement groups.
+
+**Basic Load Balancer**
+
+| Resource                                | Limit        |
+|-----------------------------------------|------------------------------|
+| Load balancers                          | 1,000                        |
+| Rules per resource                      | 250                          |
+| Rules per NIC (across all IPs on a NIC) | 300                          |
+| Frontend IP configurations              | 200                          |
+| Backend pool size                       | 300 IP configurations, single availability set |
+| Availability sets per Load Balancer     | 1                            |
+| Load Balancers per VM                   | 2 (1 Public and 1 internal)  |
+
+> There is a restriction of 300 rules per NIC, hence for single SLB mode 300 services are allowed at most. If more services are required, try to enable [multiple SLBs](../multiple-slb).
