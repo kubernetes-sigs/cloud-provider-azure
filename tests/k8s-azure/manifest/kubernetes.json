@@ -1,7 +1,13 @@
 {
   "apiVersion": "vlabs",
     "properties": {
-    "orchestratorProfile": {}, 
+    "orchestratorProfile": {
+      "kubernetesConfig": {
+        "kubeletConfig": {
+          "--feature-gates": "ExecProbeTimeout=true"
+        }
+      }
+    }, 
     "masterProfile": {
       "count": 1,
       "dnsPrefix": "",
