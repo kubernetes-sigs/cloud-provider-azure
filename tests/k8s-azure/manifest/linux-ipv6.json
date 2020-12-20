@@ -15,7 +15,8 @@
                     "--bind-address": "::"
                 },
                 "kubeletConfig": {
-                    "--node-ip": "::"
+                    "--node-ip": "::",
+                    "--feature-gates": "ExecProbeTimeout=true"
                 },
                 "controllerManagerConfig": {
                     "--bind-address": "::"
