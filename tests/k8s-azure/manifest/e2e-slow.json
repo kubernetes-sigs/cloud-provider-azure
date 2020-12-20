@@ -15,8 +15,8 @@
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
                 },
-                "cloudControllerManagerConfig": {
-                    "--feature-gates": "ServiceLoadBalancerFinalizer=true"
+                "kubeletConfig": {
+                    "--feature-gates": "ExecProbeTimeout=true"
                 }
             }
         },

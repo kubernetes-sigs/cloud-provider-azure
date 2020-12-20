@@ -16,6 +16,9 @@
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
                 },
+                "kubeletConfig": {
+                    "--feature-gates": "ExecProbeTimeout=true"
+                },
                 "loadBalancerSku": "standard"
             }
         },
