@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Kubernetes Authors.
+# Copyright 2020 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,15 @@
 
 set -euo pipefail
 
-GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.25.0
+if [[ -z "$(command -v golangci-lint)" ]]; then
+  echo "Cannot find golangci-lint. Installing golangci-lint..."
+  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.31.0
+  export PATH=$PATH:$(go env GOPATH)/bin
+fi
 
-golangci-lint run --deadline=10m
+echo "Verifying golint"
+readonly PKG_ROOT="$(git rev-parse --show-toplevel)"
 
-echo "Congratulations! All Go source files have been linted."
+golangci-lint run --config ${PKG_ROOT}/.golangci.yml
+
+echo "Congratulations! Lint check completed for all Go source files."
