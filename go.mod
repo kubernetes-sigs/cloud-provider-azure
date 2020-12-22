@@ -11,7 +11,6 @@ require (
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/golang/mock v1.4.1
-	github.com/golangci/golangci-lint v1.25.0 // indirect
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.8.1
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
