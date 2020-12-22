@@ -397,6 +397,8 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Unlabeling node")
+		node, err = utils.GetNode(cs, node.Name)
+		Expect(err).NotTo(HaveOccurred())
 		_, err = utils.LabelNode(cs, node, "node.kubernetes.io/exclude-from-external-load-balancers", true)
 		Expect(err).NotTo(HaveOccurred())
 		err = waitForNodesInLBBackendPool(tc, publicIP, len(nodes))
