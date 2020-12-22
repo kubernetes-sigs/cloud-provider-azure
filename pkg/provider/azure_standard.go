@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -664,7 +663,7 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(nodes []*v1.Node) (agent
 // for loadbalancer exists then returns the eligible VMSet. The mode selection
 // annotation would be ignored when using one SLB per cluster.
 func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (availabilitySetNames *[]string, err error) {
-	hasMode, isAuto, serviceAvailabilitySetNames := getServiceLoadBalancerMode(service)
+	hasMode, isAuto, serviceAvailabilitySetName := as.getServiceLoadBalancerMode(service)
 	useSingleSLB := as.useStandardLoadBalancer() && !as.EnableMultipleStandardLoadBalancers
 	if !hasMode || useSingleSLB {
 		// no mode specified in service annotation or use single SLB mode
@@ -681,28 +680,19 @@ func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) 
 		klog.Errorf("as.GetVMSetNames - No availability sets found for nodes in the cluster, node count(%d)", len(nodes))
 		return nil, fmt.Errorf("no availability sets found for nodes, node count(%d)", len(nodes))
 	}
-	// sort the list to have deterministic selection
-	sort.Strings(*availabilitySetNames)
 	if !isAuto {
-		if len(serviceAvailabilitySetNames) == 0 {
-			return nil, fmt.Errorf("service annotation for LoadBalancerMode is empty, it should have __auto__ or availability sets value")
-		}
-		// validate availability set exists
-		var found bool
-		for sasx := range serviceAvailabilitySetNames {
-			for asx := range *availabilitySetNames {
-				if strings.EqualFold((*availabilitySetNames)[asx], serviceAvailabilitySetNames[sasx]) {
-					found = true
-					serviceAvailabilitySetNames[sasx] = (*availabilitySetNames)[asx]
-					break
-				}
-			}
-			if !found {
-				klog.Errorf("as.GetVMSetNames - Availability set (%s) in service annotation not found", serviceAvailabilitySetNames[sasx])
-				return nil, fmt.Errorf("availability set (%s) - not found", serviceAvailabilitySetNames[sasx])
+		found := false
+		for asx := range *availabilitySetNames {
+			if strings.EqualFold((*availabilitySetNames)[asx], serviceAvailabilitySetName) {
+				found = true
+				break
 			}
 		}
-		availabilitySetNames = &serviceAvailabilitySetNames
+		if !found {
+			klog.Errorf("as.GetVMSetNames - Availability set (%s) in service annotation not found", serviceAvailabilitySetName)
+			return nil, fmt.Errorf("availability set (%s) - not found", serviceAvailabilitySetName)
+		}
+		return &[]string{serviceAvailabilitySetName}, nil
 	}
 
 	return availabilitySetNames, nil
