@@ -251,6 +251,7 @@ func (client OpenShiftManagedClustersClient) Get(ctx context.Context, resourceGr
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.OpenShiftManagedClustersClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -325,6 +326,10 @@ func (client OpenShiftManagedClustersClient) List(ctx context.Context) (result O
 	result.osmclr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.OpenShiftManagedClustersClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.osmclr.hasNextLink() && result.osmclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -384,6 +389,7 @@ func (client OpenShiftManagedClustersClient) listNextResults(ctx context.Context
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.OpenShiftManagedClustersClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -442,6 +448,10 @@ func (client OpenShiftManagedClustersClient) ListByResourceGroup(ctx context.Con
 	result.osmclr, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.OpenShiftManagedClustersClient", "ListByResourceGroup", resp, "Failure responding to request")
+		return
+	}
+	if result.osmclr.hasNextLink() && result.osmclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -502,6 +512,7 @@ func (client OpenShiftManagedClustersClient) listByResourceGroupNextResults(ctx 
 	result, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.OpenShiftManagedClustersClient", "listByResourceGroupNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }

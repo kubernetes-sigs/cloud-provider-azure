@@ -226,6 +226,7 @@ func (client ApplicationSecurityGroupsClient) Get(ctx context.Context, resourceG
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ApplicationSecurityGroupsClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -301,6 +302,10 @@ func (client ApplicationSecurityGroupsClient) List(ctx context.Context, resource
 	result.asglr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ApplicationSecurityGroupsClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.asglr.hasNextLink() && result.asglr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -361,6 +366,7 @@ func (client ApplicationSecurityGroupsClient) listNextResults(ctx context.Contex
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ApplicationSecurityGroupsClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -410,6 +416,10 @@ func (client ApplicationSecurityGroupsClient) ListAll(ctx context.Context) (resu
 	result.asglr, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ApplicationSecurityGroupsClient", "ListAll", resp, "Failure responding to request")
+		return
+	}
+	if result.asglr.hasNextLink() && result.asglr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -469,6 +479,7 @@ func (client ApplicationSecurityGroupsClient) listAllNextResults(ctx context.Con
 	result, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ApplicationSecurityGroupsClient", "listAllNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }

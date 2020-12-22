@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.15
 
 require (
-	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.1
 	github.com/Azure/go-autorest/autorest/adal v0.9.5
 	github.com/Azure/go-autorest/autorest/mocks v0.4.1
@@ -11,6 +11,7 @@ require (
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/golang/mock v1.4.1
+	github.com/niemeyer/pretty v0.0.0-00010101000000-000000000000 // indirect
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.8.1
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
@@ -18,6 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/apiserver v0.0.0
@@ -33,7 +35,6 @@ require (
 )
 
 replace (
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v44.0.1-0.20200710185145-8277be38f5a2+incompatible
 	github.com/Azure/go-ansiterm => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 	github.com/Azure/go-autorest/autorest => github.com/Azure/go-autorest/autorest v0.9.6
 	github.com/Azure/go-autorest/autorest/adal => github.com/Azure/go-autorest/autorest/adal v0.8.2
@@ -148,3 +149,17 @@ replace (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
 	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
 )
+
+replace github.com/dnaeon/go-vcr => github.com/dnaeon/go-vcr v1.1.0
+
+replace github.com/kr/text => github.com/kr/text v0.2.0
+
+replace github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
+
+replace gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
+
+replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
+
+replace k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
+
+replace k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725

@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -81,7 +81,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			nodeName: "vm1",
 			existedDisk: compute.Disk{Name: to.StringPtr("disk-name"),
 				DiskProperties: &compute.DiskProperties{
-					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey},
+					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
 					DiskSizeGB: to.Int32Ptr(4096),
 				},
 				Tags: testTags},

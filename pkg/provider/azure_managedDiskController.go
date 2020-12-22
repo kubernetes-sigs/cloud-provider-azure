@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -150,7 +150,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		}
 		diskProperties.Encryption = &compute.Encryption{
 			DiskEncryptionSetID: &options.DiskEncryptionSetID,
-			Type:                compute.EncryptionAtRestWithCustomerKey,
+			Type:                compute.EncryptionTypeEncryptionAtRestWithCustomerKey,
 		}
 	}
 

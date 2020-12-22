@@ -73,6 +73,10 @@ func (client AvailableDelegationsClient) List(ctx context.Context, location stri
 	result.adr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.AvailableDelegationsClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.adr.hasNextLink() && result.adr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -133,6 +137,7 @@ func (client AvailableDelegationsClient) listNextResults(ctx context.Context, la
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.AvailableDelegationsClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
