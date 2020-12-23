@@ -130,7 +130,11 @@ func (client VirtualMachinesClient) CaptureResponder(resp *http.Response) (resul
 }
 
 // ConvertToManagedDisks converts virtual machine disks from blob-based to managed disks. Virtual machine must be
-// stop-deallocated before invoking this operation.
+// stop-deallocated before invoking this operation. <br>For Windows, please refer to [Convert a virtual machine from
+// unmanaged disks to managed
+// disks.](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/convert-unmanaged-to-managed-disks).<br>For
+// Linux, please refer to [Convert a virtual machine from unmanaged disks to managed
+// disks.](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/convert-unmanaged-to-managed-disks).
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // VMName - the name of the virtual machine.
@@ -489,6 +493,7 @@ func (client VirtualMachinesClient) Generalize(ctx context.Context, resourceGrou
 	result, err = client.GeneralizeResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "Generalize", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -564,6 +569,7 @@ func (client VirtualMachinesClient) Get(ctx context.Context, resourceGroupName s
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -642,6 +648,7 @@ func (client VirtualMachinesClient) InstanceView(ctx context.Context, resourceGr
 	result, err = client.InstanceViewResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "InstanceView", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -718,6 +725,10 @@ func (client VirtualMachinesClient) List(ctx context.Context, resourceGroupName 
 	result.vmlr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.vmlr.hasNextLink() && result.vmlr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -778,6 +789,7 @@ func (client VirtualMachinesClient) listNextResults(ctx context.Context, lastRes
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -830,6 +842,10 @@ func (client VirtualMachinesClient) ListAll(ctx context.Context, statusOnly stri
 	result.vmlr, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "ListAll", resp, "Failure responding to request")
+		return
+	}
+	if result.vmlr.hasNextLink() && result.vmlr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -892,6 +908,7 @@ func (client VirtualMachinesClient) listAllNextResults(ctx context.Context, last
 	result, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "listAllNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -943,6 +960,7 @@ func (client VirtualMachinesClient) ListAvailableSizes(ctx context.Context, reso
 	result, err = client.ListAvailableSizesResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "ListAvailableSizes", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -1024,6 +1042,10 @@ func (client VirtualMachinesClient) ListByLocation(ctx context.Context, location
 	result.vmlr, err = client.ListByLocationResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "ListByLocation", resp, "Failure responding to request")
+		return
+	}
+	if result.vmlr.hasNextLink() && result.vmlr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -1084,6 +1106,7 @@ func (client VirtualMachinesClient) listByLocationNextResults(ctx context.Contex
 	result, err = client.ListByLocationResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachinesClient", "listByLocationNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -1104,7 +1127,8 @@ func (client VirtualMachinesClient) ListByLocationComplete(ctx context.Context, 
 	return
 }
 
-// PerformMaintenance the operation to perform maintenance on a virtual machine.
+// PerformMaintenance shuts down the virtual machine, moves it to an already updated node, and powers it back on during
+// the self-service phase of planned maintenance.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // VMName - the name of the virtual machine.

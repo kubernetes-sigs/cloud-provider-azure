@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -66,7 +66,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "diskid1",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
 		},
 		{
@@ -78,7 +78,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "diskid1",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
 		},
 		{
@@ -90,7 +90,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - failed to parse DiskIOPSReadWrite: strconv.Atoi: parsing \"invalid\": invalid syntax"),
 		},
@@ -103,7 +103,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "invalid",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - failed to parse DiskMBpsReadWrite: strconv.Atoi: parsing \"invalid\": invalid syntax"),
 		},
@@ -116,7 +116,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: badDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", badDiskEncryptionSetID, diskEncryptionSetIDFormat),
 		},
@@ -129,7 +129,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS disk type"),
 		},
@@ -142,7 +142,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - DiskMBpsReadWrite parameter is only applicable in UltraSSD_LRS disk type"),
 		},

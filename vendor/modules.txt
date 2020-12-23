@@ -1,8 +1,8 @@
-# github.com/Azure/azure-sdk-for-go v43.0.0+incompatible => github.com/Azure/azure-sdk-for-go v44.0.1-0.20200710185145-8277be38f5a2+incompatible
+# github.com/Azure/azure-sdk-for-go v49.1.0+incompatible => github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute
-github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute
+github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute
 github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry
 github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice
 github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-07-01/network
@@ -57,7 +57,7 @@ github.com/coreos/pkg/capnslog
 github.com/davecgh/go-spew/spew
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
-# github.com/dnaeon/go-vcr v1.1.0
+# github.com/dnaeon/go-vcr v1.1.0 => github.com/dnaeon/go-vcr v1.1.0
 ## explicit
 # github.com/docker/distribution v2.7.1+incompatible => github.com/docker/distribution v2.7.1+incompatible
 github.com/docker/distribution/digestset
@@ -145,6 +145,8 @@ github.com/modern-go/concurrent
 github.com/modern-go/reflect2
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 => github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/munnerz/goautoneg
+# github.com/niemeyer/pretty v0.0.0-00010101000000-000000000000 => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
+## explicit
 # github.com/onsi/ginkgo v1.11.0 => github.com/onsi/ginkgo v1.11.0
 ## explicit
 github.com/onsi/ginkgo
@@ -364,6 +366,8 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
+# gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
+## explicit
 # gopkg.in/fsnotify.v1 v1.4.7 => gopkg.in/fsnotify.v1 v1.4.7
 gopkg.in/fsnotify.v1
 # gopkg.in/inf.v0 v0.9.1 => gopkg.in/inf.v0 v0.9.1
@@ -897,7 +901,7 @@ k8s.io/controller-manager/pkg/informerfactory
 # k8s.io/klog v1.0.0 => k8s.io/klog v1.0.0
 ## explicit
 k8s.io/klog
-# k8s.io/klog/v2 v2.4.0
+# k8s.io/klog/v2 v2.4.0 => k8s.io/klog/v2 v2.4.0
 ## explicit
 k8s.io/klog/v2
 # k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd => k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
@@ -912,7 +916,7 @@ k8s.io/kubectl/pkg/scale
 k8s.io/kubectl/pkg/util/podutils
 # k8s.io/kubelet v0.0.0 => k8s.io/kubelet v0.0.0-20201114091737-92ded5ee6b96
 k8s.io/kubelet/pkg/apis/stats/v1alpha1
-# k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
+# k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725 => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
 ## explicit
 k8s.io/kubernetes/pkg/api/legacyscheme
 k8s.io/kubernetes/pkg/api/service
@@ -977,7 +981,6 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0 => sigs.k8s.io/yaml v1.2.0
 ## explicit
 sigs.k8s.io/yaml
-# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v44.0.1-0.20200710185145-8277be38f5a2+incompatible
 # github.com/Azure/go-ansiterm => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 # github.com/Azure/go-autorest/autorest => github.com/Azure/go-autorest/autorest v0.9.6
 # github.com/Azure/go-autorest/autorest/adal => github.com/Azure/go-autorest/autorest/adal v0.8.2
@@ -1091,3 +1094,10 @@ sigs.k8s.io/yaml
 # k8s.io/utils => k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
 # sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
+# github.com/dnaeon/go-vcr => github.com/dnaeon/go-vcr v1.1.0
+# github.com/kr/text => github.com/kr/text v0.2.0
+# github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
+# gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
+# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
+# k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
+# k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725

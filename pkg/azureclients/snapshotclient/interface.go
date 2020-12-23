@@ -19,7 +19,7 @@ package snapshotclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )

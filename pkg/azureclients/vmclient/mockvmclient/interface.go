@@ -18,7 +18,7 @@ package mockvmclient
 
 import (
 	context "context"
-	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"

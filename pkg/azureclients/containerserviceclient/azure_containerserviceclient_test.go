@@ -381,24 +381,18 @@ func TestListWithNextPage(t *testing.T) {
 	mcList := []containerservice.ManagedCluster{getTestManagedCluster("cluster"), getTestManagedCluster("cluster1"), getTestManagedCluster("cluster2")}
 	responseBody, err := json.Marshal(containerservice.ManagedClusterListResult{Value: &mcList, NextLink: to.StringPtr("nextLink")})
 	assert.NoError(t, err)
-	pagedResponse, err := json.Marshal(containerservice.ManagedClusterListResult{Value: &mcList})
+	_, err = json.Marshal(containerservice.ManagedClusterListResult{Value: &mcList})
 	assert.NoError(t, err)
-	armClient.EXPECT().PrepareGetRequest(gomock.Any(), gomock.Any()).Return(&http.Request{}, nil)
-	armClient.EXPECT().Send(gomock.Any(), gomock.Any()).Return(
-		&http.Response{
-			StatusCode: http.StatusOK,
-			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
-		}, nil)
 	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
 		}, nil).Times(1)
-	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	mcClient := getTestManagedClusterClient(armClient)
 	result, rerr := mcClient.List(context.TODO(), "rg")
 	assert.Nil(t, rerr)
-	assert.Equal(t, 6, len(result))
+	assert.Equal(t, 3, len(result))
 }
 
 func TestListNeverRateLimiter(t *testing.T) {

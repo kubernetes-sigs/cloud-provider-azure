@@ -379,24 +379,18 @@ func TestListWithNextPage(t *testing.T) {
 	dpList := []resources.DeploymentExtended{getTestDeploymentExtended("dep"), getTestDeploymentExtended("dep1"), getTestDeploymentExtended("dep2")}
 	partialResponse, err := json.Marshal(resources.DeploymentListResult{Value: &dpList, NextLink: to.StringPtr("nextLink")})
 	assert.NoError(t, err)
-	pagedResponse, err := json.Marshal(resources.DeploymentListResult{Value: &dpList})
+	_, err = json.Marshal(resources.DeploymentListResult{Value: &dpList})
 	assert.NoError(t, err)
-	armClient.EXPECT().PrepareGetRequest(gomock.Any(), gomock.Any()).Return(&http.Request{}, nil)
-	armClient.EXPECT().Send(gomock.Any(), gomock.Any()).Return(
-		&http.Response{
-			StatusCode: http.StatusOK,
-			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
-		}, nil)
 	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
 		}, nil).Times(1)
-	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	dpClient := getTestDeploymentClient(armClient)
 	result, rerr := dpClient.List(context.TODO(), "rg")
 	assert.Nil(t, rerr)
-	assert.Equal(t, 6, len(result))
+	assert.Equal(t, 3, len(result))
 }
 
 func TestListNeverRateLimiter(t *testing.T) {
