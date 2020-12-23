@@ -125,6 +125,8 @@ const (
 	serviceUsingDNSKey = "kubernetes-dns-label-service"
 
 	defaultLoadBalancerSourceRanges = "0.0.0.0/0"
+
+	labelNodeRoleExcludeBalancer = "node.kubernetes.io/exclude-from-external-load-balancers"
 )
 
 // GetLoadBalancer returns whether the specified load balancer and its components exist, and
@@ -1193,15 +1195,6 @@ func (az *Cloud) findFrontendIPConfigOfService(
 	return nil, false, nil
 }
 
-func nodeNameInNodes(nodeName string, nodes []*v1.Node) bool {
-	for _, node := range nodes {
-		if strings.EqualFold(nodeName, node.Name) {
-			return true
-		}
-	}
-	return false
-}
-
 // reconcileLoadBalancer ensures load balancer exists and the frontend ip config is setup.
 // This also reconciles the Service's Ports  with the LoadBalancer config.
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
@@ -1256,11 +1249,12 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 							// VM may under deletion
 							continue
 						}
-						// If a node is not supposed to be included in the LB, it
-						// would not be in the `nodes` slice. We need to check the nodes that
-						// have been added to the LB's backendpool, find the unwanted ones and
-						// delete them from the pool.
-						if !nodeNameInNodes(nodeName, nodes) {
+						// If a node is not supposed to be included in the LB.
+						shouldExclude, err := az.shouldNodeExcludedFromLoadBalancerByName(nodeName)
+						if err != nil {
+							return nil, err
+						}
+						if shouldExclude {
 							klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb backendpool - found unwanted node %s, decouple it from the LB", serviceName, wantLb, nodeName)
 							// construct a backendPool that only contains the IP config of the node to be deleted
 							backendIPConfigurationsToBeDeleted = append(backendIPConfigurationsToBeDeleted, network.InterfaceIPConfiguration{ID: to.StringPtr(ipConfID)})

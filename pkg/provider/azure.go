@@ -281,6 +281,8 @@ type Cloud struct {
 	nodeResourceGroups map[string]string
 	// unmanagedNodes holds a list of nodes not managed by Azure cloud provider.
 	unmanagedNodes sets.String
+	// balancerExcludedNodes holds a list of nodes that should not be added to LB backend address pool.
+	balancerExcludedNodes sets.String
 	// nodeInformerSynced is for determining if the informer has synced.
 	nodeInformerSynced cache.InformerSynced
 
@@ -342,10 +344,11 @@ func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
 	}
 
 	az := &Cloud{
-		nodeZones:          map[string]sets.String{},
-		nodeResourceGroups: map[string]string{},
-		unmanagedNodes:     sets.NewString(),
-		routeCIDRs:         map[string]string{},
+		nodeZones:             map[string]sets.String{},
+		nodeResourceGroups:    map[string]string{},
+		unmanagedNodes:        sets.NewString(),
+		balancerExcludedNodes: sets.NewString(),
+		routeCIDRs:            map[string]string{},
 	}
 
 	err = az.InitializeCloudFromConfig(config, false)
@@ -802,6 +805,11 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		if ok && managed == "false" {
 			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
 		}
+
+		// Remove from balancerExcludedNodes cache.
+		if az.ShouldNodeExcludedFromLoadBalancer(prevNode) {
+			az.balancerExcludedNodes.Delete(prevNode.ObjectMeta.Name)
+		}
 	}
 
 	if newNode != nil {
@@ -824,6 +832,11 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		managed, ok := newNode.ObjectMeta.Labels[managedByAzureLabel]
 		if ok && managed == "false" {
 			az.unmanagedNodes.Insert(newNode.ObjectMeta.Name)
+		}
+
+		// Add to balancerExcludedNodes cache.
+		if az.ShouldNodeExcludedFromLoadBalancer(newNode) {
+			az.balancerExcludedNodes.Insert(newNode.ObjectMeta.Name)
 		}
 	}
 }
@@ -913,9 +926,17 @@ func (az *Cloud) GetUnmanagedNodes() (sets.String, error) {
 	return sets.NewString(az.unmanagedNodes.List()...), nil
 }
 
-// ShouldNodeExcludedFromLoadBalancer returns true if node is unmanaged or in external resource group.
+// ShouldNodeExcludedFromLoadBalancer returns true if node should be excluded from balancer.
+// This include three conditions:
+// 1) node is labeled with "node.kubernetes.io/exclude-from-external-load-balancers".
+// 2) node is unmanaged.
+// 3) node is in external resource group.
 func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(node *v1.Node) bool {
 	labels := node.ObjectMeta.Labels
+	if v, ok := labels[labelNodeRoleExcludeBalancer]; ok && v == "true" {
+		return true
+	}
+
 	if rg, ok := labels[externalResourceGroupLabel]; ok && !strings.EqualFold(rg, az.ResourceGroup) {
 		return true
 	}
@@ -925,4 +946,19 @@ func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(node *v1.Node) bool {
 	}
 
 	return false
+}
+
+func (az *Cloud) shouldNodeExcludedFromLoadBalancerByName(nodeName string) (bool, error) {
+	// Kubelet won't set az.nodeInformerSynced, always return nil.
+	if az.nodeInformerSynced == nil {
+		return false, nil
+	}
+
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+	if !az.nodeInformerSynced() {
+		return false, fmt.Errorf("node informer is not synced yet when checking shouldNodeExcludedFromLoadBalancerByName")
+	}
+
+	return az.balancerExcludedNodes.Has(nodeName), nil
 }

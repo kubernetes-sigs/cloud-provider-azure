@@ -64,12 +64,13 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 			MaximumLoadBalancerRuleCount: 250,
 			VMType:                       vmTypeStandard,
 		},
-		nodeZones:          map[string]sets.String{},
-		nodeInformerSynced: func() bool { return true },
-		nodeResourceGroups: map[string]string{},
-		unmanagedNodes:     sets.NewString(),
-		routeCIDRs:         map[string]string{},
-		eventRecorder:      &record.FakeRecorder{},
+		nodeZones:             map[string]sets.String{},
+		nodeInformerSynced:    func() bool { return true },
+		nodeResourceGroups:    map[string]string{},
+		unmanagedNodes:        sets.NewString(),
+		balancerExcludedNodes: sets.NewString(),
+		routeCIDRs:            map[string]string{},
+		eventRecorder:         &record.FakeRecorder{},
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
 	az.InterfacesClient = mockinterfaceclient.NewMockInterface(ctrl)
