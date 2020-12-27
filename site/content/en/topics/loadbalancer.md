@@ -21,7 +21,7 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------ |------|
 | `service.beta.kubernetes.io/azure-load-balancer-internal`    | `true` or `false`            | Specify whether the load balancer should be internal. It’s defaulting to public if not set. | v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-internal-subnet` | Name of the subnet           | Specify which subnet the internal load balancer should be bound to. It’s defaulting to the subnet configured in cloud config file if not set. | v1.10.0 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-mode`        | `auto`, `{name1},{name2}`    | Specify the Azure load balancer selection algorithm based on availability sets. There are currently three possible load balancer selection modes : default, auto or "{name1}, {name2}". This is only working for basic LB (see below for how it works) |  v1.10.0 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-mode`        | `auto`, `{vmset-name}`    | Specify the Azure load balancer selection algorithm based on vm sets (VMSS or VMAS). There are currently three possible load balancer selection modes : default, auto or "{vmset-name}". This is only working for basic LB or multiple standard LB (see below for how it works) |  v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-dns-label-name`            | Name of the PIP DNS label        | Specify the DNS label name for the service's public IP address (PIP). If it is set to empty string, DNS in PIP would be deleted. Because of a bug, before v1.15.10/v1.16.7/v1.17.3, the DNS label on PIP would also be deleted if the annotation is not specified. | v1.15.0 and later |
 | `service.beta.kubernetes.io/azure-shared-securityrule`       | `true` or `false`            | Specify that the service should be exposed using an Azure security rule that may be shared with another service, trading specificity of rules for an increase in the number of services that can be exposed. This relies on the Azure "augmented security rules" feature. | v1.10.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-resource-group` | Name of the PIP resource group   | Specify the resource group of the service's PIP that are not in the same resource group as the cluster. | v1.10.0 and later |
@@ -39,10 +39,12 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 There are currently three possible load balancer selection modes :
 
 1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode"). In this case the Loadbalancer of the primary Availability set is selected
-2. "__auto__" mode - service is annotated with __auto__ value, this when loadbalancer from any availability set is selected which has the minimum rules associated with it.
-3. "{name1}, {name2}" mode - this is when the load balancer from the specified availability sets is selected that has the minimum rules associated with it.
+2. "__auto__" mode - service is annotated with `__auto__` value. In this case, services would be associated with the Loadbalancer with the minimum number of rules.
+3. "{vmset-name}" mode - service is annotated with the name of a VMSS/VMAS. In this case, only load balancers of the specified VMSS/VMAS would be selected, and services would be associated with the one with the minimum number of rules.
 
-The selection mode for a load balancer only works for Azure's basic SKU (see below) because of the difference in backend pool endpoints:
+> Note that the "__auto__" mode is valid only if the service is newly created. It is not allowed to change the annotation value to `__auto__` of an existed service.
+
+The selection mode for a load balancer only works for basic load balancers or multiple standard load balancers. Following is the detailed information of allowed number of VMSS/VMAS in a load balancer.
 
 * Standard SKU supports any virtual machine in a single virtual network, including a mix of virtual machines, availability sets, and virtual machine scale sets. So all the nodes would be added to the same standard LB backend pool with a max size of 1000.
 * Basic SKU only supports virtual machines in a single availability set, or a virtual machine scale set. Only nodes with the same availability set or virtual machine scale set would be added to the basic LB backend pool.
