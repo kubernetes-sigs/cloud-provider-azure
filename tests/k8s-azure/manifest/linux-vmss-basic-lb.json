@@ -34,6 +34,13 @@
         "vmSize": "Standard_DS3_v2",
         "availabilityProfile": "VirtualMachineScaleSets",
         "storageProfile": "ManagedDisks"
+      },
+      {
+        "name": "agentpool2",
+        "count": 2,
+        "vmSize": "Standard_DS3_v2",
+        "availabilityProfile": "VirtualMachineScaleSets",
+        "storageProfile": "ManagedDisks"
       }
     ],
     "linuxProfile": {
