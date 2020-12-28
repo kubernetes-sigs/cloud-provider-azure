@@ -34,7 +34,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/mockvmsets"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -114,7 +113,7 @@ func TestCreateRoute(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
-	mockVMSet := mockvmsets.NewMockVMSet(ctrl)
+	mockVMSet := NewMockVMSet(ctrl)
 
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
@@ -521,7 +520,7 @@ func TestListRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	routeTableClient := mockroutetableclient.NewMockInterface(ctrl)
-	mockVMSet := mockvmsets.NewMockVMSet(ctrl)
+	mockVMSet := NewMockVMSet(ctrl)
 
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
