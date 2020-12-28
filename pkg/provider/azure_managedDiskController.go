@@ -67,6 +67,8 @@ type ManagedDiskOptions struct {
 	DiskIOPSReadWrite string
 	// Throughput Cap (MBps) for UltraSSD disk
 	DiskMBpsReadWrite string
+	// Logical sector size in bytes for Ultra disks
+	LogicalSectorSize int32
 	// if SourceResourceID is not empty, then it's a disk copy operation(for snapshot)
 	SourceResourceID string
 	// The type of source
@@ -135,12 +137,20 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 			diskMBpsReadWrite = int64(v)
 		}
 		diskProperties.DiskMBpsReadWrite = to.Int64Ptr(diskMBpsReadWrite)
+
+		if options.LogicalSectorSize != 0 {
+			klog.V(2).Infof("AzureDisk - requested LogicalSectorSize: %v", options.LogicalSectorSize)
+			diskProperties.CreationData.LogicalSectorSize = to.Int32Ptr(options.LogicalSectorSize)
+		}
 	} else {
 		if options.DiskIOPSReadWrite != "" {
 			return "", fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS disk type")
 		}
 		if options.DiskMBpsReadWrite != "" {
 			return "", fmt.Errorf("AzureDisk - DiskMBpsReadWrite parameter is only applicable in UltraSSD_LRS disk type")
+		}
+		if options.LogicalSectorSize != 0 {
+			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS disk type")
 		}
 	}
 
