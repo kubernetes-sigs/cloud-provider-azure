@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	nodeLabelRole = "kubernetes.io/role"
-	typeLabel     = "type"
+	nodeLabelRole     = "kubernetes.io/role"
+	typeLabel         = "type"
+	agentpoolLabelKey = "agentpool"
 
 	// GPUResourceKey is the key of the GPU in the resource map of a node
 	GPUResourceKey = "nvidia.com/gpu"
@@ -236,4 +237,20 @@ func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete boo
 	node.Labels[label] = "true"
 	node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	return node, err
+}
+
+func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
+	nodepoolNodeMap := make(map[string][]string)
+	for _, node := range *nodes {
+		labels := node.ObjectMeta.Labels
+		if nodepool, ok := labels[agentpoolLabelKey]; ok {
+			if nodepoolNodeMap[nodepool] == nil {
+				nodepoolNodeMap[nodepool] = make([]string, 0)
+			} else {
+				nodepoolNodeMap[nodepool] = append(nodepoolNodeMap[nodepool], node.Name)
+			}
+		}
+	}
+
+	return nodepoolNodeMap
 }

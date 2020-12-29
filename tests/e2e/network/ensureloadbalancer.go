@@ -376,9 +376,17 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	})
 
 	It("should support node label `node.kubernetes.io/exclude-from-external-load-balancers`", func() {
+		By("Checking the number of the node pools")
+		nodes, err := utils.GetAgentNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+		initNodepoolNodeMap := utils.GetNodepoolNodeMap(&nodes)
+		if len(initNodepoolNodeMap) != 1 {
+			Skip("single node pool is needed in this scenario")
+		}
+
 		By("Creating a service to trigger the LB reconcile")
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, labels, ns.Name, ports)
-		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		publicIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
@@ -386,7 +394,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
-		nodes, err := utils.GetAgentNodes(cs)
+		nodes, err = utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(*lbBackendPoolIPConfigs)).To(Equal(len(nodes)))
 
