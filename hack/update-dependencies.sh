@@ -66,10 +66,10 @@ function ensure_require_replace_directives_for_all_dependencies() {
   cat "${replace_json}" | jq -r '"-replace \(.Old.Path)=\(.New.Path)@\(.New.Version)"'| xargs -L 100 go mod edit -fmt
 
   # 2. Add explicit require directives for indirect dependencies
-  go list -m -json all | jq -r 'select(.Main != true) | select(.Indirect == true) | "-require \(.Path)@\(.Version)"'          | xargs -L 100 go mod edit -fmt
+  go list -m -json -mod mod all | jq -r 'select(.Main != true) | select(.Indirect == true) | "-require \(.Path)@\(.Version)"'          | xargs -L 100 go mod edit -fmt
 
   # 3. Add explicit replace directives pinning dependencies that aren't pinned yet
-  go list -m -json all | jq -r 'select(.Main != true) | select(.Replace == null)  | "-replace \(.Path)=\(.Path)@\(.Version)"' | xargs -L 100 go mod edit -fmt
+  go list -m -json -mod mod all | jq -r 'select(.Main != true) | select(.Replace == null)  | "-replace \(.Path)=\(.Path)@\(.Version)"' | xargs -L 100 go mod edit -fmt
 }
 
 function group_replace_directives() {
