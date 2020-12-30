@@ -42,7 +42,6 @@ const (
 	statefulSetTimeout       = 30 * time.Minute
 	execTimeout              = 10 * time.Second
 
-	agentpoolLabelKey               = "agentpool"
 	kubeSystemNamespace             = "kube-system"
 	caDeploymentName                = "cluster-autoscaler"
 	balanceNodeGroupsFlag           = "--balance-similar-node-groups=true"
@@ -87,7 +86,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		initNodeCount = len(nodes)
 		utils.Logf("Initial number of schedulable nodes: %v", initNodeCount)
 
-		initNodepoolNodeMap = getNodepoolNodeMap(&nodes)
+		initNodepoolNodeMap = utils.GetNodepoolNodeMap(&nodes)
 		utils.Logf("found %d node pools", len(initNodepoolNodeMap))
 
 		// TODO:
@@ -553,24 +552,8 @@ func calculateNewPodCountOnNode(cs clientset.Interface, node *v1.Node) int32 {
 	return podCountOnNode
 }
 
-func getNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
-	nodepoolNodeMap := make(map[string][]string)
-	for _, node := range *nodes {
-		labels := node.ObjectMeta.Labels
-		if nodepool, ok := labels[agentpoolLabelKey]; ok {
-			if nodepoolNodeMap[nodepool] == nil {
-				nodepoolNodeMap[nodepool] = make([]string, 0)
-			} else {
-				nodepoolNodeMap[nodepool] = append(nodepoolNodeMap[nodepool], node.Name)
-			}
-		}
-	}
-
-	return nodepoolNodeMap
-}
-
 func checkNodeGroupsBalance(nodes *[]v1.Node) bool {
-	nodepoolSizeMap := getNodepoolNodeMap(nodes)
+	nodepoolSizeMap := utils.GetNodepoolNodeMap(nodes)
 	min, max := math.MaxInt32, math.MinInt32
 	for _, nodes := range nodepoolSizeMap {
 		size := len(nodes)
