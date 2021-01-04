@@ -6,28 +6,23 @@
 
 ## Introduction
 
-This repository provides tools and scripts for building and testing `Kubernetes cloud-controller-manager` for Azure. The project is under development.
-
-~~The Azure cloud provider code locates at [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/azure). If you want to create issues or pull requests for cloud provider, please go to [Kubernetes repository](https://github.com/kubernetes/kubernetes).~~
-
-The in-tree cloud provider would be deprecated in the future and only the bug fixes were allowed in the [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/azure). We fork the cloud provider code in `pkg/provider` and any feature or cleanup pull requests would be merged here.
-
-There is an ongoing work for refactoring cloud providers out of the upstream repository. For more details, please check [this issue](https://github.com/kubernetes/enhancements/issues/667).
+This repository provides Azure implementation of Kubernetes cloud provider [interface](https://github.com/kubernetes/cloud-provider). The in-tree cloud provider has been deprecated since v1.20 and only the bug fixes were allowed in the [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/azure).
 
 ## Current status
 
-cloud-provider-azure is still under **alpha** stage and its releases are maintained on Microsoft Container Registry (MCR).
+cloud-provider-azure is under **Beta** stage and its releases are maintained on Microsoft Container Registry (MCR).
 
 The latest version of azure-cloud-controller-manager and azure-cloud-node-manager could be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.6.0`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.6.0`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.7.0`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.7.0`
 
 Version matrix:
 
 |Kubernetes version|cloud-provider version|cloud-provider branch|
 |------------------|----------------------|---------------------|
 | master           | N/A                  | master              |
+| v1.20.x          | v0.7.0               | release-0.7         |
 | v1.19.x          | v0.6.0               | release-0.6         |
 | v1.18.x          | v0.5.1               | release-0.5         |
 | v1.17.x          | v0.4.1               | N/A                 |
@@ -73,27 +68,27 @@ azure-cloud-controller-manager --cloud-provider=azure \
 
 It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
 
-Please checkout more details at [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
+Please checkout more details at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
 
 ## E2E tests
 
 Please check the following documents for e2e tests:
 
-- [Upstream Kubernetes e2e tests](docs/e2e-tests.md)
-- [Azure e2e tests](docs/e2e-tests-azure.md)
+- [Upstream Kubernetes e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests/)
+- [Azure e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests-azure/)
 
 ## Documentation
 
-- [Dependency management](docs/dependency-management.md)
-- [Cloud provider config](docs/cloud-provider-config.md)
-- [Azure load balancer and annotations](docs/services/README.md)
-- [Azure permissions](docs/azure-permissions.md)
-- [Azure availability zones](docs/using-availability-zones.md)
-- [Cross resource group nodes](docs/using-cross-resource-group-nodes.md)
-- [AzureDisk known issues](docs/persistentvolumes/azuredisk/issues.md)
-- [AzureFile known issues](docs/persistentvolumes/azurefile/issues.md)
+- [Dependency management]([docs/dependency-management.md](http://kubernetes-sigs.github.io/cloud-provider-azure/development/dependencies/))
+- [Cloud provider config](http://kubernetes-sigs.github.io/cloud-provider-azure/install/configs/)
+- [Azure load balancer and annotations](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/)
+- [Azure permissions](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/azure-permissions/)
+- [Azure availability zones](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/)
+- [Cross resource group nodes]([docs/using-cross-resource-group-nodes.md](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/cross-resource-group-nodes/))
+- [AzureDisk known issues]([docs/persistentvolumes/azuredisk/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azuredisk/))
+- [AzureFile known issues]([docs/persistentvolumes/azurefile/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azurefile/))
 
-See [docs](docs/) for more documentations.
+See [kubernetes-sigs.github.io/cloud-provider-azure](https://kubernetes-sigs.github.io/cloud-provider-azure/) for more documentations.
 
 ## Contributing
 
