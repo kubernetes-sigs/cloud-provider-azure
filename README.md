@@ -68,27 +68,27 @@ azure-cloud-controller-manager --cloud-provider=azure \
 
 It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
 
-Please checkout more details at [docs/cloud-controller-manager.md](docs/cloud-controller-manager.md).
+Please checkout more details at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
 
 ## E2E tests
 
 Please check the following documents for e2e tests:
 
-- [Upstream Kubernetes e2e tests](docs/e2e-tests.md)
-- [Azure e2e tests](docs/e2e-tests-azure.md)
+- [Upstream Kubernetes e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests/)
+- [Azure e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests-azure/)
 
 ## Documentation
 
-- [Dependency management](docs/dependency-management.md)
-- [Cloud provider config](docs/cloud-provider-config.md)
-- [Azure load balancer and annotations](docs/services/README.md)
-- [Azure permissions](docs/azure-permissions.md)
-- [Azure availability zones](docs/using-availability-zones.md)
-- [Cross resource group nodes](docs/using-cross-resource-group-nodes.md)
-- [AzureDisk known issues](docs/persistentvolumes/azuredisk/issues.md)
-- [AzureFile known issues](docs/persistentvolumes/azurefile/issues.md)
+- [Dependency management]([docs/dependency-management.md](http://kubernetes-sigs.github.io/cloud-provider-azure/development/dependencies/))
+- [Cloud provider config](http://kubernetes-sigs.github.io/cloud-provider-azure/install/configs/)
+- [Azure load balancer and annotations](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/)
+- [Azure permissions](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/azure-permissions/)
+- [Azure availability zones](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/)
+- [Cross resource group nodes]([docs/using-cross-resource-group-nodes.md](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/cross-resource-group-nodes/))
+- [AzureDisk known issues]([docs/persistentvolumes/azuredisk/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azuredisk/))
+- [AzureFile known issues]([docs/persistentvolumes/azurefile/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azurefile/))
 
-See [docs](docs/) for more documentations.
+See [kubernetes-sigs.github.io/cloud-provider-azure](https://kubernetes-sigs.github.io/cloud-provider-azure/) for more documentations.
 
 ## Contributing
 
