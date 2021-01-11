@@ -18,7 +18,9 @@ package azure
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -32,6 +34,8 @@ type AccountOptions struct {
 	EnableHTTPSTrafficOnly                    bool
 	Tags                                      map[string]string
 	VirtualNetworkResourceIDs                 []string
+	// indicate whether create new account when Name is empty
+	CreateAccount bool
 }
 
 type accountWithLocation struct {
@@ -129,15 +133,19 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 	enableHTTPSTrafficOnly := accountOptions.EnableHTTPSTrafficOnly
 
 	if len(accountName) == 0 {
-		// find a storage account that matches accountType
-		accounts, err := az.getStorageAccounts(accountOptions)
-		if err != nil {
-			return "", "", fmt.Errorf("could not list storage accounts for account type %s: %v", accountType, err)
-		}
+		if !accountOptions.CreateAccount {
+			// find a storage account that matches accountType
+			accounts, err := az.getStorageAccounts(accountOptions)
+			if err != nil {
+				return "", "", fmt.Errorf("could not list storage accounts for account type %s: %v", accountType, err)
+			}
 
-		if len(accounts) > 0 {
-			accountName = accounts[0].Name
-			klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
+			if len(accounts) > 0 {
+				// get a random matching account
+				rand.Seed(time.Now().UnixNano())
+				accountName = accounts[rand.Intn(len(accounts))].Name
+				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
+			}
 		}
 
 		if len(accountName) == 0 {
