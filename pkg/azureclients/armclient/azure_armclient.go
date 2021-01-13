@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"sync"
 	"time"
@@ -125,6 +126,7 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 	}
 
 	if response.StatusCode != http.StatusNotFound || c.clientRegion == "" {
+		dumpResponse(response, 5)
 		return response, rerr
 	}
 
@@ -177,7 +179,26 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 		return response, rerr
 	}
 
+	dumpResponse(response, 5)
 	return regionalResponse, regionalError
+}
+
+func dumpResponse(resp *http.Response, v klog.Level) {
+	responseDump, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		klog.Errorf("Failed to dump response: %v", err)
+	} else {
+		klog.V(v).Infof("Dumping response: %s", string(responseDump))
+	}
+}
+
+func dumpRequest(req *http.Request, v klog.Level) {
+	requestDump, err := httputil.DumpRequest(req, true)
+	if err != nil {
+		klog.Errorf("Failed to dump request: %v", err)
+	} else {
+		klog.V(v).Infof("Dumping request: %s", string(requestDump))
+	}
 }
 
 // PreparePutRequest prepares put request
@@ -365,6 +386,7 @@ func (c *Client) PutResources(ctx context.Context, resources map[string]interfac
 			}
 			continue
 		}
+		dumpRequest(request, 5)
 
 		future, resp, clientErr := c.SendAsync(ctx, request)
 		defer c.CloseResponse(ctx, resp)
@@ -428,6 +450,7 @@ func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID strin
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
+	dumpRequest(request, 5)
 
 	future, resp, clientErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
@@ -508,6 +531,7 @@ func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parame
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
+	dumpRequest(request, 5)
 
 	future, resp, rErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
