@@ -168,7 +168,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
+	FIt("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
 		By("creating environment")
 		subnetName := "lb-subnet"
 
@@ -293,7 +293,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(lb).NotTo(BeNil())
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
+	FIt("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
 		By("Exposing two services with shared security rule")
 		annotation := map[string]string{
 			azure.ServiceAnnotationSharedSecurityRule: "true",

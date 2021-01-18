@@ -386,7 +386,7 @@ func (c *Client) PutResources(ctx context.Context, resources map[string]interfac
 			}
 			continue
 		}
-		dumpRequest(request, 5)
+		dumpRequest(request, 2)
 
 		future, resp, clientErr := c.SendAsync(ctx, request)
 		defer c.CloseResponse(ctx, resp)
@@ -450,7 +450,7 @@ func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID strin
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 5)
+	dumpRequest(request, 2)
 
 	future, resp, clientErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
@@ -531,7 +531,7 @@ func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parame
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 5)
+	dumpRequest(request, 2)
 
 	future, resp, rErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)

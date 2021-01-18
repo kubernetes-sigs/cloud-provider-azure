@@ -195,12 +195,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		By("Waiting for exposure of the original service without assigned lb private IP")
 		ip1, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
-		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
-		Expect(errList).NotTo(HaveOccurred())
-		utils.Logf("Events list:")
-		for i, event := range list.Items {
-			utils.Logf("%d. %v", i, event)
-		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ip1).NotTo(Equal(targetIP))
 
