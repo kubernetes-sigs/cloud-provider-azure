@@ -66,6 +66,27 @@ func TestNew(t *testing.T) {
 	assert.NotEmpty(t, nsgClient.rateLimiterWriter)
 }
 
+func TestNewAzureStack(t *testing.T) {
+	config := &azclients.ClientConfig{
+		CloudName:               "AZURESTACKCLOUD",
+		SubscriptionID:          "sub",
+		ResourceManagerEndpoint: "endpoint",
+		Location:                "eastus",
+		RateLimitConfig: &azclients.RateLimitConfig{
+			CloudProviderRateLimit:            true,
+			CloudProviderRateLimitQPS:         0.5,
+			CloudProviderRateLimitBucket:      1,
+			CloudProviderRateLimitQPSWrite:    0.5,
+			CloudProviderRateLimitBucketWrite: 1,
+		},
+		Backoff: &retry.Backoff{Steps: 1},
+	}
+
+	nsgClient := New(config)
+	assert.Equal(t, "AZURESTACKCLOUD", nsgClient.cloudName)
+	assert.Equal(t, "sub", nsgClient.subscriptionID)
+}
+
 func TestGet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
