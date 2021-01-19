@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 
@@ -783,4 +784,67 @@ func TestCurrentNodeName(t *testing.T) {
 	nodeName, err := cloud.CurrentNodeName(context.Background(), hostname)
 	assert.Equal(t, types.NodeName(hostname), nodeName)
 	assert.NoError(t, err)
+}
+
+func TestInstanceMetadata(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	t.Run("", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		expectedVM := buildDefaultTestVirtualMachine("as", []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1"})
+		expectedVM.HardwareProfile = &compute.HardwareProfile{
+			VMSize: compute.VirtualMachineSizeTypesBasicA0,
+		}
+		expectedVM.Location = to.StringPtr("westus2")
+		expectedVM.Zones = &[]string{"1"}
+		expectedVM.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm")
+		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm", gomock.Any()).Return(expectedVM, nil)
+		expectedNIC := buildDefaultTestInterface(true, []string{})
+		(*expectedNIC.IPConfigurations)[0].PrivateIPAddress = to.StringPtr("1.2.3.4")
+		(*expectedNIC.IPConfigurations)[0].PublicIPAddress = &network.PublicIPAddress{
+			ID: to.StringPtr("pip"),
+			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+				IPAddress: to.StringPtr("5.6.7.8"),
+			},
+		}
+		mockNICClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
+		mockNICClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(expectedNIC, nil)
+		expectedPIP := network.PublicIPAddress{
+			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+				IPAddress: to.StringPtr("5.6.7.8"),
+			},
+		}
+		mockPIPClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		mockPIPClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "pip", gomock.Any()).Return(expectedPIP, nil)
+
+		expectedMetadata := cloudprovider.InstanceMetadata{
+			ProviderID:   "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm",
+			InstanceType: string(compute.VirtualMachineSizeTypesBasicA0),
+			NodeAddresses: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "1.2.3.4",
+				},
+				{
+					Type:    v1.NodeHostName,
+					Address: "vm",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "5.6.7.8",
+				},
+			},
+			Zone:   "westus2-1",
+			Region: "westus2",
+		}
+		meta, err := cloud.InstanceMetadata(context.Background(), &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vm",
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMetadata, *meta)
+	})
 }
