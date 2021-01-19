@@ -27,9 +27,16 @@ import (
 const (
 	// APIVersion is the API version for network.
 	APIVersion = "2019-06-01"
+	// AzureStackCloudAPIVersion is the API version for Azure Stack
+	AzureStackCloudAPIVersion = "2018-11-01"
 
 	// ComputeAPIVersion is the API version for compute. It is required to get VMSS network interface.
 	ComputeAPIVersion = "2017-03-30"
+	// AzureStackComputeAPIVersion is the API version for compute for Azure Stack. It is required to get VMSS network interface.
+	AzureStackComputeAPIVersion = "2018-11-01"
+
+	// AzureStackCloudName is the cloud name of Azure Stack
+	AzureStackCloudName = "AZURESTACKCLOUD"
 )
 
 // Interface is the client interface for NetworkInterface.
