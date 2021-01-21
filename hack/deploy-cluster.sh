@@ -71,7 +71,7 @@ fi
 # Configure the manifests for aks-engine
 cat ${base_manifest} | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${CCM_IMAGE}\"" | \
-  jq ".properties.orchestratorProfile.kubernetesConfig.addons[0].containers[0].image=\"${CNM_IMAGE}\""
+  jq ".properties.orchestratorProfile.kubernetesConfig.addons[0].containers[0].image=\"${CNM_IMAGE}\"" | \
   jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
   jq ".properties.servicePrincipalProfile.secret=\"${CLIENT_SECRET}\"" \
   > ${manifest_file}

@@ -1,6 +1,4 @@
-// +build modhack
-
-package date
+// +build go1.13
 
 // Copyright 2017 Microsoft Corporation
 //
@@ -16,9 +14,16 @@ package date
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-// This file, and the github.com/Azure/go-autorest import, won't actually become part of
-// the resultant binary.
+package autorest
 
-// Necessary for safely adding multi-module repo.
-// See: https://github.com/golang/go/wiki/Modules#is-it-possible-to-add-a-module-to-a-multi-module-repository
-import _ "github.com/Azure/go-autorest"
+import (
+	"errors"
+
+	"github.com/Azure/go-autorest/autorest/adal"
+)
+
+// IsTokenRefreshError returns true if the specified error implements the TokenRefreshError interface.
+func IsTokenRefreshError(err error) bool {
+	var tre adal.TokenRefreshError
+	return errors.As(err, &tre)
+}
