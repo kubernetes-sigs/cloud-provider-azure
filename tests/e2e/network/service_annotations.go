@@ -172,6 +172,9 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
+		// TODO: re-enable the test after the underlying SLB issues fixed.
+		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
+
 		By("creating environment")
 		subnetName := "lb-subnet"
 
