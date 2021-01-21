@@ -611,6 +611,7 @@ func createNginxDeploymentManifest(name string, labels map[string]string) (resul
 }
 
 // validate internal source can access to ILB
+// nolint:unused
 func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) error {
 	// create a pod to access to the service
 	utils.Logf("Validating external IP not be public and internal accessible")
