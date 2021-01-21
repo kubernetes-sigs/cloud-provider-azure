@@ -176,7 +176,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -194,7 +194,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface).Return(response, noContentErr).Times(1)
+	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, noContentErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = nicClient.CreateOrUpdate(context.TODO(), "rg", "nic1", testInterface)
 	assert.Equal(t, noContentErr, rerr)
