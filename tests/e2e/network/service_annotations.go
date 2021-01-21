@@ -37,7 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	azure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -150,6 +150,9 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
+		// TODO: re-enable the test after the underlying SLB issues fixed.
+		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
+
 		annotation := map[string]string{
 			azure.ServiceAnnotationLoadBalancerInternal: "true",
 		}
@@ -169,6 +172,9 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
+		// TODO: re-enable the test after the underlying SLB issues fixed.
+		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
+
 		By("creating environment")
 		subnetName := "lb-subnet"
 
@@ -608,6 +614,7 @@ func createNginxDeploymentManifest(name string, labels map[string]string) (resul
 }
 
 // validate internal source can access to ILB
+// nolint:unused
 func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) error {
 	// create a pod to access to the service
 	utils.Logf("Validating external IP not be public and internal accessible")
