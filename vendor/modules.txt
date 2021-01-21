@@ -1,4 +1,4 @@
-# github.com/Azure/azure-sdk-for-go v49.1.0+incompatible => github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
+# github.com/Azure/azure-sdk-for-go v50.1.0+incompatible => github.com/Azure/azure-sdk-for-go v50.1.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute
@@ -1097,6 +1097,6 @@ sigs.k8s.io/yaml
 # github.com/kr/text => github.com/kr/text v0.2.0
 # github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 # gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
-# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v49.1.0+incompatible
+# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v50.1.0+incompatible
 # k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 # k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
