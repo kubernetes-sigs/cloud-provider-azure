@@ -2444,6 +2444,61 @@ func TestReconcileSecurityGroup(t *testing.T) {
 	}
 }
 
+func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	service := getTestService("test1", v1.ProtocolTCP, map[string]string{ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}, false, 80)
+	service.Spec.LoadBalancerSourceRanges = []string{"1.2.3.4/32"}
+	existingSg := network.SecurityGroup{
+		Name: to.StringPtr("nsg"),
+		SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+			SecurityRules: &[]network.SecurityRule{},
+		},
+	}
+	lbIP := to.StringPtr("1.1.1.1")
+	expectedSg := network.SecurityGroup{
+		Name: to.StringPtr("nsg"),
+		SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+			SecurityRules: &[]network.SecurityRule{
+				{
+					Name: to.StringPtr("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocol("Tcp"),
+						SourcePortRange:          to.StringPtr("*"),
+						SourceAddressPrefix:      to.StringPtr("1.2.3.4/32"),
+						DestinationPortRange:     to.StringPtr("80"),
+						DestinationAddressPrefix: to.StringPtr("1.1.1.1"),
+						Access:                   network.SecurityRuleAccess("Allow"),
+						Priority:                 to.Int32Ptr(500),
+						Direction:                network.SecurityRuleDirection("Inbound"),
+					},
+				},
+				{
+					Name: to.StringPtr("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocol("Tcp"),
+						SourcePortRange:          to.StringPtr("*"),
+						SourceAddressPrefix:      to.StringPtr("*"),
+						DestinationPortRange:     to.StringPtr("80"),
+						DestinationAddressPrefix: to.StringPtr("1.1.1.1"),
+						Access:                   network.SecurityRuleAccess("Deny"),
+						Priority:                 to.Int32Ptr(501),
+						Direction:                network.SecurityRuleDirection("Inbound"),
+					},
+				},
+			},
+		},
+	}
+	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
+	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(existingSg, nil)
+	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIP, true)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedSg, *sg)
+}
+
 func TestSafeDeletePublicIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
