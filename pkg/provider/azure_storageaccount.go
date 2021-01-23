@@ -18,15 +18,15 @@ package azure
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
 )
+
+const skipMatching = "skip-matching"
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -88,6 +88,12 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 				}
 			}
 
+			if acct.Tags != nil {
+				// skip account with skipMatching tag
+				if _, ok := acct.Tags[skipMatching]; ok {
+					continue
+				}
+			}
 			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: storageType, Location: location})
 		}
 	}
@@ -141,9 +147,7 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 			}
 
 			if len(accounts) > 0 {
-				// get a random matching account
-				rand.Seed(time.Now().UnixNano())
-				accountName = accounts[rand.Intn(len(accounts))].Name
+				accountName = accounts[0].Name
 				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
 			}
 		}
