@@ -22,6 +22,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 
 	"k8s.io/klog/v2"
 )
@@ -220,4 +221,27 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 	}
 
 	return accountName, accountKey, nil
+}
+
+// AddStorageAccountTags add tags to storage account
+func (az *Cloud) AddStorageAccountTags(resourceGroup, account string, tags map[string]*string) *retry.Error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+	result, rerr := az.StorageAccountClient.GetProperties(ctx, resourceGroup, account)
+	if rerr != nil {
+		return rerr
+	}
+
+	newTags := result.Tags
+	if newTags == nil {
+		newTags = make(map[string]*string)
+	}
+
+	// merge two tag map
+	for k, v := range tags {
+		newTags[k] = v
+	}
+
+	updateParams := storage.AccountUpdateParameters{Tags: newTags}
+	return az.StorageAccountClient.Update(ctx, resourceGroup, account, updateParams)
 }

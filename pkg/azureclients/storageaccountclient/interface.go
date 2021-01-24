@@ -40,6 +40,9 @@ type Interface interface {
 	// Create creates a StorageAccount.
 	Create(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountCreateParameters) *retry.Error
 
+	// Update updates a StorageAccount.
+	Update(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountUpdateParameters) *retry.Error
+
 	// Delete deletes a StorageAccount by name.
 	Delete(ctx context.Context, resourceGroupName string, accountName string) *retry.Error
 

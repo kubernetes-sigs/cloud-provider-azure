@@ -539,6 +539,48 @@ func TestCreateResponderError(t *testing.T) {
 	assert.NotNil(t, rerr)
 }
 
+func TestUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
+	sa := storage.AccountUpdateParameters{
+		Tags: map[string]*string{"key": to.StringPtr("value")},
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	saClient := getTestStorageAccountClient(armClient)
+	rerr := saClient.Update(context.TODO(), "rg", "sa1", sa)
+	assert.Nil(t, rerr)
+}
+
+func TestUpdateResponderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
+	sa := storage.AccountUpdateParameters{
+		Tags: map[string]*string{"key": to.StringPtr("value")},
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	saClient := getTestStorageAccountClient(armClient)
+	rerr := saClient.Update(context.TODO(), "rg", "sa1", sa)
+	assert.NotNil(t, rerr)
+}
+
 func TestDelete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
