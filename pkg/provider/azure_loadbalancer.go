@@ -1915,7 +1915,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		}
 
 		shouldAddDenyRule := false
-		if len(sourceRanges) > 0 {
+		if len(sourceRanges) > 0 && !servicehelpers.IsAllowAll(sourceRanges) {
 			if v, ok := service.Annotations[ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, "true") {
 				shouldAddDenyRule = true
 			}
