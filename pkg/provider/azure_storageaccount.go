@@ -27,7 +27,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const skipMatching = "skip-matching"
+// SkipMatchingTag skip account matching tag
+const SkipMatchingTag = "skip-matching"
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -90,8 +91,9 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 			}
 
 			if acct.Tags != nil {
-				// skip account with skipMatching tag
-				if _, ok := acct.Tags[skipMatching]; ok {
+				// skip account with SkipMatchingTag tag
+				if _, ok := acct.Tags[SkipMatchingTag]; ok {
+					klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, acct.Name)
 					continue
 				}
 			}
