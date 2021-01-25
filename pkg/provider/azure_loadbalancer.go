@@ -1556,7 +1556,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		if lb.FrontendIPConfigurations == nil || len(*lb.FrontendIPConfigurations) == 0 {
 			err := az.cleanOrphanedLoadBalancer(lb, service, clusterName)
 			if err != nil {
-				klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s) - failed to cleanOrphanedLoadBalancer: %v", serviceName, lbName)
+				klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s) - failed to cleanOrphanedLoadBalancer: %v", serviceName, lbName, err)
 				return nil, err
 			}
 		} else {
