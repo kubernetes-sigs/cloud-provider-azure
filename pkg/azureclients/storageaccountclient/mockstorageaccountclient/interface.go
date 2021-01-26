@@ -18,9 +18,10 @@ package mockstorageaccountclient
 
 import (
 	context "context"
+	reflect "reflect"
+
 	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -118,4 +119,18 @@ func (m *MockInterface) GetProperties(ctx context.Context, resourceGroupName, ac
 func (mr *MockInterfaceMockRecorder) GetProperties(ctx, resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProperties", reflect.TypeOf((*MockInterface)(nil).GetProperties), ctx, resourceGroupName, accountName)
+}
+
+// Update mocks base method
+func (m *MockInterface) Update(ctx context.Context, resourceGroupName, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, accountName, parameters)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// Update indicates an expected call of Update
+func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, accountName, parameters interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, accountName, parameters)
 }
