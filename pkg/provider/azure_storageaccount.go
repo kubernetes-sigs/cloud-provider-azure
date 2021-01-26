@@ -46,6 +46,9 @@ type accountWithLocation struct {
 
 // getStorageAccounts get matching storage accounts
 func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWithLocation, error) {
+	if az.StorageAccountClient == nil {
+		return nil, fmt.Errorf("StorageAccountClient is nil")
+	}
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 	result, rerr := az.StorageAccountClient.ListByResourceGroup(ctx, accountOptions.ResourceGroup)
@@ -106,9 +109,12 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 
 // GetStorageAccesskey gets the storage account access key
 func (az *Cloud) GetStorageAccesskey(account, resourceGroup string) (string, error) {
+	if az.StorageAccountClient == nil {
+		return "", fmt.Errorf("StorageAccountClient is nil")
+	}
+
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
-
 	result, rerr := az.StorageAccountClient.ListKeys(ctx, resourceGroup, account)
 	if rerr != nil {
 		return "", rerr.Error()
@@ -207,6 +213,9 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				Tags:     tags,
 				Location: &location}
 
+			if az.StorageAccountClient == nil {
+				return "", "", fmt.Errorf("StorageAccountClient is nil")
+			}
 			ctx, cancel := getContextWithCancel()
 			defer cancel()
 			rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp)
@@ -227,6 +236,9 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 
 // AddStorageAccountTags add tags to storage account
 func (az *Cloud) AddStorageAccountTags(resourceGroup, account string, tags map[string]*string) *retry.Error {
+	if az.StorageAccountClient == nil {
+		return retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
+	}
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 	result, rerr := az.StorageAccountClient.GetProperties(ctx, resourceGroup, account)
@@ -246,4 +258,29 @@ func (az *Cloud) AddStorageAccountTags(resourceGroup, account string, tags map[s
 
 	updateParams := storage.AccountUpdateParameters{Tags: newTags}
 	return az.StorageAccountClient.Update(ctx, resourceGroup, account, updateParams)
+}
+
+// RemoveStorageAccountTag remove tag from storage account
+func (az *Cloud) RemoveStorageAccountTag(resourceGroup, account, key string) *retry.Error {
+	if az.StorageAccountClient == nil {
+		return retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
+	}
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+	result, rerr := az.StorageAccountClient.GetProperties(ctx, resourceGroup, account)
+	if rerr != nil {
+		return rerr
+	}
+
+	if len(result.Tags) == 0 {
+		return nil
+	}
+
+	originalLen := len(result.Tags)
+	delete(result.Tags, key)
+	if originalLen != len(result.Tags) {
+		updateParams := storage.AccountUpdateParameters{Tags: result.Tags}
+		return az.StorageAccountClient.Update(ctx, resourceGroup, account, updateParams)
+	}
+	return nil
 }
