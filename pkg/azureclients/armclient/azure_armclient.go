@@ -126,7 +126,7 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 	}
 
 	if response.StatusCode != http.StatusNotFound || c.clientRegion == "" {
-		dumpResponse(response, 5)
+		dumpResponse(response, 10)
 		return response, rerr
 	}
 
@@ -141,7 +141,7 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 	// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
 	var body map[string]interface{}
 	if e := json.Unmarshal(bodyBytes, &body); e != nil {
-		klog.V(5).Infof("Send.sendRequest: error in parsing response body string: %s, Skip retrying regional host", e)
+		klog.Errorf("Send.sendRequest: error in parsing response body string: %s, Skip retrying regional host", e)
 		return response, rerr
 	}
 
@@ -179,7 +179,7 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 		return response, rerr
 	}
 
-	dumpResponse(response, 5)
+	dumpResponse(response, 10)
 	return regionalResponse, regionalError
 }
 
@@ -386,7 +386,7 @@ func (c *Client) PutResources(ctx context.Context, resources map[string]interfac
 			}
 			continue
 		}
-		dumpRequest(request, 5)
+		dumpRequest(request, 10)
 
 		future, resp, clientErr := c.SendAsync(ctx, request)
 		defer c.CloseResponse(ctx, resp)
@@ -450,7 +450,7 @@ func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID strin
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 5)
+	dumpRequest(request, 10)
 
 	future, resp, clientErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
@@ -531,7 +531,7 @@ func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parame
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 5)
+	dumpRequest(request, 10)
 
 	future, resp, rErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
