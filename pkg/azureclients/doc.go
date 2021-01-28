@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clients contains a set of Azure ARM clients.
-package clients // import "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
+// Package azureclients contains a set of Azure ARM clients.
+package azureclients // import "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"

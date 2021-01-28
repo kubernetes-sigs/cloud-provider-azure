@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package azure
+package provider
 
 import (
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"

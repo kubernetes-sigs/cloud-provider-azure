@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -138,7 +138,7 @@ var _ = Describe("Network security group", func() {
 	It("can set source IP prefixes automatically according to corresponding service tag", func() {
 		By("Creating service and wait it to expose")
 		annotation := map[string]string{
-			azure.ServiceAnnotationAllowedServiceTag: "AzureCloud",
+			azureprovider.ServiceAnnotationAllowedServiceTag: "AzureCloud",
 		}
 		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
