@@ -1,17 +1,16 @@
 approvers:
 - andyzhangx
-- brendandburns
 - feiskyer
-- karataliu
-- khenidak
-- ritazh
 - nilo19
+
 reviewers:
 - andyzhangx
-- brendandburns
 - feiskyer
-- justaugustus
+- nilo19
+
+emeritus_approvers:
+- brendandburns
 - karataliu
 - khenidak
 - ritazh
-- nilo19
+
