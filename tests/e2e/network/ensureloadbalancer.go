@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	azure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -85,7 +85,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	// Public w/o IP -> Public w/ IP
 	It("should support assigning to specific IP when updating public service", func() {
 		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerInternal: "false",
+			azureprovider.ServiceAnnotationLoadBalancerInternal: "false",
 		}
 		ipName := basename + "-public-none-IP" + string(uuid.NewUUID())[0:4]
 
@@ -131,7 +131,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
 
 		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerInternal: "true",
+			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		ip1, err := utils.SelectAvailablePrivateIP(tc)
 		Expect(err).NotTo(HaveOccurred())
@@ -177,7 +177,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
 
 		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerInternal: "true",
+			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		ipName := basename + "-internal-none-public-IP" + string(uuid.NewUUID())[0:4]
 
@@ -223,7 +223,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	It("should have no operation since no change in service when update [Slow]", func() {
 		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerInternal: "false",
+			azureprovider.ServiceAnnotationLoadBalancerInternal: "false",
 		}
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
@@ -251,8 +251,8 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		By("Update without changing the service and wait for a while")
 		utils.Logf("External IP is now %s", targetIP)
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
-		service.Annotations[azure.ServiceAnnotationDNSLabelName] = "testlabel"
-		utils.Logf(service.Annotations[azure.ServiceAnnotationDNSLabelName])
+		service.Annotations[azureprovider.ServiceAnnotationDNSLabelName] = "testlabel"
+		utils.Logf(service.Annotations[azureprovider.ServiceAnnotationDNSLabelName])
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -354,7 +354,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
 
 		annotation := map[string]string{
-			azure.ServiceAnnotationLoadBalancerInternal: "true",
+			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		service1 := utils.CreateLoadBalancerServiceManifest("service1", annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
@@ -435,7 +435,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 }
 
 func judgeInternal(service v1.Service) bool {
-	return service.Annotations[azure.ServiceAnnotationLoadBalancerInternal] == "true"
+	return service.Annotations[azureprovider.ServiceAnnotationLoadBalancerInternal] == "true"
 }
 
 func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (result *v1.Service) {
@@ -448,9 +448,9 @@ func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (re
 		return
 	}
 	if isInternal {
-		result.Annotations[azure.ServiceAnnotationLoadBalancerInternal] = "true"
+		result.Annotations[azureprovider.ServiceAnnotationLoadBalancerInternal] = "true"
 	} else {
-		delete(result.Annotations, azure.ServiceAnnotationLoadBalancerInternal)
+		delete(result.Annotations, azureprovider.ServiceAnnotationLoadBalancerInternal)
 	}
 	return
 }
