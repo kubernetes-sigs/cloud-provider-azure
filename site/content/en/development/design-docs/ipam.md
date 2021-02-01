@@ -3,8 +3,7 @@ title: "Out-of-tree Node IPAM Controller"
 linkTitle: "node IPAM controller"
 type: docs
 weight: 10
-description: >
-Support Node IPAM allocator in the out-of-tree provider Azure.
+description: "Support Node IPAM allocator in the out-of-tree provider Azure."
 ---
 
 ## Background
@@ -51,3 +50,4 @@ For each node pool (VMSS or VMAS), tag `{"kubernetesNodeCIDRMaskSize": "24"}` co
 
 Q: what would happen if the tag value gets changed after some time?
 A: In this case, existing node's nodeCIDR won't be changed, while new nodes' CIDR would be allocated with a new mask size.
+
