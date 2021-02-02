@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 )
 
 // ListRouteTables returns the list of all route tables in the resource group
