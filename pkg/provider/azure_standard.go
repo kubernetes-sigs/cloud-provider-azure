@@ -798,7 +798,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 		return "", "", "", nil, err
 	}
 
-	if nic.ProvisioningState != nil && *nic.ProvisioningState == nicFailedState {
+	if nic.ProvisioningState == nicFailedState {
 		klog.Warningf("EnsureHostInPool skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 		return "", "", "", nil, nil
 	}
@@ -967,7 +967,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			continue
 		}
 
-		if nic.ProvisioningState != nil && *nic.ProvisioningState == nicFailedState {
+		if nic.ProvisioningState == nicFailedState {
 			klog.Warningf("EnsureBackendPoolDeleted skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 			return nil
 		}
