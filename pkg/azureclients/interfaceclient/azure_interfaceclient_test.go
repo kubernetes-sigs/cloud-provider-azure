@@ -260,7 +260,7 @@ func getTestVMSSInterface(name string) network.Interface {
 		ID:       to.StringPtr(resourceID),
 		Location: to.StringPtr("eastus"),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			Primary: to.BoolPtr(true),
+			EnableAcceleratedNetworking: to.BoolPtr(true),
 		},
 	}
 }
