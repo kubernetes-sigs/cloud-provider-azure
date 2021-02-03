@@ -272,7 +272,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(network.PublicIPAddress{
 			Name: to.StringPtr("pip"),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				ProvisioningState: to.StringPtr("Succeeded"),
+				ProvisioningState: network.Succeeded,
 			},
 		}, nil).AnyTimes()
 
