@@ -1217,7 +1217,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		nicName           string
 		nicID             string
 		vmSetName         string
-		nicProvisionState string
+		nicProvisionState network.ProvisioningState
 		isStandardLB      bool
 		useMultipleSLBs   bool
 		expectedErrMsg    error
@@ -1322,7 +1322,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
 		testNIC.Name = to.StringPtr(test.nicName)
 		testNIC.ID = to.StringPtr(test.nicID)
-		testNIC.ProvisioningState = to.StringPtr(test.nicProvisionState)
+		testNIC.ProvisioningState = test.nicProvisionState
 
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, string(test.nodeName), gomock.Any()).Return(testVM, nil).AnyTimes()
@@ -1687,7 +1687,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) network.Interface {
 	expectedNIC := network.Interface{
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			ProvisioningState: to.StringPtr("Succeeded"),
+			ProvisioningState: network.Succeeded,
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
