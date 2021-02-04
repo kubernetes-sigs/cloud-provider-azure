@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -798,7 +798,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 		return "", "", "", nil, err
 	}
 
-	if nic.ProvisioningState != nil && *nic.ProvisioningState == nicFailedState {
+	if nic.ProvisioningState == nicFailedState {
 		klog.Warningf("EnsureHostInPool skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 		return "", "", "", nil, nil
 	}
@@ -967,7 +967,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			continue
 		}
 
-		if nic.ProvisioningState != nil && *nic.ProvisioningState == nicFailedState {
+		if nic.ProvisioningState == nicFailedState {
 			klog.Warningf("EnsureBackendPoolDeleted skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
 			return nil
 		}
