@@ -28,7 +28,7 @@ const (
 	// APIVersion is the API version for compute.
 	APIVersion = "2020-06-30"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
-	AzureStackCloudAPIVersion = "2019-07-01"
+	AzureStackCloudAPIVersion = "2019-03-01"
 	// AzureStackCloudName is the cloud name of Azure Stack
 	AzureStackCloudName = "AZURESTACKCLOUD"
 )
