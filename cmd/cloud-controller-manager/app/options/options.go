@@ -64,9 +64,10 @@ const (
 
 // CloudControllerManagerOptions is the main context object for the controller manager.
 type CloudControllerManagerOptions struct {
-	Generic           *cmoptions.GenericControllerManagerConfigurationOptions
-	KubeCloudShared   *cpoptions.KubeCloudSharedOptions
-	ServiceController *cpoptions.ServiceControllerOptions
+	Generic            *cmoptions.GenericControllerManagerConfigurationOptions
+	KubeCloudShared    *cpoptions.KubeCloudSharedOptions
+	ServiceController  *cpoptions.ServiceControllerOptions
+	NodeIPAMController *NodeIPAMControllerOptions
 
 	SecureServing *apiserveroptions.SecureServingOptionsWithLoopback
 	// TODO: remove insecure serving mode
@@ -94,7 +95,8 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 		ServiceController: &cpoptions.ServiceControllerOptions{
 			ServiceControllerConfiguration: &componentConfig.ServiceController,
 		},
-		SecureServing: apiserveroptions.NewSecureServingOptions().WithLoopback(),
+		NodeIPAMController: defaultNodeIPAMControllerOptions(),
+		SecureServing:      apiserveroptions.NewSecureServingOptions().WithLoopback(),
 		InsecureServing: (&apiserveroptions.DeprecatedInsecureServingOptions{
 			BindAddress: net.ParseIP(componentConfig.Generic.Address),
 			BindPort:    int(componentConfig.Generic.Port),
@@ -142,6 +144,7 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	o.Generic.AddFlags(&fss, allControllers, disabledByDefaultControllers)
 	o.KubeCloudShared.AddFlags(fss.FlagSet("generic"))
 	o.ServiceController.AddFlags(fss.FlagSet("service controller"))
+	o.NodeIPAMController.AddFlags(fss.FlagSet("node ipam controller"))
 
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
 	o.InsecureServing.AddUnqualifiedFlags(fss.FlagSet("insecure serving"))
@@ -168,6 +171,9 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 		return err
 	}
 	if err = o.ServiceController.ApplyTo(&c.ComponentConfig.ServiceController); err != nil {
+		return err
+	}
+	if err = o.NodeIPAMController.ApplyTo(&c.NodeIPAMControllerConfig); err != nil {
 		return err
 	}
 	if err = o.InsecureServing.ApplyTo(&c.InsecureServing, &c.LoopbackClientConfig); err != nil {
@@ -239,6 +245,7 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 	errors = append(errors, o.Generic.Validate(allControllers, disabledByDefaultControllers)...)
 	errors = append(errors, o.KubeCloudShared.Validate()...)
 	errors = append(errors, o.ServiceController.Validate()...)
+	errors = append(errors, o.NodeIPAMController.Validate()...)
 	errors = append(errors, o.SecureServing.Validate()...)
 	errors = append(errors, o.InsecureServing.Validate()...)
 	errors = append(errors, o.Authentication.Validate()...)

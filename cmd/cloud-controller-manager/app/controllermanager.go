@@ -236,7 +236,7 @@ func startControllers(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan st
 		klog.V(1).Infof("Starting %q", controllerName)
 		_, started, err := initFn(c, cloud, stopCh)
 		if err != nil {
-			klog.Errorf("Error starting %q", controllerName)
+			klog.Errorf("Error starting %q: %s", controllerName, err.Error())
 			return err
 		}
 		if !started {
@@ -281,5 +281,6 @@ func newControllerInitializers() map[string]initFunc {
 	controllers["cloud-node-lifecycle"] = startCloudNodeLifecycleController
 	controllers["service"] = startServiceController
 	controllers["route"] = startRouteController
+	controllers["node-ipam"] = startNodeIpamController
 	return controllers
 }

@@ -24,6 +24,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	ccmconfig "k8s.io/cloud-provider/app/apis/config"
+
+	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 )
 
 // Config is the main context object for the cloud controller manager.
@@ -38,6 +40,8 @@ type Config struct {
 	InsecureServing *apiserver.DeprecatedInsecureServingInfo
 	Authentication  apiserver.AuthenticationInfo
 	Authorization   apiserver.AuthorizationInfo
+
+	NodeIPAMControllerConfig nodeipamconfig.NodeIPAMControllerConfiguration
 
 	// the general kube client
 	Client *clientset.Clientset
