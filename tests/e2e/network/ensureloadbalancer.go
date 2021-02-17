@@ -127,9 +127,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	// Internal w/ IP -> Internal w/ IP
 	It("should support updating internal IP when updating internal service", func() {
-		// TODO: re-enable the test after the underlying SLB issues fixed.
-		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
-
 		annotation := map[string]string{
 			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
@@ -173,9 +170,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	// internal w/o IP -> public w/ IP
 	It("should support updating an internal service to a public service with assigned IP", func() {
-		// TODO: re-enable the test after the underlying SLB issues fixed.
-		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
-
 		annotation := map[string]string{
 			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
@@ -350,9 +344,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	})
 
 	It("should support multiple internal services sharing one IP address", func() {
-		// TODO: re-enable the test after the underlying SLB issues fixed.
-		Skip("Skip the ILB test scenarios since there're some issues in underlying SLB")
-
 		annotation := map[string]string{
 			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
 		}
