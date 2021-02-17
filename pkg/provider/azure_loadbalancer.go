@@ -550,6 +550,12 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 				Name: network.LoadBalancerSkuNameStandard,
 			}
 		}
+		if az.HasExtendedLocation() {
+			defaultLB.ExtendedLocation = &network.ExtendedLocation{
+				Name: &az.ExtendedLocationName,
+				Type: &az.ExtendedLocationType,
+			}
+		}
 	}
 
 	return defaultLB, nil, false, nil
@@ -592,6 +598,12 @@ func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, exi
 				Location:                     &az.Location,
 				Sku:                          &network.LoadBalancerSku{Name: loadBalancerSKU},
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+			}
+			if az.HasExtendedLocation() {
+				selectedLB.ExtendedLocation = &network.ExtendedLocation{
+					Name: &az.ExtendedLocationName,
+					Type: &az.ExtendedLocationType,
+				}
 			}
 
 			return selectedLB, false, nil
@@ -823,6 +835,12 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		}
 		pip.Name = to.StringPtr(pipName)
 		pip.Location = to.StringPtr(az.Location)
+		if az.HasExtendedLocation() {
+			pip.ExtendedLocation = &network.ExtendedLocation{
+				Name: &az.ExtendedLocationName,
+				Type: &az.ExtendedLocationType,
+			}
+		}
 		pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
 			IPTags:                   getServiceIPTagRequestForPublicIP(service).IPTags,

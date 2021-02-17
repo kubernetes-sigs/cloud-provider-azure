@@ -94,3 +94,11 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 
 	return az
 }
+
+// GetTestCloudWithExtendedLocation returns a fake azure cloud for unit tests in Azure related CSI drivers with extended location.
+func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
+	az = GetTestCloud(ctrl)
+	az.Config.ExtendedLocationName = "microsoftlosangeles1"
+	az.Config.ExtendedLocationType = "EdgeZone"
+	return az
+}
