@@ -925,3 +925,8 @@ func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(node *v1.Node) bool {
 
 	return false
 }
+
+// AliasRangesByProviderID to be implemented
+func (az *Cloud) AliasRangesByProviderID(id string) ([]string, error) {
+	return nil, nil
+}
