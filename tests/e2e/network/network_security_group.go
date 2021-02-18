@@ -157,6 +157,51 @@ var _ = Describe("Network security group", func() {
 		}
 		Expect(found).To(BeTrue())
 	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges`", func() {
+		By("Creating a test service with the deny rule annotation but without `service.Spec.LoadBalancerSourceRanges`")
+		annotation := map[string]string{
+			azureprovider.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+			azureprovider.ServiceAnnotationLoadBalancerInternal:                  "true",
+		}
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the service to expose")
+		internalIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking if there is a deny_all rule")
+		nsg, err := tc.GetClusterSecurityGroup()
+		Expect(err).NotTo(HaveOccurred())
+		found := validateDenyAllSecurityRuleExists(nsg, internalIP)
+		Expect(found).ToNot(BeTrue())
+
+		By("Deleting the service")
+		err = utils.DeleteService(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a test service with the deny rule annotation and `service.Spec.LoadBalancerSourceRanges`")
+		service.Spec.LoadBalancerSourceRanges = []string{"1.2.3.4/32"}
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the service to expose")
+		internalIP, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking if there is a LoadBalancerSourceRanges rule")
+		nsg, err = tc.GetClusterSecurityGroup()
+		Expect(err).NotTo(HaveOccurred())
+		found = validateLoadBalancerSourceRangesRuleExists(nsg, internalIP, "1.2.3.4/32", "1.2.3.4_32")
+		Expect(found).To(BeTrue())
+
+		By("Checking if there is a deny_all rule")
+		found = validateDenyAllSecurityRuleExists(nsg, internalIP)
+		Expect(found).To(BeTrue())
+	})
+
 })
 
 func validateUnsharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ip string, port string) bool {
@@ -191,5 +236,37 @@ func validateSharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ips []string
 			}
 		}
 	}
+	return false
+}
+
+func validateLoadBalancerSourceRangesRuleExists(nsg *aznetwork.SecurityGroup, ip, sourceAddressPrefix, ipRangesSuffix string) bool {
+	if nsg == nil || nsg.SecurityRules == nil {
+		return false
+	}
+	for _, securityRule := range *nsg.SecurityRules {
+		if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
+			strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
+			strings.HasSuffix(to.String(securityRule.Name), ipRangesSuffix) &&
+			strings.EqualFold(to.String(securityRule.SourceAddressPrefix), sourceAddressPrefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func validateDenyAllSecurityRuleExists(nsg *aznetwork.SecurityGroup, ip string) bool {
+	if nsg == nil || nsg.SecurityRules == nil {
+		return false
+	}
+	for _, securityRule := range *nsg.SecurityRules {
+		if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
+			strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
+			strings.HasSuffix(to.String(securityRule.Name), "deny_all") &&
+			strings.EqualFold(to.String(securityRule.SourceAddressPrefix), "*") {
+			return true
+		}
+	}
+
 	return false
 }
