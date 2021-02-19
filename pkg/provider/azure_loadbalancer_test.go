@@ -1258,6 +1258,62 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 	}
 }
 
+func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
+	service := getTestService("service1", v1.ProtocolTCP, nil, false, 80)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloudWithExtendedLocation(ctrl)
+	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 3, 3)
+	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
+
+	// Test with wantLB=false
+	expectedLB := &network.LoadBalancer{
+		Name:     to.StringPtr("testCluster"),
+		Location: to.StringPtr("westus"),
+		ExtendedLocation: &network.ExtendedLocation{
+			Name: to.StringPtr("microsoftlosangeles1"),
+			Type: to.StringPtr("EdgeZone"),
+		},
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+	}
+	mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
+	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
+	az.LoadBalancerClient = mockLBsClient
+
+	lb, status, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+		clusterResources.nodes, false)
+	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
+	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
+	assert.Equal(t, false, exists, "GetServiceLoadBalancer: Default LB should not exist.")
+	assert.NoError(t, err, "GetServiceLoadBalancer: No error should be thrown when returning default LB.")
+
+	// Test with wantLB=true
+	expectedLB = &network.LoadBalancer{
+		Name:     to.StringPtr("testCluster"),
+		Location: to.StringPtr("westus"),
+		ExtendedLocation: &network.ExtendedLocation{
+			Name: to.StringPtr("microsoftlosangeles1"),
+			Type: to.StringPtr("EdgeZone"),
+		},
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+		Sku: &network.LoadBalancerSku{
+			Name: network.LoadBalancerSkuName("Basic"),
+			Tier: network.LoadBalancerSkuTier(""),
+		},
+	}
+	mockLBsClient = mockloadbalancerclient.NewMockInterface(ctrl)
+	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
+	az.LoadBalancerClient = mockLBsClient
+
+	lb, status, exists, err = az.getServiceLoadBalancer(&service, testClusterName,
+		clusterResources.nodes, true)
+	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
+	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
+	assert.Equal(t, false, exists, "GetServiceLoadBalancer: LB should not exist before hand.")
+	assert.NoError(t, err, "GetServiceLoadBalancer: No error should be thrown when returning new LB.")
+}
+
 func TestIsFrontendIPChanged(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -3091,6 +3147,42 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			assert.Equal(t, test.expectedPIP, pip, "TestCase[%d]: %s", i, test.desc)
 		}
 	}
+}
+func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloudWithExtendedLocation(ctrl)
+	service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+
+	expectedPIP := &network.PublicIPAddress{
+		Name:     to.StringPtr("pip1"),
+		Location: &az.location,
+		ExtendedLocation: &network.ExtendedLocation{
+			Name: to.StringPtr("microsoftlosangeles1"),
+			Type: to.StringPtr("EdgeZone"),
+		},
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			PublicIPAllocationMethod: "Static",
+			PublicIPAddressVersion:   "IPv4",
+			ProvisioningState:        "",
+		},
+		Tags: map[string]*string{
+			"service":                 to.StringPtr("default/test1"),
+			"kubernetes-cluster-name": to.StringPtr(""),
+		},
+	}
+	mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+	first := mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{
+		HTTPStatusCode: 404,
+	})
+	mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).Return(*expectedPIP, nil).After(first)
+
+	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).Return(nil).Times(1)
+	pip, err := az.ensurePublicIPExists(&service, "pip1", "", "", false, false)
+	assert.Equal(t, expectedPIP, pip, "ensurePublicIPExists shall create a new pip"+
+		"with extendedLocation if there is no existed pip")
+	assert.Nil(t, err, "ensurePublicIPExists should create a new pip without errors.")
 }
 
 func TestShouldUpdateLoadBalancer(t *testing.T) {
