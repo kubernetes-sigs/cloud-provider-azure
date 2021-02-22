@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.15
 
 require (
-	github.com/Azure/azure-sdk-for-go v50.1.0+incompatible
+	github.com/Azure/azure-sdk-for-go v51.2.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.17
 	github.com/Azure/go-autorest/autorest/adal v0.9.10
 	github.com/Azure/go-autorest/autorest/mocks v0.4.1
@@ -31,7 +31,6 @@ require (
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
 	k8s.io/legacy-cloud-providers v0.0.0
-	k8s.io/metrics v0.0.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )
@@ -160,7 +159,7 @@ replace github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227
 
 replace gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
 
-replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v50.1.0+incompatible
+replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v51.2.0+incompatible
 
 replace k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 
