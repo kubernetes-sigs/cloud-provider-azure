@@ -1,42 +1,4 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.6.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</link><pubDate>Tue, 01 Sep 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</guid><description>
-&lt;h2 id="major-changes-since-v050">Major changes since v0.5.0&lt;/h2>
-&lt;hr>
-&lt;ul>
-&lt;li>Update vendor against k/k release-1.19(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/385">#385&lt;/a>)&lt;/li>
-&lt;li>Increase the e2e test coverage for cluster autoscaler(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/364">#364&lt;/a>)&lt;/li>
-&lt;li>Use hugo to generate doc website(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/358">#358&lt;/a>)&lt;/li>
-&lt;li>Update E2E test related docs and script(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/355">#355&lt;/a>)&lt;/li>
-&lt;li>Partly decouple k/k(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/350">#350&lt;/a>)&lt;/li>
-&lt;li>Update go module against k8s.io/cloud-provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/348">#348&lt;/a>)&lt;/li>
-&lt;li>Use distroless/static as base image(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/333">#333&lt;/a>)&lt;/li>
-&lt;li>Enable running ccm e2e test in a job(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/345">#345&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;p>The image is available at&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.6.0&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.6.0&lt;/code>&lt;/li>
-&lt;/ul>
-&lt;p>Since v0.5.0, our docs are moved to &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/">a dedicated website&lt;/a> and the &lt;code>docs/&lt;/code> directory is deprecated.&lt;/p></description></item><item><title>Blog: v0.5.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</link><pubDate>Mon, 27 Apr 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</guid><description>
-&lt;h2 id="changes-since-v050">Changes since v0.5.0&lt;/h2>
-&lt;hr>
-&lt;ul>
-&lt;li>Update Kubernetes vendor to adopt bug fixes from in-tree cloud provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/330">#330&lt;/a>)&lt;/li>
-&lt;li>Use a service account for CCM (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/329">#329&lt;/a>)&lt;/li>
-&lt;li>Update images for out-of-tree examples (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/328">#328&lt;/a>)&lt;/li>
-&lt;li>Fix wrong init url for kubemark tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/327">#327&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;p>The image is available at&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.5.1&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.1&lt;/code>&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.5.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/03/27/v0.5.0/</link><pubDate>Fri, 27 Mar 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/03/27/v0.5.0/</guid><description>
-&lt;p>The alpha version of &lt;code>azure-cloud-controller-manager&lt;/code> and &lt;code>azure-cloud-node-manager&lt;/code>, which have upgraded Kubernetes version to v1.18. It also adds Windows support for azure-cloud-node-manager.&lt;/p>
-&lt;p>Please see &lt;a href="https://github.com/kubernetes/cloud-provider-azure/blob/master/docs/cloud-controller-manager.md">docs&lt;/a> for documentation.&lt;/p>
-&lt;p>The image is available at&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.5.0&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.0&lt;/code>&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.7.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/01/04/v0.7.0/</link><pubDate>Sat, 04 Jan 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/01/04/v0.7.0/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/01/06/v0.7.0/</link><pubDate>Wed, 06 Jan 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/01/06/v0.7.0/</guid><description>
 &lt;h2 id="major-changes-since-v060">Major changes since v0.6.0&lt;/h2>
 &lt;p>Cloud Provider Azure v0.7.0 updates Kubernetes vendor to v1.20 and moves to &lt;strong>beta&lt;/strong>. The images are available at&lt;/p>
 &lt;ul>
@@ -267,6 +229,44 @@
 &lt;li>k8s.io/kubernetes/staging/src/k8s.io/metrics: 70a6823&lt;/li>
 &lt;li>k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver: 70a6823&lt;/li>
 &lt;li>vbom.ml/util: db5cfe1&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v0.6.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</link><pubDate>Tue, 01 Sep 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</guid><description>
+&lt;h2 id="major-changes-since-v050">Major changes since v0.5.0&lt;/h2>
+&lt;hr>
+&lt;ul>
+&lt;li>Update vendor against k/k release-1.19(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/385">#385&lt;/a>)&lt;/li>
+&lt;li>Increase the e2e test coverage for cluster autoscaler(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/364">#364&lt;/a>)&lt;/li>
+&lt;li>Use hugo to generate doc website(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/358">#358&lt;/a>)&lt;/li>
+&lt;li>Update E2E test related docs and script(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/355">#355&lt;/a>)&lt;/li>
+&lt;li>Partly decouple k/k(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/350">#350&lt;/a>)&lt;/li>
+&lt;li>Update go module against k8s.io/cloud-provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/348">#348&lt;/a>)&lt;/li>
+&lt;li>Use distroless/static as base image(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/333">#333&lt;/a>)&lt;/li>
+&lt;li>Enable running ccm e2e test in a job(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/345">#345&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;p>The image is available at&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.6.0&lt;/code>&lt;/li>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.6.0&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Since v0.5.0, our docs are moved to &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/">a dedicated website&lt;/a> and the &lt;code>docs/&lt;/code> directory is deprecated.&lt;/p></description></item><item><title>Blog: v0.5.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</link><pubDate>Mon, 27 Apr 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</guid><description>
+&lt;h2 id="changes-since-v050">Changes since v0.5.0&lt;/h2>
+&lt;hr>
+&lt;ul>
+&lt;li>Update Kubernetes vendor to adopt bug fixes from in-tree cloud provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/330">#330&lt;/a>)&lt;/li>
+&lt;li>Use a service account for CCM (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/329">#329&lt;/a>)&lt;/li>
+&lt;li>Update images for out-of-tree examples (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/328">#328&lt;/a>)&lt;/li>
+&lt;li>Fix wrong init url for kubemark tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/327">#327&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;p>The image is available at&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.5.1&lt;/code>&lt;/li>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.1&lt;/code>&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v0.5.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/03/27/v0.5.0/</link><pubDate>Fri, 27 Mar 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/03/27/v0.5.0/</guid><description>
+&lt;p>The alpha version of &lt;code>azure-cloud-controller-manager&lt;/code> and &lt;code>azure-cloud-node-manager&lt;/code>, which have upgraded Kubernetes version to v1.18. It also adds Windows support for azure-cloud-node-manager.&lt;/p>
+&lt;p>Please see &lt;a href="https://github.com/kubernetes/cloud-provider-azure/blob/master/docs/cloud-controller-manager.md">docs&lt;/a> for documentation.&lt;/p>
+&lt;p>The image is available at&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.5.0&lt;/code>&lt;/li>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.0&lt;/code>&lt;/li>
 &lt;/ul></description></item><item><title>Blog: v0.4.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2019/12/30/v0.4.1/</link><pubDate>Mon, 30 Dec 2019 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2019/12/30/v0.4.1/</guid><description>
 &lt;p>The alpha version of azure-cloud-controller-manager and azure-cloud-node-manager, which fixes the node address update issues.&lt;/p>
 &lt;p>The image is available at&lt;/p>
