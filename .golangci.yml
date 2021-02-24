@@ -19,7 +19,7 @@ linters:
     - ineffassign
 #    - interfacer
 #    - maligned
-#    - misspell
+    - misspell
 #    - nakedret
 #    - prealloc
     - staticcheck
