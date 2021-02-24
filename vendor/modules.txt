@@ -1024,6 +1024,8 @@ k8s.io/kubernetes/test/utils/image
 # k8s.io/legacy-cloud-providers v0.0.0 => k8s.io/legacy-cloud-providers v0.0.0-20201211092501-716c3daa6bc8
 ## explicit
 k8s.io/legacy-cloud-providers/gce
+# k8s.io/metrics v0.0.0 => k8s.io/metrics v0.0.0-20201114091333-d70c0e0c6aa5
+## explicit
 # k8s.io/utils v0.0.0-20201110183641-67b214c5f920 => k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 ## explicit
 k8s.io/utils/buffer
