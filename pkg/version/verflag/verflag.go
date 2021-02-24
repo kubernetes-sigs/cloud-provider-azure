@@ -43,13 +43,14 @@ func (v *versionValue) IsBoolFlag() bool {
 }
 
 func (v *versionValue) Get() interface{} {
-	return versionValue(*v)
+	return *v
 }
 
 func (v *versionValue) Set(s string) error {
 	if s == strRawVersion {
 		*v = VersionRaw
 		return nil
+
 	}
 	boolVal, err := strconv.ParseBool(s)
 	if boolVal {
@@ -64,7 +65,7 @@ func (v *versionValue) String() string {
 	if *v == VersionRaw {
 		return strRawVersion
 	}
-	return fmt.Sprintf("%v", bool(*v == VersionTrue))
+	return fmt.Sprintf("%v", *v == VersionTrue)
 }
 
 // The type of the flag as required by the pflag.Value interface
@@ -79,7 +80,7 @@ func VersionVar(p *versionValue, name string, value versionValue, usage string) 
 	flag.Lookup(name).NoOptDefVal = "true"
 }
 
-func Version(name string, value versionValue, usage string) *versionValue {
+func newVersionValue(name string, value versionValue, usage string) *versionValue {
 	p := new(versionValue)
 	VersionVar(p, name, value, usage)
 	return p
@@ -88,7 +89,7 @@ func Version(name string, value versionValue, usage string) *versionValue {
 const versionFlagName = "version"
 
 var (
-	versionFlag = Version(versionFlagName, VersionFalse, "Print version information and quit")
+	versionFlag = newVersionValue(versionFlagName, VersionFalse, "Print version information and quit")
 )
 
 // AddFlags registers this package's flags on arbitrary FlagSets, such that they point to the

@@ -12,7 +12,7 @@ linters:
 #    - gocyclo
     - gofmt
     - goimports
-#    - golint
+    - golint
 #    - gosec
     - gosimple
     - govet
@@ -30,3 +30,15 @@ linters:
     - varcheck
   # Run with --fast=false for more extensive checks
   fast: true
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - unused
+    - path: tests/e2e
+      linters:
+        - golint
+  #include:
+  #  - EXC0002 # include "missing comments" issues from golint
+  max-issues-per-linter: 0
+  max-same-issues: 0

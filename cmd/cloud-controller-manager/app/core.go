@@ -45,10 +45,10 @@ import (
 )
 
 const (
+	// IPv6DualStack enables ipv6 dual stack
+	//
 	// owner: @khenidak
 	// alpha: v1.15
-	//
-	// Enables ipv6 dual stack
 	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 )
 
