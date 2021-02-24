@@ -17,11 +17,11 @@ limitations under the License.
 package provider
 
 import (
-	reflect "reflect"
+	"reflect"
 
-	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
-	gomock "github.com/golang/mock/gomock"
+	"github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"

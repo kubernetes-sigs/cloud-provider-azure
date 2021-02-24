@@ -17,11 +17,12 @@ limitations under the License.
 package mockcontainerserviceclient
 
 import (
-	context "context"
-	containerservice "github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice"
-	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"context"
+	"reflect"
+
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

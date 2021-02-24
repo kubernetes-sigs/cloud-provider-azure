@@ -17,12 +17,12 @@ limitations under the License.
 package mockstorageaccountclient
 
 import (
-	context "context"
-	reflect "reflect"
+	"context"
+	"reflect"
 
-	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
-	gomock "github.com/golang/mock/gomock"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

@@ -17,10 +17,11 @@ limitations under the License.
 package mockfileclient
 
 import (
-	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
-	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	fileclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
+	"reflect"
+
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 )
 
 // MockInterface is a mock of Interface interface

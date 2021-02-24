@@ -17,7 +17,7 @@ limitations under the License.
 package mock
 
 import (
-	context "context"
+	"context"
 
 	cloudprovider "k8s.io/cloud-provider"
 

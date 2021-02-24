@@ -21,7 +21,7 @@ import (
 	"net"
 	"sync"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -72,13 +72,13 @@ type rangeAllocator struct {
 // Caller must always pass in a list of existing nodes so the new allocator.
 // Caller must ensure that ClusterCIDRs are semantically correct e.g (1 for non DualStack, 2 for DualStack etc..)
 // can initialize its CIDR map. NodeList is only nil in testing.
-func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.NodeInformer, allocatorParams CIDRAllocatorParams, nodeList *v1.NodeList) (CIDRAllocator, error) {
+func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.NodeInformer, allocatorParams CIDRAllocatorParams, nodeList *corev1.NodeList) (CIDRAllocator, error) {
 	if client == nil {
 		klog.Fatalf("kubeClient is nil when starting NodeController")
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cidrAllocator"})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "cidrAllocator"})
 	eventBroadcaster.StartStructuredLogging(0)
 	klog.V(0).Infof("Sending events to api server.")
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
@@ -136,7 +136,7 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: nodeutil.CreateAddNodeHandler(ra.AllocateOrOccupyCIDR),
-		UpdateFunc: nodeutil.CreateUpdateNodeHandler(func(_, newNode *v1.Node) error {
+		UpdateFunc: nodeutil.CreateUpdateNodeHandler(func(_, newNode *corev1.Node) error {
 			// If the PodCIDRs list is not empty we either:
 			// - already processed a Node that already had CIDRs after NC restarted
 			//   (cidr is marked as used),
@@ -219,7 +219,7 @@ func (r *rangeAllocator) removeNodeFromProcessing(nodeName string) {
 }
 
 // marks node.PodCIDRs[...] as used in allocator's tracked cidrSet
-func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
+func (r *rangeAllocator) occupyCIDRs(node *corev1.Node) error {
 	defer r.removeNodeFromProcessing(node.Name)
 	if len(node.Spec.PodCIDRs) == 0 {
 		return nil
@@ -246,7 +246,7 @@ func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
 // WARNING: If you're adding any return calls or defer any more work from this
 // function you have to make sure to update nodesInProcessing properly with the
 // disposition of the node when the work is done.
-func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
+func (r *rangeAllocator) AllocateOrOccupyCIDR(node *corev1.Node) error {
 	if node == nil {
 		return nil
 	}
@@ -281,7 +281,7 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 }
 
 // ReleaseCIDR marks node.podCIDRs[...] as unused in our tracked cidrSets
-func (r *rangeAllocator) ReleaseCIDR(node *v1.Node) error {
+func (r *rangeAllocator) ReleaseCIDR(node *corev1.Node) error {
 	if node == nil || len(node.Spec.PodCIDRs) == 0 {
 		return nil
 	}
@@ -331,7 +331,7 @@ func (r *rangeAllocator) filterOutServiceRange(serviceCIDR *net.IPNet) {
 // updateCIDRsAllocation assigns CIDR to Node and sends an update to the API server.
 func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	var err error
-	var node *v1.Node
+	var node *corev1.Node
 	defer r.removeNodeFromProcessing(data.nodeName)
 	cidrsString := cidrsAsString(data.allocatedCIDRs)
 	node, err = r.nodeLister.Get(data.nodeName)

@@ -17,12 +17,12 @@ limitations under the License.
 package mockpublicipclient
 
 import (
-	context "context"
-	reflect "reflect"
+	"context"
+	"reflect"
 
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
-	gomock "github.com/golang/mock/gomock"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

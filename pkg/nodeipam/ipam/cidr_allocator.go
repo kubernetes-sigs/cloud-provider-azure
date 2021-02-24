@@ -22,7 +22,7 @@ import (
 	"net"
 	"time"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -75,9 +75,9 @@ type CIDRAllocator interface {
 	// AllocateOrOccupyCIDR looks at the given node, assigns it a valid
 	// CIDR if it doesn't currently have one or mark the CIDR as used if
 	// the node already have one.
-	AllocateOrOccupyCIDR(node *v1.Node) error
+	AllocateOrOccupyCIDR(node *corev1.Node) error
 	// ReleaseCIDR releases the CIDR of the removed node
-	ReleaseCIDR(node *v1.Node) error
+	ReleaseCIDR(node *corev1.Node) error
 	// Run starts all the working logic of the allocator.
 	Run(stopCh <-chan struct{})
 }
@@ -112,8 +112,8 @@ func New(kubeClient clientset.Interface, cloud cloudprovider.Interface, nodeInfo
 	}
 }
 
-func listNodes(kubeClient clientset.Interface) (*v1.NodeList, error) {
-	var nodeList *v1.NodeList
+func listNodes(kubeClient clientset.Interface) (*corev1.NodeList, error) {
+	var nodeList *corev1.NodeList
 	// We must poll because apiserver might not be up. This error causes
 	// controller manager to restart.
 	if pollErr := wait.Poll(10*time.Second, apiserverStartupGracePeriod, func() (bool, error) {
