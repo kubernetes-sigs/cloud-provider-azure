@@ -16,3 +16,12 @@ public/
 /bazel-genfiles
 /bazel-out
 /bazel-testlogs
+
+# ssh keys
+.ssh*
+
+# vscode
+.vscode
+
+# goland
+.idea
