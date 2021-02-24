@@ -25,6 +25,6 @@ fi
 echo "Verifying golint"
 readonly PKG_ROOT="$(git rev-parse --show-toplevel)"
 
-golangci-lint run --config ${PKG_ROOT}/.golangci.yml
+golangci-lint run -v --config ${PKG_ROOT}/.golangci.yml
 
 echo "Congratulations! Lint check completed for all Go source files."
