@@ -60,7 +60,7 @@ type AzureAuthConfig struct {
 func getServicePrincipalToken(config *AzureAuthConfig) (*adal.ServicePrincipalToken, error) {
 	oauthConfig, err := adal.NewOAuthConfig(config.Environment.ActiveDirectoryEndpoint, config.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("creating the OAuth config: %v", err)
+		return nil, fmt.Errorf("creating the OAuth config: %w", err)
 	}
 
 	if len(config.AADClientSecret) > 0 {

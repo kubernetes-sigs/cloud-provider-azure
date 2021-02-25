@@ -7,7 +7,7 @@ linters:
   enable:
     - deadcode
     - errcheck
-#    - errorlint
+    - errorlint
 #    - goconst
 #    - gocyclo
     - gofmt
@@ -32,9 +32,6 @@ linters:
   fast: true
 issues:
   exclude-rules:
-    - path: _test\.go
-      linters:
-        - unused
     - path: tests/e2e
       linters:
         - golint

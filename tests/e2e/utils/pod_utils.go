@@ -76,7 +76,7 @@ func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
 	return wait.PollImmediate(pullInterval, pullTimeout, func() (done bool, err error) {
 		pendingPodCount, err := CountPendingPods(cs, ns)
 		if err != nil {
-			Logf("unexpected error: %v", err)
+			Logf("unexpected error: %w", err)
 			return false, err
 		}
 

@@ -94,7 +94,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 		klog.V(2).Infoln("azure: using managed identity extension to retrieve access token")
 		msiEndpoint, err := adal.GetMSIVMEndpoint()
 		if err != nil {
-			return nil, fmt.Errorf("Getting the managed service identity endpoint: %v", err)
+			return nil, fmt.Errorf("error getting the managed service identity endpoint: %w", err)
 		}
 		if len(config.UserAssignedIdentityID) > 0 {
 			klog.V(4).Info("azure: using User Assigned MSI ID to retrieve access token")
@@ -110,7 +110,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 
 	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, tenantID, nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating the OAuth config: %v", err)
+		return nil, fmt.Errorf("error creating the OAuth config: %w", err)
 	}
 
 	if len(config.AADClientSecret) > 0 {
@@ -126,11 +126,11 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 		klog.V(2).Infoln("azure: using jwt client_assertion (client_cert+client_private_key) to retrieve access token")
 		certData, err := ioutil.ReadFile(config.AADClientCertPath)
 		if err != nil {
-			return nil, fmt.Errorf("reading the client certificate from file %s: %v", config.AADClientCertPath, err)
+			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
 		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
 		if err != nil {
-			return nil, fmt.Errorf("decoding the client certificate: %v", err)
+			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
 		return adal.NewServicePrincipalTokenFromCertificate(
 			*oauthConfig,
@@ -154,13 +154,13 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (*adal.MultiTenantServicePrincipalToken, error) {
 	err := config.checkConfigWhenNetworkResourceInDifferentTenant()
 	if err != nil {
-		return nil, fmt.Errorf("got error(%v) in getting multi-tenant service principal token", err)
+		return nil, fmt.Errorf("got error getting multi-tenant service principal token: %w", err)
 	}
 
 	multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(
 		env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("creating the multi-tenant OAuth config: %v", err)
+		return nil, fmt.Errorf("creating the multi-tenant OAuth config: %w", err)
 	}
 
 	if len(config.AADClientSecret) > 0 {
@@ -188,12 +188,12 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (*adal.ServicePrincipalToken, error) {
 	err := config.checkConfigWhenNetworkResourceInDifferentTenant()
 	if err != nil {
-		return nil, fmt.Errorf("got error(%v) in getting network resources service principal token", err)
+		return nil, fmt.Errorf("got error(%w) in getting network resources service principal token", err)
 	}
 
 	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating the OAuth config for network resources tenant: %v", err)
+		return nil, fmt.Errorf("creating the OAuth config for network resources tenant: %w", err)
 	}
 
 	if len(config.AADClientSecret) > 0 {
@@ -250,7 +250,7 @@ func (config *AzureAuthConfig) UsesNetworkResourceInDifferentTenant() bool {
 func decodePkcs12(pkcs []byte, password string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	privateKey, certificate, err := pkcs12.Decode(pkcs, password)
 	if err != nil {
-		return nil, nil, fmt.Errorf("decoding the PKCS#12 client certificate: %v", err)
+		return nil, nil, fmt.Errorf("decoding the PKCS#12 client certificate: %w", err)
 	}
 	rsaPrivateKey, isRsaKey := privateKey.(*rsa.PrivateKey)
 	if !isRsaKey {

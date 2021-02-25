@@ -54,11 +54,11 @@ func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *f
 
 	accountName, accountKey, err := az.EnsureStorageAccount(accountOptions, fileShareAccountNamePrefix)
 	if err != nil {
-		return "", "", fmt.Errorf("could not get storage key for storage account %s: %v", accountOptions.Name, err)
+		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountOptions.Name, err)
 	}
 
 	if err := az.createFileShare(accountOptions.ResourceGroup, accountName, shareOptions); err != nil {
-		return "", "", fmt.Errorf("failed to create share %s in account %s: %v", shareOptions.Name, accountName, err)
+		return "", "", fmt.Errorf("failed to create share %s in account %s: %w", shareOptions.Name, accountName, err)
 	}
 	klog.V(4).Infof("created share %s in account %s", shareOptions.Name, accountOptions.Name)
 	return accountName, accountKey, nil

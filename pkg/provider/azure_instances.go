@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -190,7 +191,7 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 
 	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
 	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			return false, nil
 		}
 		return false, err
@@ -198,7 +199,7 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 
 	_, err = az.InstanceID(ctx, name)
 	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			return false, nil
 		}
 		return false, err
@@ -235,7 +236,7 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 	nodeName, err := az.VMSet.GetNodeNameByProviderID(providerID)
 	if err != nil {
 		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			return false, nil
 		}
 
@@ -245,7 +246,7 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 	powerStatus, err := az.VMSet.GetPowerStatusByNodeName(string(nodeName))
 	if err != nil {
 		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			return false, nil
 		}
 
@@ -345,7 +346,7 @@ func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, e
 func (az *Cloud) getNodeProviderIDByNodeName(ctx context.Context, name types.NodeName) (string, error) {
 	providerID, err := cloudprovider.GetInstanceProviderID(ctx, az, name)
 	if err != nil {
-		return "", fmt.Errorf("failed to get the provider ID of the node %s: %v", string(name), err)
+		return "", fmt.Errorf("failed to get the provider ID of the node %s: %w", string(name), err)
 	}
 
 	return providerID, nil
@@ -364,7 +365,7 @@ func (az *Cloud) getLocalInstanceProviderID(metadata *InstanceMetadata, nodeName
 	// Get scale set name and instanceID from vmName for vmss.
 	ssName, instanceID, err := extractVmssVMName(metadata.Compute.Name)
 	if err != nil {
-		if err == ErrorNotVmssInstance {
+		if errors.Is(err, ErrorNotVmssInstance) {
 			// Compose machineID for standard Node.
 			return az.getStandardMachineID(subscriptionID, resourceGroup, nodeName), nil
 		}

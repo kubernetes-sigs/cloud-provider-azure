@@ -57,7 +57,7 @@ func TestGetVirtualMachineWithRetry(t *testing.T) {
 		},
 		{
 			vmClientErr: &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
 		},
 	}
 
@@ -68,7 +68,9 @@ func TestGetVirtualMachineWithRetry(t *testing.T) {
 
 		vm, err := az.GetVirtualMachineWithRetry("vm", cache.CacheReadTypeDefault)
 		assert.Empty(t, vm)
-		assert.Equal(t, test.expectedErr, err)
+		if err != nil {
+			assert.EqualError(t, test.expectedErr, err.Error())
+		}
 	}
 }
 
@@ -227,7 +229,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg", gomock.Any()).Return(network.SecurityGroup{}, nil)
 
 	err := az.CreateOrUpdateSecurityGroup(network.SecurityGroup{Name: to.StringPtr("sg")})
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: canceledandsupersededduetoanotheroperation"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")), err.Error())
 
 	// security group should be removed from cache if the operation is canceled
 	shouldBeEmpty, err := az.nsgCache.Get("sg", cache.CacheReadTypeDefault)
@@ -247,15 +249,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: <nil>"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: canceledandsupersededduetoanotheroperation"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 		{
 			clientErr:   &retry.Error{RawError: fmt.Errorf(referencedResourceNotProvisionedRawErrorString)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %s", referencedResourceNotProvisionedRawErrorString),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf(referencedResourceNotProvisionedRawErrorString)),
 		},
 	}
 
@@ -280,7 +282,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 			Name: to.StringPtr("lb"),
 			Etag: to.StringPtr("etag"),
 		})
-		assert.Equal(t, test.expectedErr, err)
+		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
 		shouldBeEmpty, err := az.lbCache.Get("lb", cache.CacheReadTypeDefault)
@@ -298,7 +300,7 @@ func TestListLB(t *testing.T) {
 	mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, &retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	pips, err := az.ListLB(&v1.Service{})
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 	assert.Empty(t, pips)
 }
 
@@ -311,7 +313,7 @@ func TestListPIP(t *testing.T) {
 	mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, &retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	pips, err := az.ListPIP(&v1.Service{}, az.ResourceGroup)
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 	assert.Empty(t, pips)
 }
 
@@ -324,7 +326,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 	mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
 func TestCreateOrUpdateInterface(t *testing.T) {
@@ -336,7 +338,7 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.CreateOrUpdateInterface(&v1.Service{}, network.Interface{Name: to.StringPtr("nic")})
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
 func TestDeletePublicIP(t *testing.T) {
@@ -348,7 +350,7 @@ func TestDeletePublicIP(t *testing.T) {
 	mockPIPClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "pip").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.DeletePublicIP(&v1.Service{}, az.ResourceGroup, "pip")
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
 func TestDeleteLB(t *testing.T) {
@@ -360,7 +362,7 @@ func TestDeleteLB(t *testing.T) {
 	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.DeleteLB(&v1.Service{}, "lb")
-	assert.Equal(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"), err)
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
 func TestCreateOrUpdateRouteTable(t *testing.T) {
@@ -373,11 +375,11 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: <nil>"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: canceledandsupersededduetoanotheroperation"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 	}
 
@@ -393,7 +395,7 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 			Name: to.StringPtr("rt"),
 			Etag: to.StringPtr("etag"),
 		})
-		assert.Equal(t, test.expectedErr, err)
+		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// route table should be removed from cache if the etag is mismatch or the operation is canceled
 		shouldBeEmpty, err := az.rtCache.Get("rt", cache.CacheReadTypeDefault)
@@ -412,11 +414,11 @@ func TestCreateOrUpdateRoute(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: <nil>"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: canceledandsupersededduetoanotheroperation"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 		{
 			clientErr:   nil,
@@ -438,7 +440,9 @@ func TestCreateOrUpdateRoute(t *testing.T) {
 			Name: to.StringPtr("rt"),
 			Etag: to.StringPtr("etag"),
 		})
-		assert.Equal(t, test.expectedErr, err)
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error())
+		}
 
 		shouldBeEmpty, err := az.rtCache.Get("rt", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
@@ -456,7 +460,7 @@ func TestDeleteRouteWithName(t *testing.T) {
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>"),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
 		},
 		{
 			clientErr:   nil,
@@ -471,7 +475,9 @@ func TestDeleteRouteWithName(t *testing.T) {
 		mockRTClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "rt", "rt").Return(test.clientErr)
 
 		err := az.DeleteRouteWithName("rt")
-		assert.Equal(t, test.expectedErr, err)
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error())
+		}
 	}
 }
 

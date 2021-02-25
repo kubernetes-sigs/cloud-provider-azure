@@ -237,7 +237,7 @@ func (r *rangeAllocator) occupyCIDRs(node *corev1.Node) error {
 		}
 
 		if err := r.cidrSets[idx].Occupy(podCIDR); err != nil {
-			return fmt.Errorf("failed to mark cidr[%v] at idx [%v] as occupied for node: %v: %v", podCIDR, idx, node.Name, err)
+			return fmt.Errorf("failed to mark cidr[%v] at idx [%v] as occupied for node: %v: %w", podCIDR, idx, node.Name, err)
 		}
 	}
 	return nil
@@ -269,7 +269,7 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *corev1.Node) error {
 		if err != nil {
 			r.removeNodeFromProcessing(node.Name)
 			nodeutil.RecordNodeStatusChange(r.recorder, node, "CIDRNotAvailable")
-			return fmt.Errorf("failed to allocate cidr from cluster cidr at idx:%v: %v", idx, err)
+			return fmt.Errorf("failed to allocate cidr from cluster cidr at idx:%v: %w", idx, err)
 		}
 		allocated.allocatedCIDRs[idx] = podCIDR
 	}
@@ -289,7 +289,7 @@ func (r *rangeAllocator) ReleaseCIDR(node *corev1.Node) error {
 	for idx, cidr := range node.Spec.PodCIDRs {
 		_, podCIDR, err := net.ParseCIDR(cidr)
 		if err != nil {
-			return fmt.Errorf("failed to parse CIDR %s on Node %v: %v", cidr, node.Name, err)
+			return fmt.Errorf("failed to parse CIDR %s on Node %v: %w", cidr, node.Name, err)
 		}
 
 		// If node has a pre allocate cidr that does not exist in our cidrs.
@@ -301,7 +301,7 @@ func (r *rangeAllocator) ReleaseCIDR(node *corev1.Node) error {
 
 		klog.V(4).Infof("release CIDR %s for node:%v", cidr, node.Name)
 		if err = r.cidrSets[idx].Release(podCIDR); err != nil {
-			return fmt.Errorf("error when releasing CIDR %v: %v", cidr, err)
+			return fmt.Errorf("error when releasing CIDR %v: %w", cidr, err)
 		}
 	}
 	return nil
@@ -323,7 +323,7 @@ func (r *rangeAllocator) filterOutServiceRange(serviceCIDR *net.IPNet) {
 
 		// at this point, len(cidrSet) == len(clusterCidr)
 		if err := r.cidrSets[idx].Occupy(serviceCIDR); err != nil {
-			klog.Errorf("Error filtering out service cidr out cluster cidr:%v (index:%v) %v: %v", cidr, idx, serviceCIDR, err)
+			klog.Errorf("Error filtering out service cidr out cluster cidr:%v (index:%v) %v: %w", cidr, idx, serviceCIDR, err)
 		}
 	}
 }
@@ -336,7 +336,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	cidrsString := cidrsAsString(data.allocatedCIDRs)
 	node, err = r.nodeLister.Get(data.nodeName)
 	if err != nil {
-		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %v", data.nodeName, err)
+		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %w", data.nodeName, err)
 		return err
 	}
 
@@ -362,7 +362,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 		klog.Errorf("Node %v already has a CIDR allocated %v. Releasing the new one.", node.Name, node.Spec.PodCIDRs)
 		for idx, cidr := range data.allocatedCIDRs {
 			if releaseErr := r.cidrSets[idx].Release(cidr); releaseErr != nil {
-				klog.Errorf("Error when releasing CIDR idx:%v value: %v err:%v", idx, cidr, releaseErr)
+				klog.Errorf("Error when releasing CIDR idx:%v value: %v err:%w", idx, cidr, releaseErr)
 			}
 		}
 		return nil
@@ -376,16 +376,16 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 		}
 	}
 	// failed release back to the pool
-	klog.Errorf("Failed to update node %v PodCIDR to %v after multiple attempts: %v", node.Name, cidrsString, err)
+	klog.Errorf("Failed to update node %v PodCIDR to %v after multiple attempts: %w", node.Name, cidrsString, err)
 	nodeutil.RecordNodeStatusChange(r.recorder, node, "CIDRAssignmentFailed")
 	// We accept the fact that we may leak CIDRs here. This is safer than releasing
 	// them in case when we don't know if request went through.
 	// NodeController restart will return all falsely allocated CIDRs to the pool.
 	if !apierrors.IsServerTimeout(err) {
-		klog.Errorf("CIDR assignment for node %v failed: %v. Releasing allocated CIDR", node.Name, err)
+		klog.Errorf("CIDR assignment for node %v failed: %w. Releasing allocated CIDR", node.Name, err)
 		for idx, cidr := range data.allocatedCIDRs {
 			if releaseErr := r.cidrSets[idx].Release(cidr); releaseErr != nil {
-				klog.Errorf("Error releasing allocated CIDR for node %v: %v", node.Name, releaseErr)
+				klog.Errorf("Error releasing allocated CIDR for node %v: %w", node.Name, releaseErr)
 			}
 		}
 	}

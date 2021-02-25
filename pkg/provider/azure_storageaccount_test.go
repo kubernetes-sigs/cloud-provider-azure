@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -289,7 +290,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
 
 		accountsWithLocations, err := cloud.getStorageAccounts(test.testAccountOptions)
-		if err != test.expectedError {
+		if !errors.Is(err, test.expectedError) {
 			t.Errorf("unexpected error: %v", err)
 		}
 

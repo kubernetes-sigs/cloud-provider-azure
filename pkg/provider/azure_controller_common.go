@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -275,14 +276,14 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.NodeName) error {
 	_, err := c.cloud.InstanceID(context.TODO(), nodeName)
 	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
 			klog.Warningf("azureDisk - failed to get azure instance id(%q), DetachDisk(%s) will assume disk is already detached",
 				nodeName, diskURI)
 			return nil
 		}
 		klog.Warningf("failed to get azure instance id (%v)", err)
-		return fmt.Errorf("failed to get azure instance id for node %q (%v)", nodeName, err)
+		return fmt.Errorf("failed to get azure instance id for node %q: %w", nodeName, err)
 	}
 
 	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
@@ -318,7 +319,7 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 			return nil
 		}
 		if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
-			klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %v", diskName, diskURI, err)
+			klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %w", diskName, diskURI, err)
 			retryErr := kwait.ExponentialBackoff(c.cloud.RequestBackoff(), func() (bool, error) {
 				c.lockMap.LockEntry(node)
 				c.diskStateMap.Store(disk, "detaching")
@@ -334,7 +335,7 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 			})
 			if retryErr != nil {
 				err = retryErr
-				klog.V(2).Infof("azureDisk - update abort backoff: detach disk(%s, %s), err: %v", diskName, diskURI, err)
+				klog.V(2).Infof("azureDisk - update abort backoff: detach disk(%s, %s), err: %w", diskName, diskURI, err)
 			}
 		}
 	}
@@ -506,7 +507,7 @@ func (c *controllerCommon) DisksAreAttached(diskNames []string, nodeName types.N
 	// loop runs after the Attach/Disk OP which will reflect the latest model.
 	disks, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
 			klog.Warningf("azureDisk - Cannot find node %q, DisksAreAttached will assume disks %v are not attached to it.",
 				nodeName, diskNames)

@@ -61,11 +61,11 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 	Logf("Deleting acr %s in resource group %s.", registryName, rgName)
 	future, err := acrClient.Delete(context.Background(), rgName, registryName)
 	if err != nil {
-		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %v", registryName, rgName, err)
+		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %w", registryName, rgName, err)
 	}
 	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
 	if err != nil {
-		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %v", registryName, rgName, err)
+		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %w", registryName, rgName, err)
 	}
 	return nil
 }
@@ -79,7 +79,7 @@ func DockerLogin(registryName string) (err error) {
 
 	cmd := exec.Command("docker", "-v")
 	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("failed to execute docker command with error: %v", err)
+		return fmt.Errorf("failed to execute docker command with error: %w", err)
 	}
 
 	Logf("Attempting Docker login with azure cred.")
@@ -89,7 +89,7 @@ func DockerLogin(registryName string) (err error) {
 		fmt.Sprintf("--password=%s", authConfig.AADClientSecret),
 		registryName+".azurecr.io")
 	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("docker failed to login with error: %v", err)
+		return fmt.Errorf("docker failed to login with error: %w", err)
 	}
 	Logf("Docker login success.")
 	return nil
@@ -108,20 +108,20 @@ func PushImageToACR(registryName, image string) (tag string, err error) {
 	Logf("Pulling %s from Docker Hub.", image)
 	cmd := exec.Command("docker", "pull", image)
 	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed pulling %s with error: %v", image, err)
+		return "", fmt.Errorf("failed pulling %s with error: %w", image, err)
 	}
 
 	Logf("Tagging image.")
 	tagSuffix := string(uuid.NewUUID())[0:4]
 	cmd = exec.Command("docker", "tag", image, fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix))
 	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed tagging nginx image with error: %v", err)
+		return "", fmt.Errorf("failed tagging nginx image with error: %w", err)
 	}
 
 	Logf("Pushing image to ACR.")
 	cmd = exec.Command("docker", "push", fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix))
 	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed pushing %s image to registry %s with error: %v", image, registryName, err)
+		return "", fmt.Errorf("failed pushing %s image to registry %s with error: %w", image, registryName, err)
 	}
 
 	Logf("Pushing image success.")

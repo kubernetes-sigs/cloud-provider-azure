@@ -255,7 +255,7 @@ func (ca *cloudCIDRAllocator) updateCIDRAllocation(nodeName string) error {
 	cidrs, err := ca.cloud.AliasRangesByProviderID(node.Spec.ProviderID)
 	if err != nil {
 		nodeutil.RecordNodeStatusChange(ca.recorder, node, "CIDRNotAvailable")
-		return fmt.Errorf("failed to allocate cidr: %v", err)
+		return fmt.Errorf("failed to allocate cidr: %w", err)
 	}
 	if len(cidrs) == 0 {
 		nodeutil.RecordNodeStatusChange(ca.recorder, node, "CIDRNotAvailable")
@@ -263,7 +263,7 @@ func (ca *cloudCIDRAllocator) updateCIDRAllocation(nodeName string) error {
 	}
 	_, cidr, err := net.ParseCIDR(cidrs[0])
 	if err != nil {
-		return fmt.Errorf("failed to parse string '%s' as a CIDR: %v", cidrs[0], err)
+		return fmt.Errorf("failed to parse string '%s' as a CIDR: %w", cidrs[0], err)
 	}
 	podCIDR := cidr.String()
 

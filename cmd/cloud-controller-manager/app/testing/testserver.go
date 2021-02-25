@@ -75,7 +75,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 
 	result.TmpDir, err = ioutil.TempDir("", "cloud-controller-manager")
 	if err != nil {
-		return result, fmt.Errorf("failed to create temp dir: %v", err)
+		return result, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	fs := pflag.NewFlagSet("test", pflag.PanicOnError)
@@ -97,7 +97,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 	if s.SecureServing.BindPort != 0 {
 		s.SecureServing.Listener, s.SecureServing.BindPort, err = createListenerOnFreePort()
 		if err != nil {
-			return result, fmt.Errorf("failed to create listener: %v", err)
+			return result, fmt.Errorf("failed to create listener: %w", err)
 		}
 		s.SecureServing.ServerCert.CertDirectory = result.TmpDir
 
@@ -107,7 +107,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 	if s.InsecureServing.BindPort != 0 {
 		s.InsecureServing.Listener, s.InsecureServing.BindPort, err = createListenerOnFreePort()
 		if err != nil {
-			return result, fmt.Errorf("failed to create listener: %v", err)
+			return result, fmt.Errorf("failed to create listener: %w", err)
 		}
 
 		t.Logf("cloud-controller-manager will listen insecurely on port %d...", s.InsecureServing.BindPort)
@@ -115,7 +115,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 
 	config, err := s.Config(all, disabled)
 	if err != nil {
-		return result, fmt.Errorf("failed to create config from options: %v", err)
+		return result, fmt.Errorf("failed to create config from options: %w", err)
 	}
 
 	errCh := make(chan error)
@@ -128,7 +128,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 	t.Logf("Waiting for /healthz to be ok...")
 	client, err := kubernetes.NewForConfig(config.LoopbackClientConfig)
 	if err != nil {
-		return result, fmt.Errorf("failed to create a client: %v", err)
+		return result, fmt.Errorf("failed to create a client: %w", err)
 	}
 	err = wait.Poll(100*time.Millisecond, 30*time.Second, func() (bool, error) {
 		select {
@@ -146,7 +146,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 		return false, nil
 	})
 	if err != nil {
-		return result, fmt.Errorf("failed to wait for /healthz to return ok: %v", err)
+		return result, fmt.Errorf("failed to wait for /healthz to return ok: %w", err)
 	}
 
 	// from here the caller must call tearDown
@@ -165,7 +165,7 @@ func StartTestServerOrDie(t Logger, flags []string) *TestServer {
 		return &result
 	}
 
-	t.Fatalf("failed to launch server: %v", err)
+	t.Fatalf("failed to launch server: %w", err)
 	return nil
 }
 

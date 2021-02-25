@@ -196,7 +196,7 @@ func resyncPeriod(c *cloudnodeconfig.Config) func() time.Duration {
 // Config return a cloud controller manager config objective
 func (o *CloudNodeManagerOptions) Config() (*cloudnodeconfig.Config, error) {
 	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+		return nil, fmt.Errorf("error creating self-signed certificates: %w", err)
 	}
 
 	c := &cloudnodeconfig.Config{}

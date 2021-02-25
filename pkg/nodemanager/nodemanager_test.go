@@ -622,7 +622,7 @@ func Test_reconcileNodeLabels(t *testing.T) {
 			factory.WaitForCacheSync(nil)
 
 			err := cnc.reconcileNodeLabels("node01")
-			if err != test.expectedErr {
+			if !errors.Is(err, test.expectedErr) {
 				t.Logf("actual err: %v", err)
 				t.Logf("expected err: %v", test.expectedErr)
 				t.Errorf("unexpected error")

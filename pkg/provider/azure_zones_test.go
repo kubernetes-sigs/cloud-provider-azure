@@ -175,7 +175,7 @@ func TestGetZone(t *testing.T) {
 			if test.expectedErr == nil {
 				t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 			} else {
-				assert.Equal(t, test.expectedErr, err)
+				assert.EqualError(t, test.expectedErr, err.Error())
 			}
 		}
 		if zone.FailureDomain != test.expected {
