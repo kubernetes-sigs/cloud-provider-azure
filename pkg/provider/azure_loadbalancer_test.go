@@ -1609,12 +1609,12 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedErr     error
 	}{
 		{
-			desc:    "reconcileLoadBalancerRule shall return nil if wantLb is false",
+			desc:    "getExpectedLBRules shall return nil if wantLb is false",
 			service: getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			wantLb:  false,
 		},
 		{
-			desc:            "reconcileLoadBalancerRule shall return corresponding probe and lbRule(blb)",
+			desc:            "getExpectedLBRules shall return corresponding probe and lbRule(blb)",
 			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset": "true"}, false, 80),
 			loadBalancerSku: "basic",
 			wantLb:          true,
@@ -1622,7 +1622,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(false),
 		},
 		{
-			desc:            "reconcileLoadBalancerRule shall return corresponding probe and lbRule (slb without tcp reset)",
+			desc:            "getExpectedLBRules shall return corresponding probe and lbRule (slb without tcp reset)",
 			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset": "True"}, false, 80),
 			loadBalancerSku: "standard",
 			wantLb:          true,
@@ -1630,7 +1630,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc:            "reconcileLoadBalancerRule shall return corresponding probe and lbRule(slb with tcp reset)",
+			desc:            "getExpectedLBRules shall return corresponding probe and lbRule(slb with tcp reset)",
 			service:         getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			loadBalancerSku: "standard",
 			wantLb:          true,
@@ -1638,7 +1638,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc:            "reconcileLoadBalancerRule shall respect the probe protocol and path configuration in the config file",
+			desc:            "getExpectedLBRules shall respect the probe protocol and path configuration in the config file",
 			service:         getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			loadBalancerSku: "standard",
 			wantLb:          true,
@@ -1658,7 +1658,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		if test.probePath != "" {
 			service.Annotations[ServiceAnnotationLoadBalancerHealthProbeRequestPath] = test.probePath
 		}
-		probe, lbrule, err := az.reconcileLoadBalancerRule(&test.service, test.wantLb,
+		probe, lbrule, err := az.getExpectedLBRules(&test.service, test.wantLb,
 			"frontendIPConfigID", "backendPoolID", "lbname", to.Int32Ptr(0))
 
 		if test.expectedErr != nil {
@@ -3528,7 +3528,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 		expectedErr bool
 	}{
 		{
-			desc: "checkLoadBalancerResourcesConflicted should report the conflict error if " +
+			desc: "checkLoadBalancerResourcesConflicts should report the conflict error if " +
 				"there is a conflicted loadBalancing rule",
 			existingLB: &network.LoadBalancer{
 				Name: to.StringPtr("lb"),
@@ -3548,7 +3548,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			desc: "checkLoadBalancerResourcesConflicted should report the conflict error if " +
+			desc: "checkLoadBalancerResourcesConflicts should report the conflict error if " +
 				"there is a conflicted inbound NAT rule",
 			existingLB: &network.LoadBalancer{
 				Name: to.StringPtr("lb"),
@@ -3568,7 +3568,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			desc: "checkLoadBalancerResourcesConflicted should report the conflict error if " +
+			desc: "checkLoadBalancerResourcesConflicts should report the conflict error if " +
 				"there is a conflicted inbound NAT pool",
 			existingLB: &network.LoadBalancer{
 				Name: to.StringPtr("lb"),
@@ -3589,7 +3589,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			desc: "checkLoadBalancerResourcesConflicted should not report the conflict error if there " +
+			desc: "checkLoadBalancerResourcesConflicts should not report the conflict error if there " +
 				"is no conflicted loadBalancer resources",
 			existingLB: &network.LoadBalancer{
 				Name: to.StringPtr("lb"),
@@ -3631,7 +3631,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		err := az.checkLoadBalancerResourcesConflicted(testCase.existingLB, fipID, &service)
+		err := az.checkLoadBalancerResourcesConflicts(testCase.existingLB, fipID, &service)
 		assert.Equal(t, testCase.expectedErr, err != nil, testCase.desc)
 	}
 }
