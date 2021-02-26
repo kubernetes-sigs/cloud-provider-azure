@@ -32,6 +32,9 @@ type Config struct {
 	// the node name
 	NodeName string
 
+	// the path to the config file (azure.json) for use in ARM mode.
+	CloudConfigFilePath string
+
 	// NodeStatusUpdateFrequency is the frequency at which the controller updates nodes' status
 	NodeStatusUpdateFrequency metav1.Duration
 
@@ -73,4 +76,7 @@ type Config struct {
 	// WaitForRoutes indicates whether the node should wait for routes to be created on Azure.
 	// If true, the node condition "NodeNetworkUnavailable" would be set to true on initialization.
 	WaitForRoutes bool
+
+	// Specifies if node information is retrieved via IMDS or ARM.
+	UseInstanceMetadata bool
 }
