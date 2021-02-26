@@ -39,6 +39,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+const (
+	resourceID = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt1"
+)
+
 // 2065-01-24 05:20:00 +0000 UTC
 func getFutureTime() time.Time {
 	return time.Unix(3000000000, 0)
@@ -90,7 +94,6 @@ func TestGet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt1"
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
@@ -112,7 +115,6 @@ func TestGetNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt1"
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
@@ -133,7 +135,6 @@ func TestGetInternalError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt1"
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
@@ -191,7 +192,6 @@ func TestGetThrottle(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt1"
 	response := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),

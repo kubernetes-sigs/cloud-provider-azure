@@ -129,6 +129,8 @@ const (
 	serviceUsingDNSKey = "kubernetes-dns-label-service"
 
 	defaultLoadBalancerSourceRanges = "0.0.0.0/0"
+
+	trueAnnotationValue = "true"
 )
 
 // GetLoadBalancer returns whether the specified load balancer and its components exist, and
@@ -737,12 +739,12 @@ func flipServiceInternalAnnotation(service *v1.Service) *v1.Service {
 	if copyService.Annotations == nil {
 		copyService.Annotations = map[string]string{}
 	}
-	if v, ok := copyService.Annotations[ServiceAnnotationLoadBalancerInternal]; ok && v == "true" {
+	if v, ok := copyService.Annotations[ServiceAnnotationLoadBalancerInternal]; ok && v == trueAnnotationValue {
 		// If it is internal now, we make it external by remove the annotation
 		delete(copyService.Annotations, ServiceAnnotationLoadBalancerInternal)
 	} else {
 		// If it is external now, we make it internal
-		copyService.Annotations[ServiceAnnotationLoadBalancerInternal] = "true"
+		copyService.Annotations[ServiceAnnotationLoadBalancerInternal] = trueAnnotationValue
 	}
 	return copyService
 }
@@ -1832,7 +1834,7 @@ func (az *Cloud) reconcileLoadBalancerRule(
 
 		if requiresInternalLoadBalancer(service) &&
 			strings.EqualFold(az.LoadBalancerSku, loadBalancerSkuStandard) &&
-			strings.EqualFold(service.Annotations[ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts], "true") {
+			strings.EqualFold(service.Annotations[ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts], trueAnnotationValue) {
 			expectedRule.FrontendPort = to.Int32Ptr(0)
 			expectedRule.BackendPort = to.Int32Ptr(0)
 			expectedRule.Protocol = network.TransportProtocolAll
@@ -1934,7 +1936,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 
 		shouldAddDenyRule := false
 		if len(sourceRanges) > 0 && !servicehelpers.IsAllowAll(sourceRanges) {
-			if v, ok := service.Annotations[ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, "true") {
+			if v, ok := service.Annotations[ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, trueAnnotationValue) {
 				shouldAddDenyRule = true
 			}
 		}
@@ -2621,7 +2623,7 @@ func (az *Cloud) isBackendPoolPreConfigured(service *v1.Service) bool {
 // Check if service requires an internal load balancer.
 func requiresInternalLoadBalancer(service *v1.Service) bool {
 	if l, found := service.Annotations[ServiceAnnotationLoadBalancerInternal]; found {
-		return l == "true"
+		return l == trueAnnotationValue
 	}
 
 	return false
@@ -2654,7 +2656,7 @@ func (az *Cloud) getServiceLoadBalancerMode(service *v1.Service) (bool, bool, st
 
 func useSharedSecurityRule(service *v1.Service) bool {
 	if l, ok := service.Annotations[ServiceAnnotationSharedSecurityRule]; ok {
-		return l == "true"
+		return l == trueAnnotationValue
 	}
 
 	return false

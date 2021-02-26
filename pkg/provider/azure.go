@@ -99,6 +99,8 @@ const (
 
 	// LabelFailureDomainBetaRegion failure-domain region label
 	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
+
+	falseLabel = "false"
 )
 
 const (
@@ -810,7 +812,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Remove from unmanagedNodes cache.
 		managed, ok := prevNode.ObjectMeta.Labels[managedByAzureLabel]
-		if ok && managed == "false" {
+		if ok && managed == falseLabel {
 			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
 		}
 	}
@@ -833,7 +835,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Add to unmanagedNodes cache.
 		managed, ok := newNode.ObjectMeta.Labels[managedByAzureLabel]
-		if ok && managed == "false" {
+		if ok && managed == falseLabel {
 			az.unmanagedNodes.Insert(newNode.ObjectMeta.Name)
 		}
 	}
@@ -931,7 +933,7 @@ func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(node *v1.Node) bool {
 		return true
 	}
 
-	if managed, ok := labels[managedByAzureLabel]; ok && managed == "false" {
+	if managed, ok := labels[managedByAzureLabel]; ok && managed == falseLabel {
 		return true
 	}
 

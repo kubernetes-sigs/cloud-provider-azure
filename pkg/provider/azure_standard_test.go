@@ -42,6 +42,8 @@ import (
 const (
 	networkResourceTenantID       = "networkResourceTenantID"
 	networkResourceSubscriptionID = "networkResourceSubscriptionID"
+	asID                          = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/myAvailabilitySet"
+	primary                       = "primary"
 )
 
 func TestIsMasterNode(t *testing.T) {
@@ -157,7 +159,7 @@ func TestMapLoadBalancerNameToVMSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = "primary"
+	az.PrimaryAvailabilitySetName = primary
 
 	cases := []struct {
 		description   string
@@ -170,13 +172,13 @@ func TestMapLoadBalancerNameToVMSet(t *testing.T) {
 			description:   "default external LB should map to primary vmset",
 			lbName:        "azure",
 			clusterName:   "azure",
-			expectedVMSet: "primary",
+			expectedVMSet: primary,
 		},
 		{
 			description:   "default internal LB should map to primary vmset",
 			lbName:        "azure-internal",
 			clusterName:   "azure",
-			expectedVMSet: "primary",
+			expectedVMSet: primary,
 		},
 		{
 			description:   "non-default external LB should map to its own vmset",
@@ -207,7 +209,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = "primary"
+	az.PrimaryAvailabilitySetName = primary
 
 	cases := []struct {
 		description   string
@@ -220,20 +222,20 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 	}{
 		{
 			description: "prefix of loadBalancerName should be az.LoadBalancerName if az.LoadBalancerName is not nil",
-			vmSet:       "primary",
+			vmSet:       primary,
 			clusterName: "azure",
 			lbName:      "azurelb",
 			expected:    "azurelb",
 		},
 		{
 			description: "default external LB should get primary vmset",
-			vmSet:       "primary",
+			vmSet:       primary,
 			clusterName: "azure",
 			expected:    "azure",
 		},
 		{
 			description: "default internal LB should get primary vmset",
-			vmSet:       "primary",
+			vmSet:       primary,
 			clusterName: "azure",
 			isInternal:  true,
 			expected:    "azure-internal",
@@ -253,14 +255,14 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		},
 		{
 			description:   "default standard external LB should get cluster name",
-			vmSet:         "primary",
+			vmSet:         primary,
 			useStandardLB: true,
 			clusterName:   "azure",
 			expected:      "azure",
 		},
 		{
 			description:   "default standard internal LB should get cluster name",
-			vmSet:         "primary",
+			vmSet:         primary,
 			useStandardLB: true,
 			isInternal:    true,
 			clusterName:   "azure",
@@ -299,7 +301,7 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = "primary"
+	az.PrimaryAvailabilitySetName = primary
 
 	svc := &v1.Service{
 		ObjectMeta: meta.ObjectMeta{
@@ -382,7 +384,7 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
-	az.PrimaryAvailabilitySetName = "primary"
+	az.PrimaryAvailabilitySetName = primary
 
 	svc := &v1.Service{
 		ObjectMeta: meta.ObjectMeta{
@@ -1067,7 +1069,6 @@ func TestGetStandardVMSetNames(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	asID := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/myAvailabilitySet"
 	testVM := compute.VirtualMachine{
 		Name: to.StringPtr("vm1"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
@@ -1210,7 +1211,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 
-	availabilitySetID := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/myAvailabilitySet"
+	availabilitySetID := asID
 	backendAddressPoolID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/backendAddressPools/backendpool-1"
 
 	testCases := []struct {
@@ -1346,7 +1347,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 
-	availabilitySetID := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/myAvailabilitySet"
+	availabilitySetID := asID
 	backendAddressPoolID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1-internal/backendAddressPools/backendpool-1"
 
 	testCases := []struct {

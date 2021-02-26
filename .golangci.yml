@@ -8,7 +8,7 @@ linters:
     - deadcode
     - errcheck
     - errorlint
-#    - goconst
+    - goconst
 #    - gocyclo
     - gofmt
     - goimports

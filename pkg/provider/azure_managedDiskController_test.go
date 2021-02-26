@@ -35,6 +35,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+const (
+	fakeGetDiskFailed = "fakeGetDiskFailed"
+)
+
 func TestCreateManagedDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -182,7 +186,6 @@ func TestDeleteManagedDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	fakeGetDiskFailed := "fakeGetDiskFailed"
 	testCases := []struct {
 		desc           string
 		diskName       string
@@ -243,7 +246,6 @@ func TestGetDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	fakeGetDiskFailed := "fakeGetDiskFailed"
 	testCases := []struct {
 		desc                      string
 		diskName                  string
@@ -299,7 +301,6 @@ func TestResizeDisk(t *testing.T) {
 
 	diskSizeGB := int32(2)
 	diskName := "disk1"
-	fakeGetDiskFailed := "fakeGetDiskFailed"
 	fakeCreateDiskFailed := "fakeCreateDiskFailed"
 	testCases := []struct {
 		desc             string
@@ -407,7 +408,6 @@ func TestGetLabelsForVolume(t *testing.T) {
 	diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 		testCloud0.SubscriptionID, testCloud0.ResourceGroup, diskName)
 	diskSizeGB := int32(30)
-	fakeGetDiskFailed := "fakeGetDiskFailed"
 	fakeGetDiskFailedDiskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 		testCloud0.SubscriptionID, testCloud0.ResourceGroup, fakeGetDiskFailed)
 	testCases := []struct {

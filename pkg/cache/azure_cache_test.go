@@ -25,7 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
+const (
+	testKey      = "key1"
 	fakeCacheTTL = 2 * time.Second
 )
 
@@ -118,73 +119,69 @@ func TestCacheGetError(t *testing.T) {
 }
 
 func TestCacheDelete(t *testing.T) {
-	key := "key1"
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{
-		key: val,
+		testKey: val,
 	}
 	dataSource, cache := newFakeCache(t)
 	dataSource.set(data)
 
-	v, err := cache.Get(key, CacheReadTypeDefault)
+	v, err := cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, val, v, "cache should get correct data")
 
 	dataSource.set(nil)
-	_ = cache.Delete(key)
-	v, err = cache.Get(key, CacheReadTypeDefault)
+	_ = cache.Delete(testKey)
+	v, err = cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, nil, v, "cache should get nil after data is removed")
 }
 
 func TestCacheExpired(t *testing.T) {
-	key := "key1"
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{
-		key: val,
+		testKey: val,
 	}
 	dataSource, cache := newFakeCache(t)
 	dataSource.set(data)
 
-	v, err := cache.Get(key, CacheReadTypeDefault)
+	v, err := cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, val, v, "cache should get correct data")
 
 	time.Sleep(fakeCacheTTL)
-	v, err = cache.Get(key, CacheReadTypeDefault)
+	v, err = cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, dataSource.called)
 	assert.Equal(t, val, v, "cache should get correct data even after expired")
 }
 
 func TestCacheAllowUnsafeRead(t *testing.T) {
-	key := "key1"
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{
-		key: val,
+		testKey: val,
 	}
 	dataSource, cache := newFakeCache(t)
 	dataSource.set(data)
 
-	v, err := cache.Get(key, CacheReadTypeDefault)
+	v, err := cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, val, v, "cache should get correct data")
 
 	time.Sleep(fakeCacheTTL)
-	v, err = cache.Get(key, CacheReadTypeUnsafe)
+	v, err = cache.Get(testKey, CacheReadTypeUnsafe)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, val, v, "cache should return expired as allow unsafe read is allowed")
 }
 
 func TestCacheNoConcurrentGet(t *testing.T) {
-	key := "key1"
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{
-		key: val,
+		testKey: val,
 	}
 	dataSource, cache := newFakeCache(t)
 	dataSource.set(data)
@@ -195,10 +192,10 @@ func TestCacheNoConcurrentGet(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = cache.Get(key, CacheReadTypeDefault)
+			_, _ = cache.Get(testKey, CacheReadTypeDefault)
 		}()
 	}
-	v, err := cache.Get(key, CacheReadTypeDefault)
+	v, err := cache.Get(testKey, CacheReadTypeDefault)
 	wg.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
@@ -206,20 +203,19 @@ func TestCacheNoConcurrentGet(t *testing.T) {
 }
 
 func TestCacheForceRefresh(t *testing.T) {
-	key := "key1"
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{
-		key: val,
+		testKey: val,
 	}
 	dataSource, cache := newFakeCache(t)
 	dataSource.set(data)
 
-	v, err := cache.Get(key, CacheReadTypeDefault)
+	v, err := cache.Get(testKey, CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, val, v, "cache should get correct data")
 
-	v, err = cache.Get(key, CacheReadTypeForceRefresh)
+	v, err = cache.Get(testKey, CacheReadTypeForceRefresh)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, dataSource.called)
 	assert.Equal(t, val, v, "should refetch unexpired data as forced refresh")
