@@ -74,7 +74,7 @@ func (err *Error) Error() error {
 		retryAfterSeconds = int(err.RetryAfter.Sub(curTime) / time.Second)
 	}
 
-	return fmt.Errorf("Retriable: %v, RetryAfter: %ds, HTTPStatusCode: %d, RawError: %v",
+	return fmt.Errorf("Retriable: %v, RetryAfter: %ds, HTTPStatusCode: %d, RawError: %w",
 		err.Retriable, retryAfterSeconds, err.HTTPStatusCode, err.RawError)
 }
 
@@ -271,14 +271,14 @@ func GetStatusNotFoundAndForbiddenIgnoredError(resp *http.Response, err error) *
 
 	// Returns nil when it is StatusNotFound error.
 	if rerr.HTTPStatusCode == http.StatusNotFound {
-		klog.V(3).Infof("Ignoring StatusNotFound error: %v", rerr)
+		klog.V(3).Infof("Ignoring StatusNotFound error: %w", rerr)
 		return nil
 	}
 
 	// Returns nil if the status code is StatusForbidden.
 	// This happens when AuthorizationFailed is reported from Azure API.
 	if rerr.HTTPStatusCode == http.StatusForbidden {
-		klog.V(3).Infof("Ignoring StatusForbidden error: %v", rerr)
+		klog.V(3).Infof("Ignoring StatusForbidden error: %w", rerr)
 		return nil
 	}
 

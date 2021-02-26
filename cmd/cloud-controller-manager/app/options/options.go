@@ -277,7 +277,7 @@ func (o *CloudControllerManagerOptions) Config(allControllers, disabledByDefault
 	}
 
 	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+		return nil, fmt.Errorf("error creating self-signed certificates: %w", err)
 	}
 
 	c := &cloudcontrollerconfig.Config{}

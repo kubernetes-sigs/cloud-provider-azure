@@ -143,7 +143,7 @@ func DeleteNamespace(cs clientset.Interface, namespace string) error {
 			if apierrs.IsNotFound(err) {
 				return true, nil
 			}
-			Logf("Error while waiting for namespace to be terminated: %v", err)
+			Logf("Error while waiting for namespace to be terminated: %w", err)
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}

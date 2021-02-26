@@ -17,6 +17,8 @@ limitations under the License.
 package nodeipam
 
 import (
+	"net"
+
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -27,7 +29,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
-	"net"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
 )

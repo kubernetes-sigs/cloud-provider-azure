@@ -451,7 +451,7 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 	var err error
 
 	machine, err = as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
-	if err == cloudprovider.InstanceNotFound {
+	if errors.Is(err, cloudprovider.InstanceNotFound) {
 		return "", cloudprovider.InstanceNotFound
 	}
 	if err != nil {
@@ -534,7 +534,7 @@ func (as *availabilitySet) GetZoneByNodeName(name string) (cloudprovider.Zone, e
 		zones := *vm.Zones
 		zoneID, err := strconv.Atoi(zones[0])
 		if err != nil {
-			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %v", zones, err)
+			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %w", zones, err)
 		}
 
 		failureDomain = as.makeZone(to.String(vm.Location), zoneID)
@@ -789,7 +789,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(vmName, vmSetName)
 	if err != nil {
-		if err == errNotInVMSet {
+		if errors.Is(err, errNotInVMSet) {
 			klog.V(3).Infof("EnsureHostInPool skips node %s because it is not in the vmSet %s", nodeName, vmSetName)
 			return "", "", "", nil, nil
 		}
@@ -892,7 +892,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 		f := func() error {
 			_, _, _, _, err := as.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName, isInternal)
 			if err != nil {
-				return fmt.Errorf("ensure(%s): backendPoolID(%s) - failed to ensure host in pool: %q", getServiceName(service), backendPoolID, err)
+				return fmt.Errorf("ensure(%s): backendPoolID(%s) - failed to ensure host in pool: %w", getServiceName(service), backendPoolID, err)
 			}
 			return nil
 		}
@@ -936,20 +936,20 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 		}
 	}
 	nicUpdaters := make([]func() error, 0)
-	errors := make([]error, 0)
+	allErrs := make([]error, 0)
 	for i := range ipConfigurationIDs {
 		ipConfigurationID := ipConfigurationIDs[i]
 		nodeName, _, err := as.GetNodeNameByIPConfigurationID(ipConfigurationID)
 		if err != nil {
 			klog.Errorf("Failed to GetNodeNameByIPConfigurationID(%s): %v", ipConfigurationID, err)
-			errors = append(errors, err)
+			allErrs = append(allErrs, err)
 			continue
 		}
 
 		vmName := mapNodeNameToVMName(types.NodeName(nodeName))
 		nic, vmasID, err := as.getPrimaryInterfaceWithVMSet(vmName, vmSetName)
 		if err != nil {
-			if err == errNotInVMSet {
+			if errors.Is(err, errNotInVMSet) {
 				klog.V(3).Infof("EnsureBackendPoolDeleted skips node %s because it is not in the vmSet %s", nodeName, vmSetName)
 				return nil
 			}
@@ -959,7 +959,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 		}
 		vmasName, err := getAvailabilitySetNameByID(vmasID)
 		if err != nil {
-			return fmt.Errorf("EnsureBackendPoolDeleted: failed to parse the VMAS ID %s: %v", vmasID, err)
+			return fmt.Errorf("EnsureBackendPoolDeleted: failed to parse the VMAS ID %s: %w", vmasID, err)
 		}
 		// Only remove nodes belonging to specified vmSet to basic LB backends.
 		if !strings.EqualFold(vmasName, vmSetName) {
@@ -1010,8 +1010,8 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 		return utilerrors.Flatten(errs)
 	}
 	// Fail if there are other errors.
-	if len(errors) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
+	if len(allErrs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
@@ -1051,7 +1051,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ipConfigurationID stri
 	}
 	nic, rerr := as.InterfacesClient.Get(context.Background(), nicResourceGroup, nicName, "")
 	if rerr != nil {
-		return "", "", fmt.Errorf("GetNodeNameByIPConfigurationID(%s): failed to get interface of name %s: %s", ipConfigurationID, nicName, rerr.Error().Error())
+		return "", "", fmt.Errorf("GetNodeNameByIPConfigurationID(%s): failed to get interface of name %s: %w", ipConfigurationID, nicName, rerr.Error())
 	}
 	vmID := ""
 	if nic.InterfacePropertiesFormat != nil && nic.VirtualMachine != nil {

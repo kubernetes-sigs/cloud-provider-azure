@@ -17,6 +17,7 @@ limitations under the License.
 package nodeipam
 
 import (
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -96,7 +97,8 @@ func TestNewNodeIpamControllerWithCIDRMasks(t *testing.T) {
 			err := cmd.Run()
 			var gotFatal bool
 			if err != nil {
-				exitErr, ok := err.(*exec.ExitError)
+				var exitErr *exec.ExitError
+				ok := errors.As(err, &exitErr)
 				if !ok {
 					t.Fatalf("Failed to run subprocess: %v", err)
 				}

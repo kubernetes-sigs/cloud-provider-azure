@@ -303,7 +303,9 @@ func TestCreateRoute(t *testing.T) {
 
 		err := cloud.CreateRoute(context.TODO(), "cluster", "unused", &route)
 		assert.Equal(t, cloud.routeCIDRs, test.expectedRouteCIDRs, test.name)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		if err != nil {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+		}
 	}
 }
 
@@ -657,6 +659,8 @@ func TestListRoutes(t *testing.T) {
 
 		routes, err := cloud.ListRoutes(context.TODO(), "cluster")
 		assert.Equal(t, test.expectedRoutes, routes, test.name)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		if test.expectedErrMsg != nil {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+		}
 	}
 }

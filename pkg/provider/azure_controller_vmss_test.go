@@ -87,7 +87,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			isManagedDisk:  false,
 			existedDisk:    compute.Disk{Name: to.StringPtr("disk-name")},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
+			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
 	}
 
@@ -142,7 +142,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		}
 		err = ss.AttachDisk(test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 	}
 }
 
@@ -186,7 +188,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssvmName:     "vmss00-vm-000000",
 			existedDisk:    compute.Disk{Name: to.StringPtr(diskName)},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
+			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
 		{
 			desc:        "no error shall be returned if everything is good and the attaching disk does not match data disk",
@@ -241,7 +243,9 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		}
 		err = ss.DetachDisk(test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 
 		if !test.expectedErr {
 			dataDisks, err := ss.GetDataDisks(test.vmssvmName, azcache.CacheReadTypeDefault)

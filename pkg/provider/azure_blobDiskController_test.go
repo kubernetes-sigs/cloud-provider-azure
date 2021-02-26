@@ -83,9 +83,12 @@ func TestCreateVolume(t *testing.T) {
 	b.common.cloud.StorageAccountClient = mockSAClient
 
 	diskName, diskURI, requestGB, err := b.CreateVolume("testBlob", "testsa", "type", b.common.location, 10)
-	expectedErr := fmt.Errorf("could not get storage key for storage account testsa: could not get storage key for " +
-		"storage account testsa: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>")
-	assert.Equal(t, expectedErr, err)
+	var nilErr error
+	rawErr := fmt.Errorf("%w", nilErr)
+	retryErr := fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", rawErr)
+	expectedErr := fmt.Errorf("could not get storage key for storage account testsa: could not get storage key for "+
+		"storage account testsa: %w", retryErr)
+	assert.EqualError(t, expectedErr, err.Error())
 	assert.Empty(t, diskName)
 	assert.Empty(t, diskURI)
 	assert.Zero(t, requestGB)
@@ -120,11 +123,14 @@ func TestDeleteVolume(t *testing.T) {
 	fakeDiskURL := "fake"
 	diskURL := "https://foo.blob./vhds/bar.vhd"
 	err := b.DeleteVolume(diskURL)
-	expectedErr := fmt.Errorf("no key for storage account foo, err Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: <nil>")
-	assert.Equal(t, expectedErr, err)
+	var nilErr error
+	rawErr := fmt.Errorf("%w", nilErr)
+	retryErr := fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", rawErr)
+	expectedErr := fmt.Errorf("no key for storage account foo, err %w", retryErr)
+	assert.EqualError(t, expectedErr, err.Error())
 
 	err = b.DeleteVolume(diskURL)
-	assert.Equal(t, expectedErr, err)
+	assert.EqualError(t, expectedErr, err.Error())
 
 	mockSAClient.EXPECT().ListKeys(gomock.Any(), b.common.resourceGroup, "foo").Return(storage.AccountListKeysResult{
 		Keys: &[]storage.AccountKey{
@@ -136,8 +142,8 @@ func TestDeleteVolume(t *testing.T) {
 	}, nil)
 
 	err = b.DeleteVolume(fakeDiskURL)
-	expectedErr = fmt.Errorf("failed to parse vhd URI invalid vhd URI for regex https://(.*).blob./vhds/(.*): fake")
-	assert.Equal(t, expectedErr, err)
+	expectedErr = fmt.Errorf("failed to parse vhd URI invalid vhd URI for regex https://(.*).blob./vhds/(.*): %w", fmt.Errorf("fake"))
+	assert.EqualError(t, expectedErr, err.Error())
 
 	err = b.DeleteVolume(diskURL)
 	expectedErrStr := "failed to delete vhd https://foo.blob./vhds/bar.vhd, account foo, blob bar.vhd, err: storage: service returned error: " +

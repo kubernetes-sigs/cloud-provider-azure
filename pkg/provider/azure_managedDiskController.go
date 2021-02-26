@@ -122,7 +122,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		if options.DiskIOPSReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskIOPSReadWrite)
 			if err != nil {
-				return "", fmt.Errorf("AzureDisk - failed to parse DiskIOPSReadWrite: %v", err)
+				return "", fmt.Errorf("AzureDisk - failed to parse DiskIOPSReadWrite: %w", err)
 			}
 			diskIOPSReadWrite = int64(v)
 		}
@@ -132,7 +132,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		if options.DiskMBpsReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskMBpsReadWrite)
 			if err != nil {
-				return "", fmt.Errorf("AzureDisk - failed to parse DiskMBpsReadWrite: %v", err)
+				return "", fmt.Errorf("AzureDisk - failed to parse DiskMBpsReadWrite: %w", err)
 			}
 			diskMBpsReadWrite = int64(v)
 		}
@@ -387,7 +387,7 @@ func (c *Cloud) GetAzureDiskLabels(diskURI string) (map[string]string, error) {
 	zones := *disk.Zones
 	zoneID, err := strconv.Atoi(zones[0])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse zone %v for AzureDisk %v: %v", zones, diskName, err)
+		return nil, fmt.Errorf("failed to parse zone %v for AzureDisk %v: %w", zones, diskName, err)
 	}
 
 	zone := c.makeZone(c.Location, zoneID)

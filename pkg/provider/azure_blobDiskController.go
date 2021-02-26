@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -93,7 +94,7 @@ func (c *BlobDiskController) CreateVolume(blobName, accountName, accountType, lo
 	}
 	account, key, err := c.common.cloud.EnsureStorageAccount(accountOptions, dedicatedDiskAccountNamePrefix)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("could not get storage key for storage account %s: %v", accountName, err)
+		return "", "", 0, fmt.Errorf("could not get storage key for storage account %s: %w", accountName, err)
 	}
 
 	client, err := azstorage.NewBasicClientOnSovereignCloud(account, key, c.common.cloud.Environment)
@@ -117,22 +118,22 @@ func (c *BlobDiskController) DeleteVolume(diskURI string) error {
 	klog.V(4).Infof("azureDisk - begin to delete volume %s", diskURI)
 	accountName, blob, err := c.common.cloud.getBlobNameAndAccountFromURI(diskURI)
 	if err != nil {
-		return fmt.Errorf("failed to parse vhd URI %v", err)
+		return fmt.Errorf("failed to parse vhd URI %w", err)
 	}
 	key, err := c.common.cloud.GetStorageAccesskey(accountName, c.common.resourceGroup)
 	if err != nil {
-		return fmt.Errorf("no key for storage account %s, err %v", accountName, err)
+		return fmt.Errorf("no key for storage account %s, err %w", accountName, err)
 	}
 	err = c.common.cloud.deleteVhdBlob(accountName, key, blob)
 	if err != nil {
-		klog.Warningf("azureDisk - failed to delete blob %s err: %v", diskURI, err)
+		klog.Warningf("azureDisk - failed to delete blob %s err: %w", diskURI, err)
 		detail := err.Error()
 		if strings.Contains(detail, errLeaseIDMissing) {
 			// disk is still being used
 			// see https://msdn.microsoft.com/en-us/library/microsoft.windowsazure.storage.blob.protocol.bloberrorcodestrings.leaseidmissing.aspx
 			return volerr.NewDeletedVolumeInUseError(fmt.Sprintf("disk %q is still in use while being deleted", diskURI))
 		}
-		return fmt.Errorf("failed to delete vhd %v, account %s, blob %s, err: %v", diskURI, accountName, blob, err)
+		return fmt.Errorf("failed to delete vhd %v, account %s, blob %s, err: %w", diskURI, accountName, blob, err)
 	}
 	klog.V(4).Infof("azureDisk - blob %s deleted", diskURI)
 	return nil
@@ -181,14 +182,14 @@ func (c *BlobDiskController) createVHDBlobDisk(blobClient azstorage.BlobStorageC
 		}
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("failed to put page blob %s in container %s: %v", vhdName, containerName, err)
+		return "", "", fmt.Errorf("failed to put page blob %s in container %s: %w", vhdName, containerName, err)
 	}
 
 	// add VHD signature to the blob
 	h, err := createVHDHeader(uint64(size))
 	if err != nil {
 		_, _ = blob.DeleteIfExists(nil)
-		return "", "", fmt.Errorf("failed to create vhd header, err: %v", err)
+		return "", "", fmt.Errorf("failed to create vhd header, err: %w", err)
 	}
 
 	blobRange := azstorage.BlobRange{
@@ -392,7 +393,7 @@ func (c *BlobDiskController) ensureDefaultContainer(storageAccountName string) e
 		// we have failed to ensure that account is ready for us to create
 		// the default vhd container
 		if err != nil {
-			if err == kwait.ErrWaitTimeout {
+			if errors.Is(err, kwait.ErrWaitTimeout) {
 				return fmt.Errorf("azureDisk - timed out waiting for storage account %s to become ready", storageAccountName)
 			}
 			return err
@@ -508,7 +509,7 @@ func (c *BlobDiskController) createStorageAccount(storageAccountName string, sto
 
 		err := c.common.cloud.StorageAccountClient.Create(ctx, c.common.resourceGroup, storageAccountName, cp)
 		if err != nil {
-			return fmt.Errorf(fmt.Sprintf("Create Storage Account: %s, error: %v", storageAccountName, err))
+			return fmt.Errorf("failed to create Storage Account: %s, error: %v", storageAccountName, err)
 		}
 
 		newAccountState := &storageAccountState{

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -427,7 +428,9 @@ func TestListNextResultsMultiPages(t *testing.T) {
 		vmssClient := getTestVMSSVMClient(armClient)
 		result, err := vmssClient.listNextResults(context.TODO(), lastResult)
 		if err != nil {
-			assert.Equal(t, err.(autorest.DetailedError).Message, test.expectedErrMsg)
+			detailedErr := &autorest.DetailedError{}
+			assert.True(t, errors.As(err, detailedErr))
+			assert.Equal(t, detailedErr.Message, test.expectedErrMsg)
 		} else {
 			assert.NoError(t, err)
 		}
@@ -726,7 +729,7 @@ func TestUpdateVMsThrottle(t *testing.T) {
 	vmssvmClient := getTestVMSSVMClient(armClient)
 	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
 	assert.NotNil(t, rerr)
-	assert.Equal(t, throttleErr.Error(), fmt.Errorf(rerr.RawError.Error()))
+	assert.EqualError(t, throttleErr.Error(), rerr.RawError.Error())
 }
 
 func getTestVMSSVM(vmssName, instanceID string) compute.VirtualMachineScaleSetVM {

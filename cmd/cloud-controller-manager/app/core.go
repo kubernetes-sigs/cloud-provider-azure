@@ -45,10 +45,10 @@ import (
 )
 
 const (
+	// IPv6DualStack enables ipv6 dual stack
+	//
 	// owner: @khenidak
 	// alpha: v1.15
-	//
-	// Enables ipv6 dual stack
 	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 )
 
@@ -212,7 +212,7 @@ func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud c
 		// should be dual stack (from different IPFamilies)
 		dualstackServiceCIDR, err := netutils.IsDualStackCIDRs([]*net.IPNet{serviceCIDR, secondaryServiceCIDR})
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to perform dualstack check on serviceCIDR and secondaryServiceCIDR error:%v", err)
+			return nil, false, fmt.Errorf("failed to perform dualstack check on serviceCIDR and secondaryServiceCIDR error:%w", err)
 		}
 		if !dualstackServiceCIDR {
 			return nil, false, fmt.Errorf("serviceCIDR and secondaryServiceCIDR are not dualstack (from different IPfamiles)")

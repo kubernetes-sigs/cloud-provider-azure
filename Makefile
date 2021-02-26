@@ -19,10 +19,6 @@ BIN_DIR=bin
 PKG_CONFIG=.pkg_config
 PKG_CONFIG_CONTENT=$(shell cat $(PKG_CONFIG))
 
-# TODO: fix code and enable more options
-# -E deadcode -E gocyclo -E vetshadow -E gas -E ineffassign
-GOMETALINTER_OPTION=--tests --disable-all -E gofmt -E vet -E golint -e "don't use underscores in Go names"
-
 AKSENGINE_VERSION ?= master
 
 TEST_RESULTS_DIR=testResults

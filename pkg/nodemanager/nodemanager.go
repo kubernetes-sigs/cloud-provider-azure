@@ -250,7 +250,7 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	exists, err := cnc.ensureNodeExistsByProviderID(ctx, node)
 	if err != nil {
 		// Continue to update node address when not sure the node is not exists
-		klog.Errorf("%v", err)
+		klog.Error(err)
 	} else if !exists {
 		klog.V(4).Infof("The node %s is no longer present according to the cloud provider, do not process.", node.Name)
 		return
@@ -352,7 +352,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
 	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %v", node.Name, err))
+		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %w", node.Name, err))
 		return
 	}
 
@@ -365,7 +365,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 
 	nodeModifiers, err := cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("failed to initialize node %s at cloudprovider: %v", node.Name, err))
+		utilruntime.HandleError(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
 		return
 	}
 
@@ -453,7 +453,7 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 
 	zone, err := cnc.getZoneByName(ctx, node)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get zone from cloud provider: %v", err)
+		return nil, fmt.Errorf("failed to get zone from cloud provider: %w", err)
 	}
 	if zone.FailureDomain != "" {
 		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomain, zone.FailureDomain)
@@ -509,7 +509,7 @@ func (cnc *CloudNodeController) ensureNodeExistsByProviderID(ctx context.Context
 		var err error
 		providerID, err = cnc.nodeProvider.InstanceID(ctx, types.NodeName(node.Name))
 		if err != nil {
-			if err == cloudprovider.InstanceNotFound {
+			if errors.Is(err, cloudprovider.InstanceNotFound) {
 				return false, nil
 			}
 			return false, err
@@ -527,7 +527,7 @@ func (cnc *CloudNodeController) ensureNodeExistsByProviderID(ctx context.Context
 func (cnc *CloudNodeController) getNodeAddressesByName(ctx context.Context, node *v1.Node) ([]v1.NodeAddress, error) {
 	nodeAddresses, err := cnc.nodeProvider.NodeAddresses(ctx, types.NodeName(node.Name))
 	if err != nil {
-		return nil, fmt.Errorf("error fetching node by name %s: %v", node.Name, err)
+		return nil, fmt.Errorf("error fetching node by name %s: %w", node.Name, err)
 	}
 	return nodeAddresses, nil
 }
@@ -568,7 +568,7 @@ func ensureNodeProvidedIPExists(node *v1.Node, nodeAddresses []v1.NodeAddress) (
 func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node *v1.Node) (string, error) {
 	instanceType, err := cnc.nodeProvider.InstanceType(ctx, types.NodeName(node.Name))
 	if err != nil {
-		return "", fmt.Errorf("InstanceType: Error fetching by NodeName %s: %v", node.Name, err)
+		return "", fmt.Errorf("InstanceType: Error fetching by NodeName %s: %w", node.Name, err)
 	}
 	return instanceType, err
 }
@@ -578,7 +578,7 @@ func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node 
 func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node) (cloudprovider.Zone, error) {
 	zone, err := cnc.nodeProvider.GetZone(ctx)
 	if err != nil {
-		return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %v", node.Name, err)
+		return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %w", node.Name, err)
 	}
 
 	return zone, nil
@@ -593,7 +593,7 @@ func PatchNodeStatus(c v1core.CoreV1Interface, nodeName types.NodeName, oldNode 
 
 	updatedNode, err := c.Nodes().Patch(context.TODO(), string(nodeName), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to patch status %q for node %q: %v", patchBytes, nodeName, err)
+		return nil, nil, fmt.Errorf("failed to patch status %q for node %q: %w", patchBytes, nodeName, err)
 	}
 	return updatedNode, patchBytes, nil
 }
@@ -601,7 +601,7 @@ func PatchNodeStatus(c v1core.CoreV1Interface, nodeName types.NodeName, oldNode 
 func preparePatchBytesforNodeStatus(nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) ([]byte, error) {
 	oldData, err := json.Marshal(oldNode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Marshal oldData for node %q: %v", nodeName, err)
+		return nil, fmt.Errorf("failed to Marshal oldData for node %q: %w", nodeName, err)
 	}
 
 	// NodeStatus.Addresses is incorrectly annotated as patchStrategy=merge, which
@@ -620,17 +620,17 @@ func preparePatchBytesforNodeStatus(nodeName types.NodeName, oldNode *v1.Node, n
 	}
 	newData, err := json.Marshal(diffNode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Marshal newData for node %q: %v", nodeName, err)
+		return nil, fmt.Errorf("failed to Marshal newData for node %q: %w", nodeName, err)
 	}
 
 	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, v1.Node{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to CreateTwoWayMergePatch for node %q: %v", nodeName, err)
+		return nil, fmt.Errorf("failed to CreateTwoWayMergePatch for node %q: %w", nodeName, err)
 	}
 	if manuallyPatchAddresses {
 		patchBytes, err = fixupPatchForNodeStatusAddresses(patchBytes, newNode.Status.Addresses)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fix up NodeAddresses in patch for node %q: %v", nodeName, err)
+			return nil, fmt.Errorf("failed to fix up NodeAddresses in patch for node %q: %w", nodeName, err)
 		}
 	}
 

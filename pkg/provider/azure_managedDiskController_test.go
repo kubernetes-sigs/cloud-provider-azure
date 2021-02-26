@@ -172,7 +172,9 @@ func TestCreateManagedDisk(t *testing.T) {
 		actualDiskID, err := managedDiskController.CreateManagedDisk(volumeOptions)
 		assert.Equal(t, test.expectedDiskID, actualDiskID, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 	}
 }
 
@@ -231,7 +233,9 @@ func TestDeleteManagedDisk(t *testing.T) {
 
 		err := managedDiskController.DeleteManagedDisk(diskURI)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 	}
 }
 
@@ -281,7 +285,9 @@ func TestGetDisk(t *testing.T) {
 
 		provisioningState, diskid, err := managedDiskController.GetDisk(testCloud.ResourceGroup, test.diskName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 		assert.Equal(t, test.expectedProvisioningState, provisioningState, "TestCase[%d]: %s, expected ProvisioningState: %v, return ProvisioningState: %v", i, test.desc, test.expectedProvisioningState, provisioningState)
 		assert.Equal(t, test.expectedDiskID, diskid, "TestCase[%d]: %s, expected DiskID: %v, return DiskID: %v", i, test.desc, test.expectedDiskID, diskid)
 	}
@@ -385,7 +391,9 @@ func TestResizeDisk(t *testing.T) {
 
 		result, err := managedDiskController.ResizeDisk(diskURI, test.oldSize, test.newSize)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 		assert.Equal(t, test.expectedQuantity.Value(), result.Value(), "TestCase[%d]: %s, expected Quantity: %v, return Quantity: %v", i, test.desc, test.expectedQuantity, result)
 	}
 }
@@ -546,6 +554,8 @@ func TestGetLabelsForVolume(t *testing.T) {
 		result, err := testCloud.GetLabelsForVolume(context.TODO(), test.pv)
 		assert.Equal(t, test.expected, result, "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expected, result)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		assert.Equal(t, test.expectedErrMsg, err, "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		if test.expectedErr {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
+		}
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -427,7 +428,9 @@ func TestListNextResultsMultiPages(t *testing.T) {
 		vmssClient := getTestVMClient(armClient)
 		result, err := vmssClient.listNextResults(context.TODO(), lastResult)
 		if err != nil {
-			assert.Equal(t, err.(autorest.DetailedError).Message, test.expectedErrMsg)
+			detailedErr := &autorest.DetailedError{}
+			assert.True(t, errors.As(err, detailedErr))
+			assert.Equal(t, detailedErr.Message, test.expectedErrMsg)
 		} else {
 			assert.NoError(t, err)
 		}

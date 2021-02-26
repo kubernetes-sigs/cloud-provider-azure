@@ -62,7 +62,7 @@ var _ = Describe("Azure Credential Provider", func() {
 		defer func() {
 			err = tc.DeleteContainerRegistry(*registry.Name)
 			if err != nil {
-				utils.Logf("failed to cleanup registry with error: %v", err)
+				utils.Logf("failed to cleanup registry with error: %w", err)
 			}
 		}()
 

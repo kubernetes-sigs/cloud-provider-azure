@@ -17,11 +17,12 @@ limitations under the License.
 package mockdiskclient
 
 import (
-	context "context"
-	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
-	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"context"
+	"reflect"
+
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

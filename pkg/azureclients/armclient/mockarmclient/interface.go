@@ -17,14 +17,15 @@ limitations under the License.
 package mockarmclient
 
 import (
-	context "context"
-	autorest "github.com/Azure/go-autorest/autorest"
-	azure "github.com/Azure/go-autorest/autorest/azure"
-	gomock "github.com/golang/mock/gomock"
-	http "net/http"
-	reflect "reflect"
-	armclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"context"
+	"net/http"
+	"reflect"
+
+	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

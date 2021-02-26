@@ -898,7 +898,9 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 		}, nil).AnyTimes()
 
 		instanceID, err := cloud.VMSet.GetInstanceIDByNodeName(test.nodeName)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		if test.expectedErrMsg != nil {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+		}
 		assert.Equal(t, test.expectedID, instanceID, test.name)
 	}
 }
@@ -1054,7 +1056,9 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
 
 		zone, err := cloud.VMSet.GetZoneByNodeName(test.nodeName)
-		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		if test.expectedErrMsg != nil {
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+		}
 		assert.Equal(t, test.expectedZone, zone, test.name)
 	}
 }
@@ -1355,7 +1359,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		nicID          string
 		vmSetName      string
 		expectedErr    bool
-		expectedErrMsg string
+		expectedErrMsg error
 	}{
 		{
 			name:     "EnsureHostsInPool should return nil if there's no error when invoke EnsureHostInPool",
@@ -1446,7 +1450,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			nicID:          "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic5",
 			vmSetName:      "myAvailabilitySet",
 			expectedErr:    true,
-			expectedErrMsg: fmt.Sprintf("ensure(default/svc): backendPoolID(%s) - failed to ensure host in pool: %q", backendAddressPoolID, fmt.Errorf("failed to determine the ipconfig(IPv6=true). nicname=%q", "nic5")),
+			expectedErrMsg: fmt.Errorf("ensure(default/svc): backendPoolID(%s) - failed to ensure host in pool: %w", backendAddressPoolID, fmt.Errorf("failed to determine the ipconfig(IPv6=true). nicname=%q", "nic5")),
 		},
 	}
 
@@ -1468,7 +1472,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 
 		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName, false)
 		if test.expectedErr {
-			assert.Equal(t, test.expectedErrMsg, err.Error(), test.name)
+			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		} else {
 			assert.Nil(t, err, test.name)
 		}

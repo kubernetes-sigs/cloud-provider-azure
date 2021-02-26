@@ -649,7 +649,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 	for _, ipConfiguration := range *lb.FrontendIPConfigurations {
 		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(ipConfiguration, service)
 		if err != nil {
-			return nil, nil, fmt.Errorf("get(%s): lb(%s) - failed to filter frontend IP configs with error: %v", serviceName, to.String(lb.Name), err)
+			return nil, nil, fmt.Errorf("get(%s): lb(%s) - failed to filter frontend IP configs with error: %w", serviceName, to.String(lb.Name), err)
 		}
 		if owns {
 			klog.V(2).Infof("get(%s): lb(%s) - found frontend IP config, primary service: %v", serviceName, to.String(lb.Name), isPrimaryService)
@@ -1029,7 +1029,7 @@ func getIdleTimeout(s *v1.Service) (*int32, error) {
 	errInvalidTimeout := fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d", min, max)
 	to, err := strconv.Atoi(val)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing idle timeout value: %v: %v", err, errInvalidTimeout)
+		return nil, fmt.Errorf("error parsing idle timeout value: %w: %v", err, errInvalidTimeout)
 	}
 	to32 := int32(to)
 

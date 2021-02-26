@@ -17,11 +17,12 @@ limitations under the License.
 package mockdeploymentclient
 
 import (
-	context "context"
-	resources "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
-	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"context"
+	"reflect"
+
+	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

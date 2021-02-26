@@ -141,7 +141,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
-			Logf("error when listing sgs: %v", err)
+			Logf("error when listing sgs: %w", err)
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
@@ -216,7 +216,7 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string)
 	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		_, err := pipClient.Delete(context.Background(), rgName, ipName)
 		if err != nil {
-			Logf("error: %v, will retry soon", err)
+			Logf("error: %w, will retry soon", err)
 			return false, nil
 		}
 		return true, nil
@@ -253,7 +253,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	subnet := to.String((*vNet.Subnets)[0].AddressPrefix)
 	ip, _, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %v", to.String(vNet.Name), err)
+		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", to.String(vNet.Name), err)
 	}
 	baseIP := ip.To4()
 	for i := 0; i <= 254; i++ {

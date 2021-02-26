@@ -716,7 +716,9 @@ func TestGetVMSS(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expected}, test.vmssListError).AnyTimes()
 
 		actual, err := ss.getVMSS(test.vmssName, azcache.CacheReadTypeDefault)
-		assert.Equal(t, test.expectedErr, err, test.description)
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description)
+		}
 		if actual != nil {
 			assert.Equal(t, expected, *actual, test.description)
 		}
@@ -905,7 +907,9 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, test.vmClientErr).AnyTimes()
 
 		sku, err := ss.GetInstanceTypeByNodeName("vmss-vm-000000")
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, test.expectedType, sku, test.description)
 	}
 }
@@ -1087,7 +1091,9 @@ func TestGetPrimaryInterface(t *testing.T) {
 		}
 
 		nic, err := ss.GetPrimaryInterface(test.nodeName)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, expectedInterface, nic, test.description)
 	}
 }
@@ -1131,7 +1137,9 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 		mockPIPClient.EXPECT().GetVirtualMachineScaleSetPublicIPAddress(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", "nic", "ip", gomock.Not("pip"), "").Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: 404, RawError: fmt.Errorf("not found")}).AnyTimes()
 
 		_, found, err := ss.getVMSSPublicIPAddress(ss.ResourceGroup, testVMSSName, "0", "nic", "ip", test.pipName)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, test.found, found, test.description)
 	}
 }
@@ -1196,7 +1204,9 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 		mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), ss.ResourceGroup, testVMSSName, "0", test.nodeName, gomock.Any()).Return(expectedInterface, nil).AnyTimes()
 
 		privateIPs, err := ss.GetPrivateIPsByNodeName(test.nodeName)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, test.expectedPrivateIPs, privateIPs, test.description)
 	}
 }
@@ -1217,7 +1227,7 @@ func TestGetVmssMachineID(t *testing.T) {
 func TestExtractScaleSetNameByProviderID(t *testing.T) {
 	providerID := "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000"
 	vmssName, err := extractScaleSetNameByProviderID(providerID)
-	assert.Nil(t, err, fmt.Errorf("unexpected error %v happened", err))
+	assert.Nil(t, err, fmt.Errorf("unexpected error %w happened", err))
 	assert.Equal(t, "vmss", vmssName, "extractScaleSetNameByProviderID should return the correct vmss name")
 
 	providerID = "/invalid/id"
@@ -1229,7 +1239,7 @@ func TestExtractScaleSetNameByProviderID(t *testing.T) {
 func TestExtractResourceGroupByProviderID(t *testing.T) {
 	providerID := "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000"
 	vmssName, err := extractResourceGroupByProviderID(providerID)
-	assert.Nil(t, err, fmt.Errorf("unexpected error %v happened", err))
+	assert.Nil(t, err, fmt.Errorf("unexpected error %w happened", err))
 	assert.Equal(t, "rg", vmssName, "extractScaleSetNameByProviderID should return the correct vmss name")
 
 	providerID = "/invalid/id"
@@ -1293,7 +1303,9 @@ func TestListScaleSets(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return(test.existedScaleSets, test.vmssClientErr).AnyTimes()
 
 		vmssNames, err := ss.listScaleSets(ss.ResourceGroup)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, test.expectedVMSSNames, vmssNames, test.description)
 	}
 }
@@ -1332,7 +1344,9 @@ func TestListScaleSetVMs(t *testing.T) {
 		expectedVMSSVMs := test.existedVMSSVMs
 
 		vmssVMs, err := ss.listScaleSetVMs(testVMSSName, ss.ResourceGroup)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 		assert.Equal(t, expectedVMSSVMs, vmssVMs, test.description)
 	}
 }
@@ -2269,7 +2283,9 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
 		err = ss.ensureBackendPoolDeletedFromVMSS(&v1.Service{}, test.backendPoolID, testVMSSName, test.ipConfigurationIDs)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+		}
 	}
 }
 
