@@ -40,6 +40,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+const (
+	testResourceID     = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
+	testResourcePrefix = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts"
+)
+
 // 2065-01-24 05:20:00 +0000 UTC
 func getFutureTime() time.Time {
 	return time.Unix(3000000000, 0)
@@ -91,14 +96,13 @@ func TestGetProperties(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -227,7 +231,6 @@ func TestAllThrottle(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
@@ -247,9 +250,9 @@ func TestAllThrottle(t *testing.T) {
 	r := getTestStorageAccount("sa1")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), resourceID, "listKeys", struct{}{}).Return(response, throttleErr).Times(1)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, throttleErr).Times(1)
-	armClient.EXPECT().PutResource(gomock.Any(), resourceID, sa).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(3)
 
@@ -265,9 +268,8 @@ func TestAllThrottle(t *testing.T) {
 	rerr4 := saClient.Delete(context.TODO(), "rg", "sa1")
 	assert.Equal(t, throttleErr, rerr4)
 
-	resourceID2 := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts"
 	armClient2 := mockarmclient.NewMockInterface(ctrl)
-	armClient2.EXPECT().GetResource(gomock.Any(), resourceID2, "").Return(response, throttleErr).Times(1)
+	armClient2.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
 	armClient2.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient2 := getTestStorageAccountClient(armClient2)
@@ -280,13 +282,12 @@ func TestGetPropertiesNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -301,13 +302,12 @@ func TestGetPropertiesInternalError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -322,13 +322,12 @@ func TestListKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), resourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -342,13 +341,12 @@ func TestListKeysResponderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), resourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -457,12 +455,11 @@ func TestListByResourceGroup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts"
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snList := []storage.Account{getTestStorageAccount("sn1"), getTestStorageAccount("pip2"), getTestStorageAccount("pip3")}
 	responseBody, err := json.Marshal(storage.AccountListResult{Value: &snList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -479,12 +476,11 @@ func TestListByResourceGroupResponderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts"
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snList := []storage.Account{getTestStorageAccount("sn1"), getTestStorageAccount("pip2"), getTestStorageAccount("pip3")}
 	responseBody, err := json.Marshal(storage.AccountListResult{Value: &snList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -501,7 +497,6 @@ func TestCreate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	sa := storage.AccountCreateParameters{
 		Location: to.StringPtr("eastus"),
 	}
@@ -510,7 +505,7 @@ func TestCreate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -522,7 +517,6 @@ func TestCreateResponderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	sa := storage.AccountCreateParameters{
 		Location: to.StringPtr("eastus"),
 	}
@@ -531,7 +525,7 @@ func TestCreateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -543,7 +537,6 @@ func TestUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	sa := storage.AccountUpdateParameters{
 		Tags: map[string]*string{"key": to.StringPtr("value")},
 	}
@@ -552,7 +545,7 @@ func TestUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, sa).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -564,7 +557,6 @@ func TestUpdateResponderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1"
 	sa := storage.AccountUpdateParameters{
 		Tags: map[string]*string{"key": to.StringPtr("value")},
 	}
@@ -573,7 +565,7 @@ func TestUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, sa).Return(response, nil).Times(1)
+	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, sa).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)

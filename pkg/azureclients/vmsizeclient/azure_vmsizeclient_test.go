@@ -40,6 +40,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+const (
+	testResourceID = "/subscriptions/subscriptionID/providers/Microsoft.Compute/locations/eastus/vmSizes"
+)
+
 func TestNew(t *testing.T) {
 	config := &azclients.ClientConfig{
 		SubscriptionID:          "sub",
@@ -86,12 +90,11 @@ func TestList(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/providers/Microsoft.Compute/locations/eastus/vmSizes"
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmsizeList := []compute.VirtualMachineSize{getTestVMSize("Standard_D2s_v3"), getTestVMSize("Standard_D4s_v3"), getTestVMSize("Standard_D8s_v3")}
 	responseBody, err := json.Marshal(compute.VirtualMachineSizeListResult{Value: &vmsizeList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -107,13 +110,12 @@ func TestListNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/providers/Microsoft.Compute/locations/eastus/vmSizes"
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmsizeClient := getTestVMSizeClient(armClient)
@@ -128,13 +130,12 @@ func TestListInternalError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/providers/Microsoft.Compute/locations/eastus/vmSizes"
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmsizeClient := getTestVMSizeClient(armClient)
@@ -149,7 +150,6 @@ func TestListThrottle(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/providers/Microsoft.Compute/locations/eastus/vmSizes"
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
@@ -161,7 +161,7 @@ func TestListThrottle(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	vmsizeClient := getTestVMSizeClient(armClient)
 	expected := compute.VirtualMachineSizeListResult{Response: autorest.Response{}}

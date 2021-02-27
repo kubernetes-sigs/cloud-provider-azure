@@ -26,6 +26,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	cidr = "10.0.0.0/16"
+)
+
 func TestCIDRSetFullyAllocated(t *testing.T) {
 	cases := []struct {
 		clusterCIDRStr string
@@ -833,7 +837,6 @@ func TestCIDRSetv6(t *testing.T) {
 }
 
 func TestCidrSetMetrics(t *testing.T) {
-	cidr := "10.0.0.0/16"
 	_, clusterCIDR, _ := net.ParseCIDR(cidr)
 	// We have 256 free cidrs
 	a, err := NewCIDRSet(clusterCIDR, 24)
@@ -879,7 +882,6 @@ func TestCidrSetMetrics(t *testing.T) {
 }
 
 func TestCidrSetMetricsHistogram(t *testing.T) {
-	cidr := "10.0.0.0/16"
 	_, clusterCIDR, _ := net.ParseCIDR(cidr)
 	// We have 256 free cidrs
 	a, err := NewCIDRSet(clusterCIDR, 24)

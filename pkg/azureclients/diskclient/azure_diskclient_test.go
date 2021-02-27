@@ -37,6 +37,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+const (
+	testResourceID = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1"
+)
+
 func TestNew(t *testing.T) {
 	config := &azclients.ClientConfig{
 		SubscriptionID:          "sub",
@@ -83,13 +87,12 @@ func TestGetNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1"
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
@@ -104,13 +107,12 @@ func TestGetInternalError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1"
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
@@ -125,7 +127,6 @@ func TestGetThrottle(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1"
 	response := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
@@ -137,7 +138,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
@@ -184,14 +185,13 @@ func TestUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resourceID := "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1"
 	diskUpdate := getTestDiskUpdate()
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, diskUpdate).Return(response, nil).Times(1)
+	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, diskUpdate).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
@@ -209,7 +209,7 @@ func TestUpdate(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().PatchResource(gomock.Any(), resourceID, diskUpdate).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, diskUpdate).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = diskClient.Update(context.TODO(), "rg", "disk1", diskUpdate)
 	assert.Equal(t, throttleErr, rerr)

@@ -211,7 +211,6 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 		if test.isVMSS {
 			if test.isManagedBy {
 				testCloud.DisableAvailabilitySetNodes = false
-				testVMSSName := "vmss"
 				expectedVMSS := compute.VirtualMachineScaleSet{Name: to.StringPtr(testVMSSName)}
 				mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
