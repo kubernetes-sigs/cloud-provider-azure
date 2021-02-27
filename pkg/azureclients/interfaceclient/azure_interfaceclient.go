@@ -41,9 +41,10 @@ var _ Interface = &Client{}
 
 // Client implements network interface client.
 type Client struct {
-	armClient      armclient.Interface
-	subscriptionID string
-	cloudName      string
+	armClient              armclient.Interface
+	subscriptionID         string
+	cloudName              string
+	disableAzureStackCloud bool
 
 	// Rate limiting configures.
 	rateLimiterReader flowcontrol.RateLimiter
@@ -59,7 +60,7 @@ func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
 	authorizer := config.Authorizer
 	apiVersion := APIVersion
-	if strings.EqualFold(config.CloudName, AzureStackCloudName) {
+	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
 	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
@@ -73,11 +74,12 @@ func New(config *azclients.ClientConfig) *Client {
 		config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
 
 	client := &Client{
-		armClient:         armClient,
-		rateLimiterReader: rateLimiterReader,
-		rateLimiterWriter: rateLimiterWriter,
-		subscriptionID:    config.SubscriptionID,
-		cloudName:         config.CloudName,
+		armClient:              armClient,
+		rateLimiterReader:      rateLimiterReader,
+		rateLimiterWriter:      rateLimiterWriter,
+		subscriptionID:         config.SubscriptionID,
+		cloudName:              config.CloudName,
+		disableAzureStackCloud: config.DisableAzureStackCloud,
 	}
 
 	return client
@@ -187,7 +189,7 @@ func (c *Client) getVMSSNetworkInterface(ctx context.Context, resourceGroupName 
 
 	result := network.Interface{}
 	computeAPIVersion := ComputeAPIVersion
-	if strings.EqualFold(c.cloudName, AzureStackCloudName) {
+	if strings.EqualFold(c.cloudName, AzureStackCloudName) && !c.disableAzureStackCloud {
 		computeAPIVersion = AzureStackComputeAPIVersion
 	}
 	queryParameters := map[string]interface{}{
