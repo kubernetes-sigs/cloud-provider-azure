@@ -239,6 +239,11 @@ type Config struct {
 	// DisableAvailabilitySetNodes disables VMAS nodes support when "VMType" is set to "vmss".
 	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
 
+	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
+	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
+	// while the cluster is not running on AzureStack.
+	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
+
 	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
 	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
 	// this config, the old tags would be replaced by the new ones.
@@ -643,6 +648,7 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 		ResourceManagerEndpoint: az.Environment.ResourceManagerEndpoint,
 		Authorizer:              autorest.NewBearerAuthorizer(servicePrincipalToken),
 		Backoff:                 &retry.Backoff{Steps: 1},
+		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
 	}
 
 	if az.Config.CloudProviderBackoff {
