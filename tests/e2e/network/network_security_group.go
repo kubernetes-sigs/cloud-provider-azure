@@ -102,6 +102,7 @@ var _ = Describe("Network security group", func() {
 		url := fmt.Sprintf("http://%s:%v", ip, ports[0].Port)
 		for i := 1; i <= 30; i++ {
 			utils.Logf("round %d, GET %s", i, url)
+			/* #nosec G107: Potential HTTP request made with variable url */
 			resp, err := http.Get(url)
 			if err == nil {
 				defer func() {

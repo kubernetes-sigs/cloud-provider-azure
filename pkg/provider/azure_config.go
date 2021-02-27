@@ -29,7 +29,7 @@ import (
 const (
 	cloudConfigNamespace  = "kube-system"
 	cloudConfigKey        = "cloud-config"
-	cloudConfigSecretName = "azure-cloud-provider"
+	cloudConfigSecretName = "azure-cloud-provider" // #nosec G101
 )
 
 // The config type for Azure cloud provider secret. Supported values are:

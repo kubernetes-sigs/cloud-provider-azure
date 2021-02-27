@@ -138,7 +138,7 @@ func jitter(duration time.Duration, maxFactor float64) time.Duration {
 	if maxFactor <= 0.0 {
 		maxFactor = 1.0
 	}
-	wait := duration + time.Duration(rand.Float64()*maxFactor*float64(duration))
+	wait := duration + time.Duration(rand.Float64()*maxFactor*float64(duration)) // #nosec G404
 	return wait
 }
 

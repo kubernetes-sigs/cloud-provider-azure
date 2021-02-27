@@ -217,7 +217,7 @@ func ListVMSSes(tc *AzureTestClient) (*[]azcompute.VirtualMachineScaleSet, error
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
-func GetVMSSVMComputerName(vm *azcompute.VirtualMachineScaleSetVM) (string, error) {
+func GetVMSSVMComputerName(vm azcompute.VirtualMachineScaleSetVM) (string, error) {
 	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
 		return "", fmt.Errorf("cannot find computer name from vmss vm %s", *vm.Name)
 	}
@@ -226,6 +226,6 @@ func GetVMSSVMComputerName(vm *azcompute.VirtualMachineScaleSetVM) (string, erro
 }
 
 // IsSpotVMSS checks whether the vmss support azure spot vm instance
-func IsSpotVMSS(vmss *azcompute.VirtualMachineScaleSet) bool {
+func IsSpotVMSS(vmss azcompute.VirtualMachineScaleSet) bool {
 	return vmss.VirtualMachineProfile.Priority == azcompute.Spot
 }

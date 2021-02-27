@@ -35,7 +35,7 @@ const (
 	TenantIDEnv               = "K8S_AZURE_TENANTID"
 	SubscriptionEnv           = "K8S_AZURE_SUBSID"
 	ServicePrincipleIDEnv     = "K8S_AZURE_SPID"
-	ServicePrincipleSecretEnv = "K8S_AZURE_SPSEC"
+	ServicePrincipleSecretEnv = "K8S_AZURE_SPSEC" // #nosec G101
 	ClusterLocationEnv        = "K8S_AZURE_LOCATION"
 	ClusterEnvironment        = "K8S_AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "K8S_AZURE_LOADBALANCE_SKU"

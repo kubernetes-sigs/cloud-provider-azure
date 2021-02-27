@@ -93,8 +93,8 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		// There should be a judgement that the initNodeCount should be smaller than the max nodes property
 		// of the cluster, otherwise skip the test
 
-		for _, node := range nodes {
-			podCount += calculateNewPodCountOnNode(cs, &node)
+		for i := range nodes {
+			podCount += calculateNewPodCountOnNode(cs, &nodes[i])
 		}
 		utils.Logf("create %d new pods will saturate the space", podCount)
 	})
@@ -333,7 +333,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 
 		foundSpotVMSS := false
 		for _, scaleSet := range *scaleSets {
-			if utils.IsSpotVMSS(&scaleSet) {
+			if utils.IsSpotVMSS(scaleSet) {
 				foundSpotVMSS = true
 				break
 			}
@@ -356,8 +356,8 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		utils.Logf("Checking gpu nodes")
 		foundGPUNode := false
 		gpuCap := int64(0)
-		for _, node := range nodes {
-			found, capacity := utils.GetGPUResource(&node)
+		for i := range nodes {
+			found, capacity := utils.GetGPUResource(&nodes[i])
 			if found {
 				gpuCap = capacity
 				foundGPUNode = true

@@ -83,10 +83,12 @@ func DockerLogin(registryName string) (err error) {
 	}
 
 	Logf("Attempting Docker login with azure cred.")
+	arg0 := "--username=" + authConfig.AADClientID
+	arg1 := "--password=" + authConfig.AADClientSecret
 	cmd = exec.Command("docker",
 		"login",
-		fmt.Sprintf("--username=%s", authConfig.AADClientID),
-		fmt.Sprintf("--password=%s", authConfig.AADClientSecret),
+		arg0,
+		arg1,
 		registryName+".azurecr.io")
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("docker failed to login with error: %w", err)
@@ -113,13 +115,14 @@ func PushImageToACR(registryName, image string) (tag string, err error) {
 
 	Logf("Tagging image.")
 	tagSuffix := string(uuid.NewUUID())[0:4]
-	cmd = exec.Command("docker", "tag", image, fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix))
+	registry := fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix)
+	cmd = exec.Command("docker", "tag", image, registry)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed tagging nginx image with error: %w", err)
 	}
 
 	Logf("Pushing image to ACR.")
-	cmd = exec.Command("docker", "push", fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix))
+	cmd = exec.Command("docker", "push", registry)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed pushing %s image to registry %s with error: %w", image, registryName, err)
 	}

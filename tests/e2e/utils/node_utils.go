@@ -67,8 +67,8 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 		return nil, err
 	}
 	ret := make([]v1.Node, 0)
-	for _, node := range nodesList.Items {
-		if !isMasterNode(&node) && !isVirtualKubeletNode(&node) {
+	for i, node := range nodesList.Items {
+		if !isMasterNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) {
 			ret = append(ret, node)
 		}
 	}
@@ -91,8 +91,8 @@ func GetMaster(cs clientset.Interface) (*v1.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, node := range nodesList.Items {
-		if isMasterNode(&node) {
+	for i, node := range nodesList.Items {
+		if isMasterNode(&nodesList.Items[i]) {
 			return &node, nil
 		}
 	}

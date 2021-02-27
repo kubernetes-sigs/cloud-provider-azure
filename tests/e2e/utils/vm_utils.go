@@ -43,7 +43,7 @@ func ListVMs(tc *AzureTestClient) (*[]compute.VirtualMachine, error) {
 }
 
 // GetVMComputerName returns the corresponding node name of the VM
-func GetVMComputerName(vm *compute.VirtualMachine) (string, error) {
+func GetVMComputerName(vm compute.VirtualMachine) (string, error) {
 	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
 		return "", fmt.Errorf("cannot find computer name from vm %s", *vm.Name)
 	}

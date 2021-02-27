@@ -118,13 +118,13 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	}
 
 	if nodeList != nil {
-		for _, node := range nodeList.Items {
+		for i, node := range nodeList.Items {
 			if len(node.Spec.PodCIDRs) == 0 {
 				klog.V(4).Infof("Node %v has no CIDR, ignoring", node.Name)
 				continue
 			}
 			klog.V(4).Infof("Node %v has CIDR %s, occupying it in CIDR map", node.Name, node.Spec.PodCIDR)
-			if err := ra.occupyCIDRs(&node); err != nil {
+			if err := ra.occupyCIDRs(&nodeList.Items[i]); err != nil {
 				// This will happen if:
 				// 1. We find garbage in the podCIDRs field. Retrying is useless.
 				// 2. CIDR out of range: This means a node CIDR has changed.
