@@ -104,6 +104,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |loadBalancerCacheTTLInSeconds|Cache TTL in seconds for load balancers|Since v1.18.0, default is 120|
 |nsgCacheTTLInSeconds|Cache TTL in seconds for network security group|Since v1.18.0, default is 120|
 |routeTableCacheTTLInSeconds|Cache TTL in seconds for route table|Since v1.18.0, default is 120|
+| disableAzureStackCloud | DisableAzureStackCloud disables AzureStackCloud support. It should be used when setting Cloud with "AZURESTACKCLOUD" to customize ARM endpoints while the cluster is not running on AzureStack. Default is false. |Optional. Supported since v1.20.0 in out-of-tree cloud provider Azure. |
 
 ### primaryAvailabilitySetName
 
