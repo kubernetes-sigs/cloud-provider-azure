@@ -119,6 +119,8 @@ var (
 	defaultExcludeMasterFromStandardLB = true
 	// Outbound SNAT is enabled by default.
 	defaultDisableOutboundSNAT = false
+	// RouteUpdateWaitingInSeconds is 30 seconds by default.
+	defaultRouteUpdateWaitingInSeconds = 30
 )
 
 // Config holds the configuration parsed from the --cloud-config flag
@@ -243,6 +245,10 @@ type Config struct {
 	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
 	// while the cluster is not running on AzureStack.
 	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
+
+	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
+	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
+	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
 
 	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
 	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
@@ -394,6 +400,10 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 	if config.VMType == "" {
 		// default to standard vmType if not set.
 		config.VMType = vmTypeStandard
+	}
+
+	if config.RouteUpdateWaitingInSeconds <= 0 {
+		config.RouteUpdateWaitingInSeconds = defaultRouteUpdateWaitingInSeconds
 	}
 
 	if config.DisableAvailabilitySetNodes && config.VMType != vmTypeVMSS {
