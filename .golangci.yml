@@ -20,7 +20,7 @@ linters:
 #    - interfacer
 #    - maligned
     - misspell
-#    - nakedret
+    - nakedret
 #    - prealloc
     - staticcheck
     - structcheck

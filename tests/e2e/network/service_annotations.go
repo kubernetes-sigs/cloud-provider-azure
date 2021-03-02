@@ -569,11 +569,11 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 	return publicIP
 }
 
-// defaultDeployment returns a default deployment
+// createNginxDeploymentManifest returns a default deployment
 // running nginx image which exposes port 80
-func createNginxDeploymentManifest(name string, labels map[string]string) (result *appsv1.Deployment) {
+func createNginxDeploymentManifest(name string, labels map[string]string) *appsv1.Deployment {
 	var replicas int32 = 5
-	result = &appsv1.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -604,7 +604,6 @@ func createNginxDeploymentManifest(name string, labels map[string]string) (resul
 			},
 		},
 	}
-	return
 }
 
 // validate internal source can access to ILB

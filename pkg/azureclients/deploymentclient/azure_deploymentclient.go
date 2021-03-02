@@ -453,5 +453,5 @@ func (c *Client) ExportTemplate(ctx context.Context, resourceGroupName string, d
 	}
 
 	result.Response = autorest.Response{Response: response}
-	return
+	return result, rerr
 }
