@@ -570,9 +570,9 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 }
 
 func (az *Cloud) configAzureClients(
-	servicePrincipalToken *adal.ServicePrincipalToken,
-	multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken,
-	networkResourceServicePrincipalToken *adal.ServicePrincipalToken) {
+	servicePrincipalToken adal.OAuthTokenProvider,
+	multiTenantServicePrincipalToken adal.MultitenantOAuthTokenProvider,
+	networkResourceServicePrincipalToken adal.OAuthTokenProvider) {
 	azClientConfig := az.getAzureClientConfig(servicePrincipalToken)
 
 	// Prepare AzureClientConfig for all azure clients
@@ -643,7 +643,7 @@ func (az *Cloud) configAzureClients(
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
 }
 
-func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {
+func (az *Cloud) getAzureClientConfig(servicePrincipalToken adal.OAuthTokenProvider) *azclients.ClientConfig {
 	azClientConfig := &azclients.ClientConfig{
 		CloudName:               az.Config.Cloud,
 		Location:                az.Config.Location,

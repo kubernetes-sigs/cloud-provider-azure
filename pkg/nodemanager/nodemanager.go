@@ -655,7 +655,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 }
 
 // PatchNodeStatus patches node status.
-func PatchNodeStatus(c v1core.CoreV1Interface, nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) (*v1.Node, []byte, error) {
+func PatchNodeStatus(c v1core.NodesGetter, nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) (*v1.Node, []byte, error) {
 	patchBytes, err := preparePatchBytesforNodeStatus(nodeName, oldNode, newNode)
 	if err != nil {
 		return nil, nil, err
