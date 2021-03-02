@@ -51,14 +51,14 @@ func TestCommonAttachDisk(t *testing.T) {
 	testTags[WriteAcceleratorEnabled] = to.StringPtr("true")
 	testCases := []struct {
 		desc            string
-		vmList          map[string]string
+		existedDisk     compute.Disk
 		nodeName        types.NodeName
+		vmList          map[string]string
 		isDataDisksFull bool
 		isBadDiskURI    bool
 		isDiskUsed      bool
-		existedDisk     compute.Disk
-		expectedLun     int32
 		expectedErr     bool
+		expectedLun     int32
 	}{
 		{
 			desc:        "LUN -1 and error shall be returned if there's no such instance corresponding to given nodeName",
@@ -177,9 +177,9 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 		isManagedBy     bool
 		isManagedDisk   bool
 		isDataDisksFull bool
+		expectedErr     bool
 		existedDisk     compute.Disk
 		expectedLun     int32
-		expectedErr     bool
 	}{
 		{
 			desc:          "an error shall be returned if convert vmSet to scaleSet failed",
@@ -391,8 +391,8 @@ func TestSetDiskLun(t *testing.T) {
 		diskURI         string
 		diskMap         map[string]*AttachDiskOptions
 		isDataDisksFull bool
-		expectedLun     int32
 		expectedErr     bool
+		expectedLun     int32
 	}{
 		{
 			desc:        "the minimal LUN shall be returned if there's enough room for extra disks",
@@ -847,8 +847,8 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 		diskURI              string
 		nodeName             string
 		diskName             string
-		duplicateDiskRequest bool
 		diskNum              int
+		duplicateDiskRequest bool
 		expectedErr          bool
 	}{
 		{
@@ -927,8 +927,8 @@ func TestDetachDiskRequestFuncs(t *testing.T) {
 		diskURI              string
 		nodeName             string
 		diskName             string
-		duplicateDiskRequest bool
 		diskNum              int
+		duplicateDiskRequest bool
 		expectedErr          bool
 	}{
 		{

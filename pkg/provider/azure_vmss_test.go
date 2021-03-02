@@ -423,12 +423,12 @@ func TestGetZoneByNodeName(t *testing.T) {
 	testCases := []struct {
 		description string
 		scaleSet    string
-		vmList      []string
 		nodeName    string
 		location    string
 		zone        string
-		faultDomain int32
 		expected    string
+		vmList      []string
+		faultDomain int32
 		expectError bool
 	}{
 		{
@@ -1831,15 +1831,15 @@ func TestEnsureVMSSInPool(t *testing.T) {
 
 	testCases := []struct {
 		description        string
-		nodes              []*v1.Node
 		backendPoolID      string
 		vmSetName          string
+		clusterIP          string
+		nodes              []*v1.Node
 		isBasicLB          bool
 		isVMSSDeallocating bool
 		isVMSSNilNICConfig bool
 		expectedPutVMSS    bool
 		setIPv6Config      bool
-		clusterIP          string
 		useMultipleSLBs    bool
 		expectedErr        error
 	}{

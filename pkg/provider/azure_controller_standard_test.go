@@ -189,10 +189,10 @@ func TestGetDataDisks(t *testing.T) {
 	var testCases = []struct {
 		desc              string
 		nodeName          types.NodeName
-		isDataDiskNull    bool
-		expectedDataDisks []compute.DataDisk
-		expectedError     bool
 		crt               azcache.AzureCacheReadType
+		isDataDiskNull    bool
+		expectedError     bool
+		expectedDataDisks []compute.DataDisk
 	}{
 		{
 			desc:              "an error shall be returned if there's no corresponding vm",

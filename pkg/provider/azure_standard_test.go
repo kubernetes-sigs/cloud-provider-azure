@@ -313,11 +313,11 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 	cases := []struct {
 		description   string
 		subnetName    string
+		expected      string
+		protocol      v1.Protocol
 		isInternal    bool
 		useStandardLB bool
-		protocol      v1.Protocol
 		port          int32
-		expected      string
 	}{
 		{
 			description:   "internal lb should have subnet name on the rule name",

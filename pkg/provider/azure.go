@@ -134,6 +134,9 @@ type Config struct {
 	auth.AzureAuthConfig
 	CloudProviderRateLimitConfig
 
+	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
+	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
+
 	// The name of the resource group that the cluster is deployed in
 	ResourceGroup string `json:"resourceGroup,omitempty" yaml:"resourceGroup,omitempty"`
 	// The location of the resource group that the cluster is deployed in
@@ -173,35 +176,13 @@ type Config struct {
 	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
 	// In other words, if you use multiple agent pools (scale sets), you MUST set this field.
 	PrimaryScaleSetName string `json:"primaryScaleSetName,omitempty" yaml:"primaryScaleSetName,omitempty"`
-	// Enable exponential backoff to manage resource request retries
-	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
-	// Backoff retry limit
-	CloudProviderBackoffRetries int `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
-	// Backoff exponent
-	CloudProviderBackoffExponent float64 `json:"cloudProviderBackoffExponent,omitempty" yaml:"cloudProviderBackoffExponent,omitempty"`
-	// Backoff duration
-	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
-	// Backoff jitter
-	CloudProviderBackoffJitter float64 `json:"cloudProviderBackoffJitter,omitempty" yaml:"cloudProviderBackoffJitter,omitempty"`
-	// Use instance metadata service where possible
-	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
-
+	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
+	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
+	// this config, the old tags would be replaced by the new ones.
+	Tags string `json:"tags,omitempty" yaml:"tags,omitempty"`
 	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
 	// If not set, it will be default to basic.
 	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
-	// ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.
-	// If not set, it will be default to true.
-	ExcludeMasterFromStandardLB *bool `json:"excludeMasterFromStandardLB,omitempty" yaml:"excludeMasterFromStandardLB,omitempty"`
-	// DisableOutboundSNAT disables the outbound SNAT for public load balancer rules.
-	// It should only be set when loadBalancerSku is standard. If not set, it will be default to false.
-	DisableOutboundSNAT *bool `json:"disableOutboundSNAT,omitempty" yaml:"disableOutboundSNAT,omitempty"`
-
-	// Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer
-	MaximumLoadBalancerRuleCount int `json:"maximumLoadBalancerRuleCount,omitempty" yaml:"maximumLoadBalancerRuleCount,omitempty"`
-
-	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
-	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
-
 	// LoadBalancerName determines the specific name of the load balancer user want to use, working with
 	// LoadBalancerResourceGroup
 	LoadBalancerName string `json:"loadBalancerName,omitempty" yaml:"loadBalancerName,omitempty"`
@@ -215,6 +196,17 @@ type Config struct {
 	//   "external": for external LoadBalancer
 	//   "all": for both internal and external LoadBalancer
 	PreConfiguredBackendPoolLoadBalancerTypes string `json:"preConfiguredBackendPoolLoadBalancerTypes,omitempty" yaml:"preConfiguredBackendPoolLoadBalancerTypes,omitempty"`
+
+	// DisableAvailabilitySetNodes disables VMAS nodes support when "VMType" is set to "vmss".
+	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
+	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
+	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
+	// while the cluster is not running on AzureStack.
+	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
+	// Enable exponential backoff to manage resource request retries
+	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
+	// Use instance metadata service where possible
+	UseInstanceMetadata bool `json:"useInstanceMetadata,omitempty" yaml:"useInstanceMetadata,omitempty"`
 	// EnableMultipleStandardLoadBalancers determines the behavior of the standard load balancer. If set to true
 	// there would be one standard load balancer per VMAS or VMSS, which is similar with the behavior of the basic
 	// load balancer. Users could select the specific standard load balancer for their service by the service
@@ -222,6 +214,24 @@ type Config struct {
 	// would be shared by all services in the cluster. In this case, the mode selection annotation would be ignored.
 	EnableMultipleStandardLoadBalancers bool `json:"enableMultipleStandardLoadBalancers,omitempty" yaml:"enableMultipleStandardLoadBalancers,omitempty"`
 
+	// Backoff exponent
+	CloudProviderBackoffExponent float64 `json:"cloudProviderBackoffExponent,omitempty" yaml:"cloudProviderBackoffExponent,omitempty"`
+	// Backoff jitter
+	CloudProviderBackoffJitter float64 `json:"cloudProviderBackoffJitter,omitempty" yaml:"cloudProviderBackoffJitter,omitempty"`
+
+	// ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.
+	// If not set, it will be default to true.
+	ExcludeMasterFromStandardLB *bool `json:"excludeMasterFromStandardLB,omitempty" yaml:"excludeMasterFromStandardLB,omitempty"`
+	// DisableOutboundSNAT disables the outbound SNAT for public load balancer rules.
+	// It should only be set when loadBalancerSku is standard. If not set, it will be default to false.
+	DisableOutboundSNAT *bool `json:"disableOutboundSNAT,omitempty" yaml:"disableOutboundSNAT,omitempty"`
+
+	// Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer
+	MaximumLoadBalancerRuleCount int `json:"maximumLoadBalancerRuleCount,omitempty" yaml:"maximumLoadBalancerRuleCount,omitempty"`
+	// Backoff retry limit
+	CloudProviderBackoffRetries int `json:"cloudProviderBackoffRetries,omitempty" yaml:"cloudProviderBackoffRetries,omitempty"`
+	// Backoff duration
+	CloudProviderBackoffDuration int `json:"cloudProviderBackoffDuration,omitempty" yaml:"cloudProviderBackoffDuration,omitempty"`
 	// AvailabilitySetNodesCacheTTLInSeconds sets the Cache TTL for availabilitySetNodesCache
 	// if not set, will use default value
 	AvailabilitySetNodesCacheTTLInSeconds int `json:"availabilitySetNodesCacheTTLInSeconds,omitempty" yaml:"availabilitySetNodesCacheTTLInSeconds,omitempty"`
@@ -237,23 +247,9 @@ type Config struct {
 	NsgCacheTTLInSeconds int `json:"nsgCacheTTLInSeconds,omitempty" yaml:"nsgCacheTTLInSeconds,omitempty"`
 	// RouteTableCacheTTLInSeconds sets the cache TTL for route table
 	RouteTableCacheTTLInSeconds int `json:"routeTableCacheTTLInSeconds,omitempty" yaml:"routeTableCacheTTLInSeconds,omitempty"`
-
-	// DisableAvailabilitySetNodes disables VMAS nodes support when "VMType" is set to "vmss".
-	DisableAvailabilitySetNodes bool `json:"disableAvailabilitySetNodes,omitempty" yaml:"disableAvailabilitySetNodes,omitempty"`
-
-	// DisableAzureStackCloud disables AzureStackCloud support. It should be used
-	// when setting AzureAuthConfig.Cloud with "AZURESTACKCLOUD" to customize ARM endpoints
-	// while the cluster is not running on AzureStack.
-	DisableAzureStackCloud bool `json:"disableAzureStackCloud,omitempty" yaml:"disableAzureStackCloud,omitempty"`
-
 	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
 	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
-
-	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
-	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
-	// this config, the old tags would be replaced by the new ones.
-	Tags string `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.

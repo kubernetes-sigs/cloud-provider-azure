@@ -49,10 +49,10 @@ type ManagedDiskController struct {
 
 // ManagedDiskOptions specifies the options of managed disks.
 type ManagedDiskOptions struct {
+	// The SKU of storage account.
+	StorageAccountType compute.DiskStorageAccountTypes
 	// The name of the disk.
 	DiskName string
-	// The size in GB.
-	SizeGB int
 	// The name of PVC.
 	PVCName string
 	// The name of resource group.
@@ -61,22 +61,22 @@ type ManagedDiskOptions struct {
 	AvailabilityZone string
 	// The tags of the disk.
 	Tags map[string]string
-	// The SKU of storage account.
-	StorageAccountType compute.DiskStorageAccountTypes
 	// IOPS Caps for UltraSSD disk
 	DiskIOPSReadWrite string
 	// Throughput Cap (MBps) for UltraSSD disk
 	DiskMBpsReadWrite string
-	// Logical sector size in bytes for Ultra disks
-	LogicalSectorSize int32
 	// if SourceResourceID is not empty, then it's a disk copy operation(for snapshot)
 	SourceResourceID string
 	// The type of source
 	SourceType string
 	// ResourceId of the disk encryption set to use for enabling encryption at rest.
 	DiskEncryptionSetID string
+	// The size in GB.
+	SizeGB int
 	// The maximum number of VMs that can attach to the disk at the same time. Value greater than one indicates a disk that can be mounted on multiple VMs at the same time.
 	MaxShares int32
+	// Logical sector size in bytes for Ultra disks
+	LogicalSectorSize int32
 }
 
 //CreateManagedDisk : create managed disk

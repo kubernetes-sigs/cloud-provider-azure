@@ -618,11 +618,11 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 
 	tests := []struct {
 		desc                  string
+		desiredPipName        string
 		existingPip           network.PublicIPAddress
+		ipTagRequest          serviceIPTagRequest
 		lbShouldExist         bool
 		lbIsInternal          bool
-		desiredPipName        string
-		ipTagRequest          serviceIPTagRequest
 		expectedShouldRelease bool
 	}{
 		{
@@ -1124,13 +1124,13 @@ func TestGetServiceTags(t *testing.T) {
 func TestGetServiceLoadBalancer(t *testing.T) {
 	testCases := []struct {
 		desc           string
+		sku            string
 		existingLBs    []network.LoadBalancer
 		service        v1.Service
 		annotations    map[string]string
-		sku            string
-		wantLB         bool
 		expectedLB     *network.LoadBalancer
 		expectedStatus *v1.LoadBalancerStatus
+		wantLB         bool
 		expectedExists bool
 		expectedError  bool
 	}{
@@ -2381,11 +2381,11 @@ func TestReconcileSecurityGroup(t *testing.T) {
 
 	testCases := []struct {
 		desc          string
-		service       v1.Service
 		lbIP          *string
-		wantLb        bool
+		service       v1.Service
 		existingSgs   map[string]network.SecurityGroup
 		expectedSg    *network.SecurityGroup
+		wantLb        bool
 		expectedError bool
 	}{
 		{
@@ -2678,11 +2678,11 @@ func TestReconcilePublicIP(t *testing.T) {
 
 	testCases := []struct {
 		desc                        string
-		wantLb                      bool
+		expectedID                  string
 		annotations                 map[string]string
 		existingPIPs                []network.PublicIPAddress
-		expectedID                  string
 		expectedPIP                 *network.PublicIPAddress
+		wantLb                      bool
 		expectedError               bool
 		expectedCreateOrUpdateCount int
 		expectedDeleteCount         int
@@ -3011,12 +3011,12 @@ func TestEnsurePublicIPExists(t *testing.T) {
 
 	testCases := []struct {
 		desc                    string
-		existingPIPs            []network.PublicIPAddress
 		inputDNSLabel           string
-		foundDNSLabelAnnotation bool
-		additionalAnnotations   map[string]string
-		expectedPIP             *network.PublicIPAddress
 		expectedID              string
+		additionalAnnotations   map[string]string
+		existingPIPs            []network.PublicIPAddress
+		expectedPIP             *network.PublicIPAddress
+		foundDNSLabelAnnotation bool
 		isIPv6                  bool
 		expectedError           bool
 	}{

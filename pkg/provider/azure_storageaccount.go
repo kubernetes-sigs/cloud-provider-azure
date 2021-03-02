@@ -33,11 +33,11 @@ const SkipMatchingTag = "skip-matching"
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
 	Name, Type, Kind, ResourceGroup, Location string
-	EnableHTTPSTrafficOnly                    bool
-	Tags                                      map[string]string
-	VirtualNetworkResourceIDs                 []string
 	// indicate whether create new account when Name is empty
-	CreateAccount bool
+	EnableHTTPSTrafficOnly    bool
+	CreateAccount             bool
+	Tags                      map[string]string
+	VirtualNetworkResourceIDs []string
 }
 
 type accountWithLocation struct {
