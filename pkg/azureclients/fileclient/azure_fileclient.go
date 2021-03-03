@@ -19,8 +19,6 @@ package fileclient
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 
@@ -56,14 +54,6 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 	if shareOptions == nil {
 		return fmt.Errorf("share options is nil")
 	}
-	result, err := c.GetFileShare(resourceGroupName, accountName, shareOptions.Name)
-	if err == nil {
-		klog.V(2).Infof("file share(%s) under account(%s) rg(%s) already exists", shareOptions.Name, accountName, resourceGroupName)
-		return nil
-	} else if result.Response.Response == nil || (err != nil && result.Response.Response.StatusCode != http.StatusNotFound && !strings.Contains(err.Error(), "ShareNotFound")) {
-		return fmt.Errorf("failed to get file share(%s), err: %w", shareOptions.Name, err)
-	}
-
 	quota := int32(shareOptions.RequestGiB)
 	fileShareProperties := &storage.FileShareProperties{
 		ShareQuota: &quota,
@@ -75,8 +65,7 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 		Name:                &shareOptions.Name,
 		FileShareProperties: fileShareProperties,
 	}
-	_, err = c.fileSharesClient.Create(context.Background(), resourceGroupName, accountName, shareOptions.Name, fileShare)
-
+	_, err := c.fileSharesClient.Create(context.Background(), resourceGroupName, accountName, shareOptions.Name, fileShare)
 	return err
 }
 
