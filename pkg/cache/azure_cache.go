@@ -17,7 +17,6 @@ limitations under the License.
 package cache
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -70,10 +69,6 @@ type TimedCache struct {
 
 // NewTimedcache creates a new TimedCache.
 func NewTimedcache(ttl time.Duration, getter GetFunc) (*TimedCache, error) {
-	if getter == nil {
-		return nil, fmt.Errorf("getter is not provided")
-	}
-
 	return &TimedCache{
 		Getter: getter,
 		// switch to using NewStore instead of NewTTLStore so that we can
@@ -144,6 +139,10 @@ func (t *TimedCache) Get(key string, crt AzureCacheReadType) (interface{}, error
 	// Data is not cached yet, cache data is expired or requested force refresh
 	// cache it by getter. entry is locked before getting to ensure concurrent
 	// gets don't result in multiple ARM calls.
+	if t.Getter == nil {
+		return nil, nil
+	}
+
 	data, err := t.Getter(key)
 	if err != nil {
 		return nil, err

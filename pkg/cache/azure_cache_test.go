@@ -116,6 +116,14 @@ func TestCacheGetError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, getError, err)
 	assert.Nil(t, val)
+
+	// test with getter = nil
+	getter = nil
+	cache, err = NewTimedcache(fakeCacheTTL, getter)
+	assert.NoError(t, err)
+	val, err = cache.Get("key", CacheReadTypeDefault)
+	assert.Nil(t, val)
+	assert.Nil(t, err)
 }
 
 func TestCacheDelete(t *testing.T) {
