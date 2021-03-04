@@ -2020,7 +2020,7 @@ disableAvailabilitySetNodes: true
 	validateConfig(t, config)
 }
 
-func validateConfig(t *testing.T, config string) {
+func validateConfig(t *testing.T, config string) { //nolint
 	azureCloud := getCloudFromConfig(t, config)
 
 	if azureCloud.TenantID != "--tenant-id--" {
@@ -2889,6 +2889,7 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
+	var err error
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
@@ -2910,6 +2911,8 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	svc5.Spec.LoadBalancerIP = "192.168.22.33"
 	svc5.Annotations[ServiceAnnotationSharedSecurityRule] = "false"
 
+	testServices := []v1.Service{svc1, svc2, svc3, svc4, svc5}
+
 	testRuleName23 := testRuleName2
 	expectedRuleName4 := az.getSecurityRuleName(&svc4, v1.ServicePort{Port: 4444, Protocol: v1.ProtocolTCP}, "Internet")
 	expectedRuleName5 := az.getSecurityRuleName(&svc5, v1.ServicePort{Port: 8888, Protocol: v1.ProtocolTCP}, "Internet")
@@ -2917,29 +2920,11 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), true)
-	if err != nil {
-		t.Errorf("Unexpected error adding svc1: %q", err)
-	}
-
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), true)
-	if err != nil {
-		t.Errorf("Unexpected error adding svc2: %q", err)
-	}
-
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(svc3.Spec.LoadBalancerIP), true)
-	if err != nil {
-		t.Errorf("Unexpected error adding svc3: %q", err)
-	}
-
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc4, to.StringPtr(svc4.Spec.LoadBalancerIP), true)
-	if err != nil {
-		t.Errorf("Unexpected error adding svc4: %q", err)
-	}
-
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, to.StringPtr(svc5.Spec.LoadBalancerIP), true)
-	if err != nil {
-		t.Errorf("Unexpected error adding svc4: %q", err)
+	for i, svc := range testServices {
+		_, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(svc.Spec.LoadBalancerIP), true)
+		if err != nil {
+			t.Errorf("Unexpected error adding svc%d: %q", i+1, err)
+		}
 	}
 
 	validateSecurityGroup(t, sg, svc1, svc2, svc3, svc4, svc5)
