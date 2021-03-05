@@ -136,7 +136,8 @@ func startControllers(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 		// cloud node controller uses existing cluster role from node-controller
 		c.ClientBuilder.ClientOrDie("node-controller"),
 		nodeprovider.NewIMDSNodeProvider(),
-		c.NodeStatusUpdateFrequency.Duration)
+		c.NodeStatusUpdateFrequency.Duration,
+		c.WaitForRoutes)
 
 	go nodeController.Run(stopCh)
 

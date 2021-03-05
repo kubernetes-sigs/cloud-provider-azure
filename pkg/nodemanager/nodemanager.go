@@ -102,13 +102,20 @@ var UpdateNodeSpecBackoff = wait.Backoff{
 	Jitter:   1.0,
 }
 
+var updateNetworkConditionBackoff = wait.Backoff{
+	Steps:    5, // Maximum number of retries.
+	Duration: 100 * time.Millisecond,
+	Jitter:   1.0,
+}
+
 // CloudNodeController reconciles node information.
 type CloudNodeController struct {
-	nodeName     string
-	nodeProvider NodeProvider
-	nodeInformer coreinformers.NodeInformer
-	kubeClient   clientset.Interface
-	recorder     record.EventRecorder
+	nodeName      string
+	waitForRoutes bool
+	nodeProvider  NodeProvider
+	nodeInformer  coreinformers.NodeInformer
+	kubeClient    clientset.Interface
+	recorder      record.EventRecorder
 
 	nodeStatusUpdateFrequency time.Duration
 }
@@ -119,7 +126,8 @@ func NewCloudNodeController(
 	nodeInformer coreinformers.NodeInformer,
 	kubeClient clientset.Interface,
 	nodeProvider NodeProvider,
-	nodeStatusUpdateFrequency time.Duration) *CloudNodeController {
+	nodeStatusUpdateFrequency time.Duration,
+	waitForRoutes bool) *CloudNodeController {
 
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"})
@@ -137,6 +145,7 @@ func NewCloudNodeController(
 		kubeClient:                kubeClient,
 		recorder:                  recorder,
 		nodeProvider:              nodeProvider,
+		waitForRoutes:             waitForRoutes,
 		nodeStatusUpdateFrequency: nodeStatusUpdateFrequency,
 	}
 
@@ -363,6 +372,16 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 		return
 	}
 
+	if cnc.waitForRoutes {
+		// Set node condition node NodeNetworkUnavailable=true so that Pods won't
+		// be scheduled to this node until routes have been created.
+		err = cnc.updateNetworkingCondition(node, false)
+		if err != nil {
+			utilruntime.HandleError(fmt.Errorf("failed to patch condition for node %s: %w", node.Name, err))
+			return
+		}
+	}
+
 	nodeModifiers, err := cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
@@ -582,6 +601,57 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 	}
 
 	return zone, nil
+}
+
+func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
+	_, condition := cloudnodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
+	if networkReady && condition != nil && condition.Status == v1.ConditionFalse {
+		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=false was canceled because it is already set", node.Name)
+		return nil
+	}
+
+	if !networkReady && condition != nil && condition.Status == v1.ConditionTrue {
+		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=true was canceled because it is already set", node.Name)
+		return nil
+	}
+
+	klog.V(2).Infof("Patching node status %v with %v previous condition was:%+v", node.Name, networkReady, condition)
+
+	// either condition is not there, or has a value != to what we need
+	// start setting it
+	err := clientretry.RetryOnConflict(updateNetworkConditionBackoff, func() error {
+		var err error
+		// Patch could also fail, even though the chance is very slim. So we still do
+		// patch in the retry loop.
+		currentTime := metav1.Now()
+		if networkReady {
+			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+				Type:               v1.NodeNetworkUnavailable,
+				Status:             v1.ConditionFalse,
+				Reason:             "NodeInitialization",
+				Message:            "Should wait for cloud routes",
+				LastTransitionTime: currentTime,
+			})
+		} else {
+			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+				Type:               v1.NodeNetworkUnavailable,
+				Status:             v1.ConditionTrue,
+				Reason:             "NodeInitialization",
+				Message:            "Don't need to wait for cloud routes",
+				LastTransitionTime: currentTime,
+			})
+		}
+		if err != nil {
+			klog.V(4).Infof("Error updating node %s, retrying: %v", types.NodeName(node.Name), err)
+		}
+		return err
+	})
+
+	if err != nil {
+		klog.Errorf("Error updating node %s: %v", node.Name, err)
+	}
+
+	return err
 }
 
 // PatchNodeStatus patches node status.

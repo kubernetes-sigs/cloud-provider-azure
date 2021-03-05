@@ -200,6 +200,9 @@ func (d *delayedRouteUpdater) updateRoutes() {
 			klog.Errorf("CreateOrUpdateRouteTable() failed with error: %v", err)
 			return
 		}
+
+		// wait a while for route updates to take effect.
+		time.Sleep(time.Duration(d.az.Config.RouteUpdateWaitingInSeconds) * time.Second)
 	}
 }
 

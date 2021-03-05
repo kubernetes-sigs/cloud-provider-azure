@@ -78,6 +78,9 @@ type CloudNodeManagerOptions struct {
 	// ClientConnection specifies the kubeconfig file and client connection
 	// settings for the proxy server to use when communicating with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
+	// WaitForRoutes indicates whether the node should wait for routes to be created on Azure.
+	// If true, the node condition "NodeNetworkUnavailable" would be set to true on initialization.
+	WaitForRoutes bool
 }
 
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
@@ -124,6 +127,7 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fs.StringVar(&o.ClientConnection.ContentType, "kube-api-content-type", o.ClientConnection.ContentType, "Content type of requests sent to apiserver.")
 	fs.Float32Var(&o.ClientConnection.QPS, "kube-api-qps", 20, "QPS to use while talking with kubernetes apiserver.")
 	fs.Int32Var(&o.ClientConnection.Burst, "kube-api-burst", 30, "Burst to use while talking with kubernetes apiserver.")
+	fs.BoolVar(&o.WaitForRoutes, "wait-routes", false, "Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin.")
 	return fss
 }
 
@@ -156,6 +160,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 	c.Kubeconfig.ContentConfig.ContentType = o.ClientConnection.ContentType
 	c.Kubeconfig.QPS = o.ClientConnection.QPS
 	c.Kubeconfig.Burst = int(o.ClientConnection.Burst)
+	c.WaitForRoutes = o.WaitForRoutes
 
 	c.Client, err = clientset.NewForConfig(restclient.AddUserAgent(c.Kubeconfig, userAgent))
 	if err != nil {

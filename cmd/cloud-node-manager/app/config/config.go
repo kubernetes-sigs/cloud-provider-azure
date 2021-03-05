@@ -69,4 +69,8 @@ type Config struct {
 	// ClientConnection specifies the kubeconfig file and client connection
 	// settings for the proxy server to use when communicating with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
+
+	// WaitForRoutes indicates whether the node should wait for routes to be created on Azure.
+	// If true, the node condition "NodeNetworkUnavailable" would be set to true on initialization.
+	WaitForRoutes bool
 }
