@@ -22,10 +22,8 @@ import (
 
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
-)
 
-const (
-	azureMetricsNamespace = "cloudprovider_azure"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
@@ -110,7 +108,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 	metrics := &apiCallMetrics{
 		latency: metrics.NewHistogramVec(
 			&metrics.HistogramOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "api_request_duration_seconds",
 				Help:           "Latency of an Azure API call",
 				Buckets:        []float64{.1, .25, .5, 1, 2.5, 5, 10, 15, 25, 50, 120, 300, 600, 1200},
@@ -120,7 +118,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 		),
 		errors: metrics.NewCounterVec(
 			&metrics.CounterOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "api_request_errors",
 				Help:           "Number of errors for an Azure API call",
 				StabilityLevel: metrics.ALPHA,
@@ -129,7 +127,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 		),
 		rateLimitedCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "api_request_ratelimited_count",
 				Help:           "Number of rate limited Azure API calls",
 				StabilityLevel: metrics.ALPHA,
@@ -138,7 +136,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 		),
 		throttledCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "api_request_throttled_count",
 				Help:           "Number of throttled Azure API calls",
 				StabilityLevel: metrics.ALPHA,
@@ -160,7 +158,7 @@ func registerOperationMetrics(attributes ...string) *operationCallMetrics {
 	metrics := &operationCallMetrics{
 		operationLatency: metrics.NewHistogramVec(
 			&metrics.HistogramOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "op_duration_seconds",
 				Help:           "Latency of an Azure service operation",
 				StabilityLevel: metrics.ALPHA,
@@ -170,7 +168,7 @@ func registerOperationMetrics(attributes ...string) *operationCallMetrics {
 		),
 		operationFailureCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{
-				Namespace:      azureMetricsNamespace,
+				Namespace:      consts.AzureMetricsNamespace,
 				Name:           "op_failure_count",
 				Help:           "Number of failed Azure service operations",
 				StabilityLevel: metrics.ALPHA,

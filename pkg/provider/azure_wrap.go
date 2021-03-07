@@ -32,6 +32,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -283,7 +284,7 @@ func (az *Cloud) newRouteTableCache() (*azcache.TimedCache, error) {
 }
 
 func (az *Cloud) useStandardLoadBalancer() bool {
-	return strings.EqualFold(az.LoadBalancerSku, loadBalancerSkuStandard)
+	return strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }
 
 func (az *Cloud) excludeMasterNodesFromStandardLB() bool {
@@ -337,7 +338,7 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 	}
 
 	newLBName := matches[1]
-	newLBNameTrimmed := strings.TrimSuffix(newLBName, InternalLoadBalancerNameSuffix)
+	newLBNameTrimmed := strings.TrimSuffix(newLBName, consts.InternalLoadBalancerNameSuffix)
 	for _, backendPool := range existingBackendPools {
 		matches := backendPoolIDRE.FindStringSubmatch(backendPool)
 		if len(matches) != 2 {
@@ -345,7 +346,7 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 		}
 
 		lbName := matches[1]
-		if !strings.EqualFold(strings.TrimSuffix(lbName, InternalLoadBalancerNameSuffix), newLBNameTrimmed) {
+		if !strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), newLBNameTrimmed) {
 			return false, lbName, nil
 		}
 	}

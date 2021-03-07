@@ -22,9 +22,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // SkipMatchingTag skip account matching tag
@@ -186,11 +188,11 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				location = az.Location
 			}
 			if accountType == "" {
-				accountType = defaultStorageAccountType
+				accountType = consts.DefaultStorageAccountType
 			}
 
 			// use StorageV2 by default per https://docs.microsoft.com/en-us/azure/storage/common/storage-account-options
-			kind := defaultStorageAccountKind
+			kind := consts.DefaultStorageAccountKind
 			if accountKind != "" {
 				kind = storage.Kind(accountKind)
 			}

@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -118,7 +119,7 @@ func TestInstanceID(t *testing.T) {
 			vmList:              []string{"vm1"},
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedID:          "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
 		},
@@ -128,7 +129,7 @@ func TestInstanceID(t *testing.T) {
 			vmssName:            "vmss1",
 			nodeName:            "vmss1_0",
 			metadataName:        "vmss1_0",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedID:          "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss1/virtualMachines/0",
 		},
@@ -138,7 +139,7 @@ func TestInstanceID(t *testing.T) {
 			vmssName:            "vmss1",
 			nodeName:            "vmss1-0",
 			metadataName:        "vmss1-0",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedID:          "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vmss1-0",
 		},
@@ -147,7 +148,7 @@ func TestInstanceID(t *testing.T) {
 			vmList:              []string{"vm2"},
 			nodeName:            "vm2",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedID:          "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm2",
 		},
@@ -156,14 +157,14 @@ func TestInstanceID(t *testing.T) {
 			vmList:       []string{"vm2"},
 			nodeName:     "vm2",
 			metadataName: "vm2",
-			vmType:       vmTypeStandard,
+			vmType:       consts.VMTypeStandard,
 			expectedID:   "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm2",
 		},
 		{
 			name:                "InstanceID should report error if node doesn't exist",
 			vmList:              []string{"vm1"},
 			nodeName:            "vm3",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("instance not found"),
 		},
@@ -171,7 +172,7 @@ func TestInstanceID(t *testing.T) {
 			name:                "InstanceID should report error if metadata.Compute is nil",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			metadataTemplate:    `{"network":{"interface":[]}}`,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("failure of getting instance metadata"),
@@ -179,7 +180,7 @@ func TestInstanceID(t *testing.T) {
 		{
 			name:                "NodeAddresses should report error if cloud.VMSet is nil",
 			nodeName:            "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			nilVMSet:            true,
 			expectedErrMsg:      fmt.Errorf("no credentials provided for Azure cloud provider"),
@@ -188,7 +189,7 @@ func TestInstanceID(t *testing.T) {
 			name:                "NodeAddresses should report error if invoking GetMetadata returns error",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useCustomImsCache:   true,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("getError"),
@@ -226,7 +227,7 @@ func TestInstanceID(t *testing.T) {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 		if test.useCustomImsCache {
-			cloud.metadata.imsCache, err = azcache.NewTimedcache(metadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			})
 			if err != nil {
@@ -435,7 +436,7 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should report error if metadata.Network.Interface is nil",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			metadataTemplate:    `{"compute":{"name":"vm1"},"network":{}}`,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("no interface is found for the instance"),
@@ -444,7 +445,7 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should report error when invoke GetMetadata",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useCustomImsCache:   true,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("getError"),
@@ -452,7 +453,7 @@ func TestNodeAddresses(t *testing.T) {
 		{
 			name:                "NodeAddresses should report error if cloud.VMSet is nil",
 			nodeName:            "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			nilVMSet:            true,
 			expectedErrMsg:      fmt.Errorf("no credentials provided for Azure cloud provider"),
@@ -461,7 +462,7 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should report error when IPs are empty",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("get empty IP addresses from instance metadata service"),
 		},
@@ -469,28 +470,28 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should report error if node don't exist",
 			nodeName:            "vm2",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedErrMsg:      fmt.Errorf("timed out waiting for the condition"),
 		},
 		{
 			name:                "NodeAddresses should get IP addresses from Azure API if node's name isn't equal to metadataName",
 			nodeName:            "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			useInstanceMetadata: true,
 			expectedAddress:     expectedNodeAddress,
 		},
 		{
 			name:            "NodeAddresses should get IP addresses from Azure API if useInstanceMetadata is false",
 			nodeName:        "vm1",
-			vmType:          vmTypeStandard,
+			vmType:          consts.VMTypeStandard,
 			expectedAddress: expectedNodeAddress,
 		},
 		{
 			name:                "NodeAddresses should get IP addresses from local IMDS if node's name is equal to metadataName",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			ipV4:                "10.240.0.1",
 			ipV4Public:          "192.168.1.12",
 			ipV6:                "1111:11111:00:00:1111:1111:000:111",
@@ -524,7 +525,7 @@ func TestNodeAddresses(t *testing.T) {
 			name:                "NodeAddresses should get IP addresses from local IMDS for standard LoadBalancer if node's name is equal to metadataName",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
-			vmType:              vmTypeStandard,
+			vmType:              consts.VMTypeStandard,
 			ipV4:                "10.240.0.1",
 			ipV4Public:          "192.168.1.12",
 			ipV6:                "1111:11111:00:00:1111:1111:000:111",
@@ -571,7 +572,7 @@ func TestNodeAddresses(t *testing.T) {
 
 		mux := http.NewServeMux()
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.RequestURI, imdsLoadBalancerURI) {
+			if strings.Contains(r.RequestURI, consts.ImdsLoadBalancerURI) {
 				fmt.Fprintf(w, loadbalancerTemplate, test.ipV4Public, test.ipV4, test.ipV6Public, test.ipV6)
 				return
 			}
@@ -597,7 +598,7 @@ func TestNodeAddresses(t *testing.T) {
 		}
 
 		if test.useCustomImsCache {
-			cloud.metadata.imsCache, err = azcache.NewTimedcache(metadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			})
 			if err != nil {
@@ -713,7 +714,7 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 	}
 
 	for _, test := range vmssTestCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.name)
 		cloud.VMSet = ss
 

@@ -24,14 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
-)
-
-const (
-	defaultStorageAccountType      = string(storage.StandardLRS)
-	defaultStorageAccountKind      = storage.StorageV2
-	fileShareAccountNamePrefix     = "f"
-	sharedDiskAccountNamePrefix    = "ds"
-	dedicatedDiskAccountNamePrefix = "dd"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // CreateFileShare creates a file share, using a matching storage account type, account kind, etc.
@@ -52,7 +45,7 @@ func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *f
 		accountOptions.EnableHTTPSTrafficOnly = false
 	}
 
-	accountName, accountKey, err := az.EnsureStorageAccount(accountOptions, fileShareAccountNamePrefix)
+	accountName, accountKey, err := az.EnsureStorageAccount(accountOptions, consts.FileShareAccountNamePrefix)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountOptions.Name, err)
 	}

@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -162,7 +163,7 @@ func TestCreateVHDBlobDisk(t *testing.T) {
 	assert.NoError(t, err)
 	blobClient := client.GetBlobService()
 
-	_, _, err = b.createVHDBlobDisk(blobClient, "testsa", "blob", vhdContainerName, int64(10))
+	_, _, err = b.createVHDBlobDisk(blobClient, "testsa", "blob", consts.VhdContainerName, int64(10))
 	expectedErr := "failed to put page blob blob.vhd in container vhds: storage: service returned error: StatusCode=403, ErrorCode=AccountIsDisabled, ErrorMessage=The specified account is disabled."
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), expectedErr))

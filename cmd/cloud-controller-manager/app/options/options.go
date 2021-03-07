@@ -45,7 +45,7 @@ import (
 	"k8s.io/klog"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
-	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	// add the kubernetes feature gates
 	_ "k8s.io/kubernetes/pkg/features"
@@ -112,7 +112,7 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 	s.Authorization.AlwaysAllowPaths = []string{"/healthz"}
 
 	// Set cloud provider name to Azure.
-	s.KubeCloudShared.CloudProvider.Name = azureprovider.CloudProviderName
+	s.KubeCloudShared.CloudProvider.Name = consts.CloudProviderName
 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	s.SecureServing.ServerCert.CertDirectory = ""

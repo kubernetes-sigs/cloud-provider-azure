@@ -34,19 +34,8 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
-)
-
-const (
-	// not active means the instance is under deleting from Azure VMSS.
-	vmssVMNotActiveErrorMessage = "not an active Virtual Machine Scale Set VM instanceId"
-
-	// operationCanceledErrorMessage means the operation is canceled by another new operation.
-	operationCanceledErrorMessage = "canceledandsupersededduetoanotheroperation"
-
-	cannotDeletePublicIPErrorMessageCode = "PublicIPAddressCannotBeDeleted"
-
-	referencedResourceNotProvisionedMessageCode = "ReferencedResourceNotProvisioned"
 )
 
 var (
@@ -175,7 +164,7 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 	}
 
 	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
+	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
 		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because CreateOrUpdateSecurityGroup is canceled by another operation", *sg.Name)
 		_ = az.nsgCache.Delete(*sg.Name)
 	}
@@ -234,13 +223,13 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(retryErrorMessage), operationCanceledErrorMessage) {
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
 		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", to.String(lb.Name))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	// The LB update may fail because the referenced PIP is not in the Succeeded provisioning state
-	if strings.Contains(strings.ToLower(retryErrorMessage), strings.ToLower(referencedResourceNotProvisionedMessageCode)) {
+	if strings.Contains(strings.ToLower(retryErrorMessage), strings.ToLower(consts.ReferencedResourceNotProvisionedMessageCode)) {
 		matches := pipErrorMessageRE.FindStringSubmatch(retryErrorMessage)
 		if len(matches) != 3 {
 			klog.Warningf("Failed to parse the retry error message %s", retryErrorMessage)
@@ -341,7 +330,7 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 		klog.Errorf("PublicIPAddressesClient.Delete(%s) failed: %s", pipName, rerr.Error().Error())
 		az.Event(service, v1.EventTypeWarning, "DeletePublicIPAddress", rerr.Error().Error())
 
-		if strings.Contains(rerr.Error().Error(), cannotDeletePublicIPErrorMessageCode) {
+		if strings.Contains(rerr.Error().Error(), consts.CannotDeletePublicIPErrorMessageCode) {
 			klog.Warningf("DeletePublicIP for public IP %s failed with error %v, this is because other resources are referencing the public IP. The deletion of the service will continue.", pipName, rerr.Error())
 			return nil
 		}
@@ -387,7 +376,7 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 		_ = az.rtCache.Delete(*routeTable.Name)
 	}
 	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
+	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
 		klog.V(3).Infof("Route table cache for %s is cleanup because CreateOrUpdateRouteTable is canceled by another operation", *routeTable.Name)
 		_ = az.rtCache.Delete(*routeTable.Name)
 	}
@@ -412,7 +401,7 @@ func (az *Cloud) CreateOrUpdateRoute(route network.Route) error {
 		_ = az.rtCache.Delete(az.RouteTableName)
 	}
 	// Invalidate the cache because another new operation has canceled the current request.
-	if strings.Contains(strings.ToLower(rerr.Error().Error()), operationCanceledErrorMessage) {
+	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
 		klog.V(3).Infof("Route cache for %s is cleanup because CreateOrUpdateRouteTable is canceled by another operation", *route.Name)
 		_ = az.rtCache.Delete(az.RouteTableName)
 	}

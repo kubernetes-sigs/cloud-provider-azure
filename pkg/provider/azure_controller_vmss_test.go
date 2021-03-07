@@ -93,7 +93,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 
 	for i, test := range testCases {
 		scaleSetName := string(test.vmssName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
@@ -202,7 +202,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 
 	for i, test := range testCases {
 		scaleSetName := string(test.vmssName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
@@ -310,7 +310,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 	}
 	for i, test := range testCases {
 		scaleSetName := string(test.nodeName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName

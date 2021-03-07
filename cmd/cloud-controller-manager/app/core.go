@@ -38,7 +38,7 @@ import (
 	netutils "k8s.io/utils/net"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
-	cloudcontrolleroptions "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	nodeipamcontroller "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam"
 	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
@@ -257,7 +257,7 @@ func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud c
 // setNodeCIDRMaskSizes returns the IPv4 and IPv6 node cidr mask sizes.
 // If --node-cidr-mask-size not set, then it will return default IPv4 and IPv6 cidr mask sizes.
 func setNodeCIDRMaskSizes(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
-	ipv4Mask, ipv6Mask := cloudcontrolleroptions.DefaultNodeMaskCIDRIPv4, cloudcontrolleroptions.DefaultNodeMaskCIDRIPv6
+	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
 	// NodeCIDRMaskSizeIPv4 and NodeCIDRMaskSizeIPv6 can be used only for dual-stack clusters
 	if cfg.NodeCIDRMaskSizeIPv4 != 0 || cfg.NodeCIDRMaskSizeIPv6 != 0 {
 		return ipv4Mask, ipv6Mask, errors.New("usage of --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 are not allowed with non dual-stack clusters")
@@ -273,7 +273,7 @@ func setNodeCIDRMaskSizes(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (i
 // for --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 respectively. If value not provided,
 // then it will return default IPv4 and IPv6 cidr mask sizes.
 func setNodeCIDRMaskSizesDualStack(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
-	ipv4Mask, ipv6Mask := cloudcontrolleroptions.DefaultNodeMaskCIDRIPv4, cloudcontrolleroptions.DefaultNodeMaskCIDRIPv6
+	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
 	// NodeCIDRMaskSize can be used only for single stack clusters
 	if cfg.NodeCIDRMaskSize != 0 {
 		return ipv4Mask, ipv6Mask, errors.New("usage of --node-cidr-mask-size is not allowed with dual-stack clusters")

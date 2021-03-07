@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -51,20 +52,6 @@ const (
 	testLBBackendpoolID1 = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1"
 	testLBBackendpoolID2 = "/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-2"
 )
-
-func newTestScaleSet(ctrl *gomock.Controller) (*scaleSet, error) {
-	return newTestScaleSetWithState(ctrl)
-}
-
-func newTestScaleSetWithState(ctrl *gomock.Controller) (*scaleSet, error) {
-	cloud := GetTestCloud(ctrl)
-	ss, err := newScaleSet(cloud)
-	if err != nil {
-		return nil, err
-	}
-
-	return ss.(*scaleSet), nil
-}
 
 func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv6 bool) compute.VirtualMachineScaleSet {
 	lbBackendpools := make([]compute.SubResource, 0)
@@ -290,7 +277,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 		expectError  bool
 	}{
 		{
-			description:  "scaleSet should get node identity by node name",
+			description:  "ScaleSet should get node identity by node name",
 			vmList:       []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:     "vmssee6c2000001",
 			scaleSet:     "vmssee6c2",
@@ -298,7 +285,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 			expected:     &nodeIdentity{"rg", "vmssee6c2", "vmssee6c2000001"},
 		},
 		{
-			description:  "scaleSet should get node identity when computerNamePrefix differs from vmss name",
+			description:  "ScaleSet should get node identity when computerNamePrefix differs from vmss name",
 			vmList:       []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:     "vmssee6c2000001",
 			scaleSet:     "ss",
@@ -306,7 +293,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 			expected:     &nodeIdentity{"rg", "ss", "vmssee6c2000001"},
 		},
 		{
-			description:  "scaleSet should get node identity by node name with upper cases hostname",
+			description:  "ScaleSet should get node identity by node name with upper cases hostname",
 			vmList:       []string{"VMSSEE6C2000000", "VMSSEE6C2000001"},
 			nodeName:     "vmssee6c2000001",
 			scaleSet:     "ss",
@@ -314,7 +301,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 			expected:     &nodeIdentity{"rg", "ss", "vmssee6c2000001"},
 		},
 		{
-			description:  "scaleSet should not get node identity for non-existing nodes",
+			description:  "ScaleSet should not get node identity for non-existing nodes",
 			vmList:       []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:     "agente6c2000005",
 			scaleSet:     "ss",
@@ -324,7 +311,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -365,21 +352,21 @@ func TestGetInstanceIDByNodeName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			description: "scaleSet should get instance by node name",
+			description: "ScaleSet should get instance by node name",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000001",
 			expected:    "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/ss/virtualMachines/1",
 		},
 		{
-			description: "scaleSet should get instance by node name with upper cases hostname",
+			description: "ScaleSet should get instance by node name with upper cases hostname",
 			scaleSet:    "ss",
 			vmList:      []string{"VMSSEE6C2000000", "VMSSEE6C2000001"},
 			nodeName:    "vmssee6c2000000",
 			expected:    "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/ss/virtualMachines/0",
 		},
 		{
-			description: "scaleSet should not get instance for non-exist nodes",
+			description: "ScaleSet should not get instance for non-exist nodes",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "agente6c2000005",
@@ -388,7 +375,7 @@ func TestGetInstanceIDByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -432,7 +419,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			description: "scaleSet should get faultDomain for non-zoned nodes",
+			description: "ScaleSet should get faultDomain for non-zoned nodes",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000000",
@@ -440,7 +427,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 			expected:    "3",
 		},
 		{
-			description: "scaleSet should get availability zone for zoned nodes",
+			description: "ScaleSet should get availability zone for zoned nodes",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000000",
@@ -449,7 +436,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 			expected:    "westus-2",
 		},
 		{
-			description: "scaleSet should get availability zone in lower cases",
+			description: "ScaleSet should get availability zone in lower cases",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000000",
@@ -459,7 +446,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 			expected:    "westus-2",
 		},
 		{
-			description: "scaleSet should return error for non-exist nodes",
+			description: "ScaleSet should return error for non-exist nodes",
 			scaleSet:    "ss",
 			faultDomain: 3,
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
@@ -473,7 +460,7 @@ func TestGetZoneByNodeName(t *testing.T) {
 		if test.location != "" {
 			cloud.Location = test.location
 		}
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -531,7 +518,7 @@ func TestGetIPByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -605,7 +592,7 @@ func TestGetNodeNameByIPConfigurationID(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -701,7 +688,7 @@ func TestGetVMSS(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
@@ -752,7 +739,7 @@ func TestGetVmssVM(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		expectedVMSS := buildTestVMSS(test.existedVMSSName, "vmss-vm-")
@@ -803,7 +790,7 @@ func TestGetPowerStatusByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -844,7 +831,7 @@ func TestGetVmssVMByInstanceID(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := compute.VirtualMachineScaleSet{
@@ -892,7 +879,7 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -963,7 +950,7 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		vm := compute.VirtualMachineScaleSetVM{
@@ -1055,7 +1042,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -1129,7 +1116,7 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		mockPIPClient := ss.cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
@@ -1182,7 +1169,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -1215,7 +1202,7 @@ func TestGetVmssMachineID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := newTestScaleSet(ctrl)
+	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 	subscriptionID, resourceGroup, scaleSetName, instanceID := "sub", "RG", "vmss", "id"
@@ -1296,7 +1283,7 @@ func TestListScaleSets(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -1335,7 +1322,7 @@ func TestListScaleSetVMs(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
@@ -1367,13 +1354,13 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "vmss-vm-000000",
-						Labels: map[string]string{nodeLabelRole: "master"},
+						Labels: map[string]string{consts.NodeLabelRole: "master"},
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "vmss-vm-000001",
-						Labels: map[string]string{managedByAzureLabel: "false"},
+						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
 					},
 				},
 				{
@@ -1387,7 +1374,7 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -1443,7 +1430,7 @@ func TestGetVMSetNames(t *testing.T) {
 		{
 			description: "GetVMSetNames should return the primary vm set name when using the single SLB",
 			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: ServiceAnnotationLoadBalancerAutoModeValue}},
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			useSingleSLB:       true,
 			expectedVMSetNames: &[]string{"vmss"},
@@ -1451,7 +1438,7 @@ func TestGetVMSetNames(t *testing.T) {
 		{
 			description: "GetVMSetNames should return all scale sets if the service has auto mode annotation",
 			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: ServiceAnnotationLoadBalancerAutoModeValue}},
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1465,7 +1452,7 @@ func TestGetVMSetNames(t *testing.T) {
 		{
 			description: "GetVMSetNames should report the error if there's no such vmss",
 			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: "vmss-1"}},
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss-1"}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1479,7 +1466,7 @@ func TestGetVMSetNames(t *testing.T) {
 		{
 			description: "GetVMSetNames should return the correct vmss names",
 			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: "vmss"}},
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vmss"}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1493,12 +1480,12 @@ func TestGetVMSetNames(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		if test.useSingleSLB {
 			ss.EnableMultipleStandardLoadBalancers = false
-			ss.LoadBalancerSku = loadBalancerSkuStandard
+			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -1538,7 +1525,7 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := newTestScaleSet(ctrl)
+	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 	networkConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{
@@ -1651,7 +1638,7 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := newTestScaleSet(ctrl)
+	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 	config := &compute.VirtualMachineScaleSetNetworkConfiguration{
@@ -1780,11 +1767,11 @@ func TestEnsureHostInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		if !test.isBasicLB {
-			ss.LoadBalancerSku = loadBalancerSkuStandard
+			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
 		if test.useMultipleSLBs {
@@ -1981,16 +1968,16 @@ func TestEnsureVMSSInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		if !test.isBasicLB {
-			ss.LoadBalancerSku = loadBalancerSkuStandard
+			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = &virtualMachineScaleSetsDeallocating
+			expectedVMSS.ProvisioningState = to.StringPtr(virtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2031,7 +2018,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "vmss-vm-000000",
-						Labels: map[string]string{nodeLabelRole: "master"},
+						Labels: map[string]string{consts.NodeLabelRole: "master"},
 					},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
@@ -2040,7 +2027,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "vmss-vm-000001",
-						Labels: map[string]string{managedByAzureLabel: "false"},
+						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
 					},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
@@ -2079,10 +2066,10 @@ func TestEnsureHostsInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
-		ss.LoadBalancerSku = loadBalancerSkuStandard
+		ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		ss.ExcludeMasterFromStandardLB = to.BoolPtr(true)
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
@@ -2170,7 +2157,7 @@ func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
@@ -2257,14 +2244,14 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
-		ss.LoadBalancerSku = loadBalancerSkuStandard
+		ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = &virtualMachineScaleSetsDeallocating
+			expectedVMSS.ProvisioningState = to.StringPtr(virtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2355,7 +2342,7 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.description)
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
@@ -2378,7 +2365,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := newTestScaleSet(ctrl)
+	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err)
 
 	backendAddressPools := &[]network.BackendAddressPool{
@@ -2456,4 +2443,66 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	errs := utilerrors.AggregateGoroutines(testFunc...)
 	assert.Equal(t, 1, len(errs.Errors()))
 	assert.Equal(t, "instance not found", errs.Error())
+}
+
+func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description, providerID                    string
+		tags                                       map[string]*string
+		expectedIPV4MaskSize, expectedIPV6MaskSize int
+		expectedErr                                error
+	}{
+		{
+			description: "GetNodeCIDRMasksByProviderID should report an error if the providerID is not valid",
+			providerID:  "invalid",
+			expectedErr: ErrorNotVmssInstance,
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+			tags: map[string]*string{
+				VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+			},
+			expectedIPV4MaskSize: 24,
+			expectedIPV6MaskSize: 64,
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes even if some of the tags are not specified",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+			tags: map[string]*string{
+				VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+			},
+			expectedIPV4MaskSize: 24,
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should fail even if some of the tag is invalid",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+			tags: map[string]*string{
+				VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
+				VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+			},
+			expectedIPV6MaskSize: 64,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err)
+
+			expectedVMSS := compute.VirtualMachineScaleSet{
+				Name: to.StringPtr("vmss"),
+				Tags: tc.tags,
+			}
+			mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).MaxTimes(1)
+
+			ipv4MaskSize, ipv6MaskSize, err := ss.GetNodeCIDRMasksByProviderID(tc.providerID)
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedIPV4MaskSize, ipv4MaskSize)
+			assert.Equal(t, tc.expectedIPV6MaskSize, ipv6MaskSize)
+		})
+	}
 }

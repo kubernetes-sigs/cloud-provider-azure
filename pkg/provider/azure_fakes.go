@@ -36,11 +36,27 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
 	errPreconditionFailedEtagMismatch = fmt.Errorf("PreconditionFailedEtagMismatch")
 )
+
+// NewTestScaleSet creates a fake ScaleSet for unit test
+func NewTestScaleSet(ctrl *gomock.Controller) (*ScaleSet, error) {
+	return newTestScaleSetWithState(ctrl)
+}
+
+func newTestScaleSetWithState(ctrl *gomock.Controller) (*ScaleSet, error) {
+	cloud := GetTestCloud(ctrl)
+	ss, err := newScaleSet(cloud)
+	if err != nil {
+		return nil, err
+	}
+
+	return ss.(*ScaleSet), nil
+}
 
 // GetTestCloud returns a fake azure cloud for unit tests in Azure related CSI drivers
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
@@ -62,7 +78,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 			PrimaryAvailabilitySetName:   "as",
 			PrimaryScaleSetName:          "vmss",
 			MaximumLoadBalancerRuleCount: 250,
-			VMType:                       vmTypeStandard,
+			VMType:                       consts.VMTypeStandard,
 		},
 		nodeZones:          map[string]sets.String{},
 		nodeInformerSynced: func() bool { return true },

@@ -64,9 +64,6 @@ const (
 
 	// maxUpdateRetryTimeout is the maximum amount of time between timeouts.
 	maxUpdateRetryTimeout = 5 * time.Second
-
-	// updateMaxRetries is the max retries for a failed node
-	updateMaxRetries = 10
 )
 
 // CIDRAllocator is an interface implemented by things that know how
@@ -106,7 +103,7 @@ func New(kubeClient clientset.Interface, cloud cloudprovider.Interface, nodeInfo
 	case RangeAllocatorType:
 		return NewCIDRRangeAllocator(kubeClient, nodeInformer, allocatorParams, nodeList)
 	case CloudAllocatorType:
-		return NewCloudCIDRAllocator(kubeClient, cloud, nodeInformer)
+		return NewCloudCIDRAllocator(kubeClient, cloud, nodeInformer, allocatorParams, nodeList)
 	default:
 		return nil, fmt.Errorf("invalid CIDR allocator type: %v", allocatorType)
 	}

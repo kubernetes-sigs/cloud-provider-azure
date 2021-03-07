@@ -28,6 +28,7 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/yaml"
 )
 
@@ -163,7 +164,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 				if test.secretConfig == badConfig {
 					secret.Data = map[string][]byte{"cloud-config": []byte(`unknown: "hello",unknown: "hello"`)}
 				}
-				_, err := az.KubeClient.CoreV1().Secrets(cloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+				_, err := az.KubeClient.CoreV1().Secrets(consts.CloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 				assert.NoError(t, err, test.name)
 			}
 
@@ -256,7 +257,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 						"cloud-config": secretData,
 					}
 				}
-				_, err := az.KubeClient.CoreV1().Secrets(cloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+				_, err := az.KubeClient.CoreV1().Secrets(consts.CloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 				assert.NoError(t, err, test.name)
 			}
 

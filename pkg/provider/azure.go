@@ -61,6 +61,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 
 	// ensure the newly added package from azure-sdk-for-go is in vendor/
@@ -69,49 +70,6 @@ import (
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 
 	"sigs.k8s.io/yaml"
-)
-
-const (
-	// CloudProviderName is the value used for the --cloud-provider flag
-	CloudProviderName = "azure"
-	// AzureStackCloudName is the cloud name of Azure Stack
-	AzureStackCloudName    = "AZURESTACKCLOUD"
-	rateLimitQPSDefault    = 1.0
-	rateLimitBucketDefault = 5
-	backoffRetriesDefault  = 6
-	backoffExponentDefault = 1.5
-	backoffDurationDefault = 5 // in seconds
-	backoffJitterDefault   = 1.0
-	// According to https://docs.microsoft.com/en-us/azure/azure-subscription-service-limits#load-balancer.
-	maximumLoadBalancerRuleCount = 250
-
-	vmTypeVMSS     = "vmss"
-	vmTypeStandard = "standard"
-
-	loadBalancerSkuBasic    = "basic"
-	loadBalancerSkuStandard = "standard"
-
-	externalResourceGroupLabel = "kubernetes.azure.com/resource-group"
-	managedByAzureLabel        = "kubernetes.azure.com/managed"
-
-	// LabelFailureDomainBetaZone refer to https://github.com/kubernetes/api/blob/8519c5ea46199d57724725d5b969c5e8e0533692/core/v1/well_known_labels.go#L22-L23
-	LabelFailureDomainBetaZone = "failure-domain.beta.kubernetes.io/zone"
-
-	// LabelFailureDomainBetaRegion failure-domain region label
-	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
-
-	falseLabel = "false"
-)
-
-const (
-	// PreConfiguredBackendPoolLoadBalancerTypesNone means that the load balancers are not pre-configured
-	PreConfiguredBackendPoolLoadBalancerTypesNone = ""
-	// PreConfiguredBackendPoolLoadBalancerTypesInternal means that the `internal` load balancers are pre-configured
-	PreConfiguredBackendPoolLoadBalancerTypesInternal = "internal"
-	// PreConfiguredBackendPoolLoadBalancerTypesExternal means that the `external` load balancers are pre-configured
-	PreConfiguredBackendPoolLoadBalancerTypesExternal = "external"
-	// PreConfiguredBackendPoolLoadBalancerTypesAll means that all load balancers are pre-configured
-	PreConfiguredBackendPoolLoadBalancerTypesAll = "all"
 )
 
 var (
@@ -340,7 +298,7 @@ func init() {
 	}
 	autorest.StatusCodesForRetry = statusCodesForRetry
 
-	cloudprovider.RegisterCloudProvider(CloudProviderName, NewCloud)
+	cloudprovider.RegisterCloudProvider(consts.CloudProviderName, NewCloud)
 }
 
 // NewCloud returns a Cloud with initialized clients
@@ -349,7 +307,7 @@ func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	az.ipv6DualStackEnabled = utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack)
+	az.ipv6DualStackEnabled = utilfeature.DefaultFeatureGate.Enabled(consts.IPv6DualStack)
 
 	return az, nil
 }
@@ -395,14 +353,14 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 
 	if config.VMType == "" {
 		// default to standard vmType if not set.
-		config.VMType = vmTypeStandard
+		config.VMType = consts.VMTypeStandard
 	}
 
 	if config.RouteUpdateWaitingInSeconds <= 0 {
 		config.RouteUpdateWaitingInSeconds = defaultRouteUpdateWaitingInSeconds
 	}
 
-	if config.DisableAvailabilitySetNodes && config.VMType != vmTypeVMSS {
+	if config.DisableAvailabilitySetNodes && config.VMType != consts.VMTypeVMSS {
 		return fmt.Errorf("disableAvailabilitySetNodes %v is only supported when vmType is 'vmss'", config.DisableAvailabilitySetNodes)
 	}
 
@@ -458,7 +416,7 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 	az.Config = *config
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
-	az.metadata, err = NewInstanceMetadataService(imdsServer)
+	az.metadata, err = NewInstanceMetadataService(consts.ImdsServer)
 	if err != nil {
 		return err
 	}
@@ -476,10 +434,10 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 	}
 
 	if az.MaximumLoadBalancerRuleCount == 0 {
-		az.MaximumLoadBalancerRuleCount = maximumLoadBalancerRuleCount
+		az.MaximumLoadBalancerRuleCount = consts.MaximumLoadBalancerRuleCount
 	}
 
-	if strings.EqualFold(vmTypeVMSS, az.Config.VMType) {
+	if strings.EqualFold(consts.VMTypeVMSS, az.Config.VMType) {
 		az.VMSet, err = newScaleSet(az)
 		if err != nil {
 			return err
@@ -520,7 +478,7 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 }
 
 func (az *Cloud) setLBDefaults(config *Config) error {
-	if strings.EqualFold(config.LoadBalancerSku, loadBalancerSkuStandard) {
+	if strings.EqualFold(config.LoadBalancerSku, consts.LoadBalancerSkuStandard) {
 		// Do not add master nodes to standard LB by default.
 		if config.ExcludeMasterFromStandardLB == nil {
 			config.ExcludeMasterFromStandardLB = &defaultExcludeMasterFromStandardLB
@@ -565,17 +523,17 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 	if config.CloudProviderBackoff {
 		// Assign backoff defaults if no configuration was passed in
 		if config.CloudProviderBackoffRetries == 0 {
-			config.CloudProviderBackoffRetries = backoffRetriesDefault
+			config.CloudProviderBackoffRetries = consts.BackoffRetriesDefault
 		}
 		if config.CloudProviderBackoffDuration == 0 {
-			config.CloudProviderBackoffDuration = backoffDurationDefault
+			config.CloudProviderBackoffDuration = consts.BackoffDurationDefault
 		}
 		if config.CloudProviderBackoffExponent == 0 {
-			config.CloudProviderBackoffExponent = backoffExponentDefault
+			config.CloudProviderBackoffExponent = consts.BackoffExponentDefault
 		}
 
 		if config.CloudProviderBackoffJitter == 0 {
-			config.CloudProviderBackoffJitter = backoffJitterDefault
+			config.CloudProviderBackoffJitter = consts.BackoffJitterDefault
 		}
 
 		resourceRequestBackoff = wait.Backoff{
@@ -592,7 +550,7 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
 	} else {
 		// CloudProviderBackoffRetries will be set to 1 by default as the requirements of Azure SDK.
 		config.CloudProviderBackoffRetries = 1
-		config.CloudProviderBackoffDuration = backoffDurationDefault
+		config.CloudProviderBackoffDuration = consts.BackoffDurationDefault
 	}
 	return resourceRequestBackoff
 }
@@ -614,7 +572,7 @@ func (az *Cloud) configAzureClients(
 	// Error "not an active Virtual Machine Scale Set VM" is not retriable for VMSS VM.
 	// But http.StatusNotFound is retriable because of ARM replication latency.
 	vmssVMClientConfig := azClientConfig.WithRateLimiter(az.Config.VirtualMachineScaleSetRateLimit)
-	vmssVMClientConfig.Backoff = vmssVMClientConfig.Backoff.WithNonRetriableErrors([]string{vmssVMNotActiveErrorMessage}).WithRetriableHTTPStatusCodes([]int{http.StatusNotFound})
+	vmssVMClientConfig.Backoff = vmssVMClientConfig.Backoff.WithNonRetriableErrors([]string{consts.VmssVMNotActiveErrorMessage}).WithRetriableHTTPStatusCodes([]int{http.StatusNotFound})
 	routeClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteRateLimit)
 	subnetClientConfig := azClientConfig.WithRateLimiter(az.Config.SubnetsRateLimit)
 	routeTableClientConfig := azClientConfig.WithRateLimiter(az.Config.RouteTableRateLimit)
@@ -760,7 +718,7 @@ func (az *Cloud) HasClusterID() bool {
 
 // ProviderName returns the cloud provider ID.
 func (az *Cloud) ProviderName() string {
-	return CloudProviderName
+	return consts.CloudProviderName
 }
 
 func initDiskControllers(az *Cloud) error {
@@ -795,8 +753,8 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 		UpdateFunc: func(prev, obj interface{}) {
 			prevNode := prev.(*v1.Node)
 			newNode := obj.(*v1.Node)
-			if newNode.Labels[LabelFailureDomainBetaZone] ==
-				prevNode.Labels[LabelFailureDomainBetaZone] {
+			if newNode.Labels[consts.LabelFailureDomainBetaZone] ==
+				prevNode.Labels[consts.LabelFailureDomainBetaZone] {
 				return
 			}
 			az.updateNodeCaches(prevNode, newNode)
@@ -830,7 +788,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 	if prevNode != nil {
 		// Remove from nodeZones cache.
-		prevZone, ok := prevNode.ObjectMeta.Labels[LabelFailureDomainBetaZone]
+		prevZone, ok := prevNode.ObjectMeta.Labels[consts.LabelFailureDomainBetaZone]
 		if ok && az.isAvailabilityZone(prevZone) {
 			az.nodeZones[prevZone].Delete(prevNode.ObjectMeta.Name)
 			if az.nodeZones[prevZone].Len() == 0 {
@@ -839,21 +797,21 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		}
 
 		// Remove from nodeResourceGroups cache.
-		_, ok = prevNode.ObjectMeta.Labels[externalResourceGroupLabel]
+		_, ok = prevNode.ObjectMeta.Labels[consts.ExternalResourceGroupLabel]
 		if ok {
 			delete(az.nodeResourceGroups, prevNode.ObjectMeta.Name)
 		}
 
 		// Remove from unmanagedNodes cache.
-		managed, ok := prevNode.ObjectMeta.Labels[managedByAzureLabel]
-		if ok && managed == falseLabel {
+		managed, ok := prevNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
+		if ok && strings.EqualFold(managed, consts.NotManagedByAzureLabelValue) {
 			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
 		}
 	}
 
 	if newNode != nil {
 		// Add to nodeZones cache.
-		newZone, ok := newNode.ObjectMeta.Labels[LabelFailureDomainBetaZone]
+		newZone, ok := newNode.ObjectMeta.Labels[consts.LabelFailureDomainBetaZone]
 		if ok && az.isAvailabilityZone(newZone) {
 			if az.nodeZones[newZone] == nil {
 				az.nodeZones[newZone] = sets.NewString()
@@ -862,14 +820,14 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		}
 
 		// Add to nodeResourceGroups cache.
-		newRG, ok := newNode.ObjectMeta.Labels[externalResourceGroupLabel]
+		newRG, ok := newNode.ObjectMeta.Labels[consts.ExternalResourceGroupLabel]
 		if ok && len(newRG) > 0 {
 			az.nodeResourceGroups[newNode.ObjectMeta.Name] = strings.ToLower(newRG)
 		}
 
 		// Add to unmanagedNodes cache.
-		managed, ok := newNode.ObjectMeta.Labels[managedByAzureLabel]
-		if ok && managed == falseLabel {
+		managed, ok := newNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
+		if ok && strings.EqualFold(managed, consts.NotManagedByAzureLabelValue) {
 			az.unmanagedNodes.Insert(newNode.ObjectMeta.Name)
 		}
 	}
@@ -963,18 +921,13 @@ func (az *Cloud) GetUnmanagedNodes() (sets.String, error) {
 // ShouldNodeExcludedFromLoadBalancer returns true if node is unmanaged or in external resource group.
 func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(node *v1.Node) bool {
 	labels := node.ObjectMeta.Labels
-	if rg, ok := labels[externalResourceGroupLabel]; ok && !strings.EqualFold(rg, az.ResourceGroup) {
+	if rg, ok := labels[consts.ExternalResourceGroupLabel]; ok && !strings.EqualFold(rg, az.ResourceGroup) {
 		return true
 	}
 
-	if managed, ok := labels[managedByAzureLabel]; ok && managed == falseLabel {
+	if managed, ok := labels[consts.ManagedByAzureLabel]; ok && strings.EqualFold(managed, consts.NotManagedByAzureLabelValue) {
 		return true
 	}
 
 	return false
-}
-
-// AliasRangesByProviderID to be implemented
-func (az *Cloud) AliasRangesByProviderID(id string) ([]string, error) {
-	return nil, nil
 }

@@ -80,4 +80,7 @@ type VMSet interface {
 
 	// GetNodeNameByIPConfigurationID gets the nodeName and vmSetName by IP configuration ID.
 	GetNodeNameByIPConfigurationID(ipConfigurationID string) (string, string, error)
+
+	// GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
+	GetNodeCIDRMasksByProviderID(providerID string) (int, int, error)
 }
