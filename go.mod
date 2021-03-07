@@ -14,7 +14,6 @@ require (
 	github.com/niemeyer/pretty v0.0.0-00010101000000-000000000000 // indirect
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.8.1
-	github.com/pkg/errors v0.9.1
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
