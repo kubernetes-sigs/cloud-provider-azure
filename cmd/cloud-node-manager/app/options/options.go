@@ -193,7 +193,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 // resyncPeriod computes the time interval a shared informer waits before resyncing with the api server
 func resyncPeriod(c *cloudnodeconfig.Config) func() time.Duration {
 	return func() time.Duration {
-		factor := rand.Float64() + 1
+		factor := rand.Float64() + 1 // #nosec G404
 		return time.Duration(float64(c.MinResyncPeriod.Nanoseconds()) * factor)
 	}
 }

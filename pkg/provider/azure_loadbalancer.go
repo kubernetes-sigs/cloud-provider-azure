@@ -333,7 +333,8 @@ func (az *Cloud) cleanBackendpoolForPrimarySLB(primarySLB *network.LoadBalancer,
 			break
 		}
 	}
-	for vmSetName, backendIPConfigurationsToBeDeleted := range vmSetNameToBackendIPConfigurationsToBeDeleted {
+	for vmSetName := range vmSetNameToBackendIPConfigurationsToBeDeleted {
+		backendIPConfigurationsToBeDeleted := vmSetNameToBackendIPConfigurationsToBeDeleted[vmSetName]
 		backendpoolToBeDeleted := &[]network.BackendAddressPool{
 			{
 				ID: to.StringPtr(lbBackendPoolID),
@@ -1029,11 +1030,11 @@ func getIdleTimeout(s *v1.Service) (*int32, error) {
 	}
 
 	errInvalidTimeout := fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d", min, max)
-	to, err := strconv.Atoi(val)
+	toInt, err := strconv.ParseInt(val, 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing idle timeout value: %w: %v", err, errInvalidTimeout)
 	}
-	to32 := int32(to)
+	to32 := int32(toInt)
 
 	if to32 < min || to32 > max {
 		return nil, errInvalidTimeout

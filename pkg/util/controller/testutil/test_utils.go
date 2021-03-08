@@ -21,9 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
-	"testing"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -34,21 +32,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/cache"
 	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/klog/v2"
 
 	jsonpatch "github.com/evanphx/json-patch"
-)
-
-var (
-	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 )
 
 // FakeNodeHandler is a fake implementation of NodesInterface and NodeInterface. It
@@ -432,8 +424,8 @@ func NewNode(name string) *v1.Node {
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Status: v1.NodeStatus{
 			Capacity: v1.ResourceList{
-				v1.ResourceName(v1.ResourceCPU):    resource.MustParse("10"),
-				v1.ResourceName(v1.ResourceMemory): resource.MustParse("10G"),
+				v1.ResourceCPU:    resource.MustParse("10"),
+				v1.ResourceMemory: resource.MustParse("10G"),
 			},
 		},
 	}
@@ -471,45 +463,6 @@ func contains(node *v1.Node, nodes []*v1.Node) bool {
 	return false
 }
 
-// GetZones returns list of zones for all Nodes stored in FakeNodeHandler
-func GetZones(nodeHandler *FakeNodeHandler) []string {
-	nodes, _ := nodeHandler.List(context.TODO(), metav1.ListOptions{})
-	zones := sets.NewString()
-	for _, node := range nodes.Items {
-		zones.Insert(GetZoneKey(&node))
-	}
-	return zones.List()
-}
-
-// CreateZoneID returns a single zoneID for a given region and zone.
-func CreateZoneID(region, zone string) string {
-	return region + ":\x00:" + zone
-}
-
-// GetKey is a helper function used by controllers unit tests to get the
-// key for a given kubernetes resource.
-func GetKey(obj interface{}, t *testing.T) string {
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-	if ok {
-		// if tombstone , try getting the value from tombstone.Obj
-		obj = tombstone.Obj
-	}
-	val := reflect.ValueOf(obj).Elem()
-	name := val.FieldByName("Name").String()
-	kind := val.FieldByName("Kind").String()
-	// Note kind is not always set in the tests, so ignoring that for now
-	if len(name) == 0 || len(kind) == 0 {
-		t.Errorf("Unexpected object %v", obj)
-	}
-
-	key, err := keyFunc(obj)
-	if err != nil {
-		t.Errorf("Unexpected error getting key for %v %v: %v", kind, name, err)
-		return ""
-	}
-	return key
-}
-
 // GroupName is the group name use in this package
 const GroupName = ""
 
@@ -519,39 +472,4 @@ var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: runtime.
 // Resource takes an unqualified resource and returns a Group qualified GroupResource
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
-}
-
-// GetZoneKey is a helper function that builds a string identifier that is unique per failure-zone;
-// it returns empty-string for no zone.
-// Since there are currently two separate zone keys:
-//   * "failure-domain.beta.kubernetes.io/zone"
-//   * "topology.kubernetes.io/zone"
-// GetZoneKey will first check failure-domain.beta.kubernetes.io/zone and if not exists, will then check
-// topology.kubernetes.io/zone
-func GetZoneKey(node *v1.Node) string {
-	labels := node.Labels
-	if labels == nil {
-		return ""
-	}
-
-	// TODO: prefer stable labels for zone in v1.18
-	zone, ok := labels[v1.LabelZoneFailureDomain]
-	if !ok {
-		zone = labels[v1.LabelZoneFailureDomainStable]
-	}
-
-	// TODO: prefer stable labels for region in v1.18
-	region, ok := labels[v1.LabelZoneRegion]
-	if !ok {
-		region = labels[v1.LabelZoneRegionStable]
-	}
-
-	if region == "" && zone == "" {
-		return ""
-	}
-
-	// We include the null character just in case region or failureDomain has a colon
-	// (We do assume there's no null characters in a region or failureDomain)
-	// As a nice side-benefit, the null character is not printed by fmt.Print or glog
-	return region + ":\x00:" + zone
 }

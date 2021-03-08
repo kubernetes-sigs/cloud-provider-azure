@@ -99,7 +99,7 @@ func GetTargetNICFromList(list *[]network.Interface, targetVMNamePrefix string) 
 }
 
 // GetNicIDsFromVM returns the NIC ID in the VM
-func GetNicIDsFromVM(vm *compute.VirtualMachine) (map[string]interface{}, error) {
+func GetNicIDsFromVM(vm compute.VirtualMachine) (map[string]interface{}, error) {
 	if vm.NetworkProfile == nil || vm.NetworkProfile.NetworkInterfaces == nil ||
 		len(*vm.NetworkProfile.NetworkInterfaces) == 0 {
 		return nil, fmt.Errorf("cannot obtain NIC on VM %s", *vm.Name)
@@ -114,7 +114,7 @@ func GetNicIDsFromVM(vm *compute.VirtualMachine) (map[string]interface{}, error)
 }
 
 // GetNicIDsFromVMSSVM returns the NIC ID in the VMSS VM
-func GetNicIDsFromVMSSVM(vm *compute.VirtualMachineScaleSetVM) (map[string]interface{}, error) {
+func GetNicIDsFromVMSSVM(vm compute.VirtualMachineScaleSetVM) (map[string]interface{}, error) {
 	if vm.NetworkProfile == nil || vm.NetworkProfile.NetworkInterfaces == nil ||
 		len(*vm.NetworkProfile.NetworkInterfaces) == 0 {
 		return nil, fmt.Errorf("cannot obtain NIC on VMSS VM %s", *vm.Name)

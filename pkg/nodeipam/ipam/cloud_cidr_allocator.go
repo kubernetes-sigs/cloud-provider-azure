@@ -212,7 +212,7 @@ func nodeUpdateRetryTimeout(count int) time.Duration {
 	if timeout > maxUpdateRetryTimeout {
 		timeout = maxUpdateRetryTimeout
 	}
-	return time.Duration(timeout.Nanoseconds()/2 + rand.Int63n(timeout.Nanoseconds()))
+	return time.Duration(timeout.Nanoseconds()/2 + rand.Int63n(timeout.Nanoseconds())) // #nosec G404
 }
 
 func (ca *cloudCIDRAllocator) removeNodeFromProcessing(nodeName string) {

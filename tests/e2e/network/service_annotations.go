@@ -127,6 +127,7 @@ var _ = Describe("Service with annotation", func() {
 		serviceDomainName := utils.GetServiceDomainName(serviceDomainNamePrefix)
 		url := fmt.Sprintf("http://%s:%v", serviceDomainName, ports[0].Port)
 		for i := 1; i <= 30; i++ {
+			/* #nosec G107: Potential HTTP request made with variable url */
 			resp, err := http.Get(url)
 			if err == nil {
 				defer func() {
@@ -474,8 +475,8 @@ var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 		By("Get vmss names from node providerIDs")
 		vmssNames := sets.NewString()
 		var resourceGroupName string
-		for _, node := range nodes {
-			if utils.IsMasterNode(&node) {
+		for i, node := range nodes {
+			if utils.IsMasterNode(&nodes[i]) {
 				continue
 			}
 			providerID := node.Spec.ProviderID

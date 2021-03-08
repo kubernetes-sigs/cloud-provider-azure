@@ -1561,11 +1561,11 @@ func getServiceSourceRanges(service *v1.Service) []string {
 func getTestSecurityGroup(az *Cloud, services ...v1.Service) *network.SecurityGroup {
 	rules := []network.SecurityRule{}
 
-	for _, service := range services {
+	for i, service := range services {
 		for _, port := range service.Spec.Ports {
-			sources := getServiceSourceRanges(&service)
+			sources := getServiceSourceRanges(&services[i])
 			for _, src := range sources {
-				ruleName := az.getSecurityRuleName(&service, port, src)
+				ruleName := az.getSecurityRuleName(&services[i], port, src)
 				rules = append(rules, network.SecurityRule{
 					Name: to.StringPtr(ruleName),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
@@ -1597,25 +1597,25 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 	expectedFrontendIPCount := 0
 	expectedProbeCount := 0
 	expectedFrontendIPs := []ExpectedFrontendIPInfo{}
-	for _, svc := range services {
+	for i, svc := range services {
 		if len(svc.Spec.Ports) > 0 {
 			expectedFrontendIPCount++
 			expectedSubnetName := ""
-			if requiresInternalLoadBalancer(&svc) {
+			if requiresInternalLoadBalancer(&services[i]) {
 				expectedSubnetName = svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet]
 				if expectedSubnetName == "" {
 					expectedSubnetName = az.SubnetName
 				}
 			}
 			expectedFrontendIP := ExpectedFrontendIPInfo{
-				Name:   az.getDefaultFrontendIPConfigName(&svc),
+				Name:   az.getDefaultFrontendIPConfigName(&services[i]),
 				Subnet: to.StringPtr(expectedSubnetName),
 			}
 			expectedFrontendIPs = append(expectedFrontendIPs, expectedFrontendIP)
 		}
 		for _, wantedRule := range svc.Spec.Ports {
 			expectedRuleCount++
-			wantedRuleName := az.getLoadBalancerRuleName(&svc, wantedRule.Protocol, wantedRule.Port)
+			wantedRuleName := az.getLoadBalancerRuleName(&services[i], wantedRule.Protocol, wantedRule.Port)
 			foundRule := false
 			for _, actualRule := range *loadBalancer.LoadBalancingRules {
 				if strings.EqualFold(*actualRule.Name, wantedRuleName) &&
@@ -1636,8 +1636,8 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 
 			expectedProbeCount++
 			foundProbe := false
-			if servicehelpers.NeedsHealthCheck(&svc) {
-				path, port := servicehelpers.GetServiceHealthCheckPathPort(&svc)
+			if servicehelpers.NeedsHealthCheck(&services[i]) {
+				path, port := servicehelpers.GetServiceHealthCheckPathPort(&services[i])
 				for _, actualProbe := range *loadBalancer.Probes {
 					if strings.EqualFold(*actualProbe.Name, wantedRuleName) &&
 						*actualProbe.Port == port &&
@@ -1820,11 +1820,11 @@ func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, s
 
 	az := GetTestCloud(ctrl)
 	seenRules := make(map[string]string)
-	for _, svc := range services {
+	for i, svc := range services {
 		for _, wantedRule := range svc.Spec.Ports {
-			sources := getServiceSourceRanges(&svc)
+			sources := getServiceSourceRanges(&services[i])
 			for _, source := range sources {
-				wantedRuleName := az.getSecurityRuleName(&svc, wantedRule, source)
+				wantedRuleName := az.getSecurityRuleName(&services[i], wantedRule, source)
 				seenRules[wantedRuleName] = wantedRuleName
 				foundRule := false
 				for _, actualRule := range *securityGroup.SecurityRules {
@@ -2921,7 +2921,7 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	setMockSecurityGroup(az, ctrl, sg)
 
 	for i, svc := range testServices {
-		_, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(svc.Spec.LoadBalancerIP), true)
+		_, err := az.reconcileSecurityGroup(testClusterName, &testServices[i], to.StringPtr(svc.Spec.LoadBalancerIP), true)
 		if err != nil {
 			t.Errorf("Unexpected error adding svc%d: %q", i+1, err)
 		}

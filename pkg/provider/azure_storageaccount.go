@@ -165,9 +165,9 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 			// set network rules for storage account
 			var networkRuleSet *storage.NetworkRuleSet
 			virtualNetworkRules := []storage.VirtualNetworkRule{}
-			for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
+			for i, subnetID := range accountOptions.VirtualNetworkResourceIDs {
 				vnetRule := storage.VirtualNetworkRule{
-					VirtualNetworkResourceID: &subnetID,
+					VirtualNetworkResourceID: &accountOptions.VirtualNetworkResourceIDs[i],
 					Action:                   storage.Allow,
 				}
 				virtualNetworkRules = append(virtualNetworkRules, vnetRule)

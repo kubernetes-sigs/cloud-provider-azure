@@ -170,7 +170,7 @@ func StartTestServerOrDie(t Logger, flags []string) *TestServer {
 }
 
 func createListenerOnFreePort() (net.Listener, int, error) {
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return nil, 0, err
 	}

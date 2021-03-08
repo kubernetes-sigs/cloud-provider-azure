@@ -41,7 +41,7 @@ func ListRouteTables(tc *AzureTestClient) (*[]aznetwork.RouteTable, error) {
 }
 
 // GetNodesInRouteTable returns all the nodes in the route table
-func GetNodesInRouteTable(routeTable *aznetwork.RouteTable) (map[string]interface{}, error) {
+func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface{}, error) {
 	if routeTable.Routes == nil || len(*routeTable.Routes) == 0 {
 		return nil, fmt.Errorf("cannot obtained routes in route table %s", *routeTable.Name)
 	}

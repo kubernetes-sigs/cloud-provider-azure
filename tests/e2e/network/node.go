@@ -85,7 +85,7 @@ var _ = Describe("Azure node resources", func() {
 
 		if vms != nil && len(*vms) != 0 {
 			for _, vm := range *vms {
-				nodeName, err := utils.GetVMComputerName(&vm)
+				nodeName, err := utils.GetVMComputerName(vm)
 				Expect(err).NotTo(HaveOccurred())
 
 				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
@@ -110,7 +110,7 @@ var _ = Describe("Azure node resources", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, vmssVM := range *vmssVMs {
-					nodeName, err := utils.GetVMSSVMComputerName(&vmssVM)
+					nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 					Expect(err).NotTo(HaveOccurred())
 
 					node, err := utils.GetNode(cs, strings.ToLower(nodeName))
@@ -139,7 +139,7 @@ var _ = Describe("Azure node resources", func() {
 
 		if vmasVMs != nil && len(*vmasVMs) != 0 {
 			for _, vmasVM := range *vmasVMs {
-				nodeName, err := utils.GetVMComputerName(&vmasVM)
+				nodeName, err := utils.GetVMComputerName(vmasVM)
 				Expect(err).NotTo(HaveOccurred())
 
 				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
@@ -153,7 +153,7 @@ var _ = Describe("Azure node resources", func() {
 					}
 				}
 
-				nicIDs, err := utils.GetNicIDsFromVM(&vmasVM)
+				nicIDs, err := utils.GetNicIDsFromVM(vmasVM)
 				Expect(err).NotTo(HaveOccurred())
 
 				found := false
@@ -199,7 +199,7 @@ var _ = Describe("Azure node resources", func() {
 			utils.Logf("found %d VMSS VMs", len(vmssVMs))
 
 			for _, vmssVM := range vmssVMs {
-				nodeName, err := utils.GetVMSSVMComputerName(&vmssVM)
+				nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 				Expect(err).NotTo(HaveOccurred())
 
 				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
@@ -213,7 +213,7 @@ var _ = Describe("Azure node resources", func() {
 					}
 				}
 
-				nicIDs, err := utils.GetNicIDsFromVMSSVM(&vmssVM)
+				nicIDs, err := utils.GetNicIDsFromVMSSVM(vmssVM)
 				Expect(err).NotTo(HaveOccurred())
 
 				found := false
@@ -258,7 +258,7 @@ var _ = Describe("Azure node resources", func() {
 		var succeeded bool
 		for _, routeTable := range *routeTables {
 			utils.Logf("getting all routes in route table %s", *routeTable.Name)
-			routeSet, err := utils.GetNodesInRouteTable(&routeTable)
+			routeSet, err := utils.GetNodesInRouteTable(routeTable)
 			Expect(err).NotTo(HaveOccurred())
 
 			utils.Logf("routeSet: %v", routeSet)
@@ -356,8 +356,8 @@ var _ = Describe("Azure nodes", func() {
 		Expect(err).NotTo(HaveOccurred())
 		var nodeNotInRGMaster v1.Node
 		var nodeNotInRGMAsterCount int
-		for _, node := range nodes {
-			if rg, err := utils.GetNodeResourceGroup(&node); err == nil && rg != rgMaster {
+		for i, node := range nodes {
+			if rg, err := utils.GetNodeResourceGroup(&nodes[i]); err == nil && rg != rgMaster {
 				utils.Logf("rg of node %s is %s", node.Name, rg)
 				nodeNotInRGMaster = node
 				nodeNotInRGMAsterCount++
