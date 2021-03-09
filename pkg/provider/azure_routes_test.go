@@ -341,12 +341,12 @@ func TestCreateRouteTable(t *testing.T) {
 func TestProcessRoutes(t *testing.T) {
 	tests := []struct {
 		rt            network.RouteTable
-		exists        bool
-		err           error
-		expectErr     bool
-		expectedError string
 		expectedRoute []cloudprovider.Route
+		exists        bool
+		expectErr     bool
 		name          string
+		expectedError string
+		err           error
 	}{
 		{
 			err:           fmt.Errorf("test error"),

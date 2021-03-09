@@ -210,9 +210,9 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 func TestIsBackendPoolOnSameLB(t *testing.T) {
 	tests := []struct {
 		backendPoolID        string
+		expectedLBName       string
 		existingBackendPools []string
 		expected             bool
-		expectedLBName       string
 		expectError          bool
 	}{
 		{

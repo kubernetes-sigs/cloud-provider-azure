@@ -98,12 +98,12 @@ type controllerCommon struct {
 
 // AttachDiskOptions attach disk options
 type AttachDiskOptions struct {
-	lun                     int32
-	isManagedDisk           bool
-	diskName                string
 	cachingMode             compute.CachingTypes
+	diskName                string
 	diskEncryptionSetID     string
+	isManagedDisk           bool
 	writeAcceleratorEnabled bool
+	lun                     int32
 }
 
 // getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.
