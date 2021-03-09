@@ -111,11 +111,11 @@ func (c *Client) GetFileShare(resourceGroupName, accountName, name string) (stor
 }
 
 // GetServiceProperties get service properties
-func (c *Client) GetServiceProperties(resourceGroupName string, accountName string) (result storage.FileServiceProperties, err error) {
+func (c *Client) GetServiceProperties(resourceGroupName, accountName string) (storage.FileServiceProperties, error) {
 	return c.fileServicesClient.GetServiceProperties(context.Background(), resourceGroupName, accountName)
 }
 
 // SetServiceProperties set service properties
-func (c *Client) SetServiceProperties(resourceGroupName string, accountName string, parameters storage.FileServiceProperties) (result storage.FileServiceProperties, err error) {
+func (c *Client) SetServiceProperties(resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error) {
 	return c.fileServicesClient.SetServiceProperties(context.Background(), resourceGroupName, accountName, parameters)
 }
