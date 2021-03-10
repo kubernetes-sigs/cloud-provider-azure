@@ -24,13 +24,15 @@ import (
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -88,7 +90,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	// Public w/o IP -> Public w/ IP
 	It("should support assigning to specific IP when updating public service", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "false",
+			consts.ServiceAnnotationLoadBalancerInternal: "false",
 		}
 		ipName := basename + "-public-none-IP" + string(uuid.NewUUID())[0:4]
 
@@ -131,7 +133,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	// Internal w/ IP -> Internal w/ IP
 	It("should support updating internal IP when updating internal service", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		ip1, err := utils.SelectAvailablePrivateIP(tc)
 		Expect(err).NotTo(HaveOccurred())
@@ -174,7 +176,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 	// internal w/o IP -> public w/ IP
 	It("should support updating an internal service to a public service with assigned IP", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		ipName := basename + "-internal-none-public-IP" + string(uuid.NewUUID())[0:4]
 
@@ -220,7 +222,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	It("should have no operation since no change in service when update [Slow]", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "false",
+			consts.ServiceAnnotationLoadBalancerInternal: "false",
 		}
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
@@ -248,8 +250,8 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		By("Update without changing the service and wait for a while")
 		utils.Logf("External IP is now %s", targetIP)
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		service.Annotations[azureprovider.ServiceAnnotationDNSLabelName] = "testlabel"
-		utils.Logf(service.Annotations[azureprovider.ServiceAnnotationDNSLabelName])
+		service.Annotations[consts.ServiceAnnotationDNSLabelName] = "testlabel"
+		utils.Logf(service.Annotations[consts.ServiceAnnotationDNSLabelName])
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -348,7 +350,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 	It("should support multiple internal services sharing one IP address", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 		service1 := utils.CreateLoadBalancerServiceManifest("service1", annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
@@ -429,7 +431,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 }
 
 func judgeInternal(service v1.Service) bool {
-	return service.Annotations[azureprovider.ServiceAnnotationLoadBalancerInternal] == "true"
+	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true"
 }
 
 func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (result *v1.Service) {
@@ -442,9 +444,9 @@ func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (re
 		return
 	}
 	if isInternal {
-		result.Annotations[azureprovider.ServiceAnnotationLoadBalancerInternal] = "true"
+		result.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
 	} else {
-		delete(result.Annotations, azureprovider.ServiceAnnotationLoadBalancerInternal)
+		delete(result.Annotations, consts.ServiceAnnotationLoadBalancerInternal)
 	}
 	return
 }

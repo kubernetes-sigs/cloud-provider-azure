@@ -37,7 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 
-	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -111,7 +111,7 @@ var _ = Describe("Service with annotation", func() {
 		serviceDomainNamePrefix := serviceName + string(uuid.NewUUID())
 
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix,
+			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix,
 		}
 
 		// create service with given annotation and wait it to expose
@@ -152,7 +152,7 @@ var _ = Describe("Service with annotation", func() {
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
 		}
 
 		// create service with given annotation and wait it to expose
@@ -199,8 +199,8 @@ var _ = Describe("Service with annotation", func() {
 		}
 
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerInternal:       "true",
-			azureprovider.ServiceAnnotationLoadBalancerInternalSubnet: subnetName,
+			consts.ServiceAnnotationLoadBalancerInternal:       "true",
+			consts.ServiceAnnotationLoadBalancerInternalSubnet: subnetName,
 		}
 
 		// create service with given annotation and wait it to expose
@@ -220,7 +220,7 @@ var _ = Describe("Service with annotation", func() {
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout'", func() {
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerIdleTimeout: "5",
+			consts.ServiceAnnotationLoadBalancerIdleTimeout: "5",
 		}
 
 		// create service with given annotation and wait it to expose
@@ -276,7 +276,7 @@ var _ = Describe("Service with annotation", func() {
 		}()
 
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
+			consts.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -297,7 +297,7 @@ var _ = Describe("Service with annotation", func() {
 	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
 		By("Exposing two services with shared security rule")
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationSharedSecurityRule: "true",
+			consts.ServiceAnnotationSharedSecurityRule: "true",
 		}
 		ip1 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
@@ -326,7 +326,7 @@ var _ = Describe("Service with annotation", func() {
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
 		By("Creating a service with custom tags")
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationAzurePIPTags: "a=b,c= d,e =, =f",
+			consts.ServiceAnnotationAzurePIPTags: "a=b,c= d,e =, =f",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -363,7 +363,7 @@ var _ = Describe("Service with annotation", func() {
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		service.Annotations = map[string]string{
-			azureprovider.ServiceAnnotationAzurePIPTags: "a=c,x=y",
+			consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
 		}
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -393,7 +393,7 @@ var _ = Describe("Service with annotation", func() {
 
 		By("Creating a service referring to the first pip")
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationPIPName: "pip1",
+			consts.ServiceAnnotationPIPName: "pip1",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -407,7 +407,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Updating the service to refer to the second service")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		service.Annotations[azureprovider.ServiceAnnotationPIPName] = "pip2"
+		service.Annotations[consts.ServiceAnnotationPIPName] = "pip2"
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -570,11 +570,11 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 	return publicIP
 }
 
-// defaultDeployment returns a default deployment
+// createNginxDeploymentManifest returns a default deployment
 // running nginx image which exposes port 80
-func createNginxDeploymentManifest(name string, labels map[string]string) (result *appsv1.Deployment) {
+func createNginxDeploymentManifest(name string, labels map[string]string) *appsv1.Deployment {
 	var replicas int32 = 5
-	result = &appsv1.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -605,7 +605,6 @@ func createNginxDeploymentManifest(name string, labels map[string]string) (resul
 			},
 		},
 	}
-	return
 }
 
 // validate internal source can access to ILB
@@ -681,7 +680,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	// create annotation for LoadBalancer service
 	By("Creating service " + serviceName + " in namespace " + ns)
 	annotation := map[string]string{
-		azureprovider.ServiceAnnotationLoadBalancerMode: vmssName,
+		consts.ServiceAnnotationLoadBalancerMode: vmssName,
 	}
 	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns, ports)
 	_, err := cs.CoreV1().Services(ns).Create(context.TODO(), service, metav1.CreateOptions{})

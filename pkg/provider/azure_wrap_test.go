@@ -26,6 +26,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -123,11 +124,11 @@ func TestIsNodeUnmanagedByProviderID(t *testing.T) {
 		name       string
 	}{
 		{
-			providerID: CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
+			providerID: consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
 			expected:   false,
 		},
 		{
-			providerID: CloudProviderName + "://",
+			providerID: consts.CloudProviderName + "://",
 			expected:   true,
 		},
 		{
@@ -175,8 +176,8 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 		},
 		{
 			desc:       "resource group name in VM providerID should be converted",
-			resourceID: CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
-			expected:   CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
+			resourceID: consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
+			expected:   consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
 		},
 		{
 			desc:       "resource group name in VM resourceID should be converted",
@@ -185,8 +186,8 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 		},
 		{
 			desc:       "resource group name in VMSS providerID should be converted",
-			resourceID: CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
-			expected:   CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
+			resourceID: consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
+			expected:   consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
 		},
 		{
 			desc:       "resource group name in VMSS resourceID should be converted",
@@ -210,9 +211,9 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 func TestIsBackendPoolOnSameLB(t *testing.T) {
 	tests := []struct {
 		backendPoolID        string
+		expectedLBName       string
 		existingBackendPools []string
 		expected             bool
-		expectedLBName       string
 		expectError          bool
 	}{
 		{

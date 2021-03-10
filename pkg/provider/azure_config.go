@@ -23,13 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/yaml"
-)
-
-const (
-	cloudConfigNamespace  = "kube-system"
-	cloudConfigKey        = "cloud-config"
-	cloudConfigSecretName = "azure-cloud-provider" // #nosec G101
 )
 
 // The config type for Azure cloud provider secret. Supported values are:
@@ -68,14 +63,14 @@ func (az *Cloud) getConfigFromSecret() (*Config, error) {
 		return nil, nil
 	}
 
-	secret, err := az.KubeClient.CoreV1().Secrets(cloudConfigNamespace).Get(context.TODO(), cloudConfigSecretName, metav1.GetOptions{})
+	secret, err := az.KubeClient.CoreV1().Secrets(consts.CloudConfigNamespace).Get(context.TODO(), consts.CloudConfigSecName, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get secret %s: %w", cloudConfigSecretName, err)
+		return nil, fmt.Errorf("failed to get secret %s: %w", consts.CloudConfigSecName, err)
 	}
 
-	cloudConfigData, ok := secret.Data[cloudConfigKey]
+	cloudConfigData, ok := secret.Data[consts.CloudConfigKey]
 	if !ok {
-		return nil, fmt.Errorf("cloud-config is not set in the secret (%s)", cloudConfigSecretName)
+		return nil, fmt.Errorf("cloud-config is not set in the secret (%s)", consts.CloudConfigSecName)
 	}
 
 	config := Config{}

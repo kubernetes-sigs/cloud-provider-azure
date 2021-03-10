@@ -18,9 +18,9 @@ linters:
     - govet
     - ineffassign
 #    - interfacer
-#    - maligned
+    - maligned
     - misspell
-#    - nakedret
+    - nakedret
 #    - prealloc
     - staticcheck
     - structcheck

@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 const (
@@ -148,7 +149,7 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []NetworkInterface,
 
 	if len(addresses) == 1 {
 		// No IP addresses is got from instance metadata service, clean up cache and report errors.
-		_ = az.metadata.imsCache.Delete(metadataCacheKey)
+		_ = az.metadata.imsCache.Delete(consts.MetadataCacheKey)
 		return nil, fmt.Errorf("get empty IP addresses from instance metadata service")
 	}
 	return addresses, nil
@@ -282,7 +283,7 @@ func (az *Cloud) isCurrentInstance(name types.NodeName, metadataVMName string) (
 	nodeName := mapNodeNameToVMName(name)
 
 	// VMSS vmName is not same with hostname, use hostname instead.
-	if az.VMType == vmTypeVMSS {
+	if az.VMType == consts.VMTypeVMSS {
 		metadataVMName, err = os.Hostname()
 		if err != nil {
 			return false, err

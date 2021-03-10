@@ -29,7 +29,8 @@ import (
 
 // Client implements the azure file client interface
 type Client struct {
-	fileSharesClient storage.FileSharesClient
+	fileSharesClient   storage.FileSharesClient
+	fileServicesClient storage.FileServicesClient
 }
 
 // ShareOptions contains the fields which are used to create file share.
@@ -41,11 +42,14 @@ type ShareOptions struct {
 
 // New creates a azure file client
 func New(config *azclients.ClientConfig) *Client {
-	client := storage.NewFileSharesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
-	client.Authorizer = config.Authorizer
+	fileSharesClient := storage.NewFileSharesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
+	fileSharesClient.Authorizer = config.Authorizer
 
+	fileServicesClient := storage.NewFileServicesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
+	fileServicesClient.Authorizer = config.Authorizer
 	return &Client{
-		fileSharesClient: client,
+		fileSharesClient:   fileSharesClient,
+		fileServicesClient: fileServicesClient,
 	}
 }
 
@@ -72,7 +76,6 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 // DeleteFileShare deletes a file share
 func (c *Client) DeleteFileShare(resourceGroupName, accountName, name string) error {
 	_, err := c.fileSharesClient.Delete(context.Background(), resourceGroupName, accountName, name)
-
 	return err
 }
 
@@ -105,4 +108,14 @@ func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, si
 // GetFileShare gets a file share
 func (c *Client) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
 	return c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, storage.Stats)
+}
+
+// GetServiceProperties get service properties
+func (c *Client) GetServiceProperties(resourceGroupName, accountName string) (storage.FileServiceProperties, error) {
+	return c.fileServicesClient.GetServiceProperties(context.Background(), resourceGroupName, accountName)
+}
+
+// SetServiceProperties set service properties
+func (c *Client) SetServiceProperties(resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error) {
+	return c.fileServicesClient.SetServiceProperties(context.Background(), resourceGroupName, accountName, parameters)
 }

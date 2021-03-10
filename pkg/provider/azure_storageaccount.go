@@ -22,9 +22,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // SkipMatchingTag skip account matching tag
@@ -33,11 +35,12 @@ const SkipMatchingTag = "skip-matching"
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
 	Name, Type, Kind, ResourceGroup, Location string
-	EnableHTTPSTrafficOnly                    bool
-	Tags                                      map[string]string
-	VirtualNetworkResourceIDs                 []string
 	// indicate whether create new account when Name is empty
-	CreateAccount bool
+	EnableHTTPSTrafficOnly                  bool
+	CreateAccount                           bool
+	DisableFileServiceDeleteRetentionPolicy bool
+	Tags                                    map[string]string
+	VirtualNetworkResourceIDs               []string
 }
 
 type accountWithLocation struct {
@@ -186,11 +189,11 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				location = az.Location
 			}
 			if accountType == "" {
-				accountType = defaultStorageAccountType
+				accountType = consts.DefaultStorageAccountType
 			}
 
 			// use StorageV2 by default per https://docs.microsoft.com/en-us/azure/storage/common/storage-account-options
-			kind := defaultStorageAccountKind
+			kind := consts.DefaultStorageAccountKind
 			if accountKind != "" {
 				kind = storage.Kind(accountKind)
 			}
@@ -221,6 +224,21 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 			rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp)
 			if rerr != nil {
 				return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
+			}
+
+			if accountOptions.DisableFileServiceDeleteRetentionPolicy {
+				klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), resource group(%s)", accountName, resourceGroup)
+				prop, err := az.FileClient.GetServiceProperties(resourceGroup, accountName)
+				if err != nil {
+					return "", "", err
+				}
+				if prop.FileServicePropertiesProperties == nil {
+					return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), resource group(%s) is nil", accountName, resourceGroup)
+				}
+				prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
+				if _, err := az.FileClient.SetServiceProperties(resourceGroup, accountName, prop); err != nil {
+					return "", "", err
+				}
 			}
 		}
 	}

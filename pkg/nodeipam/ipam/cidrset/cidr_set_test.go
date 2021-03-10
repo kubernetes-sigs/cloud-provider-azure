@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/klog/v2"
 )
@@ -84,6 +86,332 @@ func TestCIDRSetFullyAllocated(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error because of fully-allocated range for %v", tc.description)
 		}
+	}
+}
+
+func TestCIDRSetFullyAllocatedWithNodeMaskSize(t *testing.T) {
+	cases := []struct {
+		clusterCIDRStr string
+		subNetMaskSize int
+		expectedCIDR   string
+		description    string
+	}{
+		{
+			clusterCIDRStr: "127.123.234.0/30",
+			subNetMaskSize: 30,
+			expectedCIDR:   "127.123.234.0/30",
+			description:    "Fully allocated CIDR with IPv4",
+		},
+		{
+			clusterCIDRStr: "beef:1234::/30",
+			subNetMaskSize: 30,
+			expectedCIDR:   "beef:1234::/30",
+			description:    "Fully allocated CIDR with IPv6",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, clusterCIDR, _ := net.ParseCIDR(tc.clusterCIDRStr)
+			a, err := NewCIDRSet(clusterCIDR, tc.subNetMaskSize)
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+			p, err := a.AllocateNextWithNodeMaskSize(30)
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+			if p.String() != tc.expectedCIDR {
+				t.Fatalf("unexpected allocated cidr: %v, expecting %v for %v",
+					p.String(), tc.expectedCIDR, tc.description)
+			}
+
+			_, err = a.AllocateNext()
+			if err == nil {
+				t.Fatalf("expected error because of fully-allocated range for %v", tc.description)
+			}
+
+			_ = a.Release(p)
+
+			p, err = a.AllocateNext()
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+			if p.String() != tc.expectedCIDR {
+				t.Fatalf("unexpected allocated cidr: %v, expecting %v for %v",
+					p.String(), tc.expectedCIDR, tc.description)
+			}
+			_, err = a.AllocateNext()
+			if err == nil {
+				t.Fatalf("expected error because of fully-allocated range for %v", tc.description)
+			}
+		})
+	}
+}
+
+func TestCIDRSetPartlyAllocatedWithNodeMastSize(t *testing.T) {
+	cases := []struct {
+		clusterCIDRStr        string
+		minSubnetMaskSize     int
+		currentSubnetMaskSize int
+		freeIndices           []int
+		expectedCIDR          string
+		expectedErr           bool
+		description           string
+	}{
+		{
+			clusterCIDRStr:        "127.123.234.0/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{0, 3},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef:1234::/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{0, 3},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "127.123.234.0/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{1, 2},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef:1234::/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{1, 2},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "127.123.234.0/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{2},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef:1234::/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{2},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "127.123.234.0/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{2, 3},
+			expectedCIDR:          "127.123.234.2/31",
+			description:           "Partly allocated CIDR and there is enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef:1234::/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{2, 3},
+			expectedCIDR:          "beef:1236::/31",
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "127.123.234.0/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{0, 1, 2},
+			expectedCIDR:          "127.123.234.0/31",
+			description:           "Partly allocated CIDR and there is enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef:1234::/30",
+			minSubnetMaskSize:     32,
+			currentSubnetMaskSize: 31,
+			freeIndices:           []int{0, 1, 2},
+			expectedCIDR:          "beef:1234::/31",
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "10.244.0.0/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 17,
+			freeIndices:           []int{8, 9, 10, 11, 12, 13, 14, 15},
+			expectedCIDR:          "10.244.128.0/17",
+			description:           "Partly allocated CIDR and there is enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef::/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 17,
+			freeIndices:           []int{8, 9, 10, 11, 12, 13, 14, 15},
+			expectedCIDR:          "beef:8000::/17",
+			description:           "Partly allocated CIDR and there is enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "10.244.0.0/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 17,
+			freeIndices:           []int{8, 9, 10, 11, 12, 13, 14},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef::/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 17,
+			freeIndices:           []int{8, 9, 10, 11, 12, 13, 14},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "10.244.0.0/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 19,
+			freeIndices:           []int{1, 3, 5, 7, 9, 11, 12, 13, 14},
+			expectedCIDR:          "10.244.192.0/19",
+			description:           "Partly allocated CIDR and there is enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "beef::/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 19,
+			freeIndices:           []int{1, 3, 5, 7, 9, 11, 12, 13, 14},
+			expectedCIDR:          "beef:c000::/19",
+			description:           "Partly allocated CIDR and there is enough room with IPv4",
+		},
+		{
+			clusterCIDRStr:        "10.244.0.0/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 19,
+			freeIndices:           []int{1, 3, 5, 7, 9, 11, 13, 14},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+		{
+			clusterCIDRStr:        "beef::/16",
+			minSubnetMaskSize:     20,
+			currentSubnetMaskSize: 19,
+			freeIndices:           []int{1, 3, 5, 7, 9, 11, 13, 14},
+			expectedErr:           true,
+			description:           "Partly allocated CIDR but there is no enough room with IPv6",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, clusterCIDR, _ := net.ParseCIDR(tc.clusterCIDRStr)
+			a, err := NewCIDRSet(clusterCIDR, tc.minSubnetMaskSize)
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+
+			err = a.Occupy(clusterCIDR)
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+
+			for _, freeIndex := range tc.freeIndices {
+				r := a.indexToCIDRBlock(freeIndex, tc.minSubnetMaskSize)
+				err = a.Release(r)
+				if err != nil {
+					t.Fatalf("unexpected error: %v for %v", err, tc.description)
+				}
+			}
+
+			p, err := a.AllocateNextWithNodeMaskSize(tc.currentSubnetMaskSize)
+			if tc.expectedErr && err == nil {
+				t.Fatal("expected error because there is no enough room")
+			}
+			if !tc.expectedErr {
+				if p.String() != tc.expectedCIDR {
+					t.Fatalf("unexpected allocated cidr: %v, expecting %v for %v",
+						p.String(), tc.expectedCIDR, tc.description)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateSubnetMaskSize(t *testing.T) {
+	for _, tc := range []struct {
+		description, clusterCIDRStr                      string
+		currentNodeSubnetMaskSize, newNodeSubnetMaskSize int
+		nodeNamePodCIDRMap                               map[string][]string
+		expectedUsed                                     *big.Int
+		expectedNodeSubnetMaskSize                       int
+		expectedErr                                      error
+	}{
+		{
+			description:                "UpdateSubnetMaskSize should do nothing if the max subnet mask size is equal to it in the cidr set",
+			clusterCIDRStr:             "127.123.234.0/30",
+			currentNodeSubnetMaskSize:  32,
+			newNodeSubnetMaskSize:      32,
+			expectedUsed:               big.NewInt(0),
+			expectedNodeSubnetMaskSize: 32,
+		},
+		{
+			description:                "UpdateSubnetMaskSize should do nothing if the max subnet mask size is equal to it in the cidr set for ipv6",
+			clusterCIDRStr:             "beef:1234::/30",
+			currentNodeSubnetMaskSize:  32,
+			newNodeSubnetMaskSize:      32,
+			expectedUsed:               big.NewInt(0),
+			expectedNodeSubnetMaskSize: 32,
+		},
+		{
+			description:                "UpdateSubnetMaskSize should update the mask size and re-calculate the used bits",
+			clusterCIDRStr:             "127.123.234.0/30",
+			currentNodeSubnetMaskSize:  31,
+			newNodeSubnetMaskSize:      32,
+			nodeNamePodCIDRMap:         map[string][]string{"node0": {"127.123.234.0/31"}},
+			expectedUsed:               big.NewInt(3), // 011
+			expectedNodeSubnetMaskSize: 32,
+		},
+		{
+			description:                "UpdateSubnetMaskSize should update the mask size and re-calculate the used bits for ipv6",
+			clusterCIDRStr:             "beef:1234::/30",
+			currentNodeSubnetMaskSize:  31,
+			newNodeSubnetMaskSize:      32,
+			nodeNamePodCIDRMap:         map[string][]string{"node0": {"beef:1236::/31"}},
+			expectedUsed:               big.NewInt(12), // 1100
+			expectedNodeSubnetMaskSize: 32,
+		},
+		{
+			description:                "UpdateSubnetMaskSize should do nothing when the new size is less than the current one",
+			clusterCIDRStr:             "127.123.234.0/30",
+			currentNodeSubnetMaskSize:  31,
+			newNodeSubnetMaskSize:      30,
+			expectedUsed:               big.NewInt(0),
+			expectedNodeSubnetMaskSize: 31,
+		},
+		{
+			description:                "UpdateSubnetMaskSize should do nothing when the new size is less than the current one",
+			clusterCIDRStr:             "beef:1234::/30",
+			currentNodeSubnetMaskSize:  31,
+			newNodeSubnetMaskSize:      30,
+			expectedUsed:               big.NewInt(0),
+			expectedNodeSubnetMaskSize: 31,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			_, clusterCIDR, _ := net.ParseCIDR(tc.clusterCIDRStr)
+			a, err := NewCIDRSet(clusterCIDR, tc.currentNodeSubnetMaskSize)
+			if err != nil {
+				t.Fatalf("unexpected error: %v for %v", err, tc.description)
+			}
+
+			err = a.UpdateSubnetMaskSize(tc.newNodeSubnetMaskSize, tc.nodeNamePodCIDRMap)
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedUsed.String(), a.used.String())
+			assert.Equal(t, tc.expectedNodeSubnetMaskSize, a.nodeMaskSize)
+		})
 	}
 }
 
@@ -207,7 +535,7 @@ func TestIndexToCIDRBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error for %v ", tc.description)
 		}
-		cidr := a.indexToCIDRBlock(tc.index)
+		cidr := a.indexToCIDRBlock(tc.index, 0)
 		if cidr.String() != tc.CIDRBlock {
 			t.Fatalf("error for %v index %d %s", tc.description, tc.index, cidr.String())
 		}

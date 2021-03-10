@@ -24,6 +24,8 @@ import (
 	"math/bits"
 	"net"
 	"sync"
+
+	netutils "k8s.io/utils/net"
 )
 
 // CidrSet manages a set of CIDR ranges from which blocks of IPs can
@@ -98,8 +100,63 @@ func NewCIDRSet(clusterCIDR *net.IPNet, subNetMaskSize int) (*CidrSet, error) {
 	}, nil
 }
 
-func (s *CidrSet) indexToCIDRBlock(index int) *net.IPNet {
-	var ip []byte
+// UpdateSubnetMaskSize updates the node subnet mask sizes to the new value
+func (s *CidrSet) UpdateSubnetMaskSize(newNodeMaskSize int, nodeNamePodCIDRMap map[string][]string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.nodeMaskSize >= newNodeMaskSize {
+		return nil
+	}
+
+	clusterMask := s.clusterCIDR.Mask
+	clusterMaskSize, bits := clusterMask.Size()
+
+	if (s.clusterCIDR.IP.To4() == nil) && (newNodeMaskSize-clusterMaskSize > clusterSubnetMaxDiff) {
+		return ErrCIDRSetSubNetTooBig
+	}
+
+	s.nodeMask = net.CIDRMask(newNodeMaskSize, bits)
+	s.maxCIDRs = 1 << uint32(newNodeMaskSize-clusterMaskSize)
+	s.nodeMaskSize = newNodeMaskSize
+
+	// re-calculate the used bits
+	s.used = *big.NewInt(0)
+	s.allocatedCIDRs = 0
+	isIPV6ClusterCIDR := netutils.IsIPv6CIDR(s.clusterCIDR)
+	for _, allocatedPodCIDRs := range nodeNamePodCIDRMap {
+		for _, allocatedPodCIDR := range allocatedPodCIDRs {
+			_, cidr, err := net.ParseCIDR(allocatedPodCIDR)
+			if err != nil {
+				return fmt.Errorf("UpdateSubnetMaskSize: failed to parse allocated pod CIDR %s: %w", allocatedPodCIDR, err)
+			}
+			if netutils.IsIPv6CIDR(cidr) != isIPV6ClusterCIDR {
+				continue
+			}
+
+			begin, end, err := s.getBeginningAndEndIndices(cidr)
+			if err != nil {
+				return fmt.Errorf("UpdateSubnetMaskSize: failed to parse the beginning and ending indices of the cidr %s: %w", cidr, err)
+			}
+			for i := begin; i <= end; i++ {
+				s.used.SetBit(&s.used, i, 1)
+				s.allocatedCIDRs++
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *CidrSet) indexToCIDRBlock(index, nodeMaskSize int) *net.IPNet {
+	if nodeMaskSize == 0 {
+		nodeMaskSize = s.nodeMaskSize
+	}
+
+	var (
+		mask net.IPMask
+		ip   []byte
+	)
 	switch /*v4 or v6*/ {
 	case s.clusterCIDR.IP.To4() != nil:
 		{
@@ -107,6 +164,7 @@ func (s *CidrSet) indexToCIDRBlock(index int) *net.IPNet {
 			ipInt := (binary.BigEndian.Uint32(s.clusterCIDR.IP)) | j
 			ip = make([]byte, net.IPv4len)
 			binary.BigEndian.PutUint32(ip, ipInt)
+			mask = net.CIDRMask(nodeMaskSize, 32)
 		}
 	case s.clusterCIDR.IP.To16() != nil:
 		{
@@ -132,16 +190,17 @@ func (s *CidrSet) indexToCIDRBlock(index int) *net.IPNet {
 					}
 				}
 				// the right side will be calculated the same way either the
-				// subNetMaskSize affects both left and right sides
+				// minSubnetMaskSize affects both left and right sides
 				rightClusterIP |= uint64(index) << uint(v6NBits-s.nodeMaskSize)
 			}
 			binary.BigEndian.PutUint64(ip[:halfIPv6Len], leftClusterIP)
 			binary.BigEndian.PutUint64(ip[halfIPv6Len:], rightClusterIP)
+			mask = net.CIDRMask(nodeMaskSize, 128)
 		}
 	}
 	return &net.IPNet{
 		IP:   ip,
-		Mask: s.nodeMask,
+		Mask: mask,
 	}
 }
 
@@ -171,7 +230,64 @@ func (s *CidrSet) AllocateNext() (*net.IPNet, error) {
 	cidrSetAllocationTriesPerRequest.WithLabelValues(s.label).Observe(float64(i))
 	cidrSetUsage.WithLabelValues(s.label).Set(float64(s.allocatedCIDRs) / float64(s.maxCIDRs))
 
-	return s.indexToCIDRBlock(candidate), nil
+	return s.indexToCIDRBlock(candidate, 0), nil
+}
+
+// AllocateNextWithNodeMaskSize allocates the next free CIDR range with the given node
+// subnet mask size. This will set the range as occupied and return the allocated range.
+func (s *CidrSet) AllocateNextWithNodeMaskSize(nodeMaskSize int) (*net.IPNet, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	relativeSize := 1 << (s.nodeMaskSize - nodeMaskSize)
+	if s.maxCIDRs-s.allocatedCIDRs < relativeSize {
+		return nil, ErrCIDRRangeNoCIDRsRemaining
+	}
+
+	var (
+		i, tries  int
+		succeeded bool
+	)
+	offset := relativeSize - 1
+	for i < s.maxCIDRs-offset {
+		tries++
+		if s.used.Bit(i) == 1 {
+			i += relativeSize
+			continue
+		}
+
+		foundUsed := false
+		var j int
+		for j = 1; j < relativeSize; j++ {
+			if s.used.Bit(i+j) == 1 {
+				foundUsed = true
+				break
+			}
+		}
+		if foundUsed {
+			i += relativeSize
+			continue
+		}
+
+		succeeded = true
+		break
+	}
+
+	if !succeeded {
+		return nil, ErrCIDRRangeNoCIDRsRemaining
+	}
+
+	for j := 0; j < relativeSize; j++ {
+		s.used.SetBit(&s.used, i+j, 1)
+		s.allocatedCIDRs++
+	}
+
+	// Update metrics
+	cidrSetAllocations.WithLabelValues(s.label).Inc()
+	cidrSetAllocationTriesPerRequest.WithLabelValues(s.label).Observe(float64(tries))
+	cidrSetUsage.WithLabelValues(s.label).Set(float64(s.allocatedCIDRs) / float64(s.maxCIDRs))
+
+	return s.indexToCIDRBlock(i, nodeMaskSize), nil
 }
 
 func (s *CidrSet) getBeginningAndEndIndices(cidr *net.IPNet) (begin, end int, err error) {

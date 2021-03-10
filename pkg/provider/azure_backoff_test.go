@@ -25,6 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -34,13 +40,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
-
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGetVirtualMachineWithRetry(t *testing.T) {
@@ -224,7 +225,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 
 	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
 	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{
-		RawError: fmt.Errorf(operationCanceledErrorMessage),
+		RawError: fmt.Errorf(consts.OperationCanceledErrorMessage),
 	})
 	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg", gomock.Any()).Return(network.SecurityGroup{}, nil)
 
@@ -252,7 +253,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
+			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 		{
@@ -378,7 +379,7 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
+			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 	}
@@ -417,7 +418,7 @@ func TestCreateOrUpdateRoute(t *testing.T) {
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(operationCanceledErrorMessage)},
+			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
 		},
 		{
@@ -505,7 +506,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		{
 			vmss: compute.VirtualMachineScaleSet{
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					ProvisioningState: &virtualMachineScaleSetsDeallocating,
+					ProvisioningState: to.StringPtr(virtualMachineScaleSetsDeallocating),
 				},
 			},
 		},

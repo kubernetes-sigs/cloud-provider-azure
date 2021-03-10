@@ -30,6 +30,7 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -118,7 +119,7 @@ func TestSendFailure(t *testing.T) {
 func TestSendThrottled(t *testing.T) {
 	count := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(retry.RetryAfterHeaderKey, "30")
+		w.Header().Set(consts.RetryAfterHeaderKey, "30")
 		http.Error(w, "failed", http.StatusTooManyRequests)
 		count++
 	}))

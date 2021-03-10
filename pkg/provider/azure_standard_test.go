@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -53,7 +54,7 @@ func TestIsMasterNode(t *testing.T) {
 	if isMasterNode(&v1.Node{
 		ObjectMeta: meta.ObjectMeta{
 			Labels: map[string]string{
-				nodeLabelRole: "worker",
+				consts.NodeLabelRole: "worker",
 			},
 		},
 	}) {
@@ -62,7 +63,7 @@ func TestIsMasterNode(t *testing.T) {
 	if !isMasterNode(&v1.Node{
 		ObjectMeta: meta.ObjectMeta{
 			Labels: map[string]string{
-				nodeLabelRole: "master",
+				consts.NodeLabelRole: "master",
 			},
 		},
 	}) {
@@ -142,8 +143,8 @@ func TestGenerateStorageAccountName(t *testing.T) {
 
 	for _, test := range tests {
 		accountName := generateStorageAccountName(test.prefix)
-		if len(accountName) > storageAccountNameMaxLength || len(accountName) < 3 {
-			t.Errorf("input prefix: %s, output account name: %s, length not in [3,%d]", test.prefix, accountName, storageAccountNameMaxLength)
+		if len(accountName) > consts.StorageAccountNameMaxLength || len(accountName) < 3 {
+			t.Errorf("input prefix: %s, output account name: %s, length not in [3,%d]", test.prefix, accountName, consts.StorageAccountNameMaxLength)
 		}
 
 		for _, char := range accountName {
@@ -196,9 +197,9 @@ func TestMapLoadBalancerNameToVMSet(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSku = loadBalancerSkuStandard
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		} else {
-			az.Config.LoadBalancerSku = loadBalancerSkuBasic
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		}
 		vmset := az.mapLoadBalancerNameToVMSet(c.lbName, c.clusterName)
 		assert.Equal(t, c.expectedVMSet, vmset, c.description)
@@ -287,9 +288,9 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSku = loadBalancerSkuStandard
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		} else {
-			az.Config.LoadBalancerSku = loadBalancerSkuBasic
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		}
 		az.Config.LoadBalancerName = c.lbName
 		loadbalancerName := az.getAzureLoadBalancerName(c.clusterName, c.vmSet, c.isInternal)
@@ -313,11 +314,11 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 	cases := []struct {
 		description   string
 		subnetName    string
+		expected      string
+		protocol      v1.Protocol
 		isInternal    bool
 		useStandardLB bool
-		protocol      v1.Protocol
 		port          int32
-		expected      string
 	}{
 		{
 			description:   "internal lb should have subnet name on the rule name",
@@ -368,12 +369,12 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSku = loadBalancerSkuStandard
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		} else {
-			az.Config.LoadBalancerSku = loadBalancerSkuBasic
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		}
-		svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
-		svc.Annotations[ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
 		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port)
 		assert.Equal(t, c.expected, loadbalancerRuleName, c.description)
@@ -389,8 +390,8 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 	svc := &v1.Service{
 		ObjectMeta: meta.ObjectMeta{
 			Annotations: map[string]string{
-				ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
-				ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 			},
 			UID: "257b9655-5137-4ad2-b091-ef3f07043ad3",
 		},
@@ -442,12 +443,12 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 
 	for _, c := range cases {
 		if c.useStandardLB {
-			az.Config.LoadBalancerSku = loadBalancerSkuStandard
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		} else {
-			az.Config.LoadBalancerSku = loadBalancerSkuBasic
+			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		}
-		svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
-		svc.Annotations[ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
 		ipconfigName := az.getDefaultFrontendIPConfigName(svc)
 		assert.Equal(t, c.expected, ipconfigName, c.description)
@@ -459,7 +460,7 @@ func TestGetFrontendIPConfigID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getFrontendIPConfigID, frontendIPConfigIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getFrontendIPConfigID, consts.FrontendIPConfigIDTemplate)
 }
 
 func TestGetBackendPoolID(t *testing.T) {
@@ -467,7 +468,7 @@ func TestGetBackendPoolID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getBackendPoolID, backendPoolIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getBackendPoolID, consts.BackendPoolIDTemplate)
 }
 
 func TestGetLoadBalancerProbeID(t *testing.T) {
@@ -475,7 +476,7 @@ func TestGetLoadBalancerProbeID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getLoadBalancerProbeID, loadBalancerProbeIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getLoadBalancerProbeID, consts.LoadBalancerProbeIDTemplate)
 }
 
 func testGetLoadBalancerSubResourceID(
@@ -1098,7 +1099,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 			name: "GetVMSetNames should return the primary vm set name when using the single SLB",
 			vm:   []compute.VirtualMachine{testVM},
 			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: ServiceAnnotationLoadBalancerAutoModeValue}},
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			usingSingleSLBS:    true,
 			expectedVMSetNames: &[]string{"as"},
@@ -1107,7 +1108,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 			name: "GetVMSetNames should return the correct as names if the service has auto mode annotation",
 			vm:   []compute.VirtualMachine{testVM},
 			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: ServiceAnnotationLoadBalancerAutoModeValue}},
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1122,7 +1123,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 			name: "GetVMSetNames should return the correct as names if node don't have availability set",
 			vm:   []compute.VirtualMachine{testVMWithoutAS},
 			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: ServiceAnnotationLoadBalancerAutoModeValue}},
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: consts.ServiceAnnotationLoadBalancerAutoModeValue}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1137,7 +1138,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 			name: "GetVMSetNames should report the error if there's no such availability set",
 			vm:   []compute.VirtualMachine{testVM},
 			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: "vm2"}},
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "vm2"}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1152,7 +1153,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 			name: "GetVMSetNames should return the correct node name",
 			vm:   []compute.VirtualMachine{testVM},
 			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{ServiceAnnotationLoadBalancerMode: "myAvailabilitySet"}},
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "myAvailabilitySet"}},
 			},
 			nodes: []*v1.Node{
 				{
@@ -1169,7 +1170,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
 		if test.usingSingleSLBS {
 			cloud.EnableMultipleStandardLoadBalancers = false
-			cloud.LoadBalancerSku = loadBalancerSkuStandard
+			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return(test.vm, nil).AnyTimes()
@@ -1260,7 +1261,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			nodeName:          "vm3",
 			nicName:           "nic3",
 			nicID:             "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic3",
-			nicProvisionState: nicFailedState,
+			nicProvisionState: consts.NicFailedState,
 			vmSetName:         "myAvailabilitySet",
 		},
 		{
@@ -1315,7 +1316,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		if test.isStandardLB {
-			cloud.Config.LoadBalancerSku = loadBalancerSkuStandard
+			cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
 		if test.useMultipleSLBs {
@@ -1386,7 +1387,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 				{
 					ObjectMeta: meta.ObjectMeta{
 						Name:   "vm2",
-						Labels: map[string]string{nodeLabelRole: "master"},
+						Labels: map[string]string{consts.NodeLabelRole: "master"},
 					},
 				},
 			},
@@ -1402,7 +1403,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 				{
 					ObjectMeta: meta.ObjectMeta{
 						Name:   "vm3",
-						Labels: map[string]string{externalResourceGroupLabel: "rg-external"},
+						Labels: map[string]string{consts.ExternalResourceGroupLabel: "rg-external"},
 					},
 				},
 			},
@@ -1418,7 +1419,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 				{
 					ObjectMeta: meta.ObjectMeta{
 						Name:   "vm4",
-						Labels: map[string]string{managedByAzureLabel: "false"},
+						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
 					},
 				},
 			},
@@ -1456,7 +1457,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		cloud.Config.LoadBalancerSku = loadBalancerSkuStandard
+		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		cloud.Config.ExcludeMasterFromStandardLB = to.BoolPtr(true)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
@@ -1613,7 +1614,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
 					UID:         types.UID("secondary"),
-					Annotations: map[string]string{ServiceAnnotationLoadBalancerInternal: "true"},
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "true"},
 				},
 				Spec: v1.ServiceSpec{
 					LoadBalancerIP: "4.3.2.1",

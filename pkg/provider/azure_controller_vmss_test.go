@@ -42,12 +42,12 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	testCases := []struct {
 		desc           string
-		vmList         map[string]string
-		vmssVMList     []string
 		vmssName       types.NodeName
 		vmssvmName     types.NodeName
-		isManagedDisk  bool
 		existedDisk    compute.Disk
+		vmList         map[string]string
+		vmssVMList     []string
+		isManagedDisk  bool
 		expectedErr    bool
 		expectedErrMsg error
 	}{
@@ -93,7 +93,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 
 	for i, test := range testCases {
 		scaleSetName := string(test.vmssName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
@@ -202,7 +202,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 
 	for i, test := range testCases {
 		scaleSetName := string(test.vmssName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
@@ -260,12 +260,12 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 
 	var testCases = []struct {
 		desc              string
+		crt               azcache.AzureCacheReadType
 		nodeName          types.NodeName
-		isDataDiskNull    bool
 		expectedDataDisks []compute.DataDisk
+		isDataDiskNull    bool
 		expectedErr       bool
 		expectedErrMsg    error
-		crt               azcache.AzureCacheReadType
 	}{
 		{
 			desc:              "an error shall be returned if there's no corresponding vm",
@@ -310,7 +310,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 	}
 	for i, test := range testCases {
 		scaleSetName := string(test.nodeName)
-		ss, err := newTestScaleSet(ctrl)
+		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
 		testCloud.PrimaryScaleSetName = scaleSetName

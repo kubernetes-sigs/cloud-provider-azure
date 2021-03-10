@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -273,13 +274,13 @@ func TestGetIdleTimeout(t *testing.T) {
 		err         bool
 	}{
 		{desc: "no annotation"},
-		{desc: "annotation empty value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: ""}, err: true},
-		{desc: "annotation not a number", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "cookies"}, err: true},
-		{desc: "annotation negative value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "-6"}, err: true},
-		{desc: "annotation zero value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "0"}, err: true},
-		{desc: "annotation too low value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "3"}, err: true},
-		{desc: "annotation too high value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "31"}, err: true},
-		{desc: "annotation good value", annotations: map[string]string{ServiceAnnotationLoadBalancerIdleTimeout: "24"}, i: to.Int32Ptr(24)},
+		{desc: "annotation empty value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: ""}, err: true},
+		{desc: "annotation not a number", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "cookies"}, err: true},
+		{desc: "annotation negative value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "-6"}, err: true},
+		{desc: "annotation zero value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "0"}, err: true},
+		{desc: "annotation too low value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "3"}, err: true},
+		{desc: "annotation too high value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "31"}, err: true},
+		{desc: "annotation good value", annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "24"}, i: to.Int32Ptr(24)},
 	} {
 		t.Run(c.desc, func(t *testing.T) {
 			s := &v1.Service{}
@@ -312,7 +313,7 @@ func TestSubnet(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+						consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
 					},
 				},
 			},
@@ -323,8 +324,8 @@ func TestSubnet(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
-						ServiceAnnotationLoadBalancerInternal:       "false",
+						consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+						consts.ServiceAnnotationLoadBalancerInternal:       "false",
 					},
 				},
 			},
@@ -335,8 +336,8 @@ func TestSubnet(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationLoadBalancerInternalSubnet: "",
-						ServiceAnnotationLoadBalancerInternal:       "true",
+						consts.ServiceAnnotationLoadBalancerInternalSubnet: "",
+						consts.ServiceAnnotationLoadBalancerInternal:       "true",
 					},
 				},
 			},
@@ -347,8 +348,8 @@ func TestSubnet(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
-						ServiceAnnotationLoadBalancerInternal:       "true",
+						consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+						consts.ServiceAnnotationLoadBalancerInternal:       "true",
 					},
 				},
 			},
@@ -406,7 +407,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 
 	for i, c := range tests {
 
-		if c.service.Annotations[ServiceAnnotationLoadBalancerInternal] == "true" {
+		if c.service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true" {
 			validateTestSubnet(t, az, &c.service)
 		}
 
@@ -462,7 +463,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "false should be returned when service name tag doesn't match",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey: to.StringPtr("nginx"),
+					consts.ServiceTagKey: to.StringPtr("nginx"),
 				},
 			},
 			serviceName: "web",
@@ -472,7 +473,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "true should be returned when service name tag matches and cluster name tag is not set",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey: to.StringPtr("nginx"),
+					consts.ServiceTagKey: to.StringPtr("nginx"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -483,8 +484,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "false should be returned when cluster name doesn't match",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr("nginx"),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr("nginx"),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "k8s",
@@ -495,8 +496,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "false should be returned when cluster name matches while service name doesn't match",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr("web"),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr("web"),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -507,8 +508,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "true should be returned when both service name tag and cluster name match",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr("nginx"),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr("nginx"),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -519,8 +520,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "false should be returned when the tag is empty",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr(""),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr(""),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -531,8 +532,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "true should be returned if there is a match among a multi-service tag",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr("nginx1,nginx2"),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr("nginx1,nginx2"),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -543,8 +544,8 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			desc: "false should be returned if there is not a match among a multi-service tag",
 			pip: &network.PublicIPAddress{
 				Tags: map[string]*string{
-					serviceTagKey:  to.StringPtr("default/nginx1,default/nginx2"),
-					clusterNameKey: to.StringPtr("kubernetes"),
+					consts.ServiceTagKey:  to.StringPtr("default/nginx1,default/nginx2"),
+					consts.ClusterNameKey: to.StringPtr("kubernetes"),
 				},
 			},
 			clusterName: "kubernetes",
@@ -575,12 +576,12 @@ func TestGetPublicIPAddressResourceGroup(t *testing.T) {
 		},
 		{
 			desc:        "annotation with empty string resource group",
-			annotations: map[string]string{ServiceAnnotationLoadBalancerResourceGroup: ""},
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: ""},
 			expected:    "rg",
 		},
 		{
 			desc:        "annotation with non-empty resource group ",
-			annotations: map[string]string{ServiceAnnotationLoadBalancerResourceGroup: "rg2"},
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: "rg2"},
 			expected:    "rg2",
 		},
 	} {
@@ -618,11 +619,11 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 
 	tests := []struct {
 		desc                  string
+		desiredPipName        string
 		existingPip           network.PublicIPAddress
+		ipTagRequest          serviceIPTagRequest
 		lbShouldExist         bool
 		lbIsInternal          bool
-		desiredPipName        string
-		ipTagRequest          serviceIPTagRequest
 		expectedShouldRelease bool
 	}{
 		{
@@ -898,7 +899,7 @@ func TestGetserviceIPTagRequestForPublicIP(t *testing.T) {
 			input: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationIPTagsForPublicIP: "",
+						consts.ServiceAnnotationIPTagsForPublicIP: "",
 					},
 				},
 			},
@@ -912,7 +913,7 @@ func TestGetserviceIPTagRequestForPublicIP(t *testing.T) {
 			input: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value,tag2=tag2value,tag3malformed",
+						consts.ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value,tag2=tag2value,tag3malformed",
 					},
 				},
 			},
@@ -1085,7 +1086,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationAllowedServiceTag: "tag1",
+						consts.ServiceAnnotationAllowedServiceTag: "tag1",
 					},
 				},
 			},
@@ -1096,7 +1097,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationAllowedServiceTag: "tag1, tag2",
+						consts.ServiceAnnotationAllowedServiceTag: "tag1, tag2",
 					},
 				},
 			},
@@ -1107,7 +1108,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationAllowedServiceTag: ", tag1, ",
+						consts.ServiceAnnotationAllowedServiceTag: ", tag1, ",
 					},
 				},
 			},
@@ -1124,13 +1125,13 @@ func TestGetServiceTags(t *testing.T) {
 func TestGetServiceLoadBalancer(t *testing.T) {
 	testCases := []struct {
 		desc           string
+		sku            string
 		existingLBs    []network.LoadBalancer
 		service        v1.Service
 		annotations    map[string]string
-		sku            string
-		wantLB         bool
 		expectedLB     *network.LoadBalancer
 		expectedStatus *v1.LoadBalancerStatus
+		wantLB         bool
 		expectedExists bool
 		expectedError  bool
 	}{
@@ -1203,7 +1204,7 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 				},
 			},
 			service:     getTestService("service1", v1.ProtocolTCP, nil, false, 80),
-			annotations: map[string]string{ServiceAnnotationLoadBalancerMode: "__auto__"},
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerMode: "__auto__"},
 			wantLB:      true,
 			expectedLB: &network.LoadBalancer{
 				Name: to.StringPtr("testCluster"),
@@ -1522,7 +1523,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			}
 		}
 		test.service.Spec.LoadBalancerIP = test.loadBalancerIP
-		test.service.Annotations[ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations
+		test.service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations
 		flag, rerr := az.isFrontendIPChanged("testCluster", test.config,
 			&test.service, test.lbFrontendIPConfigName)
 		if rerr != nil {
@@ -1675,10 +1676,10 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		az.Config.LoadBalancerSku = test.loadBalancerSku
 		service := test.service
 		if test.probeProtocol != "" {
-			service.Annotations[ServiceAnnotationLoadBalancerHealthProbeProtocol] = test.probeProtocol
+			service.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeProtocol] = test.probeProtocol
 		}
 		if test.probePath != "" {
-			service.Annotations[ServiceAnnotationLoadBalancerHealthProbeRequestPath] = test.probePath
+			service.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath] = test.probePath
 		}
 		probe, lbrule, err := az.getExpectedLBRules(&test.service, test.wantLb,
 			"frontendIPConfigID", "backendPoolID", "lbname", to.Int32Ptr(0))
@@ -2381,11 +2382,11 @@ func TestReconcileSecurityGroup(t *testing.T) {
 
 	testCases := []struct {
 		desc          string
-		service       v1.Service
 		lbIP          *string
-		wantLb        bool
+		service       v1.Service
 		existingSgs   map[string]network.SecurityGroup
 		expectedSg    *network.SecurityGroup
+		wantLb        bool
 		expectedError bool
 	}{
 		{
@@ -2393,7 +2394,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 			service: v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ServiceAnnotationSharedSecurityRule: "true",
+						consts.ServiceAnnotationSharedSecurityRule: "true",
 					},
 				},
 			},
@@ -2491,7 +2492,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 		},
 		{
 			desc:    "reconcileSecurityGroup shall not create unwanted security rules if there is service tags",
-			service: getTestService("test1", v1.ProtocolTCP, map[string]string{ServiceAnnotationAllowedServiceTag: "tag"}, true, 80),
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationAllowedServiceTag: "tag"}, true, 80),
 			wantLb:  true,
 			lbIP:    to.StringPtr("1.1.1.1"),
 			existingSgs: map[string]network.SecurityGroup{"nsg": {
@@ -2558,7 +2559,7 @@ func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	service := getTestService("test1", v1.ProtocolTCP, map[string]string{ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}, false, 80)
+	service := getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}, false, 80)
 	service.Spec.LoadBalancerSourceRanges = []string{"1.2.3.4/32"}
 	existingSg := network.SecurityGroup{
 		Name: to.StringPtr("nsg"),
@@ -2678,11 +2679,11 @@ func TestReconcilePublicIP(t *testing.T) {
 
 	testCases := []struct {
 		desc                        string
-		wantLb                      bool
+		expectedID                  string
 		annotations                 map[string]string
 		existingPIPs                []network.PublicIPAddress
-		expectedID                  string
 		expectedPIP                 *network.PublicIPAddress
+		wantLb                      bool
 		expectedError               bool
 		expectedCreateOrUpdateCount int
 		expectedDeleteCount         int
@@ -2721,7 +2722,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall report error if the given PIP name doesn't exist in the resource group",
 			wantLb:      true,
-			annotations: map[string]string{ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pip1"),
@@ -2739,7 +2740,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall delete unwanted PIP when given the name of desired PIP",
 			wantLb:      true,
-			annotations: map[string]string{ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pip1"),
@@ -2769,7 +2770,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall not delete unwanted PIP when there are other service references",
 			wantLb:      true,
-			annotations: map[string]string{ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pip1"),
@@ -2800,8 +2801,8 @@ func TestReconcilePublicIP(t *testing.T) {
 			desc:   "reconcilePublicIP shall delete unwanted pips and existing pips, when the existing pips IP tags do not match",
 			wantLb: true,
 			annotations: map[string]string{
-				ServiceAnnotationPIPName:           "testPIP",
-				ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
+				consts.ServiceAnnotationPIPName:           "testPIP",
+				consts.ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
 			},
 			existingPIPs: []network.PublicIPAddress{
 				{
@@ -2839,8 +2840,8 @@ func TestReconcilePublicIP(t *testing.T) {
 			desc:   "reconcilePublicIP shall preserve existing pips, when the existing pips IP tags do match",
 			wantLb: true,
 			annotations: map[string]string{
-				ServiceAnnotationPIPName:           "testPIP",
-				ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
+				consts.ServiceAnnotationPIPName:           "testPIP",
+				consts.ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
 			},
 			existingPIPs: []network.PublicIPAddress{
 				{
@@ -2879,7 +2880,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall find the PIP by given name and shall not delete the PIP which is not owned by service",
 			wantLb:      true,
-			annotations: map[string]string{ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pip1"),
@@ -2909,7 +2910,7 @@ func TestReconcilePublicIP(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pip1"),
-					Tags: map[string]*string{serviceTagKey: to.StringPtr("default/test1,default/test2")},
+					Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1,default/test2")},
 				},
 			},
 			expectedCreateOrUpdateCount: 1,
@@ -3011,12 +3012,12 @@ func TestEnsurePublicIPExists(t *testing.T) {
 
 	testCases := []struct {
 		desc                    string
-		existingPIPs            []network.PublicIPAddress
 		inputDNSLabel           string
-		foundDNSLabelAnnotation bool
-		additionalAnnotations   map[string]string
-		expectedPIP             *network.PublicIPAddress
 		expectedID              string
+		additionalAnnotations   map[string]string
+		existingPIPs            []network.PublicIPAddress
+		expectedPIP             *network.PublicIPAddress
+		foundDNSLabelAnnotation bool
 		isIPv6                  bool
 		expectedError           bool
 	}{
@@ -3134,7 +3135,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: to.StringPtr("pip1"),
-				Tags: map[string]*string{serviceUsingDNSKey: to.StringPtr("test1")},
+				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("previousdns"),
@@ -3412,17 +3413,17 @@ func TestBindServicesToPIP(t *testing.T) {
 	pips := []*network.PublicIPAddress{
 		{Tags: nil},
 		{Tags: map[string]*string{}},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("ns1/svc1")}},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("ns1/svc1,ns2/svc2")}},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("ns1/svc1")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("ns1/svc1,ns2/svc2")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")}},
 	}
 	serviceNames := []string{"ns2/svc2", "ns3/svc3"}
 	expectedTags := []map[string]*string{
-		{serviceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
-		{serviceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
-		{serviceTagKey: to.StringPtr("ns1/svc1,ns2/svc2,ns3/svc3")},
-		{serviceTagKey: to.StringPtr("ns1/svc1,ns2/svc2,ns3/svc3")},
-		{serviceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
+		{consts.ServiceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
+		{consts.ServiceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
+		{consts.ServiceTagKey: to.StringPtr("ns1/svc1,ns2/svc2,ns3/svc3")},
+		{consts.ServiceTagKey: to.StringPtr("ns1/svc1,ns2/svc2,ns3/svc3")},
+		{consts.ServiceTagKey: to.StringPtr("ns2/svc2,ns3/svc3")},
 	}
 
 	flags := []bool{true, true, true, true, false}
@@ -3437,16 +3438,16 @@ func TestBindServicesToPIP(t *testing.T) {
 func TestUnbindServiceFromPIP(t *testing.T) {
 	pips := []*network.PublicIPAddress{
 		{Tags: nil},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("")}},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("ns1/svc1")}},
-		{Tags: map[string]*string{serviceTagKey: to.StringPtr("ns1/svc1,ns2/svc2")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("ns1/svc1")}},
+		{Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("ns1/svc1,ns2/svc2")}},
 	}
 	serviceName := "ns2/svc2"
 	expectedTags := []map[string]*string{
 		nil,
-		{serviceTagKey: to.StringPtr("")},
-		{serviceTagKey: to.StringPtr("ns1/svc1")},
-		{serviceTagKey: to.StringPtr("ns1/svc1")},
+		{consts.ServiceTagKey: to.StringPtr("")},
+		{consts.ServiceTagKey: to.StringPtr("ns1/svc1")},
+		{consts.ServiceTagKey: to.StringPtr("ns1/svc1")},
 	}
 
 	for i, pip := range pips {
@@ -3693,7 +3694,7 @@ func TestCleanBackendpoolForPrimarySLB(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
-	cloud.LoadBalancerSku = loadBalancerSkuStandard
+	cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
 	cloud.EnableMultipleStandardLoadBalancers = true
 	cloud.PrimaryAvailabilitySetName = "agentpool1-availabilitySet-00000000"
 	clusterName := "testCluster"
@@ -3775,26 +3776,26 @@ func TestEnsurePIPTagged(t *testing.T) {
 		service := v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					ServiceAnnotationAzurePIPTags: "a=b,c=d,e=,=f,ghi",
+					consts.ServiceAnnotationAzurePIPTags: "a=b,c=d,e=,=f,ghi",
 				},
 			},
 		}
 		pip := network.PublicIPAddress{
 			Tags: map[string]*string{
-				clusterNameKey: to.StringPtr("testCluster"),
-				serviceTagKey:  to.StringPtr("default/svc1,default/svc2"),
-				"foo":          to.StringPtr("bar"),
-				"a":            to.StringPtr("j"),
+				consts.ClusterNameKey: to.StringPtr("testCluster"),
+				consts.ServiceTagKey:  to.StringPtr("default/svc1,default/svc2"),
+				"foo":                 to.StringPtr("bar"),
+				"a":                   to.StringPtr("j"),
 			},
 		}
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
-				clusterNameKey: to.StringPtr("testCluster"),
-				serviceTagKey:  to.StringPtr("default/svc1,default/svc2"),
-				"foo":          to.StringPtr("bar"),
-				"a":            to.StringPtr("b"),
-				"c":            to.StringPtr("d"),
-				"y":            to.StringPtr("z"),
+				consts.ClusterNameKey: to.StringPtr("testCluster"),
+				consts.ServiceTagKey:  to.StringPtr("default/svc1,default/svc2"),
+				"foo":                 to.StringPtr("bar"),
+				"a":                   to.StringPtr("b"),
+				"c":                   to.StringPtr("d"),
+				"y":                   to.StringPtr("z"),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -3808,9 +3809,9 @@ func TestShouldChangeLoadBalancer(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		cloud := GetTestCloud(ctrl)
-		cloud.LoadBalancerSku = loadBalancerSkuBasic
+		cloud.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		annotations := map[string]string{
-			ServiceAnnotationLoadBalancerMode: "as2",
+			consts.ServiceAnnotationLoadBalancerMode: "as2",
 		}
 		service := getTestService("service1", v1.ProtocolTCP, annotations, false, 80)
 		res := cloud.shouldChangeLoadBalancer(&service, "as1", "testCluster")

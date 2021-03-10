@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
-	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -139,7 +139,7 @@ var _ = Describe("Network security group", func() {
 	It("can set source IP prefixes automatically according to corresponding service tag", func() {
 		By("Creating service and wait it to expose")
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationAllowedServiceTag: "AzureCloud",
+			consts.ServiceAnnotationAllowedServiceTag: "AzureCloud",
 		}
 		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
@@ -162,8 +162,8 @@ var _ = Describe("Network security group", func() {
 	It("should support service annotation `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges`", func() {
 		By("Creating a test service with the deny rule annotation but without `service.Spec.LoadBalancerSourceRanges`")
 		annotation := map[string]string{
-			azureprovider.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
-			azureprovider.ServiceAnnotationLoadBalancerInternal:                  "true",
+			consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+			consts.ServiceAnnotationLoadBalancerInternal:                  "true",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})

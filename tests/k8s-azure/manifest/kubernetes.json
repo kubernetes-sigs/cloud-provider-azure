@@ -3,11 +3,11 @@
     "properties": {
     "orchestratorProfile": {
       "kubernetesConfig": {
-        "kubeletConfig": {
-          "--feature-gates": "ExecProbeTimeout=true"
+        "apiServerConfig": {
+          "--service-account-issuer": "https://kubernetes.default.svc.cluster.local"
         }
       }
-    }, 
+    },
     "masterProfile": {
       "count": 1,
       "dnsPrefix": "",

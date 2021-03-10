@@ -26,11 +26,8 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-)
 
-const (
-	// RetryAfterHeaderKey is the retry-after header key in ARM responses.
-	RetryAfterHeaderKey = "Retry-After"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
@@ -229,7 +226,7 @@ func getRetryAfter(resp *http.Response) time.Duration {
 		return 0
 	}
 
-	ra := resp.Header.Get(RetryAfterHeaderKey)
+	ra := resp.Header.Get(consts.RetryAfterHeaderKey)
 	if ra == "" {
 		return 0
 	}
