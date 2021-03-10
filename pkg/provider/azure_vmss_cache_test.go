@@ -51,13 +51,13 @@ func TestExtractVmssVMName(t *testing.T) {
 			expectError: true,
 		},
 		{
-			description:        "correct vmss VM name should return correct scaleSet and instanceID",
+			description:        "correct vmss VM name should return correct ScaleSet and instanceID",
 			vmName:             "vm_1234",
 			expectedScaleSet:   "vm",
 			expectedInstanceID: "1234",
 		},
 		{
-			description:        "correct vmss VM name with Extra Separator should return correct scaleSet and instanceID",
+			description:        "correct vmss VM name with Extra Separator should return correct ScaleSet and instanceID",
 			vmName:             "vm_test_1234",
 			expectedScaleSet:   "vm_test",
 			expectedInstanceID: "1234",
@@ -81,7 +81,7 @@ func TestVMSSVMCache(t *testing.T) {
 	defer ctrl.Finish()
 
 	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
-	ss, err := newTestScaleSet(ctrl)
+	ss, err := NewTestScaleSet(ctrl)
 	assert.NoError(t, err)
 
 	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)

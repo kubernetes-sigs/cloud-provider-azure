@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // makeZone returns the zone value in format of <region>-<zone-id>.
@@ -59,7 +60,7 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 		}
 
 		if metadata.Compute == nil {
-			_ = az.metadata.imsCache.Delete(metadataCacheKey)
+			_ = az.metadata.imsCache.Delete(consts.MetadataCacheKey)
 			return cloudprovider.Zone{}, fmt.Errorf("failure of getting compute information from instance metadata")
 		}
 

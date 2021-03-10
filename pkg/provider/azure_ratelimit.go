@@ -18,6 +18,7 @@ package provider
 
 import (
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // CloudProviderRateLimitConfig indicates the rate limit config for each clients.
@@ -49,10 +50,10 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 
 	// Assign read rate limit defaults if no configuration was passed in.
 	if config.CloudProviderRateLimitQPS == 0 {
-		config.CloudProviderRateLimitQPS = rateLimitQPSDefault
+		config.CloudProviderRateLimitQPS = consts.RateLimitQPSDefault
 	}
 	if config.CloudProviderRateLimitBucket == 0 {
-		config.CloudProviderRateLimitBucket = rateLimitBucketDefault
+		config.CloudProviderRateLimitBucket = consts.RateLimitBucketDefault
 	}
 	// Assign write rate limit defaults if no configuration was passed in.
 	if config.CloudProviderRateLimitQPSWrite == 0 {

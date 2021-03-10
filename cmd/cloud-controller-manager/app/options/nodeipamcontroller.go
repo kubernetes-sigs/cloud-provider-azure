@@ -22,16 +22,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
-)
-
-const (
-	// DefaultNodeMaskCIDRIPv4 is default mask size for IPv4 node cidr
-	DefaultNodeMaskCIDRIPv4 = 24
-	// DefaultNodeMaskCIDRIPv6 is default mask size for IPv6 node cidr
-	DefaultNodeMaskCIDRIPv6 = 64
-	// DefaultNodeCIDRMaskSize is the default mask size for node cidr
-	DefaultNodeCIDRMaskSize = 24
 )
 
 // NodeIPAMControllerOptions holds the NodeIpamController options.
@@ -45,7 +37,7 @@ func (o *NodeIPAMControllerOptions) AddFlags(fs *pflag.FlagSet) {
 		return
 	}
 	fs.StringVar(&o.ServiceCIDR, "service-cluster-ip-range", "", "CIDR Range for Services in cluster. Requires --allocate-node-cidrs to be true")
-	fs.Int32Var(&o.NodeCIDRMaskSize, "node-cidr-mask-size", DefaultNodeCIDRMaskSize, "Mask size for node cidr in cluster. Default is 24 for IPv4 and 64 for IPv6.")
+	fs.Int32Var(&o.NodeCIDRMaskSize, "node-cidr-mask-size", consts.DefaultNodeCIDRMaskSize, "Mask size for node cidr in cluster. Default is 24 for IPv4 and 64 for IPv6.")
 	fs.Int32Var(&o.NodeCIDRMaskSizeIPv4, "node-cidr-mask-size-ipv4", 0, "Mask size for IPv4 node cidr in dual-stack cluster. Default is 24.")
 	fs.Int32Var(&o.NodeCIDRMaskSizeIPv6, "node-cidr-mask-size-ipv6", 0, "Mask size for IPv6 node cidr in dual-stack cluster. Default is 64.")
 }
@@ -91,7 +83,7 @@ func defaultNodeIPAMControllerOptions() *NodeIPAMControllerOptions {
 	return &NodeIPAMControllerOptions{
 		&nodeipamconfig.NodeIPAMControllerConfiguration{
 			ServiceCIDR:          "",
-			NodeCIDRMaskSize:     DefaultNodeCIDRMaskSize,
+			NodeCIDRMaskSize:     consts.DefaultNodeCIDRMaskSize,
 			NodeCIDRMaskSizeIPv4: 0,
 			NodeCIDRMaskSizeIPv6: 0,
 		},

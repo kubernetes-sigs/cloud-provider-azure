@@ -21,21 +21,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"time"
 
 	"k8s.io/klog/v2"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-)
-
-const (
-	metadataCacheTTL = time.Minute
-	metadataCacheKey = "InstanceMetadata"
-
-	imdsInstanceAPIVersion     = "2019-03-11"
-	imdsLoadBalancerAPIVersion = "2020-10-01"
-	imdsServer                 = "http://169.254.169.254"
-	imdsInstanceURI            = "/metadata/instance"
-	imdsLoadBalancerURI        = "/metadata/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // NetworkMetadata contains metadata about an instance's network
@@ -118,7 +107,7 @@ func NewInstanceMetadataService(imdsServer string) (*InstanceMetadataService, er
 		imdsServer: imdsServer,
 	}
 
-	imsCache, err := azcache.NewTimedcache(metadataCacheTTL, ims.getMetadata)
+	imsCache, err := azcache.NewTimedcache(consts.MetadataCacheTTL, ims.getMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +161,7 @@ func (ims *InstanceMetadataService) getMetadata(key string) (interface{}, error)
 }
 
 func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMetadata, error) {
-	req, err := http.NewRequest("GET", ims.imdsServer+imdsInstanceURI, nil)
+	req, err := http.NewRequest("GET", ims.imdsServer+consts.ImdsInstanceURI, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +170,7 @@ func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMe
 
 	q := req.URL.Query()
 	q.Add("format", "json")
-	q.Add("api-version", imdsInstanceAPIVersion)
+	q.Add("api-version", consts.ImdsInstanceAPIVersion)
 	req.URL.RawQuery = q.Encode()
 
 	client := &http.Client{}
@@ -210,7 +199,7 @@ func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMe
 }
 
 func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMetadata, error) {
-	req, err := http.NewRequest("GET", ims.imdsServer+imdsLoadBalancerURI, nil)
+	req, err := http.NewRequest("GET", ims.imdsServer+consts.ImdsLoadBalancerURI, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +208,7 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 
 	q := req.URL.Query()
 	q.Add("format", "json")
-	q.Add("api-version", imdsLoadBalancerAPIVersion)
+	q.Add("api-version", consts.ImdsLoadBalancerAPIVersion)
 	req.URL.RawQuery = q.Encode()
 
 	client := &http.Client{}
@@ -250,7 +239,7 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 // GetMetadata gets instance metadata from cache.
 // crt determines if we can get data from stalled cache/need fresh if cache expired.
 func (ims *InstanceMetadataService) GetMetadata(crt azcache.AzureCacheReadType) (*InstanceMetadata, error) {
-	cache, err := ims.imsCache.Get(metadataCacheKey, crt)
+	cache, err := ims.imsCache.Get(consts.MetadataCacheKey, crt)
 	if err != nil {
 		return nil, err
 	}

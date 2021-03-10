@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -182,7 +183,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 		expectedLun     int32
 	}{
 		{
-			desc:          "an error shall be returned if convert vmSet to scaleSet failed",
+			desc:          "an error shall be returned if convert vmSet to ScaleSet failed",
 			vmList:        map[string]string{"vm1": "PowerState/Running"},
 			nodeName:      "vm1",
 			isVMSS:        false,
@@ -193,7 +194,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			expectedErr:   true,
 		},
 		{
-			desc:          "an error shall be returned if convert vmSet to scaleSet success but node is not managed by availability set",
+			desc:          "an error shall be returned if convert vmSet to ScaleSet success but node is not managed by availability set",
 			vmssList:      []string{"vmss-vm-000001"},
 			nodeName:      "vmss1",
 			isVMSS:        true,
@@ -207,7 +208,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
-		testCloud.VMType = vmTypeVMSS
+		testCloud.VMType = consts.VMTypeVMSS
 		if test.isVMSS {
 			if test.isManagedBy {
 				testCloud.DisableAvailabilitySetNodes = false

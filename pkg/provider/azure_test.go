@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -164,8 +165,8 @@ func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
 				IPAddress:                to.StringPtr("1.2.3.4"),
 			},
 			Tags: map[string]*string{
-				serviceTagKey:  to.StringPtr("default/servicea"),
-				clusterNameKey: to.StringPtr(testClusterName),
+				consts.ServiceTagKey:  to.StringPtr("default/servicea"),
+				consts.ClusterNameKey: to.StringPtr(testClusterName),
 			},
 			Sku: &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
@@ -184,11 +185,11 @@ func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
 	a := 'a'
 	for i := 1; i <= serviceCount; i++ {
 		expectedPIPs[0].Name = to.StringPtr(fmt.Sprintf("testCluster-aservice%d", i))
-		expectedPIPs[0].Tags[serviceTagKey] = to.StringPtr(fmt.Sprintf("default/service%d", i))
+		expectedPIPs[0].Tags[consts.ServiceTagKey] = to.StringPtr(fmt.Sprintf("default/service%d", i))
 		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i), gomock.Any()).Return(expectedPIPs[0], nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i)).Return(nil).AnyTimes()
 		expectedPIPs[0].Name = to.StringPtr(fmt.Sprintf("testCluster-aservice%c", a))
-		expectedPIPs[0].Tags[serviceTagKey] = to.StringPtr(fmt.Sprintf("default/service%c", a))
+		expectedPIPs[0].Tags[consts.ServiceTagKey] = to.StringPtr(fmt.Sprintf("default/service%c", a))
 		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a), gomock.Any()).Return(expectedPIPs[0], nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a)).Return(nil).AnyTimes()
 		a++
@@ -759,7 +760,7 @@ func TestReconcileLoadBalancerEditServiceSubnet(t *testing.T) {
 
 	validateLoadBalancer(t, lb, svc)
 
-	svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet] = "subnet"
+	svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = "subnet"
 	validateTestSubnet(t, az, &svc)
 
 	expectedLBs = make([]network.LoadBalancer, 0)
@@ -976,8 +977,8 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			serviceTagKey:  to.StringPtr("aservicesaomitted1"),
-			clusterNameKey: to.StringPtr(testClusterName),
+			consts.ServiceTagKey:  to.StringPtr("aservicesaomitted1"),
+			consts.ClusterNameKey: to.StringPtr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
@@ -1026,8 +1027,8 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			serviceTagKey:  to.StringPtr("aservicesanone"),
-			clusterNameKey: to.StringPtr(testClusterName),
+			consts.ServiceTagKey:  to.StringPtr("aservicesanone"),
+			consts.ClusterNameKey: to.StringPtr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
@@ -1078,8 +1079,8 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
-			serviceTagKey:  to.StringPtr("aservicesaclientip"),
-			clusterNameKey: to.StringPtr(testClusterName),
+			consts.ServiceTagKey:  to.StringPtr("aservicesaclientip"),
+			consts.ClusterNameKey: to.StringPtr(testClusterName),
 		},
 		Sku: &network.PublicIPAddressSku{
 			Name: network.PublicIPAddressSkuNameStandard,
@@ -1529,23 +1530,23 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 
 func getInternalTestService(identifier string, requestedPorts ...int32) v1.Service {
 	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
-	svc.Annotations[ServiceAnnotationLoadBalancerInternal] = trueAnnotationValue
+	svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = consts.TrueAnnotationValue
 	return svc
 }
 
 func getResourceGroupTestService(identifier, resourceGroup, loadBalancerIP string, requestedPorts ...int32) v1.Service {
 	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
 	svc.Spec.LoadBalancerIP = loadBalancerIP
-	svc.Annotations[ServiceAnnotationLoadBalancerResourceGroup] = resourceGroup
+	svc.Annotations[consts.ServiceAnnotationLoadBalancerResourceGroup] = resourceGroup
 	return svc
 }
 
 func setLoadBalancerModeAnnotation(service *v1.Service, lbMode string) {
-	service.Annotations[ServiceAnnotationLoadBalancerMode] = lbMode
+	service.Annotations[consts.ServiceAnnotationLoadBalancerMode] = lbMode
 }
 
 func setLoadBalancerAutoModeAnnotation(service *v1.Service) {
-	setLoadBalancerModeAnnotation(service, ServiceAnnotationLoadBalancerAutoModeValue)
+	setLoadBalancerModeAnnotation(service, consts.ServiceAnnotationLoadBalancerAutoModeValue)
 }
 
 func getServiceSourceRanges(service *v1.Service) []string {
@@ -1602,7 +1603,7 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 			expectedFrontendIPCount++
 			expectedSubnetName := ""
 			if requiresInternalLoadBalancer(&services[i]) {
-				expectedSubnetName = svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet]
+				expectedSubnetName = svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]
 				if expectedSubnetName == "" {
 					expectedSubnetName = az.SubnetName
 				}
@@ -1740,21 +1741,21 @@ func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *
 		t.Fatal("Expected publicIP resource exists, when it is not an internal service")
 	}
 
-	if publicIP.Tags == nil || publicIP.Tags[serviceTagKey] == nil {
-		t.Fatalf("Expected publicIP resource does not have tags[%s]", serviceTagKey)
+	if publicIP.Tags == nil || publicIP.Tags[consts.ServiceTagKey] == nil {
+		t.Fatalf("Expected publicIP resource does not have tags[%s]", consts.ServiceTagKey)
 	}
 
 	serviceName := getServiceName(service)
-	if serviceName != *(publicIP.Tags[serviceTagKey]) {
-		t.Errorf("Expected publicIP resource has matching tags[%s]", serviceTagKey)
+	if serviceName != *(publicIP.Tags[consts.ServiceTagKey]) {
+		t.Errorf("Expected publicIP resource has matching tags[%s]", consts.ServiceTagKey)
 	}
 
-	if publicIP.Tags[clusterNameKey] == nil {
-		t.Fatalf("Expected publicIP resource does not have tags[%s]", clusterNameKey)
+	if publicIP.Tags[consts.ClusterNameKey] == nil {
+		t.Fatalf("Expected publicIP resource does not have tags[%s]", consts.ClusterNameKey)
 	}
 
-	if *(publicIP.Tags[clusterNameKey]) != testClusterName {
-		t.Errorf("Expected publicIP resource has matching tags[%s]", clusterNameKey)
+	if *(publicIP.Tags[consts.ClusterNameKey]) != testClusterName {
+		t.Errorf("Expected publicIP resource has matching tags[%s]", consts.ClusterNameKey)
 	}
 
 	// We cannot use service.Spec.LoadBalancerIP to compare with
@@ -1854,10 +1855,10 @@ func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, s
 func TestSecurityRulePriorityPicksNextAvailablePriority(t *testing.T) {
 	rules := []network.SecurityRule{}
 
-	var expectedPriority int32 = loadBalancerMinimumPriority + 50
+	var expectedPriority int32 = consts.LoadBalancerMinimumPriority + 50
 
 	var i int32
-	for i = loadBalancerMinimumPriority; i < expectedPriority; i++ {
+	for i = consts.LoadBalancerMinimumPriority; i < expectedPriority; i++ {
 		rules = append(rules, network.SecurityRule{
 			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 				Priority: to.Int32Ptr(i),
@@ -1879,7 +1880,7 @@ func TestSecurityRulePriorityFailsIfExhausted(t *testing.T) {
 	rules := []network.SecurityRule{}
 
 	var i int32
-	for i = loadBalancerMinimumPriority; i < loadBalancerMaximumPriority; i++ {
+	for i = consts.LoadBalancerMinimumPriority; i < consts.LoadBalancerMaximumPriority; i++ {
 		rules = append(rules, network.SecurityRule{
 			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 				Priority: to.Int32Ptr(i),
@@ -2113,7 +2114,7 @@ func validateConfig(t *testing.T, config string) { //nolint
 	if azureCloud.RouteTableCacheTTLInSeconds != 100 {
 		t.Errorf("got incorrect value for routeTableCacheTTLInSeconds")
 	}
-	if azureCloud.VMType != vmTypeVMSS {
+	if azureCloud.VMType != consts.VMTypeVMSS {
 		t.Errorf("got incorrect value for vmType")
 	}
 	if !azureCloud.DisableAvailabilitySetNodes {
@@ -2156,7 +2157,7 @@ func TestGetNodeNameByProviderID(t *testing.T) {
 		fail bool
 	}{
 		{
-			providerID: CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
+			providerID: consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
 			name:       "k8s-agent-AAAAAAAA-0",
 			fail:       false,
 		},
@@ -2166,12 +2167,12 @@ func TestGetNodeNameByProviderID(t *testing.T) {
 			fail:       false,
 		},
 		{
-			providerID: CloudProviderName + ":/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
+			providerID: consts.CloudProviderName + ":/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
 			name:       "k8s-agent-AAAAAAAA-0",
 			fail:       false,
 		},
 		{
-			providerID: CloudProviderName + "://",
+			providerID: consts.CloudProviderName + "://",
 			name:       "",
 			fail:       true,
 		},
@@ -2205,11 +2206,11 @@ func TestGetNodeNameByProviderID(t *testing.T) {
 }
 
 func validateTestSubnet(t *testing.T, az *Cloud, svc *v1.Service) {
-	if svc.Annotations[ServiceAnnotationLoadBalancerInternal] != trueAnnotationValue {
+	if svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] != consts.TrueAnnotationValue {
 		t.Error("Subnet added to non-internal service")
 	}
 
-	subName := svc.Annotations[ServiceAnnotationLoadBalancerInternalSubnet]
+	subName := svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]
 	if subName == "" {
 		subName = az.SubnetName
 	}
@@ -2233,7 +2234,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleDoesNotExistItIsCreated(t *testing.T
 	az := GetTestCloud(ctrl)
 	svc := getTestService("servicea", v1.ProtocolTCP, nil, false, 80)
 	svc.Spec.LoadBalancerIP = testIP1
-	svc.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
@@ -2276,7 +2277,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 	az := GetTestCloud(ctrl)
 	svc := getTestService("servicesr", v1.ProtocolTCP, nil, false, 80)
 	svc.Spec.LoadBalancerIP = testIP1
-	svc.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	expectedRuleName := testRuleName
 
@@ -2332,11 +2333,11 @@ func TestIfServicesSpecifySharedRuleButDifferentPortsThenSeparateRulesAreCreated
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
@@ -2401,11 +2402,11 @@ func TestIfServicesSpecifySharedRuleButDifferentProtocolsThenSeparateRulesAreCre
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolUDP, nil, false, 4444)
 	svc2.Spec.LoadBalancerIP = testIP1
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName3 := "shared-UDP-4444-Internet"
 
@@ -2471,12 +2472,12 @@ func TestIfServicesSpecifySharedRuleButDifferentSourceAddressesThenSeparateRules
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 80)
 	svc1.Spec.LoadBalancerIP = testIP1
 	svc1.Spec.LoadBalancerSourceRanges = []string{"192.168.12.0/24"}
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 80)
 	svc2.Spec.LoadBalancerIP = testIP2
 	svc2.Spec.LoadBalancerSourceRanges = []string{"192.168.34.0/24"}
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName2 := "shared-TCP-80-192.168.12.0_24"
 	testRuleName3 := "shared-TCP-80-192.168.34.0_24"
@@ -2544,15 +2545,15 @@ func TestIfServicesSpecifySharedRuleButSomeAreOnDifferentPortsThenRulesAreSepara
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
 	svc3.Spec.LoadBalancerIP = testIP3
-	svc3.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
@@ -2645,11 +2646,11 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 80)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 80)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	expectedRuleName := testRuleName
 
@@ -2703,15 +2704,15 @@ func TestIfSomeServicesShareARuleAndOneIsDeletedItIsRemovedFromTheRightRule(t *t
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
 	svc3.Spec.LoadBalancerIP = testIP3
-	svc3.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
@@ -2811,15 +2812,15 @@ func TestIfServiceSpecifiesSharedRuleAndLastServiceIsDeletedThenRuleIsDeleted(t 
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
 	svc3.Spec.LoadBalancerIP = testIP3
-	svc3.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
@@ -2893,23 +2894,23 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
 	svc1.Spec.LoadBalancerIP = testIP1
-	svc1.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
 	svc2.Spec.LoadBalancerIP = testIP2
-	svc2.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
 	svc3.Spec.LoadBalancerIP = testIP3
-	svc3.Annotations[ServiceAnnotationSharedSecurityRule] = trueAnnotationValue
+	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc4 := getTestService("servicesr4", v1.ProtocolTCP, nil, false, 4444)
 	svc4.Spec.LoadBalancerIP = "192.168.22.33"
-	svc4.Annotations[ServiceAnnotationSharedSecurityRule] = "false"
+	svc4.Annotations[consts.ServiceAnnotationSharedSecurityRule] = "false"
 
 	svc5 := getTestService("servicesr5", v1.ProtocolTCP, nil, false, 8888)
 	svc5.Spec.LoadBalancerIP = "192.168.22.33"
-	svc5.Annotations[ServiceAnnotationSharedSecurityRule] = "false"
+	svc5.Annotations[consts.ServiceAnnotationSharedSecurityRule] = "false"
 
 	testServices := []v1.Service{svc1, svc2, svc3, svc4, svc5}
 
@@ -3228,9 +3229,9 @@ func TestUpdateNodeCaches(t *testing.T) {
 	prevNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				LabelFailureDomainBetaZone: zone,
-				externalResourceGroupLabel: trueAnnotationValue,
-				managedByAzureLabel:        "false",
+				consts.LabelFailureDomainBetaZone: zone,
+				consts.ExternalResourceGroupLabel: consts.TrueAnnotationValue,
+				consts.ManagedByAzureLabel:        "false",
 			},
 			Name: "prevNode",
 		},
@@ -3244,9 +3245,9 @@ func TestUpdateNodeCaches(t *testing.T) {
 	newNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				LabelFailureDomainBetaZone: zone,
-				externalResourceGroupLabel: trueAnnotationValue,
-				managedByAzureLabel:        "false",
+				consts.LabelFailureDomainBetaZone: zone,
+				consts.ExternalResourceGroupLabel: consts.TrueAnnotationValue,
+				consts.ManagedByAzureLabel:        "false",
 			},
 			Name: "newNode",
 		},
@@ -3296,7 +3297,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 	config := Config{
 		DisableAvailabilitySetNodes: true,
-		VMType:                      vmTypeStandard,
+		VMType:                      consts.VMTypeStandard,
 	}
 	err = az.InitializeCloudFromConfig(&config, false)
 	expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")

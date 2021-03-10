@@ -27,10 +27,11 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // AttachDisk attaches a disk to vm
-func (ss *scaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
+func (ss *ScaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -136,7 +137,7 @@ func (ss *scaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*Atta
 }
 
 // DetachDisk detaches a disk from VM
-func (ss *scaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) error {
+func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) error {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -161,7 +162,7 @@ func (ss *scaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
 				klog.V(2).Infof("azureDisk - detach disk: name %q uri %q", diskName, diskURI)
-				if strings.EqualFold(ss.cloud.Environment.Name, AzureStackCloudName) && !ss.Config.DisableAzureStackCloud {
+				if strings.EqualFold(ss.cloud.Environment.Name, consts.AzureStackCloudName) && !ss.Config.DisableAzureStackCloud {
 					disks = append(disks[:i], disks[i+1:]...)
 				} else {
 					disks[i].ToBeDetached = to.BoolPtr(true)
@@ -212,7 +213,7 @@ func (ss *scaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
-func (ss *scaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, error) {
+func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, error) {
 	_, _, vm, err := ss.getVmssVM(string(nodeName), crt)
 	if err != nil {
 		return nil, err

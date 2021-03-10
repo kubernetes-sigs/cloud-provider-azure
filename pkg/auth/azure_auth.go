@@ -25,14 +25,12 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
+
 	"golang.org/x/crypto/pkcs12"
 
 	"k8s.io/klog/v2"
-)
 
-const (
-	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
-	ADFSIdentitySystem = "adfs"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
@@ -84,8 +82,8 @@ type AzureAuthConfig struct {
 // For tokens for VM/VMSS and network resource ones, please check GetMultiTenantServicePrincipalToken and GetNetworkResourceServicePrincipalToken.
 func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (*adal.ServicePrincipalToken, error) {
 	var tenantID string
-	if strings.EqualFold(config.IdentitySystem, ADFSIdentitySystem) {
-		tenantID = ADFSIdentitySystem
+	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
+		tenantID = consts.ADFSIdentitySystem
 	} else {
 		tenantID = config.TenantID
 	}
@@ -266,7 +264,7 @@ func azureStackOverrides(env *azure.Environment, resourceManagerEndpoint, identi
 	env.ServiceManagementEndpoint = env.TokenAudience
 	env.ResourceManagerVMDNSSuffix = strings.Replace(resourceManagerEndpoint, "https://management.", "cloudapp.", -1)
 	env.ResourceManagerVMDNSSuffix = strings.TrimSuffix(env.ResourceManagerVMDNSSuffix, "/")
-	if strings.EqualFold(identitySystem, ADFSIdentitySystem) {
+	if strings.EqualFold(identitySystem, consts.ADFSIdentitySystem) {
 		env.ActiveDirectoryEndpoint = strings.TrimSuffix(env.ActiveDirectoryEndpoint, "/")
 		env.ActiveDirectoryEndpoint = strings.TrimSuffix(env.ActiveDirectoryEndpoint, "adfs")
 	}
@@ -278,7 +276,7 @@ func (config *AzureAuthConfig) checkConfigWhenNetworkResourceInDifferentTenant()
 		return fmt.Errorf("NetworkResourceTenantID and NetworkResourceSubscriptionID must be configured")
 	}
 
-	if strings.EqualFold(config.IdentitySystem, ADFSIdentitySystem) {
+	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
 		return fmt.Errorf("ADFS identity system is not supported")
 	}
 

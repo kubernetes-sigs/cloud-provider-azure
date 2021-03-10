@@ -34,6 +34,7 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	kubectrlmgrconfig "k8s.io/controller-manager/config"
 	cmoptions "k8s.io/controller-manager/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 )
 
@@ -94,7 +95,7 @@ func TestDefaultFlags(t *testing.T) {
 		},
 		NodeIPAMController: &NodeIPAMControllerOptions{
 			NodeIPAMControllerConfiguration: &config.NodeIPAMControllerConfiguration{
-				NodeCIDRMaskSize: DefaultNodeCIDRMaskSize,
+				NodeCIDRMaskSize: consts.DefaultNodeCIDRMaskSize,
 			},
 		},
 		SecureServing: (&apiserveroptions.SecureServingOptions{
@@ -237,7 +238,7 @@ func TestAddFlags(t *testing.T) {
 		},
 		NodeIPAMController: &NodeIPAMControllerOptions{
 			NodeIPAMControllerConfiguration: &config.NodeIPAMControllerConfiguration{
-				NodeCIDRMaskSize: DefaultNodeCIDRMaskSize,
+				NodeCIDRMaskSize: consts.DefaultNodeCIDRMaskSize,
 			},
 		},
 		SecureServing: (&apiserveroptions.SecureServingOptions{

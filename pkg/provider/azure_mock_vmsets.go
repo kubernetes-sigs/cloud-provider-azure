@@ -306,3 +306,19 @@ func (mr *MockVMSetMockRecorder) GetNodeNameByIPConfigurationID(ipConfigurationI
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeNameByIPConfigurationID", reflect.TypeOf((*MockVMSet)(nil).GetNodeNameByIPConfigurationID), ipConfigurationID)
 }
+
+// GetNodeCIDRMaskByProviderID mocks base method
+func (m *MockVMSet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, " GetNodeCIDRMasksByProviderID", providerID)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetNodeCIDRMaskByProviderID indicates an expected call of GetNodeNameByIPConfigurationID
+func (mr *MockVMSetMockRecorder) GetNodeCIDRMaskByProviderID(providerID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeCIDRMasksByProviderID", reflect.TypeOf((*MockVMSet)(nil).GetNodeCIDRMasksByProviderID), providerID)
+}

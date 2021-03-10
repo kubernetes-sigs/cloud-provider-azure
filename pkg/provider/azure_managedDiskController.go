@@ -32,14 +32,8 @@ import (
 	cloudvolume "k8s.io/cloud-provider/volume"
 	volumehelpers "k8s.io/cloud-provider/volume/helpers"
 	"k8s.io/klog/v2"
-)
 
-const (
-	// default IOPS Caps & Throughput Cap (MBps) per https://docs.microsoft.com/en-us/azure/virtual-machines/linux/disks-ultra-ssd
-	defaultDiskIOPSReadWrite = 500
-	defaultDiskMBpsReadWrite = 100
-
-	diskEncryptionSetIDFormat = "/subscriptions/{subs-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/diskEncryptionSets/{diskEncryptionSet-name}"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 //ManagedDiskController : managed disk controller struct
@@ -118,7 +112,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 	}
 
 	if diskSku == compute.UltraSSDLRS {
-		diskIOPSReadWrite := int64(defaultDiskIOPSReadWrite)
+		diskIOPSReadWrite := int64(consts.DefaultDiskIOPSReadWrite)
 		if options.DiskIOPSReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskIOPSReadWrite)
 			if err != nil {
@@ -128,7 +122,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		}
 		diskProperties.DiskIOPSReadWrite = to.Int64Ptr(diskIOPSReadWrite)
 
-		diskMBpsReadWrite := int64(defaultDiskMBpsReadWrite)
+		diskMBpsReadWrite := int64(consts.DefaultDiskMBpsReadWrite)
 		if options.DiskMBpsReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskMBpsReadWrite)
 			if err != nil {
@@ -156,7 +150,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 
 	if options.DiskEncryptionSetID != "" {
 		if strings.Index(strings.ToLower(options.DiskEncryptionSetID), "/subscriptions/") != 0 {
-			return "", fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", options.DiskEncryptionSetID, diskEncryptionSetIDFormat)
+			return "", fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", options.DiskEncryptionSetID, consts.DiskEncryptionSetIDFormat)
 		}
 		diskProperties.Encryption = &compute.Encryption{
 			DiskEncryptionSetID: &options.DiskEncryptionSetID,
@@ -363,7 +357,7 @@ func (c *Cloud) GetAzureDiskLabels(diskURI string) (map[string]string, error) {
 	}
 
 	labels := map[string]string{
-		LabelFailureDomainBetaRegion: c.Location,
+		consts.LabelFailureDomainBetaRegion: c.Location,
 	}
 	// no azure credential is set, return nil
 	if c.DisksClient == nil {
@@ -392,6 +386,6 @@ func (c *Cloud) GetAzureDiskLabels(diskURI string) (map[string]string, error) {
 
 	zone := c.makeZone(c.Location, zoneID)
 	klog.V(4).Infof("Got zone %q for Azure disk %q", zone, diskName)
-	labels[LabelFailureDomainBetaZone] = zone
+	labels[consts.LabelFailureDomainBetaZone] = zone
 	return labels, nil
 }

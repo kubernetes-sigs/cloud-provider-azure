@@ -23,6 +23,8 @@ import (
 	"os"
 	"strconv"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+
 	flag "github.com/spf13/pflag"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
@@ -36,8 +38,6 @@ const (
 	VersionRaw   versionValue = 2
 )
 
-const strRawVersion string = "raw"
-
 func (v *versionValue) IsBoolFlag() bool {
 	return true
 }
@@ -47,7 +47,7 @@ func (v *versionValue) Get() interface{} {
 }
 
 func (v *versionValue) Set(s string) error {
-	if s == strRawVersion {
+	if s == consts.StrRawVersion {
 		*v = VersionRaw
 		return nil
 
@@ -63,7 +63,7 @@ func (v *versionValue) Set(s string) error {
 
 func (v *versionValue) String() string {
 	if *v == VersionRaw {
-		return strRawVersion
+		return consts.StrRawVersion
 	}
 	return fmt.Sprintf("%v", *v == VersionTrue)
 }

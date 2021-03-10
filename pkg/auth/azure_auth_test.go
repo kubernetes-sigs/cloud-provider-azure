@@ -22,6 +22,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
@@ -37,7 +39,7 @@ var (
 			AADClientSecret:               "AADClientSecret",
 			NetworkResourceTenantID:       "NetworkResourceTenantID",
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-			IdentitySystem:                ADFSIdentitySystem,
+			IdentitySystem:                consts.ADFSIdentitySystem,
 		},
 		{
 			TenantID:                      "TenantID",

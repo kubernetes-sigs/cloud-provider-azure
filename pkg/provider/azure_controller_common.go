@@ -36,6 +36,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -109,14 +110,14 @@ type AttachDiskOptions struct {
 // getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.
 func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.AzureCacheReadType) (VMSet, error) {
 	// 1. vmType is standard, return cloud.VMSet directly.
-	if c.cloud.VMType == vmTypeStandard {
+	if c.cloud.VMType == consts.VMTypeStandard {
 		return c.cloud.VMSet, nil
 	}
 
-	// 2. vmType is Virtual Machine Scale Set (vmss), convert vmSet to scaleSet.
-	ss, ok := c.cloud.VMSet.(*scaleSet)
+	// 2. vmType is Virtual Machine Scale Set (vmss), convert vmSet to ScaleSet.
+	ss, ok := c.cloud.VMSet.(*ScaleSet)
 	if !ok {
-		return nil, fmt.Errorf("error of converting vmSet (%q) to scaleSet with vmType %q", c.cloud.VMSet, c.cloud.VMType)
+		return nil, fmt.Errorf("error of converting vmSet (%q) to ScaleSet with vmType %q", c.cloud.VMSet, c.cloud.VMType)
 	}
 
 	// 3. If the node is managed by availability set, then return ss.availabilitySet.

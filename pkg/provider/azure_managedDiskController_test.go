@@ -32,6 +32,7 @@ import (
 	cloudvolume "k8s.io/cloud-provider/volume"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/mockdiskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -122,7 +123,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			expectedDiskID:      "",
 			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
-			expectedErrMsg:      fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", badDiskEncryptionSetID, diskEncryptionSetIDFormat),
+			expectedErrMsg:      fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", badDiskEncryptionSetID, consts.DiskEncryptionSetIDFormat),
 		},
 		{
 			desc:                "disk Id and no error shall be returned if everything is good with StandardLRS storage account with not empty diskIOPSReadWrite",
@@ -434,8 +435,8 @@ func TestGetLabelsForVolume(t *testing.T) {
 			},
 			existedDisk: compute.Disk{Name: to.StringPtr(diskName), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB}, Zones: &[]string{"1"}},
 			expected: map[string]string{
-				LabelFailureDomainBetaRegion: testCloud0.Location,
-				LabelFailureDomainBetaZone:   testCloud0.makeZone(testCloud0.Location, 1),
+				consts.LabelFailureDomainBetaRegion: testCloud0.Location,
+				consts.LabelFailureDomainBetaZone:   testCloud0.makeZone(testCloud0.Location, 1),
 			},
 			expectedErr: false,
 		},
@@ -471,7 +472,7 @@ func TestGetLabelsForVolume(t *testing.T) {
 			},
 			existedDisk: compute.Disk{Name: to.StringPtr(diskName), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB}},
 			expected: map[string]string{
-				LabelFailureDomainBetaRegion: testCloud0.Location,
+				consts.LabelFailureDomainBetaRegion: testCloud0.Location,
 			},
 			expectedErr:    false,
 			expectedErrMsg: nil,
