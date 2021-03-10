@@ -43,6 +43,8 @@ else
 	IMAGE_TAG ?= $(TAG)
 endif
 
+DOCKER_CLI_EXPERIMENTAL := enabled
+
 # cloud controller manager image
 IMAGE_NAME=azure-cloud-controller-manager
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
@@ -80,13 +82,19 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-co
 ## Images
 ## --------------------------------------
 
+.PHONY: docker-pull-prerequisites
+docker-pull-prerequisites:
+	docker pull docker/dockerfile:1.1-experimental
+	docker pull docker.io/library/golang:1.15.8-stretch
+	docker pull gcr.io/distroless/static:latest
+
 .PHONY: build-ccm-image
-build-ccm-image:
-	docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
+build-ccm-image: docker-pull-prerequisites
+	DOCKER_BUILDKIT=1 docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image
-build-node-image:
-	docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
+build-node-image: docker-pull-prerequisites
+	DOCKER_BUILDKIT=1 docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image-windows
 build-node-image-windows:
