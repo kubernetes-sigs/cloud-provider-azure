@@ -79,8 +79,9 @@ type nodeIdentity struct {
 type ScaleSet struct {
 	*Cloud
 
-	// availabilitySet is also required for ScaleSet because some instances
-	// (e.g. master nodes) may not belong to any scale sets.
+	// availabilitySet is also required for scaleSet because some instances
+	// (e.g. control plane nodes) may not belong to any scale sets.
+	// this also allows for clusters with both VM and VMSS nodes.
 	availabilitySet VMSet
 
 	vmssCache                 *azcache.TimedCache

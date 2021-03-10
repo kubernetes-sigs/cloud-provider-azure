@@ -57,6 +57,11 @@ type vmssEntry struct {
 	lastUpdate    time.Time
 }
 
+type availabilitySetEntry struct {
+	vmNames   sets.String
+	nodeNames sets.String
+}
+
 func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{} // [vmssName]*vmssEntry
@@ -272,7 +277,7 @@ func (ss *ScaleSet) deleteCacheForNode(nodeName string) error {
 
 func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
-		localCache := sets.NewString()
+		vmNames := sets.NewString()
 		resourceGroups, err := ss.GetResourceGroups()
 		if err != nil {
 			return nil, err
@@ -286,9 +291,20 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 
 			for _, vm := range vmList {
 				if vm.Name != nil {
-					localCache.Insert(*vm.Name)
+					vmNames.Insert(*vm.Name)
 				}
 			}
+		}
+
+		// store all the node names in the cluster when the cache data was created.
+		nodeNames, err := ss.GetNodeNames()
+		if err != nil {
+			return nil, err
+		}
+
+		localCache := availabilitySetEntry{
+			vmNames:   vmNames,
+			nodeNames: nodeNames,
 		}
 
 		return localCache, nil
@@ -312,6 +328,16 @@ func (ss *ScaleSet) isNodeManagedByAvailabilitySet(nodeName string, crt azcache.
 		return false, err
 	}
 
-	availabilitySetNodes := cached.(sets.String)
-	return availabilitySetNodes.Has(nodeName), nil
+	cachedNodes := cached.(availabilitySetEntry).nodeNames
+	// if the node is not in the cache, assume the node has joined after the last cache refresh and attempt to refresh the cache.
+	if !cachedNodes.Has(nodeName) {
+		klog.V(2).Infof("Node %s has joined the cluster since the last VM cache refresh, refreshing the cache", nodeName)
+		cached, err = ss.availabilitySetNodesCache.Get(availabilitySetNodesKey, azcache.CacheReadTypeForceRefresh)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	cachedVMs := cached.(availabilitySetEntry).vmNames
+	return cachedVMs.Has(nodeName), nil
 }
