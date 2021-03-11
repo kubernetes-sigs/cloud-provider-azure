@@ -512,7 +512,7 @@ func createStatefulSetWithPVCManifest(name string, replicas int32, label map[str
 						},
 						Resources: v1.ResourceRequirements{
 							Requests: v1.ResourceList{
-								v1.ResourceName(v1.ResourceStorage): resource.MustParse("10Gi"),
+								v1.ResourceStorage: resource.MustParse("10Gi"),
 							},
 						},
 					},
