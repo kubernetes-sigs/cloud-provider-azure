@@ -106,6 +106,15 @@ const (
 
 	// StrRawVersion is the raw version string
 	StrRawVersion string = "raw"
+
+	// VirtualMachineScaleSetsDeallocating indicates VMSS instances are in Deallocating state.
+	VirtualMachineScaleSetsDeallocating = "Deallocating"
+	// VmssMachineIDTemplate is the vmss manchine ID template
+	VmssMachineIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/%s"
+	// VMSetCIDRIPV4TagKey specifies the node ipv4 CIDR mask of the instances on the VMSS or VMAS
+	VMSetCIDRIPV4TagKey = "kubernetesNodeCIDRMaskIPV4"
+	// VMSetCIDRIPV6TagKey specifies the node ipv6 CIDR mask of the instances on the VMSS or VMAS
+	VMSetCIDRIPV6TagKey = "kubernetesNodeCIDRMaskIPV6"
 )
 
 // azure cloud config
