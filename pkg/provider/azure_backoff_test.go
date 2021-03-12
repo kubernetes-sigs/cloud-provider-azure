@@ -506,7 +506,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		{
 			vmss: compute.VirtualMachineScaleSet{
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					ProvisioningState: to.StringPtr(virtualMachineScaleSetsDeallocating),
+					ProvisioningState: to.StringPtr(consts.VirtualMachineScaleSetsDeallocating),
 				},
 			},
 		},

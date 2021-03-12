@@ -1207,7 +1207,7 @@ func TestGetVmssMachineID(t *testing.T) {
 
 	subscriptionID, resourceGroup, scaleSetName, instanceID := "sub", "RG", "vmss", "id"
 	VMSSMachineID := ss.cloud.getVmssMachineID(subscriptionID, resourceGroup, scaleSetName, instanceID)
-	expectedVMSSMachineID := fmt.Sprintf(vmssMachineIDTemplate, subscriptionID, strings.ToLower(resourceGroup), scaleSetName, instanceID)
+	expectedVMSSMachineID := fmt.Sprintf(consts.VmssMachineIDTemplate, subscriptionID, strings.ToLower(resourceGroup), scaleSetName, instanceID)
 	assert.Equal(t, expectedVMSSMachineID, VMSSMachineID, "GetVmssMachineID should return the correct VMSS machine ID")
 }
 
@@ -1977,7 +1977,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = to.StringPtr(virtualMachineScaleSetsDeallocating)
+			expectedVMSS.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2251,7 +2251,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = to.StringPtr(virtualMachineScaleSetsDeallocating)
+			expectedVMSS.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2464,8 +2464,8 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				VMSetCIDRIPV4TagKey: to.StringPtr("24"),
-				VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
 			},
 			expectedIPV4MaskSize: 24,
 			expectedIPV6MaskSize: 64,
@@ -2474,7 +2474,7 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes even if some of the tags are not specified",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
 			},
 			expectedIPV4MaskSize: 24,
 		},
@@ -2482,8 +2482,8 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should fail even if some of the tag is invalid",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
-				VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
+				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
 			},
 			expectedIPV6MaskSize: 64,
 		},

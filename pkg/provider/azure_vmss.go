@@ -36,6 +36,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
@@ -48,18 +49,6 @@ var (
 	vmssIPConfigurationRE  = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces(?:.*)`)
 	vmssPIPConfigurationRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces/(.+)/ipConfigurations/(.+)/publicIPAddresses/(.+)`)
 	vmssVMProviderIDRE     = regexp.MustCompile(`azure:///subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
-)
-
-const (
-	// virtualMachineScaleSetsDeallocating indicates VMSS instances are in Deallocating state.
-	virtualMachineScaleSetsDeallocating = "Deallocating"
-
-	vmssMachineIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/%s"
-
-	// VMSetCIDRIPV4TagKey specifies the node ipv4 CIDR mask of the instances on the VMSS or VMAS
-	VMSetCIDRIPV4TagKey = "kubernetesNodeCIDRMaskIPV4"
-	// VMSetCIDRIPV6TagKey specifies the node ipv6 CIDR mask of the instances on the VMSS or VMAS
-	VMSetCIDRIPV6TagKey = "kubernetesNodeCIDRMaskIPV6"
 )
 
 // vmssMetaInfo contains the metadata for a VMSS.
@@ -562,7 +551,7 @@ func (ss *ScaleSet) getPrimaryInterfaceID(machine compute.VirtualMachineScaleSet
 // getVmssMachineID returns the full identifier of a vmss virtual machine.
 func (az *Cloud) getVmssMachineID(subscriptionID, resourceGroup, scaleSetName, instanceID string) string {
 	return fmt.Sprintf(
-		vmssMachineIDTemplate,
+		consts.VmssMachineIDTemplate,
 		subscriptionID,
 		strings.ToLower(resourceGroup),
 		scaleSetName,
@@ -1098,7 +1087,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, virtualMachineScaleSetsDeallocating) {
+		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.VirtualMachineScaleSetsDeallocating) {
 			klog.V(3).Infof("ensureVMSSInPool: found vmss %s being deleted, skipping", vmssName)
 			continue
 		}
@@ -1447,7 +1436,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(service *v1.Service, backen
 
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
-		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, virtualMachineScaleSetsDeallocating) {
+		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.VirtualMachineScaleSetsDeallocating) {
 			klog.V(3).Infof("ensureVMSSInPool: found vmss %s being deleted, skipping", vmssName)
 			continue
 		}
@@ -1655,13 +1644,13 @@ func (ss *ScaleSet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, e
 	}
 
 	var ipv4Mask, ipv6Mask int
-	if v4, ok := vmss.Tags[VMSetCIDRIPV4TagKey]; ok && v4 != nil {
+	if v4, ok := vmss.Tags[consts.VMSetCIDRIPV4TagKey]; ok && v4 != nil {
 		ipv4Mask, err = strconv.Atoi(to.String(v4))
 		if err != nil {
 			klog.Errorf(" GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", to.String(v4), err)
 		}
 	}
-	if v6, ok := vmss.Tags[VMSetCIDRIPV6TagKey]; ok && v6 != nil {
+	if v6, ok := vmss.Tags[consts.VMSetCIDRIPV6TagKey]; ok && v6 != nil {
 		ipv6Mask, err = strconv.Atoi(to.String(v6))
 		if err != nil {
 			klog.Errorf(" GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", to.String(v6), err)
