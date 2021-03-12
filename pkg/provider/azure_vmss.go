@@ -1379,7 +1379,11 @@ func (ss *ScaleSet) GetNodeNameByIPConfigurationID(ipConfigurationID string) (st
 	matches := vmssIPConfigurationRE.FindStringSubmatch(ipConfigurationID)
 	if len(matches) != 4 {
 		klog.V(4).Infof("Can not extract scale set name from ipConfigurationID (%s), assuming it is managed by availability set", ipConfigurationID)
-		return "", "", ErrorNotVmssInstance
+		name, rg, err := ss.availabilitySet.GetNodeNameByIPConfigurationID(ipConfigurationID)
+		if err != nil {
+			return "", "", ErrorNotVmssInstance
+		}
+		return name, rg, nil
 	}
 
 	resourceGroup := matches[1]
