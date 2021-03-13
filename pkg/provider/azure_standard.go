@@ -24,6 +24,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
@@ -409,13 +411,67 @@ func MakeCRC32(str string) string {
 // availabilitySet implements VMSet interface for Azure availability sets.
 type availabilitySet struct {
 	*Cloud
+
+	vmasCache *azcache.TimedCache
+}
+
+type availabilitySetEntry struct {
+	vmas          *compute.AvailabilitySet
+	resourceGroup string
+}
+
+func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
+	getter := func(key string) (interface{}, error) {
+		localCache := &sync.Map{}
+
+		allResourceGroups, err := as.GetResourceGroups()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, resourceGroup := range allResourceGroups.List() {
+			allAvailabilitySets, rerr := as.AvailabilitySetsClient.List(context.Background(), resourceGroup)
+			if rerr != nil {
+				klog.Errorf("AvailabilitySetsClient.List failed: %v", rerr)
+				return nil, rerr.Error()
+			}
+
+			for i := range allAvailabilitySets {
+				vmas := allAvailabilitySets[i]
+				if strings.EqualFold(to.String(vmas.Name), "") {
+					klog.Warning("failed to get the name of the VMAS")
+					continue
+				}
+				localCache.Store(to.String(vmas.Name), &availabilitySetEntry{
+					vmas:          &vmas,
+					resourceGroup: resourceGroup,
+				})
+			}
+		}
+
+		return localCache, nil
+	}
+
+	if as.Config.AvailabilitySetsCacheTTLInSeconds == 0 {
+		as.Config.AvailabilitySetsCacheTTLInSeconds = consts.VMASCacheTTLDefaultInSeconds
+	}
+
+	return azcache.NewTimedcache(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter)
 }
 
 // newStandardSet creates a new availabilitySet.
-func newAvailabilitySet(az *Cloud) VMSet {
-	return &availabilitySet{
+func newAvailabilitySet(az *Cloud) (VMSet, error) {
+	as := &availabilitySet{
 		Cloud: az,
 	}
+
+	var err error
+	as.vmasCache, err = as.newVMASCache()
+	if err != nil {
+		return nil, err
+	}
+
+	return as, nil
 }
 
 // GetInstanceIDByNodeName gets the cloud provider ID by node name.
@@ -1062,7 +1118,83 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ipConfigurationID stri
 	return vmName, strings.ToLower(asName), nil
 }
 
+func (as *availabilitySet) getAvailabilitySetByNodeName(nodeName string, crt azcache.AzureCacheReadType) (*compute.AvailabilitySet, error) {
+	cached, err := as.vmasCache.Get(consts.VMASKey, crt)
+	if err != nil {
+		return nil, err
+	}
+	vmasList := cached.(*sync.Map)
+
+	if vmasList == nil {
+		klog.Warning("Couldn't get all vmas from cache")
+		return nil, nil
+	}
+
+	var result *compute.AvailabilitySet
+	vmasList.Range(func(_, value interface{}) bool {
+		vmasEntry := value.(*availabilitySetEntry)
+		vmas := vmasEntry.vmas
+		if vmas != nil && vmas.AvailabilitySetProperties != nil && vmas.VirtualMachines != nil {
+			for _, vmIDRef := range *vmas.VirtualMachines {
+				if vmIDRef.ID != nil {
+					matches := vmIDRE.FindStringSubmatch(to.String(vmIDRef.ID))
+					if len(matches) != 2 {
+						err = fmt.Errorf("invalid vm ID %s", to.String(vmIDRef.ID))
+						return false
+					}
+
+					vmName := matches[1]
+					if strings.EqualFold(vmName, nodeName) {
+						result = vmas
+						return false
+					}
+				}
+			}
+		}
+
+		return true
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		klog.Warningf("failed to find the vmas of node %s", nodeName)
+		return nil, cloudprovider.InstanceNotFound
+	}
+
+	return result, nil
+}
+
 // GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
 func (as *availabilitySet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, error) {
-	return 0, 0, cloudprovider.NotImplemented
+	nodeName, err := as.GetNodeNameByProviderID(providerID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	vmas, err := as.getAvailabilitySetByNodeName(string(nodeName), azcache.CacheReadTypeDefault)
+	if err != nil {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
+			return consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6, nil
+		}
+		return 0, 0, err
+	}
+
+	var ipv4Mask, ipv6Mask int
+	if v4, ok := vmas.Tags[consts.VMSetCIDRIPV4TagKey]; ok && v4 != nil {
+		ipv4Mask, err = strconv.Atoi(to.String(v4))
+		if err != nil {
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", to.String(v4), err)
+		}
+	}
+	if v6, ok := vmas.Tags[consts.VMSetCIDRIPV6TagKey]; ok && v6 != nil {
+		ipv6Mask, err = strconv.Atoi(to.String(v6))
+		if err != nil {
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", to.String(v6), err)
+		}
+	}
+
+	return ipv4Mask, ipv6Mask, nil
 }

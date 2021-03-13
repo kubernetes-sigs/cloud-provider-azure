@@ -30,17 +30,7 @@ import (
 	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-)
-
-var (
-	vmssNameSeparator = "_"
-
-	vmssKey                 = "k8svmssKey"
-	availabilitySetNodesKey = "k8sAvailabilitySetNodesKey"
-
-	availabilitySetNodesCacheTTLDefaultInSeconds = 900
-	vmssCacheTTLDefaultInSeconds                 = 600
-	vmssVirtualMachinesCacheTTLDefaultInSeconds  = 600
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 type vmssVirtualMachinesEntry struct {
@@ -57,14 +47,14 @@ type vmssEntry struct {
 	lastUpdate    time.Time
 }
 
-type availabilitySetEntry struct {
+type availabilitySetNodeEntry struct {
 	vmNames   sets.String
 	nodeNames sets.String
 }
 
 func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
-		localCache := &sync.Map{} // [vmssName]*vmssEntry
+		localCache := &sync.Map{} // [vmasName]*vmssEntry
 
 		allResourceGroups, err := ss.GetResourceGroups()
 		if err != nil {
@@ -96,13 +86,13 @@ func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 	}
 
 	if ss.Config.VmssCacheTTLInSeconds == 0 {
-		ss.Config.VmssCacheTTLInSeconds = vmssCacheTTLDefaultInSeconds
+		ss.Config.VmssCacheTTLInSeconds = consts.VMSSCacheTTLDefaultInSeconds
 	}
 	return azcache.NewTimedcache(time.Duration(ss.Config.VmssCacheTTLInSeconds)*time.Second, getter)
 }
 
 func extractVmssVMName(name string) (string, string, error) {
-	split := strings.SplitAfter(name, vmssNameSeparator)
+	split := strings.SplitAfter(name, consts.VMSSNameSeparator)
 	if len(split) < 2 {
 		klog.V(3).Infof("Failed to extract vmssVMName %q", name)
 		return "", "", ErrorNotVmssInstance
@@ -133,7 +123,7 @@ func (ss *ScaleSet) getVMSSVMCache(resourceGroup, vmssName string) (string, *azc
 
 // gcVMSSVMCache delete stale VMSS VMs caches from deleted VMSSes.
 func (ss *ScaleSet) gcVMSSVMCache() error {
-	cached, err := ss.vmssCache.Get(vmssKey, azcache.CacheReadTypeUnsafe)
+	cached, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return err
 	}
@@ -302,7 +292,7 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 			return nil, err
 		}
 
-		localCache := availabilitySetEntry{
+		localCache := availabilitySetNodeEntry{
 			vmNames:   vmNames,
 			nodeNames: nodeNames,
 		}
@@ -311,7 +301,7 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 	}
 
 	if ss.Config.AvailabilitySetNodesCacheTTLInSeconds == 0 {
-		ss.Config.AvailabilitySetNodesCacheTTLInSeconds = availabilitySetNodesCacheTTLDefaultInSeconds
+		ss.Config.AvailabilitySetNodesCacheTTLInSeconds = consts.AvailabilitySetNodesCacheTTLDefaultInSeconds
 	}
 	return azcache.NewTimedcache(time.Duration(ss.Config.AvailabilitySetNodesCacheTTLInSeconds)*time.Second, getter)
 }
@@ -323,21 +313,21 @@ func (ss *ScaleSet) isNodeManagedByAvailabilitySet(nodeName string, crt azcache.
 		return false, nil
 	}
 
-	cached, err := ss.availabilitySetNodesCache.Get(availabilitySetNodesKey, crt)
+	cached, err := ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, crt)
 	if err != nil {
 		return false, err
 	}
 
-	cachedNodes := cached.(availabilitySetEntry).nodeNames
+	cachedNodes := cached.(availabilitySetNodeEntry).nodeNames
 	// if the node is not in the cache, assume the node has joined after the last cache refresh and attempt to refresh the cache.
 	if !cachedNodes.Has(nodeName) {
 		klog.V(2).Infof("Node %s has joined the cluster since the last VM cache refresh, refreshing the cache", nodeName)
-		cached, err = ss.availabilitySetNodesCache.Get(availabilitySetNodesKey, azcache.CacheReadTypeForceRefresh)
+		cached, err = ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
 			return false, err
 		}
 	}
 
-	cachedVMs := cached.(availabilitySetEntry).vmNames
+	cachedVMs := cached.(availabilitySetNodeEntry).vmNames
 	return cachedVMs.Has(nodeName), nil
 }

@@ -2479,7 +2479,7 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			expectedIPV4MaskSize: 24,
 		},
 		{
-			description: "GetNodeCIDRMaksByProviderID should fail even if some of the tag is invalid",
+			description: "GetNodeCIDRMaksByProviderID should not fail even if some of the tag is invalid",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
 				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
