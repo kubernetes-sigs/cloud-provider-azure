@@ -20,6 +20,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/Azure/go-autorest/autorest/to"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -95,6 +97,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		lbBackendAddressPoolsIDMap := make(map[string]bool)
 		for _, backendAddressPool := range *lb.BackendAddressPools {
+			utils.Logf("found backend pool %s", to.String(backendAddressPool.ID))
 			lbBackendAddressPoolsIDMap[*backendAddressPool.ID] = true
 		}
 
@@ -106,9 +109,15 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				continue
 			}
 			for _, ipConfig := range *nic.IPConfigurations {
+				if found {
+					break
+				}
+				utils.Logf("found ip config %s", to.String(ipConfig.Name))
 				for _, backendAddressPool := range *ipConfig.LoadBalancerBackendAddressPools {
+					utils.Logf("found backend pool on nic %s", to.String(backendAddressPool.ID))
 					if lbBackendAddressPoolsIDMap[*backendAddressPool.ID] {
 						found = true
+						break
 					}
 				}
 			}
