@@ -18,18 +18,16 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
-)
 
-const (
-	tagsDelimiter        = ","
-	tagKeyValueDelimiter = "="
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // lockMap used to lock on entries
@@ -84,31 +82,6 @@ func getContextWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
 }
 
-// ConvertTagsToMap convert the tags from string to map
-// the valid tags format is "key1=value1,key2=value2", which could be converted to
-// {"key1": "value1", "key2": "value2"}
-func ConvertTagsToMap(tags string) (map[string]string, error) {
-	m := make(map[string]string)
-	if tags == "" {
-		return m, nil
-	}
-	s := strings.Split(tags, tagsDelimiter)
-	for _, tag := range s {
-		kv := strings.Split(tag, tagKeyValueDelimiter)
-		if len(kv) != 2 {
-			return nil, fmt.Errorf("Tags '%s' are invalid, the format should like: 'key1=value1,key2=value2'", tags)
-		}
-		key := strings.TrimSpace(kv[0])
-		if key == "" {
-			return nil, fmt.Errorf("Tags '%s' are invalid, the format should like: 'key1=value1,key2=value2'", tags)
-		}
-		value := strings.TrimSpace(kv[1])
-		m[key] = value
-	}
-
-	return m, nil
-}
-
 func convertMapToMapPointer(origin map[string]string) map[string]*string {
 	newly := make(map[string]*string)
 	for k, v := range origin {
@@ -119,10 +92,10 @@ func convertMapToMapPointer(origin map[string]string) map[string]*string {
 }
 
 func parseTags(tags string) map[string]*string {
-	kvs := strings.Split(tags, ",")
+	kvs := strings.Split(tags, consts.TagsDelimiter)
 	formatted := make(map[string]*string)
 	for _, kv := range kvs {
-		res := strings.Split(kv, "=")
+		res := strings.Split(kv, consts.TagKeyValueDelimiter)
 		if len(res) != 2 {
 			klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
 			continue
@@ -135,4 +108,37 @@ func parseTags(tags string) map[string]*string {
 		formatted[k] = to.StringPtr(v)
 	}
 	return formatted
+}
+
+func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string) (reconciledTags map[string]*string, changed bool) {
+	var systemTags []string
+	var systemTagsMap sets.String
+
+	if az.SystemTags != "" {
+		systemTags = strings.Split(az.SystemTags, consts.TagsDelimiter)
+		for i := 0; i < len(systemTags); i++ {
+			systemTags[i] = strings.TrimSpace(systemTags[i])
+		}
+		systemTagsMap = sets.NewString(systemTags...)
+	}
+
+	// if the systemTags is not set, just add/update new currentTagsOnResource and not delete old currentTagsOnResource
+	for k, v := range newTags {
+		if vv, ok := currentTagsOnResource[k]; !ok || !strings.EqualFold(to.String(v), to.String(vv)) {
+			currentTagsOnResource[k] = v
+			changed = true
+		}
+	}
+
+	// if the systemTags is set, delete the old currentTagsOnResource
+	if len(systemTagsMap) > 0 {
+		for k := range currentTagsOnResource {
+			if _, ok := newTags[k]; !ok && !systemTagsMap.Has(k) {
+				delete(currentTagsOnResource, k)
+				changed = true
+			}
+		}
+	}
+
+	return currentTagsOnResource, changed
 }

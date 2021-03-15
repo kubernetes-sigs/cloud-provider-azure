@@ -3767,27 +3767,48 @@ func buildDefaultTestLB(name string, backendIPConfigs []string) network.LoadBala
 }
 
 func TestEnsurePIPTagged(t *testing.T) {
-	t.Run("ensurePIPTagged should ensure the pip is tagged as configured", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		cloud := GetTestCloud(ctrl)
-		cloud.Tags = "a=x,y=z"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		service := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAzurePIPTags: "a=b,c=d,e=,=f,ghi",
-				},
+	cloud := GetTestCloud(ctrl)
+	cloud.Tags = "a=x,y=z"
+
+	service := v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				consts.ServiceAnnotationAzurePIPTags: "a=b,c=d,e=,=f,ghi",
 			},
-		}
-		pip := network.PublicIPAddress{
+		},
+	}
+	pip := network.PublicIPAddress{
+		Tags: map[string]*string{
+			consts.ClusterNameKey: to.StringPtr("testCluster"),
+			consts.ServiceTagKey:  to.StringPtr("default/svc1,default/svc2"),
+			"foo":                 to.StringPtr("bar"),
+			"a":                   to.StringPtr("j"),
+			"m":                   to.StringPtr("n"),
+		},
+	}
+
+	t.Run("ensurePIPTagged should ensure the pip is tagged as configured", func(t *testing.T) {
+		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
 				consts.ClusterNameKey: to.StringPtr("testCluster"),
 				consts.ServiceTagKey:  to.StringPtr("default/svc1,default/svc2"),
 				"foo":                 to.StringPtr("bar"),
-				"a":                   to.StringPtr("j"),
+				"a":                   to.StringPtr("b"),
+				"c":                   to.StringPtr("d"),
+				"y":                   to.StringPtr("z"),
+				"m":                   to.StringPtr("n"),
 			},
 		}
+		changed := cloud.ensurePIPTagged(&service, &pip)
+		assert.True(t, changed)
+		assert.Equal(t, expectedPIP, pip)
+	})
+
+	t.Run("ensurePIPTagged should delete the old tags if tht SystemTags is set", func(t *testing.T) {
+		cloud.SystemTags = "a,foo"
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
 				consts.ClusterNameKey: to.StringPtr("testCluster"),
@@ -3802,6 +3823,45 @@ func TestEnsurePIPTagged(t *testing.T) {
 		assert.True(t, changed)
 		assert.Equal(t, expectedPIP, pip)
 	})
+}
+
+func TestEnsureLoadBalancerTagged(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description               string
+		existedTags, expectedTags map[string]*string
+		newTags, systemTags       string
+		expectedChanged           bool
+	}{
+		{
+			description:     "ensureLoadBalancerTagged should not delete the old tags if SystemTags is not specified",
+			existedTags:     map[string]*string{"a": to.StringPtr("b")},
+			newTags:         "c=d",
+			expectedTags:    map[string]*string{"a": to.StringPtr("b"), "c": to.StringPtr("d")},
+			expectedChanged: true,
+		},
+		{
+			description:     "ensureLoadBalancerTagged should delete the old tags if SystemTags is specified",
+			existedTags:     map[string]*string{"a": to.StringPtr("b"), "c": to.StringPtr("d"), "h": to.StringPtr("i")},
+			newTags:         "c=e,f=g",
+			systemTags:      "a,x,y,z",
+			expectedTags:    map[string]*string{"a": to.StringPtr("b"), "c": to.StringPtr("e"), "f": to.StringPtr("g")},
+			expectedChanged: true,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.Tags = tc.newTags
+			cloud.SystemTags = tc.systemTags
+			lb := &network.LoadBalancer{Tags: tc.existedTags}
+
+			changed := cloud.ensureLoadBalancerTagged(lb)
+			assert.Equal(t, tc.expectedChanged, changed)
+			assert.Equal(t, tc.expectedTags, lb.Tags)
+		})
+	}
 }
 
 func TestShouldChangeLoadBalancer(t *testing.T) {
