@@ -97,14 +97,17 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		lbBackendAddressPoolsIDMap := make(map[string]bool)
 		for _, backendAddressPool := range *lb.BackendAddressPools {
-			utils.Logf("found backend pool %s", to.String(backendAddressPool.ID))
-			lbBackendAddressPoolsIDMap[*backendAddressPool.ID] = true
+			backendAddressPoolID := to.String(backendAddressPool.ID)
+			lbBackendAddressPoolsIDMap[backendAddressPoolID] = true
+			utils.Logf("found backend pool %s", backendAddressPoolID)
 		}
+		utils.Logf("got lbBackendAddressPoolsIDMap: %v", lbBackendAddressPoolsIDMap)
 
 		NICList, err := utils.ListNICs(tc, rgName)
 		Expect(err).NotTo(HaveOccurred())
 		var found bool
 		for _, nic := range *NICList {
+			found = false
 			if strings.Split(*nic.Name, "-")[1] == "master" {
 				continue
 			}
@@ -114,8 +117,15 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				}
 				utils.Logf("found ip config %s", to.String(ipConfig.Name))
 				for _, backendAddressPool := range *ipConfig.LoadBalancerBackendAddressPools {
-					utils.Logf("found backend pool on nic %s", to.String(backendAddressPool.ID))
-					if lbBackendAddressPoolsIDMap[*backendAddressPool.ID] {
+					backendAddressPoolID := to.String(backendAddressPool.ID)
+					utils.Logf("found backend pool on nic %s", backendAddressPoolID)
+					if v, ok := lbBackendAddressPoolsIDMap[backendAddressPoolID]; ok {
+						utils.Logf("value: %v", v)
+					} else {
+						utils.Logf("not found")
+					}
+					if lbBackendAddressPoolsIDMap[backendAddressPoolID] {
+						utils.Logf("setting found = true")
 						found = true
 						break
 					}
