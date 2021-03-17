@@ -186,6 +186,10 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 				disk.DiskProperties.Encryption.DiskEncryptionSetID != nil {
 				diskEncryptionSetID = *disk.DiskProperties.Encryption.DiskEncryptionSetID
 			}
+
+			if disk.DiskProperties.DiskState != compute.Unattached && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
+				return -1, fmt.Errorf("state of disk(%s) is %s, not in expected %s state", diskURI, disk.DiskProperties.DiskState, compute.Unattached)
+			}
 		}
 
 		if v, ok := disk.Tags[WriteAcceleratorEnabled]; ok {
