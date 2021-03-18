@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -28,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -42,6 +44,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -3857,6 +3860,34 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "lb", gomock.Any(), gomock.Any()).Return(nil)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, fip, "testCluster", &service)
+		assert.NoError(t, err)
+	})
+}
+
+func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	t.Run("cleanOrphanedLoadBalancer should retry deleting lb when meeting LoadBalancerInUseByVirtualMachineScaleSet", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		vmss, err := newScaleSet(cloud)
+		assert.NoError(t, err)
+		cloud.VMSet = vmss
+		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
+
+		mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "test").Return(&retry.Error{RawError: errors.New(retry.LBInUseRawError)})
+		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "test").Return(nil)
+
+		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+		mockVMSSClient := cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), "rg").Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil)
+
+		service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
+		lb := getTestLoadBalancer(to.StringPtr("test"), to.StringPtr("rg"), to.StringPtr("test"), to.StringPtr("test"), service, consts.LoadBalancerSkuStandard)
+		(*lb.BackendAddressPools)[0].ID = to.StringPtr(testLBBackendpoolID0)
+
+		err = cloud.cleanOrphanedLoadBalancer(&lb, &service, "test")
 		assert.NoError(t, err)
 	})
 }

@@ -1066,3 +1066,8 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ipConfigurationID stri
 func (as *availabilitySet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, error) {
 	return 0, 0, cloudprovider.NotImplemented
 }
+
+//EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMAS
+func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(vmasNamesMap map[string]bool, backendPoolID string) error {
+	return nil
+}

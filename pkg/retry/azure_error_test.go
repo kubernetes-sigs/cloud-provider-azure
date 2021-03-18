@@ -364,3 +364,28 @@ func TestHasErrorCode(t *testing.T) {
 	result = HasStatusForbiddenOrIgnoredError(fmt.Errorf("HTTPStatusCode: %d", http.StatusForbidden))
 	assert.True(t, result)
 }
+
+func TestParseRawError(t *testing.T) {
+	rawError := LBInUseRawError
+	errStruct, err := ParseRawError(rawError)
+	fmt.Println(err)
+	if errStruct != nil {
+		fmt.Println(*errStruct)
+	}
+	assert.NoError(t, err)
+
+	expectedErrStruct := &RawErrorContainer{
+		Code:    "LoadBalancerInUseByVirtualMachineScaleSet",
+		Message: "Cannot delete load balancer /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb since its child resources lb are in use by virtual machine scale set /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss.",
+		Details: []string{},
+	}
+	assert.Equal(t, expectedErrStruct, errStruct)
+}
+
+func TestGetVMSSNameByRawError(t *testing.T) {
+	rawError := LBInUseRawError
+	rgName, vmssName, err := GetVMSSMetadataByRawError(rawError)
+	assert.NoError(t, err)
+	assert.Equal(t, "rg", rgName)
+	assert.Equal(t, "vmss", vmssName)
+}
