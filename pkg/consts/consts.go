@@ -115,6 +115,11 @@ const (
 	VMSetCIDRIPV4TagKey = "kubernetesNodeCIDRMaskIPV4"
 	// VMSetCIDRIPV6TagKey specifies the node ipv6 CIDR mask of the instances on the VMSS or VMAS
 	VMSetCIDRIPV6TagKey = "kubernetesNodeCIDRMaskIPV6"
+
+	// TagsDelimiter is the delimiter of tags
+	TagsDelimiter = ","
+	// TagKeyValueDelimiter is the delimiter between keys and values in tagas
+	TagKeyValueDelimiter = "="
 )
 
 // azure cloud config

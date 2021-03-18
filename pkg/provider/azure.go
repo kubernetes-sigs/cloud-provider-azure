@@ -138,6 +138,10 @@ type Config struct {
 	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
 	// this config, the old tags would be replaced by the new ones.
 	Tags string `json:"tags,omitempty" yaml:"tags,omitempty"`
+	// SystemTags determines the tag keys managed by cloud provider. If it is not set, no tags would be deleted if
+	// the `Tags` is changed. However, the old tags would be deleted if they are neither included in `Tags` nor
+	// in `SystemTags` after the update of `Tags`.
+	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
 	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
 	// If not set, it will be default to basic.
 	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
