@@ -85,10 +85,25 @@ func TestCommonAttachDisk(t *testing.T) {
 				DiskProperties: &compute.DiskProperties{
 					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
 					DiskSizeGB: to.Int32Ptr(4096),
+					DiskState:  compute.Unattached,
 				},
 				Tags: testTags},
 			expectedLun: 1,
 			expectedErr: false,
+		},
+		{
+			desc:     "an error shall be returned if disk state is not Unattached",
+			vmList:   map[string]string{"vm1": "PowerState/Running"},
+			nodeName: "vm1",
+			existedDisk: compute.Disk{Name: to.StringPtr("disk-name"),
+				DiskProperties: &compute.DiskProperties{
+					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
+					DiskSizeGB: to.Int32Ptr(4096),
+					DiskState:  compute.Attached,
+				},
+				Tags: testTags},
+			expectedLun: -1,
+			expectedErr: true,
 		},
 		{
 			desc:         "an error shall be returned if there's invalid disk uri",
