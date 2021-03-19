@@ -1198,3 +1198,8 @@ func (as *availabilitySet) GetNodeCIDRMasksByProviderID(providerID string) (int,
 
 	return ipv4Mask, ipv6Mask, nil
 }
+
+//EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMAS
+func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(vmasNamesMap map[string]bool, backendPoolID string) error {
+	return nil
+}

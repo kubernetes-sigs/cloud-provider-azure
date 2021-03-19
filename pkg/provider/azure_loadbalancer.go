@@ -371,10 +371,42 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 
 		// Remove the LB.
 		klog.V(10).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): az.DeleteLB starts", lbName, serviceName, clusterName)
-		err = az.DeleteLB(service, lbName)
-		if err != nil {
-			klog.V(2).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): failed to DeleteLB: %v", lbName, serviceName, clusterName, err)
-			return err
+		deleteErr := az.DeleteLB(service, lbName)
+		if deleteErr != nil {
+			klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to DeleteLB: %v", lbName, serviceName, clusterName, deleteErr)
+
+			rgName, vmssName, parseErr := retry.GetVMSSMetadataByRawError(deleteErr.Error())
+			if parseErr != nil {
+				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to parse error: %v", lbName, serviceName, clusterName, parseErr)
+				return deleteErr
+			}
+			if rgName == "" || vmssName == "" {
+				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): empty rgName or vmssName", lbName, serviceName, clusterName)
+				return deleteErr
+			}
+
+			// if we reach here, it means the VM couldn't be deleted because it is being referenced by a VMSS
+			if _, ok := az.VMSet.(*ScaleSet); !ok {
+				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): unexpected VMSet type, expected VMSS", lbName, serviceName, clusterName)
+				return deleteErr
+			}
+
+			if !strings.EqualFold(rgName, az.ResourceGroup) {
+				return fmt.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): the VMSS %s is in the resource group %s, but is referencing the LB in %s", lbName, serviceName, clusterName, vmssName, rgName, az.ResourceGroup)
+			}
+
+			vmssNamesMap := map[string]bool{vmssName: true}
+			err := az.VMSet.EnsureBackendPoolDeletedFromVMSets(vmssNamesMap, lbBackendPoolID)
+			if err != nil {
+				klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to EnsureBackendPoolDeletedFromVMSets: %v", lbName, serviceName, clusterName, err)
+				return err
+			}
+
+			deleteErr := az.DeleteLB(service, lbName)
+			if deleteErr != nil {
+				klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed delete lb for the second time, stop retrying: %v", lbName, serviceName, clusterName, deleteErr)
+				return deleteErr
+			}
 		}
 		klog.V(10).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): az.DeleteLB finished", lbName, serviceName, clusterName)
 	}
