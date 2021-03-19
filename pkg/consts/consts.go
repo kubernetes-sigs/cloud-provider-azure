@@ -122,6 +122,26 @@ const (
 	TagKeyValueDelimiter = "="
 )
 
+// cache
+const (
+	// VMSSNameSeparator is the separator of the vmss names
+	VMSSNameSeparator = "_"
+	// VMSSKey is the key when querying vmss cache
+	VMSSKey = "k8svmssKey"
+	// VMASKey is the key when querying vmss cache
+	VMASKey = "k8svmasKey"
+	// AvailabilitySetNodesKey is the availability set nodes key
+	AvailabilitySetNodesKey = "k8sAvailabilitySetNodesKey"
+	// AvailabilitySetNodesCacheTTLDefaultInSeconds is the TTL of the availabilitySet node cache
+	AvailabilitySetNodesCacheTTLDefaultInSeconds = 900
+	// VMSSCacheTTLDefaultInSeconds is the TTL of the vmss cache
+	VMSSCacheTTLDefaultInSeconds = 600
+	// VMSSVirtualMachinesCacheTTLDefaultInSeconds is the TTL of the vmss vm cache
+	VMSSVirtualMachinesCacheTTLDefaultInSeconds = 600
+	// VMASCacheTTLDefaultInSeconds is the TTL of the vmas cache
+	VMASCacheTTLDefaultInSeconds = 600
+)
+
 // azure cloud config
 const (
 	// CloudProviderName is the value used for the --cloud-provider flag

@@ -81,15 +81,20 @@ type ScaleSet struct {
 // newScaleSet creates a new ScaleSet.
 func newScaleSet(az *Cloud) (VMSet, error) {
 	if az.Config.VmssVirtualMachinesCacheTTLInSeconds == 0 {
-		az.Config.VmssVirtualMachinesCacheTTLInSeconds = vmssVirtualMachinesCacheTTLDefaultInSeconds
-	}
-	ss := &ScaleSet{
-		Cloud:           az,
-		availabilitySet: newAvailabilitySet(az),
-		vmssVMCache:     &sync.Map{},
+		az.Config.VmssVirtualMachinesCacheTTLInSeconds = consts.VMSSVirtualMachinesCacheTTLDefaultInSeconds
 	}
 
 	var err error
+	as, err := newAvailabilitySet(az)
+	if err != nil {
+		return nil, err
+	}
+	ss := &ScaleSet{
+		Cloud:           az,
+		availabilitySet: as,
+		vmssVMCache:     &sync.Map{},
+	}
+
 	if !ss.DisableAvailabilitySetNodes {
 		ss.availabilitySetNodesCache, err = ss.newAvailabilitySetNodesCache()
 		if err != nil {
@@ -107,7 +112,7 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 
 func (ss *ScaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {
 	getter := func(vmssName string) (*compute.VirtualMachineScaleSet, error) {
-		cached, err := ss.vmssCache.Get(vmssKey, crt)
+		cached, err := ss.vmssCache.Get(consts.VMSSKey, crt)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +135,7 @@ func (ss *ScaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*c
 	}
 
 	klog.V(2).Infof("Couldn't find VMSS with name %s, refreshing the cache", vmssName)
-	_ = ss.vmssCache.Delete(vmssKey)
+	_ = ss.vmssCache.Delete(consts.VMSSKey)
 	vmss, err = getter(vmssName)
 	if err != nil {
 		return nil, err
@@ -632,7 +637,7 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 			nodeName: nodeName,
 		}
 
-		cached, err := ss.vmssCache.Get(vmssKey, crt)
+		cached, err := ss.vmssCache.Get(consts.VMSSKey, crt)
 		if err != nil {
 			return nil, err
 		}
@@ -915,7 +920,7 @@ func (ss *ScaleSet) getConfigForScaleSetByIPFamily(config *compute.VirtualMachin
 }
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
-// participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmssName, instanceID, vmssVM, error).
+// participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
 func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string, isInternal bool) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	klog.V(3).Infof("ensuring node %q of scaleset %q in LB backendpool %q", nodeName, vmSetName, backendPoolID)
 	vmName := mapNodeNameToVMName(nodeName)
@@ -1296,7 +1301,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 }
 
 // ensureBackendPoolDeletedFromNode ensures the loadBalancer backendAddressPools deleted
-// from the specified node, which returns (resourceGroup, vmssName, instanceID, vmssVM, error).
+// from the specified node, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
 func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(nodeName, backendPoolID string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	ssName, instanceID, vm, err := ss.getVmssVM(nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -1647,13 +1652,13 @@ func (ss *ScaleSet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, e
 	if v4, ok := vmss.Tags[consts.VMSetCIDRIPV4TagKey]; ok && v4 != nil {
 		ipv4Mask, err = strconv.Atoi(to.String(v4))
 		if err != nil {
-			klog.Errorf(" GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", to.String(v4), err)
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv4 mask size %s: %v", to.String(v4), err)
 		}
 	}
 	if v6, ok := vmss.Tags[consts.VMSetCIDRIPV6TagKey]; ok && v6 != nil {
 		ipv6Mask, err = strconv.Atoi(to.String(v6))
 		if err != nil {
-			klog.Errorf(" GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", to.String(v6), err)
+			klog.Errorf("GetNodeCIDRMasksByProviderID: error when paring the value of the ipv6 mask size%s: %v", to.String(v6), err)
 		}
 	}
 

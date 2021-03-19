@@ -40,6 +40,7 @@ type CloudProviderRateLimitConfig struct {
 	SnapshotRateLimit               *azclients.RateLimitConfig `json:"snapshotRateLimit,omitempty" yaml:"snapshotRateLimit,omitempty"`
 	VirtualMachineScaleSetRateLimit *azclients.RateLimitConfig `json:"virtualMachineScaleSetRateLimit,omitempty" yaml:"virtualMachineScaleSetRateLimit,omitempty"`
 	VirtualMachineSizeRateLimit     *azclients.RateLimitConfig `json:"virtualMachineSizesRateLimit,omitempty" yaml:"virtualMachineSizesRateLimit,omitempty"`
+	AvailabilitySetRateLimit        *azclients.RateLimitConfig `json:"availabilitySetRateLimit,omitempty" yaml:"availabilitySetRateLimit,omitempty"`
 }
 
 // InitializeCloudProviderRateLimitConfig initializes rate limit configs.
@@ -76,6 +77,7 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 	config.SnapshotRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.SnapshotRateLimit)
 	config.VirtualMachineScaleSetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineScaleSetRateLimit)
 	config.VirtualMachineSizeRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineSizeRateLimit)
+	config.AvailabilitySetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.AvailabilitySetRateLimit)
 }
 
 // overrideDefaultRateLimitConfig overrides the default CloudProviderRateLimitConfig.

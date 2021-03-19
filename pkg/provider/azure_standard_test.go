@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -35,7 +36,9 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -1751,4 +1754,151 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "k8s-agentpool1-00000000-0", nodeName)
 	assert.Equal(t, "agentpool1-availabilityset-00000000", asName)
+}
+
+func TestGetAvailabilitySetByNodeName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		description   string
+		nodeName      string
+		vmasVMIDs     []string
+		vmasListError *retry.Error
+		expectedErr   error
+	}{
+		{
+			description: "getAvailabilitySetByNodeName should return the correct VMAS",
+			nodeName:    "vm-1",
+			vmasVMIDs:   []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"},
+		},
+		{
+			description: "getAvailabilitySetByNodeName should return cloudprovider.InstanceNotFound if there's no matching VMAS",
+			nodeName:    "vm-2",
+			vmasVMIDs:   []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"},
+			expectedErr: cloudprovider.InstanceNotFound,
+		},
+		{
+			description:   "getAvailabilitySetByNodeName should report an error if there's something wrong during an api call",
+			nodeName:      "vm-1",
+			vmasVMIDs:     []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1"},
+			vmasListError: &retry.Error{RawError: fmt.Errorf("error during vmas list")},
+			expectedErr:   fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error during vmas list"),
+		},
+		{
+			description: "getAvailabilitySetByNodeName should report an error if the vmID on the vmas is invalid",
+			nodeName:    "vm-1",
+			vmasVMIDs:   []string{"invalid"},
+			expectedErr: fmt.Errorf("invalid vm ID invalid"),
+		},
+	}
+
+	for _, test := range testCases {
+		cloud := GetTestCloud(ctrl)
+		vmSet, err := newAvailabilitySet(cloud)
+		assert.NoError(t, err)
+		as := vmSet.(*availabilitySet)
+
+		mockVMASClient := mockvmasclient.NewMockInterface(ctrl)
+		cloud.AvailabilitySetsClient = mockVMASClient
+
+		subResources := make([]compute.SubResource, 0)
+		for _, vmID := range test.vmasVMIDs {
+			subResources = append(subResources, compute.SubResource{
+				ID: to.StringPtr(vmID),
+			})
+		}
+		expected := compute.AvailabilitySet{
+			Name: to.StringPtr("vmas-1"),
+			AvailabilitySetProperties: &compute.AvailabilitySetProperties{
+				VirtualMachines: &subResources,
+			},
+		}
+		mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, test.vmasListError).AnyTimes()
+
+		actual, err := as.getAvailabilitySetByNodeName(test.nodeName, azcache.CacheReadTypeDefault)
+		if test.expectedErr != nil {
+			assert.EqualError(t, test.expectedErr, err.Error(), test.description)
+		}
+		if actual != nil {
+			assert.Equal(t, expected, *actual, test.description)
+		}
+	}
+}
+
+func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description, providerID                    string
+		tags                                       map[string]*string
+		expectedIPV4MaskSize, expectedIPV6MaskSize int
+		expectedErr                                error
+	}{
+		{
+			description: "GetNodeCIDRMasksByProviderID should report an error if the providerID is not valid",
+			providerID:  "invalid",
+			expectedErr: errors.New("error splitting providerID"),
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
+			tags: map[string]*string{
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+			},
+			expectedIPV4MaskSize: 24,
+			expectedIPV6MaskSize: 64,
+		},
+		{
+			description:          "GetNodeCIDRMaksByProviderID should report cloudprovider.InstanceNotFound if there is no matching vmas",
+			providerID:           "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1",
+			expectedIPV4MaskSize: 24,
+			expectedIPV6MaskSize: 64,
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes even if some of the tags are not specified",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
+			tags: map[string]*string{
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+			},
+			expectedIPV4MaskSize: 24,
+		},
+		{
+			description: "GetNodeCIDRMaksByProviderID should not fail even if some of the tag is invalid",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
+			tags: map[string]*string{
+				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
+				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+			},
+			expectedIPV6MaskSize: 64,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			vmSet, err := newAvailabilitySet(cloud)
+			assert.NoError(t, err)
+			as := vmSet.(*availabilitySet)
+
+			mockVMASClient := mockvmasclient.NewMockInterface(ctrl)
+			cloud.AvailabilitySetsClient = mockVMASClient
+
+			expected := compute.AvailabilitySet{
+				Name: to.StringPtr("vmas-1"),
+				AvailabilitySetProperties: &compute.AvailabilitySetProperties{
+					VirtualMachines: &[]compute.SubResource{
+						{ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0")},
+					},
+				},
+				Tags: tc.tags,
+			}
+			mockVMASClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.AvailabilitySet{expected}, nil).AnyTimes()
+
+			ipv4MaskSize, ipv6MaskSize, err := as.GetNodeCIDRMasksByProviderID(tc.providerID)
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedIPV4MaskSize, ipv4MaskSize)
+			assert.Equal(t, tc.expectedIPV6MaskSize, ipv6MaskSize)
+		})
+	}
 }

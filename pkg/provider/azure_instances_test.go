@@ -200,7 +200,7 @@ func TestInstanceID(t *testing.T) {
 		if test.nilVMSet {
 			cloud.VMSet = nil
 		} else {
-			cloud.VMSet = newAvailabilitySet(cloud)
+			cloud.VMSet, _ = newAvailabilitySet(cloud)
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
@@ -561,7 +561,7 @@ func TestNodeAddresses(t *testing.T) {
 		if test.nilVMSet {
 			cloud.VMSet = nil
 		} else {
-			cloud.VMSet = newAvailabilitySet(cloud)
+			cloud.VMSet, _ = newAvailabilitySet(cloud)
 		}
 		cloud.Config.VMType = test.vmType
 		cloud.Config.UseInstanceMetadata = test.useInstanceMetadata
