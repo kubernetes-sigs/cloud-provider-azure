@@ -150,7 +150,7 @@ func (d *delayedRouteUpdater) updateRoutes() {
 	// reconcile routes.
 	dirty := false
 	routes := []network.Route{}
-	if routeTable.Routes != nil {
+	if routeTable.RouteTablePropertiesFormat != nil && routeTable.RouteTablePropertiesFormat.Routes != nil {
 		routes = *routeTable.Routes
 	}
 	onlyUpdateTags := true
