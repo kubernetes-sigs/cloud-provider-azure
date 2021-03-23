@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -216,7 +216,7 @@ func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string)
 	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		_, err := pipClient.Delete(context.Background(), rgName, ipName)
 		if err != nil {
-			Logf("error: %w, will retry soon", err)
+			Logf("error: %v, will retry soon", err)
 			return false, nil
 		}
 		return true, nil

@@ -20,7 +20,7 @@ import (
 	"context"
 	"reflect"
 
-	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/golang/mock/gomock"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )

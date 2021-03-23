@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -260,7 +260,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).To(Equal(wait.ErrWaitTimeout))
 	})
 
-	It("should support multiple external services sharing one preset public IP address", func() {
+	FIt("should support multiple external services sharing one preset public IP address", func() {
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
