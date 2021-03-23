@@ -1,13 +1,7 @@
 {
   "apiVersion": "vlabs",
     "properties": {
-    "orchestratorProfile": {
-      "kubernetesConfig": {
-        "apiServerConfig": {
-          "--service-account-issuer": "https://kubernetes.default.svc.cluster.local"
-        }
-      }
-    },
+    "orchestratorProfile": {},
     "masterProfile": {
       "count": 1,
       "dnsPrefix": "",
