@@ -16,7 +16,8 @@
                 "kubeProxyMode": "iptables",
                 "networkPlugin": "kubenet",
                 "apiServerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
+                    "--feature-gates": "IPv6DualStack=true",
+                    "--service-account-issuer": "https://kubernetes.default.svc.cluster.local"
                 },
                 "kubeletConfig": {
                     "--feature-gates": "IPv6DualStack=true",
@@ -63,4 +64,3 @@
         }
     }
 }
-
