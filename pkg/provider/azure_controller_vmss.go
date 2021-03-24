@@ -82,7 +82,7 @@ func (ss *ScaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*Atta
 				compute.DataDisk{
 					Name:                    &opt.diskName,
 					Lun:                     &opt.lun,
-					Caching:                 compute.CachingTypes(opt.cachingMode),
+					Caching:                 opt.cachingMode,
 					CreateOption:            "attach",
 					ManagedDisk:             managedDisk,
 					WriteAcceleratorEnabled: to.BoolPtr(opt.writeAcceleratorEnabled),
@@ -95,7 +95,7 @@ func (ss *ScaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*Atta
 						URI: &diskURI,
 					},
 					Lun:          &opt.lun,
-					Caching:      compute.CachingTypes(opt.cachingMode),
+					Caching:      opt.cachingMode,
 					CreateOption: "attach",
 				})
 		}

@@ -77,7 +77,7 @@ func TestJitterWithNegativeMaxFactor(t *testing.T) {
 	// jitter := duration + time.Duration(rand.Float64()*maxFactor*float64(duration))
 	// If maxFactor is 0.0 or less than 0.0, a suggested default value will be chosen.
 	// rand.Float64() returns, as a float64, a pseudo-random number in [0.0,1.0).
-	duration := time.Duration(time.Second)
+	duration := time.Second
 	maxFactor := -3.0
 	res := jitter(duration, maxFactor)
 	defaultMaxFactor := 1.0

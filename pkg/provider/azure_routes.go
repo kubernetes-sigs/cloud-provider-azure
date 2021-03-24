@@ -357,7 +357,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 		return nil
 	}
 
-	CIDRv6 := utilnet.IsIPv6CIDRString(string(kubeRoute.DestinationCIDR))
+	CIDRv6 := utilnet.IsIPv6CIDRString(kubeRoute.DestinationCIDR)
 	// if single stack IPv4 then get the IP for the primary ip config
 	// single stack IPv6 is supported on dual stack host. So the IPv6 IP is secondary IP for both single stack IPv6 and dual stack
 	// Get all private IPs for the machine and find the first one that matches the IPv6 family
@@ -382,7 +382,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 			return err
 		}
 	}
-	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, string(kubeRoute.DestinationCIDR))
+	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
 	route := network.Route{
 		Name: to.StringPtr(routeName),
 		RoutePropertiesFormat: &network.RoutePropertiesFormat{
@@ -437,7 +437,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 
 	klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
 
-	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, string(kubeRoute.DestinationCIDR))
+	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
 	route := network.Route{
 		Name:                  to.StringPtr(routeName),
 		RoutePropertiesFormat: &network.RoutePropertiesFormat{},

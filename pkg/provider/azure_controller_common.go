@@ -208,7 +208,7 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 		writeAcceleratorEnabled: writeAcceleratorEnabled,
 	}
 	node := strings.ToLower(string(nodeName))
-	disk := strings.ToLower(string(diskURI))
+	disk := strings.ToLower(diskURI)
 	if err := c.insertAttachDiskRequest(disk, node, &options); err != nil {
 		return -1, err
 	}
@@ -297,7 +297,7 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 	}
 
 	node := strings.ToLower(string(nodeName))
-	disk := strings.ToLower(string(diskURI))
+	disk := strings.ToLower(diskURI)
 	if err := c.insertDetachDiskRequest(diskName, disk, node); err != nil {
 		return err
 	}

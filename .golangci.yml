@@ -25,7 +25,7 @@ linters:
     - staticcheck
     - structcheck
     - typecheck
-#    - unconvert
+    - unconvert
     - unused
     - varcheck
   # Run with --fast=false for more extensive checks

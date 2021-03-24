@@ -100,7 +100,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 	}
 
 	diskSizeGB := int32(options.SizeGB)
-	diskSku := compute.DiskStorageAccountTypes(options.StorageAccountType)
+	diskSku := options.StorageAccountType
 
 	creationData, err := getValidCreationData(c.common.subscriptionID, options.ResourceGroup, options.SourceResourceID, options.SourceType)
 	if err != nil {
