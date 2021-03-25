@@ -61,6 +61,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -252,6 +253,7 @@ type Cloud struct {
 	VirtualMachineScaleSetVMsClient vmssvmclient.Interface
 	VirtualMachineSizesClient       vmsizeclient.Interface
 	AvailabilitySetsClient          vmasclient.Interface
+	ZoneClient                      zoneclient.Interface
 
 	ResourceRequestBackoff wait.Backoff
 	metadata               *InstanceMetadataService
@@ -277,6 +279,10 @@ type Cloud struct {
 	routeCIDRsLock sync.Mutex
 	// routeCIDRs holds cache for route CIDRs.
 	routeCIDRs map[string]string
+
+	// regionZonesMap stores all available zones for the subscription by region
+	regionZonesMap   map[string][]string
+	refreshZonesLock sync.RWMutex
 
 	KubeClient       clientset.Interface
 	eventBroadcaster record.EventBroadcaster
@@ -488,6 +494,8 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 	az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
 	go az.routeUpdater.run()
 
+	go az.refreshZones(az.syncRegionZonesMap)
+
 	return nil
 }
 
@@ -596,6 +604,7 @@ func (az *Cloud) configAzureClients(
 	// TODO(ZeroMagic): add azurefileRateLimit
 	fileClientConfig := azClientConfig.WithRateLimiter(nil)
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
+	zoneClientConfig := azClientConfig.WithRateLimiter(nil)
 
 	// If uses network resources in different AAD Tenant, update Authorizer for VM/VMSS/VMAS client config
 	if multiTenantServicePrincipalToken != nil {
@@ -641,6 +650,7 @@ func (az *Cloud) configAzureClients(
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
+	az.ZoneClient = zoneclient.New(zoneClientConfig)
 }
 
 func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {

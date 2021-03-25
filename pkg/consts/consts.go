@@ -140,6 +140,9 @@ const (
 	VMSSVirtualMachinesCacheTTLDefaultInSeconds = 600
 	// VMASCacheTTLDefaultInSeconds is the TTL of the vmas cache
 	VMASCacheTTLDefaultInSeconds = 600
+
+	// ZoneFetchingInterval defines the interval of performing zoneClient.GetZones
+	ZoneFetchingInterval = 30 * time.Minute
 )
 
 // azure cloud config

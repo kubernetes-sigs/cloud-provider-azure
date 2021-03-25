@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -3950,4 +3950,68 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 		err = cloud.cleanOrphanedLoadBalancer(&lb, &service, "test")
 		assert.NoError(t, err)
 	})
+}
+
+func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description               string
+		service                   v1.Service
+		existingFrontendIPConfigs []network.FrontendIPConfiguration
+		existingPIP               network.PublicIPAddress
+		getPIPError               *retry.Error
+		regionZonesMap            map[string][]string
+		expectedZones             *[]string
+		expectedDirty             bool
+	}{
+		{
+			description:               "reconcileFrontendIPConfigs should reconcile the zones for the new fip config",
+			service:                   getTestService("test", v1.ProtocolTCP, nil, false, 80),
+			existingFrontendIPConfigs: []network.FrontendIPConfiguration{},
+			existingPIP:               network.PublicIPAddress{Location: to.StringPtr("eastus")},
+			getPIPError:               &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			regionZonesMap:            map[string][]string{"westus": {"1", "2", "3"}, "eastus": {"1", "2"}},
+			expectedDirty:             true,
+		},
+		{
+			description:               "reconcileFrontendIPConfigs should reconcile the zones for the new internal fip config",
+			service:                   getInternalTestService("test", 80),
+			existingFrontendIPConfigs: []network.FrontendIPConfiguration{},
+			existingPIP:               network.PublicIPAddress{Location: to.StringPtr("eastus")},
+			getPIPError:               &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			regionZonesMap:            map[string][]string{"westus": {"1", "2", "3"}, "eastus": {"1", "2"}},
+			expectedZones:             &[]string{"1", "2", "3"},
+			expectedDirty:             true,
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.regionZonesMap = tc.regionZonesMap
+			cloud.LoadBalancerSku = string(network.LoadBalancerSkuNameStandard)
+
+			lb := getTestLoadBalancer(to.StringPtr("lb"), to.StringPtr("rg"), to.StringPtr("testCluster"), to.StringPtr("testCluster"), tc.service, "standard")
+			lb.FrontendIPConfigurations = &tc.existingFrontendIPConfigs
+
+			mockPIPClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPClient.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(tc.existingPIP, tc.getPIPError).MaxTimes(1)
+			mockPIPClient.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(tc.existingPIP, nil).MaxTimes(1)
+			mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).MaxTimes(1)
+
+			subnetClient := cloud.SubnetsClient.(*mocksubnetclient.MockInterface)
+			subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(network.Subnet{}, nil).MaxTimes(1)
+
+			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&tc.service)
+			_, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, true, defaultLBFrontendIPConfigName)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedDirty, dirty)
+
+			for _, fip := range *lb.FrontendIPConfigurations {
+				if strings.EqualFold(to.String(fip.Name), defaultLBFrontendIPConfigName) {
+					assert.Equal(t, tc.expectedZones, fip.Zones)
+				}
+			}
+		})
+	}
 }

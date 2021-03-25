@@ -10,6 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.2.0
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/mock v1.4.1
 	github.com/niemeyer/pretty v0.0.0-00010101000000-000000000000 // indirect
 	github.com/onsi/ginkgo v1.11.0
@@ -159,7 +160,7 @@ replace github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227
 
 replace gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
 
-replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v51.2.0+incompatible
+replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v52.5.0+incompatible
 
 replace k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 

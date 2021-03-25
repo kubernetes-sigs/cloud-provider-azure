@@ -19,14 +19,14 @@ package interfaceclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
 	// APIVersion is the API version for network.
-	APIVersion = "2020-07-01"
+	APIVersion = "2020-08-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2018-11-01"
 

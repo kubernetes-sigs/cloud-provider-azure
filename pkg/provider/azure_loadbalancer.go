@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -767,7 +767,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			}
 		}
 
-		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - updating", serviceName, *pip.Name)
+		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - updating", serviceName, to.String(pip.Name))
 		if pip.PublicIPAddressPropertiesFormat == nil {
 			pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: network.Static,
@@ -800,6 +800,15 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		if az.useStandardLoadBalancer() {
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
+			}
+
+			// only add zone information for the new standard pips
+			zones, err := az.getRegionZonesBackoff(to.String(pip.Location))
+			if err != nil {
+				return nil, err
+			}
+			if len(zones) > 0 {
+				pip.Zones = &zones
 			}
 		}
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - creating", serviceName, *pip.Name)
@@ -1507,19 +1516,31 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				}
 			}
 
-			newConfigs = append(newConfigs,
-				network.FrontendIPConfiguration{
-					Name:                                    to.StringPtr(defaultLBFrontendIPConfigName),
-					ID:                                      to.StringPtr(fmt.Sprintf(consts.FrontendIPConfigIDTemplate, az.SubscriptionID, az.ResourceGroup, *lb.Name, defaultLBFrontendIPConfigName)),
-					FrontendIPConfigurationPropertiesFormat: fipConfigurationProperties,
-				})
+			newConfig := network.FrontendIPConfiguration{
+				Name:                                    to.StringPtr(defaultLBFrontendIPConfigName),
+				ID:                                      to.StringPtr(fmt.Sprintf(consts.FrontendIPConfigIDTemplate, az.SubscriptionID, az.ResourceGroup, *lb.Name, defaultLBFrontendIPConfigName)),
+				FrontendIPConfigurationPropertiesFormat: fipConfigurationProperties,
+			}
+
+			// only add zone information for new internal frontend IP configurations
+			location := az.Location
+			zones, err := az.getRegionZonesBackoff(location)
+			if err != nil {
+				return nil, false, err
+			}
+			if isInternal && az.useStandardLoadBalancer() && len(zones) > 0 {
+				newConfig.Zones = &zones
+			}
+			newConfigs = append(newConfigs, newConfig)
 			klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb frontendconfig(%s) - adding", serviceName, wantLb, defaultLBFrontendIPConfigName)
 			dirtyConfigs = true
 		}
 	}
+
 	if dirtyConfigs {
 		lb.FrontendIPConfigurations = &newConfigs
 	}
+
 	return ownedFIPConfig, dirtyConfigs, err
 }
 

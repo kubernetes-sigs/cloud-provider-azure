@@ -1,12 +1,12 @@
 # cloud.google.com/go v0.54.0
 cloud.google.com/go/compute/metadata
-# github.com/Azure/azure-sdk-for-go v51.2.0+incompatible => github.com/Azure/azure-sdk-for-go v51.2.0+incompatible
+# github.com/Azure/azure-sdk-for-go v51.2.0+incompatible => github.com/Azure/azure-sdk-for-go v52.5.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute
 github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry
 github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice
-github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-07-01/network
+github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources
 github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage
@@ -89,6 +89,9 @@ github.com/go-openapi/jsonreference
 github.com/go-openapi/spec
 # github.com/go-openapi/swag v0.19.5 => github.com/go-openapi/swag v0.19.5
 github.com/go-openapi/swag
+# github.com/gofrs/uuid v4.0.0+incompatible
+## explicit
+github.com/gofrs/uuid
 # github.com/gogo/protobuf v1.3.1 => github.com/gogo/protobuf v1.3.1
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/proto
@@ -215,8 +218,6 @@ github.com/prometheus/procfs/internal/fs
 # github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021 => github.com/rubiojr/go-vhd v0.0.0-20160810183302-0bfd3b39853c
 ## explicit
 github.com/rubiojr/go-vhd/vhd
-# github.com/satori/go.uuid v1.2.0 => github.com/satori/go.uuid v1.2.0
-github.com/satori/go.uuid
 # github.com/sirupsen/logrus v1.6.0 => github.com/sirupsen/logrus v1.4.2
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v1.1.1 => github.com/spf13/cobra v0.0.5
@@ -1161,6 +1162,6 @@ sigs.k8s.io/yaml
 # github.com/kr/text => github.com/kr/text v0.2.0
 # github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 # gopkg.in/check.v1 => gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
-# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v51.2.0+incompatible
+# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v52.5.0+incompatible
 # k8s.io/klog/v2 => k8s.io/klog/v2 v2.4.0
 # k8s.io/kubernetes => k8s.io/kubernetes v1.21.0-alpha.0.0.20201210005053-f58c4d8cd725
