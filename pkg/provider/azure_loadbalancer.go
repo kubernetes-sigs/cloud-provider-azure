@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -1329,7 +1330,7 @@ func (az *Cloud) reconcileLBProbes(lb *network.LoadBalancer, service *v1.Service
 			}
 			if !keepProbe {
 				updatedProbes = append(updatedProbes[:i], updatedProbes[i+1:]...)
-				klog.V(10).Infof("reconcileLoadBalancer for service (%s)(%t): lb probe(%s) - dropping", serviceName, wantLb, *existingProbe.Name)
+				klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb probe(%s) - dropping", serviceName, wantLb, *existingProbe.Name)
 				dirtyProbes = true
 			}
 		}
@@ -1348,6 +1349,8 @@ func (az *Cloud) reconcileLBProbes(lb *network.LoadBalancer, service *v1.Service
 		}
 	}
 	if dirtyProbes {
+		probesJSON, _ := json.MarshalIndent(expectedProbes, "", "  ")
+		klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb probes updated: %s", serviceName, wantLb, string(probesJSON))
 		lb.Probes = &updatedProbes
 	}
 	return dirtyProbes
@@ -1392,6 +1395,8 @@ func (az *Cloud) reconcileLBRules(lb *network.LoadBalancer, service *v1.Service,
 		}
 	}
 	if dirtyRules {
+		ruleJSON, _ := json.MarshalIndent(expectedRules, "", "  ")
+		klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb rules updated: %s", serviceName, wantLb, string(ruleJSON))
 		lb.LoadBalancingRules = &updatedRules
 	}
 	return dirtyRules
