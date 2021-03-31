@@ -27,6 +27,7 @@ import (
 type ClientConfig struct {
 	CloudName               string
 	Location                string
+	ExtendedLocation        *ExtendedLocation
 	SubscriptionID          string
 	ResourceManagerEndpoint string
 	Authorizer              autorest.Authorizer
@@ -55,6 +56,14 @@ type RateLimitConfig struct {
 	CloudProviderRateLimitQPSWrite float32 `json:"cloudProviderRateLimitQPSWrite,omitempty" yaml:"cloudProviderRateLimitQPSWrite,omitempty"`
 	// Rate limit Bucket Size
 	CloudProviderRateLimitBucketWrite int `json:"cloudProviderRateLimitBucketWrite,omitempty" yaml:"cloudProviderRateLimitBucketWrite,omitempty"`
+}
+
+// ExtendedLocation contains additional info about the location of resources.
+type ExtendedLocation struct {
+	// Name - The name of the extended location.
+	Name string `json:"name,omitempty"`
+	// Type - The type of the extended location.
+	Type string `json:"type,omitempty"`
 }
 
 // RateLimitEnabled returns true if CloudProviderRateLimit is set to true.

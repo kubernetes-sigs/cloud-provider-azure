@@ -100,10 +100,10 @@ type Config struct {
 	// The location of the resource group that the cluster is deployed in
 	Location string `json:"location,omitempty" yaml:"location,omitempty"`
 	// The name of site where the cluster will be deployed to that is more granular than the region specified by the "location" field.
-	// Currently only public ip and load balancer support this.
+	// Currently only public ip, load balancer and managed disks support this.
 	ExtendedLocationName string `json:"extendedLocationName,omitempty" yaml:"extendedLocationName,omitempty"`
 	// The type of site that is being targeted.
-	// Currently only public ip and load balancer support this.
+	// Currently only public ip, load balancer and managed disks support this.
 	ExtendedLocationType string `json:"extendedLocationType,omitempty" yaml:"extendedLocationType,omitempty"`
 	// The name of the VNet that the cluster is deployed in
 	VnetName string `json:"vnetName,omitempty" yaml:"vnetName,omitempty"`
@@ -649,6 +649,13 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 		}
 	}
 
+	if az.Config.HasExtendedLocation() {
+		azClientConfig.ExtendedLocation = &azclients.ExtendedLocation{
+			Name: az.Config.ExtendedLocationName,
+			Type: az.Config.ExtendedLocationType,
+		}
+	}
+
 	return azClientConfig
 }
 
@@ -735,6 +742,13 @@ func initDiskControllers(az *Cloud) error {
 		subscriptionID:        az.SubscriptionID,
 		cloud:                 az,
 		lockMap:               newLockMap(),
+	}
+
+	if az.HasExtendedLocation() {
+		common.extendedLocation = &ExtendedLocation{
+			Name: az.ExtendedLocationName,
+			Type: az.ExtendedLocationName,
+		}
 	}
 
 	az.BlobDiskController = &BlobDiskController{common: common}

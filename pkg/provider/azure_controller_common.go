@@ -86,6 +86,7 @@ var (
 type controllerCommon struct {
 	subscriptionID        string
 	location              string
+	extendedLocation      *ExtendedLocation
 	storageEndpointSuffix string
 	resourceGroup         string
 	diskStateMap          sync.Map // <diskURI, attaching/detaching state>
@@ -105,6 +106,14 @@ type AttachDiskOptions struct {
 	isManagedDisk           bool
 	writeAcceleratorEnabled bool
 	lun                     int32
+}
+
+// ExtendedLocation contains additional info about the location of resources.
+type ExtendedLocation struct {
+	// Name - The name of the extended location.
+	Name string `json:"name,omitempty"`
+	// Type - The type of the extended location.
+	Type string `json:"type,omitempty"`
 }
 
 // getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.

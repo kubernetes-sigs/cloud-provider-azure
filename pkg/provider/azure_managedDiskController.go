@@ -171,6 +171,13 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		DiskProperties: &diskProperties,
 	}
 
+	if el := c.common.extendedLocation; el != nil {
+		model.ExtendedLocation = &compute.ExtendedLocation{
+			Name: to.StringPtr(el.Name),
+			Type: compute.ExtendedLocationTypes(el.Type),
+		}
+	}
+
 	if len(createZones) > 0 {
 		model.Zones = &createZones
 	}
