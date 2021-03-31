@@ -260,7 +260,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).To(Equal(wait.ErrWaitTimeout))
 	})
 
-	FIt("should support multiple external services sharing one preset public IP address", func() {
+	It("should support multiple external services sharing one preset public IP address", func() {
 		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
