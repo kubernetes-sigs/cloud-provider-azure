@@ -38,6 +38,8 @@ import (
 
 const (
 	fakeGetDiskFailed = "fakeGetDiskFailed"
+	disk1Name         = "disk1"
+	disk1ID           = "diskid1"
 )
 
 func TestCreateManagedDisk(t *testing.T) {
@@ -64,90 +66,90 @@ func TestCreateManagedDisk(t *testing.T) {
 	}{
 		{
 			desc:                "disk Id and no error shall be returned if everything is good with UltraSSDLRS storage account",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.UltraSSDLRS,
 			diskIOPSReadWrite:   "100",
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
-			expectedDiskID:      "diskid1",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			expectedDiskID:      disk1ID,
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
 		},
 		{
 			desc:                "disk Id and no error shall be returned if everything is good with StandardLRS storage account",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.StandardLRS,
 			diskIOPSReadWrite:   "",
 			diskMBPSReadWrite:   "",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
-			expectedDiskID:      "diskid1",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			expectedDiskID:      disk1ID,
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
 		},
 		{
 			desc:                "empty diskid and an error shall be returned if everything is good with UltraSSDLRS storage account but DiskIOPSReadWrite is invalid",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.UltraSSDLRS,
 			diskIOPSReadWrite:   "invalid",
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - failed to parse DiskIOPSReadWrite: strconv.Atoi: parsing \"invalid\": invalid syntax"),
 		},
 		{
 			desc:                "empty diskid and an error shall be returned if everything is good with UltraSSDLRS storage account but DiskMBPSReadWrite is invalid",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.UltraSSDLRS,
 			diskIOPSReadWrite:   "100",
 			diskMBPSReadWrite:   "invalid",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - failed to parse DiskMBpsReadWrite: strconv.Atoi: parsing \"invalid\": invalid syntax"),
 		},
 		{
 			desc:                "empty diskid and an error shall be returned if everything is good with UltraSSDLRS storage account with bad Disk EncryptionSetID",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.UltraSSDLRS,
 			diskIOPSReadWrite:   "100",
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: badDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", badDiskEncryptionSetID, consts.DiskEncryptionSetIDFormat),
 		},
 		{
 			desc:                "disk Id and no error shall be returned if everything is good with StandardLRS storage account with not empty diskIOPSReadWrite",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.StandardLRS,
 			diskIOPSReadWrite:   "100",
 			diskMBPSReadWrite:   "",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS disk type"),
 		},
 		{
 			desc:                "disk Id and no error shall be returned if everything is good with StandardLRS storage account with not empty diskMBPSReadWrite",
-			diskID:              "diskid1",
-			diskName:            "disk1",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
 			storageAccountType:  compute.StandardLRS,
 			diskIOPSReadWrite:   "",
 			diskMBPSReadWrite:   "100",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      "",
-			existedDisk:         compute.Disk{ID: to.StringPtr("diskid1"), Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
 			expectedErr:         true,
 			expectedErrMsg:      fmt.Errorf("AzureDisk - DiskMBpsReadWrite parameter is only applicable in UltraSSD_LRS disk type"),
 		},
@@ -183,6 +185,50 @@ func TestCreateManagedDisk(t *testing.T) {
 	}
 }
 
+func TestCreateManagedDiskWithExtendedLocation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCloud := GetTestCloudWithExtendedLocation(ctrl)
+	diskName := disk1Name
+	expectedDiskID := disk1ID
+	el := &compute.ExtendedLocation{
+		Name: to.StringPtr("microsoftlosangeles1"),
+		Type: compute.EdgeZone,
+	}
+
+	diskreturned := compute.Disk{
+		ID:               to.StringPtr(expectedDiskID),
+		Name:             to.StringPtr(diskName),
+		ExtendedLocation: el,
+		DiskProperties: &compute.DiskProperties{
+			ProvisioningState: to.StringPtr("Succeeded"),
+		},
+	}
+
+	managedDiskController := testCloud.ManagedDiskController
+	volumeOptions := &ManagedDiskOptions{
+		DiskName:           diskName,
+		StorageAccountType: compute.PremiumLRS,
+		ResourceGroup:      "",
+		SizeGB:             1,
+		AvailabilityZone:   "westus-testzone",
+	}
+
+	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
+	mockDisksClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, diskName, gomock.Any()).
+		Do(func(ctx interface{}, rg string, dn string, disk compute.Disk) {
+			assert.Equal(t, el.Name, disk.ExtendedLocation.Name, "The extended location name should match.")
+			assert.Equal(t, el.Type, disk.ExtendedLocation.Type, "The extended location type should match.")
+		}).Return(nil)
+
+	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, diskName).Return(diskreturned, nil).AnyTimes()
+
+	actualDiskID, err := managedDiskController.CreateManagedDisk(volumeOptions)
+	assert.Equal(t, expectedDiskID, actualDiskID, "Disk ID does not match.")
+	assert.Nil(t, err, "There should not be an error.")
+}
+
 func TestDeleteManagedDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -197,16 +243,16 @@ func TestDeleteManagedDisk(t *testing.T) {
 	}{
 		{
 			desc:           "an error shall be returned if delete an attaching disk",
-			diskName:       "disk1",
+			diskName:       disk1Name,
 			diskState:      "attaching",
-			existedDisk:    compute.Disk{Name: to.StringPtr("disk1")},
+			existedDisk:    compute.Disk{Name: to.StringPtr(disk1Name)},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("failed to delete disk(/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1) since it's in attaching or detaching state"),
 		},
 		{
 			desc:        "no error shall be returned if everything is good",
-			diskName:    "disk1",
-			existedDisk: compute.Disk{Name: to.StringPtr("disk1")},
+			diskName:    disk1Name,
+			existedDisk: compute.Disk{Name: to.StringPtr(disk1Name)},
 			expectedErr: false,
 		},
 		{
@@ -258,8 +304,8 @@ func TestGetDisk(t *testing.T) {
 	}{
 		{
 			desc:                      "no error shall be returned if get a normal disk without DiskProperties",
-			diskName:                  "disk1",
-			existedDisk:               compute.Disk{Name: to.StringPtr("disk1")},
+			diskName:                  disk1Name,
+			existedDisk:               compute.Disk{Name: to.StringPtr(disk1Name)},
 			expectedErr:               false,
 			expectedProvisioningState: "",
 			expectedDiskID:            "",
@@ -301,7 +347,7 @@ func TestResizeDisk(t *testing.T) {
 	defer ctrl.Finish()
 
 	diskSizeGB := int32(2)
-	diskName := "disk1"
+	diskName := disk1Name
 	fakeCreateDiskFailed := "fakeCreateDiskFailed"
 	testCases := []struct {
 		desc             string
@@ -318,7 +364,7 @@ func TestResizeDisk(t *testing.T) {
 			diskName:         diskName,
 			oldSize:          *resource.NewQuantity(2*(1024*1024*1024), resource.BinarySI),
 			newSize:          *resource.NewQuantity(3*(1024*1024*1024), resource.BinarySI),
-			existedDisk:      compute.Disk{Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB, DiskState: compute.Unattached}},
+			existedDisk:      compute.Disk{Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB, DiskState: compute.Unattached}},
 			expectedQuantity: *resource.NewQuantity(3*(1024*1024*1024), resource.BinarySI),
 			expectedErr:      false,
 		},
@@ -327,7 +373,7 @@ func TestResizeDisk(t *testing.T) {
 			diskName:         diskName,
 			oldSize:          *resource.NewQuantity(2*(1024*1024*1024), resource.BinarySI),
 			newSize:          *resource.NewQuantity(3*(1024*1024*1024), resource.BinarySI),
-			existedDisk:      compute.Disk{Name: to.StringPtr("disk1")},
+			existedDisk:      compute.Disk{Name: to.StringPtr(disk1Name)},
 			expectedQuantity: *resource.NewQuantity(2*(1024*1024*1024), resource.BinarySI),
 			expectedErr:      true,
 			expectedErrMsg:   fmt.Errorf("DiskProperties of disk(%s) is nil", diskName),
@@ -337,7 +383,7 @@ func TestResizeDisk(t *testing.T) {
 			diskName:         diskName,
 			oldSize:          *resource.NewQuantity(1*(1024*1024*1024), resource.BinarySI),
 			newSize:          *resource.NewQuantity(2*(1024*1024*1024), resource.BinarySI),
-			existedDisk:      compute.Disk{Name: to.StringPtr("disk1"), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB, DiskState: compute.Unattached}},
+			existedDisk:      compute.Disk{Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{DiskSizeGB: &diskSizeGB, DiskState: compute.Unattached}},
 			expectedQuantity: *resource.NewQuantity(2*(1024*1024*1024), resource.BinarySI),
 			expectedErr:      false,
 		},
@@ -405,7 +451,7 @@ func TestGetLabelsForVolume(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCloud0 := GetTestCloud(ctrl)
-	diskName := "disk1"
+	diskName := disk1Name
 	diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 		testCloud0.SubscriptionID, testCloud0.ResourceGroup, diskName)
 	diskSizeGB := int32(30)
