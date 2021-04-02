@@ -142,3 +142,15 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 
 	return currentTagsOnResource, changed
 }
+
+func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.String {
+	vmSetNames := make([]string, 0)
+	if az.NodePoolsWithoutDedicatedSLB != "" {
+		vmSetNames = strings.Split(az.Config.NodePoolsWithoutDedicatedSLB, consts.VMSetNamesSharingPrimarySLBDelimiter)
+		for i := 0; i < len(vmSetNames); i++ {
+			vmSetNames[i] = strings.ToLower(strings.TrimSpace(vmSetNames[i]))
+		}
+	}
+
+	return sets.NewString(vmSetNames...)
+}

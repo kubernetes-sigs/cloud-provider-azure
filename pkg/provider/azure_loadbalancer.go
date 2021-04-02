@@ -62,7 +62,7 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 		return existsPip
 	}()
 
-	_, status, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false)
+	_, status, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false, []network.LoadBalancer{})
 	if err != nil {
 		return nil, existsPip, err
 	}
@@ -203,22 +203,25 @@ func (az *Cloud) getLoadBalancerResourceGroup() string {
 	return az.ResourceGroup
 }
 
-// cleanBackendpoolForPrimarySLB decouples the unwanted nodes from the standard load balancer.
-// This is needed because when migrating from single SLB to multiple SLBs, The existing
+// cleanupVMSetFromBackendPoolByCondition removes nodes of the unwanted vmSet from the lb backend pool.
+// This is needed in two scenarios:
+// 1. When migrating from single SLB to multiple SLBs, the existing
 // SLB's backend pool contains nodes from different agent pools, while we only want the
 // nodes from the primary agent pool to join the backend pool.
-func (az *Cloud) cleanBackendpoolForPrimarySLB(primarySLB *network.LoadBalancer, service *v1.Service, clusterName string) (*network.LoadBalancer, error) {
+// 2. When migrating from dedicated SLB to shared SLB (or vice versa), we should move the vmSet from
+// one SLB to another one.
+func (az *Cloud) cleanupVMSetFromBackendPoolByCondition(slb *network.LoadBalancer, service *v1.Service, clusterName string, shouldRemoveVMSetFromSLB func(string) bool) (*network.LoadBalancer, error) {
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	lbResourceGroup := az.getLoadBalancerResourceGroup()
-	lbBackendPoolID := az.getBackendPoolID(to.String(primarySLB.Name), lbResourceGroup, lbBackendPoolName)
+	lbBackendPoolID := az.getBackendPoolID(to.String(slb.Name), lbResourceGroup, lbBackendPoolName)
 	newBackendPools := make([]network.BackendAddressPool, 0)
-	if primarySLB.LoadBalancerPropertiesFormat != nil && primarySLB.BackendAddressPools != nil {
-		newBackendPools = *primarySLB.BackendAddressPools
+	if slb.LoadBalancerPropertiesFormat != nil && slb.BackendAddressPools != nil {
+		newBackendPools = *slb.BackendAddressPools
 	}
 	vmSetNameToBackendIPConfigurationsToBeDeleted := make(map[string][]network.InterfaceIPConfiguration)
 	for j, bp := range newBackendPools {
 		if strings.EqualFold(to.String(bp.Name), lbBackendPoolName) {
-			klog.V(2).Infof("cleanBackendpoolForPrimarySLB: checking the backend pool %s from standard load balancer %s", to.String(bp.Name), to.String(primarySLB.Name))
+			klog.V(2).Infof("cleanupVMSetFromBackendPoolByCondition: checking the backend pool %s from standard load balancer %s", to.String(bp.Name), to.String(slb.Name))
 			if bp.BackendAddressPoolPropertiesFormat != nil && bp.BackendIPConfigurations != nil {
 				for i := len(*bp.BackendIPConfigurations) - 1; i >= 0; i-- {
 					ipConf := (*bp.BackendIPConfigurations)[i]
@@ -227,9 +230,9 @@ func (az *Cloud) cleanBackendpoolForPrimarySLB(primarySLB *network.LoadBalancer,
 					if err != nil {
 						return nil, err
 					}
-					primaryVMSetName := az.VMSet.GetPrimaryVMSetName()
-					if !strings.EqualFold(primaryVMSetName, vmSetName) && vmSetName != "" {
-						klog.V(2).Infof("cleanBackendpoolForPrimarySLB: found unwanted vmSet %s, decouple it from the LB", vmSetName)
+
+					if shouldRemoveVMSetFromSLB(vmSetName) {
+						klog.V(2).Infof("cleanupVMSetFromBackendPoolByCondition: found unwanted vmSet %s, decouple it from the LB", vmSetName)
 						// construct a backendPool that only contains the IP config of the node to be deleted
 						interfaceIPConfigToBeDeleted := network.InterfaceIPConfiguration{
 							ID: to.StringPtr(ipConfigID),
@@ -258,9 +261,14 @@ func (az *Cloud) cleanBackendpoolForPrimarySLB(primarySLB *network.LoadBalancer,
 		if err != nil {
 			return nil, err
 		}
-		primarySLB.BackendAddressPools = &newBackendPools
+		slb.BackendAddressPools = &newBackendPools
+		// Proactively disable the etag to prevent etag mismatch error when putting lb later.
+		// This could be happen because when we remove the hosts from the lb, the nrp
+		// would put the lb to remove the backend references as well.
+		slb.Etag = nil
 	}
-	return primarySLB, nil
+
+	return slb, nil
 }
 
 // shouldChangeLoadBalancer determines if the load balancer of the service should be switched to another one
@@ -268,15 +276,18 @@ func (az *Cloud) cleanBackendpoolForPrimarySLB(primarySLB *network.LoadBalancer,
 // existing service is changed to another VMSS/VMAS.
 func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clusterName string) bool {
 	hasMode, isAuto, vmSetName := az.getServiceLoadBalancerMode(service)
+
 	// if no mode is given or the mode is `__auto__`, the current LB should be kept
 	if !hasMode || isAuto {
 		return false
 	}
+
 	// if using the single standard load balancer, the current LB should be kept
 	useSingleSLB := az.useStandardLoadBalancer() && !az.EnableMultipleStandardLoadBalancers
 	if useSingleSLB {
 		return false
 	}
+
 	// if the current LB is what we want, keep it
 	lbName := strings.TrimSuffix(currLBName, consts.InternalLoadBalancerNameSuffix)
 	if strings.EqualFold(lbName, vmSetName) {
@@ -285,6 +296,16 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) && strings.EqualFold(clusterName, lbName) {
 		return false
 	}
+
+	// if the vmSet selected by the annotation is sharing the primary slb, and the service
+	// has been associated to the primary slb, keep it
+	useMultipleSLBs := az.useStandardLoadBalancer() && az.EnableMultipleStandardLoadBalancers
+	if useMultipleSLBs &&
+		az.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmSetName)) &&
+		strings.EqualFold(lbName, clusterName) {
+		return false
+	}
+
 	// if the VMSS/VMAS of the current LB is different from the mode, change the LB
 	// to another one
 	klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one", service.Name, currLBName, clusterName)
@@ -414,32 +435,177 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 	return nil
 }
 
+func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node) ([]network.LoadBalancer, error) {
+	var (
+		primarySLB                       network.LoadBalancer
+		changed                          bool
+		ipConfigIDsToBeAddedToPrimarySLB []string
+		existingLBs                      []network.LoadBalancer
+		err                              error
+	)
+
+	// only run once since the controller manager rebooted
+	if az.isSharedLoadBalancerSynced {
+		return nil, nil
+	}
+	defer func() {
+		if err == nil {
+			az.isSharedLoadBalancerSynced = true
+		}
+	}()
+
+	// skip if the cluster doesn't enable the multiple slbs mode
+	useMultipleSLBs := az.useStandardLoadBalancer() && az.EnableMultipleStandardLoadBalancers
+	if !useMultipleSLBs {
+		return nil, nil
+	}
+
+	existingLBs, err = az.ListLB(service)
+	if err != nil {
+		return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to list LB: %w", err)
+	}
+
+	lbBackendPoolName := getBackendPoolName(clusterName, service)
+
+	for i := len(existingLBs) - 1; i >= 0; i-- {
+		lb := existingLBs[i]
+
+		// skip the primary load balancer
+		if strings.EqualFold(to.String(lb.Name), clusterName) {
+			primarySLB = lb
+			continue
+		}
+
+		// For non-primary load balancer, the lb name is the name of the VMSet.
+		// If the VMSet name is in az.NodePoolsWithoutDedicatedSLB, we should
+		// decouple the VMSet from the lb and delete the lb. Then we should
+		// add the VMSet to the backend pool of the primary slb.
+		vmSetName := strings.ToLower(to.String(lb.Name))
+		lbBackendPoolID := az.getBackendPoolID(to.String(lb.Name), az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
+		if az.getVMSetNamesSharingPrimarySLB().Has(vmSetName) {
+			err = az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools)
+			if err != nil {
+				return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err)
+			}
+
+			klog.V(2).Infof("reconcileSharedLoadBalancer: deleting LB %s because the corresponding vmSet is sharing the primary SLB", to.String(lb.Name))
+			err = az.DeleteLB(service, to.String(lb.Name))
+			if err != nil {
+				return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to DeleteLB: %w", err)
+			}
+			_ = az.lbCache.Delete(to.String(lb.Name))
+
+			primaryLBBackendPoolID := az.getBackendPoolID(clusterName, az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
+			err = az.VMSet.EnsureHostsInPool(service, nodes, primaryLBBackendPoolID, vmSetName, false)
+			if err != nil {
+				return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to EnsureHostsInPool: %w", err)
+			}
+
+			if lb.LoadBalancerPropertiesFormat != nil &&
+				lb.BackendAddressPools != nil {
+				for i := 0; i < len(*lb.BackendAddressPools); i++ {
+					backendPool := (*lb.BackendAddressPools)[i]
+					if strings.EqualFold(to.String(backendPool.Name), lbBackendPoolName) {
+						if backendPool.BackendAddressPoolPropertiesFormat != nil &&
+							backendPool.BackendIPConfigurations != nil {
+							for _, ipConfiguration := range *backendPool.BackendIPConfigurations {
+								if ipConfiguration.ID != nil {
+									ipConfigIDsToBeAddedToPrimarySLB = append(ipConfigIDsToBeAddedToPrimarySLB, to.String(ipConfiguration.ID))
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// remove the deleted lb from the list and construct a new primary
+			// lb, so that getServiceLoadBalancer doesn't have to call list api again
+			existingLBs = append(existingLBs[:i], existingLBs[i+1:]...)
+			changed = true
+		}
+	}
+
+	if changed {
+		if primarySLB.LoadBalancerPropertiesFormat != nil &&
+			primarySLB.BackendAddressPools != nil {
+			for i := 0; i < len(*primarySLB.BackendAddressPools); i++ {
+				if strings.EqualFold(to.String((*primarySLB.BackendAddressPools)[i].Name), lbBackendPoolName) {
+					backendPoolIPConfigs := (*primarySLB.BackendAddressPools)[i].BackendIPConfigurations
+					for _, id := range ipConfigIDsToBeAddedToPrimarySLB {
+						*backendPoolIPConfigs = append(*backendPoolIPConfigs, network.InterfaceIPConfiguration{
+							ID: to.StringPtr(id),
+						})
+					}
+					break
+				}
+			}
+		}
+
+		for i, existingLB := range existingLBs {
+			if strings.EqualFold(to.String(existingLB.Name), clusterName) {
+				// Proactively disable the etag to prevent etag mismatch error when putting lb later.
+				// This could be happen because when we remove the hosts from the lb, the nrp
+				// would put the lb to remove the backend references as well.
+				primarySLB.Etag = nil
+
+				existingLBs[i] = primarySLB
+				return existingLBs, nil
+			}
+		}
+	}
+
+	return existingLBs, nil
+}
+
 // getServiceLoadBalancer gets the loadbalancer for the service if it already exists.
 // If wantLb is TRUE then -it selects a new load balancer.
 // In case the selected load balancer does not exist it returns network.LoadBalancer struct
 // with added metadata (such as name, location) and existsLB set to FALSE.
 // By default - cluster default LB is returned.
-func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node, wantLb bool) (lb *network.LoadBalancer, status *v1.LoadBalancerStatus, exists bool, err error) {
+func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node, wantLb bool, existingLBs []network.LoadBalancer) (lb *network.LoadBalancer, status *v1.LoadBalancerStatus, exists bool, err error) {
 	isInternal := requiresInternalLoadBalancer(service)
 	var defaultLB *network.LoadBalancer
 	primaryVMSetName := az.VMSet.GetPrimaryVMSetName()
 	defaultLBName := az.getAzureLoadBalancerName(clusterName, primaryVMSetName, isInternal)
 	useMultipleSLBs := az.useStandardLoadBalancer() && az.EnableMultipleStandardLoadBalancers
 
-	existingLBs, err := az.ListLB(service)
-	if err != nil {
-		return nil, nil, false, err
+	// reuse the lb list from reconcileSharedLoadBalancer to reduce the api call
+	if len(existingLBs) == 0 {
+		existingLBs, err = az.ListLB(service)
+		if err != nil {
+			return nil, nil, false, err
+		}
 	}
 
 	// check if the service already has a load balancer
 	for i := range existingLBs {
 		existingLB := existingLBs[i]
+
+		// for the primary standard load balancer, when enabled multiple slbs
 		if strings.EqualFold(to.String(existingLB.Name), clusterName) && useMultipleSLBs {
-			cleanedLB, err := az.cleanBackendpoolForPrimarySLB(&existingLB, service, clusterName)
+			// there are two conditions we need to remove the vmSet from the
+			// backend pool of the primary SLB when enabling multiple SLBs:
+			shouldRemoveVMSetFromSLB := func(vmSetName string) bool {
+				// condition 1: not removing the vmSet from the primary SLB
+				// if it is supposed to share the primary SLB.
+				if az.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmSetName)) {
+					return false
+				}
+
+				// condition 2: removing the vmSet from the primary SLB if
+				// it is not the primary vmSet. There are two situations:
+				// 1. when migrating from single SLB to multiple SLBs, we
+				// need to remove all non-primary vmSets from the primary SLB;
+				// 2. when migrating from shared mode to dedicated SLB, we
+				// need to remove the specific vmSet from the primary SLB.
+				return !strings.EqualFold(vmSetName, primaryVMSetName) && vmSetName != ""
+			}
+			cleanedLB, err := az.cleanupVMSetFromBackendPoolByCondition(&existingLB, service, clusterName, shouldRemoveVMSetFromSLB)
 			if err != nil {
 				return nil, nil, false, err
 			}
 			existingLB = *cleanedLB
+			existingLBs[i] = *cleanedLB
 		}
 		if strings.EqualFold(*existingLB.Name, defaultLBName) {
 			defaultLB = &existingLB
@@ -709,7 +875,7 @@ func (az *Cloud) findServiceIPAddress(ctx context.Context, clusterName string, s
 		return service.Status.LoadBalancer.Ingress[0].IP, nil
 	}
 
-	_, lbStatus, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false)
+	_, lbStatus, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false, []network.LoadBalancer{})
 	if err != nil {
 		return "", err
 	}
@@ -1204,7 +1370,14 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
 	serviceName := getServiceName(service)
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s) - wantLb(%t): started", serviceName, wantLb)
-	lb, _, _, err := az.getServiceLoadBalancer(service, clusterName, nodes, wantLb)
+
+	existingLBs, err := az.reconcileSharedLoadBalancer(service, clusterName, nodes)
+	if err != nil {
+		klog.Errorf("reconcileLoadBalancer: failed to reconcile shared load balancer: %w", err)
+		return nil, err
+	}
+
+	lb, _, _, err := az.getServiceLoadBalancer(service, clusterName, nodes, wantLb, existingLBs)
 	if err != nil {
 		klog.Errorf("reconcileLoadBalancer: failed to get load balancer for service %q, error: %v", serviceName, err)
 		return nil, err
@@ -2160,7 +2333,7 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 }
 
 func (az *Cloud) shouldUpdateLoadBalancer(clusterName string, service *v1.Service) bool {
-	_, _, existsLb, _ := az.getServiceLoadBalancer(service, clusterName, nil, false)
+	_, _, existsLb, _ := az.getServiceLoadBalancer(service, clusterName, nil, false, []network.LoadBalancer{})
 	return existsLb && service.ObjectMeta.DeletionTimestamp == nil
 }
 
