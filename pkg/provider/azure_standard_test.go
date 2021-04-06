@@ -216,13 +216,15 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 	az.PrimaryAvailabilitySetName = primary
 
 	cases := []struct {
-		description   string
-		vmSet         string
-		isInternal    bool
-		useStandardLB bool
-		clusterName   string
-		lbName        string
-		expected      string
+		description             string
+		vmSet                   string
+		isInternal              bool
+		useStandardLB           bool
+		enableMultipleSLBs      bool
+		vmSetsSharingPrimarySLB string
+		clusterName             string
+		lbName                  string
+		expected                string
 	}{
 		{
 			description: "prefix of loadBalancerName should be az.LoadBalancerName if az.LoadBalancerName is not nil",
@@ -287,6 +289,23 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			clusterName:   "azure",
 			expected:      "azure-internal",
 		},
+		{
+			description:        "getAzureLoadBalancerName should return the vmSet name if multiple slbs are enabled",
+			vmSet:              "as",
+			useStandardLB:      true,
+			enableMultipleSLBs: true,
+			clusterName:        "azure",
+			expected:           "as",
+		},
+		{
+			description:             "getAzureLoadBalancerName should return the cluster name if multiple slbs are enabled and the vmSet is sharing the primary slb",
+			vmSet:                   "as",
+			useStandardLB:           true,
+			enableMultipleSLBs:      true,
+			vmSetsSharingPrimarySLB: "as , as-1",
+			clusterName:             "azure",
+			expected:                "azure",
+		},
 	}
 
 	for _, c := range cases {
@@ -294,6 +313,12 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		} else {
 			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+		}
+		if c.enableMultipleSLBs {
+			az.EnableMultipleStandardLoadBalancers = true
+		}
+		if c.vmSetsSharingPrimarySLB != "" {
+			az.NodePoolsWithoutDedicatedSLB = c.vmSetsSharingPrimarySLB
 		}
 		az.Config.LoadBalancerName = c.lbName
 		loadbalancerName := az.getAzureLoadBalancerName(c.clusterName, c.vmSet, c.isInternal)

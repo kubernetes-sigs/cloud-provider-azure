@@ -132,9 +132,14 @@ func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, 
 	lbNamePrefix := vmSetName
 	// The LB name prefix is set to the name of the cluster when:
 	// 1. the LB belongs to the primary agent pool.
-	// 2. using the single SLB;
+	// 2. using the single SLB.
 	useSingleSLB := az.useStandardLoadBalancer() && !az.EnableMultipleStandardLoadBalancers
 	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || useSingleSLB {
+		lbNamePrefix = clusterName
+	}
+	// 3. using multiple SLBs while the vmSet is sharing the primary SLB
+	useMultipleSLB := az.useStandardLoadBalancer() && az.EnableMultipleStandardLoadBalancers
+	if useMultipleSLB && az.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmSetName)) {
 		lbNamePrefix = clusterName
 	}
 	if isInternal {

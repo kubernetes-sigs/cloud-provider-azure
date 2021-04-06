@@ -120,6 +120,8 @@ const (
 	TagsDelimiter = ","
 	// TagKeyValueDelimiter is the delimiter between keys and values in tagas
 	TagKeyValueDelimiter = "="
+	// VMSetNamesSharingPrimarySLBDelimiter is the delimiter of vmSet names sharing the primary SLB
+	VMSetNamesSharingPrimarySLBDelimiter = ","
 )
 
 // cache
