@@ -25,6 +25,10 @@ import (
 const (
 	// APIVersion is the API version for provider list api.
 	APIVersion = "2020-06-01"
+	// AzureStackCloudAPIVersion is the API version for Azure Stack
+	AzureStackCloudAPIVersion = "2019-07-01"
+	// AzureStackCloudName is the cloud name of Azure Stack
+	AzureStackCloudName = "AZURESTACKCLOUD"
 )
 
 // Interface is the client interface for ARM.

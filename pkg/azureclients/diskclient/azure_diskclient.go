@@ -64,11 +64,7 @@ func New(config *azclients.ClientConfig) *Client {
 		apiVersion = AzureStackCloudAPIVersion
 	}
 
-	if config.ExtendedLocation != nil {
-		apiVersion = AzureEdgeZonesAPIVersion
-	}
-
-	klog.V(2).Infof("Azure DisksClient using API version: %s", AzureEdgeZonesAPIVersion)
+	klog.V(2).Infof("Azure DisksClient using API version: %s", apiVersion)
 	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
