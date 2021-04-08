@@ -65,6 +65,9 @@ func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
 	authorizer := config.Authorizer
 	apiVersion := APIVersion
+	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
+		apiVersion = AzureStackCloudAPIVersion
+	}
 
 	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
 	client := &Client{
