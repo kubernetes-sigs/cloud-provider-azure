@@ -58,9 +58,6 @@ CCM_E2E_TEST_IMAGE_NAME=cloud-provider-azure-e2e
 CCM_E2E_TEST_IMAGE=$(IMAGE_REGISTRY)/$(CCM_E2E_TEST_IMAGE_NAME):$(IMAGE_TAG)
 CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/kubernetes-sigs/cloud-provider-azure/cloud-provider-azure-e2e:$(IMAGE_TAG)
 
-# Bazel variables
-BAZEL_VERSION := $(shell command -v bazel 2> /dev/null)
-BAZEL_ARGS ?=
 
 ## --------------------------------------
 ## Binaries
@@ -175,24 +172,16 @@ test-boilerplate:
 test-spelling:
 	hack/verify-spelling.sh
 
-.PHONY: test-bazel
-test-bazel:
-	hack/verify-bazel.sh
-
 .PHONY: update-dependencies
 update-dependencies:
 	hack/update-dependencies.sh
-
-.PHONY: update-bazel
-update-bazel:
-	hack/update-bazel.sh
 
 .PHONY: update-gofmt
 update-gofmt:
 	hack/update-gofmt.sh
 
 .PHONY: update
-update: update-dependencies update-bazel update-gofmt
+update: update-dependencies update-gofmt
 
 test-e2e:
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
@@ -200,25 +189,9 @@ test-e2e:
 test-ccm-e2e:
 	go test ./tests/e2e/ -timeout 0 -v -ginkgo.v $(CCM_E2E_ARGS)
 
-.PHONY: bazel-build
-bazel-build:
-# check if bazel exists
-ifndef BAZEL_VERSION
-	$(error "Bazel is not available. Installation instructions can be found at https://docs.bazel.build/versions/master/install.html")
-endif
-	bazel build //cmd/cloud-controller-manager $(BAZEL_ARGS)
-
-.PHONY: bazel-clean
-bazel-clean:
-ifndef BAZEL_VERSION
-	$(error "Bazel is not available. Installation instructions can be found at https://docs.bazel.build/versions/master/install.html")
-endif
-	bazel clean
-
 .PHONY: clean
 clean:
 	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
-	$(MAKE) bazel-clean
 
 $(PKG_CONFIG):
 	ENABLE_GIT_COMMANDS=$(ENABLE_GIT_COMMAND) hack/pkg-config.sh > $@
