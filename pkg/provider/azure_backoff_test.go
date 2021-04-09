@@ -296,26 +296,56 @@ func TestListLB(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-	mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, &retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	tests := []struct {
+		clientErr   *retry.Error
+		expectedErr error
+	}{
+		{
+			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+		},
+		{
+			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tests {
+		az := GetTestCloud(ctrl)
+		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, test.clientErr)
 
-	pips, err := az.ListLB(&v1.Service{})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
-	assert.Empty(t, pips)
+		lbs, err := az.ListLB(&v1.Service{})
+		assert.Equal(t, test.expectedErr, err)
+		assert.Empty(t, lbs)
+	}
 }
 
 func TestListPIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-	mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, &retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	tests := []struct {
+		clientErr   *retry.Error
+		expectedErr error
+	}{
+		{
+			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+		},
+		{
+			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tests {
+		az := GetTestCloud(ctrl)
+		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, test.clientErr)
 
-	pips, err := az.ListPIP(&v1.Service{}, az.ResourceGroup)
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
-	assert.Empty(t, pips)
+		pips, err := az.ListPIP(&v1.Service{}, az.ResourceGroup)
+		assert.Equal(t, test.expectedErr, err)
+		assert.Empty(t, pips)
+	}
 }
 
 func TestCreateOrUpdatePIP(t *testing.T) {
