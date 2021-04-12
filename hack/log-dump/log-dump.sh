@@ -39,6 +39,8 @@ readonly master_logfiles=(
   "kube-proxy"
   "cluster-autoscaler"
   "cloud-node-manager"
+  "csi-azuredisk"
+  "csi-azurefile"
 )
 readonly node_logfiles=(
   "csi-azuredisk"
