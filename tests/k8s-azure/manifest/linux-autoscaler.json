@@ -36,6 +36,10 @@
                             "scale-down-delay-after-add": "5m",
                             "scale-down-unneeded-time": "5m"
                         }
+                    },
+                    {
+                        "name": "blobfuse-flexvolume",
+                        "enabled": false
                     }
                 ]
             }
