@@ -7,32 +7,20 @@ type: docs
 
 > This feature is supported since v1.20.0.
 
-## Scenarios
+There is only one external and one internal Standard Load Balancer (SLB) at most per cluster. Set `enableMultipleStandardLoadBalancers=true` in the cloud config if you want to turn on the multiple SLB mode. Similar to the basic LB, there will be a 1:1 mapping between each SLB and VMSS/VMAS. The SLB of the primary VMSS/VMAS will be named after `clusterName` in the cloud config (in AKS, it would be `kubernetes`) while the name of those belonging to non-primary VMSS/VMAS will be the name of the corresponding vmSet.
 
-Currently, there are three ways to determine which basic LB should be used by a load balancer typed service: default mode, auto mode, and `vmSetName` mode, ref: https://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/. However, the standard LB doesn't support the mode selection annotation. The reason is that every vm in the vnet could be added to the backend pool of the SLB, including vms from different node pools (VMAS/VMSS). Hence, for SLB the selection is not needed.
+> If the cluster provisioning tools like ASK-Engine and CAPZ don't proactively create a dedicated SLB for each VMSS/VMAS when enabling multiple SLB, only the primary SLB would be created. You could manually trigger the creation by setting the service annotation `service.beta.kubernetes.io/azure-load-balancer-mode` to bind the service to that VMSS/VMAS. The dedicated SLB would be created once the service reconcile loop is done. Unlike the primary SLB, there is no default outbound rules/IPs for the non-primary SLBs. That means the SLB would be deleted once all the services referencing it are deleted.
 
-However, there are scenarios that we need multiple SLBs in the cluster. For example, users could set different outbound IPs for different  VMAS or VMSS. In addition, more services are supported with multiple SLBs because there is a 4Mb restriction in an ARM request body.
+## Choose which SLB to use
 
-Basically, we would like to support the mode selection annotation (`service.beta.kubernetes.io/azure-load-balancer-mode`) with SLB, similar to what it is with basic LB.
+The service annotation `service.beta.kubernetes.io/azure-load-balancer-mode` will be respected as long as `enableMultipleStandardLoadBalancers=true` when using standard LB, and the usage is the same as it is in the basic LB clusters. Specifically, there are three selection mode: `default` to select the primary SLB; `__auto__` to select the SLB with minimum rules and `vmSetName` to select the dedicated SLB of that VMSS/VMAS.
 
-## User experience
+## Outbound Connections of non-primary VMSS/VMAS
 
-Currently, only one SLB is allowed per cluster. If users set the mode selection annotation when using the SLB, they would get an error. After this feature implemented, the users could choose if they want a single SLB (current behavior), or they want multiple SLBs, with one SLB binding to one VMAS/VMSS. If the annotation is not set, everything is unchanged: every agent node in the cluster would join the backend pool of the SLB and only one SLB is allowed. If the annotation is set to `__auto__` or `vmSetName`, there would be a 1: 1 mapping between the SLBs and the VMAS/VMSS. Specifically, for `__auto__` mode, the SLB with the minimum load balancing rules would be selected to serve the newly created service; for `vmSetName` mode, the SLB of the given  VMAS/VMSS would be selected. In this way, users could set different outbound rules for different VMAS/VMSS. If there is no SLB of the given VMAS/VMSS, a new SLB would be created.
+The outbound rules of the non-primary SLB are not managed by cloud provider azure. Instead, it should be managed by cluster provisioning tools. For now, there is no outbound configuration for the non-primary VMSS/VMAS, but we plan to support customized outbound configurations in AKS and CAPZ in the future.
 
-## Implementation
+## Sharing the primary SLB with multiple VMSS/VMAS
 
-There are three selection mode of the SLB: `default`, `__auto__` and `vmSetName`. If the annotation `service.beta.kubernetes.io/azure-load-balancer-mode` is not set for the SLB cluster, the behavior would be the same as it is now. If it is set to `__auto__`, new services should choose the SLB with minimum rules. If it is set to `vmSetName`, new services should choose the SLB  of the given VMAS or VMSS.
+> This feature is supported since v1.21.0
 
-The following are the implementations in detail.
-
-1. Introduce a new cloud provider config `enableMultipleStandardLoadBalancers`, default to `false`. When `enableMultipleStandardLoadBalancers=false`, the mode selection annotation `service.beta.kubernetes.io/azure-load-balancer-mode` would be ignored when using the SLB.
-
-2. When `enableMultipleStandardLoadBalancers=true`:
-
-    - If the annotation `service.beta.kubernetes.io/azure-load-balancer-mode` is not set, the SLB of the primary VMAS/VMSS would be selected for the services.
-
-    - If `service.beta.kubernetes.io/azure-load-balancer-mode = __auto__`, the SLB with minimum rules would be selected for the services.
-
-    - If `service.beta.kubernetes.io/azure-load-balancer-mode = vmSetName`, the SLB of the given VMAS/VMSS would be selected for the services. If there is no corresponding SLB, the cloud provider would start to create one with the naming format `vmSetname` or `vmSetName-internal`.
-
-The behaviors of other load balancing resources, e.g., load balancing rules, health probes, frontend IP configurations, etc., would keep unchanged.
+For each non-primary VMSS/VMAS, one can determine to use dedicated SLB or share the primary SLB. If the VMSS/VMAS names are in the cloud config `nodepoolsWithoutDedicatedSLB`, those would join the backend pool of the primary SLB while the others would remain to have dedicated SLBs. If the VMSS/VMAS supposed to share the primary SLB owns a dedicated SLB, the dedicated one would be deleted, and the VMSS/VMAS would be joint the primary SLB's backend pool.
