@@ -307,7 +307,7 @@ func IsErrorRetriable(err error) bool {
 		return false
 	}
 
-	return strings.Contains(err.Error(), "Retriable: true")
+	return strings.Contains(err.Error(), "Retriable: true") || strings.Contains(err.Error(), "retryable error")
 }
 
 // HasStatusForbiddenOrIgnoredError return true if the given error code is part of the error message

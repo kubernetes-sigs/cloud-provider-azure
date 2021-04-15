@@ -349,6 +349,10 @@ func TestIsErrorRetriable(t *testing.T) {
 	// true case
 	result = IsErrorRetriable(fmt.Errorf("Retriable: true"))
 	assert.Equal(t, true, result)
+
+	// true case
+	result = IsErrorRetriable(fmt.Errorf("retryable error occurred"))
+	assert.Equal(t, true, result)
 }
 
 func TestHasErrorCode(t *testing.T) {

@@ -240,7 +240,12 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
-	return lun, vmset.AttachDisk(nodeName, diskMap)
+	err = vmset.AttachDisk(nodeName, diskMap)
+	if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
+		klog.Warningf("azureDisk - update backing off: attach disk(%s), err: %w", diskURI, err)
+		err = vmset.AttachDisk(nodeName, diskMap)
+	}
+	return lun, err
 }
 
 func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {
