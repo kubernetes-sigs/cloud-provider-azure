@@ -176,7 +176,67 @@ func TestStandardDetachDisk(t *testing.T) {
 		err := vmSet.DetachDisk(test.nodeName, diskMap)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && test.diskName != "" {
-			dataDisks, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
+			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
+			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, err: %v", i, test.desc, err)
+		}
+	}
+}
+
+func TestStandardUpdateVM(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc          string
+		nodeName      types.NodeName
+		diskName      string
+		isDetachFail  bool
+		expectedError bool
+	}{
+		{
+			desc:          "no error shall be returned if there's no corresponding vm",
+			nodeName:      "vm2",
+			expectedError: false,
+		},
+		{
+			desc:          "no error shall be returned if there's no corresponding disk",
+			nodeName:      "vm1",
+			diskName:      "disk2",
+			expectedError: false,
+		},
+		{
+			desc:          "no error shall be returned if there's a corresponding disk",
+			nodeName:      "vm1",
+			diskName:      "disk1",
+			expectedError: false,
+		},
+		{
+			desc:          "an error shall be returned if detach disk failed",
+			nodeName:      "vm1",
+			isDetachFail:  true,
+			expectedError: true,
+		},
+	}
+
+	for i, test := range testCases {
+		testCloud := GetTestCloud(ctrl)
+		vmSet := testCloud.VMSet
+		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
+		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		for _, vm := range expectedVMs {
+			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
+		}
+		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+		if test.isDetachFail {
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+		} else {
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		}
+
+		err := vmSet.UpdateVM(test.nodeName)
+		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
+		if !test.expectedError && test.diskName != "" {
+			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
 			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
@@ -248,13 +308,13 @@ func TestGetDataDisks(t *testing.T) {
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Not("vm1"), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		dataDisks, err := vmSet.GetDataDisks(test.nodeName, test.crt)
+		dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, test.crt)
 		assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 
 		if test.crt == azcache.CacheReadTypeUnsafe {
 			time.Sleep(fakeCacheTTL)
-			dataDisks, err := vmSet.GetDataDisks(test.nodeName, test.crt)
+			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, test.crt)
 			assert.Equal(t, test.expectedDataDisks, dataDisks, "TestCase[%d]: %s", i, test.desc)
 			assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		}

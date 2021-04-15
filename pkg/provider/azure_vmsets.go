@@ -72,7 +72,10 @@ type VMSet interface {
 	// DetachDisk detaches a disk from vm
 	DetachDisk(nodeName types.NodeName, diskMap map[string]string) error
 	// GetDataDisks gets a list of data disks attached to the node.
-	GetDataDisks(nodeName types.NodeName, string azcache.AzureCacheReadType) ([]compute.DataDisk, error)
+	GetDataDisks(nodeName types.NodeName, string azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error)
+
+	// UpdateVM updates a vm
+	UpdateVM(nodeName types.NodeName) error
 
 	// GetPowerStatusByNodeName returns the power state of the specified node.
 	GetPowerStatusByNodeName(name string) (string, error)
