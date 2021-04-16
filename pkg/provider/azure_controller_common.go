@@ -362,6 +362,18 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 	return nil
 }
 
+// UpdateVM updates a vm
+func (c *controllerCommon) UpdateVM(nodeName types.NodeName) error {
+	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return err
+	}
+	node := strings.ToLower(string(nodeName))
+	c.lockMap.LockEntry(node)
+	defer c.lockMap.UnlockEntry(node)
+	return vmset.UpdateVM(nodeName)
+}
+
 func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName string) error {
 	var diskMap map[string]string
 	detachDiskMapKey := nodeName + detachDiskMapKeySuffix
@@ -407,23 +419,23 @@ func (c *controllerCommon) cleanDetachDiskRequests(nodeName string) (map[string]
 }
 
 // getNodeDataDisks invokes vmSet interfaces to get data disks for the node.
-func (c *controllerCommon) getNodeDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, error) {
+func (c *controllerCommon) getNodeDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
 	vmset, err := c.getNodeVMSet(nodeName, crt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return vmset.GetDataDisks(nodeName, crt)
 }
 
 // GetDiskLun finds the lun on the host that the vhd is attached to, given a vhd's diskName and diskURI.
-func (c *controllerCommon) GetDiskLun(diskName, diskURI string, nodeName types.NodeName) (int32, error) {
+func (c *controllerCommon) GetDiskLun(diskName, diskURI string, nodeName types.NodeName) (int32, *string, error) {
 	// getNodeDataDisks need to fetch the cached data/fresh data if cache expired here
 	// to ensure we get LUN based on latest entry.
-	disks, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeDefault)
+	disks, provisioningState, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		klog.Errorf("error of getting data disks for node %q: %v", nodeName, err)
-		return -1, err
+		return -1, provisioningState, err
 	}
 
 	for _, disk := range disks {
@@ -435,17 +447,17 @@ func (c *controllerCommon) GetDiskLun(diskName, diskURI string, nodeName types.N
 			} else {
 				// found the disk
 				klog.V(2).Infof("azureDisk - find disk: lun %d name %q uri %q", *disk.Lun, diskName, diskURI)
-				return *disk.Lun, nil
+				return *disk.Lun, provisioningState, nil
 			}
 		}
 	}
-	return -1, fmt.Errorf("cannot find Lun for disk %s", diskName)
+	return -1, provisioningState, fmt.Errorf("cannot find Lun for disk %s", diskName)
 }
 
 // SetDiskLun find unused luns and allocate lun for every disk in diskMap.
 // Return lun of diskURI, -1 if all luns are used.
 func (c *controllerCommon) SetDiskLun(nodeName types.NodeName, diskURI string, diskMap map[string]*AttachDiskOptions) (int32, error) {
-	disks, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeForceRefresh)
+	disks, _, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeForceRefresh)
 	if err != nil {
 		klog.Errorf("error of getting data disks for node %q: %v", nodeName, err)
 		return -1, err
@@ -519,7 +531,7 @@ func (c *controllerCommon) DisksAreAttached(diskNames []string, nodeName types.N
 	// for every reconcile call. The cache is invalidated after Attach/Detach
 	// disk. So the new entry will be fetched and cached the first time reconcile
 	// loop runs after the Attach/Disk OP which will reflect the latest model.
-	disks, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeUnsafe)
+	disks, _, err := c.getNodeDataDisks(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach

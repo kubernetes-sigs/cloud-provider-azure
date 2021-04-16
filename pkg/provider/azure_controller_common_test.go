@@ -350,6 +350,77 @@ func TestCommonDetachDisk(t *testing.T) {
 	}
 }
 
+func TestCommonUpdateVM(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc             string
+		vmList           map[string]string
+		nodeName         types.NodeName
+		diskName         string
+		isErrorRetriable bool
+		expectedErr      bool
+	}{
+		{
+			desc:        "error should not be returned if there's no such instance corresponding to given nodeName",
+			nodeName:    "vm1",
+			expectedErr: false,
+		},
+		{
+			desc:             "an error should be returned if vmset detach failed with isErrorRetriable error",
+			vmList:           map[string]string{"vm1": "PowerState/Running"},
+			nodeName:         "vm1",
+			isErrorRetriable: true,
+			expectedErr:      true,
+		},
+		{
+			desc:        "no error shall be returned if there's no matching disk according to given diskName",
+			vmList:      map[string]string{"vm1": "PowerState/Running"},
+			nodeName:    "vm1",
+			diskName:    "disk2",
+			expectedErr: false,
+		},
+		{
+			desc:        "no error shall be returned if the disk exists",
+			vmList:      map[string]string{"vm1": "PowerState/Running"},
+			nodeName:    "vm1",
+			diskName:    "disk1",
+			expectedErr: false,
+		},
+	}
+
+	for i, test := range testCases {
+		testCloud := GetTestCloud(ctrl)
+		common := &controllerCommon{
+			location:              testCloud.Location,
+			storageEndpointSuffix: testCloud.Environment.StorageEndpointSuffix,
+			resourceGroup:         testCloud.ResourceGroup,
+			subscriptionID:        testCloud.SubscriptionID,
+			cloud:                 testCloud,
+			lockMap:               newLockMap(),
+		}
+		expectedVMs := setTestVirtualMachines(testCloud, test.vmList, false)
+		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		for _, vm := range expectedVMs {
+			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
+		}
+		if len(expectedVMs) == 0 {
+			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+		}
+		if test.isErrorRetriable {
+			testCloud.CloudProviderBackoff = true
+			testCloud.ResourceRequestBackoff = wait.Backoff{Steps: 1}
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusBadRequest, Retriable: true, RawError: fmt.Errorf("Retriable: true")}).AnyTimes()
+		} else {
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		}
+
+		err := common.UpdateVM(test.nodeName)
+		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
+	}
+}
+
 func TestGetDiskLun(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -391,7 +462,7 @@ func TestGetDiskLun(t *testing.T) {
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
 		}
 
-		lun, err := common.GetDiskLun(test.diskName, test.diskURI, "vm1")
+		lun, _, err := common.GetDiskLun(test.diskName, test.diskURI, "vm1")
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}

@@ -212,16 +212,47 @@ func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 	return nil
 }
 
+// UpdateVM updates a vm
+func (ss *ScaleSet) UpdateVM(nodeName types.NodeName) error {
+	vmName := mapNodeNameToVMName(nodeName)
+	ssName, instanceID, _, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return err
+	}
+
+	nodeResourceGroup, err := ss.GetNodeResourceGroup(vmName)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	// Invalidate the cache right after updating
+	defer func() {
+		_ = ss.deleteCacheForNode(vmName)
+	}()
+
+	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, nodeName)
+	rerr := ss.VirtualMachineScaleSetVMsClient.Update(ctx, nodeResourceGroup, ssName, instanceID, compute.VirtualMachineScaleSetVM{}, "update_vmss_instance")
+
+	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - returned with %v", nodeResourceGroup, nodeName, rerr)
+	if rerr != nil {
+		return rerr.Error()
+	}
+	return nil
+}
+
 // GetDataDisks gets a list of data disks attached to the node.
-func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, error) {
+func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
 	_, _, vm, err := ss.getVmssVM(string(nodeName), crt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if vm.StorageProfile == nil || vm.StorageProfile.DataDisks == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	return *vm.StorageProfile.DataDisks, nil
+	return *vm.StorageProfile.DataDisks, vm.ProvisioningState, nil
 }

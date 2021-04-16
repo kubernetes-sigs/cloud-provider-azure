@@ -261,18 +261,33 @@ func (mr *MockVMSetMockRecorder) DetachDisk(nodeName, diskMap interface{}) *gomo
 }
 
 // GetDataDisks mocks base method
-func (m *MockVMSet) GetDataDisks(nodeName types.NodeName, string cache.AzureCacheReadType) ([]compute.DataDisk, error) {
+func (m *MockVMSet) GetDataDisks(nodeName types.NodeName, cacheType cache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDataDisks", nodeName, string)
+	ret := m.ctrl.Call(m, "GetDataDisks", nodeName, cacheType)
 	ret0, _ := ret[0].([]compute.DataDisk)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(*string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetDataDisks indicates an expected call of GetDataDisks
 func (mr *MockVMSetMockRecorder) GetDataDisks(nodeName, string interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDataDisks", reflect.TypeOf((*MockVMSet)(nil).GetDataDisks), nodeName, string)
+}
+
+// UpdateVM mocks base method
+func (m *MockVMSet) UpdateVM(nodeName types.NodeName) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateVM", nodeName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateVM indicates an expected call of UpdateVM
+func (mr *MockVMSetMockRecorder) UpdateVM(nodeName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateVM", reflect.TypeOf((*MockVMSet)(nil).UpdateVM), nodeName)
 }
 
 // GetPowerStatusByNodeName mocks base method
