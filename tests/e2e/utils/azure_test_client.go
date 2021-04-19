@@ -80,7 +80,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		return nil, err
 	}
 
-	nodes, err := GetAgentNodes(kubeClient)
+	nodes, err := WaitGetAgentNodes(kubeClient)
 	if err != nil {
 		return nil, err
 	}

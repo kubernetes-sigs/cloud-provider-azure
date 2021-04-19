@@ -1208,3 +1208,8 @@ func (as *availabilitySet) GetNodeCIDRMasksByProviderID(providerID string) (int,
 func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(vmasNamesMap map[string]bool, backendPoolID string) error {
 	return nil
 }
+
+// GetAgentPoolVMSetNames returns all VMAS names according to the nodes
+func (as *availabilitySet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
+	return as.getAgentPoolAvailabilitySets(nodes)
+}

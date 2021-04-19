@@ -18,6 +18,7 @@ package provider
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -254,6 +256,41 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	}
 
 	return rerr.Error()
+}
+
+// ListAgentPoolLBs invokes az.LoadBalancerClient.List and filter out
+// those that are not managed by cloud provider azure or not associated to a managed VMSet.
+func (az *Cloud) ListAgentPoolLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
+	allLBs, err := az.ListLB(service)
+	if err != nil {
+		return nil, err
+	}
+
+	if allLBs == nil {
+		klog.Warningf("ListAgentPoolLBs: no LBs found")
+		return nil, nil
+	}
+
+	agentPoolLBs := make([]network.LoadBalancer, 0)
+	agentPoolVMSetNames, err := az.VMSet.GetAgentPoolVMSetNames(nodes)
+	if err != nil {
+		return nil, fmt.Errorf("ListAgentPoolLBs: failed to get agent pool vmSet names: %w", err)
+	}
+	agentPoolVMSetNamesSet := sets.NewString()
+	if agentPoolVMSetNames != nil && len(*agentPoolVMSetNames) > 0 {
+		for _, vmSetName := range *agentPoolVMSetNames {
+			agentPoolVMSetNamesSet.Insert(strings.ToLower(vmSetName))
+		}
+	}
+
+	for _, lb := range allLBs {
+		vmSetNameFromLBName := az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName)
+		if agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
+			agentPoolLBs = append(agentPoolLBs, lb)
+		}
+	}
+
+	return agentPoolLBs, nil
 }
 
 // ListLB invokes az.LoadBalancerClient.List with exponential backoff retry

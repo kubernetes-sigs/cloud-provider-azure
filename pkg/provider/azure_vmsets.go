@@ -86,6 +86,9 @@ type VMSet interface {
 	// GetNodeNameByIPConfigurationID gets the nodeName and vmSetName by IP configuration ID.
 	GetNodeNameByIPConfigurationID(ipConfigurationID string) (string, string, error)
 
-	// GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
+	// GetNodeCIDRMasksByProviderID returns the node CIDR subnet mask by provider ID.
 	GetNodeCIDRMasksByProviderID(providerID string) (int, int, error)
+
+	// GetAgentPoolVMSetNames returns all vmSet names according to the nodes
+	GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error)
 }

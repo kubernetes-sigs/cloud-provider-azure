@@ -921,16 +921,18 @@ func (ss *ScaleSet) getConfigForScaleSetByIPFamily(config *compute.VirtualMachin
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool, which returns (resourceGroup, vmasName, instanceID, vmssVM, error).
-func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string, isInternal bool) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
-	klog.V(3).Infof("ensuring node %q of scaleset %q in LB backendpool %q", nodeName, vmSetName, backendPoolID)
+func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetNameOfLB string, isInternal bool) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
+		klog.Errorf("EnsureHostInPool: failed to get VMSS VM %s: %v", vmName, err)
 		return "", "", "", nil, err
 	}
 
+	klog.V(2).Infof("ensuring node %q of scaleset %q in LB backendpool %q", nodeName, ssName, backendPoolID)
+
 	// Check scale set name:
-	// - For basic SKU load balancer, return nil if the node's scale set is mismatched with vmSetName.
+	// - For basic SKU load balancer, return nil if the node's scale set is mismatched with vmSetNameOfLB.
 	// - For single standard SKU load balancer, backend could belong to multiple VMSS, so we
 	//   don't check vmSet for it.
 	// - For multiple standard SKU load balancers, the behavior is similar to the basic load balancer
@@ -942,8 +944,8 @@ func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeNam
 		// need to check the vmSet name when using multiple standard LBs
 		needCheck = true
 	}
-	if vmSetName != "" && needCheck && !strings.EqualFold(vmSetName, ssName) {
-		klog.V(3).Infof("EnsureHostInPool skips node %s because it is not in the ScaleSet %s", vmName, vmSetName)
+	if vmSetNameOfLB != "" && needCheck && !strings.EqualFold(vmSetNameOfLB, ssName) {
+		klog.V(3).Infof("EnsureHostInPool skips node %s because it is not in the ScaleSet %s", vmName, vmSetNameOfLB)
 		return "", "", "", nil, nil
 	}
 
@@ -1051,7 +1053,7 @@ func getVmssAndResourceGroupNameByVMProviderID(providerID string) (string, strin
 	return matches[1], matches[2], nil
 }
 
-func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
+func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	klog.V(2).Infof("ensureVMSSInPool: ensuring VMSS with backendPoolID %s", backendPoolID)
 	vmssNamesMap := make(map[string]bool)
 
@@ -1080,7 +1082,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 			}
 		}
 	} else {
-		vmssNamesMap[vmSetName] = true
+		vmssNamesMap[vmSetNameOfLB] = true
 	}
 
 	klog.V(2).Infof("ensureVMSSInPool begins to update VMSS %v with backendPoolID %s", vmssNamesMap, backendPoolID)
@@ -1189,7 +1191,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
-func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string, isInternal bool) error {
+func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string, isInternal bool) error {
 	mc := metrics.NewMetricContext("services", "vmss_ensure_hosts_in_pool", ss.ResourceGroup, ss.SubscriptionID, service.Name)
 	isOperationSucceeded := false
 	defer func() {
@@ -1224,7 +1226,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 			// VMAS nodes should also be added to the SLB backends.
 			if ss.useStandardLoadBalancer() {
 				hostUpdates = append(hostUpdates, func() error {
-					_, _, _, _, err := ss.availabilitySet.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName, isInternal)
+					_, _, _, _, err := ss.availabilitySet.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB, isInternal)
 					return err
 				})
 				continue
@@ -1234,7 +1236,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 			continue
 		}
 
-		nodeResourceGroup, nodeVMSS, nodeInstanceID, nodeVMSSVM, err := ss.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName, isInternal)
+		nodeResourceGroup, nodeVMSS, nodeInstanceID, nodeVMSSVM, err := ss.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetNameOfLB, isInternal)
 		if err != nil {
 			klog.Errorf("EnsureHostInPool(%s): backendPoolID(%s) - failed to ensure host in pool: %q", getServiceName(service), backendPoolID, err)
 			errors = append(errors, err)
@@ -1291,7 +1293,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 
 	// Ensure the backendPoolID is also added on VMSS itself.
 	// Refer to issue kubernetes/kubernetes#80365 for detailed information
-	err := ss.ensureVMSSInPool(service, nodes, backendPoolID, vmSetName)
+	err := ss.ensureVMSSInPool(service, nodes, backendPoolID, vmSetNameOfLB)
 	if err != nil {
 		return err
 	}
@@ -1668,4 +1670,9 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]b
 	}
 
 	return nil
+}
+
+// GetAgentPoolVMSetNames returns all VMSS names according to the nodes
+func (ss *ScaleSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
+	return ss.getAgentPoolScaleSets(nodes)
 }

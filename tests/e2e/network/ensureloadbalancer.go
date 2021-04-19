@@ -224,7 +224,8 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal: "false",
 		}
-		ipName := basename + "-public-remain" + string(uuid.NewUUID())[0:4]
+		suffix := string(uuid.NewUUID())[0:4]
+		ipName := basename + "-public-remain" + suffix
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
@@ -250,7 +251,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		By("Update without changing the service and wait for a while")
 		utils.Logf("External IP is now %s", targetIP)
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		service.Annotations[consts.ServiceAnnotationDNSLabelName] = "testlabel"
+		service.Annotations[consts.ServiceAnnotationDNSLabelName] = "testlabel" + suffix
 		utils.Logf(service.Annotations[consts.ServiceAnnotationDNSLabelName])
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -356,6 +357,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		ip, err := utils.WaitServiceExposure(cs, ns.Name, "service1")
+		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service1 in namespace %s with IP %s", ns.Name, ip)
 
 		ports2 := []v1.ServicePort{{

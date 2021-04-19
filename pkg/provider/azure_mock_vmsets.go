@@ -219,9 +219,9 @@ func (mr *MockVMSetMockRecorder) EnsureBackendPoolDeleted(service, backendPoolID
 }
 
 // EnsureBackendPoolDeletedFromVMSets mocks base method
-func (m *MockVMSet) EnsureBackendPoolDeletedFromVMSets(vmSetsNameMap map[string]bool, backendPoolID string) error {
+func (m *MockVMSet) EnsureBackendPoolDeletedFromVMSets(vmSetNamesMap map[string]bool, backendPoolID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureBackendPoolDeletedFromVMSet", vmSetsNameMap, backendPoolID)
+	ret := m.ctrl.Call(m, "EnsureBackendPoolDeletedFromVMSets", vmSetNamesMap, backendPoolID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -229,7 +229,7 @@ func (m *MockVMSet) EnsureBackendPoolDeletedFromVMSets(vmSetsNameMap map[string]
 // EnsureBackendPoolDeletedFromVMSets indicates an expected call of EnsureBackendPoolDeletedFromVMSets
 func (mr *MockVMSetMockRecorder) EnsureBackendPoolDeletedFromVMSets(vmSetNamesMap, backendPoolID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureBackendPoolDeletedFromVMSet", reflect.TypeOf((*MockVMSet)(nil).EnsureBackendPoolDeletedFromVMSets), vmSetNamesMap, backendPoolID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureBackendPoolDeletedFromVMSets", reflect.TypeOf((*MockVMSet)(nil).EnsureBackendPoolDeletedFromVMSets), vmSetNamesMap, backendPoolID)
 }
 
 // AttachDisk mocks base method
@@ -350,4 +350,19 @@ func (m *MockVMSet) GetNodeCIDRMasksByProviderID(providerID string) (int, int, e
 func (mr *MockVMSetMockRecorder) GetNodeCIDRMasksByProviderID(providerID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeCIDRMasksByProviderID", reflect.TypeOf((*MockVMSet)(nil).GetNodeCIDRMasksByProviderID), providerID)
+}
+
+// GetAgentPoolVMSetNames mocks base method
+func (m *MockVMSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAgentPoolVMSetNames", nodes)
+	ret0, _ := ret[0].(*[]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAgentPoolVMSetNames indicates an expected call of GetAgentPoolVMSetNames
+func (mr *MockVMSetMockRecorder) GetAgentPoolVMSetNames(nodes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentPoolVMSetNames", reflect.TypeOf((*MockVMSet)(nil).GetAgentPoolVMSetNames), nodes)
 }

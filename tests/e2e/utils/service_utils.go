@@ -19,8 +19,11 @@ package utils
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
+
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +33,8 @@ import (
 )
 
 const (
-	serviceTimeout = 30 * time.Minute
+	serviceTimeout        = 5 * time.Minute
+	serviceTimeoutBasicLB = 10 * time.Minute
 )
 
 // DeleteService deletes a service
@@ -72,7 +76,14 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 	var service *v1.Service
 	var err error
 
-	if wait.PollImmediate(10*time.Second, serviceTimeout, func() (bool, error) {
+	timeout := serviceTimeout
+	if skuEnv := os.Getenv(LoadBalancerSkuEnv); skuEnv != "" {
+		if strings.EqualFold(skuEnv, string(aznetwork.LoadBalancerSkuNameBasic)) {
+			timeout = serviceTimeoutBasicLB
+		}
+	}
+
+	if wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
