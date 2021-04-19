@@ -75,6 +75,34 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	return ret, nil
 }
 
+// WaitGetAgentNodes gets the list of agent nodes and ensures the providerIDs are good
+func WaitGetAgentNodes(cs clientset.Interface) (nodes []v1.Node, err error) {
+	err = wait.PollImmediate(pollInterval, pollTimeout, func() (done bool, err error) {
+		nodes, err = GetAgentNodes(cs)
+		if err != nil {
+			Logf("error when getting agent nodes: %v", err)
+			return false, err
+		}
+
+		for _, node := range nodes {
+			providerID := node.Spec.ProviderID
+			if providerID == "" {
+				Logf("the providerID of node %s is empty, will retry soon", node.Name)
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		Logf("error when waiting for the result: %v", err)
+		return
+	}
+
+	return
+}
+
 // GetAllNodes obtains the list of all nodes include master
 func GetAllNodes(cs clientset.Interface) ([]v1.Node, error) {
 	nodesList, err := getNodeList(cs)

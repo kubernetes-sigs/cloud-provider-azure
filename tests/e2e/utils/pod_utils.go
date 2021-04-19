@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	pullInterval = 10 * time.Second
-	pullTimeout  = 5 * time.Minute
+	pollInterval = 10 * time.Second
+	pollTimeout  = 5 * time.Minute
 )
 
 // PodIPRE tests if there's a valid IP in a easy way
@@ -73,7 +73,7 @@ func CountPendingPods(cs clientset.Interface, ns string) (int, error) {
 }
 
 func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
-	return wait.PollImmediate(pullInterval, pullTimeout, func() (done bool, err error) {
+	return wait.PollImmediate(pollInterval, pollTimeout, func() (done bool, err error) {
 		pendingPodCount, err := CountPendingPods(cs, ns)
 		if err != nil {
 			Logf("unexpected error: %w", err)
@@ -145,7 +145,7 @@ func GetPodLogs(cs clientset.Interface, ns, podName string, opts *v1.PodLogOptio
 // GetPodOutboundIP returns the outbound IP of the given pod
 func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string) (string, error) {
 	var log []byte
-	err := wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {
+	err := wait.PollImmediate(pollInterval, pollTimeout, func() (bool, error) {
 		pod, err := cs.CoreV1().Pods(nsName).Get(context.TODO(), podTemplate.Name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
@@ -178,7 +178,7 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 // WaitPodTo returns True if pod is in the specific phase during
 // a short period of time
 func WaitPodTo(phase v1.PodPhase, cs clientset.Interface, podTemplate *v1.Pod, nsName string) (result bool, err error) {
-	if err := wait.PollImmediate(pullInterval, pullTimeout, func() (result bool, err error) {
+	if err := wait.PollImmediate(pollInterval, pollTimeout, func() (result bool, err error) {
 		pod, err := cs.CoreV1().Pods(nsName).Get(context.TODO(), podTemplate.Name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
