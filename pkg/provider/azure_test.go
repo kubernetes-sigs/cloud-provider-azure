@@ -725,7 +725,7 @@ func TestReconcileLoadBalancerAddServicesOnMultipleSubnets(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 2, true)
 
 	// svc2 is using LB with "-internal" suffix
-	lb, err = az.reconcileLoadBalancer(testClusterName, &svc2, nil, true /* wantLb */)
+	lb, err = az.reconcileLoadBalancer(testClusterName, &svc2, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc2: %q", err)
 	}

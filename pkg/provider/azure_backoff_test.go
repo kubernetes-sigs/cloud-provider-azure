@@ -292,13 +292,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 	}
 }
 
-func TestListLB(t *testing.T) {
+func TestListAgentPoolLBs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	tests := []struct {
-		clientErr   *retry.Error
-		expectedErr error
+		existingLBs, expectedLBs []network.LoadBalancer
+		callTimes                int
+		clientErr                *retry.Error
+		expectedErr              error
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
@@ -308,15 +310,37 @@ func TestListLB(t *testing.T) {
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
 			expectedErr: nil,
 		},
+		{
+			existingLBs: []network.LoadBalancer{
+				{Name: to.StringPtr("kubernetes")},
+				{Name: to.StringPtr("kubernetes-internal")},
+				{Name: to.StringPtr("vmas-1")},
+				{Name: to.StringPtr("vmas-1-internal")},
+				{Name: to.StringPtr("unmanaged")},
+				{Name: to.StringPtr("unmanaged-internal")},
+			},
+			expectedLBs: []network.LoadBalancer{
+				{Name: to.StringPtr("kubernetes")},
+				{Name: to.StringPtr("kubernetes-internal")},
+				{Name: to.StringPtr("vmas-1")},
+				{Name: to.StringPtr("vmas-1-internal")},
+			},
+			callTimes: 1,
+		},
 	}
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
-		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, test.clientErr)
 
-		lbs, err := az.ListLB(&v1.Service{})
+		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingLBs, test.clientErr)
+		mockVMSet := NewMockVMSet(ctrl)
+		mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmas-0", "vmas-1"}, nil).Times(test.callTimes)
+		mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
+		az.VMSet = mockVMSet
+
+		lbs, err := az.ListAgentPoolLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
 		assert.Equal(t, test.expectedErr, err)
-		assert.Empty(t, lbs)
+		assert.Equal(t, test.expectedLBs, lbs)
 	}
 }
 
