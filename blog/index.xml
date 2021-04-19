@@ -1,4 +1,64 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.2</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/02/28/v0.7.2/</link><pubDate>Sun, 28 Feb 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/02/28/v0.7.2/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.3</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/04/19/v0.7.3/</link><pubDate>Mon, 19 Apr 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/04/19/v0.7.3/</guid><description>
+&lt;h1 id="major-changes-since-v072">Major changes since v0.7.2&lt;/h1>
+&lt;p>Cloud Provider Azure v0.7.3 supports out-of-tree node ipam controller, sharing the primary SLB with multiple vmSets, and a bunch of other features/bug fixes. The images are available at:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.7.2&lt;/code>&lt;/li>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.7.2&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Chore: remove get file in CreateFileShare (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/534">#534&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Feat: add ARM node provider (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/580">#580&lt;/a>, &lt;a href="https://github.com/JesusAlvarezTorres">@JesusAlvarezTorres&lt;/a>)&lt;/li>
+&lt;li>Feat: add disable RetentionPolicy parameter (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/545">#545&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Feat: add update vm interface (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/592">#592&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Feat: implement cloud allocator for vmas (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/555">#555&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: implement cloud cidr allocator for VMSS (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/539">#539&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: support sharing the primary slb with multiple vmSets (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/578">#578&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: support system tag (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/558">#558&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: upgrade azure sdk to v53.1.0 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/589">#589&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="documentation">Documentation&lt;/h3>
+&lt;ul>
+&lt;li>Doc: add doc for out-of-tree node ipam controller (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/553">#553&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Allow disabling AzureStackCloud API versions when using AzureStackCloud config on public cloud (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/525">#525&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Avoid caching the VMSS instances whose network profile is nil (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/583">#583&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Azure_storageaccount.go:99] found skip-matching tag for account %!s(*string=0xc000cbd7b0), skip matching (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/529">#529&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Ensure only LoadBalancer rule is created when HA mode is enabled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/536">#536&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Ensure service deleted when the Azure resource group has been deleted (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/584">#584&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix node public IP fetching from instance metadata service when the node is part of standard load balancer backend pool. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/540">#540&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: avoid panic when RouteTablePropertiesFormat is nil (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/568">#568&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: not delete existing pip when service is deleted (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/574">#574&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: support sharing the primary slb when there are both external and internal load balancers in the cluster (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/588">#588&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fixed routes not created issues before Pod scheduling. When using kubenet, 1) cloud-node-manager supports &amp;ldquo;&amp;ndash;wait-routes=true&amp;rdquo; to indicate a node would wait for route updates before accepting Pod scheduling and 2) route controller would wait a while for new routes to take effect (default is 30s). (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/528">#528&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Ignore not a VMSS error for VMAS nodes in reconcileBackendPools (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/551">#551&lt;/a>, &lt;a href="https://github.com/CecileRobertMichon">@CecileRobertMichon&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: move consts in azure_vmss.go to consts.go (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/554">#554&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: remove bazel support (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/585">#585&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: switch to network api 2020-08-01 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/569">#569&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Enable docker BuildKit and update Go to 1.15.8 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/548">#548&lt;/a>, &lt;a href="https://github.com/CecileRobertMichon">@CecileRobertMichon&lt;/a>)&lt;/li>
+&lt;li>Update Azure compute API version to 2020-12-01 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/579">#579&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Fix availability set cache in vmss cache (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/537">#537&lt;/a>, &lt;a href="https://github.com/CecileRobertMichon">@CecileRobertMichon&lt;/a>)&lt;/li>
+&lt;li>Fix: check disk state before attach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/564">#564&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: convert backend pool id to lower case before using it (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/561">#561&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/gofrs/uuid: &lt;a href="https://github.com/gofrs/uuid/tree/v4.0.0">v4.0.0+incompatible&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v51.2.0...v53.1.0">v51.2.0+incompatible → v53.1.0+incompatible&lt;/a>&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v0.7.2</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/02/28/v0.7.2/</link><pubDate>Sun, 28 Feb 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/02/28/v0.7.2/</guid><description>
 &lt;p>Cloud Provider Azure v0.7.2 allows to disable AzureStackCloud API versions when using AzureStackCloud config on public cloud (e.g. for customizing ARM endpoints). The images are available at&lt;/p>
 &lt;ul>
 &lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.7.2&lt;/code>&lt;/li>
