@@ -20,6 +20,7 @@ Here is a list of Azure resource assumptions that are required for cloud provide
     * Each VMAS and VMSS SHOULD be put behind a different standard LoadBalancer.
     * The primary LoadBalancer's name SHOULD be `<clusterName>` for external type and `<clusterName>-internal` for internal type. Virtual machines that are part of primary VMAS (set by `primaryAvailabilitySetName`) or primary VMSS (set by `primaryScaleSetName`) SHOULD be added to primary LoadBalancer backend address pool.
     * Other standard LoadBalancer's name SHOULD be same as VMAS or VMSS name.
+* The cluster name set for `kube-controller-manager --cluster-name=<cluster-name>` MUST not end with `-internal`.
 
 After the cluster is provisioned, cloud provider Azure MAY update the following Azure resources based on workloads:
 
