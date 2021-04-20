@@ -312,6 +312,7 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 	}
 
 	c.lockMap.LockEntry(node)
+	defer c.lockMap.UnlockEntry(node)
 	diskMap, err := c.cleanDetachDiskRequests(node)
 	if err != nil {
 		return err
@@ -320,39 +321,21 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 	klog.V(2).Infof("Trying to detach volume %q from node %q, diskMap: %s", diskURI, nodeName, diskMap)
 	if len(diskMap) > 0 {
 		c.diskStateMap.Store(disk, "detaching")
-		err = vmset.DetachDisk(nodeName, diskMap)
-		c.diskStateMap.Delete(disk)
-	}
-	c.lockMap.UnlockEntry(node)
-
-	if err != nil {
-		if isInstanceNotFoundError(err) {
-			// if host doesn't exist, no need to detach
-			klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
-				err, diskURI)
-			return nil
-		}
-		if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
-			klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %w", diskName, diskURI, err)
-			retryErr := kwait.ExponentialBackoff(c.cloud.RequestBackoff(), func() (bool, error) {
-				c.lockMap.LockEntry(node)
-				c.diskStateMap.Store(disk, "detaching")
-				err := vmset.DetachDisk(nodeName, diskMap)
-				c.diskStateMap.Delete(disk)
-				c.lockMap.UnlockEntry(node)
-
-				retriable := false
-				if err != nil && retry.IsErrorRetriable(err) {
-					retriable = true
-				}
-				return !retriable, err
-			})
-			if retryErr != nil {
-				err = retryErr
-				klog.V(2).Infof("azureDisk - update abort backoff: detach disk(%s, %s), err: %w", diskName, diskURI, err)
+		defer c.diskStateMap.Delete(disk)
+		if err = vmset.DetachDisk(nodeName, diskMap); err != nil {
+			if isInstanceNotFoundError(err) {
+				// if host doesn't exist, no need to detach
+				klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
+					err, diskURI)
+				return nil
+			}
+			if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
+				klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %w", diskName, diskURI, err)
+				err = vmset.DetachDisk(nodeName, diskMap)
 			}
 		}
 	}
+
 	if err != nil {
 		klog.Errorf("azureDisk - detach disk(%s, %s) failed, err: %v", diskName, diskURI, err)
 		return err
