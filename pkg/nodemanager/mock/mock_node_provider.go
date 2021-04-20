@@ -34,7 +34,7 @@ type NodeProvider struct {
 }
 
 // GetZone provides a mock function with given fields: ctx
-func (_m *NodeProvider) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
+func (_m *NodeProvider) GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error) {
 	ret := _m.Called(ctx)
 
 	var r0 cloudprovider.Zone

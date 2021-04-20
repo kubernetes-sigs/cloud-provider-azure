@@ -19,6 +19,7 @@ package node
 import (
 	"context"
 	"os"
+	"runtime"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,6 +88,11 @@ func (np *ARMNodeProvider) InstanceType(ctx context.Context, name types.NodeName
 // GetZone returns the Zone containing the current failure zone and locality region that the program is running in
 // In most cases, this method is called from the kubelet querying a local metadata service to acquire its zone.
 // If the node is not running with availability zones, then it will fall back to fault domain.
-func (np *ARMNodeProvider) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
+func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error) {
+	// Needed for cloud-node-manager on windows nodes where hostname of the pod is different from node name
+	if runtime.GOOS == "windows" {
+		return np.azure.GetZoneByNodeName(ctx, name)
+	}
+
 	return np.azure.GetZone(ctx)
 }

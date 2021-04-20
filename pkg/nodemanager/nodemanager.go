@@ -55,7 +55,7 @@ type NodeProvider interface {
 	// InstanceType returns the type of the specified instance.
 	InstanceType(ctx context.Context, name types.NodeName) (string, error)
 	// GetZone returns the Zone containing the current failure zone and locality region that the program is running in
-	GetZone(ctx context.Context) (cloudprovider.Zone, error)
+	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
 }
 
 // labelReconcileInfo lists Node labels to reconcile, and how to reconcile them.
@@ -595,7 +595,7 @@ func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node 
 // getZoneByName will attempt to get the zone of node using its providerID
 // then it's name. If both attempts fail, an error is returned
 func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node) (cloudprovider.Zone, error) {
-	zone, err := cnc.nodeProvider.GetZone(ctx)
+	zone, err := cnc.nodeProvider.GetZone(ctx, types.NodeName(node.Name))
 	if err != nil {
 		return cloudprovider.Zone{}, fmt.Errorf("Zone: Error fetching by NodeName %s: %w", node.Name, err)
 	}
