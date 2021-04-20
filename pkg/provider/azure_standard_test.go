@@ -1160,7 +1160,7 @@ func TestGetStandardVMSetNames(t *testing.T) {
 					},
 				},
 			},
-			expectedErrMsg: fmt.Errorf("node (vm2) - has no availability sets"),
+			expectedErrMsg: errors.New("no availability sets found for nodes, node count(1)"),
 		},
 		{
 			name: "GetVMSetNames should report the error if there's no such availability set",

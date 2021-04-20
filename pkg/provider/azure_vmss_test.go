@@ -874,7 +874,7 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 			vmList:       []string{"vmss-vm-000000"},
 			vmClientErr:  &retry.Error{RawError: fmt.Errorf("error")},
 			expectedType: "",
-			expectedErr:  fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:  fmt.Errorf("newAvailabilitySetNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
 		},
 	}
 
@@ -895,7 +895,7 @@ func TestGetInstanceTypeByNodeName(t *testing.T) {
 
 		sku, err := ss.GetInstanceTypeByNodeName("vmss-vm-000000")
 		if test.expectedErr != nil {
-			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
 		assert.Equal(t, test.expectedType, sku, test.description)
 	}
@@ -998,7 +998,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 			vmList:              []string{"vmss-vm-000000"},
 			hasPrimaryInterface: true,
 			vmClientErr:         &retry.Error{RawError: fmt.Errorf("error")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:         fmt.Errorf("newAvailabilitySetNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
 		},
 		{
 			description:         "GetPrimaryInterface should report the error if vmss client returns retry error",
@@ -1079,7 +1079,7 @@ func TestGetPrimaryInterface(t *testing.T) {
 
 		nic, err := ss.GetPrimaryInterface(test.nodeName)
 		if test.expectedErr != nil {
-			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
 		assert.Equal(t, expectedInterface, nic, test.description)
 	}
@@ -1164,7 +1164,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 			vmList:             []string{"vmss-vm-000000"},
 			vmClientErr:        &retry.Error{RawError: fmt.Errorf("error")},
 			expectedPrivateIPs: []string{},
-			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+			expectedErr:        fmt.Errorf("newAvailabilitySetNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
 		},
 	}
 
@@ -1192,7 +1192,7 @@ func TestGetPrivateIPsByNodeName(t *testing.T) {
 
 		privateIPs, err := ss.GetPrivateIPsByNodeName(test.nodeName)
 		if test.expectedErr != nil {
-			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
+			assert.EqualError(t, err, test.expectedErr.Error(), test.description)
 		}
 		assert.Equal(t, test.expectedPrivateIPs, privateIPs, test.description)
 	}
@@ -2542,4 +2542,60 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			assert.Equal(t, tc.expectedIPV6MaskSize, ipv6MaskSize)
 		})
 	}
+}
+
+func TestGetAgentPoolVMSetNamesMixedInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+
+	existingVMs := []compute.VirtualMachine{
+		{
+			Name: to.StringPtr("vm-0"),
+			VirtualMachineProperties: &compute.VirtualMachineProperties{
+				AvailabilitySet: &compute.SubResource{
+					ID: to.StringPtr("vmas-0"),
+				},
+			},
+		},
+		{
+			Name: to.StringPtr("vm-1"),
+			VirtualMachineProperties: &compute.VirtualMachineProperties{
+				AvailabilitySet: &compute.SubResource{
+					ID: to.StringPtr("vmas-1"),
+				},
+			},
+		},
+	}
+	expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
+	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
+	existingVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, vmList, "", false)
+
+	mockVMClient := ss.Cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(existingVMs, nil).AnyTimes()
+
+	mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil)
+
+	mockVMSSVMClient := ss.Cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), testVMSSName, gomock.Any()).Return(existingVMSSVMs, nil)
+
+	nodes := []*v1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vmssee6c2000000",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vm-0",
+			},
+		},
+	}
+	expectedVMSetNames := &[]string{testVMSSName, "vmas-0"}
+	vmSetNames, err := ss.GetAgentPoolVMSetNames(nodes)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedVMSetNames, vmSetNames)
 }
