@@ -7,4 +7,18 @@ description: >
     Deploy a cluster with customized CCM or CNM images.
 ---
 
-Switch to the project root directory and `make image`. This will build both CCM and CNM images. If you want to build only one of them, try `make build-ccm-image` or `make build-node-image`. To push the images to your own image registry, you can specify the registry and image tag while building: `IMAGE_REGISTRY=<image registry name> IMAGE_TAG=<tag name> make image`. After building, you can push it by `make push`.
+Switch to the project root directory and run the following command to build both CCM and CNM images:
+
+```sh
+make image
+```
+
+If you want to build only one of them, try `make build-ccm-image` or `make build-node-image`.
+
+To push the images to your own image registry, you can specify the registry and image tag while building:
+
+```sh
+IMAGE_REGISTRY=<image registry name> IMAGE_TAG=<tag name> make image
+```
+
+After building, you can push them to your image registry by `make push`.
