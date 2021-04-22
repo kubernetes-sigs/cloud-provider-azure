@@ -116,9 +116,9 @@ fi
 
 # read azure credentials
 echo "reading azure credentials from environment variables"
-ClientID="${K8S_AZURE_SPID}"
-ClientSecret="${K8S_AZURE_SPSEC}"
-TenantID="${K8S_AZURE_TENANTID}"
+ClientID="${AZURE_CLIENT_ID}"
+ClientSecret="${AZURE_CLIENT_SECRET}"
+TenantID="${AZURE_TENANT_ID}"
 
 echo "logging in to azure"
 az login --service-principal --username "${ClientID}" --password "${ClientSecret}" --tenant "${TenantID}" > /dev/null

@@ -13,27 +13,27 @@ spec:
           image: docker.pkg.github.com/kubernetes-sigs/cloud-provider-azure/cloud-provider-azure-e2e:latest
           command: ["/bin/bash", "tests/e2e/job/run.sh"]
           env:
-            - name: K8S_AZURE_TENANTID
+            - name: AZURE_TENANT_ID
               valueFrom:
                 secretKeyRef:
                   name: envs
                   key: tenantID
-            - name: K8S_AZURE_SUBSID
+            - name: AZURE_SUBSCRIPTION_ID
               valueFrom:
                 secretKeyRef:
                   name: envs
                   key: subscription
-            - name: K8S_AZURE_SPID
+            - name: AZURE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: envs
                   key: clientID
-            - name: K8S_AZURE_SPSEC
+            - name: AZURE_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: envs
                   key: clientSecret
-            - name: K8S_AZURE_LOCATION
+            - name: AZURE_LOCATION
               valueFrom:
                 secretKeyRef:
                   name: envs

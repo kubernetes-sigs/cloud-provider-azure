@@ -17,28 +17,19 @@
 set -e
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
-RESOURCE_GROUP_NAME=${RESOURCE_GROUP_NAME:-""}
-LOCATION=${K8S_AZURE_LOCATION-""}
 
-#Check for variables is initialized or not
-SUBSCRIPTION_ID=${K8S_AZURE_SUBSID:-""}
-CLIENT_ID=${K8S_AZURE_SPID:-""}
-CLIENT_SECRET=${K8S_AZURE_SPSEC:-""}
-TENANT_ID=${K8S_AZURE_TENANTID:-""}
-USE_CSI_DEFAULT_STORAGECLASS=${USE_CSI_DEFAULT_STORAGECLASS:-""}
-ENABLE_AVAILABILITY_ZONE=${ENABLE_AVAILABILITY_ZONE:-""}
-
-# Check for variables is initialized or not
-if [ -z "${LOCATION}" ] || [ -z "${SUBSCRIPTION_ID}" ] || [ -z "${CLIENT_ID}" ] || [ -z "${CLIENT_SECRET}" ] || [ -z "${TENANT_ID}" ] || [ -z "${USE_CSI_DEFAULT_STORAGECLASS}" ] || [ -z "${K8S_RELEASE_VERSION}" ] || [ -z "${CCM_IMAGE}" ] || [ -z "${CNM_IMAGE}" ]; then
-  echo "SUBSCRIPTION_ID, CLIENT_ID, TENANT_ID, CLIENT_SECRET ,LOCATION, USE_CSI_DEFAULT_STORAGECLASS, K8S_RELEASE_VERSION, CCM_IMAGE and CNM_IMAGE must be specified"
-  exit 1
-fi
-
-if [ "${RESOURCE_GROUP_NAME}" = "" ]
-then
-echo "RESOURCE GROUP NAME must be specified"
-exit 1
-fi
+# Verify the required Environment Variables are present.
+: "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
+: "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
+: "${AZURE_LOCATION:?Environment variable empty or not defined.}"
+: "${USE_CSI_DEFAULT_STORAGECLASS:?Environment variable empty or not defined.}"
+: "${K8S_RELEASE_VERSION:?Environment variable empty or not defined.}"
+: "${AZURE_LOCATION:?Environment variable empty or not defined.}"
+: "${CCM_IMAGE:?Environment variable empty or not defined.}"
+: "${CNM_IMAGE:?Environment variable empty or not defined.}"
+: "${RESOURCE_GROUP_NAME:?Environment variable empty or not defined.}"
 
 # Check for commands which would be used in following steps.
 if ! [ -x "$(command -v jq)" ]; then
@@ -64,7 +55,7 @@ function cleanup() {
 trap cleanup EXIT
 
 base_manifest=${REPO_ROOT}/examples/aks-engine.json
-if [ ! -z "${ENABLE_AVAILABILITY_ZONE}" ]; then
+if [ ! -z "${ENABLE_AVAILABILITY_ZONE:-}" ]; then
     base_manifest=${REPO_ROOT}/examples/az.json
 fi
 
