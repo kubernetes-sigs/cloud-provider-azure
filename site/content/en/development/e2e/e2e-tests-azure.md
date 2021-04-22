@@ -19,13 +19,13 @@ Refer step 1-3 in [e2e-tests](../e2e-tests) for deploying the Kubernetes cluster
 ### Setup Azure credentials
 
 ```sh
-export K8S_AZURE_TENANTID=<tenant-id>               # the tenant ID
-export K8S_AZURE_SUBSID=<subscription-id>           # the subscription ID
-export K8S_AZURE_SPID=<service-principal-id>        # the service principal ID
-export K8S_AZURE_SPSEC=<service-principal-secret>   # the service principal secret
-export K8S_AZURE_ENVIRONMENT=<AzurePublicCloud>     # the cloud environment (optional, default is AzurePublicCloud)
-export K8S_AZURE_LOCATION=<location>                # the location
-export K8S_AZURE_LOADBALANCE_SKU=<loadbalancer-sku> # the sku of load balancer (optional, default is basic)
+export AZURE_TENANT_ID=<tenant-id>               # the tenant ID
+export AZURE_SUBSCRIPTION_ID=<subscription-id>           # the subscription ID
+export AZURE_CLIENT_ID=<service-principal-id>        # the service principal ID
+export AZURE_CLIENT_SECRET=<service-principal-secret>   # the service principal secret
+export AZURE_ENVIRONMENT=<AzurePublicCloud>     # the cloud environment (optional, default is AzurePublicCloud)
+export AZURE_LOCATION=<location>                # the location
+export AZURE_LOADBALANCER_SKU=<loadbalancer-sku> # the sku of load balancer (optional, default is basic)
 ```
 
 ### Setup KUBECONFIG
