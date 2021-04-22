@@ -1672,7 +1672,39 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]b
 	return nil
 }
 
-// GetAgentPoolVMSetNames returns all VMSS names according to the nodes
+// GetAgentPoolVMSetNames returns all VMSS/VMAS names according to the nodes.
+// We need to include the VMAS here because some of the cluster provisioning tools
+// like capz allows mixed instance type.
 func (ss *ScaleSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
-	return ss.getAgentPoolScaleSets(nodes)
+	vmSetNames := make([]string, 0)
+	as := ss.availabilitySet.(*availabilitySet)
+
+	for _, node := range nodes {
+		var names *[]string
+		managedByAS, err := ss.isNodeManagedByAvailabilitySet(node.Name, azcache.CacheReadTypeDefault)
+		if err != nil {
+			return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to check if the node %s is managed by VMAS: %w", node.Name, err)
+		}
+		if managedByAS {
+			cached, err := ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, azcache.CacheReadTypeDefault)
+			if err != nil {
+				return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to get availabilitySetNodesCache")
+			}
+			vms := cached.(availabilitySetNodeEntry).vms
+			names, err = as.getAgentPoolAvailabilitySets(vms, []*v1.Node{node})
+			if err != nil {
+				return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to execute getAgentPoolAvailabilitySets: %w", err)
+			}
+			vmSetNames = append(vmSetNames, *names...)
+			continue
+		}
+
+		names, err = ss.getAgentPoolScaleSets([]*v1.Node{node})
+		if err != nil {
+			return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to execute getAgentPoolScaleSets: %w", err)
+		}
+		vmSetNames = append(vmSetNames, *names...)
+	}
+
+	return &vmSetNames, nil
 }

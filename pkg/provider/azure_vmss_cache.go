@@ -50,6 +50,7 @@ type vmssEntry struct {
 type availabilitySetNodeEntry struct {
 	vmNames   sets.String
 	nodeNames sets.String
+	vms       []compute.VirtualMachine
 }
 
 func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
@@ -278,15 +279,16 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 			return nil, err
 		}
 
+		vmList := make([]compute.VirtualMachine, 0)
 		for _, resourceGroup := range resourceGroups.List() {
-			vmList, err := ss.Cloud.ListVirtualMachines(resourceGroup)
+			vms, err := ss.Cloud.ListVirtualMachines(resourceGroup)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("newAvailabilitySetNodesCache: failed to list vms in the resource group %s: %w", resourceGroup, err)
 			}
-
-			for _, vm := range vmList {
+			for _, vm := range vms {
 				if vm.Name != nil {
-					vmNames.Insert(*vm.Name)
+					vmNames.Insert(to.String(vm.Name))
+					vmList = append(vmList, vm)
 				}
 			}
 		}
@@ -300,6 +302,7 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 		localCache := availabilitySetNodeEntry{
 			vmNames:   vmNames,
 			nodeNames: nodeNames,
+			vms:       vmList,
 		}
 
 		return localCache, nil

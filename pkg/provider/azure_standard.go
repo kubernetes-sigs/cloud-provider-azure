@@ -650,12 +650,7 @@ func (as *availabilitySet) GetPrivateIPsByNodeName(name string) ([]string, error
 
 // getAgentPoolAvailabilitySets lists the virtual machines for the resource group and then builds
 // a list of availability sets that match the nodes available to k8s.
-func (as *availabilitySet) getAgentPoolAvailabilitySets(nodes []*v1.Node) (agentPoolAvailabilitySets *[]string, err error) {
-	vms, err := as.ListVirtualMachines(as.ResourceGroup)
-	if err != nil {
-		klog.Errorf("as.getNodeAvailabilitySet - ListVirtualMachines failed, err=%v", err)
-		return nil, err
-	}
+func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMachine, nodes []*v1.Node) (agentPoolAvailabilitySets *[]string, err error) {
 	vmNameToAvailabilitySetID := make(map[string]string, len(vms))
 	for vmx := range vms {
 		vm := vms[vmx]
@@ -672,8 +667,8 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(nodes []*v1.Node) (agent
 		}
 		asID, ok := vmNameToAvailabilitySetID[nodeName]
 		if !ok {
-			klog.Errorf("as.getNodeAvailabilitySet - Node(%s) has no availability sets", nodeName)
-			return nil, fmt.Errorf("node (%s) - has no availability sets", nodeName)
+			klog.Warningf("as.getNodeAvailabilitySet - Node(%s) has no availability sets", nodeName)
+			continue
 		}
 		if availabilitySetIDs.Has(asID) {
 			// already added in the list
@@ -708,7 +703,13 @@ func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) 
 		availabilitySetNames = &[]string{as.Config.PrimaryAvailabilitySetName}
 		return availabilitySetNames, nil
 	}
-	availabilitySetNames, err = as.getAgentPoolAvailabilitySets(nodes)
+
+	vms, err := as.ListVirtualMachines(as.ResourceGroup)
+	if err != nil {
+		klog.Errorf("as.getNodeAvailabilitySet - ListVirtualMachines failed, err=%v", err)
+		return nil, err
+	}
+	availabilitySetNames, err = as.getAgentPoolAvailabilitySets(vms, nodes)
 	if err != nil {
 		klog.Errorf("as.GetVMSetNames - getAgentPoolAvailabilitySets failed err=(%v)", err)
 		return nil, err
@@ -1211,5 +1212,11 @@ func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(vmasNamesMap map[s
 
 // GetAgentPoolVMSetNames returns all VMAS names according to the nodes
 func (as *availabilitySet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
-	return as.getAgentPoolAvailabilitySets(nodes)
+	vms, err := as.ListVirtualMachines(as.ResourceGroup)
+	if err != nil {
+		klog.Errorf("as.getNodeAvailabilitySet - ListVirtualMachines failed, err=%v", err)
+		return nil, err
+	}
+
+	return as.getAgentPoolAvailabilitySets(vms, nodes)
 }
