@@ -32,9 +32,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 )
 
-const k8sVNetPrefix = "k8s-vnet-"
-
-// getVirtualNetworkList is a wapper around listing VirtualNetwork
+// getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
 func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwork.VirtualNetworkListResultPage, err error) {
 	Logf("Getting virtual network list")
 	vNetClient := azureTestClient.createVirtualNetworksClient()
@@ -51,38 +49,27 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 	return
 }
 
-// GetClusterVirtualNetwork gets the only vnet of the cluster
+// GetClusterVirtualNetwork returns the cluster's virtual network.
 func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwork aznetwork.VirtualNetwork, err error) {
 	vNetList, err := azureTestClient.getVirtualNetworkList()
 	if err != nil {
 		return
 	}
 
-	k8sVNetCount := 0
-	returnIndex := 0
-	for i, vNet := range vNetList.Values() {
-		if strings.HasPrefix(to.String(vNet.Name), k8sVNetPrefix) {
-			Logf("found one k8s virtual network %s", to.String(vNet.Name))
-			k8sVNetCount++
-			returnIndex = i
-		} else {
-			Logf("found other virtual network %s, skip", to.String(vNet.Name))
-		}
-	}
-	switch k8sVNetCount {
+	switch len(vNetList.Values()) {
 	case 0:
-		err = fmt.Errorf("Found no virtual network of the corresponding cluster in resource group")
+		err = fmt.Errorf("found no virtual network in resource group %s", azureTestClient.GetResourceGroup())
 		return
 	case 1:
-		virtualNetwork = vNetList.Values()[returnIndex]
+		virtualNetwork = vNetList.Values()[0]
 		return
 	default:
-		err = fmt.Errorf("Found more than one virtual network of the corresponding cluster in resource group")
+		err = fmt.Errorf("found more than one virtual network in resource group %s", azureTestClient.GetResourceGroup())
 		return
 	}
 }
 
-// CreateSubnet will create a new subnet in certain virtual network
+// CreateSubnet creates a new subnet in the specified virtual network.
 func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string) error {
 	Logf("creating a new subnet %s, %s", *subnetName, *prefix)
 	subnetParameter := (*vnet.Subnets)[0]
@@ -93,7 +80,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 	return err
 }
 
-// DeleteSubnet delete a subnet with retry
+// DeleteSubnet deletes a subnet with retry.
 func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName string) error {
 	subnetClient := azureTestClient.createSubnetsClient()
 	return wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
@@ -115,14 +102,14 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 			Logf("subnet %s has been deleted", subnetName)
 			return true, nil
 		}
-		Logf("encountered unexpected error %v during deleting subnet %s", err, subnetName)
+		Logf("encountered unexpected error %v while deleting subnet %s", err, subnetName)
 		return true, nil
 	})
 }
 
-// GetNextSubnetCIDR obtains a new ip address which has no overlapping with other subnet
+// GetNextSubnetCIDR obtains a new ip address which has no overlap with existing subnets.
 func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
-	if len((*vnet.AddressSpace.AddressPrefixes)) == 0 {
+	if len(*vnet.AddressSpace.AddressPrefixes) == 0 {
 		return "", fmt.Errorf("vNet has no prefix")
 	}
 	vnetCIDR := (*vnet.AddressSpace.AddressPrefixes)[0]
@@ -134,7 +121,7 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 	return getNextSubnet(vnetCIDR, existSubnets)
 }
 
-// getSecurityGroupList is a wrapper around listing VirtualNetwork
+// getSecurityGroupList returns the list of security groups in the cluster resource group.
 func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork.SecurityGroupListResultPage, err error) {
 	Logf("Getting virtual network list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
@@ -152,20 +139,20 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	return
 }
 
-// GetClusterSecurityGroup gets the only vnet of the cluster
-func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwork.SecurityGroup, err error) {
+// GetClusterSecurityGroups gets the security groups of the cluster.
+func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []aznetwork.SecurityGroup, err error) {
 	securityGroupsList, err := azureTestClient.getSecurityGroupList()
 	if err != nil {
 		return
 	}
 	Logf("got sg list, length = %d", len(securityGroupsList.Values()))
 
-	// Assume there is only one cluster in one resource group
-	if len(securityGroupsList.Values()) != 1 {
-		err = fmt.Errorf("Found no or more than 1 virtual network in resource group same as cluster name")
+	if len(securityGroupsList.Values()) != 0 {
+		ret = securityGroupsList.Values()
 		return
 	}
-	ret = &securityGroupsList.Values()[0]
+
+	err = fmt.Errorf("could not find the cluster security group in resource group %s", azureTestClient.GetResourceGroup())
 	return
 }
 
@@ -174,6 +161,7 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
+			Namespace:   namespace,
 			Annotations: annotation,
 		},
 		Spec: v1.ServiceSpec{
@@ -251,6 +239,15 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 		return "", fmt.Errorf("failed to find a subnet in vNet %s", to.String(vNet.Name))
 	}
 	subnet := to.String((*vNet.Subnets)[0].AddressPrefix)
+	if len(*vNet.Subnets) > 1 {
+		for _, sn := range *vNet.Subnets {
+			// if there is more than one subnet, select the first one we find.
+			if !strings.Contains(*sn.Name, "controlplane") {
+				subnet = *sn.AddressPrefix
+				break
+			}
+		}
+	}
 	ip, _, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", to.String(vNet.Name), err)

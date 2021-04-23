@@ -151,13 +151,13 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		}()
 		By("Waiting for exposure of internal service with specific IP")
 		err = utils.WaitUpdateServiceExposure(cs, ns.Name, testServiceName, ip1, true)
+		Expect(err).NotTo(HaveOccurred())
 		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(errList).NotTo(HaveOccurred())
 		utils.Logf("Events list:")
 		for i, event := range list.Items {
 			utils.Logf("%d. %v", i, event)
 		}
-		Expect(err).NotTo(HaveOccurred())
 
 		ip2, err := utils.SelectAvailablePrivateIP(tc)
 		Expect(err).NotTo(HaveOccurred())
@@ -199,14 +199,14 @@ var _ = Describe("Ensure LoadBalancer", func() {
 
 		By("Waiting for exposure of the original service without assigned lb private IP")
 		ip1, err := utils.WaitServiceExposure(cs, ns.Name, testServiceName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip1).NotTo(Equal(targetIP))
 		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(errList).NotTo(HaveOccurred())
 		utils.Logf("Events list:")
 		for i, event := range list.Items {
 			utils.Logf("%d. %v", i, event)
 		}
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ip1).NotTo(Equal(targetIP))
 
 		By("Updating service to bound to specific public IP")
 		utils.Logf("will update IP to %s, %v", targetIP, len(targetIP))
