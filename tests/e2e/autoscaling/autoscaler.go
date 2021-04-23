@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/kubernetes/test/e2e/framework"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -160,7 +159,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
 
 		By("Deploying a StatefulSet")
-		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(5), map[string]string{"app": basename + "-statefulset"})
+		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(2), map[string]string{"app": basename + "-statefulset"})
 		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Create(context.TODO(), statefulSetManifest, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -178,7 +177,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		Expect(err).NotTo(HaveOccurred())
 		for _, pod := range statefulSetPods.Items {
 			podNodeMap[pod.Name] = pod.Spec.NodeName
-			_, err := framework.LookForStringInPodExec(ns.Name, pod.Name, []string{"cat", "/mnt/test/data"}, "hello world", execTimeout)
+			_, err := utils.LookForStringInPodExec(ns.Name, pod.Name, []string{"cat", "/mnt/test/data"}, "hello world", execTimeout)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -201,7 +200,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 				// If pod did not get re-scheduled, data file should remain the same
 				expectedOutput = "hello world"
 			}
-			_, err := framework.LookForStringInPodExec(ns.Name, pod.Name, []string{"cat", "/mnt/test/data"}, expectedOutput, execTimeout)
+			_, err := utils.LookForStringInPodExec(ns.Name, pod.Name, []string{"cat", "/mnt/test/data"}, expectedOutput, execTimeout)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})

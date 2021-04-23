@@ -43,7 +43,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // NodeProvider defines the interfaces for node provider.

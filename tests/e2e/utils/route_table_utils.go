@@ -21,6 +21,9 @@ import (
 	"fmt"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
+
+	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 // ListRouteTables returns the list of all route tables in the resource group
@@ -48,7 +51,7 @@ func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface
 
 	routeSet := make(map[string]interface{})
 	for _, route := range *routeTable.Routes {
-		routeSet[*route.Name] = true
+		routeSet[string(providerazure.MapRouteNameToNodeName(true, to.String(route.Name)))] = true
 	}
 
 	return routeSet, nil

@@ -34,7 +34,7 @@ import (
 	routecontroller "k8s.io/cloud-provider/controllers/route"
 	servicecontroller "k8s.io/cloud-provider/controllers/service"
 	"k8s.io/component-base/featuregate"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
@@ -275,8 +275,12 @@ func setNodeCIDRMaskSizes(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (i
 func setNodeCIDRMaskSizesDualStack(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
 	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
 	// NodeCIDRMaskSize can be used only for single stack clusters
-	if cfg.NodeCIDRMaskSize != 0 {
+	if cfg.NodeCIDRMaskSize != 0 && (cfg.NodeCIDRMaskSizeIPv4 != 0 || cfg.NodeCIDRMaskSizeIPv6 != 0) {
 		return ipv4Mask, ipv6Mask, errors.New("usage of --node-cidr-mask-size is not allowed with dual-stack clusters")
+	}
+	if cfg.NodeCIDRMaskSize != 0 && cfg.NodeCIDRMaskSizeIPv4 == 0 && cfg.NodeCIDRMaskSizeIPv6 == 0 {
+		ipv4Mask = int(cfg.NodeCIDRMaskSize)
+		ipv6Mask = int(cfg.NodeCIDRMaskSize)
 	}
 	if cfg.NodeCIDRMaskSizeIPv4 != 0 {
 		ipv4Mask = int(cfg.NodeCIDRMaskSizeIPv4)

@@ -39,7 +39,8 @@ import (
 	"k8s.io/component-base/configz"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"

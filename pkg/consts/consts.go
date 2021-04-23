@@ -342,3 +342,9 @@ const (
 	// ImdsLoadBalancerURI is the imds load balancer uri
 	ImdsLoadBalancerURI = "/metadata/loadbalancer"
 )
+
+// routes
+const (
+	RouteNameFmt       = "%s____%s"
+	RouteNameSeparator = "____"
+)

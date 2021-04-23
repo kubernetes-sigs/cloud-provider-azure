@@ -33,6 +33,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
@@ -47,9 +48,6 @@ type routeOperation string
 // copied to minimize the number of cross reference
 // and exceptions in publishing and allowed imports.
 const (
-	routeNameFmt       = "%s____%s"
-	routeNameSeparator = "____"
-
 	// Route operations.
 	routeOperationAdd             routeOperation = "add"
 	routeOperationDelete          routeOperation = "delete"
@@ -254,7 +252,7 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 		if cidr, ok := az.routeCIDRs[nodeName]; ok {
 			routes = append(routes, &cloudprovider.Route{
 				Name:            nodeName,
-				TargetNode:      mapRouteNameToNodeName(az.ipv6DualStackEnabled, nodeName),
+				TargetNode:      MapRouteNameToNodeName(az.ipv6DualStackEnabled, nodeName),
 				DestinationCIDR: cidr,
 			})
 		}
@@ -294,7 +292,7 @@ func processRoutes(ipv6DualStackEnabled bool, routeTable network.RouteTable, exi
 	if routeTable.RouteTablePropertiesFormat != nil && routeTable.Routes != nil {
 		kubeRoutes = make([]*cloudprovider.Route, len(*routeTable.Routes))
 		for i, route := range *routeTable.Routes {
-			instance := mapRouteNameToNodeName(ipv6DualStackEnabled, *route.Name)
+			instance := MapRouteNameToNodeName(ipv6DualStackEnabled, *route.Name)
 			cidr := *route.AddressPrefix
 			klog.V(10).Infof("ListRoutes: * instance=%q, cidr=%q", instance, cidr)
 
@@ -461,7 +459,7 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 	return nil
 }
 
-// This must be kept in sync with mapRouteNameToNodeName.
+// This must be kept in sync with MapRouteNameToNodeName.
 // These two functions enable stashing the instance name in the route
 // and then retrieving it later when listing. This is needed because
 // Azure does not let you put tags/descriptions on the Route itself.
@@ -469,15 +467,16 @@ func mapNodeNameToRouteName(ipv6DualStackEnabled bool, nodeName types.NodeName, 
 	if !ipv6DualStackEnabled {
 		return string(nodeName)
 	}
-	return fmt.Sprintf(routeNameFmt, nodeName, cidrtoRfc1035(cidr))
+	return fmt.Sprintf(consts.RouteNameFmt, nodeName, cidrtoRfc1035(cidr))
 }
 
-// Used with mapNodeNameToRouteName. See comment on mapNodeNameToRouteName.
-func mapRouteNameToNodeName(ipv6DualStackEnabled bool, routeName string) types.NodeName {
+// MapRouteNameToNodeName is used with mapNodeNameToRouteName.
+// See comment on mapNodeNameToRouteName for detailed usage.
+func MapRouteNameToNodeName(ipv6DualStackEnabled bool, routeName string) types.NodeName {
 	if !ipv6DualStackEnabled {
 		return types.NodeName(routeName)
 	}
-	parts := strings.Split(routeName, routeNameSeparator)
+	parts := strings.Split(routeName, consts.RouteNameSeparator)
 	nodeName := parts[0]
 	return types.NodeName(nodeName)
 

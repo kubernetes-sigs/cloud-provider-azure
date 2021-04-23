@@ -31,7 +31,8 @@ import (
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"

@@ -17,7 +17,6 @@ limitations under the License.
 package e2e
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -27,9 +26,8 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"k8s.io/klog"
-	"k8s.io/kubernetes/test/e2e/framework"
 
+	"k8s.io/klog/v2"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/auth"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/network"
@@ -40,19 +38,7 @@ const (
 	defaultReportDir = "_report/"
 )
 
-// handleFlags sets up all flags and parses the command line.
-func handleFlags() {
-	framework.RegisterCommonFlags(flag.CommandLine)
-	framework.RegisterClusterFlags(flag.CommandLine)
-	flag.Parse()
-}
-
 func TestAzureTest(t *testing.T) {
-	// Register test flags, then parse flags.
-	handleFlags()
-
-	framework.AfterReadingAllFlags(&framework.TestContext)
-
 	RegisterFailHandler(Fail)
 	reportDir := os.Getenv(reportDirEnv)
 	if reportDir == "" {

@@ -27,7 +27,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // Environmental variables for validating Azure resource status.
