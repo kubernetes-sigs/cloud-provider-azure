@@ -32,9 +32,11 @@ import (
 )
 
 const (
-	nodeLabelRole     = "kubernetes.io/role"
-	typeLabel         = "type"
-	agentpoolLabelKey = "agentpool"
+	masterNodeRoleLabel       = "node-role.kubernetes.io/master"
+	controlPlaneNodeRoleLabel = "node-role.kubernetes.io/control-plane"
+	nodeLabelRole             = "kubernetes.io/role"
+	typeLabel                 = "type"
+	agentpoolLabelKey         = "agentpool"
 
 	// GPUResourceKey is the key of the GPU in the resource map of a node
 	GPUResourceKey = "nvidia.com/gpu"
@@ -68,7 +70,7 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	}
 	ret := make([]v1.Node, 0)
 	for i, node := range nodesList.Items {
-		if !isMasterNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) {
+		if !IsControlPlaneNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) {
 			ret = append(ret, node)
 		}
 	}
@@ -120,7 +122,7 @@ func GetMaster(cs clientset.Interface) (*v1.Node, error) {
 		return nil, err
 	}
 	for i, node := range nodesList.Items {
-		if isMasterNode(&nodesList.Items[i]) {
+		if IsControlPlaneNode(&nodesList.Items[i]) {
 			return &node, nil
 		}
 	}
@@ -235,10 +237,17 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 	return err
 }
 
-// isMasterNode returns true if the node has a master role label.
-// The master role is determined by looking for:
-// * a kubernetes.io/role="master" label
-func isMasterNode(node *v1.Node) bool {
+// IsControlPlaneNode returns true if the node has a control-plane role label.
+// The control-plane role is determined by looking for:
+// * a node-role.kubernetes.io/control-plane or node-role.kubernetes.io/master="" label
+func IsControlPlaneNode(node *v1.Node) bool {
+	if _, ok := node.Labels[controlPlaneNodeRoleLabel]; ok {
+		return true
+	}
+	// include master role labels for k8s < 1.19
+	if _, ok := node.Labels[masterNodeRoleLabel]; ok {
+		return true
+	}
 	if val, ok := node.Labels[nodeLabelRole]; ok && val == "master" {
 		return true
 	}

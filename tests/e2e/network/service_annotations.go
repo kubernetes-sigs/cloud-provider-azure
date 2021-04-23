@@ -476,7 +476,7 @@ var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 		vmssNames := sets.NewString()
 		var resourceGroupName string
 		for i, node := range nodes {
-			if utils.IsMasterNode(&nodes[i]) {
+			if utils.IsControlPlaneNode(&nodes[i]) {
 				continue
 			}
 			providerID := node.Spec.ProviderID

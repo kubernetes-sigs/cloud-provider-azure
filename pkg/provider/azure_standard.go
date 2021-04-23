@@ -148,14 +148,20 @@ func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, 
 	return lbNamePrefix
 }
 
-// isMasterNode returns true if the node has a master role label.
-// The master role is determined by looking for:
-// * a kubernetes.io/role="master" label
-func isMasterNode(node *v1.Node) bool {
+// isControlPlaneNode returns true if the node has a control-plane role label.
+// The control-plane role is determined by looking for:
+// * a node-role.kubernetes.io/control-plane or node-role.kubernetes.io/master="" label
+func isControlPlaneNode(node *v1.Node) bool {
+	if _, ok := node.Labels[consts.ControlPlaneNodeRoleLabel]; ok {
+		return true
+	}
+	// include master role labels for k8s < 1.19
+	if _, ok := node.Labels[consts.MasterNodeRoleLabel]; ok {
+		return true
+	}
 	if val, ok := node.Labels[consts.NodeLabelRole]; ok && val == "master" {
 		return true
 	}
-
 	return false
 }
 
@@ -682,7 +688,7 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMac
 	agentPoolAvailabilitySets = &[]string{}
 	for nx := range nodes {
 		nodeName := (*nodes[nx]).Name
-		if isMasterNode(nodes[nx]) {
+		if isControlPlaneNode(nodes[nx]) {
 			continue
 		}
 		asID, ok := vmNameToAvailabilitySetID[nodeName]
@@ -936,7 +942,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 	hostUpdates := make([]func() error, 0, len(nodes))
 	for _, node := range nodes {
 		localNodeName := node.Name
-		if as.useStandardLoadBalancer() && as.excludeMasterNodesFromStandardLB() && isMasterNode(node) {
+		if as.useStandardLoadBalancer() && as.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}
