@@ -108,7 +108,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		var found bool
 		for _, nic := range *NICList {
 			found = false
-			if strings.Split(*nic.Name, "-")[1] == "master" {
+			if strings.Split(*nic.Name, "-")[1] == "master" || strings.Contains(*nic.Name, "control-plane") {
 				continue
 			}
 			for _, ipConfig := range *nic.IPConfigurations {
