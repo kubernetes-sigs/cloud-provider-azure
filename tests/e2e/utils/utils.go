@@ -190,17 +190,6 @@ func StringInSlice(s string, list []string) bool {
 	return false
 }
 
-// IsMasterNode returns true if the node has a master role label.
-// The master role is determined by looking for:
-// * a kubernetes.io/role="master" label
-func IsMasterNode(node *v1.Node) bool {
-	if val, ok := node.Labels[nodeLabelRole]; ok && val == "master" {
-		return true
-	}
-
-	return false
-}
-
 // HandleVMNotFoundErr returns true if the input error is errVMNotFound or nil
 func HandleVMNotFoundErr(err error) bool {
 	return err == nil || reflect.DeepEqual(err, errVMNotFound)

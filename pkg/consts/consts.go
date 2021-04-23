@@ -83,6 +83,10 @@ const (
 
 	// NodeLabelRole specifies the role of a node
 	NodeLabelRole = "kubernetes.io/role"
+	// MasterNodeRoleLabel specifies is the master node label for a node
+	MasterNodeRoleLabel       = "node-role.kubernetes.io/master"
+	// ControlPlaneNodeRoleLabel specifies is the control-plane node label for a node
+	ControlPlaneNodeRoleLabel = "node-role.kubernetes.io/control-plane"
 
 	// NicFailedState is the failed state of a nic
 	NicFailedState = "Failed"
