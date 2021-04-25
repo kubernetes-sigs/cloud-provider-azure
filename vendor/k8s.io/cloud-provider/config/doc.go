@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,5 +15,6 @@ limitations under the License.
 */
 
 // +k8s:deepcopy-gen=package
+// +groupName=cloudcontrollermanager.config.k8s.io
 
-package config // import "k8s.io/cloud-provider/service/config"
+package config // import "k8s.io/cloud-provider/config"
