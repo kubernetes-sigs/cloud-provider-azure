@@ -14,27 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package config
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	serviceconfigv1alpha1 "k8s.io/cloud-provider/service/config/v1alpha1"
-	cmconfigv1alpha1 "k8s.io/controller-manager/config/v1alpha1"
+	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
+	cmconfig "k8s.io/controller-manager/config"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// CloudControllerManagerConfiguration contains elements describing cloud-controller manager.
 type CloudControllerManagerConfiguration struct {
-	metav1.TypeMeta `json:",inline"`
+	metav1.TypeMeta
 
 	// Generic holds configuration for a generic controller-manager
-	Generic cmconfigv1alpha1.GenericControllerManagerConfiguration
+	Generic cmconfig.GenericControllerManagerConfiguration
 	// KubeCloudSharedConfiguration holds configuration for shared related features
 	// both in cloud controller manager and kube-controller manager.
 	KubeCloudShared KubeCloudSharedConfiguration
+
 	// ServiceControllerConfiguration holds configuration for ServiceController
 	// related features.
-	ServiceController serviceconfigv1alpha1.ServiceControllerConfiguration
+	ServiceController serviceconfig.ServiceControllerConfiguration
+
 	// NodeStatusUpdateFrequency is the frequency at which the controller updates nodes' status
 	NodeStatusUpdateFrequency metav1.Duration
 }
@@ -67,7 +70,7 @@ type KubeCloudSharedConfiguration struct {
 	CIDRAllocatorType string
 	// configureCloudRoutes enables CIDRs allocated with allocateNodeCIDRs
 	// to be configured on the cloud provider.
-	ConfigureCloudRoutes *bool
+	ConfigureCloudRoutes bool
 	// nodeSyncPeriod is the period for syncing nodes from cloudprovider. Longer
 	// periods will result in fewer calls to cloud provider, but may delay addition
 	// of new nodes to cluster.

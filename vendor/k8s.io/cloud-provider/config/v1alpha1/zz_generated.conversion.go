@@ -24,8 +24,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	config "k8s.io/cloud-provider/app/apis/config"
-	serviceconfigv1alpha1 "k8s.io/cloud-provider/service/config/v1alpha1"
+	config "k8s.io/cloud-provider/config"
+	serviceconfigv1alpha1 "k8s.io/cloud-provider/controllers/service/config/v1alpha1"
 	configv1alpha1 "k8s.io/controller-manager/config/v1alpha1"
 )
 

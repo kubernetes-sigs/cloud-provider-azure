@@ -344,8 +344,8 @@ k8s.io/apiserver v0.0.0-20210417161757-940c1071845d h1:pCduQaCaUwF8WlsDxFjbIVO3P
 k8s.io/apiserver v0.0.0-20210417161757-940c1071845d/go.mod h1:qAvLXoyMsorbMrDE8TZsLfJSFOmlFgF9UmiUZq83fKY=
 k8s.io/client-go v0.0.0-20210417155731-8c8fa70f7a2a h1:qhW8eg0Lcm4SVuB/xRO9NkhH3xNug0wHpQgV0L3PHiA=
 k8s.io/client-go v0.0.0-20210417155731-8c8fa70f7a2a/go.mod h1:NcSllaKuzG5G3cDEGxlLIN1HpxPHWykJaa67vGc32XY=
-k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013 h1:H2mgNPuLEb9Vrtn2qfz30jaK64tzHhUfGxOINBgEzhE=
-k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013/go.mod h1:Yi0/Yu5fXyVZ4m7rlarrg2mh+VJd0+bhMnuG6K6LFRA=
+k8s.io/cloud-provider v0.0.0-20210417041545-1ea896ed6b0d h1:ltN2VveDUplnqrXMJknhUJZ1TmWY3Gr4HuLdT0jYEak=
+k8s.io/cloud-provider v0.0.0-20210417041545-1ea896ed6b0d/go.mod h1:A2HSMw2vuj6ejBBT/KBw6jOtIcNxBnRg+TiT5iVytks=
 k8s.io/component-base v0.0.0-20210417035459-5860d9b1feba h1:nxnXOrxy8ZdiSTyjDBiODoVvmuLBbuMWytQf6XsPgN8=
 k8s.io/component-base v0.0.0-20210417035459-5860d9b1feba/go.mod h1:zEytEW+Y696JL4g97mo/bP6hzeY26r9zDRw2IFbc7fE=
 k8s.io/controller-manager v0.20.0-alpha.1.0.20210417041449-146a790d6e02 h1:kPmOsBa5ubOOMz4sPRjwyyKIgNONI9YxXvTjGQ3gyPw=

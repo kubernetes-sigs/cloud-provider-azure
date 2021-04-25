@@ -15,7 +15,5 @@ limitations under the License.
 */
 
 // +k8s:deepcopy-gen=package
-// +k8s:conversion-gen=k8s.io/cloud-provider/service/config
-// +k8s:conversion-gen=k8s.io/cloud-provider/service/config/v1alpha1
 
-package v1alpha1 // import "k8s.io/cloud-provider/service/config/v1alpha1"
+package config // import "k8s.io/cloud-provider/controllers/service/config"

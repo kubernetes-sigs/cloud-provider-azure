@@ -30,9 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
-	cpconfig "k8s.io/cloud-provider/app/apis/config"
+	cpconfig "k8s.io/cloud-provider/config"
+	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
 	cpoptions "k8s.io/cloud-provider/options"
-	serviceconfig "k8s.io/cloud-provider/service/config"
 	componentbaseconfig "k8s.io/component-base/config"
 	kubectrlmgrconfig "k8s.io/controller-manager/config"
 	cmoptions "k8s.io/controller-manager/options"
@@ -131,7 +131,7 @@ func TestDefaultFlags(t *testing.T) {
 			AllowCacheTTL:                10 * time.Second,
 			DenyCacheTTL:                 10 * time.Second,
 			RemoteKubeConfigFileOptional: true,
-			AlwaysAllowPaths:             []string{"/healthz"}, // note: this does not match /healthz/ or
+			AlwaysAllowPaths:             []string{"/healthz", "/readyz", "/livez"}, // note: this does not match /healthz/ or /healthz/*
 			AlwaysAllowGroups:            []string{"system:masters"},
 			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
 			ClientTimeout:                10 * time.Second,
@@ -276,7 +276,7 @@ func TestAddFlags(t *testing.T) {
 			AllowCacheTTL:                10 * time.Second,
 			DenyCacheTTL:                 10 * time.Second,
 			RemoteKubeConfigFileOptional: true,
-			AlwaysAllowPaths:             []string{"/healthz"}, // note: this does not match /healthz/ or
+			AlwaysAllowPaths:             []string{"/healthz", "/readyz", "/livez"}, // note: this does not match /healthz/ or /healthz/*// note: this does not match /healthz/ or
 			AlwaysAllowGroups:            []string{"system:masters"},
 			WebhookRetryBackoff:          &wait.Backoff{Duration: 500 * time.Millisecond, Factor: 1.5, Jitter: 0.2, Steps: 5},
 			ClientTimeout:                10 * time.Second,

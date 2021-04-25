@@ -231,7 +231,7 @@ require (
 	k8s.io/apimachinery v0.22.0-alpha.0.0.20210417144234-8daf28983e6e
 	k8s.io/apiserver v0.0.0-20210417161757-940c1071845d
 	k8s.io/client-go v0.0.0-20210417155731-8c8fa70f7a2a
-	k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013
+	k8s.io/cloud-provider v0.0.0-20210417041545-1ea896ed6b0d
 	k8s.io/component-base v0.0.0-20210417035459-5860d9b1feba
 	k8s.io/controller-manager v0.20.0-alpha.1.0.20210417041449-146a790d6e02
 	k8s.io/gengo v0.0.0-20200413195148-3a45101e95ac // indirect
@@ -485,7 +485,7 @@ replace (
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.0-alpha.0.0.20210417144234-8daf28983e6e
 	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20210417161757-940c1071845d
 	k8s.io/client-go => k8s.io/client-go v0.0.0-20210417155731-8c8fa70f7a2a
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20201021002512-82fca6d2b013
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20210417041545-1ea896ed6b0d
 	k8s.io/component-base => k8s.io/component-base v0.0.0-20210417035459-5860d9b1feba
 	k8s.io/controller-manager => k8s.io/controller-manager v0.20.0-alpha.1.0.20210417041449-146a790d6e02
 	k8s.io/gengo => k8s.io/gengo v0.0.0-20200413195148-3a45101e95ac
