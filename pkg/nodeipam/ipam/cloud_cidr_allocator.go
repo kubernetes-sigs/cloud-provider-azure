@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	utiltaints "k8s.io/kubernetes/pkg/util/taints"
 	netutils "k8s.io/utils/net"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -46,6 +45,7 @@ import (
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	nodeutil "sigs.k8s.io/cloud-provider-azure/pkg/util/controller/node"
 	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	utiltaints "sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 )
 
 // cloudCIDRAllocator allocates node CIDRs according to the node subnet mask size

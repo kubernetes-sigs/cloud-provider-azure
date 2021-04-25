@@ -95,7 +95,7 @@ func TestDeleteRoute(t *testing.T) {
 		nodeName: nodeCIDR,
 	}
 	route1 := cloudprovider.Route{
-		TargetNode:      mapRouteNameToNodeName(false, nodeName),
+		TargetNode:      MapRouteNameToNodeName(false, nodeName),
 		DestinationCIDR: nodeCIDR,
 	}
 	err = cloud.DeleteRoute(context.TODO(), "cluster", &route1)
@@ -386,7 +386,7 @@ func TestProcessRoutes(t *testing.T) {
 			expectedRoute: []cloudprovider.Route{
 				{
 					Name:            "name",
-					TargetNode:      mapRouteNameToNodeName(false, "name"),
+					TargetNode:      MapRouteNameToNodeName(false, "name"),
 					DestinationCIDR: "1.2.3.4/16",
 				},
 			},
@@ -415,12 +415,12 @@ func TestProcessRoutes(t *testing.T) {
 			expectedRoute: []cloudprovider.Route{
 				{
 					Name:            "name",
-					TargetNode:      mapRouteNameToNodeName(false, "name"),
+					TargetNode:      MapRouteNameToNodeName(false, "name"),
 					DestinationCIDR: "1.2.3.4/16",
 				},
 				{
 					Name:            "name2",
-					TargetNode:      mapRouteNameToNodeName(false, "name2"),
+					TargetNode:      MapRouteNameToNodeName(false, "name2"),
 					DestinationCIDR: "5.6.7.8/16",
 				},
 			},
@@ -509,11 +509,11 @@ func TestRouteNameFuncs(t *testing.T) {
 	}
 	for _, test := range testCases {
 		routeName := mapNodeNameToRouteName(test.ipv6DualStackEnabled, types.NodeName(nodeName), v4CIDR)
-		outNodeName := mapRouteNameToNodeName(test.ipv6DualStackEnabled, routeName)
+		outNodeName := MapRouteNameToNodeName(test.ipv6DualStackEnabled, routeName)
 		assert.Equal(t, string(outNodeName), nodeName)
 
 		routeName = mapNodeNameToRouteName(test.ipv6DualStackEnabled, types.NodeName(nodeName), v6CIDR)
-		outNodeName = mapRouteNameToNodeName(test.ipv6DualStackEnabled, routeName)
+		outNodeName = MapRouteNameToNodeName(test.ipv6DualStackEnabled, routeName)
 		assert.Equal(t, string(outNodeName), nodeName)
 	}
 }
@@ -572,7 +572,7 @@ func TestListRoutes(t *testing.T) {
 			expectedRoutes: []*cloudprovider.Route{
 				{
 					Name:            "node",
-					TargetNode:      mapRouteNameToNodeName(false, "node"),
+					TargetNode:      MapRouteNameToNodeName(false, "node"),
 					DestinationCIDR: "1.2.3.4/24",
 				},
 			},
@@ -600,12 +600,12 @@ func TestListRoutes(t *testing.T) {
 			expectedRoutes: []*cloudprovider.Route{
 				{
 					Name:            "node",
-					TargetNode:      mapRouteNameToNodeName(false, "node"),
+					TargetNode:      MapRouteNameToNodeName(false, "node"),
 					DestinationCIDR: "1.2.3.4/24",
 				},
 				{
 					Name:            "unmanaged-node",
-					TargetNode:      mapRouteNameToNodeName(false, "unmanaged-node"),
+					TargetNode:      MapRouteNameToNodeName(false, "unmanaged-node"),
 					DestinationCIDR: "2.2.3.4/24",
 				},
 			},

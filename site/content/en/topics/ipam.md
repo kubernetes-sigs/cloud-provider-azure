@@ -36,7 +36,10 @@ To turn on the out-of-tree node IPAM controller:
 1. To use `RangeAllocator`:
     * configure the `--cluster-cidr`, `--service-cluster-ip-range` and `--node-cidr-mask-size`;
     * if you enable the ipv6 dualstack, setting `--node-cidr-mask-size-ipv4` and `--node-cidr-mask-size-ipv6` instead of 
-      `--node-cidr-mask-size`.
+      `--node-cidr-mask-size`. An error would be reported if `--node-cidr-mask-size` and `--node-cidr-mask-size-ipv4` 
+      (or `--node-cidr-mask-size-ipv6`) are set to non-zero values at a time. If only `--node-cidr-mask-size` is set, 
+      which is not recommended, the `--node-cidr-mask-size-ipv4` and `--node-cidr-mask-size-ipv6` would be set to this
+      value by default.
 1. To use `CloudAllocator`:
     * set the `--cidr-allocator-type=CloudAllocator`;
     * configure mask sizes of each VMSS/VMAS by tagging `{"kubernetesNodeCIDRMaskIPV4": "custom-mask-size"}` and

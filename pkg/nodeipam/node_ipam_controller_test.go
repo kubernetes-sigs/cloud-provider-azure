@@ -29,10 +29,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/legacy-cloud-providers/gce"
 	netutils "k8s.io/utils/net"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
+	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
 )
 
@@ -52,9 +52,9 @@ func newTestNodeIpamController(clusterCIDR []*net.IPNet, serviceCIDR *net.IPNet,
 		_ = fakeNodeInformer.Informer().GetStore().Add(node)
 	}
 
-	fakeGCE := gce.NewFakeGCECloud(gce.DefaultTestClusterValues())
+	fakeAZ := &providerazure.Cloud{}
 	return NewNodeIpamController(
-		fakeNodeInformer, fakeGCE, clientSet,
+		fakeNodeInformer, fakeAZ, clientSet,
 		clusterCIDR, serviceCIDR, secondaryServiceCIDR, nodeCIDRMaskSizes, allocatorType,
 	)
 }

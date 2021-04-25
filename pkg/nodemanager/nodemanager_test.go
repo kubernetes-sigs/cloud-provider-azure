@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	mocknodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager/mock"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"

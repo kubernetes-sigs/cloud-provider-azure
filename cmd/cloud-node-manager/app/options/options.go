@@ -37,12 +37,12 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/controller-manager/pkg/clientbuilder"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 
-	// add the kubernetes feature gates
-	_ "k8s.io/kubernetes/pkg/features"
+	// add the related feature gates
+	_ "k8s.io/controller-manager/pkg/features/register"
 )
 
 const (
