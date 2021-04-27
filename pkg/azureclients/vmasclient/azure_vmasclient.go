@@ -54,6 +54,37 @@ type Client struct {
 	RetryAfterWriter time.Time
 }
 
+// New creates a new VMAS client with ratelimiting.
+func New(config *azclients.ClientConfig) *Client {
+	baseURI := config.ResourceManagerEndpoint
+	authorizer := config.Authorizer
+	apiVersion := APIVersion
+	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
+		apiVersion = AzureStackCloudAPIVersion
+	}
+	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
+
+	if azclients.RateLimitEnabled(config.RateLimitConfig) {
+		klog.V(2).Infof("Azure AvailabilitySetsClient (read ops) using rate limit config: QPS=%g, bucket=%d",
+			config.RateLimitConfig.CloudProviderRateLimitQPS,
+			config.RateLimitConfig.CloudProviderRateLimitBucket)
+		klog.V(2).Infof("Azure AvailabilitySetsClient  (write ops) using rate limit config: QPS=%g, bucket=%d",
+			config.RateLimitConfig.CloudProviderRateLimitQPSWrite,
+			config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
+	}
+
+	client := &Client{
+		armClient:         armClient,
+		rateLimiterReader: rateLimiterReader,
+		rateLimiterWriter: rateLimiterWriter,
+		subscriptionID:    config.SubscriptionID,
+		cloudName:         config.CloudName,
+	}
+
+	return client
+}
+
 // Get gets a AvailabilitySet.
 func (c *Client) Get(ctx context.Context, resourceGroupName string, vmasName string) (compute.AvailabilitySet, *retry.Error) {
 	mc := metrics.NewMetricContext("vmas", "get", resourceGroupName, c.subscriptionID, "")
@@ -113,35 +144,6 @@ func (c *Client) getVMAS(ctx context.Context, resourceGroupName string, vmasName
 
 	result.Response = autorest.Response{Response: response}
 	return result, nil
-}
-
-// New creates a new VMAS client with ratelimiting.
-func New(config *azclients.ClientConfig) *Client {
-	baseURI := config.ResourceManagerEndpoint
-	authorizer := config.Authorizer
-	apiVersion := APIVersion
-	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
-		apiVersion = AzureStackCloudAPIVersion
-	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
-	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
-
-	klog.V(2).Infof("Azure AvailabilitySetsClient (read ops) using rate limit config: QPS=%g, bucket=%d",
-		config.RateLimitConfig.CloudProviderRateLimitQPS,
-		config.RateLimitConfig.CloudProviderRateLimitBucket)
-	klog.V(2).Infof("Azure AvailabilitySetsClient  (write ops) using rate limit config: QPS=%g, bucket=%d",
-		config.RateLimitConfig.CloudProviderRateLimitQPSWrite,
-		config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
-
-	client := &Client{
-		armClient:         armClient,
-		rateLimiterReader: rateLimiterReader,
-		rateLimiterWriter: rateLimiterWriter,
-		subscriptionID:    config.SubscriptionID,
-		cloudName:         config.CloudName,
-	}
-
-	return client
 }
 
 // List gets a list of AvailabilitySets in the resource group.
