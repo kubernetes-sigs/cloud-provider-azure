@@ -64,12 +64,14 @@ func New(config *azclients.ClientConfig) *Client {
 	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
-	klog.V(2).Infof("Azure VirtualMachineSizesClient (read ops) using rate limit config: QPS=%g, bucket=%d",
-		config.RateLimitConfig.CloudProviderRateLimitQPS,
-		config.RateLimitConfig.CloudProviderRateLimitBucket)
-	klog.V(2).Infof("Azure VirtualMachineSizesClient (write ops) using rate limit config: QPS=%g, bucket=%d",
-		config.RateLimitConfig.CloudProviderRateLimitQPSWrite,
-		config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
+	if azclients.RateLimitEnabled(config.RateLimitConfig) {
+		klog.V(2).Infof("Azure VirtualMachineSizesClient (read ops) using rate limit config: QPS=%g, bucket=%d",
+			config.RateLimitConfig.CloudProviderRateLimitQPS,
+			config.RateLimitConfig.CloudProviderRateLimitBucket)
+		klog.V(2).Infof("Azure VirtualMachineSizesClient (write ops) using rate limit config: QPS=%g, bucket=%d",
+			config.RateLimitConfig.CloudProviderRateLimitQPSWrite,
+			config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
+	}
 
 	client := &Client{
 		armClient:         armClient,
