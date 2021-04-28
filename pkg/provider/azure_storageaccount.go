@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -38,6 +39,7 @@ type AccountOptions struct {
 	// indicate whether create new account when Name is empty
 	EnableHTTPSTrafficOnly                  bool
 	CreateAccount                           bool
+	EnableLargeFileShare                    bool
 	DisableFileServiceDeleteRetentionPolicy bool
 	Tags                                    map[string]string
 	VirtualNetworkResourceIDs               []string
@@ -94,6 +96,10 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 				if !found {
 					continue
 				}
+			}
+
+			if acct.Sku.Tier != storage.SkuTier(compute.PremiumLRS) && accountOptions.EnableLargeFileShare && (len(acct.LargeFileSharesState) == 0 || acct.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
+				continue
 			}
 
 			if acct.Tags != nil {
@@ -216,6 +222,10 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				Tags:     tags,
 				Location: &location}
 
+			if accountOptions.EnableLargeFileShare {
+				klog.V(2).Infof("Enabling LargeFileShare for the storage account")
+				cp.AccountPropertiesCreateParameters.LargeFileSharesState = storage.LargeFileSharesStateEnabled
+			}
 			if az.StorageAccountClient == nil {
 				return "", "", fmt.Errorf("StorageAccountClient is nil")
 			}
