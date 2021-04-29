@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -170,7 +171,8 @@ func IsRetryableAPIError(err error) bool {
 // ExtractDNSPrefix obtains the cluster DNS prefix
 func ExtractDNSPrefix() string {
 	c := obtainConfig()
-	return c.CurrentContext
+	parts := strings.Split(c.CurrentContext, "@")
+	return parts[len(parts)-1]
 }
 
 // Load config from file
