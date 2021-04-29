@@ -148,5 +148,8 @@ func extractSuffix() string {
 	prefix := ExtractDNSPrefix()
 	url := c.Clusters[prefix].Server
 	suffix := url[strings.Index(url, "."):]
+	if strings.Contains(suffix, ":") {
+		suffix = suffix[:strings.Index(suffix, ":")]
+	}
 	return suffix
 }
