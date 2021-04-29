@@ -777,7 +777,7 @@ func initDiskControllers(az *Cloud) error {
 	if az.HasExtendedLocation() {
 		common.extendedLocation = &ExtendedLocation{
 			Name: az.ExtendedLocationName,
-			Type: az.ExtendedLocationName,
+			Type: az.ExtendedLocationType,
 		}
 	}
 
