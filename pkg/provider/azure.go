@@ -222,6 +222,12 @@ type Config struct {
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
 }
 
+type InitSecretConfig struct {
+	SecretName      string `json:"secretName,omitempty" yaml:"secret_name,omitempty"`
+	SecretNamespace string `json:"secret_namespace,omitempty" yaml:"secret_namespace,omitempty"`
+	CloudConfigKey  string `json:"cloud_config_key,omitempty" yaml:"cloud_config_key,omitempty"`
+}
+
 // HasExtendedLocation returns true if extendedlocation prop are specified.
 func (config *Config) HasExtendedLocation() bool {
 	return config.ExtendedLocationName != "" && config.ExtendedLocationType != ""
@@ -239,6 +245,7 @@ var (
 // Cloud holds the config and clients
 type Cloud struct {
 	Config
+	InitSecretConfig
 	Environment azure.Environment
 
 	RoutesClient                    routeclient.Interface
@@ -334,6 +341,32 @@ func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
 	return az, nil
 }
 
+func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, secretName, secretNamespace, cloudConfigKey string) (cloudprovider.Interface, error) {
+	az := &Cloud{
+		nodeNames:          sets.NewString(),
+		nodeZones:          map[string]sets.String{},
+		nodeResourceGroups: map[string]string{},
+		unmanagedNodes:     sets.NewString(),
+		routeCIDRs:         map[string]string{},
+		InitSecretConfig: InitSecretConfig{
+			SecretName:      secretName,
+			SecretNamespace: secretNamespace,
+			CloudConfigKey:  cloudConfigKey,
+		},
+	}
+
+	az.Initialize(clientBuilder, wait.NeverStop)
+
+	err := az.InitializeCloudFromSecret()
+	if err != nil {
+		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %v", az.SecretNamespace, az.SecretName, err)
+	}
+
+	az.ipv6DualStackEnabled = utilfeature.DefaultFeatureGate.Enabled(consts.IPv6DualStack)
+
+	return az, nil
+}
+
 // NewCloudWithoutFeatureGates returns a Cloud without trying to wire the feature gates.  This is used by the unit tests
 // that don't load the actual features being used in the cluster.
 func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
@@ -360,10 +393,9 @@ func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
 
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) error {
-	// cloud-config not set, return nil so that it would be initialized from secret.
 	if config == nil {
-		klog.Warning("cloud-config is not provided, Azure cloud provider will be initialized from secret")
-		return nil
+		// should not reach here
+		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
 	}
 
 	if config.RouteTableResourceGroup == "" {
@@ -718,7 +750,6 @@ func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder,
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})
 	az.eventRecorder = az.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "azure-cloud-provider"})
-	az.InitializeCloudFromSecret()
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.

@@ -139,6 +139,12 @@ func TestDefaultFlags(t *testing.T) {
 		Kubeconfig:                "",
 		Master:                    "",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 5 * time.Minute},
+		DynamicReloading: &DynamicReloadingOptions{
+			EnableDynamicReloading:     false,
+			CloudConfigSecretName:      "",
+			CloudConfigSecretNamespace: "",
+			CloudConfigKey:             "",
+		},
 	}
 	if !reflect.DeepEqual(expected, s) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
@@ -183,6 +189,8 @@ func TestAddFlags(t *testing.T) {
 		"--route-reconciliation-period=30s",
 		"--secure-port=10001",
 		"--use-service-account-credentials=false",
+		"--enable-dynamic-reloading=true",
+		"--cloud-config-secret-name=test-secret",
 	}
 	err := fs.Parse(args)
 	if err != nil {
@@ -284,6 +292,12 @@ func TestAddFlags(t *testing.T) {
 		Kubeconfig:                "/kubeconfig",
 		Master:                    "192.168.4.20",
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 10 * time.Minute},
+		DynamicReloading: &DynamicReloadingOptions{
+			EnableDynamicReloading:     true,
+			CloudConfigSecretName:      "test-secret",
+			CloudConfigSecretNamespace: "kube-system",
+			CloudConfigKey:             "cloud-config",
+		},
 	}
 	if !reflect.DeepEqual(expected, s) {
 		t.Errorf("Got different run options than expected.\nDifference detected on:\n%s", diff.ObjectReflectDiff(expected, s))
@@ -301,6 +315,7 @@ func TestValidate(t *testing.T) {
 			expected: "",
 			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
 				s, _ := NewCloudControllerManagerOptions()
+				s.DynamicReloading.EnableDynamicReloading = true
 				return s
 			},
 		},
@@ -310,6 +325,7 @@ func TestValidate(t *testing.T) {
 			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
 				s, _ := NewCloudControllerManagerOptions()
 				s.KubeCloudShared.CloudProvider.Name = ""
+				s.KubeCloudShared.CloudProvider.CloudConfigFile = "azure.json"
 				return s
 			},
 		},
@@ -319,6 +335,15 @@ func TestValidate(t *testing.T) {
 			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
 				s, _ := NewCloudControllerManagerOptions()
 				s.ServiceController.ConcurrentServiceSyncs = 10
+				s.KubeCloudShared.CloudProvider.CloudConfigFile = "azure.json"
+				return s
+			},
+		},
+		{
+			desc:     "should return an error if the cloud config file is empty and the dynamic reloading is not enabled",
+			expected: "--cloud-config cannot be empty when --enable-dynamic-reloading is not set to true",
+			generateTestCloudControllerManagerOptions: func() *CloudControllerManagerOptions {
+				s, _ := NewCloudControllerManagerOptions()
 				return s
 			},
 		},

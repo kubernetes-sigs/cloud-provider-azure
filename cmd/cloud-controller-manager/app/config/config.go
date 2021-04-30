@@ -60,6 +60,15 @@ type Config struct {
 
 	// SharedInformers gives access to informers for the controller.
 	SharedInformers informers.SharedInformerFactory
+
+	DynamicReloadingConfig DynamicReloadingConfig
+}
+
+type DynamicReloadingConfig struct {
+	EnableDynamicReloading     bool
+	CloudConfigSecretName      string
+	CloudConfigSecretNamespace string
+	CloudConfigKey             string
 }
 
 type completedConfig struct {
