@@ -32,13 +32,13 @@ import (
 
 // Environmental variables for validating Azure resource status.
 const (
-	TenantIDEnv               = "K8S_AZURE_TENANTID"
-	SubscriptionEnv           = "K8S_AZURE_SUBSID"
-	ServicePrincipleIDEnv     = "K8S_AZURE_SPID"
-	ServicePrincipleSecretEnv = "K8S_AZURE_SPSEC" // #nosec G101
-	ClusterLocationEnv        = "K8S_AZURE_LOCATION"
-	ClusterEnvironment        = "K8S_AZURE_ENVIRONMENT"
-	LoadBalancerSkuEnv        = "K8S_AZURE_LOADBALANCE_SKU"
+	TenantIDEnv               = "AZURE_TENANT_ID"
+	SubscriptionEnv           = "AZURE_SUBSCRIPTION_ID"
+	ServicePrincipleIDEnv     = "AZURE_CLIENT_ID"
+	ServicePrincipleSecretEnv = "AZURE_CLIENT_SECRET" // #nosec G101
+	ClusterLocationEnv        = "AZURE_LOCATION"
+	ClusterEnvironment        = "AZURE_ENVIRONMENT"
+	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
