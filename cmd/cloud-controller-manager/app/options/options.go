@@ -80,6 +80,8 @@ type CloudControllerManagerOptions struct {
 
 	// NodeStatusUpdateFrequency is the frequency at which the controller updates nodes' status
 	NodeStatusUpdateFrequency metav1.Duration
+
+	DynamicReloading *DynamicReloadingOptions
 }
 
 // NewCloudControllerManagerOptions creates a new ExternalCMServer with a default config.
@@ -105,6 +107,7 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 		Authentication:            apiserveroptions.NewDelegatingAuthenticationOptions(),
 		Authorization:             apiserveroptions.NewDelegatingAuthorizationOptions(),
 		NodeStatusUpdateFrequency: componentConfig.NodeStatusUpdateFrequency,
+		DynamicReloading:          defaultDynamicReloadingOptions(),
 	}
 
 	s.Authentication.RemoteKubeConfigFileOptional = true
@@ -150,6 +153,8 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	o.Authentication.AddFlags(fss.FlagSet("authentication"))
 	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 
+	o.DynamicReloading.AddFlags(fss.FlagSet("dynamic reloading"))
+
 	fs := fss.FlagSet("misc")
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
@@ -179,6 +184,9 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 		return err
 	}
 	if err = o.SecureServing.ApplyTo(&c.SecureServing, &c.LoopbackClientConfig); err != nil {
+		return err
+	}
+	if err = o.DynamicReloading.ApplyTo(&c.DynamicReloadingConfig); err != nil {
 		return err
 	}
 	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
@@ -222,7 +230,7 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 		c.ClientBuilder = rootClientBuilder
 	}
 	c.VersionedClient = rootClientBuilder.ClientOrDie("shared-informers")
-	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, resyncPeriod(c)())
+	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, ResyncPeriod(c)())
 
 	// sync back to component config
 	// TODO: find more elegant way than syncing back the values.
@@ -246,6 +254,7 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 	errors = append(errors, o.InsecureServing.Validate()...)
 	errors = append(errors, o.Authentication.Validate()...)
 	errors = append(errors, o.Authorization.Validate()...)
+	errors = append(errors, o.DynamicReloading.Validate()...)
 
 	if len(o.KubeCloudShared.CloudProvider.Name) == 0 {
 		errors = append(errors, fmt.Errorf("--cloud-provider cannot be empty"))
@@ -255,11 +264,15 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 		errors = append(errors, fmt.Errorf("--concurrent-service-syncs is limited to 1 only"))
 	}
 
+	if !o.DynamicReloading.EnableDynamicReloading && o.KubeCloudShared.CloudProvider.CloudConfigFile == "" {
+		errors = append(errors, fmt.Errorf("--cloud-config cannot be empty when --enable-dynamic-reloading is not set to true"))
+	}
+
 	return utilerrors.NewAggregate(errors)
 }
 
-// resyncPeriod computes the time interval a shared informer waits before resyncing with the api server
-func resyncPeriod(c *cloudcontrollerconfig.Config) func() time.Duration {
+// ResyncPeriod computes the time interval a shared informer waits before resyncing with the api server
+func ResyncPeriod(c *cloudcontrollerconfig.Config) func() time.Duration {
 	return func() time.Duration {
 		factor := rand.Float64() + 1 // #nosec G404
 		return time.Duration(float64(c.ComponentConfig.Generic.MinResyncPeriod.Nanoseconds()) * factor)

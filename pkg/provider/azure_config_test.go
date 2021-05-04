@@ -28,7 +28,6 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/yaml"
 )
 
@@ -142,6 +141,11 @@ func TestGetConfigFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
+				InitSecretConfig: InitSecretConfig{
+					SecretName:      "azure-cloud-provider",
+					SecretNamespace: "kube-system",
+					CloudConfigKey:  "cloud-config",
+				},
 			}
 			if test.existingConfig != nil {
 				az.Config = *test.existingConfig
@@ -164,7 +168,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 				if test.secretConfig == badConfig {
 					secret.Data = map[string][]byte{"cloud-config": []byte(`unknown: "hello",unknown: "hello"`)}
 				}
-				_, err := az.KubeClient.CoreV1().Secrets(consts.CloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+				_, err := az.KubeClient.CoreV1().Secrets("kube-system").Create(context.TODO(), secret, metav1.CreateOptions{})
 				assert.NoError(t, err, test.name)
 			}
 
@@ -208,6 +212,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 			},
 			secretConfig: unknownConfigTypeConfig,
 			expected:     nil,
+			expectErr:    true,
 		},
 		{
 			name:           "Azure config should be override when cloud config type is secret",
@@ -238,6 +243,11 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
+				InitSecretConfig: InitSecretConfig{
+					SecretName:      "azure-cloud-provider",
+					SecretNamespace: "kube-system",
+					CloudConfigKey:  "cloud-config",
+				},
 			}
 			if test.existingConfig != nil {
 				az.Config = *test.existingConfig
@@ -257,11 +267,12 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 						"cloud-config": secretData,
 					}
 				}
-				_, err := az.KubeClient.CoreV1().Secrets(consts.CloudConfigNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+				_, err := az.KubeClient.CoreV1().Secrets("kube-system").Create(context.TODO(), secret, metav1.CreateOptions{})
 				assert.NoError(t, err, test.name)
 			}
 
-			az.InitializeCloudFromSecret()
+			err := az.InitializeCloudFromSecret()
+			assert.Equal(t, test.expectErr, err != nil)
 		})
 	}
 }

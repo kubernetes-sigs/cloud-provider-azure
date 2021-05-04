@@ -1430,7 +1430,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 
 	existingLBs, err := az.reconcileSharedLoadBalancer(service, clusterName, nodes)
 	if err != nil {
-		klog.Errorf("reconcileLoadBalancer: failed to reconcile shared load balancer: %w", err)
+		klog.Errorf("reconcileLoadBalancer: failed to reconcile shared load balancer: %v", err)
 		return nil, err
 	}
 

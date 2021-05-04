@@ -18,7 +18,6 @@ package app
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -42,7 +41,9 @@ import (
 	"k8s.io/klog/v2"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
+	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/dynamic"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/options"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
 )
@@ -70,15 +71,66 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+				klog.Errorf("Run: failed to configure cloud controller manager: %v", err)
 				os.Exit(1)
 			}
 
-			if err := Run(c.Complete(), wait.NeverStop); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+			err = StartHTTPServer(c.Complete(), wait.NeverStop)
+			if err != nil {
+				klog.Errorf("Run: railed to start HTTP server: %v", err)
 				os.Exit(1)
 			}
 
+			if c.ComponentConfig.Generic.LeaderElection.LeaderElect {
+				// Identity used to distinguish between multiple cloud controller manager instances
+				id, err := os.Hostname()
+				if err != nil {
+					klog.Errorf("Run: failed to get host name: %v", err)
+					os.Exit(1)
+				}
+				// add a uniquifier so that two processes on the same host don't accidentally both become active
+				id = id + "_" + string(uuid.NewUUID())
+
+				// Lock required for leader election
+				rl, err := resourcelock.NewFromKubeconfig(c.ComponentConfig.Generic.LeaderElection.ResourceLock,
+					c.ComponentConfig.Generic.LeaderElection.ResourceNamespace,
+					c.ComponentConfig.Generic.LeaderElection.ResourceName,
+					resourcelock.ResourceLockConfig{
+						Identity:      id,
+						EventRecorder: c.EventRecorder,
+					},
+					c.Kubeconfig,
+					c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration)
+				if err != nil {
+					klog.Fatalf("error creating lock: %v", err)
+				}
+
+				// Try and become the leader and start cloud controller manager loops
+				var electionChecker *leaderelection.HealthzAdaptor
+				if c.ComponentConfig.Generic.LeaderElection.LeaderElect {
+					electionChecker = leaderelection.NewLeaderHealthzAdaptor(time.Second * 20)
+				}
+
+				leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
+					Lock:          rl,
+					LeaseDuration: c.ComponentConfig.Generic.LeaderElection.LeaseDuration.Duration,
+					RenewDeadline: c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration,
+					RetryPeriod:   c.ComponentConfig.Generic.LeaderElection.RetryPeriod.Duration,
+					Callbacks: leaderelection.LeaderCallbacks{
+						OnStartedLeading: RunWrapper(s, c),
+						OnStoppedLeading: func() {
+							panic("leaderelection lost")
+						},
+					},
+					WatchDog: electionChecker,
+					Name:     "cloud-controller-manager",
+				})
+
+				panic("unreachable")
+			}
+
+			RunWrapper(s, c)(context.TODO())
+			panic("unreachable")
 		},
 	}
 
@@ -87,11 +139,6 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
 
-	if flag.CommandLine.Lookup("cloud-provider-gce-lb-src-cidrs") != nil {
-		// hoist this flag from the global flagset to preserve the commandline until
-		// the gce cloudprovider is removed.
-		globalflag.Register(namedFlagSets.FlagSet("generic"), "cloud-provider-gce-lb-src-cidrs")
-	}
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
@@ -110,34 +157,66 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	return cmd
 }
 
-// Run runs the ExternalCMServer.  This should never exit.
-func Run(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error {
-	// To help debugging, immediately log version
-	klog.Infof("Version: %+v", version.Get())
+// RunWrapper adapts the ccm boot logic to the leader elector call back function
+func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config) func(ctx context.Context) {
+	return func(ctx context.Context) {
+		if !c.DynamicReloadingConfig.EnableDynamicReloading {
+			klog.V(1).Infof("using static initialization from config file %s", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
+			if err := Run(context.TODO(), c.Complete()); err != nil {
+				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
+				os.Exit(1)
+			}
 
-	cloud, err := cloudprovider.InitCloudProvider(c.ComponentConfig.KubeCloudShared.CloudProvider.Name, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
-	if err != nil {
-		klog.Fatalf("Cloud provider could not be initialized: %v", err)
-	}
-	if cloud == nil {
-		klog.Fatalf("cloud provider is nil")
-	}
-
-	if !cloud.HasClusterID() {
-		if c.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
-			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future.  Please tag your cluster to avoid any future issues")
+			panic("unreachable")
 		} else {
-			klog.Fatalf("no ClusterID found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
+			klog.V(1).Infof("RunWrapper: using dynamic initialization from secret %s/%s, starting the secret watcher", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
+			updateCh := dynamic.RunSecretWatcherOrDie(c)
+			errCh := make(chan error, 1)
+
+			cancelFunc := runAsync(s, errCh)
+
+			for {
+				select {
+				case <-updateCh:
+					klog.V(2).Infof("RunWrapper: detected the cloud config secret %s/%s has been updated, re-constructing the cloud controller manager", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
+
+					// stop the previous goroutines
+					cancelFunc()
+
+					// start new goroutines
+					cancelFunc = runAsync(s, errCh)
+				case err := <-errCh:
+					klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
+					os.Exit(1)
+				}
+			}
 		}
 	}
+}
 
-	// setup /configz endpoint
-	if cz, err := configz.New(ConfigzName); err == nil {
-		cz.Set(c.ComponentConfig)
-	} else {
-		klog.Errorf("unable to register configz: %v", err)
-	}
+func runAsync(s *options.CloudControllerManagerOptions, errCh chan error) context.CancelFunc {
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
+	go func() {
+		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
+		if err != nil {
+			klog.Errorf("RunAsync: failed to configure cloud controller manager: %v", err)
+			os.Exit(1)
+		}
+
+		if err := Run(ctx, c.Complete()); err != nil {
+			klog.Errorf("RunAsync: failed to run cloud controller manager: %v", err)
+			errCh <- err
+		}
+
+		klog.V(1).Infof("RunAsync: stopping")
+	}()
+
+	return cancelFunc
+}
+
+// StartHTTPServer starts the controller manager HTTP server
+func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error {
 	// Setup any healthz checks we will want to use.
 	var checks []healthz.HealthChecker
 	var electionChecker *leaderelection.HealthzAdaptor
@@ -168,55 +247,55 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error
 		healthz.InstallReadyzHandler(unsecuredMux, checks...)
 	}
 
-	run := func(ctx context.Context) {
-		if err := startControllers(c, ctx.Done(), cloud, newControllerInitializers()); err != nil {
-			klog.Fatalf("error running controllers: %v", err)
+	return nil
+}
+
+// Run runs the ExternalCMServer.  This should never exit.
+func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig) error {
+	// To help debugging, immediately log version
+	klog.Infof("Version: %+v", version.Get())
+
+	var (
+		cloud cloudprovider.Interface
+		err   error
+	)
+
+	if c.DynamicReloadingConfig.EnableDynamicReloading {
+		cloud, err = provider.NewCloudFromSecret(c.ClientBuilder, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigKey)
+		if err != nil {
+			klog.Fatalf("Run: Cloud provider could not be initialized dynamically from secret %s/%s: %v", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName, err)
+		}
+	} else {
+		cloud, err = cloudprovider.InitCloudProvider(c.ComponentConfig.KubeCloudShared.CloudProvider.Name, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
+		if err != nil {
+			klog.Fatalf("Cloud provider could not be initialized: %v", err)
 		}
 	}
 
-	if !c.ComponentConfig.Generic.LeaderElection.LeaderElect {
-		run(context.TODO())
-		panic("unreachable")
+	if cloud == nil {
+		klog.Fatalf("cloud provider is nil")
 	}
 
-	// Identity used to distinguish between multiple cloud controller manager instances
-	id, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-	// add a uniquifier so that two processes on the same host don't accidentally both become active
-	id = id + "_" + string(uuid.NewUUID())
-
-	// Lock required for leader election
-	rl, err := resourcelock.NewFromKubeconfig(c.ComponentConfig.Generic.LeaderElection.ResourceLock,
-		c.ComponentConfig.Generic.LeaderElection.ResourceNamespace,
-		c.ComponentConfig.Generic.LeaderElection.ResourceName,
-		resourcelock.ResourceLockConfig{
-			Identity:      id,
-			EventRecorder: c.EventRecorder,
-		},
-		c.Kubeconfig,
-		c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration)
-	if err != nil {
-		klog.Fatalf("error creating lock: %v", err)
+	if !cloud.HasClusterID() {
+		if c.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
+			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future.  Please tag your cluster to avoid any future issues")
+		} else {
+			klog.Fatalf("no ClusterID found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
+		}
 	}
 
-	// Try and become the leader and start cloud controller manager loops
-	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
-		Lock:          rl,
-		LeaseDuration: c.ComponentConfig.Generic.LeaderElection.LeaseDuration.Duration,
-		RenewDeadline: c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration,
-		RetryPeriod:   c.ComponentConfig.Generic.LeaderElection.RetryPeriod.Duration,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: run,
-			OnStoppedLeading: func() {
-				klog.Fatalf("leaderelection lost")
-			},
-		},
-		WatchDog: electionChecker,
-		Name:     "cloud-controller-manager",
-	})
-	panic("unreachable")
+	// setup /configz endpoint
+	if cz, err := configz.New(ConfigzName); err == nil {
+		cz.Set(c.ComponentConfig)
+	} else {
+		klog.Errorf("unable to register configz: %v", err)
+	}
+
+	if err := startControllers(c, ctx.Done(), cloud, newControllerInitializers()); err != nil {
+		klog.Fatalf("error running controllers: %v", err)
+	}
+
+	return nil
 }
 
 // startControllers starts the cloud specific controller loops.
@@ -255,9 +334,13 @@ func startControllers(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan st
 		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
 	}
 
+	klog.V(2).Infof("startControllers: starting shared informers")
 	c.SharedInformers.Start(stopCh)
 
-	select {}
+	<-stopCh
+	klog.V(1).Infof("startControllers: received stopping signal, exiting")
+
+	return nil
 }
 
 // initFunc is used to launch a particular controller.  It may run additional "should I activate checks".

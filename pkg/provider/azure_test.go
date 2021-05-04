@@ -3296,7 +3296,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	az := GetTestCloud(ctrl)
 
 	err := az.InitializeCloudFromConfig(nil, false)
-	assert.NoError(t, err)
+	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
 	config := Config{
 		DisableAvailabilitySetNodes: true,

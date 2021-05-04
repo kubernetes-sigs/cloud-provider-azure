@@ -169,13 +169,6 @@ const (
 	BackoffDurationDefault = 5 // in seconds
 	// BackoffJitterDefault is the default value of the backoff jitter
 	BackoffJitterDefault = 1.0
-
-	// CloudConfigNamespace is the namespace of the cloud config secret
-	CloudConfigNamespace = "kube-system"
-	// CloudConfigKey is the name of the cloud config key
-	CloudConfigKey = "cloud-config"
-	// CloudConfigSecName is the name of the cloud config secret
-	CloudConfigSecName = "azure-cloud-provider"
 )
 
 // load balancer
