@@ -712,7 +712,7 @@ func (ss *ScaleSet) listScaleSetVMs(scaleSetName, resourceGroup string) ([]compu
 func (ss *ScaleSet) getAgentPoolScaleSets(nodes []*v1.Node) (*[]string, error) {
 	agentPoolScaleSets := &[]string{}
 	for nx := range nodes {
-		if isMasterNode(nodes[nx]) {
+		if isControlPlaneNode(nodes[nx]) {
 			continue
 		}
 
@@ -1061,7 +1061,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 	// multiple standard load balancers and the basic load balancer doesn't
 	if ss.useStandardLoadBalancer() && !ss.EnableMultipleStandardLoadBalancers {
 		for _, node := range nodes {
-			if ss.excludeMasterNodesFromStandardLB() && isMasterNode(node) {
+			if ss.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 				continue
 			}
 
@@ -1204,7 +1204,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 	for _, node := range nodes {
 		localNodeName := node.Name
 
-		if ss.useStandardLoadBalancer() && ss.excludeMasterNodesFromStandardLB() && isMasterNode(node) {
+		if ss.useStandardLoadBalancer() && ss.excludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 			klog.V(4).Infof("Excluding master node %q from load balancer backendpool %q", localNodeName, backendPoolID)
 			continue
 		}
@@ -1487,8 +1487,10 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 
 		nodeResourceGroup, nodeVMSS, nodeInstanceID, nodeVMSSVM, err := ss.ensureBackendPoolDeletedFromNode(nodeName, backendPoolID)
 		if err != nil {
-			klog.Errorf("EnsureBackendPoolDeleted(%s): backendPoolID(%s) - failed with error %v", getServiceName(service), backendPoolID, err)
-			allErrs = append(allErrs, err)
+			if !errors.Is(err, ErrorNotVmssInstance) { // Do nothing for the VMAS nodes.
+				klog.Errorf("EnsureBackendPoolDeleted(%s): backendPoolID(%s) - failed with error %v", getServiceName(service), backendPoolID, err)
+				allErrs = append(allErrs, err)
+			}
 			continue
 		}
 

@@ -50,27 +50,45 @@ const (
 	primary                       = "primary"
 )
 
-func TestIsMasterNode(t *testing.T) {
-	if isMasterNode(&v1.Node{}) {
+func TestIsControlPlaneNode(t *testing.T) {
+	if isControlPlaneNode(&v1.Node{}) {
 		t.Errorf("Empty node should not be master!")
 	}
-	if isMasterNode(&v1.Node{
+	if isControlPlaneNode(&v1.Node{
 		ObjectMeta: meta.ObjectMeta{
 			Labels: map[string]string{
 				consts.NodeLabelRole: "worker",
 			},
 		},
 	}) {
-		t.Errorf("Node labelled 'worker' should not be master!")
+		t.Errorf("Node labelled 'worker' should not be control plane!")
 	}
-	if !isMasterNode(&v1.Node{
+	if !isControlPlaneNode(&v1.Node{
 		ObjectMeta: meta.ObjectMeta{
 			Labels: map[string]string{
 				consts.NodeLabelRole: "master",
 			},
 		},
 	}) {
-		t.Errorf("Node should be master!")
+		t.Errorf("Node with kubernetes.io/role: \"master\" label should be control plane!")
+	}
+	if !isControlPlaneNode(&v1.Node{
+		ObjectMeta: meta.ObjectMeta{
+			Labels: map[string]string{
+				consts.MasterNodeRoleLabel: "",
+			},
+		},
+	}) {
+		t.Errorf("Node with node-role.kubernetes.io/master: \"\" label should be control plane!")
+	}
+	if !isControlPlaneNode(&v1.Node{
+		ObjectMeta: meta.ObjectMeta{
+			Labels: map[string]string{
+				consts.ControlPlaneNodeRoleLabel: "",
+			},
+		},
+	}) {
+		t.Errorf("Node with node-role.kubernetes.io/control-plane: \"\" label should be control plane!")
 	}
 }
 

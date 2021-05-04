@@ -316,11 +316,11 @@ var _ = Describe("Service with annotation", func() {
 
 		By("Validate shared security rule exists")
 		port := fmt.Sprintf("%v", nginxPort)
-		nsg, err := tc.GetClusterSecurityGroup()
+		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 
 		ipList := []string{ip1, ip2}
-		Expect(validateSharedSecurityRuleExists(nsg, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
+		Expect(validateSharedSecurityRuleExists(nsgs, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
@@ -476,7 +476,7 @@ var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 		vmssNames := sets.NewString()
 		var resourceGroupName string
 		for i, node := range nodes {
-			if utils.IsMasterNode(&nodes[i]) {
+			if utils.IsControlPlaneNode(&nodes[i]) {
 				continue
 			}
 			providerID := node.Spec.ProviderID
