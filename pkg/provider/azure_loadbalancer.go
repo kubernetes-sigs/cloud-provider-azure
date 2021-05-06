@@ -2713,9 +2713,11 @@ func (az *Cloud) getPublicIPUpdates(clusterName string, service *v1.Service, pip
 				}
 				dirtyPIP = true
 			}
-			changed := az.ensurePIPTagged(service, &pip)
-			if changed {
-				dirtyPIP = true
+			if !isUserAssignedPIP {
+				changed := az.ensurePIPTagged(service, &pip)
+				if changed {
+					dirtyPIP = true
+				}
 			}
 			if shouldReleaseExistingOwnedPublicIP(&pip, wantLb, isInternal, isUserAssignedPIP, desiredPipName, serviceIPTagRequest) {
 				// Then, release the public ip
