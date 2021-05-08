@@ -424,3 +424,80 @@ func (page LoadBalancerListResultPage) Values() []network.LoadBalancer {
 	}
 	return *page.lblr.Value
 }
+
+// CreateOrUpdateBackendPools creates or updates a LoadBalancer backend pool.
+func (c *Client) CreateOrUpdateBackendPools(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolName string, parameters network.BackendAddressPool, etag string) *retry.Error {
+	mc := metrics.NewMetricContext("load_balancers", "create_or_update_backend_pools", resourceGroupName, c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return retry.GetRateLimitError(true, "LBCreateOrUpdateBackendPools")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("LBCreateOrUpdateBackendPools", "client throttled", c.RetryAfterWriter)
+		return rerr
+	}
+
+	rerr := c.createOrUpdateLBBackendPool(ctx, resourceGroupName, loadBalancerName, backendPoolName, parameters, etag)
+	_ = mc.Observe(rerr.Error())
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return rerr
+	}
+
+	return nil
+}
+
+// createOrUpdateLBBackendPool creates or updates a LoadBalancer.
+func (c *Client) createOrUpdateLBBackendPool(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolName string, parameters network.BackendAddressPool, etag string) *retry.Error {
+	resourceID := armclient.GetChildResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		"Microsoft.Network/loadBalancers",
+		loadBalancerName,
+		"backendAddressPools",
+		backendPoolName,
+	)
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+		autorest.WithJSON(parameters),
+	}
+	if etag != "" {
+		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
+	}
+
+	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	defer c.armClient.CloseResponse(ctx, response)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.put.request", resourceID, rerr.Error())
+		return rerr
+	}
+
+	if response != nil && response.StatusCode != http.StatusNoContent {
+		_, rerr = c.createOrUpdateBackendPoolResponder(response)
+		if rerr != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.put.respond", resourceID, rerr.Error())
+			return rerr
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) createOrUpdateBackendPoolResponder(resp *http.Response) (*network.BackendAddressPool, *retry.Error) {
+	result := &network.BackendAddressPool{}
+	err := autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByUnmarshallingJSON(&result))
+	result.Response = autorest.Response{Response: resp}
+	return result, retry.GetError(resp, err)
+}
