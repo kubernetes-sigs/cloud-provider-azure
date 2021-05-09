@@ -223,9 +223,9 @@ type Config struct {
 }
 
 type InitSecretConfig struct {
-	SecretName      string `json:"secretName,omitempty" yaml:"secret_name,omitempty"`
-	SecretNamespace string `json:"secret_namespace,omitempty" yaml:"secret_namespace,omitempty"`
-	CloudConfigKey  string `json:"cloud_config_key,omitempty" yaml:"cloud_config_key,omitempty"`
+	SecretName      string `json:"secretName,omitempty" yaml:"secretName,omitempty"`
+	SecretNamespace string `json:"secretNamespace,omitempty" yaml:"secretNamespace,omitempty"`
+	CloudConfigKey  string `json:"cloudConfigKey,omitempty" yaml:"cloudConfigKey,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
