@@ -41,7 +41,7 @@ func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *f
 	}
 
 	accountOptions.EnableHTTPSTrafficOnly = true
-	if shareOptions.Protocol == storage.NFS {
+	if shareOptions.Protocol == storage.EnabledProtocolsNFS {
 		accountOptions.EnableHTTPSTrafficOnly = false
 	}
 

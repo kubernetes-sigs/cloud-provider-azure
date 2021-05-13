@@ -98,7 +98,7 @@ func TestGetStorageAccount(t *testing.T) {
 			VirtualNetworkRules: &[]storage.VirtualNetworkRule{
 				{
 					VirtualNetworkResourceID: &networkID,
-					Action:                   storage.Allow,
+					Action:                   storage.ActionAllow,
 					State:                    "state",
 				},
 			},

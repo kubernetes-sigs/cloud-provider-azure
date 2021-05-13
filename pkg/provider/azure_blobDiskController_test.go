@@ -216,11 +216,11 @@ func TestEnsureDefaultContainer(t *testing.T) {
 
 	b.accounts["testsa"] = &storageAccountState{isValidating: 0}
 	mockSAClient.EXPECT().GetProperties(gomock.Any(), b.common.resourceGroup, "testsa").Return(storage.Account{
-		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.Creating},
+		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.ProvisioningStateCreating},
 	}, nil)
 	mockSAClient.EXPECT().GetProperties(gomock.Any(), b.common.resourceGroup, "testsa").Return(storage.Account{}, &retryError500)
 	mockSAClient.EXPECT().GetProperties(gomock.Any(), b.common.resourceGroup, "testsa").Return(storage.Account{
-		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.Succeeded},
+		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.ProvisioningStateSucceeded},
 	}, nil)
 	mockSAClient.EXPECT().ListKeys(gomock.Any(), b.common.resourceGroup, "testsa").Return(storage.AccountListKeysResult{
 		Keys: &[]storage.AccountKey{
@@ -284,13 +284,13 @@ func TestFindSANameForDisk(t *testing.T) {
 		"this-shall-be-skipped": {name: "fake"},
 		"ds0": {
 			name:      "ds0",
-			saType:    storage.StandardGRS,
+			saType:    storage.SkuNameStandardGRS,
 			diskCount: 50,
 		},
 	}
 	mockSAClient.EXPECT().GetProperties(gomock.Any(), b.common.resourceGroup, gomock.Any()).Return(storage.Account{}, &retryError500).Times(2)
 	mockSAClient.EXPECT().GetProperties(gomock.Any(), b.common.resourceGroup, gomock.Any()).Return(storage.Account{
-		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.Succeeded},
+		AccountProperties: &storage.AccountProperties{ProvisioningState: storage.ProvisioningStateSucceeded},
 	}, nil).Times(2)
 	mockSAClient.EXPECT().ListKeys(gomock.Any(), b.common.resourceGroup, gomock.Any()).Return(storage.AccountListKeysResult{
 		Keys: &[]storage.AccountKey{
@@ -301,36 +301,36 @@ func TestFindSANameForDisk(t *testing.T) {
 		},
 	}, nil)
 	mockSAClient.EXPECT().Create(gomock.Any(), b.common.resourceGroup, gomock.Any(), gomock.Any()).Return(nil)
-	name, err := b.findSANameForDisk(storage.StandardGRS)
+	name, err := b.findSANameForDisk(storage.SkuNameStandardGRS)
 	expectedErr := "does not exist while trying to create/ensure default container"
 	assert.True(t, strings.Contains(err.Error(), expectedErr))
 	assert.Error(t, err)
 	assert.Empty(t, name)
 
 	b.accounts = make(map[string]*storageAccountState)
-	name, err = b.findSANameForDisk(storage.StandardGRS)
+	name, err = b.findSANameForDisk(storage.SkuNameStandardGRS)
 	assert.Error(t, err)
 	assert.Empty(t, name)
 
 	b.accounts = map[string]*storageAccountState{
 		"ds0": {
 			name:      "ds0",
-			saType:    storage.StandardGRS,
+			saType:    storage.SkuNameStandardGRS,
 			diskCount: 0,
 		},
 	}
-	name, err = b.findSANameForDisk(storage.StandardGRS)
+	name, err = b.findSANameForDisk(storage.SkuNameStandardGRS)
 	assert.Equal(t, "ds0", name)
 	assert.NoError(t, err)
 
 	for i := 0; i < maxStorageAccounts; i++ {
 		b.accounts[fmt.Sprintf("ds%d", i)] = &storageAccountState{
 			name:      fmt.Sprintf("ds%d", i),
-			saType:    storage.StandardGRS,
+			saType:    storage.SkuNameStandardGRS,
 			diskCount: 59,
 		}
 	}
-	name, err = b.findSANameForDisk(storage.StandardGRS)
+	name, err = b.findSANameForDisk(storage.SkuNameStandardGRS)
 	assert.NotEmpty(t, name)
 	assert.NoError(t, err)
 }
@@ -342,7 +342,7 @@ func TestCreateBlobDisk(t *testing.T) {
 	b.accounts = map[string]*storageAccountState{
 		"ds0": {
 			name:      "ds0",
-			saType:    storage.StandardGRS,
+			saType:    storage.SkuNameStandardGRS,
 			diskCount: 0,
 		},
 	}
@@ -357,7 +357,7 @@ func TestCreateBlobDisk(t *testing.T) {
 			},
 		},
 	}, nil)
-	diskURI, err := b.CreateBlobDisk("datadisk", storage.StandardGRS, 10)
+	diskURI, err := b.CreateBlobDisk("datadisk", storage.SkuNameStandardGRS, 10)
 	expectedErr := "failed to put page blob datadisk.vhd in container vhds: storage: service returned error: StatusCode=403"
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), expectedErr))

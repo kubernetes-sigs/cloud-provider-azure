@@ -158,7 +158,7 @@ func TestCreateFileShare(t *testing.T) {
 
 		mockFileShare := &fileclient.ShareOptions{
 			Name:       test.name,
-			Protocol:   storage.SMB,
+			Protocol:   storage.EnabledProtocolsSMB,
 			RequestGiB: test.gb,
 		}
 

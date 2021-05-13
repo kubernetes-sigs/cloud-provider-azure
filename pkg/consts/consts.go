@@ -95,9 +95,9 @@ const (
 	StorageAccountNameMaxLength = 24
 
 	// DefaultStorageAccountType is the default storage account type
-	DefaultStorageAccountType = string(storage.StandardLRS)
+	DefaultStorageAccountType = string(storage.SkuNameStandardLRS)
 	// DefaultStorageAccountKind is the default storage account kind
-	DefaultStorageAccountKind = storage.StorageV2
+	DefaultStorageAccountKind = storage.KindStorageV2
 	// FileShareAccountNamePrefix is the file share account name prefix
 	FileShareAccountNamePrefix = "f"
 	// SharedDiskAccountNamePrefix is the shared disk account name prefix
