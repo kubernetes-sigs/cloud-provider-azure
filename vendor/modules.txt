@@ -12,7 +12,7 @@
 ## explicit
 # dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9 => dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9
 ## explicit
-# github.com/Azure/azure-sdk-for-go v53.1.0+incompatible => github.com/Azure/azure-sdk-for-go v53.1.0+incompatible
+# github.com/Azure/azure-sdk-for-go v54.1.0+incompatible => github.com/Azure/azure-sdk-for-go v54.1.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute
@@ -21,7 +21,7 @@ github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/cont
 github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources
-github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage
+github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage
 github.com/Azure/azure-sdk-for-go/storage
 github.com/Azure/azure-sdk-for-go/version
 # github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
@@ -1342,7 +1342,7 @@ sigs.k8s.io/yaml
 # cloud.google.com/go/pubsub => cloud.google.com/go/pubsub v1.2.0
 # cloud.google.com/go/storage => cloud.google.com/go/storage v1.6.0
 # dmitri.shuralyov.com/gpu/mtl => dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9
-# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v53.1.0+incompatible
+# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v54.1.0+incompatible
 # github.com/Azure/go-ansiterm => github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 # github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 # github.com/Azure/go-autorest/autorest => github.com/Azure/go-autorest/autorest v0.11.17

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
 	"github.com/golang/mock/gomock"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
@@ -158,7 +158,7 @@ func TestCreateFileShare(t *testing.T) {
 
 		mockFileShare := &fileclient.ShareOptions{
 			Name:       test.name,
-			Protocol:   storage.SMB,
+			Protocol:   storage.EnabledProtocolsSMB,
 			RequestGiB: test.gb,
 		}
 

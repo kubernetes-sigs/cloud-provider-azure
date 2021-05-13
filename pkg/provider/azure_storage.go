@@ -19,7 +19,7 @@ package provider
 import (
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
 
 	"k8s.io/klog/v2"
 
@@ -41,7 +41,7 @@ func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *f
 	}
 
 	accountOptions.EnableHTTPSTrafficOnly = true
-	if shareOptions.Protocol == storage.NFS {
+	if shareOptions.Protocol == storage.EnabledProtocolsNFS {
 		accountOptions.EnableHTTPSTrafficOnly = false
 	}
 

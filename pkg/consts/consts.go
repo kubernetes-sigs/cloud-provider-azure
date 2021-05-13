@@ -19,7 +19,7 @@ package consts
 import (
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
 
 	"k8s.io/component-base/featuregate"
 )
@@ -95,9 +95,9 @@ const (
 	StorageAccountNameMaxLength = 24
 
 	// DefaultStorageAccountType is the default storage account type
-	DefaultStorageAccountType = string(storage.StandardLRS)
+	DefaultStorageAccountType = string(storage.SkuNameStandardLRS)
 	// DefaultStorageAccountKind is the default storage account kind
-	DefaultStorageAccountKind = storage.StorageV2
+	DefaultStorageAccountKind = storage.KindStorageV2
 	// FileShareAccountNamePrefix is the file share account name prefix
 	FileShareAccountNamePrefix = "f"
 	// SharedDiskAccountNamePrefix is the shared disk account name prefix
