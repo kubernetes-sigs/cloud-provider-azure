@@ -25,6 +25,7 @@ import (
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -141,7 +142,15 @@ var _ = Describe("Network security group", func() {
 		annotation := map[string]string{
 			consts.ServiceAnnotationAllowedServiceTag: "AzureCloud",
 		}
-		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+		By("Waiting for the service to be exposed")
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, "")
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating if the corresponding IP prefix existing in nsg")
 		nsgs, err := tc.GetClusterSecurityGroups()
@@ -177,7 +186,7 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		internalIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if there is a deny_all rule")
@@ -196,7 +205,7 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIP, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		internalIP, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if there is a LoadBalancerSourceRanges rule")
