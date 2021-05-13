@@ -23,7 +23,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -37,8 +36,6 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
-
-const expectedDiskProvisionSeconds = 3 // seconds
 
 //ManagedDiskController : managed disk controller struct
 type ManagedDiskController struct {
@@ -203,8 +200,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 	diskID := fmt.Sprintf(managedDiskPath, cloud.subscriptionID, options.ResourceGroup, options.DiskName)
 
 	if options.SkipGetDiskOperation {
-		klog.Warningf("azureDisk - GetDisk(%s, StorageAccountType:%s) is throttled, wait 3s for disk provisioning complete", options.DiskName, options.StorageAccountType)
-		time.Sleep(expectedDiskProvisionSeconds * time.Second)
+		klog.Warningf("azureDisk - GetDisk(%s, StorageAccountType:%s) is throttled, unable to confirm provisioningState in poll process", options.DiskName, options.StorageAccountType)
 	} else {
 		err = kwait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
 			provisionState, id, err := c.GetDisk(options.ResourceGroup, options.DiskName)
@@ -225,8 +221,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		})
 
 		if err != nil {
-			klog.Warningf("azureDisk - created new MD Name:%s StorageAccountType:%s Size:%v but was unable to confirm provisioningState in poll process, wait 3s for disk provisioning complete", options.DiskName, options.StorageAccountType, options.SizeGB)
-			time.Sleep(expectedDiskProvisionSeconds * time.Second)
+			klog.Warningf("azureDisk - created new MD Name:%s StorageAccountType:%s Size:%v but was unable to confirm provisioningState in poll process", options.DiskName, options.StorageAccountType, options.SizeGB)
 		}
 	}
 
