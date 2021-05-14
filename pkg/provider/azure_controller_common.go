@@ -149,11 +149,6 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	diskEncryptionSetID := ""
 	writeAcceleratorEnabled := false
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
-	if err != nil {
-		return -1, err
-	}
-
 	if isManagedDisk {
 		diskName := path.Base(diskURI)
 		resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
@@ -170,6 +165,10 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 		}
 
 		if disk.ManagedBy != nil && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
+			vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+			if err != nil {
+				return -1, err
+			}
 			attachedNode, err := vmset.GetNodeNameByProviderID(*disk.ManagedBy)
 			if err != nil {
 				return -1, err
@@ -247,6 +246,11 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	if len(diskMap) == 0 {
 		return lun, nil
 	}
+
+	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return -1, err
+	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
 	return lun, vmset.AttachDisk(nodeName, diskMap)
@@ -309,11 +313,6 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 		return fmt.Errorf("failed to get azure instance id for node %q: %w", nodeName, err)
 	}
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
-	if err != nil {
-		return err
-	}
-
 	node := strings.ToLower(string(nodeName))
 	disk := strings.ToLower(diskURI)
 	if err := c.insertDetachDiskRequest(diskName, disk, node); err != nil {
@@ -329,6 +328,10 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 
 	klog.V(2).Infof("Trying to detach volume %q from node %q, diskMap: %s", diskURI, nodeName, diskMap)
 	if len(diskMap) > 0 {
+		vmset, errVMSet := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+		if errVMSet != nil {
+			return errVMSet
+		}
 		c.diskStateMap.Store(disk, "detaching")
 		defer c.diskStateMap.Delete(disk)
 		if err = vmset.DetachDisk(nodeName, diskMap); err != nil {
