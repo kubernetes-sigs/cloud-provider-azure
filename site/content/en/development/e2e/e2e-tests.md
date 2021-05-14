@@ -73,11 +73,11 @@ description: >
 
     ```sh
     export RESOURCE_GROUP_NAME=<resource group name>
-    export K8S_AZURE_LOCATION=<location>
-    export K8S_AZURE_SUBSID=<subscription ID>
-    export K8S_AZURE_SPID=<client id>
-    export K8S_AZURE_SPSEC=<client secret>
-    export K8S_AZURE_TENANTID=<tenant id>
+    export AZURE_LOCATION=<location>
+    export AZURE_SUBSCRIPTION_ID=<subscription ID>
+    export AZURE_CLIENT_ID=<client id>
+    export AZURE_CLIENT_SECRET=<client secret>
+    export AZURE_TENANT_ID=<tenant id>
     export USE_CSI_DEFAULT_STORAGECLASS=<true/false>
     export K8S_RELEASE_VERSION=<k8s release version>
     export CCM_IMAGE=<image of the cloud controller manager>
