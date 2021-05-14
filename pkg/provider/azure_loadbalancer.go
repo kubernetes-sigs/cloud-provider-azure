@@ -2017,9 +2017,6 @@ func (az *Cloud) getExpectedLBRules(
 	var enableTCPReset *bool
 	if az.useStandardLoadBalancer() {
 		enableTCPReset = to.BoolPtr(true)
-		if _, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerDisableTCPReset]; ok {
-			klog.Warning("annotation service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset has been removed as of Kubernetes 1.20. TCP Resets are always enabled on Standard SKU load balancers.")
-		}
 	}
 
 	var expectedProbes []network.Probe
