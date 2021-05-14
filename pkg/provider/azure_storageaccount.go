@@ -41,6 +41,8 @@ type AccountOptions struct {
 	CreateAccount                           bool
 	EnableLargeFileShare                    bool
 	DisableFileServiceDeleteRetentionPolicy bool
+	IsHnsEnabled                            *bool
+	EnableNfsV3                             *bool
 	Tags                                    map[string]string
 	VirtualNetworkResourceIDs               []string
 }
@@ -108,6 +110,14 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 					klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, *acct.Name)
 					continue
 				}
+			}
+
+			if to.Bool(acct.IsHnsEnabled) != to.Bool(accountOptions.IsHnsEnabled) {
+				continue
+			}
+
+			if to.Bool(acct.EnableNfsV3) != to.Bool(accountOptions.EnableNfsV3) {
+				continue
 			}
 			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: storageType, Location: location})
 		}
@@ -218,6 +228,8 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				AccountPropertiesCreateParameters: &storage.AccountPropertiesCreateParameters{
 					EnableHTTPSTrafficOnly: &enableHTTPSTrafficOnly,
 					NetworkRuleSet:         networkRuleSet,
+					IsHnsEnabled:           accountOptions.IsHnsEnabled,
+					EnableNfsV3:            accountOptions.EnableNfsV3,
 				},
 				Tags:     tags,
 				Location: &location}
