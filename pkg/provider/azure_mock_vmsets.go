@@ -20,7 +20,7 @@ import (
 	"reflect"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	types "k8s.io/apimachinery/pkg/types"
