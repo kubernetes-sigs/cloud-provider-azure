@@ -19,7 +19,7 @@ package routeclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )

@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -776,7 +776,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		if az.HasExtendedLocation() {
 			defaultLB.ExtendedLocation = &network.ExtendedLocation{
 				Name: &az.ExtendedLocationName,
-				Type: &az.ExtendedLocationType,
+				Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
 			}
 		}
 	}
@@ -825,7 +825,7 @@ func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, exi
 			if az.HasExtendedLocation() {
 				selectedLB.ExtendedLocation = &network.ExtendedLocation{
 					Name: &az.ExtendedLocationName,
-					Type: &az.ExtendedLocationType,
+					Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
 				}
 			}
 
@@ -1072,7 +1072,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - updating", serviceName, to.String(pip.Name))
 		if pip.PublicIPAddressPropertiesFormat == nil {
 			pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
-				PublicIPAllocationMethod: network.Static,
+				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
 			}
 		}
 	} else {
@@ -1085,11 +1085,11 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			klog.V(2).Infof("Using extended location with name %s, and type %s for PIP", az.ExtendedLocationName, az.ExtendedLocationType)
 			pip.ExtendedLocation = &network.ExtendedLocation{
 				Name: &az.ExtendedLocationName,
-				Type: &az.ExtendedLocationType,
+				Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
 			}
 		}
 		pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.Static,
+			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
 			IPTags:                   getServiceIPTagRequestForPublicIP(service).IPTags,
 		}
 		pip.Tags = map[string]*string{
@@ -1130,16 +1130,16 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 	// as dual-stack clusters
 	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
 	if ipv6 {
-		pip.PublicIPAddressVersion = network.IPv6
+		pip.PublicIPAddressVersion = network.IPVersionIPv6
 		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv6 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
 
-		pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.Dynamic
+		pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodDynamic
 		if az.useStandardLoadBalancer() {
 			// standard sku must have static allocation method for ipv6
-			pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.Static
+			pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodStatic
 		}
 	} else {
-		pip.PublicIPAddressVersion = network.IPv4
+		pip.PublicIPAddressVersion = network.IPVersionIPv4
 		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
 	}
 
@@ -1311,9 +1311,9 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 			}
 		}
 		if loadBalancerIP == "" {
-			return config.PrivateIPAllocationMethod == network.Static, nil
+			return config.PrivateIPAllocationMethod == network.IPAllocationMethodStatic, nil
 		}
-		return config.PrivateIPAllocationMethod != network.Static || !strings.EqualFold(loadBalancerIP, to.String(config.PrivateIPAddress)), nil
+		return config.PrivateIPAllocationMethod != network.IPAllocationMethodStatic || !strings.EqualFold(loadBalancerIP, to.String(config.PrivateIPAddress)), nil
 	}
 	pipName, _, err := az.determinePublicIPName(clusterName, service)
 	if err != nil {
@@ -1789,21 +1789,20 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				}
 
 				if utilnet.IsIPv6String(service.Spec.ClusterIP) {
-					configProperties.PrivateIPAddressVersion = network.IPv6
+					configProperties.PrivateIPAddressVersion = network.IPVersionIPv6
 				}
 
 				loadBalancerIP := service.Spec.LoadBalancerIP
 				if loadBalancerIP != "" {
-					configProperties.PrivateIPAllocationMethod = network.Static
+					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = &loadBalancerIP
 				} else if status != nil && len(status.Ingress) > 0 {
 					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): keep the original private IP %s", serviceName, status.Ingress[0].IP)
-					configProperties.PrivateIPAllocationMethod = network.Static
+					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = to.StringPtr(status.Ingress[0].IP)
 				} else {
 					// We'll need to call GetLoadBalancer later to retrieve allocated IP.
-					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): dynamically allocate the private IP", serviceName)
-					configProperties.PrivateIPAllocationMethod = network.Dynamic
+					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodDynamic
 				}
 
 				fipConfigurationProperties = &configProperties
