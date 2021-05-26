@@ -53,8 +53,6 @@ var (
 const (
 	nginxPort       = 80
 	nginxStatusCode = 200
-	pullInterval    = 20 * time.Second
-	pullTimeout     = 10 * time.Minute
 	testingPort     = 81
 )
 
@@ -156,17 +154,12 @@ var _ = Describe("Service with annotation", func() {
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-
-		By("Validating whether the load balancer is internal")
-		url := fmt.Sprintf("%s:%v", ip, ports[0].Port)
-		err := validateInternalLoadBalancer(cs, ns.Name, url)
-		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
@@ -287,7 +280,7 @@ var _ = Describe("Service with annotation", func() {
 
 		//wait and get service's public IP Address
 		By("Waiting service to expose...")
-		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
 		Expect(err).NotTo(HaveOccurred())
 
 		lb := getAzureLoadBalancerFromPIP(tc, *pip.IPAddress, *rg.Name, "")
@@ -333,7 +326,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting service to expose...")
-		ip, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
@@ -400,7 +393,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		ip, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ip).To(Equal(to.String(pip1.IPAddress)))
 
@@ -412,7 +405,7 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for service IP to be updated")
-		err = utils.WaitServiceIPEqualTo(cs, to.String(pip2.IPAddress), serviceName, ns.Name)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip2.IPAddress))
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -564,7 +557,7 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 
 	//wait and get service's public IP Address
 	utils.Logf("Waiting service to expose...")
-	publicIP, err := utils.WaitServiceExposure(cs, nsName, serviceName)
+	publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, nsName, serviceName, "")
 	Expect(err).NotTo(HaveOccurred())
 
 	return publicIP
@@ -607,73 +600,6 @@ func createNginxDeploymentManifest(name string, labels map[string]string) *appsv
 	}
 }
 
-// validate internal source can access to ILB
-// nolint:unused
-func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) error {
-	// create a pod to access to the service
-	utils.Logf("Validating external IP not be public and internal accessible")
-	utils.Logf("Create a front pod to connect to service")
-	podName := "front-pod"
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: podName,
-		},
-		Spec: v1.PodSpec{
-			Hostname: podName,
-			Containers: []v1.Container{
-				{
-					Name:            "test-app",
-					Image:           "appropriate/curl",
-					ImagePullPolicy: v1.PullIfNotPresent,
-					Command: []string{
-						"/bin/sh",
-						"-c",
-						"code=0; while [ $code != 200 ]; do code=$(curl -s -o /dev/null -w \"%{http_code}\" " + url + "); sleep 1; done; echo $code",
-					},
-				},
-			},
-			RestartPolicy: v1.RestartPolicyNever,
-		},
-	}
-	_, err := c.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	defer func() {
-		utils.Logf("Deleting front pod")
-		err = utils.DeletePod(c, ns, podName)
-	}()
-
-	// publicFlag shows whether public accessible test ends
-	// internalFlag shows whether internal accessible test ends
-	utils.Logf("Call from the created pod")
-	err = wait.PollImmediate(pullInterval, pullTimeout, func() (bool, error) {
-		pod, err := c.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{})
-		if err != nil {
-			if utils.IsRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		if pod.Status.Phase != v1.PodSucceeded {
-			utils.Logf("waiting for the pod succeeded")
-			return false, nil
-		}
-		if pod.Status.ContainerStatuses[0].State.Terminated == nil || pod.Status.ContainerStatuses[0].State.Terminated.Reason != "Completed" {
-			utils.Logf("waiting for the container completed")
-			return false, nil
-		}
-		utils.Logf("Still testing internal access from front pod to internal service")
-		log, err := c.CoreV1().Pods(ns).GetLogs(pod.Name, &v1.PodLogOptions{}).Do(context.TODO()).Raw()
-		if err != nil {
-			return false, nil
-		}
-		return strings.Contains(fmt.Sprintf("%s", log), "200"), nil
-	})
-	utils.Logf("validation finished")
-	return err
-}
-
 func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string, cs clientset.Interface, serviceName string, labels map[string]string, ns string, ports []v1.ServicePort, resourceGroupName string) {
 	serviceName = fmt.Sprintf("%s-%s", serviceName, vmssName)
 
@@ -689,7 +615,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 
 	//wait and get service's public IP Address
 	By("Waiting for service exposure")
-	publicIP, err := utils.WaitServiceExposure(cs, ns, serviceName)
+	publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns, serviceName, "")
 	Expect(err).NotTo(HaveOccurred())
 
 	// Invoking azure network client to get list of public IP Addresses
