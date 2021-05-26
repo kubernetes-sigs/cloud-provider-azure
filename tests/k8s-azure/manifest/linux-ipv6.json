@@ -12,8 +12,7 @@
                 "excludeMasterFromStandardLB": true,
                 "networkPlugin": "kubenet",
                 "apiServerConfig": {
-                    "--bind-address": "::",
-                    "--service-account-issuer": "https://kubernetes.default.svc.cluster.local"
+                    "--bind-address": "::"
                 },
                 "kubeletConfig": {
                     "--node-ip": "::",
