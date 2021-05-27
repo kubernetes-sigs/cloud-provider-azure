@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -790,14 +790,14 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 	ipv4IPconfig := network.InterfaceIPConfiguration{
 		Name: to.StringPtr("ipconfig1"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv4,
+			PrivateIPAddressVersion: network.IPVersionIPv4,
 			PrivateIPAddress:        to.StringPtr("10.10.0.12"),
 		},
 	}
 	ipv6IPconfig := network.InterfaceIPConfiguration{
 		Name: to.StringPtr("ipconfig2"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPv6,
+			PrivateIPAddressVersion: network.IPVersionIPv6,
 			PrivateIPAddress:        to.StringPtr("1111:11111:00:00:1111:1111:000:111"),
 		},
 	}
@@ -853,7 +853,7 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 						{
 							Name: to.StringPtr("ipconfig1"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								PrivateIPAddressVersion: network.IPv4,
+								PrivateIPAddressVersion: network.IPVersionIPv4,
 							},
 						},
 					},
@@ -1739,7 +1739,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) network.Interface {
 	expectedNIC := network.Interface{
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			ProvisioningState: network.Succeeded,
+			ProvisioningState: network.ProvisioningStateSucceeded,
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
