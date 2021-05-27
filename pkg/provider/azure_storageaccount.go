@@ -112,13 +112,19 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 				}
 			}
 
-			if to.Bool(acct.IsHnsEnabled) != to.Bool(accountOptions.IsHnsEnabled) {
-				continue
+			if acct.AccountProperties == nil {
+				if accountOptions.IsHnsEnabled != nil || accountOptions.EnableNfsV3 != nil {
+					continue
+				}
+			} else {
+				if to.Bool(acct.IsHnsEnabled) != to.Bool(accountOptions.IsHnsEnabled) {
+					continue
+				}
+				if to.Bool(acct.EnableNfsV3) != to.Bool(accountOptions.EnableNfsV3) {
+					continue
+				}
 			}
 
-			if to.Bool(acct.EnableNfsV3) != to.Bool(accountOptions.EnableNfsV3) {
-				continue
-			}
 			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: storageType, Location: location})
 		}
 	}
