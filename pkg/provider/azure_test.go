@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -2123,12 +2124,28 @@ func validateConfig(t *testing.T, config string) { //nolint
 }
 
 func getCloudFromConfig(t *testing.T, config string) *Cloud {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	configReader := strings.NewReader(config)
-	azureCloud, err := NewCloudWithoutFeatureGates(configReader)
-	if err != nil {
-		t.Error(err)
+	c, err := parseConfig(configReader)
+	assert.NoError(t, err)
+
+	az := &Cloud{
+		nodeNames:          sets.NewString(),
+		nodeZones:          map[string]sets.String{},
+		nodeResourceGroups: map[string]string{},
+		unmanagedNodes:     sets.NewString(),
+		routeCIDRs:         map[string]string{},
+		ZoneClient:         mockzoneclient.NewMockInterface(ctrl),
 	}
-	return azureCloud
+	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
+	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
+
+	err = az.InitializeCloudFromConfig(c, false, true)
+	assert.NoError(t, err)
+
+	return az
 }
 
 // TODO include checks for other appropriate default config parameters
@@ -3295,14 +3312,18 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	err := az.InitializeCloudFromConfig(nil, false)
+	mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
+	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+	az.ZoneClient = mockZoneClient
+
+	err := az.InitializeCloudFromConfig(nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
 	config := Config{
 		DisableAvailabilitySetNodes: true,
 		VMType:                      consts.VMTypeStandard,
 	}
-	err = az.InitializeCloudFromConfig(&config, false)
+	err = az.InitializeCloudFromConfig(&config, false, true)
 	expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 	assert.Equal(t, expectedErr, err)
 
@@ -3312,7 +3333,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		},
 		CloudConfigType: cloudConfigTypeFile,
 	}
-	err = az.InitializeCloudFromConfig(&config, false)
+	err = az.InitializeCloudFromConfig(&config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 	assert.Equal(t, expectedErr, err)
 }
