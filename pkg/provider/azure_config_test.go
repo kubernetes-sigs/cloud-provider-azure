@@ -20,6 +20,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
+
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/stretchr/testify/assert"
 
@@ -185,6 +188,9 @@ func TestGetConfigFromSecret(t *testing.T) {
 }
 
 func TestInitializeCloudFromSecret(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	emptyConfig := &Config{}
 	unknownConfigTypeConfig := getTestConfig()
 	unknownConfigTypeConfig.CloudConfigType = "UnknownConfigType"
@@ -270,6 +276,10 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 				_, err := az.KubeClient.CoreV1().Secrets("kube-system").Create(context.TODO(), secret, metav1.CreateOptions{})
 				assert.NoError(t, err, test.name)
 			}
+
+			mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
+			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).MaxTimes(1)
+			az.ZoneClient = mockZoneClient
 
 			err := az.InitializeCloudFromSecret()
 			assert.Equal(t, test.expectErr, err != nil)
