@@ -57,6 +57,8 @@ const (
 	CloudControllerManagerPort = 10263
 	// defaultNodeStatusUpdateFrequencyInMinute is the default frequency at which the manager updates nodes' status.
 	defaultNodeStatusUpdateFrequencyInMinute = 5
+	// defaultNodeName is the default option for --node-name flag, which will result in usage of os.Hostname() output value
+	defaultNodeName = "hostname"
 )
 
 // CloudNodeManagerOptions is the main context object for the controller manager.
@@ -123,7 +125,7 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fs := fss.FlagSet("misc")
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
-	fs.StringVar(&o.NodeName, "node-name", o.NodeName, "Name of the Node (default is hostname).")
+	fs.StringVar(&o.NodeName, "node-name", defaultNodeName, "Name of the Node. If omitted, defaults to VM hostname. Setting it to emply value disables requirement for running it from inside VM.")
 	fs.DurationVar(&o.NodeStatusUpdateFrequency.Duration, "node-status-update-frequency", o.NodeStatusUpdateFrequency.Duration, "Specifies how often the controller updates nodes' status.")
 	fs.DurationVar(&o.MinResyncPeriod.Duration, "min-resync-period", o.MinResyncPeriod.Duration, "The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod.")
 	fs.StringVar(&o.ClientConnection.ContentType, "kube-api-content-type", o.ClientConnection.ContentType, "Content type of requests sent to apiserver.")
@@ -184,7 +186,7 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 
 	// Default NodeName is hostname.
 	c.NodeName = strings.ToLower(o.NodeName)
-	if c.NodeName == "" {
+	if c.NodeName == defaultNodeName {
 		hostname, err := os.Hostname()
 		if err != nil {
 			return err

@@ -175,10 +175,15 @@ func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
 
 // UpdateNodeStatus updates the node status, such as node addresses
 func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
-	nodes, err := cnc.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
-		ResourceVersion: "0",
-		FieldSelector:   fields.OneTermEqualSelector("metadata.name", cnc.nodeName).String(),
-	})
+	options := metav1.ListOptions{}
+	// Provides ability to serve NodeStatus via cloudConfig using ARM endpoint
+	if cnc.nodeName != "" {
+		options = metav1.ListOptions{
+			ResourceVersion: "0",
+			FieldSelector:   fields.OneTermEqualSelector("metadata.name", cnc.nodeName).String(),
+		}
+	}
+	nodes, err := cnc.kubeClient.CoreV1().Nodes().List(context.TODO(), options)
 	if err != nil {
 		klog.Errorf("Error monitoring node status: %v", err)
 		return
@@ -324,8 +329,9 @@ func (cnc *CloudNodeController) UpdateCloudNode(ctx context.Context, _, newObj i
 		return
 	}
 
+	// Provides ability to serve NodeStatus via cloudConfig using ARM endpoint by omiting NodeName
 	// Skip other nodes other than cnc.nodeName.
-	if !strings.EqualFold(cnc.nodeName, node.Name) {
+	if cnc.nodeName != "" && !strings.EqualFold(cnc.nodeName, node.Name) {
 		return
 	}
 
@@ -342,8 +348,9 @@ func (cnc *CloudNodeController) UpdateCloudNode(ctx context.Context, _, newObj i
 func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{}) {
 	node := obj.(*v1.Node)
 
+	// Provides ability to serve NodeStatus via cloudConfig using ARM endpoint by omiting NodeName
 	// Skip other nodes other than cnc.nodeName.
-	if !strings.EqualFold(cnc.nodeName, node.Name) {
+	if cnc.nodeName != "" && !strings.EqualFold(cnc.nodeName, node.Name) {
 		return
 	}
 
