@@ -604,9 +604,16 @@ func TestGetProtocolsFromKubernetesProtocol(t *testing.T) {
 			nilProbeProto:              true,
 		},
 		{
+			Name:                       "getProtocolsFromKubernetesProtocol should get SCTP protocol",
+			protocol:                   v1.ProtocolSCTP,
+			expectedTransportProto:     network.TransportProtocolAll,
+			expectedSecurityGroupProto: network.SecurityRuleProtocolAsterisk,
+			nilProbeProto:              true,
+		},
+		{
 			Name:           "getProtocolsFromKubernetesProtocol should report error",
-			protocol:       v1.ProtocolSCTP,
-			expectedErrMsg: fmt.Errorf("only TCP and UDP are supported for Azure LoadBalancers"),
+			protocol:       v1.Protocol("ICMP"),
+			expectedErrMsg: fmt.Errorf("only TCP, UDP and SCTP are supported for Azure LoadBalancers"),
 		},
 	}
 
