@@ -85,15 +85,40 @@ Here is the recommended way to define the [outbound rules](https://docs.microsof
 * Create a separate pool definition for outbound, and ensure all virtual machines or VMSS virtual machines are in this pool. Azure cloud provider will manage the load balancer rules with another pool, so that provisioning tools and the Azure cloud provider won't affect each other.
 * Define inbound with load balancing rules and inbound NAT rules as needed, and set `disableOutboundSNAT` to true on the load balancing rule(s).  Don't rely on the side effect from these rules for outbound connectivity. It makes it messier than it needs to be and limits your options.  Use inbound NAT rules to create port forwarding mappings for SSH access to the VM's rather than burning public IPs per instance.
 
-## Exclude nodes from the load balancer (v1.20.0)
+## Exclude nodes from the load balancer
 
-The kubernetes controller manager supports excluding nodes from the load balancer backend pools by enabling the feature gate `ServiceNodeExclusion`, which is in beta state since v1.19. This PR let users to exclude nodes from the LB by labeling `node.kubernetes.io/exclude-from-external-load-balancers=true` on the nodes. There are several things that need to be mentioned.
+> Excluding nodes from Azure LoadBalancer is supported since v1.20.0.
 
-1. To use the feature, the feature gate `ServiceNodeExclusion` should be on.
+The kubernetes controller manager supports excluding nodes from the load balancer backend pools by enabling the feature gate `ServiceNodeExclusion`. To exclude nodes from Azure LoadBalancer, label `node.kubernetes.io/exclude-from-external-load-balancers=true` should be added to the nodes.
+
+1. To use the feature, the feature gate `ServiceNodeExclusion` should be on (enabled by default since its beta on v1.19).
 
 2. The labeled nodes would be excluded from the LB in the next LB reconcile loop, which needs one or more LB typed services to trigger. Basically, users could trigger the update by creating a service. If there are one or more LB typed services existing, no extra operations are needed.
 
 3. To re-include the nodes, just remove the label and the update would be operated in the next LB reconcile loop.
+
+
+## Using SCTP
+
+SCTP protocol services are only supported on internal standard LoadBalancer, hence annotation `service.beta.kubernetes.io/azure-load-balancer-internal: "true"` should be added to SCTP protocol services. See below for an example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: sctpservice
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: sctpserver
+  ports:
+    - name: sctpserver
+      protocol: SCTP
+      port: 30102
+      targetPort: 30102
+```
 
 ## Load balancer limits
 

@@ -2023,6 +2023,10 @@ func (az *Cloud) getExpectedLBRules(
 	var expectedRules []network.LoadBalancingRule
 	highAvailabilityPortsEnabled := false
 	for _, port := range ports {
+		if !requiresInternalLoadBalancer(service) && port.Protocol == v1.ProtocolSCTP {
+			return nil, nil, fmt.Errorf("SCTP is only supported on internal LoadBalancer")
+		}
+
 		if highAvailabilityPortsEnabled {
 			// Since the port is always 0 when enabling HA, only one rule should be configured.
 			break
@@ -2111,7 +2115,7 @@ func (az *Cloud) getExpectedLBRules(
 
 		if requiresInternalLoadBalancer(service) &&
 			strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard) &&
-			strings.EqualFold(service.Annotations[consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts], consts.TrueAnnotationValue) {
+			(strings.EqualFold(service.Annotations[consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts], consts.TrueAnnotationValue) || port.Protocol == v1.ProtocolSCTP) {
 			expectedRule.FrontendPort = to.Int32Ptr(0)
 			expectedRule.BackendPort = to.Int32Ptr(0)
 			expectedRule.Protocol = network.TransportProtocolAll
