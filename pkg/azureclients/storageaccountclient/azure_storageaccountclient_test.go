@@ -457,7 +457,7 @@ func TestListByResourceGroup(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snList := []storage.Account{getTestStorageAccount("sn1"), getTestStorageAccount("pip2"), getTestStorageAccount("pip3")}
-	responseBody, err := json.Marshal(storage.AccountListResult{Value: &snList})
+	responseBody, err := json.Marshal(map[string]interface{}{"value": snList, "nextLink": ""})
 	assert.NoError(t, err)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
 		&http.Response{
