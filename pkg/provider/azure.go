@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -326,19 +327,49 @@ func init() {
 		}
 	}
 	autorest.StatusCodesForRetry = statusCodesForRetry
-
-	cloudprovider.RegisterCloudProvider(consts.CloudProviderName, NewCloud)
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
-	az, err := NewCloudWithoutFeatureGates(configReader)
+func NewCloud(configReader io.Reader, syncZones bool) (cloudprovider.Interface, error) {
+	az, err := NewCloudWithoutFeatureGates(configReader, syncZones)
 	if err != nil {
 		return nil, err
 	}
 	az.ipv6DualStackEnabled = utilfeature.DefaultFeatureGate.Enabled(consts.IPv6DualStack)
 
 	return az, nil
+}
+
+func NewCloudFromConfigFile(configFilePath string, syncZones bool) (cloudprovider.Interface, error) {
+	var (
+		cloud cloudprovider.Interface
+		err   error
+	)
+
+	if configFilePath != "" {
+		var config *os.File
+		config, err = os.Open(configFilePath)
+		if err != nil {
+			klog.Fatalf("Couldn't open cloud provider configuration %s: %#v",
+				configFilePath, err)
+		}
+
+		defer config.Close()
+		cloud, err = NewCloud(config, syncZones)
+	} else {
+		// Pass explicit nil so plugins can actually check for nil. See
+		// "Why is my nil error value not equal to nil?" in golang.org/doc/faq.
+		cloud, err = NewCloud(nil, false)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("could not init cloud provider azure: %v", err)
+	}
+	if cloud == nil {
+		return nil, fmt.Errorf("nil cloud")
+	}
+
+	return cloud, nil
 }
 
 func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, secretName, secretNamespace, cloudConfigKey string) (cloudprovider.Interface, error) {
@@ -369,7 +400,7 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 
 // NewCloudWithoutFeatureGates returns a Cloud without trying to wire the feature gates.  This is used by the unit tests
 // that don't load the actual features being used in the cluster.
-func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
+func NewCloudWithoutFeatureGates(configReader io.Reader, syncZones bool) (*Cloud, error) {
 	config, err := parseConfig(configReader)
 	if err != nil {
 		return nil, err
@@ -383,7 +414,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
 		routeCIDRs:         map[string]string{},
 	}
 
-	err = az.InitializeCloudFromConfig(config, false)
+	err = az.InitializeCloudFromConfig(config, false, syncZones)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +423,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader) (*Cloud, error) {
 }
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) error {
+func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -504,6 +535,34 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 		}
 	}
 
+	err = az.initCaches()
+	if err != nil {
+		return err
+	}
+
+	if err := initDiskControllers(az); err != nil {
+		return err
+	}
+
+	// start delayed route updater.
+	az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
+	go az.routeUpdater.run()
+
+	if syncZones {
+		// wait for the success first time of syncing zones
+		err = az.syncRegionZonesMap()
+		if err != nil {
+			klog.Errorf("InitializeCloudFromConfig: failed eto sync regional zones map for the first time: %s", err.Error())
+			return err
+		}
+
+		go az.refreshZones(az.syncRegionZonesMap)
+	}
+
+	return nil
+}
+
+func (az *Cloud) initCaches() (err error) {
 	az.vmCache, err = az.newVMCache()
 	if err != nil {
 		return err
@@ -523,16 +582,6 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret bool) erro
 	if err != nil {
 		return err
 	}
-
-	if err := initDiskControllers(az); err != nil {
-		return err
-	}
-
-	// start delayed route updater.
-	az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
-	go az.routeUpdater.run()
-
-	go az.refreshZones(az.syncRegionZonesMap)
 
 	return nil
 }
@@ -688,7 +737,10 @@ func (az *Cloud) configAzureClients(
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
-	az.ZoneClient = zoneclient.New(zoneClientConfig)
+
+	if az.ZoneClient == nil {
+		az.ZoneClient = zoneclient.New(zoneClientConfig)
+	}
 }
 
 func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincipalToken) *azclients.ClientConfig {

@@ -38,7 +38,7 @@ func NewIMDSNodeProvider() *IMDSNodeProvider {
 	az, err := azureprovider.NewCloud(bytes.NewBuffer([]byte(`{
 			"useInstanceMetadata": true,
 			"vmType": "vmss"
-		}`)))
+		}`)), false)
 	if err != nil {
 		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
 	}
