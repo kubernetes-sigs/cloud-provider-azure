@@ -552,7 +552,7 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones
 		// wait for the success first time of syncing zones
 		err = az.syncRegionZonesMap()
 		if err != nil {
-			klog.Errorf("InitializeCloudFromConfig: failed eto sync regional zones map for the first time: %s", err.Error())
+			klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
 			return err
 		}
 
