@@ -33,9 +33,9 @@
             }
         },
         "masterProfile": {
-            "count": 1,
+            "count": 3,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_DS3_v2",
+            "vmSize": "Standard_DS2_v2",
             "distro": "aks-ubuntu-16.04"
         },
         "agentPoolProfiles": [

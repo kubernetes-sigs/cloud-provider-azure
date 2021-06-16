@@ -24,7 +24,7 @@
         "masterProfile": {
             "count": 5,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_DS3_v2",
+            "vmSize": "Standard_DS2_v2",
             "availabilityZones": [
                 "1",
                 "2"

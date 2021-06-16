@@ -48,9 +48,9 @@
             }
         },
         "masterProfile": {
-            "count": 1,
+            "count": 3,
             "dnsPrefix": "{dnsPrefix}",
-            "vmSize": "Standard_D4s_v3"
+            "vmSize": "Standard_D2s_v3"
         },
         "agentPoolProfiles": [
             {
