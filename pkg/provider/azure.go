@@ -372,6 +372,24 @@ func NewCloudFromConfigFile(configFilePath string, syncZones bool) (cloudprovide
 	return cloud, nil
 }
 
+func (az *Cloud) configSecretMetadata(secretName, secretNamespace, cloudConfigKey string) {
+	if secretName == "" {
+		secretName = consts.DefaultCloudProviderConfigSecName
+	}
+	if secretNamespace == "" {
+		secretNamespace = consts.DefaultCloudProviderConfigSecNamespace
+	}
+	if cloudConfigKey == "" {
+		cloudConfigKey = consts.DefaultCloudProviderConfigSecKey
+	}
+
+	az.InitSecretConfig = InitSecretConfig{
+		SecretName:      secretName,
+		SecretNamespace: secretNamespace,
+		CloudConfigKey:  cloudConfigKey,
+	}
+}
+
 func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, secretName, secretNamespace, cloudConfigKey string) (cloudprovider.Interface, error) {
 	az := &Cloud{
 		nodeNames:          sets.NewString(),
@@ -379,12 +397,9 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 		nodeResourceGroups: map[string]string{},
 		unmanagedNodes:     sets.NewString(),
 		routeCIDRs:         map[string]string{},
-		InitSecretConfig: InitSecretConfig{
-			SecretName:      secretName,
-			SecretNamespace: secretNamespace,
-			CloudConfigKey:  cloudConfigKey,
-		},
 	}
+
+	az.configSecretMetadata(secretName, secretNamespace, cloudConfigKey)
 
 	az.Initialize(clientBuilder, wait.NeverStop)
 
