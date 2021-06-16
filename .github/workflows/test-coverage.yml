@@ -1,4 +1,4 @@
-name: Linux Build & Unit Tests
+name: Test Coverage
 on:
     pull_request: {}
     push: {}
