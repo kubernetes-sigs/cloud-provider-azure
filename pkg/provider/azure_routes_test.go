@@ -79,7 +79,7 @@ func TestDeleteRoute(t *testing.T) {
 			Routes: &[]network.Route{},
 		},
 	}
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil)
+	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil).AnyTimes()
 	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterDeletion, "").Return(nil)
 	err := cloud.DeleteRoute(context.TODO(), "cluster", &route)
 	if err != nil {
@@ -662,5 +662,83 @@ func TestListRoutes(t *testing.T) {
 		if test.expectedErrMsg != nil {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		}
+	}
+}
+
+func TestCleanupOutdatedRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, testCase := range []struct {
+		description                          string
+		existingRoutes, expectedRoutes       []network.Route
+		existingNodeNames                    sets.String
+		expectedChanged, enableIPV6DualStack bool
+	}{
+		{
+			description: "cleanupOutdatedRoutes should delete outdated non-dualstack routes when dualstack is enabled",
+			existingRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			expectedRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+			},
+			existingNodeNames:   sets.NewString("aks-node1-vmss000000"),
+			enableIPV6DualStack: true,
+			expectedChanged:     true,
+		},
+		{
+			description: "cleanupOutdatedRoutes should delete outdated dualstack routes when dualstack is disabled",
+			existingRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			expectedRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			existingNodeNames: sets.NewString("aks-node1-vmss000000"),
+			expectedChanged:   true,
+		},
+		{
+			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is enabled",
+			existingRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			expectedRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			existingNodeNames:   sets.NewString("aks-node1-vmss000001"),
+			enableIPV6DualStack: true,
+		},
+		{
+			description: "cleanupOutdatedRoutes should not delete unmanaged routes when dualstack is disabled",
+			existingRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			expectedRoutes: []network.Route{
+				{Name: to.StringPtr("aks-node1-vmss000000____xxx")},
+				{Name: to.StringPtr("aks-node1-vmss000000")},
+			},
+			existingNodeNames: sets.NewString("aks-node1-vmss000001"),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			cloud := &Cloud{
+				ipv6DualStackEnabled: testCase.enableIPV6DualStack,
+				nodeNames:            testCase.existingNodeNames,
+			}
+
+			d := &delayedRouteUpdater{
+				az: cloud,
+			}
+
+			routes, changed := d.cleanupOutdatedRoutes(testCase.existingRoutes)
+			assert.Equal(t, testCase.expectedChanged, changed)
+			assert.Equal(t, testCase.expectedRoutes, routes)
+		})
 	}
 }
