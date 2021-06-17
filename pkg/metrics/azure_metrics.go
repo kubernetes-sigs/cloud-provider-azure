@@ -162,7 +162,7 @@ func registerOperationMetrics(attributes ...string) *operationCallMetrics {
 				Name:           "op_duration_seconds",
 				Help:           "Latency of an Azure service operation",
 				StabilityLevel: metrics.ALPHA,
-				Buckets:        []float64{0.1, 0.2, 0.5, 1, 10, 20, 30, 40, 50, 60, 100, 200, 300},
+				Buckets:        []float64{0.1, 0.2, 0.5, 1, 5, 10, 15, 20, 30, 40, 50, 60, 100, 200, 300, 600, 1200},
 			},
 			attributes,
 		),
