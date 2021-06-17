@@ -71,7 +71,7 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 	env := &azure.PublicCloud
 
 	for _, config := range configs {
-		token, err := GetServicePrincipalToken(config, env)
+		token, err := GetServicePrincipalToken(config, env, "")
 		assert.NoError(t, err)
 
 		msiEndpoint, err := adal.GetMSIVMEndpoint()
@@ -101,7 +101,7 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 	env := &azure.PublicCloud
 
 	for _, config := range configs {
-		token, err := GetServicePrincipalToken(config, env)
+		token, err := GetServicePrincipalToken(config, env, "")
 		assert.NoError(t, err)
 
 		msiEndpoint, err := adal.GetMSIVMEndpoint()
@@ -122,7 +122,7 @@ func TestGetServicePrincipalToken(t *testing.T) {
 	}
 	env := &azure.PublicCloud
 
-	token, err := GetServicePrincipalToken(config, env)
+	token, err := GetServicePrincipalToken(config, env, "")
 	assert.NoError(t, err)
 
 	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
