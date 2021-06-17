@@ -24,9 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
@@ -34,31 +33,39 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-func (az *Cloud) refreshZones(refreshFunc func()) {
+func (az *Cloud) refreshZones(refreshFunc func() error) {
 	ticker := time.NewTicker(consts.ZoneFetchingInterval)
 	defer ticker.Stop()
 
-	az.regionZonesMap = make(map[string][]string)
-	refreshFunc()
-	for ; true; <-ticker.C {
-		refreshFunc()
+	for range ticker.C {
+		_ = refreshFunc()
 	}
 }
 
-func (az *Cloud) syncRegionZonesMap() {
-	klog.V(4).Infof("refreshZones: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
+func (az *Cloud) syncRegionZonesMap() error {
+	klog.V(2).Infof("refreshZones: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
 	zones, rerr := az.ZoneClient.GetZones(context.Background(), az.SubscriptionID)
-	if len(zones) == 0 || rerr != nil {
-		klog.Warningf("refreshZones: error when get zones, will retry after %s", consts.ZoneFetchingInterval.String())
-		return
+	if rerr != nil {
+		klog.Warningf("refreshZones: error when get zones: %s, will retry after %s", rerr.Error().Error(), consts.ZoneFetchingInterval.String())
+		return rerr.Error()
+	}
+	if len(zones) == 0 {
+		klog.Warningf("refreshZones: empty zone list, will retry after %s", consts.ZoneFetchingInterval.String())
+		return fmt.Errorf("empty zone list")
 	}
 
 	az.updateRegionZonesMap(zones)
+
+	return nil
 }
 
 func (az *Cloud) updateRegionZonesMap(zones map[string][]string) {
 	az.refreshZonesLock.Lock()
 	defer az.refreshZonesLock.Unlock()
+
+	if az.regionZonesMap == nil {
+		az.regionZonesMap = make(map[string][]string)
+	}
 
 	for region, z := range zones {
 		az.regionZonesMap[region] = z

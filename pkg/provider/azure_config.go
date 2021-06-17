@@ -51,7 +51,7 @@ func (az *Cloud) InitializeCloudFromSecret() error {
 		return nil
 	}
 
-	if err := az.InitializeCloudFromConfig(config, true); err != nil {
+	if err := az.InitializeCloudFromConfig(config, true, true); err != nil {
 		klog.Errorf("Failed to initialize Azure cloud provider: %v", err)
 		return fmt.Errorf("InitializeCloudFromSecret: failed to initialize Azure cloud provider: %w", err)
 	}
