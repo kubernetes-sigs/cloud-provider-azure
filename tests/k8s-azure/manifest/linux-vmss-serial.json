@@ -22,7 +22,7 @@
             }
         },
         "masterProfile": {
-            "count": 1,
+            "count": 3,
             "dnsPrefix": "{dnsPrefix}",
             "vmSize": "Standard_F2"
         },
