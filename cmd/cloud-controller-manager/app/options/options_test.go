@@ -141,8 +141,8 @@ func TestDefaultFlags(t *testing.T) {
 		NodeStatusUpdateFrequency: metav1.Duration{Duration: 5 * time.Minute},
 		DynamicReloading: &DynamicReloadingOptions{
 			EnableDynamicReloading:     false,
-			CloudConfigSecretName:      "",
-			CloudConfigSecretNamespace: "",
+			CloudConfigSecretName:      "azure-cloud-provider",
+			CloudConfigSecretNamespace: "kube-system",
 			CloudConfigKey:             "",
 		},
 	}

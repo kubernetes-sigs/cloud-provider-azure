@@ -340,3 +340,10 @@ const (
 	RouteNameFmt       = "%s____%s"
 	RouteNameSeparator = "____"
 )
+
+// cloud provider config secret
+const (
+	DefaultCloudProviderConfigSecName      = "azure-cloud-provider"
+	DefaultCloudProviderConfigSecNamespace = "kube-system"
+	DefaultCloudProviderConfigSecKey       = "cloud-config"
+)
