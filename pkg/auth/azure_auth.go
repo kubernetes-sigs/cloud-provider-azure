@@ -80,12 +80,16 @@ type AzureAuthConfig struct {
 // If NetworkResourceTenantID and NetworkResourceSubscriptionID are specified to have different values than TenantID and SubscriptionID, network resources are deployed in different AAD Tenant and Subscription than those for the cluster,
 // than only azure clients except VM/VMSS and network resource ones use this method to fetch Token.
 // For tokens for VM/VMSS and network resource ones, please check GetMultiTenantServicePrincipalToken and GetNetworkResourceServicePrincipalToken.
-func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (*adal.ServicePrincipalToken, error) {
+func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, resource string) (*adal.ServicePrincipalToken, error) {
 	var tenantID string
 	if strings.EqualFold(config.IdentitySystem, consts.ADFSIdentitySystem) {
 		tenantID = consts.ADFSIdentitySystem
 	} else {
 		tenantID = config.TenantID
+	}
+
+	if resource == "" {
+		resource = env.ServiceManagementEndpoint
 	}
 
 	if config.UseManagedIdentityExtension {
@@ -108,13 +112,13 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 
 			klog.V(4).Info("azure: User Assigned MSI ID is client ID. Resource ID parsing error: %+v", err)
 			return adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(msiEndpoint,
-				env.ServiceManagementEndpoint,
+				resource,
 				config.UserAssignedIdentityID)
 		}
 		klog.V(4).Info("azure: using System Assigned MSI to retrieve access token")
 		return adal.NewServicePrincipalTokenFromMSI(
 			msiEndpoint,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, tenantID, nil)
@@ -128,7 +132,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 			*oauthConfig,
 			config.AADClientID,
 			config.AADClientSecret,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
@@ -146,7 +150,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment) (
 			config.AADClientID,
 			certificate,
 			privateKey,
-			env.ServiceManagementEndpoint)
+			resource)
 	}
 
 	return nil, ErrorNoAuth
