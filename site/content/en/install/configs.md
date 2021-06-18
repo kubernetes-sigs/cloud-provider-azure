@@ -22,8 +22,9 @@ Here is a config file sample:
     "location": "eastus",
     "subnetName": "<name>",
     "securityGroupName": "<name>",
+    "securityGroupResourceGroup": "<name>",
     "vnetName": "<name>",
-    "vnetResourceGroup": "",
+    "vnetResourceGroup": "<name>",
     "routeTableName": "<name>",
     "primaryAvailabilitySetName": "<name>",
     "routeTableResourceGroup": "<name>",
@@ -72,6 +73,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |vnetResourceGroup|The name of the resource group that the Vnet is deployed in||
 |subnetName|The name of the subnet that the cluster is deployed in||
 |securityGroupName|The name of the security group attached to the cluster's subnet||
+|securityGroupResourceGroup|The name of the resource group that the security group is deployed in||
 |routeTableName|The name of the route table attached to the subnet that the cluster is deployed in|Optional in 1.6|
 |primaryAvailabilitySetName[*](#primaryavailabilitysetname)|The name of the availability set that should be used as the load balancer backend|Optional|
 |vmType|The type of azure nodes. Candidate values are: `vmss` and `standard`|Optional, default to `standard`|
