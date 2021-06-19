@@ -17,6 +17,10 @@ limitations under the License.
 package auth
 
 import (
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/Azure/go-autorest/autorest/adal"
@@ -50,6 +54,11 @@ var (
 			UseManagedIdentityExtension:   true,
 		},
 	}
+
+	// msiEndpointEnv is the environment variable used to store the endpoint in go-autorest/adal library.
+	msiEndpointEnv = "MSI_ENDPOINT"
+	// msiSecretEnv is the environment variable used to store the request secret in go-autorest/adal library.
+	msiSecretEnv = "MSI_SECRET"
 )
 
 func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
@@ -69,6 +78,23 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 		},
 	}
 	env := &azure.PublicCloud
+
+	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("{}"))
+		assert.NoError(t, err)
+	}))
+	originalEnv := os.Getenv(msiEndpointEnv)
+	originalSecret := os.Getenv(msiSecretEnv)
+	os.Setenv(msiEndpointEnv, server.URL)
+	os.Setenv(msiSecretEnv, "secret")
+	defer func() {
+		server.Close()
+		os.Setenv(msiEndpointEnv, originalEnv)
+		os.Setenv(msiSecretEnv, originalSecret)
+	}()
 
 	for _, config := range configs {
 		token, err := GetServicePrincipalToken(config, env, "")
@@ -149,6 +175,23 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 	}
 	env := &azure.PublicCloud
 
+	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("{}"))
+		assert.NoError(t, err)
+	}))
+	originalEnv := os.Getenv(msiEndpointEnv)
+	originalSecret := os.Getenv(msiSecretEnv)
+	os.Setenv(msiEndpointEnv, server.URL)
+	os.Setenv(msiSecretEnv, "secret")
+	defer func() {
+		server.Close()
+		os.Setenv(msiEndpointEnv, originalEnv)
+		os.Setenv(msiSecretEnv, originalSecret)
+	}()
+
 	for _, config := range configs {
 		token, err := GetServicePrincipalToken(config, env, "")
 		assert.NoError(t, err)
@@ -203,6 +246,28 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, multiTenantToken, spt)
+}
+
+func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
+	config := &AzureAuthConfig{
+		TenantID:              "TenantID",
+		AADClientID:           "AADClientID",
+		AADClientCertPath:     "./testdata/test.pfx",
+		AADClientCertPassword: "id",
+	}
+	env := &azure.PublicCloud
+	token, err := GetServicePrincipalToken(config, env, "")
+	assert.NoError(t, err)
+
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+	assert.NoError(t, err)
+	pfxContent, err := ioutil.ReadFile("./testdata/test.pfx")
+	assert.NoError(t, err)
+	certificate, privateKey, err := decodePkcs12(pfxContent, "id")
+	assert.NoError(t, err)
+	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+	assert.NoError(t, err)
+	assert.Equal(t, token, spt)
 }
 
 func TestGetMultiTenantServicePrincipalTokenNegative(t *testing.T) {
@@ -269,6 +334,28 @@ func TestParseAzureEnvironment(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, env, c.expected)
 	}
+}
+
+func TestParseAzureEnvironmentForAzureStack(t *testing.T) {
+	c := struct {
+		cloudName               string
+		resourceManagerEndpoint string
+		identitySystem          string
+	}{
+		cloudName:               "AZURESTACKCCLOUD",
+		resourceManagerEndpoint: "https://management.azure.com/",
+		identitySystem:          "",
+	}
+
+	nameOverride := azure.OverrideProperty{Key: azure.EnvironmentName, Value: c.cloudName}
+	expected, err := azure.EnvironmentFromURL(c.resourceManagerEndpoint, nameOverride)
+	assert.NoError(t, err)
+	azureStackOverrides(&expected, c.resourceManagerEndpoint, c.identitySystem)
+
+	env, err := ParseAzureEnvironment(c.cloudName, c.resourceManagerEndpoint, c.identitySystem)
+	assert.NoError(t, err)
+	assert.Equal(t, env, &expected)
+
 }
 
 func TestAzureStackOverrides(t *testing.T) {
