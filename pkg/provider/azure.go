@@ -330,8 +330,8 @@ func init() {
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(configReader io.Reader, syncZones bool) (cloudprovider.Interface, error) {
-	az, err := NewCloudWithoutFeatureGates(configReader, syncZones)
+func NewCloud(configReader io.Reader, callFromCCM bool) (cloudprovider.Interface, error) {
+	az, err := NewCloudWithoutFeatureGates(configReader, callFromCCM)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func NewCloud(configReader io.Reader, syncZones bool) (cloudprovider.Interface, 
 	return az, nil
 }
 
-func NewCloudFromConfigFile(configFilePath string, syncZones bool) (cloudprovider.Interface, error) {
+func NewCloudFromConfigFile(configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -355,7 +355,7 @@ func NewCloudFromConfigFile(configFilePath string, syncZones bool) (cloudprovide
 		}
 
 		defer config.Close()
-		cloud, err = NewCloud(config, syncZones)
+		cloud, err = NewCloud(config, calFromCCM)
 	} else {
 		// Pass explicit nil so plugins can actually check for nil. See
 		// "Why is my nil error value not equal to nil?" in golang.org/doc/faq.
@@ -415,7 +415,7 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 
 // NewCloudWithoutFeatureGates returns a Cloud without trying to wire the feature gates.  This is used by the unit tests
 // that don't load the actual features being used in the cluster.
-func NewCloudWithoutFeatureGates(configReader io.Reader, syncZones bool) (*Cloud, error) {
+func NewCloudWithoutFeatureGates(configReader io.Reader, callFromCCM bool) (*Cloud, error) {
 	config, err := parseConfig(configReader)
 	if err != nil {
 		return nil, err
@@ -429,7 +429,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader, syncZones bool) (*Cloud
 		routeCIDRs:         map[string]string{},
 	}
 
-	err = az.InitializeCloudFromConfig(config, false, syncZones)
+	err = az.InitializeCloudFromConfig(config, false, callFromCCM)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +438,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader, syncZones bool) (*Cloud
 }
 
 // InitializeCloudFromConfig initializes the Cloud from config.
-func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones bool) error {
+func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromCCM bool) error {
 	if config == nil {
 		// should not reach here
 		return fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config")
@@ -559,11 +559,12 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones
 		return err
 	}
 
-	// start delayed route updater.
-	az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
-	go az.routeUpdater.run()
+	// updating routes and syncing zones only in CCM
+	if callFromCCM {
+		// start delayed route updater.
+		az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
+		go az.routeUpdater.run()
 
-	if syncZones {
 		// wait for the success first time of syncing zones
 		err = az.syncRegionZonesMap()
 		if err != nil {
