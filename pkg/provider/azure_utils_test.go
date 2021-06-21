@@ -19,6 +19,9 @@ package provider
 import (
 	"testing"
 	"time"
+
+	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSimpleLockEntry(t *testing.T) {
@@ -79,5 +82,100 @@ func ensureNoCallback(t *testing.T, callbackChan <-chan interface{}) bool {
 		return false
 	case <-time.After(callbackTimeout):
 		return true
+	}
+}
+
+func TestReconcileTags(t *testing.T) {
+	for _, testCase := range []struct {
+		description, systemTags                      string
+		currentTagsOnResource, newTags, expectedTags map[string]*string
+		expectedChanged                              bool
+	}{
+		{
+			description: "reconcileTags should add missing tags and update existing tags",
+			currentTagsOnResource: map[string]*string{
+				"a": to.StringPtr("b"),
+			},
+			newTags: map[string]*string{
+				"a": to.StringPtr("c"),
+				"b": to.StringPtr("d"),
+			},
+			expectedTags: map[string]*string{
+				"a": to.StringPtr("c"),
+				"b": to.StringPtr("d"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should remove the tags that are not included in systemTags",
+			currentTagsOnResource: map[string]*string{
+				"a": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+			newTags: map[string]*string{
+				"a": to.StringPtr("c"),
+			},
+			systemTags: "a, b",
+			expectedTags: map[string]*string{
+				"a": to.StringPtr("c"),
+			},
+			expectedChanged: true,
+		},
+		{
+			description: "reconcileTags should ignore the case of keys when comparing",
+			currentTagsOnResource: map[string]*string{
+				"A": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+			newTags: map[string]*string{
+				"a": to.StringPtr("b"),
+				"C": to.StringPtr("d"),
+			},
+			expectedTags: map[string]*string{
+				"A": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+		},
+		{
+			description: "reconcileTags should ignore the case of values when comparing",
+			currentTagsOnResource: map[string]*string{
+				"A": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+			newTags: map[string]*string{
+				"a": to.StringPtr("B"),
+				"C": to.StringPtr("D"),
+			},
+			expectedTags: map[string]*string{
+				"A": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+		},
+		{
+			description: "reconcileTags should ignore the case of keys when checking systemTags",
+			currentTagsOnResource: map[string]*string{
+				"a": to.StringPtr("b"),
+				"c": to.StringPtr("d"),
+			},
+			newTags: map[string]*string{
+				"a": to.StringPtr("c"),
+			},
+			systemTags: "A, b",
+			expectedTags: map[string]*string{
+				"a": to.StringPtr("c"),
+			},
+			expectedChanged: true,
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			cloud := &Cloud{}
+			if testCase.systemTags != "" {
+				cloud.SystemTags = testCase.systemTags
+			}
+
+			tags, changed := cloud.reconcileTags(testCase.currentTagsOnResource, testCase.newTags)
+			assert.Equal(t, testCase.expectedChanged, changed)
+			assert.Equal(t, testCase.expectedTags, tags)
+		})
 	}
 }
