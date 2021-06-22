@@ -230,6 +230,7 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 					NetworkRuleSet:         networkRuleSet,
 					IsHnsEnabled:           accountOptions.IsHnsEnabled,
 					EnableNfsV3:            accountOptions.EnableNfsV3,
+					MinimumTLSVersion:      storage.MinimumTLSVersionTLS12,
 				},
 				Tags:     tags,
 				Location: &location}
