@@ -89,7 +89,7 @@ sudo mv kubectl /usr/local/bin/
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">IMAGE_REGISTRY&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&amp;lt;username&amp;gt;
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">IMAGE_TAG&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&amp;lt;tag&amp;gt;
 make build-images
-make push-images &lt;span style="color:#8f5902;font-style:italic"># or manually `docker push`&lt;/span>
+make push-images &lt;span style="color:#8f5902;font-style:italic"># or manually `docker push` &lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;/li>
 &lt;li>
 &lt;p>Deploy a Kubernetes cluster with the above &lt;code>azure-cloud-controller-manager&lt;/code> image.&lt;/p>
@@ -129,7 +129,7 @@ make ginkgo
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">CLOUD_CONFIG&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&lt;span style="color:#000">$GOPATH&lt;/span>/src/sigs.k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
 &lt;span style="color:#8f5902;font-style:italic"># some test cases require ssh configurations&lt;/span>
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">KUBE_SSH_KEY_PATH&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>path/to/ssh/privatekey
-&lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">KUBE_SSH_USER&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">{&lt;/span>ssh_user&lt;span style="color:#ce5c00;font-weight:bold">}&lt;/span>
+&lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">KUBE_SSH_USER&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">={&lt;/span>ssh_user&lt;span style="color:#ce5c00;font-weight:bold">}&lt;/span>
 &lt;span style="color:#8f5902;font-style:italic"># Replace the test_args with your own.&lt;/span>
 kubetest --test --provider&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&lt;span style="color:#204a87">local&lt;/span> --check-version-skew&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&lt;span style="color:#204a87">false&lt;/span> --test_args&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&lt;span style="color:#4e9a06">&amp;#39;--ginkgo.focus=Port\sforwarding&amp;#39;&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div></description></item></channel></rss>

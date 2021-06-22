@@ -1,4 +1,39 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.0.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</link><pubDate>Fri, 07 May 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.0.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/06/21/v1.0.1/</link><pubDate>Mon, 21 Jun 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/06/21/v1.0.1/</guid><description>
+&lt;h1 id="major-changes-since-v100">Major changes since v1.0.0&lt;/h1>
+&lt;p>Cloud Provider Azure v1.0.1 includes several critical bug fixes. The images are available at:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.0.1&lt;/code>&lt;/li>
+&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.0.1&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="documentation">Documentation&lt;/h3>
+&lt;ul>
+&lt;li>Chore: update docs for service tags NSG (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/647">#647&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Docs: add &amp;lsquo;securityGroupResourceGroup&amp;rsquo; cloud-config value (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/668">#668&lt;/a>, &lt;a href="https://github.com/aslafy-z">@aslafy-z&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="failing-test">Failing Test&lt;/h3>
+&lt;ul>
+&lt;li>Fix: serviceOwnsFrontendIP shouldn&amp;rsquo;t report error when the public IP doesn&amp;rsquo;t match (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/649">#649&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Do not set cached Sku when updating VMSS and VMSS instances (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/630">#630&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: cleanup outdated routes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/661">#661&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: make tags case-insensitive for both keys and values (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/669">#669&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: add e2e test for byo public IP (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/627">#627&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: add more buckets for operation metrics (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/656">#656&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Chore: only reconciling routes in cloud controller manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/671">#671&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: set default config secret name and namespace (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/662">#662&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: wait for the success of the initial run of syncRegionZonesMap (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/646">#646&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Update Azure Go SDK to v55.0.0 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/643">#643&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Upgrade to 2020-02-01/storage (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/628">#628&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Add CreateOrUpdateBackendPools() interface for LoadBalancer client (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/620">#620&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Feat: add NFSv3 account creation support (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/633">#633&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: no sleep when GetDisk is throttled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/629">#629&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v1.0.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</link><pubDate>Fri, 07 May 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</guid><description>
 &lt;h1 id="major-changes-since-v074">Major changes since v0.7.4&lt;/h1>
 &lt;p>Cloud Provider Azure v1.0.0 includes several critical bug fixes. The images are available at:&lt;/p>
 &lt;ul>
