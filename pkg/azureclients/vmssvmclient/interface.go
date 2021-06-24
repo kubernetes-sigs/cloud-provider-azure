@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -45,6 +46,12 @@ type Interface interface {
 
 	// Update updates a VirtualMachineScaleSetVM.
 	Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) *retry.Error
+
+	// UpdateAsync updates a VirtualMachineScaleSetVM asynchronously
+	UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error)
+
+	// WaitForUpdateResult waits for the response of the update request
+	WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error
 
 	// UpdateVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
 	UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string) *retry.Error

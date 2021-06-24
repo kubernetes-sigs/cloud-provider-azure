@@ -99,9 +99,9 @@ func TestStandardAttachDisk(t *testing.T) {
 		}
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		if test.isAttachFail {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		options := AttachDiskOptions{
@@ -115,7 +115,7 @@ func TestStandardAttachDisk(t *testing.T) {
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
 		}
-		err := vmSet.AttachDisk(test.nodeName, diskMap)
+		_, err := vmSet.AttachDisk(test.nodeName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 	}
 }
@@ -172,9 +172,9 @@ func TestStandardDetachDisk(t *testing.T) {
 		}
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		if test.isDetachFail {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, "vm1", gomock.Any(), "detach_disk").Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, "vm1", gomock.Any(), "detach_disk").Return(nil, nil).AnyTimes()
 		}
 
 		diskMap := map[string]string{}
@@ -183,7 +183,7 @@ func TestStandardDetachDisk(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err := vmSet.DetachDisk(test.nodeName, diskMap)
+		_, err := vmSet.DetachDisk(test.nodeName, diskMap)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && len(test.disks) > 0 {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)

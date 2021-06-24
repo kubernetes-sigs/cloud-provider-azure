@@ -77,6 +77,9 @@ type Interface interface {
 	// PatchResource patches a resource by resource ID
 	PatchResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error)
 
+	// PatchResourceAsync patches a resource by resource ID asynchronously
+	PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error)
+
 	// PutResourceAsync puts a resource by resource ID in async mode
 	PutResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error)
 
