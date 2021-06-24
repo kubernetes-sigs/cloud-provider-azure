@@ -250,6 +250,60 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName st
 	return nil
 }
 
+// UpdateAsync updates a VirtualMachine asynchronously
+func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) (*azure.Future, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "updateasync", resourceGroupName, c.subscriptionID, source)
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(true, "VMUpdateAsync")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMUpdateAsync", "client throttled", c.RetryAfterWriter)
+		return nil, rerr
+	}
+
+	resourceID := armclient.GetResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		"Microsoft.Compute/virtualMachines",
+		VMName,
+	)
+
+	future, rerr := c.armClient.PatchResourceAsync(ctx, resourceID, parameters)
+	_ = mc.Observe(rerr.Error())
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return nil, rerr
+	}
+
+	return future, nil
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
+	mc := metrics.NewMetricContext("vm", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
+	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMWaitForUpdateResult")
+	_ = mc.Observe(err)
+
+	if response != nil && response.StatusCode != http.StatusNoContent {
+		_, rerr := c.updateResponder(response)
+		if rerr != nil {
+			klog.V(5).Infof("Received error: %s", "vm.put.respond", rerr.Error())
+			return rerr
+		}
+	}
+	return nil
+}
+
 // updateVM updates a VirtualMachine.
 func (c *Client) updateVM(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error {
 	resourceID := armclient.GetResourceID(
