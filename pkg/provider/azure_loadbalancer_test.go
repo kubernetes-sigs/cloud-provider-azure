@@ -1761,7 +1761,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "reconcileLoadBalancerRule shall return corresponding probe and lbRule (slb with HA enabled)",
+			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with HA enabled)",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports": "true",
 				"service.beta.kubernetes.io/azure-load-balancer-internal":                       "true",
@@ -1772,7 +1772,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getHATestRules(true, true, v1.ProtocolTCP),
 		},
 		{
-			desc: "reconcileLoadBalancerRule shall return corresponding probe and lbRule (slb with SCTP)",
+			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with SCTP)",
 			service: getTestService("test1", v1.ProtocolSCTP, map[string]string{
 				"service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports": "true",
 				"service.beta.kubernetes.io/azure-load-balancer-internal":                       "true",
@@ -1782,7 +1782,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getHATestRules(true, false, v1.ProtocolSCTP),
 		},
 		{
-			desc: "reconcileLoadBalancerRule shall return corresponding probe and lbRule (slb with HA enabled multi-ports services)",
+			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with HA enabled multi-ports services)",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports": "true",
 				"service.beta.kubernetes.io/azure-load-balancer-internal":                       "true",
@@ -1791,6 +1791,15 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			wantLb:          true,
 			expectedProbes:  getDefaultTestProbes("Tcp", ""),
 			expectedRules:   getHATestRules(true, true, v1.ProtocolTCP),
+		},
+		{
+			desc:            "getExpectedLBRules should leave probe path empty when using TCP probe",
+			service:         getTestService("test1", v1.ProtocolTCP, nil, false, 80),
+			loadBalancerSku: "standard",
+			wantLb:          true,
+			probeProtocol:   "Tcp",
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+			expectedRules:   getDefaultTestRules(true),
 		},
 	}
 	for i, test := range testCases {
