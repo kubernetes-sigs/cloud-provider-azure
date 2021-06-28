@@ -1952,3 +1952,25 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAvailabilitySetNameByID(t *testing.T) {
+	t.Run("getAvailabilitySetNameByID should return empty string if the given ID is empty", func(t *testing.T) {
+		vmasName, err := getAvailabilitySetNameByID("")
+		assert.Nil(t, err)
+		assert.Empty(t, vmasName)
+	})
+
+	t.Run("getAvailabilitySetNameByID should report an error if the format of the given ID is wrong", func(t *testing.T) {
+		asID := "illegal-id"
+		vmasName, err := getAvailabilitySetNameByID(asID)
+		assert.Equal(t, fmt.Errorf("getAvailabilitySetNameByID: failed to parse the VMAS ID illegal-id"), err)
+		assert.Empty(t, vmasName)
+	})
+
+	t.Run("getAvailabilitySetNameByID should extract the VMAS name from the given ID", func(t *testing.T) {
+		asID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/as"
+		vmasName, err := getAvailabilitySetNameByID(asID)
+		assert.Nil(t, err)
+		assert.Equal(t, "as", vmasName)
+	})
+}
