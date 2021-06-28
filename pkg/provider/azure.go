@@ -50,6 +50,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
@@ -57,6 +60,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient"
@@ -266,6 +270,10 @@ type Cloud struct {
 	VirtualMachineSizesClient       vmsizeclient.Interface
 	AvailabilitySetsClient          vmasclient.Interface
 	ZoneClient                      zoneclient.Interface
+	privateendpointclient           privateendpointclient.Interface
+	privatednsclient                privatednsclient.Interface
+	privatednszonegroupclient       privatednszonegroupclient.Interface
+	virtualNetworkLinksClient       virtualnetworklinksclient.Interface
 
 	ResourceRequestBackoff wait.Backoff
 	metadata               *InstanceMetadataService
@@ -753,6 +761,10 @@ func (az *Cloud) configAzureClients(
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
+	az.privateendpointclient = privateendpointclient.New(azClientConfig)
+	az.privatednsclient = privatednsclient.New(azClientConfig)
+	az.privatednszonegroupclient = privatednszonegroupclient.New(azClientConfig)
+	az.virtualNetworkLinksClient = virtualnetworklinksclient.New(azClientConfig)
 
 	if az.ZoneClient == nil {
 		az.ZoneClient = zoneclient.New(zoneClientConfig)

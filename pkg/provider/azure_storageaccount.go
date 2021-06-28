@@ -17,10 +17,13 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -32,6 +35,9 @@ import (
 
 // SkipMatchingTag skip account matching tag
 const SkipMatchingTag = "skip-matching"
+const LocationGlobal = "global"
+const GroupIDFile = "file"
+const PrivateDNSZoneName = "privatelink.file.core.windows.net"
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -40,6 +46,7 @@ type AccountOptions struct {
 	EnableHTTPSTrafficOnly                  bool
 	CreateAccount                           bool
 	EnableLargeFileShare                    bool
+	CreatePrivateEndpoint                   bool
 	DisableFileServiceDeleteRetentionPolicy bool
 	IsHnsEnabled                            *bool
 	EnableNfsV3                             *bool
@@ -66,63 +73,20 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 	accounts := []accountWithLocation{}
 	for _, acct := range result {
 		if acct.Name != nil && acct.Location != nil && acct.Sku != nil {
-			storageType := string((*acct.Sku).Name)
-			if accountOptions.Type != "" && !strings.EqualFold(accountOptions.Type, storageType) {
+			if !(isStorageTypeEqual(acct, accountOptions) &&
+				isAccountKindEqual(acct, accountOptions) &&
+				isLocationEqual(acct, accountOptions) &&
+				AreVNetRulesEqual(acct, accountOptions) &&
+				isLargeFileSharesPropertyEqual(acct, accountOptions) &&
+				isTaggedWithSkip(acct) &&
+				isHnsPropertyEqual(acct, accountOptions) &&
+				isEnableNfsV3PropertyEqual(acct, accountOptions) &&
+				isPrivateEndpointAsExpected(acct, accountOptions)) {
 				continue
 			}
-
-			if accountOptions.Kind != "" && !strings.EqualFold(accountOptions.Kind, string(acct.Kind)) {
-				continue
-			}
-
-			location := *acct.Location
-			if accountOptions.Location != "" && !strings.EqualFold(accountOptions.Location, location) {
-				continue
-			}
-
-			if len(accountOptions.VirtualNetworkResourceIDs) > 0 {
-				if acct.AccountProperties == nil || acct.AccountProperties.NetworkRuleSet == nil ||
-					acct.AccountProperties.NetworkRuleSet.VirtualNetworkRules == nil {
-					continue
-				}
-
-				found := false
-				for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
-					for _, rule := range *acct.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
-						if strings.EqualFold(to.String(rule.VirtualNetworkResourceID), subnetID) && rule.Action == storage.ActionAllow {
-							found = true
-							break
-						}
-					}
-				}
-				if !found {
-					continue
-				}
-			}
-
-			if acct.Sku.Tier != storage.SkuTier(compute.PremiumLRS) && accountOptions.EnableLargeFileShare && (len(acct.LargeFileSharesState) == 0 || acct.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
-				continue
-			}
-
-			if acct.Tags != nil {
-				// skip account with SkipMatchingTag tag
-				if _, ok := acct.Tags[SkipMatchingTag]; ok {
-					klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, *acct.Name)
-					continue
-				}
-			}
-
-			if to.Bool(acct.IsHnsEnabled) != to.Bool(accountOptions.IsHnsEnabled) {
-				continue
-			}
-
-			if to.Bool(acct.EnableNfsV3) != to.Bool(accountOptions.EnableNfsV3) {
-				continue
-			}
-			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: storageType, Location: location})
+			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: string((*acct.Sku).Name), Location: *acct.Location})
 		}
 	}
-
 	return accounts, nil
 }
 
@@ -199,6 +163,12 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				}
 			}
 
+			if accountOptions.CreatePrivateEndpoint {
+				networkRuleSet = &storage.NetworkRuleSet{
+					DefaultAction: storage.DefaultActionDeny,
+				}
+			}
+
 			// not found a matching account, now create a new account in current resource group
 			accountName = generateStorageAccountName(genAccountNamePrefix)
 			if location == "" {
@@ -263,6 +233,37 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 					return "", "", err
 				}
 			}
+
+			if accountOptions.CreatePrivateEndpoint {
+				// Get properties of the storageAccount
+				storageAccount, err := az.StorageAccountClient.GetProperties(ctx, az.ResourceGroup, accountName)
+				if err != nil {
+					return "", "", fmt.Errorf("Failed to get the properties of storage account(%s), resourceGroup(%s), error: %v", accountName, az.ResourceGroup, err)
+				}
+
+				// Create private endpoint
+				privateEndpointName := accountName + "-pvtendpoint"
+				if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName); err != nil {
+					return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, az.ResourceGroup, err)
+				}
+
+				// Create DNS zone
+				if err := az.createPrivateDNSZone(ctx); err != nil {
+					return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, az.ResourceGroup, err)
+				}
+
+				// Create virtual link to the zone private DNS zone
+				vNetLinkName := accountName + "-vnetlink"
+				if err := az.createVNetLink(ctx, vNetLinkName); err != nil {
+					return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", az.VnetName, PrivateDNSZoneName, az.ResourceGroup, err)
+				}
+
+				// Create dns zone group
+				dnsZoneGroupName := accountName + "-dnszonegroup"
+				if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName); err != nil {
+					return "", "", fmt.Errorf("Failed to create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s), error: %v", privateEndpointName, az.VnetName, az.ResourceGroup, err)
+				}
+			}
 		}
 	}
 
@@ -273,6 +274,88 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 	}
 
 	return accountName, accountKey, nil
+}
+
+func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName string) error {
+	klog.V(5).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
+	subnet, rerr := az.SubnetsClient.Get(ctx, az.ResourceGroup, az.VnetName, az.SubnetName, "")
+	if rerr != nil {
+		return rerr.Error()
+	}
+
+	// Disable the private endpoint network policies before creating private endpoint
+	subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+	rerr = az.SubnetsClient.CreateOrUpdate(ctx, az.ResourceGroup, az.VnetName, az.SubnetName, subnet)
+	if rerr != nil {
+		return rerr.Error()
+	}
+
+	//Create private endpoint
+	privateLinkServiceConnectionName := accountName + "-pvtsvcconn"
+	privateLinkServiceConnection := network.PrivateLinkServiceConnection{
+		Name: &privateLinkServiceConnectionName,
+		PrivateLinkServiceConnectionProperties: &network.PrivateLinkServiceConnectionProperties{
+			GroupIds:             &[]string{GroupIDFile},
+			PrivateLinkServiceID: accountID,
+		},
+	}
+	privateLinkServiceConnections := []network.PrivateLinkServiceConnection{privateLinkServiceConnection}
+	privateEndpoint := network.PrivateEndpoint{
+		Location:                  &az.Location,
+		PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
+	}
+	if err := az.privateendpointclient.CreateOrUpdate(ctx, az.ResourceGroup, privateEndpointName, privateEndpoint, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (az *Cloud) createPrivateDNSZone(ctx context.Context) error {
+	klog.V(5).Infof("Creating private dns zone(%s) in resourceGroup (%s)", PrivateDNSZoneName, az.ResourceGroup)
+	location := LocationGlobal
+	privateDNSZone := privatedns.PrivateZone{Location: &location}
+	if err := az.privatednsclient.CreateOrUpdate(ctx, az.ResourceGroup, PrivateDNSZoneName, privateDNSZone, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName string) error {
+	klog.V(5).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, PrivateDNSZoneName, az.ResourceGroup)
+	location := LocationGlobal
+	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s", az.SubscriptionID, az.ResourceGroup, az.VnetName)
+	registrationEnabled := false
+	parameters := privatedns.VirtualNetworkLink{
+		Location: &location,
+		VirtualNetworkLinkProperties: &privatedns.VirtualNetworkLinkProperties{
+			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
+			RegistrationEnabled: &registrationEnabled},
+	}
+	if err := az.virtualNetworkLinksClient.CreateOrUpdate(ctx, az.ResourceGroup, PrivateDNSZoneName, vNetLinkName, parameters, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName string, privateEndpointName string) error {
+	klog.V(5).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, az.VnetName, az.ResourceGroup)
+	privateDNSZoneID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, az.ResourceGroup, PrivateDNSZoneName)
+	dnsZoneName := PrivateDNSZoneName
+	privateDNSZoneConfig := network.PrivateDNSZoneConfig{
+		Name: &dnsZoneName,
+		PrivateDNSZonePropertiesFormat: &network.PrivateDNSZonePropertiesFormat{
+			PrivateDNSZoneID: &privateDNSZoneID},
+	}
+	privateDNSZoneConfigs := []network.PrivateDNSZoneConfig{privateDNSZoneConfig}
+	privateDNSZoneGroup := network.PrivateDNSZoneGroup{
+		PrivateDNSZoneGroupPropertiesFormat: &network.PrivateDNSZoneGroupPropertiesFormat{
+			PrivateDNSZoneConfigs: &privateDNSZoneConfigs,
+		},
+	}
+	if err := az.privatednszonegroupclient.CreateOrUpdate(ctx, az.ResourceGroup, privateEndpointName, dnsZoneGroupName, privateDNSZoneGroup, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 // AddStorageAccountTags add tags to storage account
@@ -324,4 +407,81 @@ func (az *Cloud) RemoveStorageAccountTag(resourceGroup, account, key string) *re
 		return az.StorageAccountClient.Update(ctx, resourceGroup, account, updateParams)
 	}
 	return nil
+}
+
+func isStorageTypeEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.Type != "" && !strings.EqualFold(accountOptions.Type, string((*account.Sku).Name)) {
+		return false
+	}
+	return true
+}
+
+func isAccountKindEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.Kind != "" && !strings.EqualFold(accountOptions.Kind, string(account.Kind)) {
+		return false
+	}
+	return true
+}
+
+func isLocationEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.Location != "" && !strings.EqualFold(accountOptions.Location, *account.Location) {
+		return false
+	}
+	return true
+}
+
+func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if len(accountOptions.VirtualNetworkResourceIDs) > 0 {
+		if account.AccountProperties == nil || account.AccountProperties.NetworkRuleSet == nil ||
+			account.AccountProperties.NetworkRuleSet.VirtualNetworkRules == nil {
+			return false
+		}
+
+		found := false
+		for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
+			for _, rule := range *account.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
+				if strings.EqualFold(to.String(rule.VirtualNetworkResourceID), subnetID) && rule.Action == storage.ActionAllow {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func isLargeFileSharesPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if account.Sku.Tier != storage.SkuTier(compute.PremiumLRS) && accountOptions.EnableLargeFileShare && (len(account.LargeFileSharesState) == 0 || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
+		return false
+	}
+	return true
+}
+
+func isTaggedWithSkip(account storage.Account) bool {
+	if account.Tags != nil {
+		// skip account with SkipMatchingTag tag
+		if _, ok := account.Tags[SkipMatchingTag]; ok {
+			klog.V(2).Infof("found %s tag for account %s, skip matching", SkipMatchingTag, *account.Name)
+			return false
+		}
+	}
+	return true
+}
+
+func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	return to.Bool(account.IsHnsEnabled) == to.Bool(accountOptions.IsHnsEnabled)
+}
+
+func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	return to.Bool(account.EnableNfsV3) == to.Bool(accountOptions.EnableNfsV3)
+}
+
+func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.CreatePrivateEndpoint && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
+		return false
+	}
+	return true
 }
