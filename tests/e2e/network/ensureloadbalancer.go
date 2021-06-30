@@ -448,10 +448,6 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		By("Checking the number of the node pools")
 		nodes, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
-		initNodepoolNodeMap := utils.GetNodepoolNodeMap(&nodes)
-		if len(initNodepoolNodeMap) != 1 {
-			Skip("single node pool is needed in this scenario")
-		}
 
 		By("Creating a service to trigger the LB reconcile")
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
