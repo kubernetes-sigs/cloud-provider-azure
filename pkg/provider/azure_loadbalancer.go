@@ -1004,11 +1004,15 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			pip.PublicIPAddressPropertiesFormat = &network.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
 			}
+			changed = true
 		}
 	} else {
 		if shouldPIPExisted {
 			return nil, fmt.Errorf("PublicIP from annotation azure-pip-name=%s for service %s doesn't exist", pipName, serviceName)
 		}
+
+		changed = true
+
 		pip.Name = to.StringPtr(pipName)
 		pip.Location = to.StringPtr(az.Location)
 		if az.HasExtendedLocation() {
@@ -1045,37 +1049,35 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		}
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - creating", serviceName, *pip.Name)
 	}
+
 	if foundDNSLabelAnnotation {
-		err = reconcileDNSSettings(&pip, domainNameLabel, serviceName, pipName)
+		updatedDNSSettings, err := reconcileDNSSettings(&pip, domainNameLabel, serviceName, pipName)
 		if err != nil {
 			return nil, fmt.Errorf("ensurePublicIPExists for service(%s): failed to reconcileDNSSettings: %w", serviceName, err)
+		}
+
+		if updatedDNSSettings {
+			changed = true
 		}
 	}
 
 	// use the same family as the clusterIP as we support IPv6 single stack as well
 	// as dual-stack clusters
-	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
-	if ipv6 {
-		pip.PublicIPAddressVersion = network.IPVersionIPv6
-		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv6 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
+	updatedIPSettings := az.reconcileIPSettings(&pip, service)
+	if updatedIPSettings {
+		changed = true
+	}
 
-		pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodDynamic
-		if az.useStandardLoadBalancer() {
-			// standard sku must have static allocation method for ipv6
-			pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodStatic
+	if changed {
+		klog.V(2).Infof("CreateOrUpdatePIP(%s, %q): start", pipResourceGroup, *pip.Name)
+		err = az.CreateOrUpdatePIP(service, pipResourceGroup, pip)
+		if err != nil {
+			klog.V(2).Infof("ensure(%s) abort backoff: pip(%s)", serviceName, *pip.Name)
+			return nil, err
 		}
-	} else {
-		pip.PublicIPAddressVersion = network.IPVersionIPv4
-		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
-	}
 
-	klog.V(2).Infof("CreateOrUpdatePIP(%s, %q): start", pipResourceGroup, *pip.Name)
-	err = az.CreateOrUpdatePIP(service, pipResourceGroup, pip)
-	if err != nil {
-		klog.V(2).Infof("ensure(%s) abort backoff: pip(%s)", serviceName, *pip.Name)
-		return nil, err
+		klog.V(10).Infof("CreateOrUpdatePIP(%s, %q): end", pipResourceGroup, *pip.Name)
 	}
-	klog.V(10).Infof("CreateOrUpdatePIP(%s, %q): end", pipResourceGroup, *pip.Name)
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
@@ -1086,15 +1088,55 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 	return &pip, nil
 }
 
-func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, serviceName, pipName string) error {
+func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.Service) bool {
+	var changed bool
+
+	serviceName := getServiceName(service)
+	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
+	if ipv6 {
+		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv6 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
+
+		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv6)) {
+			pip.PublicIPAddressVersion = network.IPVersionIPv6
+			changed = true
+		}
+
+		if az.useStandardLoadBalancer() {
+			// standard sku must have static allocation method for ipv6
+			if !strings.EqualFold(string(pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod), string(network.IPAllocationMethodStatic)) {
+				pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodStatic
+				changed = true
+			}
+		} else if !strings.EqualFold(string(pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod), string(network.IPAllocationMethodDynamic)) {
+			pip.PublicIPAddressPropertiesFormat.PublicIPAllocationMethod = network.IPAllocationMethodDynamic
+			changed = true
+		}
+	} else {
+		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
+
+		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv6)) {
+			pip.PublicIPAddressVersion = network.IPVersionIPv4
+			changed = true
+		}
+	}
+
+	return changed
+}
+
+func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, serviceName, pipName string) (bool, error) {
+	var changed bool
+
 	if existingServiceName, ok := pip.Tags[consts.ServiceUsingDNSKey]; ok {
 		if !strings.EqualFold(to.String(existingServiceName), serviceName) {
-			return fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing service %s consuming the DNS label on the public IP, so the service cannot set the DNS label annotation with this value", serviceName, pipName, *existingServiceName)
+			return false, fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing service %s consuming the DNS label on the public IP, so the service cannot set the DNS label annotation with this value", serviceName, pipName, *existingServiceName)
 		}
 	}
 
 	if len(domainNameLabel) == 0 {
-		pip.PublicIPAddressPropertiesFormat.DNSSettings = nil
+		if pip.PublicIPAddressPropertiesFormat.DNSSettings != nil {
+			pip.PublicIPAddressPropertiesFormat.DNSSettings = nil
+			changed = true
+		}
 	} else {
 		if pip.PublicIPAddressPropertiesFormat.DNSSettings == nil ||
 			pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel == nil {
@@ -1102,16 +1144,22 @@ func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, service
 			pip.PublicIPAddressPropertiesFormat.DNSSettings = &network.PublicIPAddressDNSSettings{
 				DomainNameLabel: &domainNameLabel,
 			}
+			changed = true
 		} else {
 			existingDNSLabel := pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel
 			if !strings.EqualFold(to.String(existingDNSLabel), domainNameLabel) {
-				return fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing DNS label %s on the public IP", serviceName, pipName, *existingDNSLabel)
+				return false, fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing DNS label %s on the public IP", serviceName, pipName, *existingDNSLabel)
 			}
 		}
-		pip.Tags[consts.ServiceUsingDNSKey] = &serviceName
+
+		if svc, ok := pip.Tags[consts.ServiceUsingDNSKey]; !ok ||
+			!strings.EqualFold(to.String(svc), serviceName) {
+			pip.Tags[consts.ServiceUsingDNSKey] = &serviceName
+			changed = true
+		}
 	}
 
-	return nil
+	return changed, nil
 }
 
 type serviceIPTagRequest struct {
