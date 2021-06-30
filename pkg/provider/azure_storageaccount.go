@@ -277,7 +277,7 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 }
 
 func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName string) error {
-	klog.V(5).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
+	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
 	subnet, rerr := az.SubnetsClient.Get(ctx, az.ResourceGroup, az.VnetName, az.SubnetName, "")
 	if rerr != nil {
 		return rerr.Error()
@@ -311,7 +311,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 }
 
 func (az *Cloud) createPrivateDNSZone(ctx context.Context) error {
-	klog.V(5).Infof("Creating private dns zone(%s) in resourceGroup (%s)", PrivateDNSZoneName, az.ResourceGroup)
+	klog.V(2).Infof("Creating private dns zone(%s) in resourceGroup (%s)", PrivateDNSZoneName, az.ResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	if err := az.privatednsclient.CreateOrUpdate(ctx, az.ResourceGroup, PrivateDNSZoneName, privateDNSZone, true); err != nil {
@@ -321,7 +321,7 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context) error {
 }
 
 func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName string) error {
-	klog.V(5).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, PrivateDNSZoneName, az.ResourceGroup)
+	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, PrivateDNSZoneName, az.ResourceGroup)
 	location := LocationGlobal
 	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s", az.SubscriptionID, az.ResourceGroup, az.VnetName)
 	registrationEnabled := false
@@ -338,7 +338,7 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName string) error 
 }
 
 func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName string, privateEndpointName string) error {
-	klog.V(5).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, az.VnetName, az.ResourceGroup)
+	klog.V(2).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, az.VnetName, az.ResourceGroup)
 	privateDNSZoneID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, az.ResourceGroup, PrivateDNSZoneName)
 	dnsZoneName := PrivateDNSZoneName
 	privateDNSZoneConfig := network.PrivateDNSZoneConfig{
