@@ -265,6 +265,11 @@ const (
 	// is `a=b,c=d,...`. After updated, the old user-assigned tags would not be replaced by the new ones.
 	ServiceAnnotationAzurePIPTags = "service.beta.kubernetes.io/azure-pip-tags"
 
+	// ServiceAnnotationAzurePIPTags sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
+	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
+	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).
+	ServiceAnnotationAdditionalPublicIPs = "service.beta.kubernetes.io/azure-additional-public-ips"
+
 	// ServiceTagKey is the service key applied for public IP tags.
 	ServiceTagKey = "service"
 	// ClusterNameKey is the cluster name key applied for public IP tags.
