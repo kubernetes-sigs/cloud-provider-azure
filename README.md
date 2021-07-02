@@ -75,14 +75,14 @@ Please check the following documents for e2e tests:
 
 ## Documentation
 
-- [Dependency management]([docs/dependency-management.md](http://kubernetes-sigs.github.io/cloud-provider-azure/development/dependencies/))
+- [Dependency management](http://kubernetes-sigs.github.io/cloud-provider-azure/development/dependencies/)
 - [Cloud provider config](http://kubernetes-sigs.github.io/cloud-provider-azure/install/configs/)
 - [Azure load balancer and annotations](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/)
 - [Azure permissions](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/azure-permissions/)
 - [Azure availability zones](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/)
-- [Cross resource group nodes]([docs/using-cross-resource-group-nodes.md](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/cross-resource-group-nodes/))
-- [AzureDisk known issues]([docs/persistentvolumes/azuredisk/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azuredisk/))
-- [AzureFile known issues]([docs/persistentvolumes/azurefile/issues.md](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azurefile/))
+- [Cross resource group nodes](http://kubernetes-sigs.github.io/cloud-provider-azure/topics/cross-resource-group-nodes/)
+- [AzureDisk known issues](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azuredisk/)
+- [AzureFile known issues](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azurefile/)
 
 See [kubernetes-sigs.github.io/cloud-provider-azure](https://kubernetes-sigs.github.io/cloud-provider-azure/) for more documentations.
 
