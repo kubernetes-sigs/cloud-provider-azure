@@ -18,9 +18,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"strings"
 	"sync"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/Azure/go-autorest/autorest/to"
@@ -153,4 +156,29 @@ func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.String {
 	}
 
 	return sets.NewString(vmSetNames...)
+}
+
+func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
+	if service == nil {
+		return nil, nil
+	}
+
+	result := []string{}
+	if val, ok := service.Annotations[consts.ServiceAnnotationAdditionalPublicIPs]; ok {
+		pips := strings.Split(strings.TrimSpace(val), ",")
+		for _, pip := range pips {
+			ip := strings.TrimSpace(pip)
+			if ip == "" {
+				continue // skip empty string
+			}
+
+			if net.ParseIP(ip) == nil {
+				return nil, fmt.Errorf("%s is not a valid IP address", ip)
+			}
+
+			result = append(result, ip)
+		}
+	}
+
+	return result, nil
 }
