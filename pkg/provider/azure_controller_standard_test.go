@@ -32,6 +32,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -125,11 +126,12 @@ func TestStandardDetachDisk(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc          string
-		nodeName      types.NodeName
-		disks         []string
-		isDetachFail  bool
-		expectedError bool
+		desc           string
+		nodeName       types.NodeName
+		disks          []string
+		testAzureStack bool
+		isDetachFail   bool
+		expectedError  bool
 	}{
 		{
 			desc:          "no error shall be returned if there's no corresponding vm",
@@ -155,6 +157,20 @@ func TestStandardDetachDisk(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			desc:           "no error shall be returned if there's a corresponding disk(AzureStack)",
+			nodeName:       "vm1",
+			testAzureStack: true,
+			disks:          []string{"disk1"},
+			expectedError:  false,
+		},
+		{
+			desc:           "no error shall be returned if there's 2 corresponding disks(AzureStack)",
+			nodeName:       "vm1",
+			testAzureStack: true,
+			disks:          []string{"disk1", "disk2"},
+			expectedError:  false,
+		},
+		{
 			desc:          "an error shall be returned if detach disk failed",
 			nodeName:      "vm1",
 			isDetachFail:  true,
@@ -164,6 +180,10 @@ func TestStandardDetachDisk(t *testing.T) {
 
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
+		if test.testAzureStack {
+			testCloud.cloud.Environment.Name = consts.AzureStackCloudName
+			testCloud.cloud.Config.DisableAzureStackCloud = false
+		}
 		vmSet := testCloud.VMSet
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
