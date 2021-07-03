@@ -2626,6 +2626,36 @@ func TestReconcileSecurityGroup(t *testing.T) {
 			},
 		},
 		{
+			desc:    "reconcileSecurityGroup shall create sgs with correct destinationPrefix with additional public IPs",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationAdditionalPublicIPs: "2.3.4.5"}, true, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIP:   to.StringPtr("1.2.3.4"),
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: to.StringPtr("atest1-TCP-80-Internet"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            to.StringPtr("*"),
+								DestinationPortRange:       to.StringPtr("80"),
+								SourceAddressPrefix:        to.StringPtr("Internet"),
+								DestinationAddressPrefixes: to.StringSlicePtr([]string{"1.2.3.4", "2.3.4.5"}),
+								Access:                     network.SecurityRuleAccess("Allow"),
+								Priority:                   to.Int32Ptr(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			desc:    "reconcileSecurityGroup shall not create unwanted security rules if there is service tags",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationAllowedServiceTag: "tag"}, true, 80),
 			wantLb:  true,
@@ -2639,7 +2669,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 								SourceAddressPrefix:      to.StringPtr("prefix"),
 								SourcePortRange:          to.StringPtr("range"),
-								DestinationAddressPrefix: to.StringPtr("desPrefix"),
+								DestinationAddressPrefix: to.StringPtr("destPrefix"),
 								DestinationPortRange:     to.StringPtr("desRange"),
 							},
 						},

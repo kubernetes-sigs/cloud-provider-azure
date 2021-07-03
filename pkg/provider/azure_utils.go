@@ -18,9 +18,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"strings"
 	"sync"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
@@ -186,4 +189,29 @@ func getExtendedLocationTypeFromString(extendedLocationType string) network.Exte
 		return val
 	}
 	return network.ExtendedLocationTypesEdgeZone
+}
+
+func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
+	if service == nil {
+		return nil, nil
+	}
+
+	result := []string{}
+	if val, ok := service.Annotations[consts.ServiceAnnotationAdditionalPublicIPs]; ok {
+		pips := strings.Split(strings.TrimSpace(val), ",")
+		for _, pip := range pips {
+			ip := strings.TrimSpace(pip)
+			if ip == "" {
+				continue // skip empty string
+			}
+
+			if net.ParseIP(ip) == nil {
+				return nil, fmt.Errorf("%s is not a valid IP address", ip)
+			}
+
+			result = append(result, ip)
+		}
+	}
+
+	return result, nil
 }
