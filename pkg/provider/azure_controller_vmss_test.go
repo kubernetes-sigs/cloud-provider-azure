@@ -383,7 +383,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 
 		if !test.expectedErr {
 			dataDisks, _, err := ss.GetDataDisks(test.vmssvmName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
+			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
 		}
 	}
 }

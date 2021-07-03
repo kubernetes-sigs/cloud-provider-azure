@@ -279,6 +279,14 @@ func TestGetDataDisks(t *testing.T) {
 					Lun:  to.Int32Ptr(0),
 					Name: to.StringPtr("disk1"),
 				},
+				{
+					Lun:  to.Int32Ptr(1),
+					Name: to.StringPtr("disk2"),
+				},
+				{
+					Lun:  to.Int32Ptr(2),
+					Name: to.StringPtr("disk3"),
+				},
 			},
 			expectedError: false,
 			crt:           azcache.CacheReadTypeDefault,
@@ -290,6 +298,14 @@ func TestGetDataDisks(t *testing.T) {
 				{
 					Lun:  to.Int32Ptr(0),
 					Name: to.StringPtr("disk1"),
+				},
+				{
+					Lun:  to.Int32Ptr(1),
+					Name: to.StringPtr("disk2"),
+				},
+				{
+					Lun:  to.Int32Ptr(2),
+					Name: to.StringPtr("disk3"),
 				},
 			},
 			expectedError: false,

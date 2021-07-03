@@ -68,7 +68,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			nodeName:    "vm1",
 			diskName:    "disk-name",
 			existedDisk: nil,
-			expectedLun: 1,
+			expectedLun: 3,
 			expectedErr: false,
 		},
 		{
@@ -101,7 +101,7 @@ func TestCommonAttachDisk(t *testing.T) {
 					DiskState:  compute.Unattached,
 				},
 				Tags: testTags},
-			expectedLun: 1,
+			expectedLun: 3,
 			expectedErr: false,
 		},
 		{
@@ -372,7 +372,7 @@ func TestCommonUpdateVM(t *testing.T) {
 			desc:        "no error shall be returned if there's no matching disk according to given diskName",
 			vmList:      map[string]string{"vm1": "PowerState/Running"},
 			nodeName:    "vm1",
-			diskName:    "disk2",
+			diskName:    "diskx",
 			expectedErr: false,
 		},
 		{
@@ -428,7 +428,7 @@ func TestGetDiskLun(t *testing.T) {
 	}{
 		{
 			desc:        "LUN -1 and error shall be returned if diskName != disk.Name or diskURI != disk.Vhd.URI",
-			diskName:    "disk2",
+			diskName:    "diskx",
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -480,7 +480,7 @@ func TestSetDiskLun(t *testing.T) {
 			nodeName:    "nodeName",
 			diskURI:     "diskURI",
 			diskMap:     map[string]*AttachDiskOptions{"diskURI": {}},
-			expectedLun: 1,
+			expectedLun: 3,
 			expectedErr: false,
 		},
 		{
@@ -544,9 +544,9 @@ func TestDisksAreAttached(t *testing.T) {
 		},
 		{
 			desc:             "proper attach map shall be returned if everything is good",
-			diskNames:        []string{"disk1", "disk2"},
+			diskNames:        []string{"disk1", "diskx"},
 			nodeName:         "vm1",
-			expectedAttached: map[string]bool{"disk1": true, "disk2": false},
+			expectedAttached: map[string]bool{"disk1": true, "diskx": false},
 			expectedErr:      false,
 		},
 	}
