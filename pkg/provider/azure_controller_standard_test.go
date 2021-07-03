@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -126,7 +127,7 @@ func TestStandardDetachDisk(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		nodeName      types.NodeName
-		diskName      string
+		disks         []string
 		isDetachFail  bool
 		expectedError bool
 	}{
@@ -138,13 +139,19 @@ func TestStandardDetachDisk(t *testing.T) {
 		{
 			desc:          "no error shall be returned if there's no corresponding disk",
 			nodeName:      "vm1",
-			diskName:      "disk2",
+			disks:         []string{"diskx"},
 			expectedError: false,
 		},
 		{
 			desc:          "no error shall be returned if there's a corresponding disk",
 			nodeName:      "vm1",
-			diskName:      "disk1",
+			disks:         []string{"disk1"},
+			expectedError: false,
+		},
+		{
+			desc:          "no error shall be returned if there's 2 corresponding disks",
+			nodeName:      "vm1",
+			disks:         []string{"disk1", "disk2"},
 			expectedError: false,
 		},
 		{
@@ -167,17 +174,20 @@ func TestStandardDetachDisk(t *testing.T) {
 		if test.isDetachFail {
 			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, "vm1", gomock.Any(), "detach_disk").Return(nil).AnyTimes()
 		}
 
-		diskMap := map[string]string{
-			"uri": test.diskName,
+		diskMap := map[string]string{}
+		for _, diskName := range test.disks {
+			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
+			diskMap[diskURI] = diskName
 		}
 		err := vmSet.DetachDisk(test.nodeName, diskMap)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
-		if !test.expectedError && test.diskName != "" {
+		if !test.expectedError && len(test.disks) > 0 {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, err: %v", i, test.desc, err)
+			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
 }
@@ -237,7 +247,7 @@ func TestStandardUpdateVM(t *testing.T) {
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && test.diskName != "" {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, err: %v", i, test.desc, err)
+			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		}
 	}
 }
@@ -269,6 +279,14 @@ func TestGetDataDisks(t *testing.T) {
 					Lun:  to.Int32Ptr(0),
 					Name: to.StringPtr("disk1"),
 				},
+				{
+					Lun:  to.Int32Ptr(1),
+					Name: to.StringPtr("disk2"),
+				},
+				{
+					Lun:  to.Int32Ptr(2),
+					Name: to.StringPtr("disk3"),
+				},
 			},
 			expectedError: false,
 			crt:           azcache.CacheReadTypeDefault,
@@ -280,6 +298,14 @@ func TestGetDataDisks(t *testing.T) {
 				{
 					Lun:  to.Int32Ptr(0),
 					Name: to.StringPtr("disk1"),
+				},
+				{
+					Lun:  to.Int32Ptr(1),
+					Name: to.StringPtr("disk2"),
+				},
+				{
+					Lun:  to.Int32Ptr(2),
+					Name: to.StringPtr("disk3"),
 				},
 			},
 			expectedError: false,

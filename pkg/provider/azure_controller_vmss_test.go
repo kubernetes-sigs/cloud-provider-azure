@@ -44,7 +44,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		desc           string
 		vmssName       types.NodeName
 		vmssvmName     types.NodeName
-		existedDisk    compute.Disk
+		disks          []string
 		vmList         map[string]string
 		vmssVMList     []string
 		isManagedDisk  bool
@@ -57,17 +57,26 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			vmssName:       "vm1",
 			vmssvmName:     "vm1",
 			isManagedDisk:  false,
-			existedDisk:    compute.Disk{Name: to.StringPtr("disk-name")},
+			disks:          []string{"disk-name"},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("not a vmss instance"),
 		},
 		{
-			desc:          "no error shall be returned if everything is good with managed disk",
+			desc:          "no error shall be returned if everything is good with one managed disk",
 			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:      "vmss00",
 			vmssvmName:    "vmss00-vm-000000",
 			isManagedDisk: true,
-			existedDisk:   compute.Disk{Name: to.StringPtr("disk-name")},
+			disks:         []string{"disk-name"},
+			expectedErr:   false,
+		},
+		{
+			desc:          "no error shall be returned if everything is good with 2 managed disks",
+			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:      "vmss00",
+			vmssvmName:    "vmss00-vm-000000",
+			isManagedDisk: true,
+			disks:         []string{"disk-name", "disk-name2"},
 			expectedErr:   false,
 		},
 		{
@@ -76,7 +85,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			vmssName:      "vmss00",
 			vmssvmName:    "vmss00-vm-000000",
 			isManagedDisk: false,
-			existedDisk:   compute.Disk{Name: to.StringPtr("disk-name")},
+			disks:         []string{"disk-name"},
 			expectedErr:   false,
 		},
 		{
@@ -85,7 +94,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			vmssName:       fakeStatusNotFoundVMSSName,
 			vmssvmName:     "vmss00-vm-000000",
 			isManagedDisk:  false,
-			existedDisk:    compute.Disk{Name: to.StringPtr("disk-name")},
+			disks:          []string{"disk-name"},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
@@ -126,19 +135,20 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
-			testCloud.SubscriptionID, testCloud.ResourceGroup, *test.existedDisk.Name)
+		diskMap := map[string]*AttachDiskOptions{}
+		for i, diskName := range test.disks {
+			options := AttachDiskOptions{
+				lun:                     int32(i),
+				isManagedDisk:           test.isManagedDisk,
+				diskName:                diskName,
+				cachingMode:             compute.CachingTypesReadWrite,
+				diskEncryptionSetID:     "",
+				writeAcceleratorEnabled: true,
+			}
 
-		options := AttachDiskOptions{
-			lun:                     0,
-			isManagedDisk:           test.isManagedDisk,
-			diskName:                "disk-name",
-			cachingMode:             compute.CachingTypesReadWrite,
-			diskEncryptionSetID:     "",
-			writeAcceleratorEnabled: true,
-		}
-		diskMap := map[string]*AttachDiskOptions{
-			diskURI: &options,
+			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
+			diskMap[diskURI] = &options
 		}
 		err = ss.AttachDisk(test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
@@ -160,7 +170,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		vmssVMList     []string
 		vmssName       types.NodeName
 		vmssvmName     types.NodeName
-		existedDisk    compute.Disk
+		disks          []string
 		expectedErr    bool
 		expectedErrMsg error
 	}{
@@ -169,7 +179,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss-vm-000001"},
 			vmssName:       "vm1",
 			vmssvmName:     "vm1",
-			existedDisk:    compute.Disk{Name: to.StringPtr(diskName)},
+			disks:          []string{diskName},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("not a vmss instance"),
 		},
@@ -178,7 +188,15 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: to.StringPtr(diskName)},
+			disks:       []string{diskName},
+			expectedErr: false,
+		},
+		{
+			desc:        "no error shall be returned if everything is good",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{diskName, "disk2"},
 			expectedErr: false,
 		},
 		{
@@ -186,7 +204,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:       fakeStatusNotFoundVMSSName,
 			vmssvmName:     "vmss00-vm-000000",
-			existedDisk:    compute.Disk{Name: to.StringPtr(diskName)},
+			disks:          []string{diskName},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
@@ -195,7 +213,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: to.StringPtr("disk-name-err")},
+			disks:       []string{"disk-name-err"},
 			expectedErr: false,
 		},
 	}
@@ -224,10 +242,20 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 						},
 					},
 				},
-				DataDisks: &[]compute.DataDisk{{
-					Lun:  to.Int32Ptr(0),
-					Name: to.StringPtr(diskName),
-				}},
+				DataDisks: &[]compute.DataDisk{
+					{
+						Lun:  to.Int32Ptr(0),
+						Name: to.StringPtr(diskName),
+					},
+					{
+						Lun:  to.Int32Ptr(1),
+						Name: to.StringPtr("disk2"),
+					},
+					{
+						Lun:  to.Int32Ptr(2),
+						Name: to.StringPtr("disk3"),
+					},
+				},
 			}
 		}
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
@@ -238,8 +266,11 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		diskMap := map[string]string{
-			diskName: *test.existedDisk.Name,
+		diskMap := map[string]string{}
+		for _, diskName := range test.disks {
+			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
+			diskMap[diskURI] = diskName
 		}
 		err = ss.DetachDisk(test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
@@ -249,7 +280,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 
 		if !test.expectedErr {
 			dataDisks, _, err := ss.GetDataDisks(test.vmssvmName, azcache.CacheReadTypeDefault)
-			assert.Equal(t, true, len(dataDisks) == 1, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
+			assert.Equal(t, true, len(dataDisks) == 3, "TestCase[%d]: %s, actual data disk num: %d, err: %v", i, test.desc, len(dataDisks), err)
 		}
 	}
 }

@@ -162,11 +162,7 @@ func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 				(disk.ManagedDisk != nil && diskURI != "" && strings.EqualFold(*disk.ManagedDisk.ID, diskURI)) {
 				// found the disk
 				klog.V(2).Infof("azureDisk - detach disk: name %q uri %q", diskName, diskURI)
-				if strings.EqualFold(ss.cloud.Environment.Name, consts.AzureStackCloudName) && !ss.Config.DisableAzureStackCloud {
-					disks = append(disks[:i], disks[i+1:]...)
-				} else {
-					disks[i].ToBeDetached = to.BoolPtr(true)
-				}
+				disks[i].ToBeDetached = to.BoolPtr(true)
 				bFoundDisk = true
 			}
 		}
@@ -175,6 +171,17 @@ func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 	if !bFoundDisk {
 		// only log here, next action is to update VM status with original meta data
 		klog.Errorf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
+	} else {
+		if strings.EqualFold(ss.cloud.Environment.Name, consts.AzureStackCloudName) && !ss.Config.DisableAzureStackCloud {
+			// Azure stack does not support ToBeDetached flag, use original way to detach disk
+			newDisks := []compute.DataDisk{}
+			for _, disk := range disks {
+				if !to.Bool(disk.ToBeDetached) {
+					newDisks = append(newDisks, disk)
+				}
+			}
+			disks = newDisks
+		}
 	}
 
 	newVM := compute.VirtualMachineScaleSetVM{
