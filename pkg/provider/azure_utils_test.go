@@ -17,8 +17,14 @@ limitations under the License.
 package provider
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func TestSimpleLockEntry(t *testing.T) {
@@ -79,5 +85,77 @@ func ensureNoCallback(t *testing.T, callbackChan <-chan interface{}) bool {
 		return false
 	case <-time.After(callbackTimeout):
 		return true
+	}
+}
+
+func TestGetServiceAdditionalPublicIPs(t *testing.T) {
+	for _, testCase := range []struct {
+		description   string
+		service       *v1.Service
+		expectedIPs   []string
+		expectedError error
+	}{
+		{
+			description: "nil service should return empty IP list",
+		},
+		{
+			description: "service without annotation should return empty IP list",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{},
+				},
+			},
+			expectedIPs: []string{},
+		},
+		{
+			description: "service without annotation should return empty IP list",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAdditionalPublicIPs: "",
+					},
+				},
+			},
+			expectedIPs: []string{},
+		},
+		{
+			description: "service with one IP in annotation should return expected IPs",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAdditionalPublicIPs: "1.2.3.4 ",
+					},
+				},
+			},
+			expectedIPs: []string{"1.2.3.4"},
+		},
+		{
+			description: "service with multiple IPs in annotation should return expected IPs",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAdditionalPublicIPs: "1.2.3.4, 2.3.4.5 ",
+					},
+				},
+			},
+			expectedIPs: []string{"1.2.3.4", "2.3.4.5"},
+		},
+		{
+			description: "service with wrong IP in annotation should report an error",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAdditionalPublicIPs: "invalid",
+					},
+				},
+			},
+			expectedError: fmt.Errorf("invalid is not a valid IP address"),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			ips, err := getServiceAdditionalPublicIPs(testCase.service)
+			assert.Equal(t, testCase.expectedIPs, ips)
+			assert.Equal(t, testCase.expectedError, err)
+		})
 	}
 }
