@@ -52,6 +52,9 @@ type Interface interface {
 	// List gets a list of PublicIPAddress in the resource group.
 	List(ctx context.Context, resourceGroupName string) (result []network.PublicIPAddress, rerr *retry.Error)
 
+	// ListAll gets all of PublicIPAddress in the subscription.
+	ListAll(ctx context.Context) (result []network.PublicIPAddress, rerr *retry.Error)
+
 	// CreateOrUpdate creates or updates a PublicIPAddress.
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error
 

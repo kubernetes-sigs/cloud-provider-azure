@@ -41,9 +41,10 @@ import (
 )
 
 const (
-	testResourceID     = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"
-	testVMSSResourceID = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic/ipconfigurations/ipConfig/publicipaddresses/pip1"
-	resourceIDPrefix   = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses"
+	testResourceID      = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"
+	testVMSSResourceID  = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic/ipconfigurations/ipConfig/publicipaddresses/pip1"
+	resourceIDPrefix    = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses"
+	subResourceIDPrefix = "/subscriptions/subscriptionID/providers/Microsoft.Network/publicIPAddresses"
 )
 
 func TestNew(t *testing.T) {
@@ -809,4 +810,109 @@ func getTestPublicIPAddressClientWithRetryAfterReader(armClient armclient.Interf
 		RetryAfterReader:  getFutureTime(),
 		RetryAfterWriter:  getFutureTime(),
 	}
+}
+
+func TestListAll(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	pipList := []network.PublicIPAddress{getTestPublicIPAddress("pip1"), getTestPublicIPAddress("pip2"), getTestPublicIPAddress("pip3")}
+	responseBody, err := json.Marshal(network.PublicIPAddressListResult{Value: &pipList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResource(gomock.Any(), subResourceIDPrefix, "").Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	pipClient := getTestPublicIPAddressClient(armClient)
+	result, rerr := pipClient.ListAll(context.TODO())
+	assert.Nil(t, rerr)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestListAllNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResource(gomock.Any(), subResourceIDPrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	pipClient := getTestPublicIPAddressClient(armClient)
+	expected := []network.PublicIPAddress{}
+	result, rerr := pipClient.ListAll(context.TODO())
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
+}
+
+func TestListAllInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResource(gomock.Any(), subResourceIDPrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	pipClient := getTestPublicIPAddressClient(armClient)
+	expected := []network.PublicIPAddress{}
+	result, rerr := pipClient.ListAll(context.TODO())
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
+}
+
+func TestListAllThrottle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	throttleErr := &retry.Error{
+		HTTPStatusCode: http.StatusTooManyRequests,
+		RawError:       fmt.Errorf("error"),
+		Retriable:      true,
+		RetryAfter:     time.Unix(100, 0),
+	}
+	armClient.EXPECT().GetResource(gomock.Any(), subResourceIDPrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	pipClient := getTestPublicIPAddressClient(armClient)
+	result, rerr := pipClient.ListAll(context.TODO())
+	assert.Empty(t, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, throttleErr, rerr)
+}
+
+func TestListAllWithListResponderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	pipList := []network.PublicIPAddress{getTestPublicIPAddress("pip1"), getTestPublicIPAddress("pip2"), getTestPublicIPAddress("pip3")}
+	responseBody, err := json.Marshal(network.PublicIPAddressListResult{Value: &pipList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResource(gomock.Any(), subResourceIDPrefix, "").Return(
+		&http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	pipClient := getTestPublicIPAddressClient(armClient)
+	result, rerr := pipClient.ListAll(context.TODO())
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 0, len(result))
 }
