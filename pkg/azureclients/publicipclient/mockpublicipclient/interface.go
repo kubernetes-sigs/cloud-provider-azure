@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,15 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package mockpublicipclient is a generated GoMock package.
 package mockpublicipclient
 
 import (
-	"context"
-	"reflect"
+	context "context"
+	reflect "reflect"
 
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
-	"github.com/golang/mock/gomock"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	gomock "github.com/golang/mock/gomock"
+	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface
@@ -91,6 +92,21 @@ func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]n
 func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
+}
+
+// ListAll mocks base method
+func (m *MockInterface) ListAll(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAll", ctx)
+	ret0, _ := ret[0].([]network.PublicIPAddress)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// ListAll indicates an expected call of ListAll
+func (mr *MockInterfaceMockRecorder) ListAll(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockInterface)(nil).ListAll), ctx)
 }
 
 // CreateOrUpdate mocks base method
