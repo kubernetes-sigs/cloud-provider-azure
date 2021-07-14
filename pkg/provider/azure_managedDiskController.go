@@ -151,6 +151,10 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		}
 	}
 
+	if diskSku == compute.DiskStorageAccountTypesPremiumLRS || diskSku == compute.DiskStorageAccountTypesPremiumZRS {
+		diskProperties.BurstingEnabled = to.BoolPtr(true)
+	}
+
 	if options.DiskEncryptionSetID != "" {
 		if strings.Index(strings.ToLower(options.DiskEncryptionSetID), "/subscriptions/") != 0 {
 			return "", fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", options.DiskEncryptionSetID, consts.DiskEncryptionSetIDFormat)
