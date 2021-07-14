@@ -74,6 +74,12 @@ type ManagedDiskOptions struct {
 	LogicalSectorSize int32
 	// SkipGetDiskOperation indicates whether skip GetDisk operation(mainly due to throttling)
 	SkipGetDiskOperation bool
+	// NetworkAccessPolicy - Possible values include: 'AllowAll', 'AllowPrivate', 'DenyAll'
+	NetworkAccessPolicy compute.NetworkAccessPolicy
+	// DiskAccessID - ARM id of the DiskAccess resource for using private endpoints on disks.
+	DiskAccessID *string
+	// BurstingEnabled - Set to true to enable bursting beyond the provisioned performance target of the disk.
+	BurstingEnabled *bool
 }
 
 //CreateManagedDisk : create managed disk
@@ -110,8 +116,23 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		return "", err
 	}
 	diskProperties := compute.DiskProperties{
-		DiskSizeGB:   &diskSizeGB,
-		CreationData: &creationData,
+		DiskSizeGB:      &diskSizeGB,
+		CreationData:    &creationData,
+		BurstingEnabled: options.BurstingEnabled,
+	}
+
+	if options.NetworkAccessPolicy != "" {
+		diskProperties.NetworkAccessPolicy = options.NetworkAccessPolicy
+		if options.NetworkAccessPolicy == compute.AllowPrivate {
+			if options.DiskAccessID == nil {
+				return "", fmt.Errorf("DiskAccessID should not be empty when NetworkAccessPolicy is AllowPrivate")
+			}
+			diskProperties.DiskAccessID = options.DiskAccessID
+		} else {
+			if options.DiskAccessID != nil {
+				return "", fmt.Errorf("DiskAccessID(%s) must be empty when NetworkAccessPolicy(%s) is not AllowPrivate", *options.DiskAccessID, options.NetworkAccessPolicy)
+			}
+		}
 	}
 
 	if diskSku == compute.UltraSSDLRS {
