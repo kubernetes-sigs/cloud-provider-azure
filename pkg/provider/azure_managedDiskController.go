@@ -114,9 +114,8 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		return "", err
 	}
 	diskProperties := compute.DiskProperties{
-		DiskSizeGB:      &diskSizeGB,
-		CreationData:    &creationData,
-		BurstingEnabled: to.BoolPtr(true),
+		DiskSizeGB:   &diskSizeGB,
+		CreationData: &creationData,
 	}
 
 	if options.NetworkAccessPolicy != "" {
@@ -158,9 +157,6 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 			klog.V(2).Infof("AzureDisk - requested LogicalSectorSize: %v", options.LogicalSectorSize)
 			diskProperties.CreationData.LogicalSectorSize = to.Int32Ptr(options.LogicalSectorSize)
 		}
-
-		// BurstingEnabled does not apply to Ultra disks
-		diskProperties.BurstingEnabled = nil
 	} else {
 		if options.DiskIOPSReadWrite != "" {
 			return "", fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS disk type")
@@ -171,6 +167,10 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		if options.LogicalSectorSize != 0 {
 			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS disk type")
 		}
+	}
+
+	if diskSku == compute.PremiumLRS || diskSku == compute.PremiumZRS {
+		diskProperties.BurstingEnabled = to.BoolPtr(true)
 	}
 
 	if options.DiskEncryptionSetID != "" {
