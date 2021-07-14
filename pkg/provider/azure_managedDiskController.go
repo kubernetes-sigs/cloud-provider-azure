@@ -78,6 +78,8 @@ type ManagedDiskOptions struct {
 	NetworkAccessPolicy compute.NetworkAccessPolicy
 	// DiskAccessID - ARM id of the DiskAccess resource for using private endpoints on disks.
 	DiskAccessID *string
+	// BurstingEnabled - Set to true to enable bursting beyond the provisioned performance target of the disk.
+	BurstingEnabled *bool
 }
 
 //CreateManagedDisk : create managed disk
@@ -114,8 +116,9 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		return "", err
 	}
 	diskProperties := compute.DiskProperties{
-		DiskSizeGB:   &diskSizeGB,
-		CreationData: &creationData,
+		DiskSizeGB:      &diskSizeGB,
+		CreationData:    &creationData,
+		BurstingEnabled: options.BurstingEnabled,
 	}
 
 	if options.NetworkAccessPolicy != "" {
@@ -167,10 +170,6 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		if options.LogicalSectorSize != 0 {
 			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS disk type")
 		}
-	}
-
-	if diskSku == compute.PremiumLRS || diskSku == compute.PremiumZRS {
-		diskProperties.BurstingEnabled = to.BoolPtr(true)
 	}
 
 	if options.DiskEncryptionSetID != "" {
