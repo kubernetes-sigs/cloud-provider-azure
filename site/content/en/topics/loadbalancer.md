@@ -34,6 +34,7 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer the detailed docs [here](../custom-health-probe) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports` | Enable [high availability ports](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-ha-ports-overview) on internal SLB | HA ports is required when applications require IP fragments | v1.20 and later |
 | `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` | `true` or `false` | Deny all traffic to the service. This is helpful when the `service.Spec.LoadBalancerSourceRanges` is set to an internal load balancer typed service. When set the loadBalancerSourceRanges field on the service in order to whitelist ip src addresses, although the generated NSG has added the rules for loadBalancerSourceRanges, the default rule (65000) will allow any vnet traffic, basically meaning the whitelist is of no use. This annotation solves this issue. | v1.21 and later |
+| `service.beta.kubernetes.io/azure-additional-public-ips` | External public IPs besides the service's own public IP | It is mainly used for global VIP on Azure cross-region LoadBalancer | v1.20 and later with out-of-tree cloud provider |
 
 Please note that
 

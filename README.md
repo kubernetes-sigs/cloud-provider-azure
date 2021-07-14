@@ -15,16 +15,16 @@ This repository provides Azure implementation of Kubernetes cloud provider [inte
 
 The latest version of azure-cloud-controller-manager and azure-cloud-node-manager could be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.0.1`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.0.1`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.0.2`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.0.2`
 
 Version matrix:
 
 |Kubernetes version|cloud-provider version|cloud-provider branch|
 |------------------|----------------------|---------------------|
 | master           | N/A                  | master              |
-| v1.21.x          | v1.0.1               | release-1.0         |
-| v1.20.x          | v0.7.4               | release-0.7         |
+| v1.21.x          | v1.0.2               | release-1.0         |
+| v1.20.x          | v0.7.5               | release-0.7         |
 | v1.19.x          | v0.6.0               | release-0.6         |
 | v1.18.x          | v0.5.1               | release-0.5         |
 | v1.17.x          | v0.4.1               | N/A                 |
