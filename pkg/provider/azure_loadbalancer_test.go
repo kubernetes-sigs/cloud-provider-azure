@@ -3404,14 +3404,17 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloudWithExtendedLocation(ctrl)
+	az.LoadBalancerSku = consts.LoadBalancerSkuStandard
 	service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
 
+	exLocName := "microsoftlosangeles1"
+	exLocType := "EdgeZone"
 	expectedPIP := &network.PublicIPAddress{
 		Name:     to.StringPtr("pip1"),
 		Location: &az.location,
 		ExtendedLocation: &network.ExtendedLocation{
-			Name: to.StringPtr("microsoftlosangeles1"),
-			Type: to.StringPtr("EdgeZone"),
+			Name: to.StringPtr(exLocName),
+			Type: to.StringPtr(exLocType),
 		},
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: "Static",
@@ -3429,9 +3432,18 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 	})
 	mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).Return(*expectedPIP, nil).After(first)
 
-	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).Return(nil).Times(1)
+	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, publicIPAddressParameters network.PublicIPAddress) *retry.Error {
+			assert.NotNil(t, publicIPAddressParameters)
+			assert.NotNil(t, publicIPAddressParameters.ExtendedLocation)
+			assert.Equal(t, *publicIPAddressParameters.ExtendedLocation.Name, exLocName)
+			assert.Equal(t, *publicIPAddressParameters.ExtendedLocation.Type, exLocType)
+			// Edge zones don't support availability zones.
+			assert.Nil(t, publicIPAddressParameters.Zones)
+			return nil
+		}).Times(1)
 	pip, err := az.ensurePublicIPExists(&service, "pip1", "", "", false, false)
-	assert.Equal(t, expectedPIP, pip, "ensurePublicIPExists shall create a new pip"+
+	assert.NotNil(t, pip, "ensurePublicIPExists shall create a new pip"+
 		"with extendedLocation if there is no existed pip")
 	assert.Nil(t, err, "ensurePublicIPExists should create a new pip without errors.")
 }
