@@ -1031,6 +1031,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		pip.Name = to.StringPtr(pipName)
 		pip.Location = to.StringPtr(az.Location)
 		if az.HasExtendedLocation() {
+			klog.V(2).Infof("Using extended location with name %s, and type %s for PIP", az.ExtendedLocationName, az.ExtendedLocationType)
 			pip.ExtendedLocation = &network.ExtendedLocation{
 				Name: &az.ExtendedLocationName,
 				Type: getExtendedLocationTypeFromString(az.ExtendedLocationType),
@@ -1053,13 +1054,16 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 				Name: network.PublicIPAddressSkuNameStandard,
 			}
 
-			// only add zone information for the new standard pips
-			zones, err := az.getRegionZonesBackoff(to.String(pip.Location))
-			if err != nil {
-				return nil, err
-			}
-			if len(zones) > 0 {
-				pip.Zones = &zones
+			// skip adding zone info since edge zones doesn't support multiple availability zones.
+			if !az.HasExtendedLocation() {
+				// only add zone information for the new standard pips
+				zones, err := az.getRegionZonesBackoff(to.String(pip.Location))
+				if err != nil {
+					return nil, err
+				}
+				if len(zones) > 0 {
+					pip.Zones = &zones
+				}
 			}
 		}
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - creating", serviceName, *pip.Name)
@@ -1837,14 +1841,16 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				FrontendIPConfigurationPropertiesFormat: fipConfigurationProperties,
 			}
 
-			// only add zone information for new internal frontend IP configurations
-			location := az.Location
-			zones, err := az.getRegionZonesBackoff(location)
-			if err != nil {
-				return nil, false, err
-			}
-			if isInternal && az.useStandardLoadBalancer() && len(zones) > 0 {
-				newConfig.Zones = &zones
+			// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
+			if isInternal && az.useStandardLoadBalancer() && !az.HasExtendedLocation() {
+				location := az.Location
+				zones, err := az.getRegionZonesBackoff(location)
+				if err != nil {
+					return nil, false, err
+				}
+				if len(zones) > 0 {
+					newConfig.Zones = &zones
+				}
 			}
 			newConfigs = append(newConfigs, newConfig)
 			klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb frontendconfig(%s) - adding", serviceName, wantLb, defaultLBFrontendIPConfigName)
