@@ -1842,15 +1842,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 			}
 
 			// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
-			if isInternal && az.useStandardLoadBalancer() && !az.HasExtendedLocation() {
-				location := az.Location
-				zones, err := az.getRegionZonesBackoff(location)
-				if err != nil {
-					return nil, false, err
-				}
-				if len(zones) > 0 {
-					newConfig.Zones = &zones
-				}
+			location := az.Location
+			zones, err := az.getRegionZonesBackoff(location)
+			if err != nil {
+				return nil, false, err
+			}
+			if isInternal && az.useStandardLoadBalancer() && len(zones) > 0 && !az.HasExtendedLocation() {
+				newConfig.Zones = &zones
 			}
 			newConfigs = append(newConfigs, newConfig)
 			klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb frontendconfig(%s) - adding", serviceName, wantLb, defaultLBFrontendIPConfigName)
