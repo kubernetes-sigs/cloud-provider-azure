@@ -368,8 +368,6 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 				return true, isPrimaryService, nil
 			}
 			klog.V(4).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s", *pip.ID, *pip.IPAddress)
-
-			return false, isPrimaryService, nil
 		}
 
 		return false, isPrimaryService, nil

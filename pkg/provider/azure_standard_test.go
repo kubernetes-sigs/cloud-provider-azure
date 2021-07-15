@@ -1629,6 +1629,33 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 		},
 		{
+			desc: "serviceOwnsFrontendIP should return false if there is no public IP address in the frontend IP config",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: to.StringPtr("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.StringPtr("4.3.2.1"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: to.StringPtr("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPPrefix: &network.SubResource{
+						ID: to.StringPtr("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("secondary"),
+				},
+				Spec: v1.ServiceSpec{
+					LoadBalancerIP: "4.3.2.1",
+				},
+			},
+		},
+		{
 			desc: "serviceOwnsFrontendIP should detect the secondary external service",
 			existingPIPs: []network.PublicIPAddress{
 				{
