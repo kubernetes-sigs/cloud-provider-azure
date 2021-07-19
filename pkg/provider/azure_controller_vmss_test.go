@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -166,6 +167,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 	diskName := "disk-name"
 	testCases := []struct {
 		desc           string
+		testAzureStack bool
 		vmList         map[string]string
 		vmssVMList     []string
 		vmssName       types.NodeName
@@ -200,6 +202,15 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			expectedErr: false,
 		},
 		{
+			desc:           "no error shall be returned if everything is good(AzureStack)",
+			testAzureStack: true,
+			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:       "vmss00",
+			vmssvmName:     "vmss00-vm-000000",
+			disks:          []string{diskName, "disk2"},
+			expectedErr:    false,
+		},
+		{
 			desc:           "an error shall be returned if response StatusNotFound",
 			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:       fakeStatusNotFoundVMSSName,
@@ -223,6 +234,10 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
+		if test.testAzureStack {
+			testCloud.cloud.Environment.Name = consts.AzureStackCloudName
+			testCloud.cloud.Config.DisableAzureStackCloud = false
+		}
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
