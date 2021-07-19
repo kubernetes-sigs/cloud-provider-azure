@@ -480,8 +480,11 @@ func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *Account
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.CreatePrivateEndpoint && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
-		return false
+	if accountOptions.CreatePrivateEndpoint && account.PrivateEndpointConnections != nil {
+		return true
 	}
-	return true
+	if !accountOptions.CreatePrivateEndpoint && account.PrivateEndpointConnections == nil {
+		return true
+	}
+	return false
 }
