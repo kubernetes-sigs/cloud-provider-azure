@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -543,6 +544,21 @@ func TestGetResourceID(t *testing.T) {
 
 	resourceID := GetResourceID("sub", "rg", "type", "name")
 	assert.Equal(t, expectedResourceID, resourceID)
+}
+
+func TestGetUserAgent(t *testing.T) {
+	armClient := New(nil, "", "", "2019-01-01", "eastus", nil)
+	assert.Contains(t, armClient.client.UserAgent, "kubernetes-cloudprovider")
+
+	userAgent := GetUserAgent(armClient.client)
+	assert.Contains(t, userAgent, armClient.client.UserAgent)
+}
+
+func TestGetSender(t *testing.T) {
+	sender := getSender()
+	j, _ := cookiejar.New(nil)
+	assert.Equal(t, j, sender.(*http.Client).Jar)
+	assert.Equal(t, commTransport, sender.(*http.Client).Transport)
 }
 
 func TestGetChildResourceID(t *testing.T) {
