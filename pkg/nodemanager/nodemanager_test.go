@@ -176,14 +176,13 @@ func TestNodeInitialized(t *testing.T) {
 	}, nil)
 
 	eventBroadcaster := record.NewBroadcaster()
-	cloudNodeController := &CloudNodeController{
-		nodeName:                  "node0",
-		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
-		nodeProvider:              mockNP,
-		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
-		nodeStatusUpdateFrequency: 1 * time.Second,
-	}
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		factory.Core().V1().Nodes(),
+		fnh,
+		mockNP,
+		time.Second,
+		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
@@ -191,6 +190,82 @@ func TestNodeInitialized(t *testing.T) {
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
+}
+
+func TestUpdateCloudNode(t *testing.T) {
+	fnh := &testutil.FakeNodeHandler{
+		Existing: []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node0",
+					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:               v1.NodeReady,
+							Status:             v1.ConditionUnknown,
+							LastHeartbeatTime:  metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+							LastTransitionTime: metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key:    cloudproviderapi.TaintExternalCloudProvider,
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+		Clientset:      fake.NewSimpleClientset(&v1.PodList{}),
+		DeleteWaitChan: make(chan struct{}),
+	}
+
+	ctx := context.TODO()
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	mockNP := &mocknodeprovider.NodeProvider{}
+	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
+	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+		Region:        "eastus",
+		FailureDomain: "1",
+	}, nil)
+	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+		{
+			Type:    v1.NodeHostName,
+			Address: "node0.cloud.internal",
+		},
+		{
+			Type:    v1.NodeInternalIP,
+			Address: "10.0.0.1",
+		},
+		{
+			Type:    v1.NodeExternalIP,
+			Address: "132.143.154.163",
+		},
+	}, nil)
+
+	eventBroadcaster := record.NewBroadcaster()
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		factory.Core().V1().Nodes(),
+		fnh,
+		mockNP,
+		time.Second,
+		true)
+	eventBroadcaster.StartLogging(klog.Infof)
+
+	cloudNodeController.UpdateCloudNode(ctx, fnh.Existing[0], fnh.Existing[0])
+
+	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
+	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
+	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
+	assert.Equal(t, 2, len(fnh.UpdatedNodes[0].Status.Conditions), "Node Contions was not updated")
+	assert.Equal(t, "NetworkUnavailable", string(fnh.UpdatedNodes[0].Status.Conditions[0].Type), "Node Condition NetworkUnavailable was not updated")
 }
 
 // This test checks that a node without the external cloud provider taint are NOT cloudprovider initialized
@@ -243,13 +318,13 @@ func TestNodeIgnored(t *testing.T) {
 	}, nil)
 
 	eventBroadcaster := record.NewBroadcaster()
-	cloudNodeController := &CloudNodeController{
-		kubeClient:   fnh,
-		nodeName:     "node0",
-		nodeInformer: factory.Core().V1().Nodes(),
-		nodeProvider: mockNP,
-		recorder:     eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
-	}
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		factory.Core().V1().Nodes(),
+		fnh,
+		mockNP,
+		time.Second,
+		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
@@ -409,14 +484,13 @@ func TestNodeAddresses(t *testing.T) {
 	}, nil)
 
 	eventBroadcaster := record.NewBroadcaster()
-	cloudNodeController := &CloudNodeController{
-		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
-		nodeName:                  "node0",
-		nodeProvider:              mockNP,
-		nodeStatusUpdateFrequency: 1 * time.Second,
-		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
-	}
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		factory.Core().V1().Nodes(),
+		fnh,
+		mockNP,
+		time.Second,
+		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
 
@@ -512,14 +586,13 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 	}, nil)
 
 	eventBroadcaster := record.NewBroadcaster()
-	cloudNodeController := &CloudNodeController{
-		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
-		nodeName:                  "node0",
-		nodeProvider:              mockNP,
-		nodeStatusUpdateFrequency: 1 * time.Second,
-		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
-	}
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		factory.Core().V1().Nodes(),
+		fnh,
+		mockNP,
+		time.Second,
+		false)
 	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
