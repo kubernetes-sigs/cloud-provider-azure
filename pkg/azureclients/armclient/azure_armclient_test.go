@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -635,4 +636,47 @@ func TestGetResourceID(t *testing.T) {
 			assert.Equal(t, tc.expectedResourceID, tc.resourceID)
 		})
 	}
+}
+
+func TestGetUserAgent(t *testing.T) {
+	armClient := New(nil, "", "", "2019-01-01", "eastus", nil)
+	assert.Contains(t, armClient.client.UserAgent, "kubernetes-cloudprovider")
+
+	userAgent := GetUserAgent(armClient.client)
+	assert.Contains(t, userAgent, armClient.client.UserAgent)
+}
+
+func TestGetSender(t *testing.T) {
+	sender := getSender()
+	j, _ := cookiejar.New(nil)
+	assert.Equal(t, j, sender.(*http.Client).Jar)
+	assert.Equal(t, commTransport, sender.(*http.Client).Transport)
+}
+
+func TestGetChildResourceID(t *testing.T) {
+	expectedResourceID := "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/name-2/name-3"
+
+	resourceID := GetChildResourceID("sub", "rg", "type", "name-1", "name-2", "name-3")
+	assert.Equal(t, expectedResourceID, resourceID)
+}
+
+func TestGetChildResourcesListID(t *testing.T) {
+	expectedResourceID := "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/name-2"
+
+	resourceID := GetChildResourcesListID("sub", "rg", "type", "name-1", "name-2")
+	assert.Equal(t, expectedResourceID, resourceID)
+}
+
+func TestGetProviderResourceID(t *testing.T) {
+	expectedResourceID := "/subscriptions/sub/providers/namespace"
+
+	resourceID := GetProviderResourceID("sub", "namespace")
+	assert.Equal(t, expectedResourceID, resourceID)
+}
+
+func TestGetProviderResourcesListID(t *testing.T) {
+	expectedResourceID := "/subscriptions/sub/providers"
+
+	resourceID := GetProviderResourcesListID("sub")
+	assert.Equal(t, expectedResourceID, resourceID)
 }
