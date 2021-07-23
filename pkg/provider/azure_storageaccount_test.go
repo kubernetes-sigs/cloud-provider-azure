@@ -24,6 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient/mockprivatednsclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
@@ -382,5 +383,63 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 
 	if _, _, err := cloud.EnsureStorageAccount(testAccountOptions, "test"); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestIsPrivateEndpointAsExpected(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: true,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: false,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: false,
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: true,
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isPrivateEndpointAsExpected(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
 	}
 }

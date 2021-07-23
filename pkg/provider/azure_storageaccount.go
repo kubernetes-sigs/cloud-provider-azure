@@ -123,6 +123,7 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
+
 	accountName := accountOptions.Name
 	accountType := accountOptions.Type
 	accountKind := accountOptions.Kind
@@ -212,10 +213,10 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 			if az.StorageAccountClient == nil {
 				return "", "", fmt.Errorf("StorageAccountClient is nil")
 			}
+
 			ctx, cancel := getContextWithCancel()
 			defer cancel()
-			rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp)
-			if rerr != nil {
+			if rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp); rerr != nil {
 				return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 			}
 
@@ -315,7 +316,10 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context) error {
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
 	if err := az.privatednsclient.CreateOrUpdate(ctx, az.ResourceGroup, PrivateDNSZoneName, privateDNSZone, true); err != nil {
-		return err
+		if strings.Contains(err.Error(), "exists already") {
+			klog.V(2).Infof("private dns zone(%s) in resourceGroup (%s) already exists", PrivateDNSZoneName, az.ResourceGroup)
+			return nil
+		}
 	}
 	return nil
 }
@@ -324,12 +328,11 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName string) error 
 	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, PrivateDNSZoneName, az.ResourceGroup)
 	location := LocationGlobal
 	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s", az.SubscriptionID, az.ResourceGroup, az.VnetName)
-	registrationEnabled := false
 	parameters := privatedns.VirtualNetworkLink{
 		Location: &location,
 		VirtualNetworkLinkProperties: &privatedns.VirtualNetworkLinkProperties{
 			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
-			RegistrationEnabled: &registrationEnabled},
+			RegistrationEnabled: to.BoolPtr(true)},
 	}
 	if err := az.virtualNetworkLinksClient.CreateOrUpdate(ctx, az.ResourceGroup, PrivateDNSZoneName, vNetLinkName, parameters, false); err != nil {
 		return err
@@ -480,8 +483,11 @@ func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *Account
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.CreatePrivateEndpoint && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
-		return false
+	if accountOptions.CreatePrivateEndpoint && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
+		return true
 	}
-	return true
+	if !accountOptions.CreatePrivateEndpoint && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
+		return true
+	}
+	return false
 }
