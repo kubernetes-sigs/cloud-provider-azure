@@ -322,10 +322,22 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	resourceGroup := "ResourceGroup"
+	vnetName := "VnetName"
+	vnetResourceGroup := "VnetResourceGroup"
+	subnetName := "SubnetName"
+	location := TestLocation
+
 	cloud := &Cloud{}
+	cloud.ResourceGroup = resourceGroup
+	cloud.VnetResourceGroup = vnetResourceGroup
+	cloud.VnetName = vnetName
+	cloud.SubnetName = subnetName
+	cloud.Location = location
+	cloud.SubscriptionID = "testSub"
 
 	name := "testStorageAccount"
-	location := TestLocation
 	sku := &storage.Sku{
 		Name: "testSku",
 		Tier: "testSkuTier",
@@ -350,36 +362,30 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 
 	subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
 	mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
-	mockSubnetsClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(subnet, nil).Times(1)
-	mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
+	mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
 	cloud.SubnetsClient = mockSubnetsClient
 
 	mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
-	mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+	mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
 	cloud.privatednsclient = mockPrivateDNSClient
 
 	mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
-	mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+	mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
 	cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
 
 	mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
-	mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+	mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
 	cloud.privateendpointclient = mockPrivateEndpointClient
 
 	mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
-	mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+	mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
 	cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
 
 	testAccountOptions := &AccountOptions{
 		ResourceGroup:         "rg",
 		CreatePrivateEndpoint: true,
 	}
-
-	cloud.ResourceGroup = "rg"
-	cloud.VnetName = "testVnetName"
-	cloud.SubnetName = "testSubnetname"
-	cloud.Location = location
-	cloud.SubscriptionID = "testSub"
 
 	if _, _, err := cloud.EnsureStorageAccount(testAccountOptions, "test"); err != nil {
 		t.Errorf("unexpected error: %v", err)
