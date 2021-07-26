@@ -67,7 +67,7 @@ Alternatively, you can use [aks-engine](https://github.com/Azure/aks-engine) to 
 
 AzureDisk and AzureFile volume plugins are not supported with in-tree cloud provider (See [kubernetes/kubernetes#71018](https://github.com/kubernetes/kubernetes/issues/71018) for explanations).
 
-Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) and [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) should be used for persistent volumes. Please refer the installation guides [here](https://github.com/kubernetes-sigs/azuredisk-csi-driver/blob/master/docs/install-azuredisk-csi-driver.md) and [here](https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/install-azurefile-csi-driver.md) for their deployments.
+Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) and [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) should be used for persistent volumes. Please refer the installation guides [here](https://github.com/kubernetes-sigs/azuredisk-csi-driver/tree/master/charts) and [here](https://github.com/kubernetes-sigs/azurefile-csi-driver/tree/master/charts) for their deployments.
 
 ### Change default storage class
 
