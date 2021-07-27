@@ -31,6 +31,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
@@ -149,6 +150,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
@@ -253,6 +255,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
@@ -315,6 +318,7 @@ func TestCommonDetachDisk(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/disk-name",
 			testCloud.SubscriptionID, testCloud.ResourceGroup)
@@ -384,6 +388,7 @@ func TestCommonUpdateVM(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, test.vmList, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -440,6 +445,7 @@ func TestGetDiskLun(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -502,6 +508,7 @@ func TestSetDiskLun(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{test.nodeName: "PowerState/Running"}, test.isDataDisksFull)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -551,6 +558,7 @@ func TestDisksAreAttached(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -967,6 +975,7 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
@@ -1047,6 +1056,7 @@ func TestDetachDiskRequestFuncs(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)

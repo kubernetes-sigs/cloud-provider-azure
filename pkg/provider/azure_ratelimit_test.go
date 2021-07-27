@@ -88,6 +88,14 @@ var (
 		CloudProviderRateLimitQPS:         1,
 		CloudProviderRateLimitQPSWrite:    1,
 	}
+
+	testAttachDetachDiskDefaultRateLimitConfig = azclients.RateLimitConfig{
+		CloudProviderRateLimit:            true,
+		CloudProviderRateLimitQPS:         0,
+		CloudProviderRateLimitBucket:      0,
+		CloudProviderRateLimitQPSWrite:    defaultAtachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: defaultAtachDetachDiskBucket,
+	}
 )
 
 func TestParseConfig(t *testing.T) {
@@ -175,4 +183,5 @@ func TestInitializeCloudProviderRateLimitConfig(t *testing.T) {
 	assert.Equal(t, config.StorageAccountRateLimit, &testDefaultRateLimitConfig)
 	assert.Equal(t, config.DiskRateLimit, &testDefaultRateLimitConfig)
 	assert.Equal(t, config.SnapshotRateLimit, &testDefaultRateLimitConfig)
+	assert.Equal(t, config.AttachDetachDiskRateLimit, &testAttachDetachDiskDefaultRateLimitConfig)
 }

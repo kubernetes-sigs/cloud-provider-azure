@@ -31,6 +31,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	volerr "k8s.io/cloud-provider/volume/errors"
 	"k8s.io/klog/v2"
@@ -95,6 +96,8 @@ type controllerCommon struct {
 	// <nodeName, map<diskURI, *AttachDiskOptions/DetachDiskOptions>>
 	attachDiskMap sync.Map
 	detachDiskMap sync.Map
+	// attach/detach disk rate limiter
+	diskOpRateLimiter flowcontrol.RateLimiter
 }
 
 // AttachDiskOptions attach disk options
@@ -252,9 +255,13 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 		return -1, err
 	}
 
-	// unlock and wait for attach disk complete
-	unlock = true
-	c.lockMap.UnlockEntry(node)
+	if c.diskOpRateLimiter.TryAccept() {
+		// unlock and wait for attach disk complete
+		unlock = true
+		c.lockMap.UnlockEntry(node)
+	} else {
+		klog.Warningf("azureDisk - switch to batch operation since disk operation is rate limited, current QPS: %f", c.diskOpRateLimiter.QPS())
+	}
 
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
@@ -367,9 +374,14 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 		if err != nil {
 			return err
 		}
-		// unlock and wait for attach disk complete
-		unlock = true
-		c.lockMap.UnlockEntry(node)
+		if c.diskOpRateLimiter.TryAccept() {
+			// unlock and wait for attach disk complete
+			unlock = true
+			c.lockMap.UnlockEntry(node)
+		} else {
+			klog.Warningf("azureDisk - switch to batch operation since disk operation is rate limited, current QPS: %f", c.diskOpRateLimiter.QPS())
+		}
+
 		if err := vmset.WaitForUpdateResult(ctx, future, resourceGroup, "detach_disk"); err != nil {
 			klog.Errorf("azureDisk - detach disk(%s, %s) failed with error: %v", diskName, diskURI, err)
 			return err

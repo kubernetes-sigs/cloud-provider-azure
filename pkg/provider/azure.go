@@ -41,6 +41,7 @@ import (
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
@@ -876,6 +877,14 @@ func initDiskControllers(az *Cloud) error {
 	// Common controller contains the function
 	// needed by both blob disk and managed disk controllers
 
+	qps := float32(defaultAtachDetachDiskQPS)
+	bucket := defaultAtachDetachDiskBucket
+	if az.Config.AttachDetachDiskRateLimit != nil {
+		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
+		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
+	}
+	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
+
 	common := &controllerCommon{
 		location:              az.Location,
 		storageEndpointSuffix: az.Environment.StorageEndpointSuffix,
@@ -883,6 +892,7 @@ func initDiskControllers(az *Cloud) error {
 		subscriptionID:        az.SubscriptionID,
 		cloud:                 az,
 		lockMap:               newLockMap(),
+		diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
 	}
 
 	if az.HasExtendedLocation() {
