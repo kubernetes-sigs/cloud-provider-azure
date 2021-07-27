@@ -168,15 +168,19 @@ func doBackoffRetry(s autorest.Sender, r *http.Request, backoff *Backoff) (resp 
 		// 3) request has been throttled
 		// 4) request contains non-retriable errors
 		// 5) request has completed all the retry steps
-		if rerr == nil || !rerr.Retriable || rerr.IsThrottled() || backoff.isNonRetriableError(rerr) || backoff.Steps == 1 {
-			return resp, rerr.Error()
+		if rerr == nil {
+			return resp, nil
+		}
+
+		if !rerr.Retriable || rerr.IsThrottled() || backoff.isNonRetriableError(rerr) || backoff.Steps == 1 {
+			return resp, rerr.RawError
 		}
 
 		if !delayForBackOff(backoff, r.Context().Done()) {
 			if r.Context().Err() != nil {
 				return resp, r.Context().Err()
 			}
-			return resp, rerr.Error()
+			return resp, rerr.RawError
 		}
 
 		klog.V(3).Infof("Backoff retrying %s %q with error %v", r.Method, r.URL.String(), rerr)
