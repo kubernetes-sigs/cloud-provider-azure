@@ -37,6 +37,8 @@ import (
 
 const (
 	testResourceID = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"
+	operationURI   = "/subscriptions/subscription/providers/Microsoft.Network/locations/eastus/operations/op?api-version=2019-01-01"
+	expectedURI    = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01"
 )
 
 func TestNew(t *testing.T) {
@@ -243,12 +245,11 @@ func TestNormalizeAzureRegion(t *testing.T) {
 }
 
 func TestGetResource(t *testing.T) {
-	expectedURI := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01"
-
+	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01"
 	count := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, expectedURI, r.URL.String())
+		assert.Equal(t, expectedURIResource, r.URL.String())
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("{data: testPIP}"))
 		count++
@@ -268,12 +269,12 @@ func TestGetResource(t *testing.T) {
 }
 
 func TestGetResourceWithDecorators(t *testing.T) {
-	expectedURI := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2"
+	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2"
 
 	count := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, expectedURI, r.URL.String())
+		assert.Equal(t, expectedURIResource, r.URL.String())
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("{data: testPIP}"))
 		count++
@@ -301,8 +302,6 @@ func TestGetResourceWithDecorators(t *testing.T) {
 }
 
 func TestPutResource(t *testing.T) {
-	expectedURI := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01"
-	operationURI := "/subscriptions/subscription/providers/Microsoft.Network/locations/eastus/operations/op?api-version=2019-01-01"
 	handlers := []func(http.ResponseWriter, *http.Request){
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PUT", req.Method)
@@ -439,8 +438,6 @@ func TestDeleteResourceAsync(t *testing.T) {
 }
 
 func TestPatchResource(t *testing.T) {
-	expectedURI := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01"
-	operationURI := "/subscriptions/subscription/providers/Microsoft.Network/locations/eastus/operations/op?api-version=2019-01-01"
 	handlers := []func(http.ResponseWriter, *http.Request){
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PATCH", req.Method)
@@ -478,6 +475,47 @@ func TestPatchResource(t *testing.T) {
 	assert.Nil(t, response)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, true, rerr.Retriable)
+}
+
+func TestPatchResourceAsync(t *testing.T) {
+	expectedURI := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01"
+	operationURI := "/subscriptions/subscription/providers/Microsoft.Network/locations/eastus/operations/op?api-version=2019-01-01"
+	handlers := []func(http.ResponseWriter, *http.Request){
+		func(rw http.ResponseWriter, req *http.Request) {
+			assert.Equal(t, "PATCH", req.Method)
+			assert.Equal(t, expectedURI, req.URL.String())
+			rw.Header().Set("Azure-AsyncOperation",
+				fmt.Sprintf("http://%s%s", req.Host, operationURI))
+			rw.WriteHeader(http.StatusCreated)
+		},
+
+		func(rw http.ResponseWriter, req *http.Request) {
+			assert.Equal(t, "GET", req.Method)
+			assert.Equal(t, operationURI, req.URL.String())
+
+			rw.WriteHeader(http.StatusOK)
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+		},
+	}
+
+	count := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlers[count](w, r)
+		count++
+		if count > 1 {
+			count = 1
+		}
+	}))
+
+	backoff := &retry.Backoff{Steps: 1}
+	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	armClient.client.RetryDuration = time.Millisecond * 1
+
+	ctx := context.Background()
+	future, rerr := armClient.PatchResourceAsync(ctx, testResourceID, nil)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, future)
+	assert.Nil(t, rerr)
 }
 
 func TestPostResource(t *testing.T) {

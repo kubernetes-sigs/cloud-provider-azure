@@ -17,10 +17,12 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -233,11 +235,12 @@ func (mr *MockVMSetMockRecorder) EnsureBackendPoolDeletedFromVMSets(vmSetNamesMa
 }
 
 // AttachDisk mocks base method
-func (m *MockVMSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
+func (m *MockVMSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) (*azure.Future, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AttachDisk", nodeName, diskMap)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*azure.Future)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // AttachDisk indicates an expected call of AttachDisk
@@ -247,11 +250,12 @@ func (mr *MockVMSetMockRecorder) AttachDisk(nodeName, diskMap interface{}) *gomo
 }
 
 // DetachDisk mocks base method
-func (m *MockVMSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) error {
+func (m *MockVMSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) (*azure.Future, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DetachDisk", nodeName, diskMap)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*azure.Future)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // DetachDisk indicates an expected call of DetachDisk
@@ -365,4 +369,18 @@ func (m *MockVMSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) 
 func (mr *MockVMSetMockRecorder) GetAgentPoolVMSetNames(nodes interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentPoolVMSetNames", reflect.TypeOf((*MockVMSet)(nil).GetAgentPoolVMSetNames), nodes)
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForUpdateResult", future, resourceGroupName, source)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (mr *MockVMSetMockRecorder) WaitForUpdateResult(ctx, future, resourceGroupName, source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForUpdateResult", reflect.TypeOf((*MockVMSet)(nil).WaitForUpdateResult), ctx, future, resourceGroupName, source)
 }

@@ -24,12 +24,14 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
@@ -148,6 +150,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
@@ -168,6 +171,8 @@ func TestCommonAttachDisk(t *testing.T) {
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		}
 		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&azure.Future{}, nil).AnyTimes()
+		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil).AnyTimes()
 
 		lun, err := common.AttachDisk(true, "", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk)
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
@@ -250,6 +255,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
@@ -276,24 +282,16 @@ func TestCommonDetachDisk(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc             string
-		vmList           map[string]string
-		nodeName         types.NodeName
-		diskName         string
-		isErrorRetriable bool
-		expectedErr      bool
+		desc        string
+		vmList      map[string]string
+		nodeName    types.NodeName
+		diskName    string
+		expectedErr bool
 	}{
 		{
 			desc:        "error should not be returned if there's no such instance corresponding to given nodeName",
 			nodeName:    "vm1",
 			expectedErr: false,
-		},
-		{
-			desc:             "an error should be returned if vmset detach failed with isErrorRetriable error",
-			vmList:           map[string]string{"vm1": "PowerState/Running"},
-			nodeName:         "vm1",
-			isErrorRetriable: true,
-			expectedErr:      true,
 		},
 		{
 			desc:        "no error shall be returned if there's no matching disk according to given diskName",
@@ -320,6 +318,7 @@ func TestCommonDetachDisk(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/disk-name",
 			testCloud.SubscriptionID, testCloud.ResourceGroup)
@@ -331,13 +330,9 @@ func TestCommonDetachDisk(t *testing.T) {
 		if len(expectedVMs) == 0 {
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		}
-		if test.isErrorRetriable {
-			testCloud.CloudProviderBackoff = true
-			testCloud.ResourceRequestBackoff = wait.Backoff{Steps: 1}
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusBadRequest, Retriable: true, RawError: fmt.Errorf("Retriable: true")}).AnyTimes()
-		} else {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		}
+		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&azure.Future{}, nil).AnyTimes()
+		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil).AnyTimes()
 
 		err := common.DetachDisk(test.diskName, diskURI, test.nodeName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
@@ -393,6 +388,7 @@ func TestCommonUpdateVM(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, test.vmList, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -449,6 +445,7 @@ func TestGetDiskLun(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -511,6 +508,7 @@ func TestSetDiskLun(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{test.nodeName: "PowerState/Running"}, test.isDataDisksFull)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -560,6 +558,7 @@ func TestDisksAreAttached(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -976,6 +975,7 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
@@ -1056,6 +1056,7 @@ func TestDetachDiskRequestFuncs(t *testing.T) {
 			subscriptionID:        testCloud.SubscriptionID,
 			cloud:                 testCloud,
 			lockMap:               newLockMap(),
+			diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(10, 20),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)

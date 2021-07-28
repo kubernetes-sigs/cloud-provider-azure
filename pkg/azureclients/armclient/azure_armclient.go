@@ -553,6 +553,28 @@ func (c *Client) PatchResource(ctx context.Context, resourceID string, parameter
 	return response, nil
 }
 
+// PatchResourceAsync patches a resource by resource ID asynchronously
+func (c *Client) PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error) {
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+		autorest.WithJSON(parameters),
+	}
+
+	request, err := c.PreparePatchRequest(ctx, decorators...)
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "patch.prepare", resourceID, err)
+		return nil, retry.NewError(false, err)
+	}
+
+	future, resp, clientErr := c.SendAsync(ctx, request)
+	defer c.CloseResponse(ctx, resp)
+	if clientErr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "patch.send", resourceID, clientErr.Error())
+		return nil, clientErr
+	}
+	return future, clientErr
+}
+
 // PutResourceAsync puts a resource by resource ID in async mode
 func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error) {
 	decorators := []autorest.PrepareDecorator{

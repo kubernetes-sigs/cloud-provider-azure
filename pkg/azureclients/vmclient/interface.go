@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -48,6 +49,12 @@ type Interface interface {
 
 	// Update updates a VirtualMachine.
 	Update(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error
+
+	// UpdateAsync updates a VirtualMachine asynchronously
+	UpdateAsync(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) (*azure.Future, *retry.Error)
+
+	// WaitForUpdateResult waits for the response of the update request
+	WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error
 
 	// Delete deletes a VirtualMachine.
 	Delete(ctx context.Context, resourceGroupName string, VMName string) *retry.Error

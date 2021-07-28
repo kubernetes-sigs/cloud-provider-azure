@@ -29,6 +29,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -509,6 +510,40 @@ func TestUpdate(t *testing.T) {
 	vmClient := getTestVMClient(armClient)
 	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.Nil(t, rerr)
+}
+
+func TestUpdateAsync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testVM := compute.VirtualMachineUpdate{}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient.EXPECT().PatchResourceAsync(gomock.Any(), testResourceID, testVM).Return(response, nil).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	future, rerr := vmClient.UpdateAsync(context.TODO(), "rg", "vm1", testVM, "test")
+	assert.Nil(t, future)
+	assert.Nil(t, rerr)
+}
+
+func TestWaitForUpdateResult(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMWaitForUpdateResult").Return(response, nil).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	err := vmClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
+	assert.Nil(t, err)
 }
 
 func TestUpdateWithUpdateResponderError(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 	"reflect"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/golang/mock/gomock"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -90,6 +91,35 @@ func (m *MockInterface) Update(ctx context.Context, resourceGroupName, VMScaleSe
 func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+}
+
+// UpdateSync mocks base method
+func (m *MockInterface) UpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateAsync", ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+	ret0, _ := ret[0].(*azure.Future)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// UpdateSync indicates an expected call of UpdateSync
+func (mr *MockInterfaceMockRecorder) UpdateAsync(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAsync", reflect.TypeOf((*MockInterface)(nil).UpdateAsync), ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, source)
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (m *MockInterface) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForUpdateResult", ctx, future, resourceGroupName, source)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (mr *MockInterfaceMockRecorder) WaitForUpdateResult(ctx, future, resourceGroupName, source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForUpdateResult", reflect.TypeOf((*MockInterface)(nil).WaitForUpdateResult), ctx, future, resourceGroupName, source)
 }
 
 // UpdateVMs mocks base method

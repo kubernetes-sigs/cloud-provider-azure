@@ -21,6 +21,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+const (
+	defaultAtachDetachDiskQPS    = 6.0
+	defaultAtachDetachDiskBucket = 10
+)
+
 // CloudProviderRateLimitConfig indicates the rate limit config for each clients.
 type CloudProviderRateLimitConfig struct {
 	// The default rate limit config options.
@@ -41,6 +46,7 @@ type CloudProviderRateLimitConfig struct {
 	VirtualMachineScaleSetRateLimit *azclients.RateLimitConfig `json:"virtualMachineScaleSetRateLimit,omitempty" yaml:"virtualMachineScaleSetRateLimit,omitempty"`
 	VirtualMachineSizeRateLimit     *azclients.RateLimitConfig `json:"virtualMachineSizesRateLimit,omitempty" yaml:"virtualMachineSizesRateLimit,omitempty"`
 	AvailabilitySetRateLimit        *azclients.RateLimitConfig `json:"availabilitySetRateLimit,omitempty" yaml:"availabilitySetRateLimit,omitempty"`
+	AttachDetachDiskRateLimit       *azclients.RateLimitConfig `json:"attachDetachDiskRateLimit,omitempty" yaml:"attachDetachDiskRateLimit,omitempty"`
 }
 
 // InitializeCloudProviderRateLimitConfig initializes rate limit configs.
@@ -78,6 +84,13 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 	config.VirtualMachineScaleSetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineScaleSetRateLimit)
 	config.VirtualMachineSizeRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineSizeRateLimit)
 	config.AvailabilitySetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.AvailabilitySetRateLimit)
+
+	atachDetachDiskRateLimitConfig := azclients.RateLimitConfig{
+		CloudProviderRateLimit:            true,
+		CloudProviderRateLimitQPSWrite:    defaultAtachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: defaultAtachDetachDiskBucket,
+	}
+	config.AttachDetachDiskRateLimit = overrideDefaultRateLimitConfig(&atachDetachDiskRateLimitConfig, config.AttachDetachDiskRateLimit)
 }
 
 // overrideDefaultRateLimitConfig overrides the default CloudProviderRateLimitConfig.
