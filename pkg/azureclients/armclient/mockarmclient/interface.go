@@ -274,6 +274,12 @@ func (m *MockInterface) PatchResourceAsync(ctx context.Context, resourceID strin
 }
 
 // PatchResource indicates an expected call of PatchResource
+func (mr *MockInterfaceMockRecorder) PatchResourceAsync(ctx, resourceID, parameters interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResourceAsync", reflect.TypeOf((*MockInterface)(nil).PatchResource), ctx, resourceID, parameters)
+}
+
+// PatchResource indicates an expected call of PatchResource
 func (mr *MockInterfaceMockRecorder) PatchResource(ctx, resourceID, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResource", reflect.TypeOf((*MockInterface)(nil).PatchResource), ctx, resourceID, parameters)
