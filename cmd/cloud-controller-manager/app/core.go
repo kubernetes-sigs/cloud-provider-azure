@@ -274,20 +274,19 @@ func setNodeCIDRMaskSizes(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (i
 // then it will return default IPv4 and IPv6 cidr mask sizes.
 func setNodeCIDRMaskSizesDualStack(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
 	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
-	// NodeCIDRMaskSize can be used only for single stack clusters
-	if cfg.NodeCIDRMaskSize != 0 && (cfg.NodeCIDRMaskSizeIPv4 != 0 || cfg.NodeCIDRMaskSizeIPv6 != 0) {
-		return ipv4Mask, ipv6Mask, errors.New("usage of --node-cidr-mask-size is not allowed with dual-stack clusters")
+
+	if cfg.NodeCIDRMaskSize != 0 {
+		klog.Warningf("setNodeCIDRMaskSizesDualStack: --node-cidr-mask-size is set to %d, but it would be ignored because the dualstack is enabled", cfg.NodeCIDRMaskSize)
 	}
-	if cfg.NodeCIDRMaskSize != 0 && cfg.NodeCIDRMaskSizeIPv4 == 0 && cfg.NodeCIDRMaskSizeIPv6 == 0 {
-		ipv4Mask = int(cfg.NodeCIDRMaskSize)
-		ipv6Mask = int(cfg.NodeCIDRMaskSize)
-	}
+
 	if cfg.NodeCIDRMaskSizeIPv4 != 0 {
 		ipv4Mask = int(cfg.NodeCIDRMaskSizeIPv4)
 	}
+
 	if cfg.NodeCIDRMaskSizeIPv6 != 0 {
 		ipv6Mask = int(cfg.NodeCIDRMaskSizeIPv6)
 	}
+
 	return ipv4Mask, ipv6Mask, nil
 }
 
