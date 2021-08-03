@@ -18,6 +18,10 @@ other = "Buscar"
 [ui_in]
 other = "en"
 
+# Used in sentences such as "All Tags"
+[ui_all]
+other = "todos"
+
 # Footer text
 [footer_all_rights_reserved]
 other = "Derechos reservados"
@@ -35,9 +39,23 @@ other = "Creado"
 other = "Última modificación"
 [post_edit_this]
 other = "Editar esta página"
+[post_create_child_page]
+other = "Create child page"
 [post_create_issue]
 other = "Notificar una incidencia con la documentanción"
 [post_create_project_issue]
 other = "Notificar una incidencia en un proyecto"
 [post_posts_in]
 other = "Añadir entrada"
+[post_reading_time]
+other = "minutos de lectura"
+
+# Print support
+[print_printable_section]
+other = "Versión imprimible multipagina."
+[print_click_to_print]
+other = "Haga click aquí para imprimir"
+[print_show_regular]
+other = "Volver a la vista normal de esta página"
+[print_entire_section]
+other = "Imprimir la sección entera"
