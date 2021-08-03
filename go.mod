@@ -30,7 +30,7 @@ require (
 	k8s.io/cloud-provider v0.0.0-20210417041545-1ea896ed6b0d
 	k8s.io/component-base v0.0.0-20210417035459-5860d9b1feba
 	k8s.io/controller-manager v0.20.0-alpha.1.0.20210417041449-146a790d6e02
-	k8s.io/klog/v2 v2.8.0
+	k8s.io/klog/v2 v2.10.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )
