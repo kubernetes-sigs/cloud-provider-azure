@@ -24,6 +24,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 var (
@@ -79,14 +80,14 @@ func (mc *MetricContext) ThrottledCount() {
 }
 
 // Observe observes the request latency and failed requests.
-func (mc *MetricContext) Observe(err error) error {
+func (mc *MetricContext) Observe(rerr *retry.Error) {
 	apiMetrics.latency.WithLabelValues(mc.attributes...).Observe(
 		time.Since(mc.start).Seconds())
-	if err != nil {
-		apiMetrics.errors.WithLabelValues(mc.attributes...).Inc()
+	if rerr != nil {
+		errorCode := rerr.ServiceErrorCode()
+		attributes := append(mc.attributes, errorCode)
+		apiMetrics.errors.WithLabelValues(attributes...).Inc()
 	}
-
-	return err
 }
 
 // ObserveOperationWithResult observes the request latency and failed requests of an operation.
@@ -123,7 +124,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 				Help:           "Number of errors for an Azure API call",
 				StabilityLevel: metrics.ALPHA,
 			},
-			attributes,
+			append(attributes, "code"),
 		),
 		rateLimitedCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{

@@ -397,20 +397,20 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 		if deleteErr != nil {
 			klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to DeleteLB: %v", lbName, serviceName, clusterName, deleteErr)
 
-			rgName, vmssName, parseErr := retry.GetVMSSMetadataByRawError(deleteErr.Error())
+			rgName, vmssName, parseErr := retry.GetVMSSMetadataByRawError(deleteErr)
 			if parseErr != nil {
 				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to parse error: %v", lbName, serviceName, clusterName, parseErr)
-				return deleteErr
+				return deleteErr.Error()
 			}
 			if rgName == "" || vmssName == "" {
 				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): empty rgName or vmssName", lbName, serviceName, clusterName)
-				return deleteErr
+				return deleteErr.Error()
 			}
 
 			// if we reach here, it means the VM couldn't be deleted because it is being referenced by a VMSS
 			if _, ok := az.VMSet.(*ScaleSet); !ok {
 				klog.Warningf("cleanOrphanedLoadBalancer(%s, %s, %s): unexpected VMSet type, expected VMSS", lbName, serviceName, clusterName)
-				return deleteErr
+				return deleteErr.Error()
 			}
 
 			if !strings.EqualFold(rgName, az.ResourceGroup) {
@@ -427,7 +427,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 			deleteErr := az.DeleteLB(service, lbName)
 			if deleteErr != nil {
 				klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed delete lb for the second time, stop retrying: %v", lbName, serviceName, clusterName, deleteErr)
-				return deleteErr
+				return deleteErr.Error()
 			}
 		}
 		klog.V(10).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): az.DeleteLB finished", lbName, serviceName, clusterName)
@@ -444,9 +444,9 @@ func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vm
 	}
 
 	klog.V(2).Infof("deleteDedicatedLoadBalancer: deleting LB %s because the corresponding vmSet is supposed to be in the primary SLB", to.String(lb.Name))
-	err = az.DeleteLB(service, to.String(lb.Name))
-	if err != nil {
-		return fmt.Errorf("deleteDedicatedLoadBalancer : failed to DeleteLB: %w", err)
+	rerr := az.DeleteLB(service, to.String(lb.Name))
+	if rerr != nil {
+		return fmt.Errorf("deleteDedicatedLoadBalancer : failed to DeleteLB: %w", rerr.Error())
 	}
 	_ = az.lbCache.Delete(to.String(lb.Name))
 

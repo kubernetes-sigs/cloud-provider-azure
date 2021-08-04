@@ -103,7 +103,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, snapshotName
 	}
 
 	result, rerr := c.getSnapshot(ctx, resourceGroupName, snapshotName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -164,7 +164,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, snapshotN
 	}
 
 	rerr := c.deleteSnapshot(ctx, resourceGroupName, snapshotName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -207,7 +207,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, s
 	}
 
 	rerr := c.createOrUpdateSnapshot(ctx, resourceGroupName, snapshotName, snapshot)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -275,7 +275,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 	}
 
 	result, rerr := c.listSnapshotsByResourceGroup(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
