@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	"k8s.io/klog/v2"
 
@@ -109,6 +110,14 @@ func NewError(retriable bool, err error) *Error {
 		Retriable: retriable,
 		RawError:  err,
 	}
+}
+
+// NewError creates a new Error. Returns nil if err is nil
+func NewErrorOrNil(retriable bool, err error) *Error {
+	if err == nil {
+		return nil
+	}
+	return NewError(retriable, err)
 }
 
 // GetRetriableError gets new retriable Error.

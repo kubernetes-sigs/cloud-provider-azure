@@ -678,7 +678,7 @@ func TestWaitForAsyncOperationResult(t *testing.T) {
 
 	armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), &azure.Future{}, "VMSSWaitForAsyncOperationResult").Return(response, nil)
 	vmssClient := getTestVMSSClient(armClient)
-	_, err := vmssClient.WaitForAsyncOperationResult(context.TODO(), &azure.Future{})
+	_, err := vmssClient.WaitForAsyncOperationResult(context.TODO(), &azure.Future{}, "rgName", "req", "VMSSWaitForAsyncOperationResult")
 	assert.NoError(t, err)
 }
 

@@ -101,7 +101,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, routeTableNa
 	}
 
 	result, rerr := c.getRouteTable(ctx, resourceGroupName, routeTableName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -162,7 +162,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, r
 	}
 
 	rerr := c.createOrUpdateRouteTable(ctx, resourceGroupName, routeTableName, parameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

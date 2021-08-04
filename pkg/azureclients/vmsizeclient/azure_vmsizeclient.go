@@ -102,7 +102,7 @@ func (c *Client) List(ctx context.Context, location string) (compute.VirtualMach
 	}
 
 	result, rerr := c.listVirtualMachineSizes(ctx, location)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
