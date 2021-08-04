@@ -103,7 +103,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, loadBalancer
 	}
 
 	result, rerr := c.getLB(ctx, resourceGroupName, loadBalancerName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -164,7 +164,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 	}
 
 	result, rerr := c.listLB(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -235,7 +235,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, l
 	}
 
 	rerr := c.createOrUpdateLB(ctx, resourceGroupName, loadBalancerName, parameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -310,7 +310,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, loadBalan
 	}
 
 	rerr := c.deleteLB(ctx, resourceGroupName, loadBalancerName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -443,7 +443,7 @@ func (c *Client) CreateOrUpdateBackendPools(ctx context.Context, resourceGroupNa
 	}
 
 	rerr := c.createOrUpdateLBBackendPool(ctx, resourceGroupName, loadBalancerName, backendPoolName, parameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

@@ -96,7 +96,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, managedClust
 	}
 
 	result, rerr := c.getManagedCluster(ctx, resourceGroupName, managedClusterName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -157,7 +157,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]containe
 	}
 
 	result, rerr := c.listManagedCluster(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -318,7 +318,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, m
 	}
 
 	rerr := c.createOrUpdateManagedCluster(ctx, resourceGroupName, managedClusterName, parameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -393,7 +393,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, managedCl
 	}
 
 	rerr := c.deleteManagedCluster(ctx, resourceGroupName, managedClusterName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.

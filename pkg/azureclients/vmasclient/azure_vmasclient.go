@@ -103,7 +103,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, vmasName str
 	}
 
 	result, rerr := c.getVMAS(ctx, resourceGroupName, vmasName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -164,7 +164,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 	}
 
 	result, rerr := c.listVMAS(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
