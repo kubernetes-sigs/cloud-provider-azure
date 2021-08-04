@@ -384,7 +384,7 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 }
 
 // DeleteLB invokes az.LoadBalancerClient.Delete with exponential backoff retry
-func (az *Cloud) DeleteLB(service *v1.Service, lbName string) error {
+func (az *Cloud) DeleteLB(service *v1.Service, lbName string) *retry.Error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
@@ -398,7 +398,7 @@ func (az *Cloud) DeleteLB(service *v1.Service, lbName string) error {
 
 	klog.Errorf("LoadBalancerClient.Delete(%s) failed: %s", lbName, rerr.Error().Error())
 	az.Event(service, v1.EventTypeWarning, "DeleteLoadBalancer", rerr.Error().Error())
-	return rerr.Error()
+	return rerr
 }
 
 // CreateOrUpdateRouteTable invokes az.RouteTablesClient.CreateOrUpdate with exponential backoff retry
