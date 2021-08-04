@@ -33,16 +33,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-// LBInUseRawError is the LoadBalancerInUseByVirtualMachineScaleSet raw error
-// We don't put this in pkg/consts because it is for unit tests only
-const LBInUseRawError = `Retriable: false, RetryAfter: 0s, HTTPStatusCode: 400, RawError: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 400, RawError: {
-  "error": {
-    "code": "LoadBalancerInUseByVirtualMachineScaleSet",
-    "message": "Cannot delete load balancer /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb since its child resources lb are in use by virtual machine scale set /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss.",
-    "details": []
-  }
-}`
-
 var (
 	// The function to get current time.
 	now = time.Now
@@ -328,49 +318,25 @@ func HasStatusForbiddenOrIgnoredError(err error) bool {
 	return false
 }
 
-// ParseRawError parse the error message in the rawError and unmarshal it into RawErrorContainer
-func ParseRawError(rawError string) (*RawErrorContainer, error) {
-	reg := regexp.MustCompile(`^(?:[^{]*)([\s\S]*)$`)
-	matches := reg.FindStringSubmatch(rawError)
-	if len(matches) != 2 {
-		klog.V(4).Infof("skipping parsing because the format of the raw error message %q is not the expected one")
-		return nil, nil
-	}
-
-	rawErrorMap := make(map[string]*RawErrorContainer)
-	err := json.Unmarshal([]byte(matches[1]), &rawErrorMap)
-	if err != nil {
-		return nil, err
-	}
-
-	return rawErrorMap["error"], nil
-}
-
-// IsErrorLoadBalancerInUseByVirtualMachineScaleSet determines if the Error is
-// LoadBalancerInUseByVirtualMachineScaleSet
-func IsErrorLoadBalancerInUseByVirtualMachineScaleSet(rawError string) bool {
-	return strings.Contains(rawError, "LoadBalancerInUseByVirtualMachineScaleSet")
-}
-
 // GetVMSSMetadataByRawError gets the vmss name by parsing the error message
-func GetVMSSMetadataByRawError(rawError string) (string, string, error) {
-	if !IsErrorLoadBalancerInUseByVirtualMachineScaleSet(rawError) {
-		return "", "", nil
-	}
-
-	rawErrorInfo, err := ParseRawError(rawError)
-	if err != nil {
-		klog.Warningf("GetVMSSMetadataByRawError: failed to parse raw error: %v", err)
+func GetVMSSMetadataByRawError(err *Error) (string, string, error) {
+	if err == nil || !isErrorLoadBalancerInUseByVirtualMachineScaleSet(err.RawError.Error()) {
 		return "", "", nil
 	}
 
 	reg := regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+).`)
-	matches := reg.FindStringSubmatch(rawErrorInfo.Message)
+	matches := reg.FindStringSubmatch(err.ServiceErrorMessage())
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("GetVMSSMetadataByRawError: couldn't find a VMSS resource Id from error message %s", rawErrorInfo.Message)
+		return "", "", fmt.Errorf("GetVMSSMetadataByRawError: couldn't find a VMSS resource Id from error message %s", err.RawError)
 	}
 
 	return matches[1], matches[2], nil
+}
+
+// isErrorLoadBalancerInUseByVirtualMachineScaleSet determines if the Error is
+// LoadBalancerInUseByVirtualMachineScaleSet
+func isErrorLoadBalancerInUseByVirtualMachineScaleSet(rawError string) bool {
+	return strings.Contains(rawError, "LoadBalancerInUseByVirtualMachineScaleSet")
 }
 
 const (
@@ -429,7 +395,7 @@ func classifyErrorCode(sre azure.ServiceError) string {
 // getOperationNotAllowedReason attempts to better classify OperationNotAllowed errors
 // by looking at the message
 func getOperationNotAllowedReason(msg string) string {
-	if strings.Contains(msg, "Quota increase") {
+	if strings.Contains(strings.ToLower(msg), strings.ToLower("Quota increase")) {
 		return QuotaExceeded
 	}
 	return OperationNotAllowed
