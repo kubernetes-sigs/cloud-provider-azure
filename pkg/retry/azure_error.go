@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -370,4 +371,66 @@ func GetVMSSMetadataByRawError(rawError string) (string, string, error) {
 	}
 
 	return matches[1], matches[2], nil
+}
+
+const (
+	// OperationNotAllowed is an umbrella errrfor a lot of errors
+	OperationNotAllowed string = "OperationNotAllowed"
+	// QuotaExceeded falls under OperationNotAllowed error code but we make it more specific here
+	QuotaExceeded string = "QuotaExceeded"
+)
+
+// ServiceRawError wraps the RawError field satisfying autorest.ServiceError
+type ServiceRawError struct {
+	ServiceError *azure.ServiceError `json:"error,omitempty"`
+}
+
+// ServiceErrorMessage returns the message associated with the autorest.ServiceError body
+func (err *Error) ServiceErrorMessage() string {
+	if err == nil || err.RawError == nil {
+		return ""
+	}
+
+	sre := ServiceRawError{}
+	marshalErr := json.Unmarshal([]byte(err.RawError.Error()), &sre)
+	if marshalErr != nil {
+		return ""
+	}
+	if sre.ServiceError == nil {
+		return ""
+	}
+	return sre.ServiceError.Message
+}
+
+// ServiceErrorCode returns the code associated with the autorest.ServiceError body
+func (err *Error) ServiceErrorCode() string {
+	if err == nil || err.RawError == nil {
+		return ""
+	}
+
+	sre := ServiceRawError{}
+	marshalErr := json.Unmarshal([]byte(err.RawError.Error()), &sre)
+	if marshalErr != nil {
+		return ""
+	}
+	if sre.ServiceError == nil {
+		return ""
+	}
+	return classifyErrorCode(*sre.ServiceError)
+}
+
+func classifyErrorCode(sre azure.ServiceError) string {
+	if sre.Code == OperationNotAllowed {
+		return getOperationNotAllowedReason(sre.Message)
+	}
+	return sre.Code
+}
+
+// getOperationNotAllowedReason attempts to better classify OperationNotAllowed errors
+// by looking at the message
+func getOperationNotAllowedReason(msg string) string {
+	if strings.Contains(msg, "Quota increase") {
+		return QuotaExceeded
+	}
+	return OperationNotAllowed
 }
