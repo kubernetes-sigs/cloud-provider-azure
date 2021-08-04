@@ -389,3 +389,95 @@ func TestGetVMSSNameByRawError(t *testing.T) {
 	assert.Equal(t, "rg", rgName)
 	assert.Equal(t, "vmss", vmssName)
 }
+
+func TestServiceServiceErrorMessage(t *testing.T) {
+	now = func() time.Time {
+		return time.Time{}
+	}
+
+	tests := []struct {
+		err      *Error
+		expected string
+	}{
+		{
+			err:      nil,
+			expected: "",
+		},
+		{
+			err: &Error{
+				Retriable:      true,
+				HTTPStatusCode: http.StatusOK,
+				RawError:       nil,
+			},
+			expected: "",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"message\": \"\"}}"),
+			},
+			expected: "",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"message\": \"Some error message\"}}"),
+			},
+			expected: "Some error message",
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expected, test.err.ServiceErrorMessage())
+	}
+}
+
+func TestServiceErrorCode(t *testing.T) {
+	now = func() time.Time {
+		return time.Time{}
+	}
+
+	tests := []struct {
+		err      *Error
+		expected string
+	}{
+		{
+			err:      nil,
+			expected: "",
+		},
+		{
+			err: &Error{
+				Retriable:      true,
+				HTTPStatusCode: http.StatusOK,
+				RawError:       nil,
+			},
+			expected: "",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"code\": \"\",\"message\": \"Some error message\"}}"),
+			},
+			expected: "",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"code\": \"ReadOnlyDisabledSubscription\",\"message\": \"Some error message\"}}"),
+			},
+			expected: "ReadOnlyDisabledSubscription",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"code\": \"OperationNotAllowed\",\"message\": \"Another operation is in progress\"}}"),
+			},
+			expected: "OperationNotAllowed",
+		},
+		{
+			err: &Error{
+				RawError: fmt.Errorf("%s", "{\"error\":{\"code\": \"OperationNotAllowed\",\"message\": \"Submit a request for Quota increase at\"}}"),
+			},
+			expected: "QuotaExceeded",
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expected, test.err.ServiceErrorCode())
+	}
+}
