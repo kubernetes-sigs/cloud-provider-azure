@@ -137,7 +137,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 				Help:           "Number of errors for an Azure API call",
 				StabilityLevel: metrics.ALPHA,
 			},
-			attributes,
+			append(attributes, "code"),
 		),
 		rateLimitedCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{
