@@ -576,14 +576,18 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 		az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
 		go az.routeUpdater.run()
 
-		// wait for the success first time of syncing zones
-		err = az.syncRegionZonesMap()
-		if err != nil {
-			klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
-			return err
-		}
+		// Azure Stack does not support zone at the moment
+		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
+		if !az.isStackCloud() {
+			// wait for the success first time of syncing zones
+			err = az.syncRegionZonesMap()
+			if err != nil {
+				klog.Errorf("InitializeCloudFromConfig: failed to sync regional zones map for the first time: %s", err.Error())
+				return err
+			}
 
-		go az.refreshZones(az.syncRegionZonesMap)
+			go az.refreshZones(az.syncRegionZonesMap)
+		}
 	}
 
 	return nil
@@ -828,6 +832,10 @@ func parseConfig(configReader io.Reader) (*Config, error) {
 	return &config, nil
 }
 
+func (az *Cloud) isStackCloud() bool {
+	return strings.EqualFold(az.Config.Cloud, consts.AzureStackCloudName) && !az.Config.DisableAzureStackCloud
+}
+
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
@@ -853,6 +861,11 @@ func (az *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
 func (az *Cloud) Zones() (cloudprovider.Zones, bool) {
+	if az.isStackCloud() {
+		// Azure stack does not support zones at this point
+		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
+		return nil, false
+	}
 	return az, true
 }
 
