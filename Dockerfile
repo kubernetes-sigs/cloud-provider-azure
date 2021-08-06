@@ -15,7 +15,7 @@
 # limitations under the License.
 
 ARG ENABLE_GIT_COMMAND=true
-FROM golang:1.15.8-stretch AS builder
+FROM golang:1.16.6-stretch AS builder
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
