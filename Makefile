@@ -97,7 +97,7 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-co
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull docker/dockerfile:1.1-experimental
-	docker pull docker.io/library/golang:1.15.8-stretch
+	docker pull docker.io/library/golang:1.16.6-stretch
 	docker pull gcr.io/distroless/static:latest
 
 .PHONY: build-ccm-image

@@ -910,6 +910,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1.StatefulSetSpec
   map:
     fields:
+    - name: minReadySeconds
+      type:
+        scalar: numeric
     - name: podManagementPolicy
       type:
         scalar: string
@@ -943,6 +946,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1.StatefulSetStatus
   map:
     fields:
+    - name: availableReplicas
+      type:
+        scalar: numeric
     - name: collisionCount
       type:
         scalar: numeric
@@ -1191,6 +1197,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1beta1.StatefulSetSpec
   map:
     fields:
+    - name: minReadySeconds
+      type:
+        scalar: numeric
     - name: podManagementPolicy
       type:
         scalar: string
@@ -1224,6 +1233,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1beta1.StatefulSetStatus
   map:
     fields:
+    - name: availableReplicas
+      type:
+        scalar: numeric
     - name: collisionCount
       type:
         scalar: numeric
@@ -1670,6 +1682,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1beta2.StatefulSetSpec
   map:
     fields:
+    - name: minReadySeconds
+      type:
+        scalar: numeric
     - name: podManagementPolicy
       type:
         scalar: string
@@ -1703,6 +1718,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.apps.v1beta2.StatefulSetStatus
   map:
     fields:
+    - name: availableReplicas
+      type:
+        scalar: numeric
     - name: collisionCount
       type:
         scalar: numeric
@@ -2656,6 +2674,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: succeeded
       type:
         scalar: numeric
+    - name: uncountedTerminatedPods
+      type:
+        namedType: io.k8s.api.batch.v1.UncountedTerminatedPods
 - name: io.k8s.api.batch.v1.JobTemplateSpec
   map:
     fields:
@@ -2667,6 +2688,21 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: io.k8s.api.batch.v1.JobSpec
       default: {}
+- name: io.k8s.api.batch.v1.UncountedTerminatedPods
+  map:
+    fields:
+    - name: failed
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: associative
+    - name: succeeded
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: associative
 - name: io.k8s.api.batch.v1beta1.CronJob
   map:
     fields:
@@ -2789,6 +2825,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.certificates.v1.CertificateSigningRequestSpec
   map:
     fields:
+    - name: expirationSeconds
+      type:
+        scalar: numeric
     - name: extra
       type:
         map:
@@ -2885,6 +2924,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.certificates.v1beta1.CertificateSigningRequestSpec
   map:
     fields:
+    - name: expirationSeconds
+      type:
+        scalar: numeric
     - name: extra
       type:
         map:
@@ -4856,6 +4898,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: dataSource
       type:
         namedType: io.k8s.api.core.v1.TypedLocalObjectReference
+    - name: dataSourceRef
+      type:
+        namedType: io.k8s.api.core.v1.TypedLocalObjectReference
     - name: resources
       type:
         namedType: io.k8s.api.core.v1.ResourceRequirements
@@ -6217,12 +6262,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: sessionAffinityConfig
       type:
         namedType: io.k8s.api.core.v1.SessionAffinityConfig
-    - name: topologyKeys
-      type:
-        list:
-          elementType:
-            scalar: string
-          elementRelationship: atomic
     - name: type
       type:
         scalar: string
@@ -6580,6 +6619,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: gmsaCredentialSpecName
       type:
         scalar: string
+    - name: hostProcess
+      type:
+        scalar: boolean
     - name: runAsUserName
       type:
         scalar: string
