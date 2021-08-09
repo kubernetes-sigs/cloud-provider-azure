@@ -26,8 +26,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
-	"github.com/Azure/go-autorest/autore
-	st/to"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -66,6 +65,7 @@ func setTestVirtualMachines(c *Cloud, vmList map[string]string, isDataDisksFull 
 			},
 		}
 		vm.VirtualMachineProperties = &compute.VirtualMachineProperties{
+			ProvisioningState: to.StringPtr(string(compute.ProvisioningStateSucceeded)),
 			HardwareProfile: &compute.HardwareProfile{
 				VMSize: compute.StandardA0,
 			},
@@ -255,12 +255,13 @@ func TestInstanceID(t *testing.T) {
 
 func TestInstanceShutdownByProviderID(t *testing.T) {
 	testcases := []struct {
-		name           string
-		vmList         map[string]string
-		nodeName       string
-		providerID     string
-		expected       bool
-		expectedErrMsg error
+		name              string
+		vmList            map[string]string
+		nodeName          string
+		providerID        string
+		provisioningState string
+		expected          bool
+		expectedErrMsg    error
 	}{
 		{
 			name:       "InstanceShutdownByProviderID should return false if the vm is in PowerState/Running status",
@@ -296,6 +297,14 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 			nodeName:   "vm5",
 			providerID: "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm5",
 			expected:   true,
+		},
+		{
+			name:              "InstanceShutdownByProviderID should return false if the vm is in PowerState/Stopped state with Creating provisioning state",
+			vmList:            map[string]string{"vm5": "PowerState/Stopped"},
+			nodeName:          "vm5",
+			provisioningState: "Creating",
+			providerID:        "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm5",
+			expected:          false,
 		},
 		{
 			name:       "InstanceShutdownByProviderID should return false if the vm is in PowerState/Stopping status",
@@ -335,6 +344,9 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 	for _, test := range testcases {
 		cloud := GetTestCloud(ctrl)
 		expectedVMs := setTestVirtualMachines(cloud, test.vmList, false)
+		if test.provisioningState != "" {
+			expectedVMs[0].ProvisioningState = to.StringPtr(test.provisioningState)
+		}
 		mockVMsClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		for _, vm := range expectedVMs {
 			mockVMsClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()

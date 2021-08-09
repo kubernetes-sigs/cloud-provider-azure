@@ -28,6 +28,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -253,10 +254,22 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 
 		return false, err
 	}
-	klog.V(5).Infof("InstanceShutdownByProviderID gets power status %q for node %q", powerStatus, nodeName)
+	klog.V(3).Infof("InstanceShutdownByProviderID gets power status %q for node %q", powerStatus, nodeName)
+
+	provisioningState, err := az.VMSet.GetProvisioningStateByNodeName(string(nodeName))
+	if err != nil {
+		// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
+			return false, nil
+		}
+
+		return false, err
+	}
+	klog.V(3).Infof("InstanceShutdownByProviderID gets provisioning state %q for node %q", provisioningState, nodeName)
 
 	status := strings.ToLower(powerStatus)
-	return status == vmPowerStateStopped || status == vmPowerStateDeallocated || status == vmPowerStateDeallocating, nil
+	provisioningSucceeded := strings.EqualFold(strings.ToLower(provisioningState), strings.ToLower(string(compute.ProvisioningStateSucceeded)))
+	return provisioningSucceeded && (status == vmPowerStateStopped || status == vmPowerStateDeallocated || status == vmPowerStateDeallocating), nil
 }
 
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.

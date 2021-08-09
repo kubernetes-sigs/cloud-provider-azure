@@ -965,6 +965,7 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			vm: compute.VirtualMachine{
 				Name: to.StringPtr("vm2"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
 					InstanceView: &compute.VirtualMachineInstanceView{
 						Statuses: &[]compute.InstanceViewStatus{
 							{
@@ -980,8 +981,10 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			name:     "GetPowerStatusByNodeName should get vmPowerStateStopped if vm.InstanceView is nil",
 			nodeName: "vm3",
 			vm: compute.VirtualMachine{
-				Name:                     to.StringPtr("vm3"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{},
+				Name: to.StringPtr("vm3"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
+				},
 			},
 			expectedStatus: vmPowerStateStopped,
 		},
@@ -991,7 +994,8 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			vm: compute.VirtualMachine{
 				Name: to.StringPtr("vm4"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					InstanceView: &compute.VirtualMachineInstanceView{},
+					ProvisioningState: to.StringPtr("Succeeded"),
+					InstanceView:      &compute.VirtualMachineInstanceView{},
 				},
 			},
 			expectedStatus: vmPowerStateStopped,
@@ -1004,6 +1008,69 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 		powerState, err := cloud.VMSet.GetPowerStatusByNodeName(test.nodeName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedStatus, powerState, test.name)
+	}
+}
+
+func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cloud := GetTestCloud(ctrl)
+
+	testcases := []struct {
+		name                      string
+		nodeName                  string
+		vm                        compute.VirtualMachine
+		expectedProvisioningState string
+		getErr                    *retry.Error
+		expectedErrMsg            error
+	}{
+		{
+			name:     "GetProvisioningStateByNodeName should report error if node don't exist",
+			nodeName: "vm1",
+			vm:       compute.VirtualMachine{},
+			getErr: &retry.Error{
+				HTTPStatusCode: http.StatusNotFound,
+				RawError:       cloudprovider.InstanceNotFound,
+			},
+			expectedErrMsg: fmt.Errorf("instance not found"),
+		},
+		{
+			name:     "GetProvisioningStateByNodeName should return Succeeded for running VM",
+			nodeName: "vm2",
+			vm: compute.VirtualMachine{
+				Name: to.StringPtr("vm2"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
+					InstanceView: &compute.VirtualMachineInstanceView{
+						Statuses: &[]compute.InstanceViewStatus{
+							{
+								Code: to.StringPtr("PowerState/Running"),
+							},
+						},
+					},
+				},
+			},
+			expectedProvisioningState: "Succeeded",
+		},
+		{
+			name:     "GetProvisioningStateByNodeName should return empty string when vm.ProvisioningState is nil",
+			nodeName: "vm3",
+			vm: compute.VirtualMachine{
+				Name: to.StringPtr("vm3"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: nil,
+				},
+			},
+			expectedProvisioningState: "",
+		},
+	}
+	for _, test := range testcases {
+		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
+
+		provisioningState, err := cloud.VMSet.GetProvisioningStateByNodeName(test.nodeName)
+		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		assert.Equal(t, test.expectedProvisioningState, provisioningState, test.name)
 	}
 }
 
