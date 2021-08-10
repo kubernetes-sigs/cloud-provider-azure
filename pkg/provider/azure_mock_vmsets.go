@@ -26,7 +26,6 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	cloud_provider "k8s.io/cloud-provider"
 	cache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	provider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 // MockVMSet is a mock of VMSet interface.
@@ -53,7 +52,7 @@ func (m *MockVMSet) EXPECT() *MockVMSetMockRecorder {
 }
 
 // AttachDisk mocks base method.
-func (m *MockVMSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*provider.AttachDiskOptions) error {
+func (m *MockVMSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AttachDisk", nodeName, diskMap)
 	ret0, _ := ret[0].(error)
