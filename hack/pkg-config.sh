@@ -17,7 +17,7 @@
 set -e
 cd $(dirname "${BASH_SOURCE}")/..
 
-if [ "${ENABLE_GIT_COMMANDS}" = true ]; then
+if [ "${ENABLE_GIT_COMMAND}" = true ]; then
   GIT_VERSION=$(git describe --tags --always --abbrev=9 || echo)
   GIT_COMMIT=$(git rev-parse HEAD)
 else

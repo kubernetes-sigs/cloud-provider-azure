@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM mcr.microsoft.com/windows/servercore:1809 as core
+ARG OSVERSION=1809
 
-FROM mcr.microsoft.com/windows/nanoserver:1809
-COPY --from=core /Windows/System32/netapi32.dll /Windows/System32/netapi32.dll
+# NOTE(claudiub): Instead of pulling the servercore image, which is ~2GB in side, we
+# can instead pull the windows-servercore-cache image, which is only a few MBs in size.
+# The image contains the netapi32.dll we need.
+FROM --platform=linux/amd64 gcr.io/k8s-staging-e2e-test-images/windows-servercore-cache:1.0-linux-amd64-$OSVERSION as servercore-helper
+
+FROM mcr.microsoft.com/windows/nanoserver:$OSVERSION
+COPY --from=servercore-helper /Windows/System32/netapi32.dll /Windows/System32/netapi32.dll
 COPY bin/azure-cloud-node-manager.exe /cloud-node-manager.exe
 USER ContainerAdministrator
 ENTRYPOINT ["/azure-cloud-node-manager.exe"]
