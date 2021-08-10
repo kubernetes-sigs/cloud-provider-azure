@@ -13,7 +13,7 @@ steps:
       - TAG=${_GIT_TAG}
       - PULL_BASE_REF=${_PULL_BASE_REF}
       - PROJECT=${_STAGING_PROJECT}
-      - ENABLE_GIT_COMMAND=false
+      - ENABLE_GIT_COMMAND=true
       - DOCKER_CLI_EXPERIMENTAL=enabled
       - DOCKER_BUILDKIT=1
     args:
