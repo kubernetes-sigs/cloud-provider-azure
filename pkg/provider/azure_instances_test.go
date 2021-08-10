@@ -339,10 +339,12 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		},
 		{
 			name:     "InstanceShutdownByProviderID should report error if providerID is null",
+			nodeName: "vmm",
 			expected: false,
 		},
 		{
 			name:           "InstanceShutdownByProviderID should report error if providerID is invalid",
+			nodeName:       "vm9",
 			providerID:     "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VM/vm9",
 			expected:       false,
 			expectedErrMsg: fmt.Errorf("error splitting providerID"),
@@ -361,9 +363,18 @@ func TestInstanceShutdownByProviderID(t *testing.T) {
 		for _, vm := range expectedVMs {
 			mockVMsClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
 		}
-		mockVMsClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm8", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+		mockVMsClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 
 		hasShutdown, err := cloud.InstanceShutdownByProviderID(context.Background(), test.providerID)
+		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		assert.Equal(t, test.expected, hasShutdown, test.name)
+
+		hasShutdown, err = cloud.InstanceShutdown(context.Background(), &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: test.nodeName},
+			Spec: v1.NodeSpec{
+				ProviderID: test.providerID,
+			},
+		})
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expected, hasShutdown, test.name)
 	}

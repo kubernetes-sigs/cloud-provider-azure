@@ -219,7 +219,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 	providerID := node.Spec.ProviderID
 	if providerID == "" {
 		var err error
-		providerID, err = az.getNodeProviderIDByNodeName(ctx, types.NodeName(node.Name))
+		providerID, err = cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
 			klog.Errorf("InstanceExists: failed to get the provider ID by node name %s: %v", node.Name, err)
 			return false, err
@@ -281,8 +281,13 @@ func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, err
 	providerID := node.Spec.ProviderID
 	if providerID == "" {
 		var err error
-		providerID, err = az.getNodeProviderIDByNodeName(ctx, types.NodeName(node.Name))
+		providerID, err = cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
+			// Returns false, so the controller manager will continue to check InstanceExistsByProviderID().
+			if strings.Contains(err.Error(), cloudprovider.InstanceNotFound.Error()) {
+				return false, nil
+			}
+
 			klog.Errorf("InstanceShutdown: failed to get the provider ID by node name %s: %v", node.Name, err)
 			return false, err
 		}
@@ -355,15 +360,6 @@ func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, e
 	}
 
 	return az.VMSet.GetInstanceIDByNodeName(nodeName)
-}
-
-func (az *Cloud) getNodeProviderIDByNodeName(ctx context.Context, name types.NodeName) (string, error) {
-	providerID, err := cloudprovider.GetInstanceProviderID(ctx, az, name)
-	if err != nil {
-		return "", fmt.Errorf("failed to get the provider ID of the node %s: %w", string(name), err)
-	}
-
-	return providerID, nil
 }
 
 func (az *Cloud) getLocalInstanceProviderID(metadata *InstanceMetadata, nodeName string) (string, error) {
@@ -482,7 +478,7 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	if node.Spec.ProviderID != "" {
 		meta.ProviderID = node.Spec.ProviderID
 	} else {
-		providerID, err := az.getNodeProviderIDByNodeName(ctx, types.NodeName(node.Name))
+		providerID, err := cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
 			klog.Errorf("InstanceMetadata: failed to get the provider ID by node name %s: %v", node.Name, err)
 			return nil, err
