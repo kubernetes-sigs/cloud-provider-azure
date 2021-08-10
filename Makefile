@@ -17,10 +17,9 @@
 SHELL=/bin/bash -o pipefail
 BIN_DIR=bin
 PKG_CONFIG=.pkg_config
-PKG_CONFIG_CONTENT=$(shell cat $(PKG_CONFIG))
 
 AKSENGINE_VERSION ?= master
-
+ENABLE_GIT_COMMAND ?= true
 TEST_RESULTS_DIR=testResults
 # manifest name under tests/e2e/k8s-azure/manifest
 TEST_MANIFEST ?= linux
@@ -82,13 +81,13 @@ help: ## Display this help.
 all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager $(BIN_DIR)/azure-cloud-node-manager.exe ## Build binaries for the project.
 
 $(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Linux.
-	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
+	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Windows.
-	CGO_ENABLED=0 GOOS=windows go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe $(PKG_CONFIG_CONTENT) ./cmd/cloud-node-manager
+	CGO_ENABLED=0 GOOS=windows go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*) ## Build binary for controller-manager.
-	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(PKG_CONFIG_CONTENT) ./cmd/cloud-controller-manager
+	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
 
 ## --------------------------------------
 ##@ Images
@@ -233,7 +232,7 @@ clean: ## Cleanup local builds.
 	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
 
 $(PKG_CONFIG):
-	ENABLE_GIT_COMMANDS=$(ENABLE_GIT_COMMAND) hack/pkg-config.sh > $@
+	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) hack/pkg-config.sh > $@
 
 ## --------------------------------------
 ##@ Release
@@ -245,4 +244,4 @@ deploy: image push ## Build, push and deploy an aks-engine cluster.
 
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
-	ENABLE_GIT_COMMANDS=false IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
+	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images

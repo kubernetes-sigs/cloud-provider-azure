@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG ENABLE_GIT_COMMAND=true
 FROM golang:1.16.6-stretch AS builder
+ARG ENABLE_GIT_COMMAND=true
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
