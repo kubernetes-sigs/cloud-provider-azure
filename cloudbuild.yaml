@@ -7,13 +7,13 @@ timeout: 1200s
 options:
   substitution_option: ALLOW_LOOSE
 steps:
-  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20200713-e9b3d9d"
+  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20210722-085d930"
     entrypoint: make
     env:
       - TAG=${_GIT_TAG}
       - PULL_BASE_REF=${_PULL_BASE_REF}
       - PROJECT=${_STAGING_PROJECT}
-      - ENABLE_GIT_COMMAND=true
+      - ENABLE_GIT_COMMAND=false
       - DOCKER_CLI_EXPERIMENTAL=enabled
       - DOCKER_BUILDKIT=1
     args:
