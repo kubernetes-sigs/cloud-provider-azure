@@ -1,4 +1,261 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.6</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</link><pubDate>Tue, 20 Jul 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.7</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v0.7.7/</link><pubDate>Fri, 13 Aug 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v0.7.7/</guid><description>
+&lt;h1 id="changelog-since-v076">Changelog since v0.7.6&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: ensure NSG rules are handled regardless of case
+&lt;ul>
+&lt;li>fix: enable git command by default&lt;/li>
+&lt;li>fix: ensure VM with provisioningState=Creating and powerState=Stopped is treated as Creating instead of Stopped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/747">#747&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;h3 id="features">Features&lt;/h3>
+&lt;ul>
+&lt;li>Feat: Provide IPv6 support for internal load balancer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/712">#712&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v1.0.4</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v1.0.4/</link><pubDate>Fri, 13 Aug 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v1.0.4/</guid><description>
+&lt;h1 id="changelog-since-v103">Changelog since v1.0.3&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: ensure NSG rules are handled regardless of case
+&lt;ul>
+&lt;li>fix: enable git command by default&lt;/li>
+&lt;li>fix: ensure VM with provisioningState=Creating and powerState=Stopped is treated as Creating instead of Stopped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/746">#746&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;h3 id="features">Features&lt;/h3>
+&lt;ul>
+&lt;li>Feat: Provide IPv6 support for internal load balancer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/713">#713&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v1.1.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v1.1.0/</link><pubDate>Fri, 13 Aug 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v1.1.0/</guid><description>
+&lt;h1 id="changelog-since-v100">Changelog since v1.0.0&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Added support for Windows Server 2004 and 20H2 to the &lt;code>azure-cloud-node-manager&lt;/code> image. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/655">#655&lt;/a>, &lt;a href="https://github.com/claudiubelu">@claudiubelu&lt;/a>) [SIG Windows]&lt;/li>
+&lt;li>Azure_api_request_errors metric now has an added &amp;ldquo;code&amp;rdquo; label which provides more details on the errors encountered. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/733">#733&lt;/a>, &lt;a href="https://github.com/marwanad">@marwanad&lt;/a>)&lt;/li>
+&lt;li>Chore: upgrade TLS1.0 to TLS1.2 in account creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/675">#675&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Feat: Provide IPv6 support for internal load balancer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/703">#703&lt;/a>, &lt;a href="https://github.com/tomkerkhove">@tomkerkhove&lt;/a>)&lt;/li>
+&lt;li>Feat: add ListAll interface for PublicIP client (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/695">#695&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Feat: add support for additional public IPs via service annotation &amp;ldquo;service.beta.kubernetes.io/azure-additional-public-ips&amp;rdquo; (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/691">#691&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Feat: enable creation of private endpoint for storage account (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/652">#652&lt;/a>, &lt;a href="https://github.com/nearora-msft">@nearora-msft&lt;/a>)&lt;/li>
+&lt;li>Feat: support async attach/detach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/677">#677&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Feat: support networkAccessPolicy (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/701">#701&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>UserAgents can now be passed as part of the cloud provider config (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/734">#734&lt;/a>, &lt;a href="https://github.com/kassarl">@kassarl&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="documentation">Documentation&lt;/h3>
+&lt;ul>
+&lt;li>Chore: update docs for service tags NSG (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/647">#647&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Docs: add &amp;lsquo;securityGroupResourceGroup&amp;rsquo; cloud-config value (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/668">#668&lt;/a>, &lt;a href="https://github.com/aslafy-z">@aslafy-z&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="failing-test">Failing Test&lt;/h3>
+&lt;ul>
+&lt;li>Fix: serviceOwnsFrontendIP shouldn&amp;rsquo;t report error when the public IP doesn&amp;rsquo;t match (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/649">#649&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Do not set cached Sku when updating VMSS and VMSS instances (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/630">#630&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>fixed PrivateEndpoint matching in storage account search (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/707">#707&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: cleanup outdated routes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/661">#661&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: detach disk panic on Azure Stack (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/688">#688&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: enable git command by default so that images could get the correct version from git (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/745">#745&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: ensure NSG rules are handled regardless of case (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/741">#741&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: ensure VM with provisioningState=Creating and powerState=Stopped is treated as Creating instead of Stopped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/743">#743&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: ensure http connections reused for ARM clients (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/711">#711&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: ignore the NodeCIDRMaskSize in dualstack clusters (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/721">#721&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: make tags case-insensitive for both keys and values (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/669">#669&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: remove GetDisk operation in AttachDisk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/678">#678&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: respect VnetResourceGroup in private link creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/719">#719&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: return empty VMAS name if using standalone VM (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/679">#679&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>fix: reduce crp throttling in attach disk scenario (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/621">#621&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>fix: dangling volume issue (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/622">#622&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>fix: delete non existing disk issue (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/623">#623&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Retry.GetError(response, err) (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/718">#718&lt;/a>, &lt;a href="https://github.com/marwanad">@marwanad&lt;/a>)&lt;/li>
+&lt;li>fix: ensure major and minor versions are set correctly (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/749">#749&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Zones logic on Azure Stack Cloud platform was disabled because it does not supported on this platform. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/716">#716&lt;/a>, &lt;a href="https://github.com/lobziik">@lobziik&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: add e2e test for byo public IP (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/627">#627&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: add more buckets for operation metrics (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/656">#656&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Chore: enrich unit test for serviceOwnsFrontendIP (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/710">#710&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: only put pip if it is necessary (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/686">#686&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: only reconciling routes in cloud controller manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/671">#671&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Chore: set default config secret name and namespace (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/662">#662&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: wait for the success of the initial run of syncRegionZonesMap (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/646">#646&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Update Azure Go SDK to v55.0.0 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/643">#643&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Upgrade to 2020-02-01/storage (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/628">#628&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>&lt;code>GetTestCloud&lt;/code> properly initializes the disk controller fields enabling them to be used in unit tests and mocked. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/689">#689&lt;/a>, &lt;a href="https://github.com/edreed">@edreed&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Add CreateOrUpdateBackendPools() interface for LoadBalancer client (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/620">#620&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Feat: add NFSv3 account creation support (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/633">#633&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Fix: leave the probe path empty for TCP probes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/680">#680&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: no sleep when GetDisk is throttled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/629">#629&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>&lt;code>GetTestCloud&lt;/code> now initializes the &lt;code>SnapshotsClient&lt;/code> field to a mock implementation to facilitate unit test development for consuming projects. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/732">#732&lt;/a>, &lt;a href="https://github.com/edreed">@edreed&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/OneOfOne/xxhash: &lt;a href="https://github.com/OneOfOne/xxhash/tree/v1.2.2">v1.2.2&lt;/a>&lt;/li>
+&lt;li>github.com/antihax/optional: &lt;a href="https://github.com/antihax/optional/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/benbjohnson/clock: &lt;a href="https://github.com/benbjohnson/clock/tree/v1.0.3">v1.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/certifi/gocertifi: &lt;a href="https://github.com/certifi/gocertifi/tree/2c3bb06">2c3bb06&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash: &lt;a href="https://github.com/cespare/xxhash/tree/v1.1.0">v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/client9/misspell: &lt;a href="https://github.com/client9/misspell/tree/v0.3.4">v0.3.4&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/udpa/go: &lt;a href="https://github.com/cncf/udpa/go/tree/5459f2c">5459f2c&lt;/a>&lt;/li>
+&lt;li>github.com/cockroachdb/errors: &lt;a href="https://github.com/cockroachdb/errors/tree/v1.2.4">v1.2.4&lt;/a>&lt;/li>
+&lt;li>github.com/cockroachdb/logtags: &lt;a href="https://github.com/cockroachdb/logtags/tree/eb05cc2">eb05cc2&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/go-systemd/v22: &lt;a href="https://github.com/coreos/go-systemd/v22/tree/v22.3.2">v22.3.2&lt;/a>&lt;/li>
+&lt;li>github.com/dgryski/go-sip13: &lt;a href="https://github.com/dgryski/go-sip13/tree/e10d5fe">e10d5fe&lt;/a>&lt;/li>
+&lt;li>github.com/felixge/httpsnoop: &lt;a href="https://github.com/felixge/httpsnoop/tree/v1.0.1">v1.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/getsentry/raven-go: &lt;a href="https://github.com/getsentry/raven-go/tree/v0.2.0">v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/go-gl/glfw: &lt;a href="https://github.com/go-gl/glfw/tree/e6da0ac">e6da0ac&lt;/a>&lt;/li>
+&lt;li>github.com/go-kit/log: &lt;a href="https://github.com/go-kit/log/tree/v0.1.0">v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/go-stack/stack: &lt;a href="https://github.com/go-stack/stack/tree/v1.8.0">v1.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/go-task/slim-sprig: &lt;a href="https://github.com/go-task/slim-sprig/tree/348f09d">348f09d&lt;/a>&lt;/li>
+&lt;li>github.com/godbus/dbus/v5: &lt;a href="https://github.com/godbus/dbus/v5/tree/v5.0.4">v5.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/google/martian/v3: &lt;a href="https://github.com/google/martian/v3/tree/v3.1.0">v3.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/josharian/intern: &lt;a href="https://github.com/josharian/intern/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/jpillora/backoff: &lt;a href="https://github.com/jpillora/backoff/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/konsorten/go-windows-terminal-sequences: &lt;a href="https://github.com/konsorten/go-windows-terminal-sequences/tree/v1.0.3">v1.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/kr/fs: &lt;a href="https://github.com/kr/fs/tree/v0.1.0">v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/kr/pty: &lt;a href="https://github.com/kr/pty/tree/v1.1.1">v1.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/nxadm/tail: &lt;a href="https://github.com/nxadm/tail/tree/v1.4.8">v1.4.8&lt;/a>&lt;/li>
+&lt;li>github.com/oklog/ulid: &lt;a href="https://github.com/oklog/ulid/tree/v1.3.1">v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/opentracing/opentracing-go: &lt;a href="https://github.com/opentracing/opentracing-go/tree/v1.1.0">v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/pkg/sftp: &lt;a href="https://github.com/pkg/sftp/tree/v1.10.1">v1.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/tsdb: &lt;a href="https://github.com/prometheus/tsdb/tree/v0.7.1">v0.7.1&lt;/a>&lt;/li>
+&lt;li>github.com/spaolacci/murmur3: &lt;a href="https://github.com/spaolacci/murmur3/tree/f09979e">f09979e&lt;/a>&lt;/li>
+&lt;li>github.com/stoewer/go-strcase: &lt;a href="https://github.com/stoewer/go-strcase/tree/v1.2.0">v1.2.0&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd/api/v3: v3.5.0&lt;/li>
+&lt;li>go.etcd.io/etcd/client/pkg/v3: v3.5.0&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v2: v2.305.0&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v3: v3.5.0&lt;/li>
+&lt;li>go.etcd.io/etcd/pkg/v3: v3.5.0&lt;/li>
+&lt;li>go.etcd.io/etcd/raft/v3: v3.5.0&lt;/li>
+&lt;li>go.etcd.io/etcd/server/v3: v3.5.0&lt;/li>
+&lt;li>go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/contrib: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/exporters/otlp: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/metric: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/oteltest: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/sdk/export/metric: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/sdk/metric: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/sdk: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel/trace: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/otel: v0.20.0&lt;/li>
+&lt;li>go.opentelemetry.io/proto/otlp: v0.7.0&lt;/li>
+&lt;li>go.uber.org/goleak: v1.1.10&lt;/li>
+&lt;li>rsc.io/binaryregexp: v0.2.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/bigquery: v1.4.0 → v1.8.0&lt;/li>
+&lt;li>cloud.google.com/go/pubsub: v1.2.0 → v1.3.1&lt;/li>
+&lt;li>cloud.google.com/go/storage: v1.6.0 → v1.10.0&lt;/li>
+&lt;li>cloud.google.com/go: v0.54.0 → v0.81.0&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v53.1.0...v55.0.0">v53.1.0+incompatible → v55.0.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-ansiterm: &lt;a href="https://github.com/Azure/go-ansiterm/compare/d6e3b33...d185dfc">d6e3b33 → d185dfc&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.10...v0.9.14">v0.9.10 → v0.9.14&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/to: &lt;a href="https://github.com/Azure/go-autorest/autorest/to/compare/v0.2.0...v0.4.0">v0.2.0 → v0.4.0&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.17...v0.11.19">v0.11.17 → v0.11.19&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/logger: &lt;a href="https://github.com/Azure/go-autorest/logger/compare/v0.2.0...v0.2.1">v0.2.0 → v0.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/alecthomas/units: &lt;a href="https://github.com/alecthomas/units/compare/c3de453...f65c72e">c3de453 → f65c72e&lt;/a>&lt;/li>
+&lt;li>github.com/bketelsen/crypt: &lt;a href="https://github.com/bketelsen/crypt/compare/5cbc8cc...v0.0.4">5cbc8cc → v0.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/cockroachdb/datadriven: &lt;a href="https://github.com/cockroachdb/datadriven/compare/80d97fb...bf6692d">80d97fb → bf6692d&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/go-control-plane: &lt;a href="https://github.com/envoyproxy/go-control-plane/compare/5f8ba28...668b12f">5f8ba28 → 668b12f&lt;/a>&lt;/li>
+&lt;li>github.com/evanphx/json-patch: &lt;a href="https://github.com/evanphx/json-patch/compare/v4.9.0...v4.11.0">v4.9.0+incompatible → v4.11.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/form3tech-oss/jwt-go: &lt;a href="https://github.com/form3tech-oss/jwt-go/compare/v3.2.2...v3.2.3">v3.2.2+incompatible → v3.2.3+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/fsnotify/fsnotify: &lt;a href="https://github.com/fsnotify/fsnotify/compare/v1.4.7...v1.4.9">v1.4.7 → v1.4.9&lt;/a>&lt;/li>
+&lt;li>github.com/go-logfmt/logfmt: &lt;a href="https://github.com/go-logfmt/logfmt/compare/v0.4.0...v0.5.0">v0.4.0 → v0.5.0&lt;/a>&lt;/li>
+&lt;li>github.com/go-openapi/jsonpointer: &lt;a href="https://github.com/go-openapi/jsonpointer/compare/v0.19.3...v0.19.5">v0.19.3 → v0.19.5&lt;/a>&lt;/li>
+&lt;li>github.com/go-openapi/jsonreference: &lt;a href="https://github.com/go-openapi/jsonreference/compare/v0.19.3...v0.19.5">v0.19.3 → v0.19.5&lt;/a>&lt;/li>
+&lt;li>github.com/go-openapi/swag: &lt;a href="https://github.com/go-openapi/swag/compare/v0.19.5...v0.19.14">v0.19.5 → v0.19.14&lt;/a>&lt;/li>
+&lt;li>github.com/golang/groupcache: &lt;a href="https://github.com/golang/groupcache/compare/8c9f03a...41bb18b">8c9f03a → 41bb18b&lt;/a>&lt;/li>
+&lt;li>github.com/golang/mock: &lt;a href="https://github.com/golang/mock/compare/v1.4.1...v1.6.0">v1.4.1 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang/protobuf: &lt;a href="https://github.com/golang/protobuf/compare/v1.4.3...v1.5.2">v1.4.3 → v1.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/google/btree: &lt;a href="https://github.com/google/btree/compare/v1.0.0...v1.0.1">v1.0.0 → v1.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/google/go-cmp: &lt;a href="https://github.com/google/go-cmp/compare/v0.5.2...v0.5.5">v0.5.2 → v0.5.5&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/1ebb73c...cbba55b">1ebb73c → cbba55b&lt;/a>&lt;/li>
+&lt;li>github.com/googleapis/gnostic: &lt;a href="https://github.com/googleapis/gnostic/compare/v0.4.1...v0.5.5">v0.4.1 → v0.5.5&lt;/a>&lt;/li>
+&lt;li>github.com/grpc-ecosystem/go-grpc-middleware: &lt;a href="https://github.com/grpc-ecosystem/go-grpc-middleware/compare/f849b54...v1.3.0">f849b54 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/grpc-ecosystem/grpc-gateway: &lt;a href="https://github.com/grpc-ecosystem/grpc-gateway/compare/v1.9.5...v1.16.0">v1.9.5 → v1.16.0&lt;/a>&lt;/li>
+&lt;li>github.com/ianlancetaylor/demangle: &lt;a href="https://github.com/ianlancetaylor/demangle/compare/5e5cf60...28f6c0f">5e5cf60 → 28f6c0f&lt;/a>&lt;/li>
+&lt;li>github.com/jonboulle/clockwork: &lt;a href="https://github.com/jonboulle/clockwork/compare/v0.1.0...v0.2.2">v0.1.0 → v0.2.2&lt;/a>&lt;/li>
+&lt;li>github.com/json-iterator/go: &lt;a href="https://github.com/json-iterator/go/compare/v1.1.10...v1.1.11">v1.1.10 → v1.1.11&lt;/a>&lt;/li>
+&lt;li>github.com/julienschmidt/httprouter: &lt;a href="https://github.com/julienschmidt/httprouter/compare/v1.2.0...v1.3.0">v1.2.0 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/magiconair/properties: &lt;a href="https://github.com/magiconair/properties/compare/v1.8.1...v1.8.5">v1.8.1 → v1.8.5&lt;/a>&lt;/li>
+&lt;li>github.com/mailru/easyjson: &lt;a href="https://github.com/mailru/easyjson/compare/v0.7.0...v0.7.6">v0.7.0 → v0.7.6&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-isatty: &lt;a href="https://github.com/mattn/go-isatty/compare/v0.0.4...v0.0.3">v0.0.4 → v0.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/mapstructure: &lt;a href="https://github.com/mitchellh/mapstructure/compare/v1.1.2...v1.4.1">v1.1.2 → v1.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/moby/term: &lt;a href="https://github.com/moby/term/compare/df9cb8a...9d4ed18">df9cb8a → 9d4ed18&lt;/a>&lt;/li>
+&lt;li>github.com/mwitkow/go-conntrack: &lt;a href="https://github.com/mwitkow/go-conntrack/compare/cc309e4...2f06839">cc309e4 → 2f06839&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo: &lt;a href="https://github.com/onsi/ginkgo/compare/v1.11.0...v1.16.4">v1.11.0 → v1.16.4&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.8.1...v1.15.0">v1.8.1 → v1.15.0&lt;/a>&lt;/li>
+&lt;li>github.com/pelletier/go-toml: &lt;a href="https://github.com/pelletier/go-toml/compare/v1.2.0...v1.9.3">v1.2.0 → v1.9.3&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/client_golang: &lt;a href="https://github.com/prometheus/client_golang/compare/v1.7.1...v1.11.0">v1.7.1 → v1.11.0&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/common: &lt;a href="https://github.com/prometheus/common/compare/v0.10.0...v0.26.0">v0.10.0 → v0.26.0&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/procfs: &lt;a href="https://github.com/prometheus/procfs/compare/v0.2.0...v0.6.0">v0.2.0 → v0.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/rogpeppe/fastuuid: &lt;a href="https://github.com/rogpeppe/fastuuid/compare/6724a57...v1.2.0">6724a57 → v1.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/sirupsen/logrus: &lt;a href="https://github.com/sirupsen/logrus/compare/v1.7.0...v1.8.1">v1.7.0 → v1.8.1&lt;/a>&lt;/li>
+&lt;li>github.com/soheilhy/cmux: &lt;a href="https://github.com/soheilhy/cmux/compare/v0.1.4...v0.1.5">v0.1.4 → v0.1.5&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/afero: &lt;a href="https://github.com/spf13/afero/compare/v1.2.2...v1.6.0">v1.2.2 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cast: &lt;a href="https://github.com/spf13/cast/compare/v1.3.0...v1.3.1">v1.3.0 → v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cobra: &lt;a href="https://github.com/spf13/cobra/compare/v1.1.1...v1.2.1">v1.1.1 → v1.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/jwalterweatherman: &lt;a href="https://github.com/spf13/jwalterweatherman/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/viper: &lt;a href="https://github.com/spf13/viper/compare/v1.7.0...v1.8.1">v1.7.0 → v1.8.1&lt;/a>&lt;/li>
+&lt;li>github.com/stretchr/testify: &lt;a href="https://github.com/stretchr/testify/compare/v1.6.1...v1.7.0">v1.6.1 → v1.7.0&lt;/a>&lt;/li>
+&lt;li>github.com/tmc/grpc-websocket-proxy: &lt;a href="https://github.com/tmc/grpc-websocket-proxy/compare/0ad062e...e5319fd">0ad062e → e5319fd&lt;/a>&lt;/li>
+&lt;li>github.com/yuin/goldmark: &lt;a href="https://github.com/yuin/goldmark/compare/v1.2.1...v1.3.5">v1.2.1 → v1.3.5&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/bbolt: v1.3.5 → v1.3.6&lt;/li>
+&lt;li>go.opencensus.io: v0.22.3 → v0.23.0&lt;/li>
+&lt;li>go.uber.org/atomic: v1.6.0 → v1.7.0&lt;/li>
+&lt;li>go.uber.org/multierr: v1.5.0 → v1.6.0&lt;/li>
+&lt;li>go.uber.org/zap: v1.16.0 → v1.17.0&lt;/li>
+&lt;li>golang.org/x/lint: 738671d → 6edffad&lt;/li>
+&lt;li>golang.org/x/mod: ce943fd → v0.4.2&lt;/li>
+&lt;li>golang.org/x/net: 3d97a24 → 37e1c6a&lt;/li>
+&lt;li>golang.org/x/oauth2: bf48bf1 → 2e8d934&lt;/li>
+&lt;li>golang.org/x/sync: 67f06af → 036812b&lt;/li>
+&lt;li>golang.org/x/sys: a50acf3 → 59db8d7&lt;/li>
+&lt;li>golang.org/x/text: v0.3.4 → v0.3.6&lt;/li>
+&lt;li>golang.org/x/time: f8bda1e → 1f47c86&lt;/li>
+&lt;li>golang.org/x/tools: v0.1.0 → v0.1.2&lt;/li>
+&lt;li>google.golang.org/api: v0.20.0 → v0.44.0&lt;/li>
+&lt;li>google.golang.org/appengine: v1.6.5 → v1.6.7&lt;/li>
+&lt;li>google.golang.org/genproto: 8816d57 → f16073e&lt;/li>
+&lt;li>google.golang.org/grpc: v1.27.1 → v1.38.0&lt;/li>
+&lt;li>google.golang.org/protobuf: v1.25.0 → v1.26.0&lt;/li>
+&lt;li>gopkg.in/ini.v1: v1.51.0 → v1.62.0&lt;/li>
+&lt;li>gopkg.in/yaml.v3: 9f266ea → 496545a&lt;/li>
+&lt;li>honnef.co/go/tools: v0.0.1-2020.1.3 → v0.0.1-2020.1.4&lt;/li>
+&lt;li>k8s.io/api: 648b778 → v0.22.0&lt;/li>
+&lt;li>k8s.io/apimachinery: 8daf289 → v0.22.0&lt;/li>
+&lt;li>k8s.io/apiserver: 940c107 → v0.22.0&lt;/li>
+&lt;li>k8s.io/client-go: 8c8fa70 → v0.22.0&lt;/li>
+&lt;li>k8s.io/cloud-provider: 1ea896e → v0.22.0&lt;/li>
+&lt;li>k8s.io/component-base: 5860d9b → v0.22.0&lt;/li>
+&lt;li>k8s.io/controller-manager: 146a790 → v0.22.0&lt;/li>
+&lt;li>k8s.io/klog/v2: v2.8.0 → v2.10.0&lt;/li>
+&lt;li>k8s.io/kube-openapi: 591a79e → 9528897&lt;/li>
+&lt;li>k8s.io/utils: 67b214c → 4b05e18&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.15 → v0.0.22&lt;/li>
+&lt;li>sigs.k8s.io/structured-merge-diff/v4: v4.1.1 → v4.1.2&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/go-openapi/spec: &lt;a href="https://github.com/go-openapi/spec/tree/v0.19.5">v0.19.5&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-runewidth: &lt;a href="https://github.com/mattn/go-runewidth/tree/v0.0.2">v0.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/olekukonko/tablewriter: &lt;a href="https://github.com/olekukonko/tablewriter/tree/a0225b3">a0225b3&lt;/a>&lt;/li>
+&lt;li>github.com/urfave/cli: &lt;a href="https://github.com/urfave/cli/tree/v1.20.0">v1.20.0&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd: dd1b699&lt;/li>
+&lt;li>go.uber.org/tools: 2cfd321&lt;/li>
+&lt;li>gopkg.in/cheggaaa/pb.v1: v1.0.25&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v0.7.6</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</link><pubDate>Tue, 20 Jul 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</guid><description>
 &lt;h1 id="changelog-since-v075">Changelog since v0.7.5&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
