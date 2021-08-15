@@ -15,14 +15,15 @@ This repository provides Azure implementation of Kubernetes cloud provider [inte
 
 The latest version of azure-cloud-controller-manager and azure-cloud-node-manager could be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.0.3`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.0.3`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.1.0`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.1.0`
 
 Version matrix:
 
 |Kubernetes version|cloud-provider version|cloud-provider branch|
 |------------------|----------------------|---------------------|
 | master           | N/A                  | master              |
+| v1.22.x          | v1.1.0               | release-1.1         |
 | v1.21.x          | v1.0.3               | release-1.0         |
 | v1.20.x          | v0.7.6               | release-0.7         |
 | v1.19.x          | v0.6.0               | release-0.6         |
@@ -50,8 +51,10 @@ IMAGE_REGISTRY=<registry> make image
 Run azure-cloud-controller-manager locally:
 
 ```sh
-azure-cloud-controller-manager --cloud-provider=azure \
+azure-cloud-controller-manager \
+    --cloud-provider=azure \
     --cluster-name=kubernetes \
+    --controllers=*,-cloud-node \
     --cloud-config=/etc/kubernetes/azure.json \
     --kubeconfig=/etc/kubernetes/kubeconfig \
     --allocate-node-cidrs=true \
@@ -59,7 +62,16 @@ azure-cloud-controller-manager --cloud-provider=azure \
     --cluster-cidr=10.240.0.0/16 \
     --route-reconciliation-period=10s \
     --leader-elect=true \
+    --port=10267 \
     --v=2
+```
+
+Run azure-cloud-node-manager locally:
+
+```sh
+azure-cloud-node-manager \
+    --node-name=$(hostname) \
+    --wait-routes=true
 ```
 
 It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
