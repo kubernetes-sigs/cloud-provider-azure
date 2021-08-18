@@ -152,14 +152,14 @@ func TestParseConfig(t *testing.T) {
 	}
 
 	buffer := bytes.NewBufferString(testAzureConfig)
-	config, err := parseConfig(buffer)
+	config, err := ParseConfig(buffer)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, config)
 }
 
 func TestInitializeCloudProviderRateLimitConfig(t *testing.T) {
 	buffer := bytes.NewBufferString(testAzureConfig)
-	config, err := parseConfig(buffer)
+	config, err := ParseConfig(buffer)
 	assert.NoError(t, err)
 
 	InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
