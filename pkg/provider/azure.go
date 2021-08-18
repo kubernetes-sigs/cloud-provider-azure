@@ -427,7 +427,7 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 // NewCloudWithoutFeatureGates returns a Cloud without trying to wire the feature gates.  This is used by the unit tests
 // that don't load the actual features being used in the cluster.
 func NewCloudWithoutFeatureGates(configReader io.Reader, callFromCCM bool) (*Cloud, error) {
-	config, err := parseConfig(configReader)
+	config, err := ParseConfig(configReader)
 	if err != nil {
 		return nil, err
 	}
@@ -809,8 +809,8 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 	return azClientConfig
 }
 
-// parseConfig returns a parsed configuration for an Azure cloudprovider config file
-func parseConfig(configReader io.Reader) (*Config, error) {
+// ParseConfig returns a parsed configuration for an Azure cloudprovider config file
+func ParseConfig(configReader io.Reader) (*Config, error) {
 	var config Config
 	if configReader == nil {
 		return nil, nil

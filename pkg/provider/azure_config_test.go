@@ -177,7 +177,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 				assert.NoError(t, err, test.name)
 			}
 
-			real, err := az.getConfigFromSecret()
+			real, err := az.GetConfigFromSecret()
 			if test.expectErr {
 				assert.Error(t, err, test.name)
 				return

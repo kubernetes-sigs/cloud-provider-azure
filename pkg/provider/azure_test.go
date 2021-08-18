@@ -2128,7 +2128,7 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	defer ctrl.Finish()
 
 	configReader := strings.NewReader(config)
-	c, err := parseConfig(configReader)
+	c, err := ParseConfig(configReader)
 	assert.NoError(t, err)
 
 	az := &Cloud{
