@@ -352,3 +352,6 @@ const (
 	DefaultCloudProviderConfigSecNamespace = "kube-system"
 	DefaultCloudProviderConfigSecKey       = "cloud-config"
 )
+
+// RateLimited error string
+const RateLimited = "rate limited"

@@ -314,6 +314,8 @@ func TestDeleteManagedDisk(t *testing.T) {
 			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: Get Disk failed"),
 		},
 	}
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
@@ -332,7 +334,7 @@ func TestDeleteManagedDisk(t *testing.T) {
 		}
 		mockDisksClient.EXPECT().Delete(gomock.Any(), testCloud.ResourceGroup, test.diskName).Return(nil).AnyTimes()
 
-		err := managedDiskController.DeleteManagedDisk(diskURI)
+		err := managedDiskController.DeleteManagedDisk(ctx, diskURI)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)

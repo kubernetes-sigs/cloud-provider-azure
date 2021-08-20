@@ -342,6 +342,12 @@ func TestIsThrottled(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			err: &Error{
+				RetryAfter: time.Now().Add(0),
+			},
+			expected: true,
+		},
 	}
 
 	for _, test := range tests {

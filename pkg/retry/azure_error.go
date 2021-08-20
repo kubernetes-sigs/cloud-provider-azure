@@ -34,6 +34,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+// RateLimited error string
+const RateLimited = "rate limited"
+
 var (
 	// The function to get current time.
 	now = time.Now
@@ -134,7 +137,7 @@ func GetRateLimitError(isWrite bool, opName string) *Error {
 	if isWrite {
 		opType = "write"
 	}
-	return GetRetriableError(fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", opType, opName))
+	return GetRetriableError(fmt.Errorf("azure cloud provider %s(%s) for operation %q", RateLimited, opType, opName))
 }
 
 // GetThrottlingError creates a new error for throttling.
