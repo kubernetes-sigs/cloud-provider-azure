@@ -34,10 +34,9 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 
-	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
 
 var _ Interface = &Client{}
