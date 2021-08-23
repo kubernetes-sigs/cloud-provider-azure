@@ -218,8 +218,12 @@ update-dependencies: ## Update dependencies and go modules.
 update-gofmt: ## Update go formats.
 	hack/update-gofmt.sh
 
+.PHONY: update-mocks
+update-mocks: ## Create or update mock clients.
+	@hack/update-mock-clients.sh
+
 .PHONY: update
-update: update-dependencies update-gofmt ## Update go formats and dependencies.
+update: update-dependencies update-gofmt update-mocks ## Update go formats, mocks and dependencies.
 
 test-e2e: ## Run k8s e2e tests.
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
@@ -245,7 +249,3 @@ deploy: image push ## Build, push and deploy an aks-engine cluster.
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
-
-.PHONY: update-mocks
-update-mocks: ## Create or update mock clients.
-	@hack/update-mock-clients.sh
