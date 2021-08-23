@@ -35,7 +35,7 @@ const (
 
 // Interface is the client interface for Route.
 // Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient/interface.go -package=mockrouteclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient/mockrouteclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// CreateOrUpdate creates or updates a Route.
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, routeTableName string, routeName string, routeParameters network.Route, etag string) *retry.Error

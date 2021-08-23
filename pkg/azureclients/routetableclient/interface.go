@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for RouteTable.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/interface.go -package=mockroutetableclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a RouteTable.
 	Get(ctx context.Context, resourceGroupName string, routeTableName string, expand string) (result network.RouteTable, rerr *retry.Error)

@@ -22,6 +22,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 )
 
+// Interface is the client interface for Private DNS Zone Group.
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 
 	// Get gets the private dns zone group

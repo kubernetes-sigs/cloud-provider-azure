@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for Disks.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/interface.go -package=mockdiskclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/mockdiskclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a Disk.
 	Get(ctx context.Context, resourceGroupName string, diskName string) (result compute.Disk, rerr *retry.Error)
