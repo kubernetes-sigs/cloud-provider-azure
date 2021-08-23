@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for StorageAccounts.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/interface.go -package=mockstorageaccountclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Create creates a StorageAccount.
 	Create(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountCreateParameters) *retry.Error

@@ -23,6 +23,7 @@ import (
 )
 
 // Interface is the client interface for Private Endpoints.
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 
 	// Get gets the private endpoint

@@ -518,11 +518,7 @@ func TestUpdateAsync(t *testing.T) {
 
 	testVM := compute.VirtualMachineUpdate{}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	response := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
-	}
-	armClient.EXPECT().PatchResourceAsync(gomock.Any(), testResourceID, testVM).Return(response, nil).Times(1)
+	armClient.EXPECT().PatchResourceAsync(gomock.Any(), testResourceID, testVM).Times(1)
 
 	vmClient := getTestVMClient(armClient)
 	future, rerr := vmClient.UpdateAsync(context.TODO(), "rg", "vm1", testVM, "test")

@@ -22,6 +22,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 )
 
+// Interface is the client interface for Virtual Network Link.
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 
 	// Get gets a virtual network link

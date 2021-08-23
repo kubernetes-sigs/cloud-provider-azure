@@ -33,8 +33,7 @@ const (
 )
 
 // Interface is the client interface for VirtualMachineSizes.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient/interface.go -package=mockvmsizeclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmsizeclient/mockvmsizeclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// List gets compute.VirtualMachineSizeListResult.
 	List(ctx context.Context, location string) (result compute.VirtualMachineSizeListResult, rerr *retry.Error)

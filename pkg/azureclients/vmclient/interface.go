@@ -35,8 +35,7 @@ const (
 )
 
 // Interface is the client interface for VirtualMachines.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/interface.go -package=mockvmclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a VirtualMachine.
 	Get(ctx context.Context, resourceGroupName string, VMName string, expand compute.InstanceViewTypes) (compute.VirtualMachine, *retry.Error)

@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for Subnet.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/interface.go -package=mocksubnetclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a Subnet.
 	Get(ctx context.Context, resourceGroupName string, virtualNetworkName string, subnetName string, expand string) (result network.Subnet, rerr *retry.Error)

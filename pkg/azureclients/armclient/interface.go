@@ -33,8 +33,7 @@ type PutResourcesResponse struct {
 }
 
 // Interface is the client interface for ARM.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient/interface.go -package=mockarmclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient/mockarmclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Send sends a http request to ARM service with possible retry to regional ARM endpoint.
 	Send(ctx context.Context, request *http.Request) (*http.Response, *retry.Error)

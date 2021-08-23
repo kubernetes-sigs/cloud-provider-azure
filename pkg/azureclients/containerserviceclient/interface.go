@@ -30,8 +30,7 @@ const (
 )
 
 // Interface is the client interface for ContainerService.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient/interface.go -package=mockcontainerserviceclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient/mockcontainerserviceclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, managedClusterName string, parameters containerservice.ManagedCluster, etag string) *retry.Error
 	Delete(ctx context.Context, resourceGroupName string, managedClusterName string) *retry.Error

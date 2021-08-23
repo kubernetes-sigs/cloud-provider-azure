@@ -40,8 +40,7 @@ const (
 )
 
 // Interface is the client interface for PublicIPAddress.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/interface.go -package=mockpublicipclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a PublicIPAddress.
 	Get(ctx context.Context, resourceGroupName string, publicIPAddressName string, expand string) (result network.PublicIPAddress, rerr *retry.Error)

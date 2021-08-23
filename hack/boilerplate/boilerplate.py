@@ -89,7 +89,7 @@ def file_passes(filename, refs, regexs):
     extension = file_extension(filename)
     if generated:
         if extension == "go":
-            extension = "generatego"
+            extension = "gomock"
         elif extension == "bzl":
             extension = "generatebzl"
 
@@ -99,7 +99,7 @@ def file_passes(filename, refs, regexs):
         ref = refs[basename]
 
     # remove extra content from the top of files
-    if extension == "go" or extension == "generatego":
+    if extension == "go" or extension == "gomock":
         p = regexs["go_build_constraints"]
         (data, found) = p.subn("", data, 1)
     elif extension in ["sh", "py"]:

@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for Snapshots.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient/interface.go -package=mocksnapshotclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/snapshotclient/mocksnapshotclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a Snapshot.
 	Get(ctx context.Context, resourceGroupName string, snapshotName string) (compute.Snapshot, *retry.Error)

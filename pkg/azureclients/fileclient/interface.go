@@ -21,7 +21,7 @@ import (
 )
 
 // Interface is the client interface for creating file shares, interface for test injection.
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/interface.go -package=mockfileclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/mockfileclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	CreateFileShare(resourceGroupName, accountName string, shareOptions *ShareOptions) error
 	DeleteFileShare(resourceGroupName, accountName, name string) error
