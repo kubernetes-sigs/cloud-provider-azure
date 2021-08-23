@@ -395,17 +395,6 @@
 &lt;li>Fix: leave the probe path empty for TCP probes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/680">#680&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
-&lt;h3 id="added">Added&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="changed">Changed&lt;/h3>
-&lt;ul>
-&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v55.0.0...v54.1.0">v55.0.0+incompatible → v54.1.0+incompatible&lt;/a>&lt;/li>
-&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.13...v0.9.10">v0.9.13 → v0.9.10&lt;/a>&lt;/li>
-&lt;li>github.com/Azure/go-autorest/autorest/to: &lt;a href="https://github.com/Azure/go-autorest/autorest/to/compare/v0.4.0...v0.2.0">v0.4.0 → v0.2.0&lt;/a>&lt;/li>
-&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.18...v0.11.17">v0.11.18 → v0.11.17&lt;/a>&lt;/li>
-&lt;li>github.com/Azure/go-autorest/logger: &lt;a href="https://github.com/Azure/go-autorest/logger/compare/v0.2.1...v0.2.0">v0.2.1 → v0.2.0&lt;/a>&lt;/li>
-&lt;/ul>
-&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</link><pubDate>Fri, 07 May 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/05/07/v1.0.0/</guid><description>
 &lt;h1 id="major-changes-since-v074">Major changes since v0.7.4&lt;/h1>
 &lt;p>Cloud Provider Azure v1.0.0 includes several critical bug fixes. The images are available at:&lt;/p>
