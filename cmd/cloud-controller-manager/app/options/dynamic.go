@@ -36,10 +36,10 @@ func (o *DynamicReloadingOptions) AddFlags(fs *pflag.FlagSet) {
 		return
 	}
 
-	fs.BoolVar(&o.EnableDynamicReloading, "enable-dynamic-reloading", false, "Enable re-configuring cloud controller manager from secret without restarting")
-	fs.StringVar(&o.CloudConfigSecretName, "cloud-config-secret-name", "azure-cloud-provider", "The name of the cloud config secret, default to 'cloud-provider-config'")
-	fs.StringVar(&o.CloudConfigSecretNamespace, "cloud-config-secret-namespace", "kube-system", "The k8s namespace of the cloud config secret, default to 'kube-system'")
-	fs.StringVar(&o.CloudConfigKey, "cloud-config-key", "cloud-config", "The key of the config data in the cloud config secret, default to 'cloud-config'")
+	fs.BoolVar(&o.EnableDynamicReloading, "enable-dynamic-reloading", false, "Enable re-configuring cloud controller manager from secret without restarting.")
+	fs.StringVar(&o.CloudConfigSecretName, "cloud-config-secret-name", "", "The name of the cloud config secret.")
+	fs.StringVar(&o.CloudConfigSecretNamespace, "cloud-config-secret-namespace", "kube-system", "The k8s namespace of the cloud config secret, default to 'kube-system'.")
+	fs.StringVar(&o.CloudConfigKey, "cloud-config-key", "cloud-config", "The key of the config data in the cloud config secret, default to 'cloud-config'.")
 }
 
 // ApplyTo fills up dynamic reloading config with options

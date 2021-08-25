@@ -129,11 +129,11 @@ Master nodes are not added to the backends of Azure Load Balancer (ALB) if `excl
 
 By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want to add the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
 
-### Setting Azure cloud provider from Kubernetes secrets
+### Dynamically reloading cloud controller manager
 
 Since v1.21.0, Azure cloud provider supports reading the cloud config from Kubernetes secrets. The secret is a serialized version of `azure.json` file. When the secret is changed, the cloud controller manager will re-constructing itself without restarting the pod.
 
-To enable this feature, set `--enable-dynamic-reloading=true` and configure the secret name, namespace and data key by `--cloud-config-secret-name`, `--cloud-config-secret-namespace` and `--cloud-config-key`. When initializing from secret, the `--cloud-config` would be ignored.
+To enable this feature, set `--enable-dynamic-reloading=true` and configure the secret name, namespace and data key by `--cloud-config-secret-name`, `--cloud-config-secret-namespace` and `--cloud-config-key`. When initializing from secret, the `--cloud-config` should not be set.
 
 > Note that the `--enable-dynamic-reloading` cannot be `false` if `--cloud-config` is empty. To build the cloud provider from classic config file, please explicitly specify the `--cloud-config` and do not set `--enable-dynamic-reloading=true`. In this manner, the cloud controller manager will not be updated when the config file is changed. You need to restart the pod to manually trigger the re-initialization.
 
@@ -169,6 +169,8 @@ subjects:
   name: azure-cloud-provider
   namespace: kube-system
 ```
+
+It is also supported to build the cloud controller manager from the cloud config file and reload dynamically. To use this way, turn on `--enable-dynamic-reloading` and set `--cloud-config` to an non-empty value.
 
 ### per client rate limiting
 
