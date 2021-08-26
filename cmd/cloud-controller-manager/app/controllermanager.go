@@ -169,21 +169,16 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 
 			panic("unreachable")
 		} else {
-			var updateCh chan struct{}
-			if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
-				klog.V(1).Infof("RunWrapper: using dynamic initialization from config file %s, starting the file watcher", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
-				updateCh = dynamic.RunFileWatcherOrDie(c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
-			} else {
-				klog.V(1).Infof("RunWrapper: using dynamic initialization from secret %s/%s, starting the secret watcher", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
-				updateCh = dynamic.RunSecretWatcherOrDie(c)
-			}
-
+			klog.V(1).Infof("RunWrapper: using dynamic initialization from secret %s/%s, starting the secret watcher", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
+			updateCh := dynamic.RunSecretWatcherOrDie(c)
 			errCh := make(chan error, 1)
+
 			cancelFunc := runAsync(s, errCh)
+
 			for {
 				select {
 				case <-updateCh:
-					klog.V(2).Info("RunWrapper: detected the cloud config has been updated, re-constructing the cloud controller manager")
+					klog.V(2).Infof("RunWrapper: detected the cloud config secret %s/%s has been updated, re-constructing the cloud controller manager", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
 
 					// stop the previous goroutines
 					cancelFunc()
@@ -265,20 +260,20 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig) error {
 		err   error
 	)
 
-	if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
-		cloud, err = provider.NewCloudFromConfigFile(c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
-		if err != nil {
-			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
-		}
-	} else if c.DynamicReloadingConfig.EnableDynamicReloading && c.DynamicReloadingConfig.CloudConfigSecretName != "" {
+	if c.DynamicReloadingConfig.EnableDynamicReloading {
 		cloud, err = provider.NewCloudFromSecret(c.ClientBuilder, c.DynamicReloadingConfig.CloudConfigSecretName, c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigKey)
 		if err != nil {
 			klog.Fatalf("Run: Cloud provider azure could not be initialized dynamically from secret %s/%s: %v", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName, err)
 		}
+	} else {
+		cloud, err = provider.NewCloudFromConfigFile(c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
+		if err != nil {
+			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
+		}
 	}
 
 	if cloud == nil {
-		klog.Fatalf("cloud provider is nil, please check if the --cloud-config is set properly")
+		klog.Fatalf("cloud provider is nil")
 	}
 
 	if !cloud.HasClusterID() {
