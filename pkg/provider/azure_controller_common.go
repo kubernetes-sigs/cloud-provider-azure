@@ -147,7 +147,7 @@ func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.Azu
 
 // AttachDisk attaches a vhd to vm. The vhd must exist, can be identified by diskName, diskURI.
 // return (lun, error)
-func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI string, nodeName types.NodeName,
+func (c *controllerCommon) AttachDisk(ctx context.Context, isManagedDisk bool, diskName, diskURI string, nodeName types.NodeName,
 	cachingMode compute.CachingTypes, disk *compute.Disk) (int32, error) {
 	diskEncryptionSetID := ""
 	writeAcceleratorEnabled := false
@@ -262,15 +262,10 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	} else {
 		klog.Warningf("azureDisk - switch to batch operation since disk operation is rate limited, current QPS: %f", c.diskOpRateLimiter.QPS())
 	}
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
 	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
 	if err != nil {
 		return -1, err
 	}
-
 	return lun, vmset.WaitForUpdateResult(ctx, future, resourceGroup, "attach_disk")
 }
 
@@ -318,9 +313,7 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 }
 
 // DetachDisk detaches a disk from VM
-func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.NodeName) error {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
+func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI string, nodeName types.NodeName) error {
 	_, err := c.cloud.InstanceID(ctx, nodeName)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
@@ -374,14 +367,6 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 		if err != nil {
 			return err
 		}
-		if c.diskOpRateLimiter.TryAccept() {
-			// unlock and wait for attach disk complete
-			unlock = true
-			c.lockMap.UnlockEntry(node)
-		} else {
-			klog.Warningf("azureDisk - switch to batch operation since disk operation is rate limited, current QPS: %f", c.diskOpRateLimiter.QPS())
-		}
-
 		if err := vmset.WaitForUpdateResult(ctx, future, resourceGroup, "detach_disk"); err != nil {
 			klog.Errorf("azureDisk - detach disk(%s, %s) failed with error: %v", diskName, diskURI, err)
 			return err
