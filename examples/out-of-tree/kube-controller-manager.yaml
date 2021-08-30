@@ -10,9 +10,9 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-controller-manager
-      image: k8s.gcr.io/hyperkube-amd64:v1.18.0
+      image: k8s.gcr.io/kube-controller-manager:v1.22.1
       imagePullPolicy: IfNotPresent
-      command: ["/hyperkube", "kube-controller-manager"]
+      command: ["kube-controller-manager"]
       args:
         - "--allocate-node-cidrs=true"       # "false" for Azure CNI and "true" for other network plugins
         - "--cluster-cidr=10.244.0.0/16"
