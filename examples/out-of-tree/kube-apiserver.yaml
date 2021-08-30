@@ -10,9 +10,9 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-apiserver
-      image: k8s.gcr.io/hyperkube-amd64:v1.18.0
+      image: k8s.gcr.io/kube-apiserver:v1.22.1
       imagePullPolicy: IfNotPresent
-      command: ["/hyperkube", "kube-apiserver"]
+      command: ["kube-apiserver"]
       args:
         - "--advertise-address=10.241.255.5"
         - "--allow-privileged=true"
