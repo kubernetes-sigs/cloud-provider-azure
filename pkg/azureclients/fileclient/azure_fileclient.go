@@ -42,6 +42,8 @@ type ShareOptions struct {
 	Name       string
 	Protocol   storage.EnabledProtocols
 	RequestGiB int
+	// supported values: ""(by default), "TransactionOptimized", "Cool", "Hot", "Premium"
+	AccessTier string
 }
 
 // New creates a azure file client
@@ -71,6 +73,9 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 	}
 	if shareOptions.Protocol == storage.EnabledProtocolsNFS {
 		fileShareProperties.EnabledProtocols = shareOptions.Protocol
+	}
+	if shareOptions.AccessTier != "" {
+		fileShareProperties.AccessTier = storage.ShareAccessTier(shareOptions.AccessTier)
 	}
 	fileShare := storage.FileShare{
 		Name:                &shareOptions.Name,
