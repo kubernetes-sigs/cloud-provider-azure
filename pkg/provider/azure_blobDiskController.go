@@ -80,7 +80,7 @@ func (c *BlobDiskController) initStorageAccounts() {
 // CreateVolume creates a VHD blob in a storage account that has storageType and location using the given storage account.
 // If no storage account is given, search all the storage accounts associated with the resource group and pick one that
 // fits storage type and location.
-func (c *BlobDiskController) CreateVolume(blobName, accountName, accountType, location string, requestGB int) (string, string, int, error) {
+func (c *BlobDiskController) CreateVolume(ctx context.Context, blobName, accountName, accountType, location string, requestGB int) (string, string, int, error) {
 	accountOptions := &AccountOptions{
 		Name:                   accountName,
 		Type:                   accountType,
@@ -89,7 +89,7 @@ func (c *BlobDiskController) CreateVolume(blobName, accountName, accountType, lo
 		Location:               location,
 		EnableHTTPSTrafficOnly: true,
 	}
-	account, key, err := c.common.cloud.EnsureStorageAccount(accountOptions, consts.DedicatedDiskAccountNamePrefix)
+	account, key, err := c.common.cloud.EnsureStorageAccount(ctx, accountOptions, consts.DedicatedDiskAccountNamePrefix)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("could not get storage key for storage account %s: %w", accountName, err)
 	}
