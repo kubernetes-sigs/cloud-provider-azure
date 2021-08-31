@@ -40,6 +40,9 @@ func TestGetStorageAccessKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	cloud := &Cloud{}
 	value := "foo bar"
 
@@ -78,7 +81,7 @@ func TestGetStorageAccessKeys(t *testing.T) {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
 		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
-		key, err := cloud.GetStorageAccesskey("acct", "rg")
+		key, err := cloud.GetStorageAccesskey(ctx, "acct", "rg")
 		if test.expectErr && err == nil {
 			t.Errorf("Unexpected non-error")
 			continue
@@ -96,6 +99,9 @@ func TestGetStorageAccessKeys(t *testing.T) {
 func TestGetStorageAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -136,7 +142,7 @@ func TestGetStorageAccount(t *testing.T) {
 
 	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(testResourceGroups, nil).Times(1)
 
-	accountsWithLocations, err := cloud.getStorageAccounts(accountOptions)
+	accountsWithLocations, err := cloud.getStorageAccounts(ctx, accountOptions)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -172,6 +178,9 @@ func TestGetStorageAccount(t *testing.T) {
 func TestGetStorageAccountEdgeCases(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -308,7 +317,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 
 		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
 
-		accountsWithLocations, err := cloud.getStorageAccounts(test.testAccountOptions)
+		accountsWithLocations, err := cloud.getStorageAccounts(ctx, test.testAccountOptions)
 		if !errors.Is(err, test.expectedError) {
 			t.Errorf("unexpected error: %v", err)
 		}

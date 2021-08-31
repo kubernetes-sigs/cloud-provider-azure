@@ -42,8 +42,8 @@ const PrivateDNSZoneName = "privatelink.file.core.windows.net"
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
 	Name, Type, Kind, ResourceGroup, Location string
-	// indicate whether create new account when Name is empty
-	EnableHTTPSTrafficOnly                  bool
+	EnableHTTPSTrafficOnly                    bool
+	// indicate whether create new account when Name is empty or when account does not exists
 	CreateAccount                           bool
 	EnableLargeFileShare                    bool
 	CreatePrivateEndpoint                   bool
@@ -60,12 +60,10 @@ type accountWithLocation struct {
 }
 
 // getStorageAccounts get matching storage accounts
-func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWithLocation, error) {
+func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *AccountOptions) ([]accountWithLocation, error) {
 	if az.StorageAccountClient == nil {
 		return nil, fmt.Errorf("StorageAccountClient is nil")
 	}
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	result, rerr := az.StorageAccountClient.ListByResourceGroup(ctx, accountOptions.ResourceGroup)
 	if rerr != nil {
 		return nil, rerr.Error()
@@ -92,13 +90,11 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 }
 
 // GetStorageAccesskey gets the storage account access key
-func (az *Cloud) GetStorageAccesskey(account, resourceGroup string) (string, error) {
+func (az *Cloud) GetStorageAccesskey(ctx context.Context, account, resourceGroup string) (string, error) {
 	if az.StorageAccountClient == nil {
 		return "", fmt.Errorf("StorageAccountClient is nil")
 	}
 
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	result, rerr := az.StorageAccountClient.ListKeys(ctx, resourceGroup, account)
 	if rerr != nil {
 		return "", rerr.Error()
@@ -132,151 +128,165 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	location := accountOptions.Location
 	enableHTTPSTrafficOnly := accountOptions.EnableHTTPSTrafficOnly
 
+	var createNewAccount bool
 	if len(accountName) == 0 {
+		createNewAccount = true
 		if !accountOptions.CreateAccount {
 			// find a storage account that matches accountType
-			accounts, err := az.getStorageAccounts(accountOptions)
+			accounts, err := az.getStorageAccounts(ctx, accountOptions)
 			if err != nil {
 				return "", "", fmt.Errorf("could not list storage accounts for account type %s: %w", accountType, err)
 			}
 
 			if len(accounts) > 0 {
 				accountName = accounts[0].Name
+				createNewAccount = false
 				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
 			}
 		}
 
 		if len(accountName) == 0 {
-			// set network rules for storage account
-			var networkRuleSet *storage.NetworkRuleSet
-			virtualNetworkRules := []storage.VirtualNetworkRule{}
-			for i, subnetID := range accountOptions.VirtualNetworkResourceIDs {
-				vnetRule := storage.VirtualNetworkRule{
-					VirtualNetworkResourceID: &accountOptions.VirtualNetworkResourceIDs[i],
-					Action:                   storage.ActionAllow,
-				}
-				virtualNetworkRules = append(virtualNetworkRules, vnetRule)
-				klog.V(4).Infof("subnetID(%s) has been set", subnetID)
-			}
-			if len(virtualNetworkRules) > 0 {
-				networkRuleSet = &storage.NetworkRuleSet{
-					VirtualNetworkRules: &virtualNetworkRules,
-					DefaultAction:       storage.DefaultActionDeny,
-				}
-			}
-
-			if accountOptions.CreatePrivateEndpoint {
-				networkRuleSet = &storage.NetworkRuleSet{
-					DefaultAction: storage.DefaultActionDeny,
-				}
-			}
-
-			// not found a matching account, now create a new account in current resource group
 			accountName = generateStorageAccountName(genAccountNamePrefix)
-			if location == "" {
-				location = az.Location
+		}
+	} else {
+		createNewAccount = false
+		if accountOptions.CreateAccount {
+			// check whether account exists
+			if _, err := az.GetStorageAccesskey(ctx, accountName, resourceGroup); err != nil {
+				klog.V(2).Infof("get storage key for storage account %s returned with %v", accountName, err)
+				createNewAccount = true
 			}
-			if accountType == "" {
-				accountType = consts.DefaultStorageAccountType
+		}
+	}
+
+	if createNewAccount {
+		// set network rules for storage account
+		var networkRuleSet *storage.NetworkRuleSet
+		virtualNetworkRules := []storage.VirtualNetworkRule{}
+		for i, subnetID := range accountOptions.VirtualNetworkResourceIDs {
+			vnetRule := storage.VirtualNetworkRule{
+				VirtualNetworkResourceID: &accountOptions.VirtualNetworkResourceIDs[i],
+				Action:                   storage.ActionAllow,
+			}
+			virtualNetworkRules = append(virtualNetworkRules, vnetRule)
+			klog.V(4).Infof("subnetID(%s) has been set", subnetID)
+		}
+		if len(virtualNetworkRules) > 0 {
+			networkRuleSet = &storage.NetworkRuleSet{
+				VirtualNetworkRules: &virtualNetworkRules,
+				DefaultAction:       storage.DefaultActionDeny,
+			}
+		}
+
+		if accountOptions.CreatePrivateEndpoint {
+			networkRuleSet = &storage.NetworkRuleSet{
+				DefaultAction: storage.DefaultActionDeny,
+			}
+		}
+
+		if location == "" {
+			location = az.Location
+		}
+		if accountType == "" {
+			accountType = consts.DefaultStorageAccountType
+		}
+
+		// use StorageV2 by default per https://docs.microsoft.com/en-us/azure/storage/common/storage-account-options
+		kind := consts.DefaultStorageAccountKind
+		if accountKind != "" {
+			kind = storage.Kind(accountKind)
+		}
+		if len(accountOptions.Tags) == 0 {
+			accountOptions.Tags = make(map[string]string)
+		}
+		accountOptions.Tags["created-by"] = "azure"
+		tags := convertMapToMapPointer(accountOptions.Tags)
+
+		klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
+			accountName, resourceGroup, location, accountType, kind, accountOptions.Tags)
+
+		cp := storage.AccountCreateParameters{
+			Sku:  &storage.Sku{Name: storage.SkuName(accountType)},
+			Kind: kind,
+			AccountPropertiesCreateParameters: &storage.AccountPropertiesCreateParameters{
+				EnableHTTPSTrafficOnly: &enableHTTPSTrafficOnly,
+				NetworkRuleSet:         networkRuleSet,
+				IsHnsEnabled:           accountOptions.IsHnsEnabled,
+				EnableNfsV3:            accountOptions.EnableNfsV3,
+				MinimumTLSVersion:      storage.MinimumTLSVersionTLS12,
+			},
+			Tags:     tags,
+			Location: &location}
+
+		if accountOptions.EnableLargeFileShare {
+			klog.V(2).Infof("Enabling LargeFileShare for storage account(%s)", accountName)
+			cp.AccountPropertiesCreateParameters.LargeFileSharesState = storage.LargeFileSharesStateEnabled
+		}
+		if accountOptions.AllowBlobPublicAccess != nil {
+			klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
+			cp.AccountPropertiesCreateParameters.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
+		}
+		if az.StorageAccountClient == nil {
+			return "", "", fmt.Errorf("StorageAccountClient is nil")
+		}
+
+		if rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp); rerr != nil {
+			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
+		}
+
+		if accountOptions.DisableFileServiceDeleteRetentionPolicy {
+			klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), resource group(%s)", accountName, resourceGroup)
+			prop, err := az.FileClient.GetServiceProperties(resourceGroup, accountName)
+			if err != nil {
+				return "", "", err
+			}
+			if prop.FileServicePropertiesProperties == nil {
+				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), resource group(%s) is nil", accountName, resourceGroup)
+			}
+			prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
+			if _, err := az.FileClient.SetServiceProperties(resourceGroup, accountName, prop); err != nil {
+				return "", "", err
+			}
+		}
+
+		if accountOptions.CreatePrivateEndpoint {
+			vnetResourceGroup := az.ResourceGroup
+			if len(az.VnetResourceGroup) > 0 {
+				vnetResourceGroup = az.VnetResourceGroup
+			}
+			// Get properties of the storageAccount
+			storageAccount, err := az.StorageAccountClient.GetProperties(ctx, resourceGroup, accountName)
+			if err != nil {
+				return "", "", fmt.Errorf("Failed to get the properties of storage account(%s), resourceGroup(%s), error: %v", accountName, resourceGroup, err)
 			}
 
-			// use StorageV2 by default per https://docs.microsoft.com/en-us/azure/storage/common/storage-account-options
-			kind := consts.DefaultStorageAccountKind
-			if accountKind != "" {
-				kind = storage.Kind(accountKind)
-			}
-			if len(accountOptions.Tags) == 0 {
-				accountOptions.Tags = make(map[string]string)
-			}
-			accountOptions.Tags["created-by"] = "azure"
-			tags := convertMapToMapPointer(accountOptions.Tags)
-
-			klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
-				accountName, resourceGroup, location, accountType, kind, accountOptions.Tags)
-
-			cp := storage.AccountCreateParameters{
-				Sku:  &storage.Sku{Name: storage.SkuName(accountType)},
-				Kind: kind,
-				AccountPropertiesCreateParameters: &storage.AccountPropertiesCreateParameters{
-					EnableHTTPSTrafficOnly: &enableHTTPSTrafficOnly,
-					NetworkRuleSet:         networkRuleSet,
-					IsHnsEnabled:           accountOptions.IsHnsEnabled,
-					EnableNfsV3:            accountOptions.EnableNfsV3,
-					MinimumTLSVersion:      storage.MinimumTLSVersionTLS12,
-				},
-				Tags:     tags,
-				Location: &location}
-
-			if accountOptions.EnableLargeFileShare {
-				klog.V(2).Infof("Enabling LargeFileShare for storage account(%s)", accountName)
-				cp.AccountPropertiesCreateParameters.LargeFileSharesState = storage.LargeFileSharesStateEnabled
-			}
-			if accountOptions.AllowBlobPublicAccess != nil {
-				klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
-				cp.AccountPropertiesCreateParameters.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
-			}
-			if az.StorageAccountClient == nil {
-				return "", "", fmt.Errorf("StorageAccountClient is nil")
+			// Create private endpoint
+			privateEndpointName := accountName + "-pvtendpoint"
+			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup); err != nil {
+				return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
 			}
 
-			if rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp); rerr != nil {
-				return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
+			// Create DNS zone
+			if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
+				return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
 			}
 
-			if accountOptions.DisableFileServiceDeleteRetentionPolicy {
-				klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), resource group(%s)", accountName, resourceGroup)
-				prop, err := az.FileClient.GetServiceProperties(resourceGroup, accountName)
-				if err != nil {
-					return "", "", err
-				}
-				if prop.FileServicePropertiesProperties == nil {
-					return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), resource group(%s) is nil", accountName, resourceGroup)
-				}
-				prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
-				if _, err := az.FileClient.SetServiceProperties(resourceGroup, accountName, prop); err != nil {
-					return "", "", err
-				}
+			// Create virtual link to the zone private DNS zone
+			vNetLinkName := accountName + "-vnetlink"
+			if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup); err != nil {
+				return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", az.VnetName, PrivateDNSZoneName, vnetResourceGroup, err)
 			}
 
-			if accountOptions.CreatePrivateEndpoint {
-				vnetResourceGroup := az.ResourceGroup
-				if len(az.VnetResourceGroup) > 0 {
-					vnetResourceGroup = az.VnetResourceGroup
-				}
-				// Get properties of the storageAccount
-				storageAccount, err := az.StorageAccountClient.GetProperties(ctx, resourceGroup, accountName)
-				if err != nil {
-					return "", "", fmt.Errorf("Failed to get the properties of storage account(%s), resourceGroup(%s), error: %v", accountName, resourceGroup, err)
-				}
-
-				// Create private endpoint
-				privateEndpointName := accountName + "-pvtendpoint"
-				if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup); err != nil {
-					return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
-				}
-
-				// Create DNS zone
-				if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
-					return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
-				}
-
-				// Create virtual link to the zone private DNS zone
-				vNetLinkName := accountName + "-vnetlink"
-				if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup); err != nil {
-					return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", az.VnetName, PrivateDNSZoneName, vnetResourceGroup, err)
-				}
-
-				// Create dns zone group
-				dnsZoneGroupName := accountName + "-dnszonegroup"
-				if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup); err != nil {
-					return "", "", fmt.Errorf("Failed to create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s), error: %v", privateEndpointName, az.VnetName, vnetResourceGroup, err)
-				}
+			// Create dns zone group
+			dnsZoneGroupName := accountName + "-dnszonegroup"
+			if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup); err != nil {
+				return "", "", fmt.Errorf("Failed to create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s), error: %v", privateEndpointName, az.VnetName, vnetResourceGroup, err)
 			}
 		}
 	}
 
 	// find the access key with this account
-	accountKey, err := az.GetStorageAccesskey(accountName, resourceGroup)
+	accountKey, err := az.GetStorageAccesskey(ctx, accountName, resourceGroup)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountName, err)
 	}
