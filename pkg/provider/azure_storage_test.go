@@ -32,6 +32,9 @@ func TestCreateFileShare(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	cloud := &Cloud{controllerCommon: &controllerCommon{resourceGroup: "rg"}}
 	name := "baz"
 	sku := "sku"
@@ -168,7 +171,7 @@ func TestCreateFileShare(t *testing.T) {
 			RequestGiB: test.gb,
 		}
 
-		account, key, err := cloud.CreateFileShare(mockAccount, mockFileShare)
+		account, key, err := cloud.CreateFileShare(ctx, mockAccount, mockFileShare)
 		if test.expectErr && err == nil {
 			t.Errorf("unexpected non-error")
 			continue

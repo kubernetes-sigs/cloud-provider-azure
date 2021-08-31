@@ -79,11 +79,14 @@ func TestCreateVolume(t *testing.T) {
 	defer ctrl.Finish()
 	b := GetTestBlobDiskController(t)
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	mockSAClient := mockstorageaccountclient.NewMockInterface(ctrl)
 	mockSAClient.EXPECT().ListKeys(gomock.Any(), b.common.resourceGroup, "testsa").Return(storage.AccountListKeysResult{}, &retryError500)
 	b.common.cloud.StorageAccountClient = mockSAClient
 
-	diskName, diskURI, requestGB, err := b.CreateVolume("testBlob", "testsa", "type", b.common.location, 10)
+	diskName, diskURI, requestGB, err := b.CreateVolume(ctx, "testBlob", "testsa", "type", b.common.location, 10)
 	var nilErr error
 	rawErr := fmt.Errorf("%w", nilErr)
 	retryErr := fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", rawErr)
@@ -102,7 +105,7 @@ func TestCreateVolume(t *testing.T) {
 			},
 		},
 	}, nil)
-	diskName, diskURI, requestGB, err = b.CreateVolume("testBlob", "testsa", "type", b.common.location, 10)
+	diskName, diskURI, requestGB, err = b.CreateVolume(ctx, "testBlob", "testsa", "type", b.common.location, 10)
 	expectedErrStr := "failed to put page blob testBlob.vhd in container vhds: storage: service returned error: StatusCode=403, ErrorCode=AccountIsDisabled, ErrorMessage=The specified account is disabled."
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), expectedErrStr))

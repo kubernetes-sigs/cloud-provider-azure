@@ -323,6 +323,9 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	resourceGroup := "ResourceGroup"
 	vnetName := "VnetName"
 	vnetResourceGroup := "VnetResourceGroup"
@@ -387,7 +390,7 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 		CreatePrivateEndpoint: true,
 	}
 
-	if _, _, err := cloud.EnsureStorageAccount(testAccountOptions, "test"); err != nil {
+	if _, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test"); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

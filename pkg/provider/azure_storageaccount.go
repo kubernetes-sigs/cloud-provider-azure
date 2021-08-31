@@ -50,6 +50,7 @@ type AccountOptions struct {
 	DisableFileServiceDeleteRetentionPolicy bool
 	IsHnsEnabled                            *bool
 	EnableNfsV3                             *bool
+	AllowBlobPublicAccess                   *bool
 	Tags                                    map[string]string
 	VirtualNetworkResourceIDs               []string
 }
@@ -119,7 +120,7 @@ func (az *Cloud) GetStorageAccesskey(account, resourceGroup string) (string, err
 }
 
 // EnsureStorageAccount search storage account, create one storage account(with genAccountNamePrefix) if not found, return accountName, accountKey
-func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
+func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *AccountOptions, genAccountNamePrefix string) (string, string, error) {
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
@@ -207,15 +208,17 @@ func (az *Cloud) EnsureStorageAccount(accountOptions *AccountOptions, genAccount
 				Location: &location}
 
 			if accountOptions.EnableLargeFileShare {
-				klog.V(2).Infof("Enabling LargeFileShare for the storage account")
+				klog.V(2).Infof("Enabling LargeFileShare for storage account(%s)", accountName)
 				cp.AccountPropertiesCreateParameters.LargeFileSharesState = storage.LargeFileSharesStateEnabled
+			}
+			if accountOptions.AllowBlobPublicAccess != nil {
+				klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
+				cp.AccountPropertiesCreateParameters.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
 			}
 			if az.StorageAccountClient == nil {
 				return "", "", fmt.Errorf("StorageAccountClient is nil")
 			}
 
-			ctx, cancel := getContextWithCancel()
-			defer cancel()
 			if rerr := az.StorageAccountClient.Create(ctx, resourceGroup, accountName, cp); rerr != nil {
 				return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 			}

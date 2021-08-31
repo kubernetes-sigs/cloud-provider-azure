@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
@@ -29,7 +30,7 @@ import (
 
 // CreateFileShare creates a file share, using a matching storage account type, account kind, etc.
 // storage account will be created if specified account is not found
-func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *fileclient.ShareOptions) (string, string, error) {
+func (az *Cloud) CreateFileShare(ctx context.Context, accountOptions *AccountOptions, shareOptions *fileclient.ShareOptions) (string, string, error) {
 	if accountOptions == nil {
 		return "", "", fmt.Errorf("account options is nil")
 	}
@@ -45,7 +46,7 @@ func (az *Cloud) CreateFileShare(accountOptions *AccountOptions, shareOptions *f
 		accountOptions.EnableHTTPSTrafficOnly = false
 	}
 
-	accountName, accountKey, err := az.EnsureStorageAccount(accountOptions, consts.FileShareAccountNamePrefix)
+	accountName, accountKey, err := az.EnsureStorageAccount(ctx, accountOptions, consts.FileShareAccountNamePrefix)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountOptions.Name, err)
 	}
