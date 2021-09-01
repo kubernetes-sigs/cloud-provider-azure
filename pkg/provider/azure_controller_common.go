@@ -314,8 +314,7 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 
 // DetachDisk detaches a disk from VM
 func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI string, nodeName types.NodeName) error {
-	_, err := c.cloud.InstanceID(ctx, nodeName)
-	if err != nil {
+	if _, err := c.cloud.InstanceID(context.TODO(), nodeName); err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
 			klog.Warningf("azureDisk - failed to get azure instance id(%q), DetachDisk(%s) will assume disk is already detached",
@@ -326,6 +325,11 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 		return fmt.Errorf("failed to get azure instance id for node %q: %w", nodeName, err)
 	}
 
+	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return err
+	}
+
 	node := strings.ToLower(string(nodeName))
 	disk := strings.ToLower(diskURI)
 	if err := c.insertDetachDiskRequest(diskName, disk, node); err != nil {
@@ -333,12 +337,7 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 	}
 
 	c.lockMap.LockEntry(node)
-	unlock := false
-	defer func() {
-		if !unlock {
-			c.lockMap.UnlockEntry(node)
-		}
-	}()
+	defer c.lockMap.UnlockEntry(node)
 	diskMap, err := c.cleanDetachDiskRequests(node)
 	if err != nil {
 		return err
@@ -346,31 +345,25 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 
 	klog.V(2).Infof("Trying to detach volume %q from node %q, diskMap: %s", diskURI, nodeName, diskMap)
 	if len(diskMap) > 0 {
-		vmset, errVMSet := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
-		if errVMSet != nil {
-			return errVMSet
-		}
 		c.diskStateMap.Store(disk, "detaching")
 		defer c.diskStateMap.Delete(disk)
-		future, err := vmset.DetachDisk(nodeName, diskMap)
-		if err != nil {
+		if err = vmset.DetachDisk(nodeName, diskMap); err != nil {
 			if isInstanceNotFoundError(err) {
 				// if host doesn't exist, no need to detach
 				klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
 					err, diskURI)
 				return nil
 			}
-			klog.Errorf("azureDisk - detach disk(%s, %s) failed, err: %v", diskName, diskURI, err)
-			return err
 		}
-		resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
-		if err != nil {
-			return err
+	} else {
+		if lun, _, err := c.GetDiskLun(diskName, diskURI, nodeName); err == nil {
+			return fmt.Errorf("disk(%s) is still attatched to node(%s) on lun(%d)", diskURI, nodeName, lun)
 		}
-		if err := vmset.WaitForUpdateResult(ctx, future, resourceGroup, "detach_disk"); err != nil {
-			klog.Errorf("azureDisk - detach disk(%s, %s) failed with error: %v", diskName, diskURI, err)
-			return err
-		}
+	}
+
+	if err != nil {
+		klog.Errorf("azureDisk - detach disk(%s, %s) failed, err: %v", diskName, diskURI, err)
+		return err
 	}
 
 	klog.V(2).Infof("azureDisk - detach disk(%s, %s) succeeded", diskName, diskURI)
