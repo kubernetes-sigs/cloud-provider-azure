@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient/mockvirtualnetworklinksclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const TestLocation = "testLocation"
@@ -39,6 +40,9 @@ const TestLocation = "testLocation"
 func TestGetStorageAccessKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 	value := "foo bar"
@@ -78,7 +82,7 @@ func TestGetStorageAccessKeys(t *testing.T) {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
 		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
-		key, err := cloud.GetStorageAccesskey("acct", "rg")
+		key, err := cloud.GetStorageAccesskey(ctx, "acct", "rg")
 		if test.expectErr && err == nil {
 			t.Errorf("Unexpected non-error")
 			continue
@@ -96,6 +100,9 @@ func TestGetStorageAccessKeys(t *testing.T) {
 func TestGetStorageAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -136,7 +143,7 @@ func TestGetStorageAccount(t *testing.T) {
 
 	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(testResourceGroups, nil).Times(1)
 
-	accountsWithLocations, err := cloud.getStorageAccounts(accountOptions)
+	accountsWithLocations, err := cloud.getStorageAccounts(ctx, accountOptions)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -172,6 +179,9 @@ func TestGetStorageAccount(t *testing.T) {
 func TestGetStorageAccountEdgeCases(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -308,7 +318,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 
 		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
 
-		accountsWithLocations, err := cloud.getStorageAccounts(test.testAccountOptions)
+		accountsWithLocations, err := cloud.getStorageAccounts(ctx, test.testAccountOptions)
 		if !errors.Is(err, test.expectedError) {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -356,42 +366,63 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 		},
 	}
 
-	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
-	cloud.StorageAccountClient = mockStorageAccountsClient
-
-	subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
-	mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
-	mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
-	mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
-	cloud.SubnetsClient = mockSubnetsClient
-
-	mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
-	mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
-	cloud.privatednsclient = mockPrivateDNSClient
-
-	mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
-	mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
-	cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
-
-	mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
-	mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
-	cloud.privateendpointclient = mockPrivateEndpointClient
-
-	mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
-	mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
-	cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
-
-	testAccountOptions := &AccountOptions{
-		ResourceGroup:         "rg",
-		CreatePrivateEndpoint: true,
+	tests := []struct {
+		CreateAccount bool
+		AccountName   string
+	}{
+		{
+			CreateAccount: false,
+			AccountName:   "",
+		},
+		{
+			CreateAccount: true,
+			AccountName:   "accountname",
+		},
 	}
 
-	if _, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test"); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	for _, test := range tests {
+		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
+		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
+		if test.AccountName == "" {
+			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
+		} else {
+			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
+		}
+		cloud.StorageAccountClient = mockStorageAccountsClient
+
+		subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
+
+		mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
+		mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
+		mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
+		cloud.SubnetsClient = mockSubnetsClient
+
+		mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
+		mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+		cloud.privatednsclient = mockPrivateDNSClient
+
+		mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
+		mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+		cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
+
+		mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
+		mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+		cloud.privateendpointclient = mockPrivateEndpointClient
+
+		mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
+		mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+		cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
+
+		testAccountOptions := &AccountOptions{
+			ResourceGroup:         "rg",
+			CreatePrivateEndpoint: true,
+			Name:                  test.AccountName,
+			CreateAccount:         test.CreateAccount,
+		}
+		_, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test")
+		assert.Equal(t, err == nil, test.AccountName == "")
 	}
 }
 
