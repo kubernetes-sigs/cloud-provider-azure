@@ -69,12 +69,11 @@ func (mr *MockVMSetMockRecorder) AttachDisk(nodeName, diskMap interface{}) *gomo
 }
 
 // DetachDisk mocks base method.
-func (m *MockVMSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) (*azure.Future, error) {
+func (m *MockVMSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DetachDisk", nodeName, diskMap)
-	ret0, _ := ret[0].(*azure.Future)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // DetachDisk indicates an expected call of DetachDisk.
