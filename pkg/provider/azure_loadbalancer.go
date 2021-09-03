@@ -2673,8 +2673,14 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *network.PublicIPAddre
 	if _, ok := service.Annotations[consts.ServiceAnnotationAzurePIPTags]; ok {
 		annotationTags = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags])
 	}
+
 	for k, v := range annotationTags {
-		configTags[k] = v
+		found, key := findKeyInMapCaseInsensitive(configTags, k)
+		if !found {
+			configTags[k] = v
+		} else if !strings.EqualFold(to.String(v), to.String(configTags[key])) {
+			configTags[key] = v
+		}
 	}
 
 	// include the cluster name and service names tags when comparing
