@@ -72,6 +72,7 @@ func (az *Cloud) getVirtualMachine(nodeName types.NodeName, crt azcache.AzureCac
 	}
 
 	if cachedVM == nil {
+		klog.Warningf("Unable to find node %s: %v", nodeName, cloudprovider.InstanceNotFound)
 		return vm, cloudprovider.InstanceNotFound
 	}
 
