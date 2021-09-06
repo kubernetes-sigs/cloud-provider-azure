@@ -19,6 +19,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -227,7 +228,7 @@ func (az *Cloud) cleanupVMSetFromBackendPoolByCondition(slb *network.LoadBalance
 					ipConf := (*bp.BackendIPConfigurations)[i]
 					ipConfigID := to.String(ipConf.ID)
 					_, vmSetName, err := az.VMSet.GetNodeNameByIPConfigurationID(ipConfigID)
-					if err != nil {
+					if err != nil && !errors.Is(err, cloudprovider.InstanceNotFound) {
 						return nil, err
 					}
 
@@ -1615,7 +1616,7 @@ func (az *Cloud) reconcileLBProbes(lb *network.LoadBalancer, service *v1.Service
 		}
 	}
 	if dirtyProbes {
-		probesJSON, _ := json.MarshalIndent(expectedProbes, "", "  ")
+		probesJSON, _ := json.Marshal(expectedProbes)
 		klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb probes updated: %s", serviceName, wantLb, string(probesJSON))
 		lb.Probes = &updatedProbes
 	}
@@ -1661,7 +1662,7 @@ func (az *Cloud) reconcileLBRules(lb *network.LoadBalancer, service *v1.Service,
 		}
 	}
 	if dirtyRules {
-		ruleJSON, _ := json.MarshalIndent(expectedRules, "", "  ")
+		ruleJSON, _ := json.Marshal(expectedRules)
 		klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb rules updated: %s", serviceName, wantLb, string(ruleJSON))
 		lb.LoadBalancingRules = &updatedRules
 	}
@@ -1839,13 +1840,10 @@ func (az *Cloud) reconcileBackendPools(clusterName string, service *v1.Service, 
 				for _, ipConf := range *bp.BackendIPConfigurations {
 					ipConfID := to.String(ipConf.ID)
 					nodeName, _, err := az.VMSet.GetNodeNameByIPConfigurationID(ipConfID)
-					if err != nil {
+					if err != nil && !errors.Is(err, cloudprovider.InstanceNotFound) {
 						return false, false, err
 					}
-					if nodeName == "" {
-						// VM may under deletion
-						continue
-					}
+
 					// If a node is not supposed to be included in the LB, it
 					// would not be in the `nodes` slice. We need to check the nodes that
 					// have been added to the LB's backendpool, find the unwanted ones and
