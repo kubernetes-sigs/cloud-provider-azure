@@ -40,9 +40,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
+// ErrorNotVmssInstanceErrorMsg indicates an instance is not belonging to any vmss.
+const ErrorNotVmssInstanceErrorMsg = "not a vmss instance"
+
 var (
 	// ErrorNotVmssInstance indicates an instance is not belonging to any vmss.
-	ErrorNotVmssInstance = errors.New("not a vmss instance")
+	ErrorNotVmssInstance = errors.New(ErrorNotVmssInstanceErrorMsg)
 
 	scaleSetNameRE         = regexp.MustCompile(`.*/subscriptions/(?:.*)/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
 	resourceGroupRE        = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(?:.*)/virtualMachines(?:.*)`)

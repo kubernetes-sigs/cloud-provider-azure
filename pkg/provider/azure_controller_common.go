@@ -142,6 +142,13 @@ func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.Azu
 	}
 
 	// 4. Node is managed by vmss
+	if _, err := ss.GetInstanceIDByNodeName(mapNodeNameToVMName(nodeName)); err != nil {
+		if strings.Contains(err.Error(), ErrorNotVmssInstanceErrorMsg) {
+			klog.Errorf("GetInstanceIDByNodeName(%s) failed with %v, fall back to standard VMType", nodeName, err)
+			return c.cloud.VMSet, nil
+		}
+		klog.Errorf("GetInstanceIDByNodeName(%s) failed with %v", err)
+	}
 	return ss, nil
 }
 
