@@ -355,3 +355,6 @@ const (
 
 // RateLimited error string
 const RateLimited = "rate limited"
+
+// CreatedByTag tag key for CSI drivers
+const CreatedByTag = "k8s-azure-created-by"

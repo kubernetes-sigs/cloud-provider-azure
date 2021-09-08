@@ -98,7 +98,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 	// insert original tags to newTags
 	newTags := make(map[string]*string)
 	azureDDTag := "kubernetes-azure-dd"
-	newTags["created-by"] = &azureDDTag
+	newTags[consts.CreatedByTag] = &azureDDTag
 	if options.Tags != nil {
 		for k, v := range options.Tags {
 			// Azure won't allow / (forward slash) in tags
