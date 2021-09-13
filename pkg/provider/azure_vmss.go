@@ -76,6 +76,8 @@ type ScaleSet struct {
 	vmssCache                 *azcache.TimedCache
 	vmssVMCache               *sync.Map // [resourcegroup/vmssname]*azcache.TimedCache
 	availabilitySetNodesCache *azcache.TimedCache
+	// lockMap in cache refresh
+	lockMap *lockMap
 }
 
 // newScaleSet creates a new ScaleSet.
@@ -93,6 +95,7 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 		Cloud:           az,
 		availabilitySet: as,
 		vmssVMCache:     &sync.Map{},
+		lockMap:         newLockMap(),
 	}
 
 	if !ss.DisableAvailabilitySetNodes {
@@ -183,6 +186,15 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 	}
 
 	if !found {
+		// lock and try find nodeName from cache again, refresh cache if still not found
+		ss.lockMap.LockEntry(cacheKey)
+		defer ss.lockMap.UnlockEntry(cacheKey)
+		vmssName, instanceID, vm, found, err = getter(node.nodeName, crt)
+		if err == nil && found && vm != nil {
+			klog.V(2).Infof("found VMSS VM with nodeName %s after retry", node.nodeName)
+			return vmssName, instanceID, vm, nil
+		}
+
 		klog.V(2).Infof("Couldn't find VMSS VM with nodeName %s, refreshing the cache", node.nodeName)
 		vmssName, instanceID, vm, found, err = getter(node.nodeName, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
