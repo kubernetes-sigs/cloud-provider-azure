@@ -167,7 +167,7 @@ func TestDoBackoffRetry(t *testing.T) {
 	resp, err := doBackoffRetry(client, fakeRequest, &Backoff{Factor: 1.0, Steps: 3})
 	assert.NotNil(t, resp)
 	assert.Equal(t, 500, resp.StatusCode)
-	assert.Equal(t, expectedErr.Error(), err)
+	assert.Equal(t, expectedErr.RawError, err)
 	assert.Equal(t, 3, client.Attempts())
 
 	// retries with 0 steps
@@ -218,7 +218,7 @@ func TestDoBackoffRetry(t *testing.T) {
 		RawError:       fmt.Errorf("HTTP status code (429)"),
 	}
 	resp, err = doBackoffRetry(client, fakeRequest, &Backoff{Factor: 1.0, Steps: 3})
-	assert.Equal(t, expectedErr.Error(), err)
+	assert.Equal(t, expectedErr.RawError, err)
 	assert.Equal(t, 1, client.Attempts())
 	assert.NotNil(t, resp)
 	assert.Equal(t, 429, resp.StatusCode)
@@ -235,7 +235,7 @@ func TestDoBackoffRetry(t *testing.T) {
 	resp, err = doBackoffRetry(client, fakeRequest, &Backoff{Factor: 1.0, Steps: 3})
 	assert.NotNil(t, resp)
 	assert.Equal(t, 404, resp.StatusCode)
-	assert.Equal(t, expectedErr.Error(), err)
+	assert.Equal(t, expectedErr.RawError, err)
 	assert.Equal(t, 1, client.Attempts())
 
 	// retry on RetriableHTTPStatusCodes
@@ -254,6 +254,6 @@ func TestDoBackoffRetry(t *testing.T) {
 	})
 	assert.NotNil(t, resp)
 	assert.Equal(t, 102, resp.StatusCode)
-	assert.Equal(t, expectedErr.Error(), err)
+	assert.Equal(t, expectedErr.RawError, err)
 	assert.Equal(t, 3, client.Attempts())
 }
