@@ -22,14 +22,14 @@ require (
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
-	k8s.io/api v0.22.1
-	k8s.io/apimachinery v0.22.1
+	k8s.io/api v0.22.2
+	k8s.io/apimachinery v0.22.2
 	k8s.io/apiserver v0.22.1
-	k8s.io/client-go v0.22.1
+	k8s.io/client-go v0.22.2
 	k8s.io/cloud-provider v0.22.1
-	k8s.io/component-base v0.22.1
+	k8s.io/component-base v0.22.2
 	k8s.io/controller-manager v0.22.1
 	k8s.io/klog/v2 v2.10.0
-	k8s.io/utils v0.0.0-20210707171843-4b05e18ac7d9
+	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 	sigs.k8s.io/yaml v1.2.0
 )
