@@ -586,6 +586,7 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error
 
 // GetZoneByNodeName gets availability zone for the specified node. If the node is not running
 // with availability zone, then it returns fault domain.
+// for details, refer to https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
 func (as *availabilitySet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
 	vm, err := as.getVirtualMachine(types.NodeName(name), azcache.CacheReadTypeUnsafe)
 	if err != nil {
