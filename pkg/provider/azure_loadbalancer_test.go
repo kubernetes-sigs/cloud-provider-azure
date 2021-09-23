@@ -4201,7 +4201,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 	service := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				consts.ServiceAnnotationAzurePIPTags: "a=b,c=d,e=,=f,ghi",
+				consts.ServiceAnnotationAzurePIPTags: "A=b,c=d,e=,=f,ghi",
 			},
 		},
 	}
@@ -4232,7 +4232,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 		assert.Equal(t, expectedPIP, pip)
 	})
 
-	t.Run("ensurePIPTagged should delete the old tags if tht SystemTags is set", func(t *testing.T) {
+	t.Run("ensurePIPTagged should delete the old tags if the SystemTags is set", func(t *testing.T) {
 		cloud.SystemTags = "a,foo"
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
