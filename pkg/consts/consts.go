@@ -271,11 +271,14 @@ const (
 	ServiceAnnotationAdditionalPublicIPs = "service.beta.kubernetes.io/azure-additional-public-ips"
 
 	// ServiceTagKey is the service key applied for public IP tags.
-	ServiceTagKey = "service"
+	ServiceTagKey       = "k8s-azure-service"
+	LegacyServiceTagKey = "service"
 	// ClusterNameKey is the cluster name key applied for public IP tags.
-	ClusterNameKey = "kubernetes-cluster-name"
+	ClusterNameKey       = "k8s-azure-cluster-name"
+	LegacyClusterNameKey = "kubernetes-cluster-name"
 	// ServiceUsingDNSKey is the service name consuming the DNS label on the public IP
-	ServiceUsingDNSKey = "kubernetes-dns-label-service"
+	ServiceUsingDNSKey       = "k8s-azure-dns-label-service"
+	LegacyServiceUsingDNSKey = "kubernetes-dns-label-service"
 
 	// DefaultLoadBalancerSourceRanges is the default value of the load balancer source ranges
 	DefaultLoadBalancerSourceRanges = "0.0.0.0/0"

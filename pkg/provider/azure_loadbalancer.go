@@ -990,8 +990,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 
 		// return if pip exist and dns label is the same
 		if strings.EqualFold(getDomainNameLabel(&pip), domainNameLabel) {
-			if existingServiceName, ok := pip.Tags[consts.ServiceUsingDNSKey]; ok &&
-				strings.EqualFold(*existingServiceName, serviceName) {
+			if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
 				klog.V(6).Infof("ensurePublicIPExists for service(%s): pip(%s) - "+
 					"the service is using the DNS label on the public IP", serviceName, pipName)
 
@@ -1146,10 +1145,8 @@ func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.S
 func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, serviceName, pipName string) (bool, error) {
 	var changed bool
 
-	if existingServiceName, ok := pip.Tags[consts.ServiceUsingDNSKey]; ok {
-		if !strings.EqualFold(to.String(existingServiceName), serviceName) {
-			return false, fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing service %s consuming the DNS label on the public IP, so the service cannot set the DNS label annotation with this value", serviceName, pipName, *existingServiceName)
-		}
+	if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && !strings.EqualFold(existingServiceName, serviceName) {
+		return false, fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing service %s consuming the DNS label on the public IP, so the service cannot set the DNS label annotation with this value", serviceName, pipName, existingServiceName)
 	}
 
 	if len(domainNameLabel) == 0 {
@@ -1172,14 +1169,55 @@ func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, service
 			}
 		}
 
-		if svc, ok := pip.Tags[consts.ServiceUsingDNSKey]; !ok ||
-			!strings.EqualFold(to.String(svc), serviceName) {
+		if svc := getServiceFromPIPDNSTags(pip.Tags); svc == "" || !strings.EqualFold(svc, serviceName) {
 			pip.Tags[consts.ServiceUsingDNSKey] = &serviceName
 			changed = true
 		}
 	}
 
 	return changed, nil
+}
+
+func getServiceFromPIPDNSTags(tags map[string]*string) string {
+	v, ok := tags[consts.ServiceUsingDNSKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	v, ok = tags[consts.LegacyServiceUsingDNSKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	return ""
+}
+
+func getServiceFromPIPServiceTags(tags map[string]*string) string {
+	v, ok := tags[consts.ServiceTagKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	v, ok = tags[consts.LegacyServiceTagKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	return ""
+}
+
+func getClusterFromPIPClusterTags(tags map[string]*string) string {
+	v, ok := tags[consts.ClusterNameKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	v, ok = tags[consts.LegacyClusterNameKey]
+	if ok && v != nil {
+		return *v
+	}
+
+	return ""
 }
 
 type serviceIPTagRequest struct {
@@ -2641,14 +2679,14 @@ func shouldReleaseExistingOwnedPublicIP(existingPip *network.PublicIPAddress, lb
 
 	// Check whether the public IP is being referenced by other service.
 	// The owned public IP can be released only when there is not other service using it.
-	if existingPip.Tags[consts.ServiceTagKey] != nil {
+	if serviceTag := getServiceFromPIPServiceTags(existingPip.Tags); serviceTag != "" {
 		// case 1: there is at least one reference when deleting the PIP
-		if !lbShouldExist && len(parsePIPServiceTag(existingPip.Tags[consts.ServiceTagKey])) > 0 {
+		if !lbShouldExist && len(parsePIPServiceTag(&serviceTag)) > 0 {
 			return false
 		}
 
 		// case 2: there is at least one reference from other service
-		if lbShouldExist && len(parsePIPServiceTag(existingPip.Tags[consts.ServiceTagKey])) > 1 {
+		if lbShouldExist && len(parsePIPServiceTag(&serviceTag)) > 1 {
 			return false
 		}
 	}
@@ -2683,11 +2721,11 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *network.PublicIPAddre
 
 	// include the cluster name and service names tags when comparing
 	var clusterName, serviceNames *string
-	if v, ok := pip.Tags[consts.ClusterNameKey]; ok {
-		clusterName = v
+	if v := getClusterFromPIPClusterTags(pip.Tags); v != "" {
+		clusterName = &v
 	}
-	if v, ok := pip.Tags[consts.ServiceTagKey]; ok {
-		serviceNames = v
+	if v := getServiceFromPIPServiceTags(pip.Tags); v != "" {
+		serviceNames = &v
 	}
 	if clusterName != nil {
 		configTags[consts.ClusterNameKey] = clusterName
@@ -3113,32 +3151,30 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 	serviceName := getServiceName(service)
 
 	if pip.Tags != nil {
-		serviceTag := pip.Tags[consts.ServiceTagKey]
-		clusterTag := pip.Tags[consts.ClusterNameKey]
+		serviceTag := getServiceFromPIPServiceTags(pip.Tags)
+		clusterTag := getClusterFromPIPClusterTags(pip.Tags)
 
 		// if there is no service tag on the pip, it is user-created pip
-		if to.String(serviceTag) == "" {
+		if serviceTag == "" {
 			return strings.EqualFold(to.String(pip.IPAddress), service.Spec.LoadBalancerIP), true
 		}
 
-		if serviceTag != nil {
-			// if there is service tag on the pip, it is system-created pip
-			if isSVCNameInPIPTag(*serviceTag, serviceName) {
-				// Backward compatible for clusters upgraded from old releases.
-				// In such case, only "service" tag is set.
-				if clusterTag == nil {
-					return true, false
-				}
-
-				// If cluster name tag is set, then return true if it matches.
-				if *clusterTag == clusterName {
-					return true, false
-				}
-			} else {
-				// if the service is not included in te tags of the system-created pip, check the ip address
-				// this could happen for secondary services
-				return strings.EqualFold(to.String(pip.IPAddress), service.Spec.LoadBalancerIP), false
+		// if there is service tag on the pip, it is system-created pip
+		if isSVCNameInPIPTag(serviceTag, serviceName) {
+			// Backward compatible for clusters upgraded from old releases.
+			// In such case, only "service" tag is set.
+			if clusterTag == "" {
+				return true, false
 			}
+
+			// If cluster name tag is set, then return true if it matches.
+			if clusterTag == clusterName {
+				return true, false
+			}
+		} else {
+			// if the service is not included in te tags of the system-created pip, check the ip address
+			// this could happen for secondary services
+			return strings.EqualFold(to.String(pip.IPAddress), service.Spec.LoadBalancerIP), false
 		}
 	}
 
@@ -3158,7 +3194,7 @@ func isSVCNameInPIPTag(tag, svcName string) bool {
 }
 
 func parsePIPServiceTag(serviceTag *string) []string {
-	if serviceTag == nil {
+	if serviceTag == nil || len(*serviceTag) == 0 {
 		return []string{}
 	}
 
@@ -3188,7 +3224,7 @@ func bindServicesToPIP(pip *network.PublicIPAddress, incomingServiceNames []stri
 		pip.Tags = map[string]*string{consts.ServiceTagKey: to.StringPtr("")}
 	}
 
-	serviceTagValue := pip.Tags[consts.ServiceTagKey]
+	serviceTagValue := to.StringPtr(getServiceFromPIPServiceTags(pip.Tags))
 	serviceTagValueSet := make(map[string]struct{})
 	existingServiceNames := parsePIPServiceTag(serviceTagValue)
 	addedNew := false
@@ -3232,7 +3268,7 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, ser
 	}
 
 	// skip removing tags for user assigned pips
-	serviceTagValue := pip.Tags[consts.ServiceTagKey]
+	serviceTagValue := to.StringPtr(getServiceFromPIPServiceTags(pip.Tags))
 	existingServiceNames := parsePIPServiceTag(serviceTagValue)
 	var found bool
 	for i := len(existingServiceNames) - 1; i >= 0; i-- {
@@ -3250,10 +3286,8 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, ser
 		return err
 	}
 
-	if existingServiceName, ok := pip.Tags[consts.ServiceUsingDNSKey]; ok {
-		if strings.EqualFold(*existingServiceName, serviceName) {
-			pip.Tags[consts.ServiceUsingDNSKey] = to.StringPtr("")
-		}
+	if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
+		pip.Tags[consts.ServiceUsingDNSKey] = to.StringPtr("")
 	}
 
 	return nil
