@@ -80,6 +80,10 @@ func (az *Cloud) getVirtualMachine(nodeName types.NodeName, crt azcache.AzureCac
 }
 
 func (az *Cloud) getRouteTable(crt azcache.AzureCacheReadType) (routeTable network.RouteTable, exists bool, err error) {
+	if len(az.RouteTableName) == 0 {
+		return routeTable, false, fmt.Errorf("Route table name is not configured")
+	}
+
 	cachedRt, err := az.rtCache.Get(az.RouteTableName, crt)
 	if err != nil {
 		return routeTable, false, err
