@@ -502,8 +502,8 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 			return false, err
 		}
 		tags := pip.Tags
-		delete(tags, "kubernetes-cluster-name")
-		delete(tags, "service")
+		delete(tags, consts.ClusterNameKey)
+		delete(tags, consts.ServiceTagKey)
 		utils.Logf("\ntags: %v\nexpectedTags: %v", tags, expectedTags)
 		return reflect.DeepEqual(tags, expectedTags), nil
 	})
