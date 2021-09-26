@@ -965,6 +965,11 @@ func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeNam
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
+			klog.Infof("EnsureHostInPool: skipping node %s because it is not found", vmName)
+			return "", "", "", nil, nil
+		}
+
 		klog.Errorf("EnsureHostInPool: failed to get VMSS VM %s: %v", vmName, err)
 		return "", "", "", nil, err
 	}
@@ -1345,6 +1350,11 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(nodeName, backendPoolID string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	ssName, instanceID, vm, err := ss.getVmssVM(nodeName, azcache.CacheReadTypeDefault)
 	if err != nil {
+		if errors.Is(err, cloudprovider.InstanceNotFound) {
+			klog.Infof("ensureBackendPoolDeletedFromNode: skipping node %s because it is not found", nodeName)
+			return "", "", "", nil, nil
+		}
+
 		return "", "", "", nil, err
 	}
 
