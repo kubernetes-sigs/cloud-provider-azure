@@ -164,6 +164,11 @@ func TestCreateRoute(t *testing.T) {
 		expectedErrMsg    error
 	}{
 		{
+			name:           "CreateRoute should report an error if route table name is not configured",
+			routeTableName: "",
+			expectedErrMsg: fmt.Errorf("Route table name is not configured"),
+		},
+		{
 			name:           "CreateRoute should create route if route doesn't exist",
 			routeTableName: "rt1",
 			updatedRoute:   networkRoute,
