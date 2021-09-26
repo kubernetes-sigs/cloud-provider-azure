@@ -100,8 +100,12 @@ func convertMapToMapPointer(origin map[string]string) map[string]*string {
 }
 
 func parseTags(tags string) map[string]*string {
-	kvs := strings.Split(tags, consts.TagsDelimiter)
 	formatted := make(map[string]*string)
+	if len(tags) == 0 {
+		return formatted
+	}
+
+	kvs := strings.Split(tags, consts.TagsDelimiter)
 	for _, kv := range kvs {
 		res := strings.Split(kv, consts.TagKeyValueDelimiter)
 		if len(res) != 2 {
