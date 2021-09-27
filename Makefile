@@ -36,9 +36,9 @@ STAGING_REGISTRY := gcr.io/k8s-staging-provider-azure
 K8S_VERSION ?= v1.18.0-rc.1
 HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_VERSION)
 
-# The OS Version for the Windows images: 1809, 2004, 20H2
+# The OS Version for the Windows images: 1809, 2004, 20H2, ltsc2022
 WINDOWS_OSVERSION ?= 1809
-ALL_WINDOWS_OSVERSIONS = 1809 2004 20H2
+ALL_WINDOWS_OSVERSIONS = 1809 2004 20H2 ltsc2022
 BASE.windows := mcr.microsoft.com/windows/nanoserver
 
 ifndef TAG
