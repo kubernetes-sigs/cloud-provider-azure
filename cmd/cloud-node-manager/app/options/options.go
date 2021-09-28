@@ -84,6 +84,10 @@ type CloudNodeManagerOptions struct {
 	WaitForRoutes bool
 
 	UseInstanceMetadata bool
+
+	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
+	// Its corresponding flag only gets registered in Windows builds
+	WindowsService bool
 }
 
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
@@ -115,12 +119,15 @@ func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
 // Flags returns flags for a specific APIServer by section name
 func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
+
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
 	o.InsecureServing.AddUnqualifiedFlags(fss.FlagSet("insecure serving"))
 	o.Authentication.AddFlags(fss.FlagSet("authentication"))
 	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 
 	fs := fss.FlagSet("misc")
+	o.addOSFlags(fs)
+
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 	fs.StringVar(&o.NodeName, "node-name", o.NodeName, "Name of the Node (default is hostname).")
@@ -192,6 +199,8 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 
 		c.NodeName = strings.ToLower(hostname)
 	}
+
+	c.WindowsService = o.WindowsService
 
 	return nil
 }
