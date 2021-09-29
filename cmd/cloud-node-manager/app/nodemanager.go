@@ -61,6 +61,11 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
+			if err := initForOS(c.WindowsService); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
+
 			if err := Run(c, wait.NeverStop); err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
