@@ -223,12 +223,12 @@ func TestInstanceID(t *testing.T) {
 		}()
 		defer listener.Close()
 
-		cloud.metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 		if test.useCustomImsCache {
-			cloud.metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			})
 			if err != nil {
@@ -616,13 +616,13 @@ func TestNodeAddresses(t *testing.T) {
 		}()
 		defer listener.Close()
 
-		cloud.metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 
 		if test.useCustomImsCache {
-			cloud.metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			})
 			if err != nil {
@@ -836,7 +836,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		}()
 		defer listener.Close()
 
-		cloud.metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}

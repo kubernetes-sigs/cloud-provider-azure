@@ -275,7 +275,7 @@ type Cloud struct {
 	ZoneClient                      zoneclient.Interface
 
 	ResourceRequestBackoff wait.Backoff
-	metadata               *InstanceMetadataService
+	Metadata               *InstanceMetadataService
 	VMSet                  VMSet
 
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
@@ -513,7 +513,7 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones
 	az.Config = *config
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
-	az.metadata, err = NewInstanceMetadataService(consts.ImdsServer)
+	az.Metadata, err = NewInstanceMetadataService(consts.ImdsServer)
 	if err != nil {
 		return err
 	}
