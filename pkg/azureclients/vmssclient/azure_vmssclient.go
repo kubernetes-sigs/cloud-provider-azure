@@ -472,7 +472,7 @@ func (c *Client) DeleteInstances(ctx context.Context, resourceGroupName string, 
 }
 
 // DeleteInstancesAsync sends the delete request to ARM client and DOEST NOT wait on the future
-func (c *Client) DeleteInstancesAsync(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) (*azure.Future, *retry.Error) {
+func (c *Client) DeleteInstancesAsync(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, forceDelete bool) (*azure.Future, *retry.Error) {
 	mc := metrics.NewMetricContext("vmss", "delete_instances_async", resourceGroupName, c.subscriptionID, "")
 
 	// Report errors if the client is rate limited.
@@ -495,7 +495,13 @@ func (c *Client) DeleteInstancesAsync(ctx context.Context, resourceGroupName str
 		vmScaleSetName,
 	)
 
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs, map[string]interface{}{})
+	var queryParameters map[string]interface{}
+	if forceDelete {
+		queryParameters = map[string]interface{}{
+			"forceDeletion": true,
+		}
+	}
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs, queryParameters)
 	defer c.armClient.CloseResponse(ctx, response)
 
 	if rerr != nil {

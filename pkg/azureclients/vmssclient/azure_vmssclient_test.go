@@ -802,6 +802,7 @@ func TestDeleteInstancesWaitError(t *testing.T) {
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssDeleteInstancesErr, rerr)
 }
+
 func TestDeleteInstancesAsync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -816,19 +817,26 @@ func TestDeleteInstancesAsync(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	future, rerr := vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs)
+	future, rerr := vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, false)
+	assert.Nil(t, rerr)
+	assert.Equal(t, future.Status(), "Succeeded")
+
+	// with force delete
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{"forceDeletion": true}).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	future, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, true)
 	assert.Nil(t, rerr)
 	assert.Equal(t, future.Status(), "Succeeded")
 
 	// on error
 	retryErr := &retry.Error{RawError: fmt.Errorf("error")}
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{}).Return(&http.Response{StatusCode: http.StatusBadRequest}, retryErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, gomock.Any()).Return(&http.Response{StatusCode: http.StatusBadRequest}, retryErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	_, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs)
+	_, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, false)
 	assert.Equal(t, retryErr, rerr)
 }
 
