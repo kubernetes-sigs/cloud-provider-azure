@@ -81,7 +81,7 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +150,7 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []NetworkInterface,
 
 	if len(addresses) == 1 {
 		// No IP addresses is got from instance metadata service, clean up cache and report errors.
-		_ = az.metadata.imsCache.Delete(consts.MetadataCacheKey)
+		_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
 		return nil, fmt.Errorf("get empty IP addresses from instance metadata service")
 	}
 	return addresses, nil
@@ -333,7 +333,7 @@ func (az *Cloud) InstanceID(ctx context.Context, name types.NodeName) (string, e
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
 		if err != nil {
 			return "", err
 		}
@@ -423,7 +423,7 @@ func (az *Cloud) InstanceType(ctx context.Context, name types.NodeName) (string,
 	}
 
 	if az.UseInstanceMetadata {
-		metadata, err := az.metadata.GetMetadata(azcache.CacheReadTypeDefault)
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeDefault)
 		if err != nil {
 			return "", err
 		}
