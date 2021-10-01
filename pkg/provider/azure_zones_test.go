@@ -165,7 +165,7 @@ func TestGetZone(t *testing.T) {
 		}()
 		defer listener.Close()
 
-		cloud.metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
