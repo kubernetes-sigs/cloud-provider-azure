@@ -250,7 +250,7 @@ func TestAllThrottle(t *testing.T) {
 	r := getTestStorageAccount("sa1")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
@@ -327,7 +327,7 @@ func TestListKeys(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -346,7 +346,7 @@ func TestListKeysResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)

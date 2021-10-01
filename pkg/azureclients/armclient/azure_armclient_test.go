@@ -567,7 +567,7 @@ func TestPostResource(t *testing.T) {
 
 	ctx := context.Background()
 	resourceID := testResourceID
-	future, rerr := armClient.PostResource(ctx, resourceID, "post", "")
+	future, rerr := armClient.PostResource(ctx, resourceID, "post", "", map[string]interface{}{})
 	assert.Equal(t, 3, count)
 	assert.NotNil(t, future)
 	assert.NotNil(t, rerr)
