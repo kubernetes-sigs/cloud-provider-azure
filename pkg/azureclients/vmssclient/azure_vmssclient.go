@@ -495,7 +495,7 @@ func (c *Client) DeleteInstancesAsync(ctx context.Context, resourceGroupName str
 		vmScaleSetName,
 	)
 
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs)
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 
 	if rerr != nil {
@@ -544,7 +544,7 @@ func (c *Client) DeallocateInstancesAsync(ctx context.Context, resourceGroupName
 		vmScaleSetName,
 	)
 
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "deallocate", vmInstanceIDs)
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "deallocate", vmInstanceIDs, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 
 	if rerr != nil {
@@ -593,7 +593,7 @@ func (c *Client) StartInstancesAsync(ctx context.Context, resourceGroupName stri
 		vmScaleSetName,
 	)
 
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "start", vmInstanceIDs)
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "start", vmInstanceIDs, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 
 	if rerr != nil {
@@ -626,7 +626,7 @@ func (c *Client) deleteVMSSInstances(ctx context.Context, resourceGroupName stri
 		"Microsoft.Compute/virtualMachineScaleSets",
 		vmScaleSetName,
 	)
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs)
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "delete", vmInstanceIDs, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmss.deletevms.request", resourceID, rerr.Error())
