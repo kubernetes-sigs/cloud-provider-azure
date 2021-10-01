@@ -351,18 +351,18 @@ func (mr *MockInterfaceMockRecorder) GetResourceWithDecorators(ctx, resourceID, 
 }
 
 // PostResource mocks base method.
-func (m *MockInterface) PostResource(ctx context.Context, resourceID, action string, parameters interface{}) (*http.Response, *retry.Error) {
+func (m *MockInterface) PostResource(ctx context.Context, resourceID, action string, parameters interface{}, queryParameters map[string]interface{}) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PostResource", ctx, resourceID, action, parameters)
+	ret := m.ctrl.Call(m, "PostResource", ctx, resourceID, action, parameters, queryParameters)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PostResource indicates an expected call of PostResource.
-func (mr *MockInterfaceMockRecorder) PostResource(ctx, resourceID, action, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PostResource(ctx, resourceID, action, parameters, queryParameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostResource", reflect.TypeOf((*MockInterface)(nil).PostResource), ctx, resourceID, action, parameters)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostResource", reflect.TypeOf((*MockInterface)(nil).PostResource), ctx, resourceID, action, parameters, queryParameters)
 }
 
 // DeleteResource mocks base method.
