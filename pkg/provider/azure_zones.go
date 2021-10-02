@@ -133,13 +133,13 @@ func (az *Cloud) GetZoneID(zoneLabel string) string {
 // If the node is not running with availability zones, then it will fall back to fault domain.
 func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 	if az.UseInstanceMetadata {
-		metadata, err := az.metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
 		if err != nil {
 			return cloudprovider.Zone{}, err
 		}
 
 		if metadata.Compute == nil {
-			_ = az.metadata.imsCache.Delete(consts.MetadataCacheKey)
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
 			return cloudprovider.Zone{}, fmt.Errorf("failure of getting compute information from instance metadata")
 		}
 
