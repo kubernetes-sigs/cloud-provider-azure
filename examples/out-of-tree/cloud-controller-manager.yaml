@@ -150,7 +150,7 @@ spec:
       imagePullPolicy: IfNotPresent
       command: ["cloud-controller-manager"]
       args:
-        - "--allocate-node-cidrs=true"
+        - "--allocate-node-cidrs=true" # "false" for Azure CNI and "true" for other network plugins
         - "--cloud-config=/etc/kubernetes/azure.json"
         - "--cloud-provider=azure"
         - "--cluster-cidr=10.244.0.0/16"
