@@ -438,7 +438,7 @@ func (c *Client) ExportTemplate(ctx context.Context, resourceGroupName string, d
 		autorest.Encode("path", c.subscriptionID),
 		autorest.Encode("path", resourceGroupName),
 		autorest.Encode("path", deploymentName))
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "exportTemplate", struct{}{})
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "exportTemplate", struct{}{}, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "deployment.exportTemplate.request", resourceID, rerr.Error())

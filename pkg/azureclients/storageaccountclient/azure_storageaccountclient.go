@@ -187,7 +187,7 @@ func (c *Client) listStorageAccountKeys(ctx context.Context, resourceGroupName s
 	)
 
 	result := storage.AccountListKeysResult{}
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "listKeys", struct{}{})
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "listKeys", struct{}{}, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "storageaccount.listkeys.request", resourceID, rerr.Error())

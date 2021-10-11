@@ -599,7 +599,7 @@ func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parame
 }
 
 // PostResource posts a resource by resource ID
-func (c *Client) PostResource(ctx context.Context, resourceID, action string, parameters interface{}) (*http.Response, *retry.Error) {
+func (c *Client) PostResource(ctx context.Context, resourceID, action string, parameters interface{}, queryParameters map[string]interface{}) (*http.Response, *retry.Error) {
 	pathParameters := map[string]interface{}{
 		"resourceID": resourceID,
 		"action":     action,
@@ -609,6 +609,10 @@ func (c *Client) PostResource(ctx context.Context, resourceID, action string, pa
 		autorest.WithPathParameters("{resourceID}/{action}", pathParameters),
 		autorest.WithJSON(parameters),
 	}
+	if len(queryParameters) > 0 {
+		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
+	}
+
 	request, err := c.PreparePostRequest(ctx, decorators...)
 	if err != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "post.prepare", resourceID, err)

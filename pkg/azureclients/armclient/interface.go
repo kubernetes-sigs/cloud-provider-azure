@@ -92,7 +92,7 @@ type Interface interface {
 	GetResourceWithDecorators(ctx context.Context, resourceID string, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error)
 
 	// PostResource posts a resource by resource ID
-	PostResource(ctx context.Context, resourceID, action string, parameters interface{}) (*http.Response, *retry.Error)
+	PostResource(ctx context.Context, resourceID, action string, parameters interface{}, queryParameters map[string]interface{}) (*http.Response, *retry.Error)
 
 	// DeleteResource deletes a resource by resource ID
 	DeleteResource(ctx context.Context, resourceID, ifMatch string) *retry.Error
