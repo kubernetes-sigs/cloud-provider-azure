@@ -18,6 +18,9 @@ SHELL=/bin/bash -o pipefail
 BIN_DIR=bin
 PKG_CONFIG=.pkg_config
 
+ARCH ?= amd64
+LINUX_ARCHS = amd64 arm arm64 ppc64le s390x
+
 AKSENGINE_VERSION ?= master
 ENABLE_GIT_COMMAND ?= true
 TEST_RESULTS_DIR=testResults
@@ -57,10 +60,12 @@ NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
 NODE_MANAGER_LINUX_IMAGE_NAME=azure-cloud-node-manager-linux
 NODE_MANAGER_WINDOWS_IMAGE_NAME=azure-cloud-node-manager-windows
 NODE_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
-NODE_MANAGER_LINUX_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_LINUX_IMAGE_NAME):$(IMAGE_TAG)
+NODE_MANAGER_LINUX_FULL_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_LINUX_IMAGE_NAME)
 NODE_MANAGER_WINDOWS_IMAGE=$(IMAGE_REGISTRY)/$(NODE_MANAGER_WINDOWS_IMAGE_NAME):$(IMAGE_TAG)
 
-ALL_NODE_MANAGER_IMAGES = $(NODE_MANAGER_LINUX_IMAGE) $(foreach osversion, ${ALL_OWINDOWS_SVERSIONS}, $(NODE_MANAGER_WINDOWS_IMAGE)-${osversion})
+ALL_NODE_MANAGER_IMAGES = $(foreach arch, ${LINUX_ARCHS}, $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-${arch}) $(foreach osversion, ${ALL_WINDOWS_OSVERSIONS}, $(NODE_MANAGER_WINDOWS_IMAGE)-${osversion})
+ALL_LINUX_NODE_MANAGER_IMAGES = $(foreach arch, ${LINUX_ARCHS}, $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-${arch})
+
 
 # ccm e2e test image
 CCM_E2E_TEST_IMAGE_NAME=cloud-provider-azure-e2e
@@ -81,7 +86,7 @@ help: ## Display this help.
 all: $(BIN_DIR)/azure-cloud-controller-manager $(BIN_DIR)/azure-cloud-node-manager $(BIN_DIR)/azure-cloud-node-manager.exe ## Build binaries for the project.
 
 $(BIN_DIR)/azure-cloud-node-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Linux.
-	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
+	CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-node-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node-manager/*) $(wildcard cmd/cloud-node-manager/**/*) $(wildcard pkg/**/*) ## Build node-manager binary for Windows.
 	CGO_ENABLED=0 GOOS=windows go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
@@ -104,65 +109,27 @@ build-ccm-image: docker-pull-prerequisites ## Build controller-manager image.
 	DOCKER_BUILDKIT=1 docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image
-build-node-image: docker-pull-prerequisites ## Build node-manager image for Windows.
-	DOCKER_BUILDKIT=1 docker build -t $(NODE_MANAGER_IMAGE) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
+build-node-image: docker-pull-prerequisites ## Build node-manager image.
+	DOCKER_BUILDKIT=1 docker build -t $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) --build-arg ARCH=$(ARCH) .
 
-.PHONY: build-node-image-windows
-build-node-image-windows: ## Build node-manager image for Windows.
+.PHONY: build-and-push-node-image-windows
+build-and-push-node-image-windows: ## Build node-manager image for Windows and push it to registry.
 	go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe ./cmd/cloud-node-manager
-	docker build --platform windows/amd64 -t $(NODE_MANAGER_WINDOWS_IMAGE) \
-		--build-arg OSVERSION=$(WINDOWS_OSVERSION) -f cloud-node-manager-windows.Dockerfile .
-
-sub-build-node-image-windows-%:
-	go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe ./cmd/cloud-node-manager
-	docker buildx build --pull --output=type=registry --platform windows/amd64 \
-		-t $(NODE_MANAGER_WINDOWS_IMAGE)-$* --build-arg OSVERSION=$* \
+	docker buildx build --pull --push --output=type=registry --platform windows/amd64 \
+		-t $(NODE_MANAGER_WINDOWS_IMAGE)-$(WINDOWS_OSVERSION) --build-arg OSVERSION=$(WINDOWS_OSVERSION) \
 		-f cloud-node-manager-windows.Dockerfile .
-
-.PHONY: build-and-push-all-windows-node-images
-build-and-push-all-windows-node-images: $(addprefix sub-build-node-image-windows-,$(ALL_WINDOWS_OSVERSIONS))
 
 .PHONY: build-ccm-e2e-test-image
 build-ccm-e2e-test-image: ## Build e2e test image.
 	docker build -t $(CCM_E2E_TEST_IMAGE) -f ./e2e.Dockerfile .
 
-.PHONY: build-images
-build-images: build-ccm-image build-node-image ## Build all images.
-
-.PHONY: image
-image: build-ccm-image build-node-image ## Build all images.
-
 .PHONY: push-ccm-image
-push-ccm-image: ## Push controller-manager image.
+push-ccm-image: build-ccm-image ## Push controller-manager image.
 	docker push $(IMAGE)
 
 .PHONY: push-node-image
 push-node-image: ## Push node-manager image for Linux.
-	docker push $(NODE_MANAGER_IMAGE)
-
-.PHONY: push-node-image-windows
-push-node-image-windows: ## Push node-manager image for Windows.
-	docker push $(NODE_MANAGER_WINDOWS_IMAGE)
-
-.PHONY: push
-push: push-ccm-image push-node-image ## Push all images.
-
-.PHONY: push-images
-push-images: push-ccm-image push-node-image ## Push all images.
-
-.PHONY: push-node-manager-manifest
-push-node-manager-manifest: ## Create and push a manifest list containing all the Windows and Linux images.
-	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(ALL_NODE_MANAGER_IMAGES)
-	docker manifest annotate --os linux --arch amd64 $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_IMAGE)
-	# For Windows images, we also need to include the "os.version" in the manifest list, so the Windows node can pull the proper image it needs.
-	# we use awk to also trim the quotes around the OS version string.
-	set -x; \
-	for osversion in $(ALL_WINDOWS_OSVERSIONS); do \
-		full_version=`docker manifest inspect ${BASE.windows}:$${osversion} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'` || true; \
-		docker manifest annotate --os windows --arch amd64 --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_IMAGE)-$${osversion}; \
-		sed -i -r "s/(\"os\"\:\"windows\")/\0,\"os.version\":$${full_version}/" "${HOME}/.docker/manifests/$${manifest_list_folder}/$${manifest_image_folder}-$${osversion}"; \
-	done
-	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+	docker push $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH)
 
 .PHONY: release-ccm-e2e-test-image
 release-ccm-e2e-test-image: ## Build and release e2e test image.
@@ -174,6 +141,63 @@ ifneq ($(K8S_BRANCH), )
 	$(eval K8S_VERSION=$(shell REGISTRY=$(IMAGE_REGISTRY) BRANCH=$(K8S_BRANCH) hack/build-hyperkube.sh))
 	$(eval HYPERKUBE_IMAGE=$(IMAGE_REGISTRY)/hyperkube-amd64:$(K8S_VERSION))
 endif
+
+## --------------------------------------
+##@ All Arch or OS Version
+## --------------------------------------
+
+.PHONY: build-images
+build-images: build-ccm-image build-all-node-images ## Build all images.
+
+.PHONY: image
+image: build-ccm-image build-all-node-images ## Build all images.
+
+.PHONY: push-images
+push-images: push-ccm-image push-all-node-images ## Push all images.
+
+.PHONY: push
+push: push-ccm-image push-all-node-images ## Push all images.
+
+.PHONY: push-node-manager-manifest
+push-node-manager-manifest: push-all-node-images push-all-windows-node-images ## Create and push a manifest list containing all the Windows and Linux images.
+	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(ALL_NODE_MANAGER_IMAGES)
+	for arch in $(LINUX_ARCHS); do \
+		docker manifest annotate --os linux --arch $${arch} $(NODE_MANAGER_IMAGE)  $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$${arch}; \
+	done
+	# For Windows images, we also need to include the "os.version" in the manifest list, so the Windows node can pull the proper image it needs.
+	# we use awk to also trim the quotes around the OS version string.
+	set -x; \
+	for osversion in $(ALL_WINDOWS_OSVERSIONS); do \
+		full_version=`docker manifest inspect ${BASE.windows}:$${osversion} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'` || true; \
+		docker manifest annotate --os windows --arch amd64 --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_IMAGE)-$${osversion}; \
+	done
+	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+
+# TODO(mainred): Currently we push only Linux multi-arch docker images for node image, after fully support Windows docker image building,
+#			     we need to replace push-all-node-images with push-all-node-images to push multi-arch and multi-os node image, 
+#				 which is tracked https://github.com/kubernetes-sigs/cloud-provider-azure/issues/829
+.PHONY: push-all-node-images
+push-all-node-images: build-all-node-images $(addprefix push-node-image-,$(LINUX_ARCHS))
+	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(ALL_LINUX_NODE_MANAGER_IMAGES)
+	for arch in $(LINUX_ARCHS); do \
+		docker manifest annotate --os linux --arch $${arch} $(NODE_MANAGER_IMAGE)  $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$${arch}; \
+	done
+	docker manifest push --purge $(NODE_MANAGER_IMAGE)
+
+.PHONY: push-all-windows-node-images
+push-all-windows-node-images: $(addprefix push-node-image-windows-,$(ALL_WINDOWS_OSVERSIONS))
+
+.PHONY: build-all-node-images
+build-all-node-images: $(addprefix build-node-image-,$(LINUX_ARCHS))
+
+build-node-image-%:
+	$(MAKE) ARCH=$* build-node-image
+
+push-node-image-windows-%: ## Push node-manager image for Windows.
+	$(MAKE) WINDOWS_OSVERSION=$* build-and-push-node-image-windows
+
+push-node-image-%:
+	$(MAKE) ARCH=$* push-node-image
 
 ## --------------------------------------
 ##@ Tests
