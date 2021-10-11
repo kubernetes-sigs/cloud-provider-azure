@@ -14,7 +14,7 @@ spec:
       imagePullPolicy: IfNotPresent
       command: ["kube-controller-manager"]
       args:
-        - "--allocate-node-cidrs=true"       # "false" for Azure CNI and "true" for other network plugins
+        - "--allocate-node-cidrs=false" # allocate-node-cidrs should be disabled when it is enabled on cloud-controller-manager.
         - "--cluster-cidr=10.244.0.0/16"
         - "--cluster-name=k8s"
         - "--cluster-signing-cert-file=/etc/kubernetes/certs/ca.crt"
