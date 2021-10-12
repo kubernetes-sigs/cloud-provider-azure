@@ -14,7 +14,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/mock v1.6.0
-	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.16.0
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
 	github.com/spf13/cobra v1.2.1
