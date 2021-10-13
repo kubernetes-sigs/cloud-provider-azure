@@ -2524,7 +2524,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
 						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -2567,8 +2567,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(testFunc...)
-	assert.Equal(t, 1, len(errs.Errors()))
-	assert.Equal(t, "instance not found", errs.Error())
+	assert.Nil(t, errs)
 }
 
 func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
