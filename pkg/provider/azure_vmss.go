@@ -1507,6 +1507,11 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				continue
 			}
 
+			if errors.Is(err, cloudprovider.InstanceNotFound) {
+				klog.Infof("EnsureBackendPoolDeleted(%s): skipping ip config %s because the corresponding vmss vm is not found", getServiceName(service), ipConfigurationID)
+				continue
+			}
+
 			klog.Errorf("Failed to GetNodeNameByIPConfigurationID(%s): %v", ipConfigurationID, err)
 			allErrs = append(allErrs, err)
 			continue
