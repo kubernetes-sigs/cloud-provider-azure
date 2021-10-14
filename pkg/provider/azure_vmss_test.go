@@ -2497,13 +2497,12 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 			},
 		},
 		{
-			// this would fail
 			ID: to.StringPtr(testLBBackendpoolID2),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
 						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -2536,7 +2535,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	mockVMSSVMClient.EXPECT().UpdateVMs(gomock.Any(), ss.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	backendpoolAddressIDs := []string{testLBBackendpoolID0, testLBBackendpoolID1, testLBBackendpoolID2}
-	testVMSSNames := []string{"vmss-0", "vmss-1", "vmss-0"}
+	testVMSSNames := []string{"vmss-0", "vmss-1", "vmss-2"}
 	testFunc := make([]func() error, 0)
 	for i, id := range backendpoolAddressIDs {
 		i := i
@@ -2546,7 +2545,8 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(testFunc...)
-	assert.Nil(t, errs)
+	assert.Equal(t, 1, len(errs.Errors()))
+	assert.Equal(t, "instance not found", errs.Error())
 }
 
 func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
