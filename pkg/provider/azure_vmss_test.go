@@ -2424,6 +2424,26 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			expectedErr:            true,
 			vmClientErr:            &retry.Error{RawError: fmt.Errorf("error")},
 		},
+		{
+			description:   "EnsureBackendPoolDeleted should skip the node that doesn't exist",
+			backendpoolID: testLBBackendpoolID0,
+			backendAddressPools: &[]network.BackendAddressPool{
+				{
+					ID: to.StringPtr(testLBBackendpoolID0),
+					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+							{
+								Name: to.StringPtr("ip-1"),
+								ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/6/networkInterfaces/nic"),
+							},
+						},
+					},
+				},
+				{
+					ID: to.StringPtr(testLBBackendpoolID1),
+				},
+			},
+		},
 	}
 
 	for _, test := range testCases {
@@ -2483,7 +2503,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
 						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -2526,8 +2546,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(testFunc...)
-	assert.Equal(t, 1, len(errs.Errors()))
-	assert.Equal(t, "instance not found", errs.Error())
+	assert.Nil(t, errs)
 }
 
 func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
