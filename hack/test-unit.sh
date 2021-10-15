@@ -21,5 +21,5 @@ set -o pipefail
 DIR_LIST=$(go list ./... | grep -v tests/e2e)
 for DIR in $DIR_LIST
 do
-  go test -v "$DIR"
+  go test -v -race "$DIR"
 done
