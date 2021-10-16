@@ -19,7 +19,13 @@ BIN_DIR=bin
 PKG_CONFIG=.pkg_config
 
 ARCH ?= amd64
-LINUX_ARCHS = amd64 arm arm64 ppc64le s390x
+# golang/strecth supports only amd64, arm32v7, arm64v8 and i386, before we have an
+# explicit requirement for other arch support, let's keep golang/stretch
+# https://github.com/docker-library/official-images/blob/master/library/golang
+LINUX_ARCHS = amd64 arm arm64
+
+# The output type for `docker buildx build` could either be docker (local), or registry.
+OUTPUT_TYPE ?= docker
 
 AKSENGINE_VERSION ?= master
 ENABLE_GIT_COMMAND ?= true
@@ -43,6 +49,9 @@ HYPERKUBE_IMAGE ?= gcrio.azureedge.net/google_containers/hyperkube-amd64:$(K8S_V
 WINDOWS_OSVERSION ?= 1809
 ALL_WINDOWS_OSVERSIONS = 1809 2004 20H2 ltsc2022
 BASE.windows := mcr.microsoft.com/windows/nanoserver
+
+# `docker buildx` and `docker manifest` requires enabling DOCKER_CLI_EXPERIMENTAL for docker version < 1.20
+export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifndef TAG
 	IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
@@ -104,16 +113,31 @@ docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull docker.io/library/golang:1.16.6-stretch
 	docker pull gcr.io/distroless/static:latest
 
+buildx-setup:
+	docker buildx inspect img-builder > /dev/null || docker buildx create --name img-builder --use
+	# enable qemu for arm64 build
+	# https://github.com/docker/buildx/issues/464#issuecomment-741507760
+	docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-aarch64
+	docker run --rm --privileged tonistiigi/binfmt --install all
+
 .PHONY: build-ccm-image
 build-ccm-image: docker-pull-prerequisites ## Build controller-manager image.
 	DOCKER_BUILDKIT=1 docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
 
 .PHONY: build-node-image
-build-node-image: docker-pull-prerequisites ## Build node-manager image.
-	DOCKER_BUILDKIT=1 docker build -t $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH) -f cloud-node-manager.Dockerfile --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) --build-arg ARCH=$(ARCH) .
+build-node-image: buildx-setup docker-pull-prerequisites ## Build node-manager image.
+	docker buildx build \
+		--pull \
+		--output=type=$(OUTPUT_TYPE) \
+		--platform linux/$(ARCH) \
+		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
+		--build-arg ARCH="$(ARCH)" \
+		--build-arg VERSION="$(VERSION)" \
+		--file cloud-node-manager.Dockerfile \
+		--tag $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH) .
 
 .PHONY: build-and-push-node-image-windows
-build-and-push-node-image-windows: ## Build node-manager image for Windows and push it to registry.
+build-and-push-node-image-windows: buildx-setup ## Build node-manager image for Windows and push it to registry.
 	go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe ./cmd/cloud-node-manager
 	docker buildx build --pull --push --output=type=registry --platform windows/amd64 \
 		-t $(NODE_MANAGER_WINDOWS_IMAGE)-$(WINDOWS_OSVERSION) --build-arg OSVERSION=$(WINDOWS_OSVERSION) \
@@ -129,7 +153,7 @@ push-ccm-image: build-ccm-image ## Push controller-manager image.
 
 .PHONY: push-node-image
 push-node-image: ## Push node-manager image for Linux.
-	docker push $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH)
+	$(MAKE) OUTPUT_TYPE=registry ARCH=$(ARCH) build-node-image
 
 .PHONY: release-ccm-e2e-test-image
 release-ccm-e2e-test-image: ## Build and release e2e test image.
@@ -174,10 +198,10 @@ push-node-manager-manifest: push-all-node-images push-all-windows-node-images ##
 	docker manifest push --purge $(NODE_MANAGER_IMAGE)
 
 # TODO(mainred): Currently we push only Linux multi-arch docker images for node image, after fully support Windows docker image building,
-#			     we need to replace push-all-node-images with push-all-node-images to push multi-arch and multi-os node image, 
-#				 which is tracked https://github.com/kubernetes-sigs/cloud-provider-azure/issues/829
+#                we need to replace push-all-node-images with push-all-node-images to push multi-arch and multi-os node image, 
+#                which is tracked https://github.com/kubernetes-sigs/cloud-provider-azure/issues/829
 .PHONY: push-all-node-images
-push-all-node-images: build-all-node-images $(addprefix push-node-image-,$(LINUX_ARCHS))
+push-all-node-images: $(addprefix push-node-image-,$(LINUX_ARCHS))
 	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(ALL_LINUX_NODE_MANAGER_IMAGES)
 	for arch in $(LINUX_ARCHS); do \
 		docker manifest annotate --os linux --arch $${arch} $(NODE_MANAGER_IMAGE)  $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$${arch}; \
