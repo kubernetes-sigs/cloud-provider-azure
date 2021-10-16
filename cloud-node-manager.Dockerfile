@@ -22,12 +22,7 @@ ARG ARCH=amd64
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
-# Cache the go build into the the Go’s compiler cache folder so we take benefits of compiler caching across docker build calls
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build ./cmd/cloud-node-manager
-
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
+RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
 
 FROM gcr.io/distroless/static
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
