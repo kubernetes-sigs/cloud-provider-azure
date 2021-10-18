@@ -756,11 +756,16 @@ func (ss *ScaleSet) getAgentPoolScaleSets(nodes []*v1.Node) (*[]string, error) {
 			continue
 		}
 
-		if ss.ShouldNodeExcludedFromLoadBalancer(nodes[nx]) {
+		nodeName := nodes[nx].Name
+		shouldExcludeLoadBalancer, err := ss.ShouldNodeExcludedFromLoadBalancer(nodeName)
+		if err != nil {
+			klog.Errorf("ShouldNodeExcludedFromLoadBalancer(%s) failed with error: %v", nodeName, err)
+			return nil, err
+		}
+		if shouldExcludeLoadBalancer {
 			continue
 		}
 
-		nodeName := nodes[nx].Name
 		ssName, _, _, err := ss.getVmssVM(nodeName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return nil, err
@@ -1109,7 +1114,12 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 				continue
 			}
 
-			if ss.ShouldNodeExcludedFromLoadBalancer(node) {
+			shouldExcludeLoadBalancer, err := ss.ShouldNodeExcludedFromLoadBalancer(node.Name)
+			if err != nil {
+				klog.Errorf("ShouldNodeExcludedFromLoadBalancer(%s) failed with error: %v", node.Name, err)
+				return err
+			}
+			if shouldExcludeLoadBalancer {
 				klog.V(4).Infof("Excluding unmanaged/external-resource-group node %q", node.Name)
 				continue
 			}
@@ -1252,7 +1262,12 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 			continue
 		}
 
-		if ss.ShouldNodeExcludedFromLoadBalancer(node) {
+		shouldExcludeLoadBalancer, err := ss.ShouldNodeExcludedFromLoadBalancer(localNodeName)
+		if err != nil {
+			klog.Errorf("ShouldNodeExcludedFromLoadBalancer(%s) failed with error: %v", localNodeName, err)
+			return err
+		}
+		if shouldExcludeLoadBalancer {
 			klog.V(4).Infof("Excluding unmanaged/external-resource-group node %q", localNodeName)
 			continue
 		}
