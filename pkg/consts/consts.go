@@ -347,3 +347,13 @@ const (
 	// ImdsLoadBalancerURI is the imds load balancer uri
 	ImdsLoadBalancerURI = "/metadata/loadbalancer"
 )
+
+const (
+	// LabelNodeRoleExcludeBalancer specifies that the node should not be considered as a target
+	// for external load-balancers which use nodes as a second hop (e.g. many cloud LBs which only
+	// understand nodes). For services that use externalTrafficPolicy=Local, this may mean that
+	// any backends on excluded nodes are not reachable by those external load-balancers.
+	// Implementations of this exclusion may vary based on provider. This label is honored starting
+	// in 1.16 when the ServiceNodeExclusion gate is on.
+	LabelNodeRoleExcludeBalancer = "node.kubernetes.io/exclude-from-external-load-balancers"
+)

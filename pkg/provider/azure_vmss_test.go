@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
@@ -1395,12 +1396,14 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 
 	testCases := []struct {
 		description       string
+		excludeLBNodes    []string
 		nodes             []*v1.Node
 		expectedVMSSNames *[]string
 		expectedErr       error
 	}{
 		{
-			description: "getAgentPoolScaleSets should return the correct vmss names",
+			description:    "getAgentPoolScaleSets should return the correct vmss names",
+			excludeLBNodes: []string{"vmss-vm-000000", "vmss-vm-000001"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1422,11 +1425,30 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 			},
 			expectedVMSSNames: &[]string{"vmss"},
 		},
+		{
+			description:    "getAgentPoolScaleSets should return the correct vmss names",
+			excludeLBNodes: []string{"vmss-vm-000001"},
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "vmss-vm-000001",
+						Labels: map[string]string{consts.LabelNodeRoleExcludeBalancer: "true"},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "vmss-vm-000002",
+					},
+				},
+			},
+			expectedVMSSNames: &[]string{"vmss"},
+		},
 	}
 
 	for _, test := range testCases {
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
+		ss.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
