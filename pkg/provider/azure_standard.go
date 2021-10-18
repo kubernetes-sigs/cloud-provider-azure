@@ -951,7 +951,12 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 			continue
 		}
 
-		if as.ShouldNodeExcludedFromLoadBalancer(node) {
+		shouldExcludeLoadBalancer, err := as.ShouldNodeExcludedFromLoadBalancer(localNodeName)
+		if err != nil {
+			klog.Errorf("ShouldNodeExcludedFromLoadBalancer(%s) failed with error: %v", localNodeName, err)
+			return err
+		}
+		if shouldExcludeLoadBalancer {
 			klog.V(4).Infof("Excluding unmanaged/external-resource-group node %q", localNodeName)
 			continue
 		}
