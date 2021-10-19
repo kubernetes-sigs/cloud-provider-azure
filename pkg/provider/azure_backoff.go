@@ -258,23 +258,23 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	return rerr.Error()
 }
 
-// ListAgentPoolLBs invokes az.LoadBalancerClient.List and filter out
+// ListManagedLBs invokes az.LoadBalancerClient.List and filter out
 // those that are not managed by cloud provider azure or not associated to a managed VMSet.
-func (az *Cloud) ListAgentPoolLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
+func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
 	allLBs, err := az.ListLB(service)
 	if err != nil {
 		return nil, err
 	}
 
 	if allLBs == nil {
-		klog.Warningf("ListAgentPoolLBs: no LBs found")
+		klog.Warningf("ListManagedLBs: no LBs found")
 		return nil, nil
 	}
 
 	agentPoolLBs := make([]network.LoadBalancer, 0)
 	agentPoolVMSetNames, err := az.VMSet.GetAgentPoolVMSetNames(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("ListAgentPoolLBs: failed to get agent pool vmSet names: %w", err)
+		return nil, fmt.Errorf("ListManagedLBs: failed to get agent pool vmSet names: %w", err)
 	}
 	agentPoolVMSetNamesSet := sets.NewString()
 	if agentPoolVMSetNames != nil && len(*agentPoolVMSetNames) > 0 {
