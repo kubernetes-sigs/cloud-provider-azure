@@ -1090,6 +1090,7 @@ func getVmssAndResourceGroupNameByVMProviderID(providerID string) (string, strin
 	return matches[1], matches[2], nil
 }
 
+// nolint: gocyclo
 func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	klog.V(2).Infof("ensureVMSSInPool: ensuring VMSS with backendPoolID %s", backendPoolID)
 	vmssNamesMap := make(map[string]bool)
