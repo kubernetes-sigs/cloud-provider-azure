@@ -338,7 +338,7 @@ func TestListAgentPoolLBs(t *testing.T) {
 		mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
 		az.VMSet = mockVMSet
 
-		lbs, err := az.ListAgentPoolLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
+		lbs, err := az.ListManagedLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
 		assert.Equal(t, test.expectedErr, err)
 		assert.Equal(t, test.expectedLBs, lbs)
 	}
