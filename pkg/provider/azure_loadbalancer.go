@@ -313,7 +313,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 	return true
 }
 
-func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(lb *network.LoadBalancer, fip *network.FrontendIPConfiguration, clusterName string, service *v1.Service) error {
+func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(lb *network.LoadBalancer, existingLBs []network.LoadBalancer, fip *network.FrontendIPConfiguration, clusterName string, service *v1.Service) error {
 	if lb == nil || lb.LoadBalancerPropertiesFormat == nil || lb.FrontendIPConfigurations == nil {
 		return nil
 	}
@@ -348,7 +348,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(lb *network.LoadB
 
 	if len(fipConfigs) == 0 {
 		klog.V(2).Infof("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): deleting load balancer because there is no remaining frontend IP configurations", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name)
-		err := az.cleanOrphanedLoadBalancer(lb, service, clusterName)
+		err := az.cleanOrphanedLoadBalancer(lb, existingLBs, service, clusterName)
 		if err != nil {
 			klog.Errorf("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): failed to cleanupOrphanedLoadBalancer: %v", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name, err)
 			return err
@@ -365,7 +365,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(lb *network.LoadB
 	return nil
 }
 
-func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1.Service, clusterName string) error {
+func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, existingLBs []network.LoadBalancer, service *v1.Service, clusterName string) error {
 	lbName := to.String(lb.Name)
 	serviceName := getServiceName(service)
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
@@ -375,6 +375,18 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 	if isBackendPoolPreConfigured {
 		klog.V(2).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): ignore cleanup of dirty lb because the lb is pre-configured", lbName, serviceName, clusterName)
 	} else {
+		foundLB := false
+		for _, existingLB := range existingLBs {
+			if strings.EqualFold(to.String(lb.Name), to.String(existingLB.Name)) {
+				foundLB = true
+				break
+			}
+		}
+		if !foundLB {
+			klog.V(2).Infof("cleanOrphanedLoadBalancer: the LB %s doesn't exist, will not delete it", to.String(lb.Name))
+			return nil
+		}
+
 		// When FrontendIPConfigurations is empty, we need to delete the Azure load balancer resource itself,
 		// because an Azure load balancer cannot have an empty FrontendIPConfigurations collection
 		klog.V(2).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): deleting the LB since there are no remaining frontendIPConfigurations", lbName, serviceName, clusterName)
@@ -489,14 +501,19 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		err                      error
 	)
 
+	existingLBs, err = az.ListManagedLBs(service, nodes, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to list LB: %w", err)
+	}
+
 	// skip this operation when wantLb=false
 	if nodes == nil {
-		return nil, nil
+		return existingLBs, nil
 	}
 
 	// only run once since the controller manager rebooted
 	if az.isSharedLoadBalancerSynced {
-		return nil, nil
+		return existingLBs, nil
 	}
 	defer func() {
 		if err == nil {
@@ -506,12 +523,7 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 
 	// skip if the cluster is using basic LB
 	if !az.useStandardLoadBalancer() {
-		return nil, nil
-	}
-
-	existingLBs, err = az.ListAgentPoolLBs(service, nodes, clusterName)
-	if err != nil {
-		return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to list LB: %w", err)
+		return existingLBs, nil
 	}
 
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
@@ -683,7 +695,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		// select another load balancer instead of returning
 		// the current one if the change is needed
 		if wantLb && az.shouldChangeLoadBalancer(service, to.String(existingLB.Name), clusterName) {
-			if err := az.removeFrontendIPConfigurationFromLoadBalancer(&existingLB, fipConfig, clusterName, service); err != nil {
+			if err := az.removeFrontendIPConfigurationFromLoadBalancer(&existingLB, existingLBs, fipConfig, clusterName, service); err != nil {
 				klog.Errorf("getServiceLoadBalancer(%s, %s, %v): failed to remove frontend IP configuration from load balancer: %v", service.Name, clusterName, wantLb, err)
 				return nil, nil, false, err
 			}
@@ -1582,7 +1594,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	// If it is not exist, and no change to that, we don't CreateOrUpdate LB
 	if dirtyLb {
 		if lb.FrontendIPConfigurations == nil || len(*lb.FrontendIPConfigurations) == 0 {
-			err := az.cleanOrphanedLoadBalancer(lb, service, clusterName)
+			err := az.cleanOrphanedLoadBalancer(lb, existingLBs, service, clusterName)
 			if err != nil {
 				klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s) - failed to cleanOrphanedLoadBalancer: %v", serviceName, lbName, err)
 				return nil, err
