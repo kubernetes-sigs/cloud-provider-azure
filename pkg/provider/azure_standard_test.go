@@ -32,6 +32,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
@@ -1450,6 +1451,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		name           string
 		service        *v1.Service
 		nodes          []*v1.Node
+		excludeLBNodes []string
 		nodeName       string
 		backendPoolID  string
 		nicName        string
@@ -1475,9 +1477,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName:     "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is master node",
-			service:  &v1.Service{},
-			nodeName: "vm2",
+			name:           "EnsureHostsInPool should skip if node is master node",
+			service:        &v1.Service{},
+			nodeName:       "vm2",
+			excludeLBNodes: []string{"vm2"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1491,9 +1494,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName: "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is in external resource group",
-			service:  &v1.Service{},
-			nodeName: "vm3",
+			name:           "EnsureHostsInPool should skip if node is in external resource group",
+			service:        &v1.Service{},
+			nodeName:       "vm3",
+			excludeLBNodes: []string{"vm3"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1507,9 +1511,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName: "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is unmanaged",
-			service:  &v1.Service{},
-			nodeName: "vm4",
+			name:           "EnsureHostsInPool should skip if node is unmanaged",
+			service:        &v1.Service{},
+			nodeName:       "vm4",
+			excludeLBNodes: []string{"vm4"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1554,6 +1559,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	for _, test := range testCases {
 		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		cloud.Config.ExcludeMasterFromStandardLB = to.BoolPtr(true)
+		cloud.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
@@ -1780,7 +1786,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		cloud.InterfacesClient = mockNICClient
 
-		err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools)
+		err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
 	}
 }
