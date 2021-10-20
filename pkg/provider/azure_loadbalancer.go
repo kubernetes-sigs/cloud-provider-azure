@@ -258,7 +258,7 @@ func (az *Cloud) cleanupVMSetFromBackendPoolByCondition(slb *network.LoadBalance
 			},
 		}
 		// decouple the backendPool from the node
-		err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, backendpoolToBeDeleted)
+		err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, backendpoolToBeDeleted, true)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 			// do nothing for availability set
 			lb.BackendAddressPools = nil
 		}
-		err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools)
+		err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools, true)
 		if err != nil {
 			klog.Errorf("cleanOrphanedLoadBalancer(%s, %s, %s): failed to EnsureBackendPoolDeleted: %v", lbName, serviceName, clusterName, err)
 			return err
@@ -439,7 +439,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, service *v1
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
 func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vmSetName string, service *v1.Service) error {
 	lbBackendPoolID := az.getBackendPoolID(to.String(lb.Name), az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
-	err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools)
+	err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools, true)
 	if err != nil {
 		return fmt.Errorf("deleteDedicatedLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err)
 	}
@@ -1477,15 +1477,6 @@ func (az *Cloud) findFrontendIPConfigOfService(
 	return nil, false, nil
 }
 
-func nodeNameInNodes(nodeName string, nodes []*v1.Node) bool {
-	for _, node := range nodes {
-		if strings.EqualFold(nodeName, node.Name) {
-			return true
-		}
-	}
-	return false
-}
-
 // reconcileLoadBalancer ensures load balancer exists and the frontend ip config is setup.
 // This also reconciles the Service's Ports  with the LoadBalancer config.
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
@@ -1896,7 +1887,12 @@ func (az *Cloud) reconcileBackendPools(clusterName string, service *v1.Service, 
 					// would not be in the `nodes` slice. We need to check the nodes that
 					// have been added to the LB's backendpool, find the unwanted ones and
 					// delete them from the pool.
-					if !nodeNameInNodes(nodeName, nodes) {
+					shouldExcludeLoadBalancer, err := az.ShouldNodeExcludedFromLoadBalancer(nodeName)
+					if err != nil {
+						klog.Errorf("ShouldNodeExcludedFromLoadBalancer(%s) failed with error: %v", nodeName, err)
+						return false, false, err
+					}
+					if shouldExcludeLoadBalancer {
 						klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb backendpool - found unwanted node %s, decouple it from the LB", serviceName, wantLb, nodeName)
 						// construct a backendPool that only contains the IP config of the node to be deleted
 						backendIPConfigurationsToBeDeleted = append(backendIPConfigurationsToBeDeleted, network.InterfaceIPConfiguration{ID: to.StringPtr(ipConfID)})
@@ -1912,7 +1908,7 @@ func (az *Cloud) reconcileBackendPools(clusterName string, service *v1.Service, 
 						},
 					}
 					// decouple the backendPool from the node
-					err = az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, backendpoolToBeDeleted)
+					err = az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, backendpoolToBeDeleted, false)
 					if err != nil {
 						return false, false, err
 					}
