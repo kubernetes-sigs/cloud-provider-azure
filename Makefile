@@ -153,7 +153,7 @@ push-ccm-image: build-ccm-image ## Push controller-manager image.
 
 .PHONY: push-node-image
 push-node-image: ## Push node-manager image for Linux.
-	$(MAKE) OUTPUT_TYPE=registry ARCH=$(ARCH) build-node-image
+	docker push $(NODE_MANAGER_LINUX_FULL_IMAGE):$(IMAGE_TAG)-$(ARCH)
 
 .PHONY: release-ccm-e2e-test-image
 release-ccm-e2e-test-image: ## Build and release e2e test image.
