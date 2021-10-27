@@ -1,93 +1,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.9</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</link><pubDate>Thu, 21 Oct 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</guid><description>
 &lt;h1 id="changelog-since-v078">Changelog since v0.7.8&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="feature">Feature&lt;/h3>
-&lt;ul>
-&lt;li>
-&lt;p>Adds support for the Cloud Node Manager to run as a Windows Service. This can be enabled using the &amp;ndash;windows-service flag. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/823">#823&lt;/a>, &lt;a href="https://github.com/JoelSpeed">@JoelSpeed&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Chore: rename tag key for CSI drivers (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/799">#799&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: Adds windows server 2022 build (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/821">#821&lt;/a>, &lt;a href="https://github.com/nick5616">@nick5616&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AccessTier in file share creation interface (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/781">#781&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AllowBlobPublicAccess setting in storage account creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/784">#784&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: only restart all controllers after stopping if needed (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/832">#832&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: reduce vmss cache refresh in parallel disk attach/detach (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/803">#803&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: support creating account if not exists when account name is provided (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/786">#786&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: support reloading the cloud controller manager based on the changes of the config file (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/769">#769&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Prefix &amp;lsquo;k8s-azure-&amp;rsquo; has been added to the following tags:&lt;/p>
-&lt;table>
-&lt;thead>
-&lt;tr>
-&lt;th>Legacy Tag&lt;/th>
-&lt;th>New Tag&lt;/th>
-&lt;th>Comment&lt;/th>
-&lt;/tr>
-&lt;/thead>
-&lt;tbody>
-&lt;tr>
-&lt;td>service&lt;/td>
-&lt;td>k8s-azure-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-cluster-name&lt;/td>
-&lt;td>k8s-azure-cluster-name&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-dns-label-service&lt;/td>
-&lt;td>k8s-azure-dns-label-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;/tbody>
-&lt;/table>
-&lt;p>To keep backward compability, the legacy tags on existing public IP would not be removed, but newly created public IPs would only get the new tags. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/815">#815&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;/ul>
-&lt;h3 id="failing-test">Failing Test&lt;/h3>
-&lt;ul>
-&lt;li>Chore: fix implictly required vendor (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/775">#775&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
-&lt;li>&lt;strong>Release note&lt;/strong>: (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/780">#780&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix detach disk issue on deleting vmss node (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/774">#774&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: consolidate logs for instance not found error (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/794">#794&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/850">#850&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/860">#860&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: fix a potential data race issue in unit test (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/848">#848&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: ignore the case when comparing azure tags in service annotation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/791">#791&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: remove VMSS instances from SLB backend pool only when they are explicitly labeled
-fix: remove VMSS from SLB backend pool only when necessary (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/856">#856&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: use correct gitVersion in userAgent (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/764">#764&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: detect data race in unit tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/849">#849&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: logging the service body when service controller invokes the cloud provider (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/778">#778&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: report an error when route table name is not configured (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/819">#819&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: avoid wrapping RawError twice (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/805">#805&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/852">#852&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/864">#864&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: use correct gitVersion in userAgent (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/766">#766&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
-&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/842">#842&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: switch to sync detach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/790">#790&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Chore: support multi-arch cloud-node-manager image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/837">#837&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
+&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/843">#843&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Use docker buildx for multi-arch node image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/857">#857&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
@@ -100,83 +25,22 @@ fix: remove VMSS from SLB backend pool only when necessary (&lt;a href="https://
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
 &lt;ul>
-&lt;li>
-&lt;p>Adds support for the Cloud Node Manager to run as a Windows Service. This can be enabled using the &amp;ndash;windows-service flag. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/823">#823&lt;/a>, &lt;a href="https://github.com/JoelSpeed">@JoelSpeed&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Chore: rename tag key for CSI drivers (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/799">#799&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: Adds windows server 2022 build (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/821">#821&lt;/a>, &lt;a href="https://github.com/nick5616">@nick5616&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AccessTier in file share creation interface (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/781">#781&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AllowBlobPublicAccess setting in storage account creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/784">#784&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: only restart all controllers after stopping if needed (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/832">#832&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: reduce vmss cache refresh in parallel disk attach/detach (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/803">#803&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: support creating account if not exists when account name is provided (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/786">#786&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Prefix &amp;lsquo;k8s-azure-&amp;rsquo; has been added to the following tags:&lt;/p>
-&lt;table>
-&lt;thead>
-&lt;tr>
-&lt;th>Legacy Tag&lt;/th>
-&lt;th>New Tag&lt;/th>
-&lt;th>Comment&lt;/th>
-&lt;/tr>
-&lt;/thead>
-&lt;tbody>
-&lt;tr>
-&lt;td>service&lt;/td>
-&lt;td>k8s-azure-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-cluster-name&lt;/td>
-&lt;td>k8s-azure-cluster-name&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-dns-label-service&lt;/td>
-&lt;td>k8s-azure-dns-label-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;/tbody>
-&lt;/table>
-&lt;p>To keep backward compability, the legacy tags on existing public IP would not be removed, but newly created public IPs would only get the new tags. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/815">#815&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/p>
-&lt;/li>
+&lt;li>Feat: only restart all controllers after stopping if needed (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/846">#846&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: reloading ccm when the config file changes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/777">#777&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
-&lt;li>&lt;strong>Release note&lt;/strong>: (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/780">#780&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix detach disk issue on deleting vmss node (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/774">#774&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: consolidate logs for instance not found error (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/794">#794&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/850">#850&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/860">#860&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: fix a potential data race issue in unit test (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/848">#848&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: ignore the case when comparing azure tags in service annotation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/791">#791&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: remove VMSS instances from SLB backend pool only when they are explicitly labeled
-fix: remove VMSS from SLB backend pool only when necessary (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/856">#856&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: detect data race in unit tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/849">#849&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: logging the service body when service controller invokes the cloud provider (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/778">#778&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: report an error when route table name is not configured (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/819">#819&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: avoid wrapping RawError twice (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/804">#804&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/865">#865&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: ignore the case when comparing azure tags in service annotation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/811">#811&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: skip not found nodes when reconciling LB backend address pools (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/818">#818&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
-&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/842">#842&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: switch to sync detach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/790">#790&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Chore: support multi-arch cloud-node-manager image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/836">#836&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
+&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/853">#853&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/844">#844&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Use docker buildx for multi-arch node image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/858">#858&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
@@ -189,83 +53,21 @@ fix: remove VMSS from SLB backend pool only when necessary (&lt;a href="https://
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
 &lt;ul>
-&lt;li>
-&lt;p>Adds support for the Cloud Node Manager to run as a Windows Service. This can be enabled using the &amp;ndash;windows-service flag. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/823">#823&lt;/a>, &lt;a href="https://github.com/JoelSpeed">@JoelSpeed&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Chore: rename tag key for CSI drivers (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/799">#799&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: Adds windows server 2022 build (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/821">#821&lt;/a>, &lt;a href="https://github.com/nick5616">@nick5616&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AccessTier in file share creation interface (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/781">#781&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: add AllowBlobPublicAccess setting in storage account creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/784">#784&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: only restart all controllers after stopping if needed (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/832">#832&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: reduce vmss cache refresh in parallel disk attach/detach (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/803">#803&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Feat: support creating account if not exists when account name is provided (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/786">#786&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/p>
-&lt;/li>
-&lt;li>
-&lt;p>Prefix &amp;lsquo;k8s-azure-&amp;rsquo; has been added to the following tags:&lt;/p>
-&lt;table>
-&lt;thead>
-&lt;tr>
-&lt;th>Legacy Tag&lt;/th>
-&lt;th>New Tag&lt;/th>
-&lt;th>Comment&lt;/th>
-&lt;/tr>
-&lt;/thead>
-&lt;tbody>
-&lt;tr>
-&lt;td>service&lt;/td>
-&lt;td>k8s-azure-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-cluster-name&lt;/td>
-&lt;td>k8s-azure-cluster-name&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;tr>
-&lt;td>kubernetes-dns-label-service&lt;/td>
-&lt;td>k8s-azure-dns-label-service&lt;/td>
-&lt;td>Applied on public IP&lt;/td>
-&lt;/tr>
-&lt;/tbody>
-&lt;/table>
-&lt;p>To keep backward compability, the legacy tags on existing public IP would not be removed, but newly created public IPs would only get the new tags. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/815">#815&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/p>
-&lt;/li>
+&lt;li>Feat: only restart all controllers after stopping if needed (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/847">#847&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Feat: reloading ccm when the config file changes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/776">#776&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
-&lt;li>&lt;strong>Release note&lt;/strong>: (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/780">#780&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix detach disk issue on deleting vmss node (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/774">#774&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: consolidate logs for instance not found error (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/794">#794&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/850">#850&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/860">#860&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: fix a potential data race issue in unit test (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/848">#848&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: ignore the case when comparing azure tags in service annotation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/791">#791&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: remove VMSS instances from SLB backend pool only when they are explicitly labeled
-fix: remove VMSS from SLB backend pool only when necessary (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/856">#856&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: detect data race in unit tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/849">#849&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: logging the service body when service controller invokes the cloud provider (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/778">#778&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: report an error when route table name is not configured (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/819">#819&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: do not crash if the region does not support zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/854">#854&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/866">#866&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: ignore the case when comparing azure tags in service annotation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/812">#812&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: skip not found nodes when reconciling LB backend address pools (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/817">#817&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
-&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/842">#842&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: switch to sync detach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/790">#790&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;li>Chore: support multi-arch cloud-node-manager image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/835">#835&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
+&lt;li>Fix: skip instance not found when decoupling vmss from lb (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/845">#845&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Use docker buildx for multi-arch node image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/859">#859&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
