@@ -159,6 +159,18 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 	}
 
+	vnetResourceGroup := az.ResourceGroup
+	if len(az.VnetResourceGroup) > 0 {
+		vnetResourceGroup = az.VnetResourceGroup
+	}
+
+	if accountOptions.CreatePrivateEndpoint {
+		// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
+		if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
+			return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
+		}
+	}
+
 	if createNewAccount {
 		// set network rules for storage account
 		var networkRuleSet *storage.NetworkRuleSet
@@ -250,10 +262,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if accountOptions.CreatePrivateEndpoint {
-			vnetResourceGroup := az.ResourceGroup
-			if len(az.VnetResourceGroup) > 0 {
-				vnetResourceGroup = az.VnetResourceGroup
-			}
 			// Get properties of the storageAccount
 			storageAccount, err := az.StorageAccountClient.GetProperties(ctx, resourceGroup, accountName)
 			if err != nil {
@@ -264,11 +272,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			privateEndpointName := accountName + "-pvtendpoint"
 			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup); err != nil {
 				return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
-			}
-
-			// Create DNS zone
-			if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
-				return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
 			}
 
 			// Create virtual link to the zone private DNS zone
