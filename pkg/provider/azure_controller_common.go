@@ -145,9 +145,10 @@ func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.Azu
 	return ss, nil
 }
 
-// AttachDisk attaches a vhd to vm. The vhd must exist, can be identified by diskName, diskURI.
+// AttachDisk attaches a disk to vm
+// parameter async indicates whether allow multiple batch disk attach on one node in parallel
 // return (lun, error)
-func (c *controllerCommon) AttachDisk(ctx context.Context, isManagedDisk bool, diskName, diskURI string, nodeName types.NodeName,
+func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName, diskURI string, nodeName types.NodeName,
 	cachingMode compute.CachingTypes, disk *compute.Disk) (int32, error) {
 	diskEncryptionSetID := ""
 	writeAcceleratorEnabled := false
@@ -209,7 +210,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, isManagedDisk bool, d
 
 	options := AttachDiskOptions{
 		lun:                     -1,
-		isManagedDisk:           isManagedDisk,
+		isManagedDisk:           true,
 		diskName:                diskName,
 		cachingMode:             cachingMode,
 		diskEncryptionSetID:     diskEncryptionSetID,
@@ -255,12 +256,12 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, isManagedDisk bool, d
 		return -1, err
 	}
 
-	if c.diskOpRateLimiter.TryAccept() {
+	if async && c.diskOpRateLimiter.TryAccept() {
 		// unlock and wait for attach disk complete
 		unlock = true
 		c.lockMap.UnlockEntry(node)
 	} else {
-		klog.Warningf("azureDisk - switch to batch operation since disk operation is rate limited, current QPS: %f", c.diskOpRateLimiter.QPS())
+		klog.Warningf("azureDisk - switch to batch operation due to rate limited(async: %t), QPS: %f", async, c.diskOpRateLimiter.QPS())
 	}
 	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
 	if err != nil {
