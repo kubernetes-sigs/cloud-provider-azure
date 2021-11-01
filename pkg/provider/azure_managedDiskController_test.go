@@ -490,7 +490,7 @@ func TestResizeDisk(t *testing.T) {
 			mockDisksClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, test.diskName, gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		result, err := managedDiskController.ResizeDisk(diskURI, test.oldSize, test.newSize)
+		result, err := managedDiskController.ResizeDisk(diskURI, test.oldSize, test.newSize, false)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
