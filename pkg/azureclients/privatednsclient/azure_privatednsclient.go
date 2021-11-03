@@ -33,7 +33,7 @@ type Client struct {
 
 // New creates a new privatedns client.
 func New(config *azclients.ClientConfig) *Client {
-	privateDNSClient := privatedns.NewPrivateZonesClient(config.SubscriptionID)
+	privateDNSClient := privatedns.NewPrivateZonesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
 	privateDNSClient.Authorizer = config.Authorizer
 	client := &Client{
 		privateDNSClient: privateDNSClient,
