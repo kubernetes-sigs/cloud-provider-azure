@@ -33,7 +33,7 @@ type Client struct {
 
 // New creates a new private endpoint client.
 func New(config *azclients.ClientConfig) *Client {
-	privateEndpointClient := network.NewPrivateEndpointsClient(config.SubscriptionID)
+	privateEndpointClient := network.NewPrivateEndpointsClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
 	privateEndpointClient.Authorizer = config.Authorizer
 
 	client := &Client{
