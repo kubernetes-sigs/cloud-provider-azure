@@ -346,6 +346,7 @@ var _ = Describe("Service with annotation", func() {
 		expectedTags := map[string]*string{
 			"a": to.StringPtr("b"),
 			"c": to.StringPtr("d"),
+			"e": to.StringPtr(""),
 		}
 		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
@@ -370,6 +371,7 @@ var _ = Describe("Service with annotation", func() {
 		expectedTags = map[string]*string{
 			"a": to.StringPtr("c"),
 			"c": to.StringPtr("d"),
+			"e": to.StringPtr(""),
 			"x": to.StringPtr("y"),
 		}
 		err = waitComparePIPTags(tc, expectedTags, to.String(targetPIP.Name))

@@ -4133,6 +4133,7 @@ func TestEnsurePIPTagged(t *testing.T) {
 				"c":                   to.StringPtr("d"),
 				"y":                   to.StringPtr("z"),
 				"m":                   to.StringPtr("n"),
+				"e":                   to.StringPtr(""),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -4150,6 +4151,26 @@ func TestEnsurePIPTagged(t *testing.T) {
 				"a":                   to.StringPtr("b"),
 				"c":                   to.StringPtr("d"),
 				"y":                   to.StringPtr("z"),
+				"e":                   to.StringPtr(""),
+			},
+		}
+		changed := cloud.ensurePIPTagged(&service, &pip)
+		assert.True(t, changed)
+		assert.Equal(t, expectedPIP, pip)
+	})
+
+	t.Run("ensurePIPTagged should support TagsMap", func(t *testing.T) {
+		cloud.SystemTags = "a,foo"
+		cloud.TagsMap = map[string]string{"a": "c", "a=b": "c=d", "Y": "zz"}
+		expectedPIP := network.PublicIPAddress{
+			Tags: map[string]*string{
+				consts.ClusterNameKey: to.StringPtr("testCluster"),
+				consts.ServiceTagKey:  to.StringPtr("default/svc1,default/svc2"),
+				"foo":                 to.StringPtr("bar"),
+				"a":                   to.StringPtr("b"),
+				"c":                   to.StringPtr("d"),
+				"a=b":                 to.StringPtr("c=d"),
+				"e":                   to.StringPtr(""),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
