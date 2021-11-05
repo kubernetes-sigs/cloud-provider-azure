@@ -44,13 +44,13 @@ spec:
                   fieldPath: metadata.name
           command:
             [
+              "/go-runner",
+              "-log-file=/var/log/kubelet-$(NODE_NAME).log",
               "/kubemark",
               "--morph=kubelet",
               "--name=$(NODE_NAME)",
               "--kubeconfig=/kubeconfig/kubelet.kubeconfig",
               "$(CONTENT_TYPE)",
-              "--log-file=/var/log/kubelet-$(NODE_NAME).log",
-              "--logtostderr=false",
               "--v=2",
             ]
           volumeMounts:
@@ -82,14 +82,14 @@ spec:
                   fieldPath: metadata.name
           command:
             [
+              "/go-runner",
+              "-log-file=/var/log/kubeproxy-$(NODE_NAME).log",
               "/kubemark",
               "--morph=proxy",
               "--name=$(NODE_NAME)",
               "--use-real-proxier=false",
               "--kubeconfig=/kubeconfig/kubeproxy.kubeconfig",
               "$(CONTENT_TYPE)",
-              "--log-file=/var/log/kubeproxy-$(NODE_NAME).log",
-              "--logtostderr=false",
               "--v=10",
             ]
           volumeMounts:
