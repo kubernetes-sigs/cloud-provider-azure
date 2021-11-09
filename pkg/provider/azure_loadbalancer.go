@@ -2712,10 +2712,10 @@ func shouldReleaseExistingOwnedPublicIP(existingPip *network.PublicIPAddress, lb
 
 // ensurePIPTagged ensures the public IP of the service is tagged as configured
 func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *network.PublicIPAddress) bool {
-	configTags := parseTags(az.Tags)
+	configTags := parseTags(az.Tags, az.TagsMap)
 	annotationTags := make(map[string]*string)
 	if _, ok := service.Annotations[consts.ServiceAnnotationAzurePIPTags]; ok {
-		annotationTags = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags])
+		annotationTags = parseTags(service.Annotations[consts.ServiceAnnotationAzurePIPTags], map[string]string{})
 	}
 
 	for k, v := range annotationTags {
@@ -3306,7 +3306,7 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *network.LoadBalancer) bool {
 	if az.Tags == "" {
 		return false
 	}
-	tags := parseTags(az.Tags)
+	tags := parseTags(az.Tags, az.TagsMap)
 	if lb.Tags == nil {
 		lb.Tags = make(map[string]*string)
 	}
@@ -3322,7 +3322,7 @@ func (az *Cloud) ensureSecurityGroupTagged(sg *network.SecurityGroup) bool {
 	if az.Tags == "" {
 		return false
 	}
-	tags := parseTags(az.Tags)
+	tags := parseTags(az.Tags, az.TagsMap)
 	if sg.Tags == nil {
 		sg.Tags = make(map[string]*string)
 	}

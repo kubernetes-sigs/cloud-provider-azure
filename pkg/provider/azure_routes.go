@@ -566,7 +566,7 @@ func (az *Cloud) ensureRouteTableTagged(rt *network.RouteTable) (map[string]*str
 	if az.Tags == "" {
 		return nil, false
 	}
-	tags := parseTags(az.Tags)
+	tags := parseTags(az.Tags, az.TagsMap)
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)
 	}

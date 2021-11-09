@@ -99,26 +99,42 @@ func convertMapToMapPointer(origin map[string]string) map[string]*string {
 	return newly
 }
 
-func parseTags(tags string) map[string]*string {
+func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 	formatted := make(map[string]*string)
-	if len(tags) == 0 {
-		return formatted
+
+	if tags != "" {
+		kvs := strings.Split(tags, consts.TagsDelimiter)
+		for _, kv := range kvs {
+			res := strings.Split(kv, consts.TagKeyValueDelimiter)
+			if len(res) != 2 {
+				klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
+				continue
+			}
+			k, v := strings.TrimSpace(res[0]), strings.TrimSpace(res[1])
+			if k == "" {
+				klog.Warning("parseTags: empty key, ignoring this key-value pair")
+				continue
+			}
+			formatted[k] = to.StringPtr(v)
+		}
 	}
 
-	kvs := strings.Split(tags, consts.TagsDelimiter)
-	for _, kv := range kvs {
-		res := strings.Split(kv, consts.TagKeyValueDelimiter)
-		if len(res) != 2 {
-			klog.Warningf("parseTags: error when parsing key-value pair %s, would ignore this one", kv)
-			continue
+	if len(tagsMap) > 0 {
+		for key, value := range tagsMap {
+			key, value := strings.TrimSpace(key), strings.TrimSpace(value)
+			if key == "" {
+				klog.Warningf("parseTags: empty key, ignoring this key-value pair")
+				continue
+			}
+
+			if found, k := findKeyInMapCaseInsensitive(formatted, key); found && k != key {
+				klog.V(4).Infof("parseTags: found identical keys: %s from tags and %s from tagsMap (case-insensitive), %s will replace %s", k, key, key, k)
+				delete(formatted, k)
+			}
+			formatted[key] = to.StringPtr(value)
 		}
-		k, v := strings.TrimSpace(res[0]), strings.TrimSpace(res[1])
-		if k == "" || v == "" {
-			klog.Warningf("parseTags: error when parsing key-value pair %s-%s, would ignore this one", k, v)
-			continue
-		}
-		formatted[k] = to.StringPtr(v)
 	}
+
 	return formatted
 }
 

@@ -107,6 +107,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 |routeTableCacheTTLInSeconds|Cache TTL in seconds for route table|Since v1.18.0, default is 120|
 | disableAzureStackCloud | DisableAzureStackCloud disables AzureStackCloud support. It should be used when setting Cloud with "AZURESTACKCLOUD" to customize ARM endpoints while the cluster is not running on AzureStack. Default is false. |Optional. Supported since v1.20.0 in out-of-tree cloud provider Azure. |
 | tags | tags that would be tagged onto the cloud provider managed resources, including lb, public IP, network security group and route table. | Optional. Supported since v1.20.0. |
+| tagsMap | JSON-style tags, will be merged with `tags` | Optional. Supported since v1.23.0. |
 | systemTags | tag keys that should not be deleted when being updated. | Optional. Supported since v1.21.0. |
 
 ### primaryAvailabilitySetName
