@@ -145,7 +145,11 @@ type Config struct {
 	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
 	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
 	// this config, the old tags would be replaced by the new ones.
+	// Because special characters are not supported in "tags" configuration, "tags" support would be removed in a future release,
+	// please consider migrating the config to "tagsMap".
 	Tags string `json:"tags,omitempty" yaml:"tags,omitempty"`
+	// TagsMap is similar to Tags but holds tags with special characters such as `=` and `,`.
+	TagsMap map[string]string `json:"tagsMap,omitempty" yaml:"tagsMap,omitempty"`
 	// SystemTags determines the tag keys managed by cloud provider. If it is not set, no tags would be deleted if
 	// the `Tags` is changed. However, the old tags would be deleted if they are neither included in `Tags` nor
 	// in `SystemTags` after the update of `Tags`.
