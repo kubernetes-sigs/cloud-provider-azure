@@ -97,6 +97,47 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		tc = nil
 	})
 
+	It("should support mixed protocol services", func() {
+		By("creating a mixed protocol service")
+		mixedProtocolPorts := []v1.ServicePort{
+			{
+				Name:       "tcp",
+				Port:       nginxPort,
+				TargetPort: intstr.FromInt(nginxPort),
+				Protocol:   v1.ProtocolTCP,
+			},
+			{
+				Name:       "udp",
+				Port:       testingPort,
+				TargetPort: intstr.FromInt(testingPort),
+				Protocol:   v1.ProtocolUDP,
+			},
+		}
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, mixedProtocolPorts)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("checking load balancing rules")
+		foundTCP, foundUDP := false, false
+		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
+		for _, rule := range *lb.LoadBalancingRules {
+			switch {
+			case strings.EqualFold(string(rule.Protocol), string(v1.ProtocolTCP)):
+				if to.Int32(rule.FrontendPort) == nginxPort {
+					foundTCP = true
+				}
+			case strings.EqualFold(string(rule.Protocol), string(v1.ProtocolUDP)):
+				if to.Int32(rule.FrontendPort) == testingPort {
+					foundUDP = true
+				}
+			}
+		}
+		Expect(foundTCP).To(BeTrue())
+		Expect(foundUDP).To(BeTrue())
+	})
+
 	It("should support BYO public IP", func() {
 		By("creating a public IP with tags")
 		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
