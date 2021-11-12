@@ -170,6 +170,11 @@ func (az *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID strin
 		return nil, nil
 	}
 
+	if az.VMSet == nil {
+		// vmSet == nil indicates credentials are not provided.
+		return nil, fmt.Errorf("no credentials provided for Azure cloud provider")
+	}
+
 	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
 	if err != nil {
 		return nil, err
@@ -189,6 +194,11 @@ func (az *Cloud) InstanceExistsByProviderID(ctx context.Context, providerID stri
 	if az.IsNodeUnmanagedByProviderID(providerID) {
 		klog.V(4).Infof("InstanceExistsByProviderID: assuming unmanaged node %q exists", providerID)
 		return true, nil
+	}
+
+	if az.VMSet == nil {
+		// vmSet == nil indicates credentials are not provided.
+		return false, fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
 	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
@@ -233,6 +243,10 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	if providerID == "" {
 		return false, nil
+	}
+	if az.VMSet == nil {
+		// vmSet == nil indicates credentials are not provided.
+		return false, fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
 	nodeName, err := az.VMSet.GetNodeNameByProviderID(providerID)
@@ -399,6 +413,11 @@ func (az *Cloud) InstanceTypeByProviderID(ctx context.Context, providerID string
 		return "", nil
 	}
 
+	if az.VMSet == nil {
+		// vmSet == nil indicates credentials are not provided.
+		return "", fmt.Errorf("no credentials provided for Azure cloud provider")
+	}
+
 	name, err := az.VMSet.GetNodeNameByProviderID(providerID)
 	if err != nil {
 		return "", err
@@ -448,6 +467,11 @@ func (az *Cloud) InstanceType(ctx context.Context, name types.NodeName) (string,
 		if metadata.Compute.VMSize != "" {
 			return metadata.Compute.VMSize, nil
 		}
+	}
+
+	if az.VMSet == nil {
+		// vmSet == nil indicates credentials are not provided.
+		return "", fmt.Errorf("no credentials provided for Azure cloud provider")
 	}
 
 	return az.VMSet.GetInstanceTypeByNodeName(string(name))

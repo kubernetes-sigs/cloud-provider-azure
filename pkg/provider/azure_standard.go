@@ -581,6 +581,9 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error
 		return "", err
 	}
 
+	if machine.HardwareProfile == nil {
+		return "", fmt.Errorf("HardwareProfile of node(%s) is nil", name)
+	}
 	return string(machine.HardwareProfile.VMSize), nil
 }
 
