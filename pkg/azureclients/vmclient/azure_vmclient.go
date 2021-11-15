@@ -40,6 +40,7 @@ import (
 var _ Interface = &Client{}
 
 // Client implements VirtualMachine client Interface.
+// This is a test comment!
 type Client struct {
 	armClient      armclient.Interface
 	subscriptionID string
