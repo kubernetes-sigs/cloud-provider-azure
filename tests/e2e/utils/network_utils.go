@@ -240,7 +240,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	if len(*vNet.Subnets) > 1 {
 		for _, sn := range *vNet.Subnets {
 			// if there is more than one subnet, select the first one we find.
-			if !strings.Contains(*sn.Name, "controlplane") {
+			if !strings.Contains(*sn.Name, "controlplane") && !strings.Contains(*sn.Name, "control-plane") {
 				subnet = *sn.AddressPrefix
 				break
 			}
