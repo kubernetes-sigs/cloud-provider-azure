@@ -41,17 +41,11 @@ import (
 )
 
 const (
-	// for limits check https://docs.microsoft.com/en-us/azure/azure-subscription-service-limits#storage-limits
-	maxStorageAccounts                     = 100 // max # is 200 (250 with special request). this allows 100 for everything else including stand alone disks
-	maxDisksPerStorageAccounts             = 60
-	storageAccountUtilizationBeforeGrowing = 0.5
 	// Disk Caching is not supported for disks 4 TiB and larger
 	// https://docs.microsoft.com/en-us/azure/virtual-machines/premium-storage-performance#disk-caching
 	diskCachingLimit = 4096 // GiB
 
 	maxLUN                 = 64 // max number of LUNs per VM
-	errLeaseIDMissing      = "LeaseIdMissing"
-	errContainerNotFound   = "ContainerNotFound"
 	errStatusCode400       = "statuscode=400"
 	errInvalidParameter    = `code="invalidparameter"`
 	errTargetInstanceIds   = `target="instanceids"`

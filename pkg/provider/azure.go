@@ -325,7 +325,6 @@ type Cloud struct {
 	nsgCache *azcache.TimedCache
 	rtCache  *azcache.TimedCache
 
-	*BlobDiskController
 	*ManagedDiskController
 	*controllerCommon
 }
@@ -926,7 +925,6 @@ func initDiskControllers(az *Cloud) error {
 		}
 	}
 
-	az.BlobDiskController = &BlobDiskController{common: common}
 	az.ManagedDiskController = &ManagedDiskController{common: common}
 	az.controllerCommon = common
 
