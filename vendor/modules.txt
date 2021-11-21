@@ -581,7 +581,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.22.3
+# k8s.io/apiserver v0.22.4
 ## explicit
 k8s.io/apiserver/pkg/admission
 k8s.io/apiserver/pkg/admission/configuration
@@ -1022,7 +1022,7 @@ k8s.io/component-base/metrics/testutil
 k8s.io/component-base/term
 k8s.io/component-base/traces
 k8s.io/component-base/version
-# k8s.io/controller-manager v0.22.3
+# k8s.io/controller-manager v0.22.4
 ## explicit
 k8s.io/controller-manager/app
 k8s.io/controller-manager/config
