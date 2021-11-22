@@ -99,7 +99,6 @@ type AttachDiskOptions struct {
 	cachingMode             compute.CachingTypes
 	diskName                string
 	diskEncryptionSetID     string
-	isManagedDisk           bool
 	writeAcceleratorEnabled bool
 	lun                     int32
 }
@@ -204,7 +203,6 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 
 	options := AttachDiskOptions{
 		lun:                     -1,
-		isManagedDisk:           true,
 		diskName:                diskName,
 		cachingMode:             cachingMode,
 		diskEncryptionSetID:     diskEncryptionSetID,

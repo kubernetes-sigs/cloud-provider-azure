@@ -192,41 +192,38 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 
 	testCases := []struct {
 		desc            string
-		vmList          map[string]string
-		vmssList        []string
+		diskName        string
 		nodeName        types.NodeName
+		expectedLun     int32
 		isVMSS          bool
 		isManagedBy     bool
-		isManagedDisk   bool
 		isDataDisksFull bool
 		expectedErr     bool
-		diskName        string
+		vmList          map[string]string
+		vmssList        []string
 		existedDisk     *compute.Disk
-		expectedLun     int32
 	}{
 		{
-			desc:          "an error shall be returned if convert vmSet to ScaleSet failed",
-			vmList:        map[string]string{"vm1": "PowerState/Running"},
-			nodeName:      "vm1",
-			isVMSS:        false,
-			isManagedBy:   false,
-			isManagedDisk: false,
-			diskName:      "disk-name",
-			existedDisk:   &compute.Disk{Name: to.StringPtr("disk-name")},
-			expectedLun:   -1,
-			expectedErr:   true,
+			desc:        "an error shall be returned if convert vmSet to ScaleSet failed",
+			vmList:      map[string]string{"vm1": "PowerState/Running"},
+			nodeName:    "vm1",
+			isVMSS:      false,
+			isManagedBy: false,
+			diskName:    "disk-name",
+			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name")},
+			expectedLun: -1,
+			expectedErr: true,
 		},
 		{
-			desc:          "an error shall be returned if convert vmSet to ScaleSet success but node is not managed by availability set",
-			vmssList:      []string{"vmss-vm-000001"},
-			nodeName:      "vmss1",
-			isVMSS:        true,
-			isManagedBy:   false,
-			isManagedDisk: false,
-			diskName:      "disk-name",
-			existedDisk:   &compute.Disk{Name: to.StringPtr("disk-name")},
-			expectedLun:   -1,
-			expectedErr:   true,
+			desc:        "an error shall be returned if convert vmSet to ScaleSet success but node is not managed by availability set",
+			vmssList:    []string{"vmss-vm-000001"},
+			nodeName:    "vmss1",
+			isVMSS:      true,
+			isManagedBy: false,
+			diskName:    "disk-name",
+			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name")},
+			expectedLun: -1,
+			expectedErr: true,
 		},
 	}
 
@@ -277,7 +274,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		lun, err := common.AttachDisk(ctx, test.isManagedDisk, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk)
+		lun, err := common.AttachDisk(ctx, true, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk)
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 	}
