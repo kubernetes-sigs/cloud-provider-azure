@@ -44,36 +44,31 @@ func TestStandardAttachDisk(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc          string
-		nodeName      types.NodeName
-		isManagedDisk bool
-		isAttachFail  bool
-		expectedErr   bool
+		desc         string
+		nodeName     types.NodeName
+		isAttachFail bool
+		expectedErr  bool
 	}{
 		{
-			desc:          "an error shall be returned if there's no corresponding vms",
-			nodeName:      "vm2",
-			isManagedDisk: true,
-			expectedErr:   true,
+			desc:        "an error shall be returned if there's no corresponding vms",
+			nodeName:    "vm2",
+			expectedErr: true,
 		},
 		{
-			desc:          "no error shall be returned if everything's good",
-			nodeName:      "vm1",
-			isManagedDisk: true,
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything's good",
+			nodeName:    "vm1",
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything's good with non managed disk",
-			nodeName:      "vm1",
-			isManagedDisk: false,
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything's good with non managed disk",
+			nodeName:    "vm1",
+			expectedErr: false,
 		},
 		{
-			desc:          "an error shall be returned if update attach disk failed",
-			nodeName:      "vm1",
-			isManagedDisk: true,
-			isAttachFail:  true,
-			expectedErr:   true,
+			desc:         "an error shall be returned if update attach disk failed",
+			nodeName:     "vm1",
+			isAttachFail: true,
+			expectedErr:  true,
 		},
 	}
 
@@ -106,7 +101,6 @@ func TestStandardAttachDisk(t *testing.T) {
 
 		options := AttachDiskOptions{
 			lun:                     0,
-			isManagedDisk:           test.isManagedDisk,
 			diskName:                "",
 			cachingMode:             compute.CachingTypesReadOnly,
 			diskEncryptionSetID:     "",

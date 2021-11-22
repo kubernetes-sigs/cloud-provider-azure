@@ -47,56 +47,32 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		disks          []string
 		vmList         map[string]string
 		vmssVMList     []string
-		isManagedDisk  bool
 		expectedErr    bool
 		expectedErrMsg error
 	}{
 		{
-			desc:           "an error shall be returned if it is invalid vmss name",
-			vmssVMList:     []string{"vmss-vm-000001"},
-			vmssName:       "vm1",
-			vmssvmName:     "vm1",
-			isManagedDisk:  false,
-			disks:          []string{"disk-name"},
-			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("not a vmss instance"),
+			desc:        "no error shall be returned if everything is good with one managed disk",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name"},
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything is good with one managed disk",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: true,
-			disks:         []string{"disk-name"},
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything is good with 2 managed disks",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name", "disk-name2"},
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything is good with 2 managed disks",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: true,
-			disks:         []string{"disk-name", "disk-name2"},
-			expectedErr:   false,
-		},
-		{
-			desc:          "no error shall be returned if everything is good with non-managed disk",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: false,
-			disks:         []string{"disk-name"},
-			expectedErr:   false,
-		},
-		{
-			desc:           "an error shall be returned if response StatusNotFound",
-			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:       fakeStatusNotFoundVMSSName,
-			vmssvmName:     "vmss00-vm-000000",
-			isManagedDisk:  false,
-			disks:          []string{"disk-name"},
-			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
+			desc:        "no error shall be returned if everything is good with non-managed disk",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name"},
+			expectedErr: false,
 		},
 	}
 
@@ -139,7 +115,6 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		for i, diskName := range test.disks {
 			options := AttachDiskOptions{
 				lun:                     int32(i),
-				isManagedDisk:           test.isManagedDisk,
 				diskName:                diskName,
 				cachingMode:             compute.CachingTypesReadWrite,
 				diskEncryptionSetID:     "",
