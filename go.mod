@@ -13,7 +13,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/gomega v1.17.0
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/objx v0.2.0 // indirect
