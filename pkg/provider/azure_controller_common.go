@@ -37,7 +37,6 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
@@ -371,10 +370,6 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 				klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
 					err, diskURI)
 				return nil
-			}
-			if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
-				klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %w", diskName, diskURI, err)
-				err = vmset.DetachDisk(nodeName, diskMap)
 			}
 		}
 		resourceGroup, err := getResourceGroupFromDiskURI(diskURI)

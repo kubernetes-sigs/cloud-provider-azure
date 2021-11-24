@@ -275,7 +275,7 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMNa
 	)
 
 	future, rerr := c.armClient.PatchResourceAsync(ctx, resourceID, parameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -292,7 +292,7 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMNa
 func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
 	mc := metrics.NewMetricContext("vm", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
 	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMWaitForUpdateResult")
-	_ = mc.Observe(err)
+	mc.Observe(retry.NewErrorOrNil(false, err))
 
 	if response != nil && response.StatusCode != http.StatusNoContent {
 		_, rerr := c.updateResponder(response)

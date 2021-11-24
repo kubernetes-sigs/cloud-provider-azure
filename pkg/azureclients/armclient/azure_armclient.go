@@ -226,6 +226,10 @@ func dumpResponse(resp *http.Response, v klog.Level) {
 }
 
 func dumpRequest(req *http.Request, v klog.Level) {
+	if req == nil {
+		return
+	}
+
 	requestDump, err := httputil.DumpRequest(req, true)
 	if err != nil {
 		klog.Errorf("Failed to dump request: %v", err)
@@ -441,18 +445,72 @@ func (c *Client) PutResources(ctx context.Context, resources map[string]interfac
 	futures := make(map[string]*azure.Future)
 	responses := make(map[string]*PutResourcesResponse)
 	for resourceID, parameters := range resources {
-		future, rerr := c.PutResourceAsync(ctx, resourceID, parameters)
-		if rerr != nil {
+		decorators := []autorest.PrepareDecorator{
+			autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+			autorest.WithJSON(parameters),
+		}
+		request, err := c.PreparePutRequest(ctx, decorators...)
+		dumpRequest(request, 10)
+		if err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 			responses[resourceID] = &PutResourcesResponse{
-				Error: rerr,
+				Error: retry.NewError(false, err),
 			}
 			continue
 		}
+
+		future, resp, clientErr := c.SendAsync(ctx, request)
+		defer c.CloseResponse(ctx, resp)
+		if clientErr != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.send", resourceID, clientErr.Error())
+			responses[resourceID] = &PutResourcesResponse{
+				Error: clientErr,
+			}
+			continue
+		}
+
 		futures[resourceID] = future
 	}
 
-	c.waitAsync(ctx, futures, responses)
+	// Concurrent async requests.
+	wg := sync.WaitGroup{}
+	var responseLock sync.Mutex
+	for resourceID, future := range futures {
+		wg.Add(1)
+		go func(resourceID string, future *azure.Future) {
+			defer wg.Done()
+			response, err := c.WaitForAsyncOperationResult(ctx, future, "armclient.PutResource")
+			if err != nil {
+				if response != nil {
+					klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', response code %d", err.Error(), response.StatusCode)
+				} else {
+					klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', no response", err.Error())
+				}
 
+				retriableErr := retry.GetError(response, err)
+				if !retriableErr.Retriable &&
+					strings.Contains(strings.ToUpper(err.Error()), strings.ToUpper("InternalServerError")) {
+					klog.V(5).Infof("Received InternalServerError in WaitForAsyncOperationResult: '%s', setting error retriable", err.Error())
+					retriableErr.Retriable = true
+				}
+
+				responseLock.Lock()
+				responses[resourceID] = &PutResourcesResponse{
+					Error: retriableErr,
+				}
+				responseLock.Unlock()
+				return
+			}
+
+			responseLock.Lock()
+			responses[resourceID] = &PutResourcesResponse{
+				Response: response,
+			}
+			responseLock.Unlock()
+		}(resourceID, future)
+	}
+
+	wg.Wait()
 	return responses
 }
 
@@ -529,11 +587,11 @@ func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string
 // PutResourceWithDecorators puts a resource by resource ID
 func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	request, err := c.PreparePutRequest(ctx, decorators...)
+	dumpRequest(request, 10)
 	if err != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 10)
 
 	future, resp, clientErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
@@ -632,11 +690,11 @@ func (c *Client) PutResourceAsync(ctx context.Context, resourceID string, parame
 	}
 
 	request, err := c.PreparePutRequest(ctx, decorators...)
+	dumpRequest(request, 10)
 	if err != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
 		return nil, retry.NewError(false, err)
 	}
-	dumpRequest(request, 10)
 
 	future, resp, rErr := c.SendAsync(ctx, request)
 	defer c.CloseResponse(ctx, resp)
