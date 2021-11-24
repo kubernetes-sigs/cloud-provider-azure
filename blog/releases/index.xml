@@ -1,4 +1,52 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.9</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</link><pubDate>Thu, 21 Oct 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/releases/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.10</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v0.7.10/</link><pubDate>Tue, 23 Nov 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v0.7.10/</guid><description>
+&lt;h1 id="changelog-since-v079">Changelog since v0.7.9&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/864">#864&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.7</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.0.7/</link><pubDate>Tue, 23 Nov 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.0.7/</guid><description>
+&lt;h1 id="changelog-since-v106">Changelog since v1.0.6&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Feat: support json style tags (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/895">#895&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/865">#865&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.3</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.1.3/</link><pubDate>Tue, 23 Nov 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.1.3/</guid><description>
+&lt;h1 id="changelog-since-v112">Changelog since v1.1.2&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Feat: support json style tags (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/896">#896&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/866">#866&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: remove outdated ipv4 route when the corresponding node is deleted (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/891">#891&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.9</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</link><pubDate>Thu, 21 Oct 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/10/21/v0.7.9/</guid><description>
 &lt;h1 id="changelog-since-v078">Changelog since v0.7.8&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
