@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -159,6 +160,9 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 		return nil
 	}
 
+	nsgJSON, _ := json.Marshal(sg)
+	klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", to.String(sg.Name), rerr.Error(), string(nsgJSON))
+
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
@@ -216,6 +220,9 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 		_ = az.lbCache.Delete(*lb.Name)
 		return nil
 	}
+
+	lbJSON, _ := json.Marshal(lb)
+	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", to.String(lb.Name), rerr.Error(), string(lbJSON))
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
@@ -339,7 +346,8 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	rerr := az.PublicIPAddressesClient.CreateOrUpdate(ctx, pipResourceGroup, to.String(pip.Name), pip)
 	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, to.String(pip.Name))
 	if rerr != nil {
-		klog.Errorf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error())
+		pipJSON, _ := json.Marshal(pip)
+		klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error(), string(pipJSON))
 		az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
 		return rerr.Error()
 	}
@@ -412,6 +420,9 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 		_ = az.rtCache.Delete(*routeTable.Name)
 		return nil
 	}
+
+	rtJSON, _ := json.Marshal(routeTable)
+	klog.Warningf("RouteTablesClient.CreateOrUpdate(%s) failed: %v, RouteTable request: %s", to.String(routeTable.Name), rerr.Error(), string(rtJSON))
 
 	// Invalidate the cache because etag mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
