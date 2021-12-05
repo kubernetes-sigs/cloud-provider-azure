@@ -1898,7 +1898,7 @@ func TestEnsureHostInPool(t *testing.T) {
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName, false)
+		nodeResourceGroup, ssName, instanceID, vm, err := ss.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
 		assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup, test.description)
 		assert.Equal(t, test.expectedVMSSName, ssName, test.description)
@@ -2195,7 +2195,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-		err = ss.EnsureHostsInPool(&v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName, false)
+		err = ss.EnsureHostsInPool(&v1.Service{}, test.nodes, test.backendpoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErr, err != nil, test.description+", but an error occurs")
 	}
 }
@@ -2687,4 +2687,35 @@ func TestGetAgentPoolVMSetNamesMixedInstances(t *testing.T) {
 	vmSetNames, err := ss.GetAgentPoolVMSetNames(nodes)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedVMSetNames, vmSetNames)
+}
+
+func TestGetNodeVMSetNameVMSS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	node := &v1.Node{
+		Spec: v1.NodeSpec{
+			ProviderID: "invalid",
+		},
+	}
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+	mockVMSet := NewMockVMSet(ctrl)
+	mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).Return("as", nil)
+	ss.availabilitySet = mockVMSet
+
+	vmSetName, err := ss.GetNodeVMSetName(node)
+	assert.NoError(t, err)
+	assert.Equal(t, "as", vmSetName)
+
+	node = &v1.Node{
+		Spec: v1.NodeSpec{
+			ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+		},
+	}
+
+	vmSetName, err = ss.GetNodeVMSetName(node)
+	assert.NoError(t, err)
+	assert.Equal(t, "vmss", vmSetName)
 }

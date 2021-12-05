@@ -67,25 +67,27 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 				TenantID:       "tenant",
 				SubscriptionID: "subscription",
 			},
-			ResourceGroup:                "rg",
-			VnetResourceGroup:            "rg",
-			RouteTableResourceGroup:      "rg",
-			SecurityGroupResourceGroup:   "rg",
-			Location:                     "westus",
-			VnetName:                     "vnet",
-			SubnetName:                   "subnet",
-			SecurityGroupName:            "nsg",
-			RouteTableName:               "rt",
-			PrimaryAvailabilitySetName:   "as",
-			PrimaryScaleSetName:          "vmss",
-			MaximumLoadBalancerRuleCount: 250,
-			VMType:                       consts.VMTypeStandard,
+			ResourceGroup:                            "rg",
+			VnetResourceGroup:                        "rg",
+			RouteTableResourceGroup:                  "rg",
+			SecurityGroupResourceGroup:               "rg",
+			Location:                                 "westus",
+			VnetName:                                 "vnet",
+			SubnetName:                               "subnet",
+			SecurityGroupName:                        "nsg",
+			RouteTableName:                           "rt",
+			PrimaryAvailabilitySetName:               "as",
+			PrimaryScaleSetName:                      "vmss",
+			MaximumLoadBalancerRuleCount:             250,
+			VMType:                                   consts.VMTypeStandard,
+			LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration,
 		},
 		nodeZones:                map[string]sets.String{},
 		nodeInformerSynced:       func() bool { return true },
 		nodeResourceGroups:       map[string]string{},
 		unmanagedNodes:           sets.NewString(),
 		excludeLoadBalancerNodes: sets.NewString(),
+		nodePrivateIPs:           map[string]sets.String{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
 	}
@@ -106,6 +108,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.lbCache, _ = az.newLBCache()
 	az.nsgCache, _ = az.newNSGCache()
 	az.rtCache, _ = az.newRouteTableCache()
+	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 
 	_ = initDiskControllers(az)
 

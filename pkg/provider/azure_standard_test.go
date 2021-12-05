@@ -1458,7 +1458,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName, false)
+		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Nil(t, vm, test.name)
 	}
@@ -1598,7 +1598,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName, false)
+		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		} else {
@@ -2073,4 +2073,103 @@ func TestGetAvailabilitySetNameByID(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, "as", vmasName)
 	})
+}
+
+func TestGetNodeVMSetName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description       string
+		node              *v1.Node
+		listTimes         int
+		expectedVMs       []compute.VirtualMachine
+		listErr           *retry.Error
+		expectedVMSetName string
+		expectedErr       error
+	}{
+		{
+			description: "GetNodeVMSetName should return early if there is no host name in the node",
+			node:        &v1.Node{},
+		},
+		{
+			description: "GetNodeVMSetName should report an error if failed to list vms",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			listTimes:   1,
+			listErr:     retry.NewError(false, errors.New("error")),
+			expectedErr: retry.NewError(false, errors.New("error")).Error(),
+		},
+		{
+			description: "GetNodeVMSetName should report an error if the availability set ID of the vm is not legal",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			expectedVMs: []compute.VirtualMachine{
+				{
+					Name: to.StringPtr("vm"),
+					VirtualMachineProperties: &compute.VirtualMachineProperties{
+						AvailabilitySet: &compute.SubResource{
+							ID: to.StringPtr("/"),
+						},
+					},
+				},
+			},
+			listTimes:   1,
+			expectedErr: errors.New("resource name was missing from identifier"),
+		},
+		{
+			description: "GetNodeVMSetName should return the availability set name in the vm",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			expectedVMs: []compute.VirtualMachine{
+				{
+					Name: to.StringPtr("vm"),
+					VirtualMachineProperties: &compute.VirtualMachineProperties{
+						AvailabilitySet: &compute.SubResource{
+							ID: to.StringPtr("as"),
+						},
+					},
+				},
+			},
+			listTimes:         1,
+			expectedVMSetName: "as",
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		vmClient := mockvmclient.NewMockInterface(ctrl)
+		vmClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.expectedVMs, tc.listErr).Times(tc.listTimes)
+		az.VirtualMachinesClient = vmClient
+
+		vmSet, err := newAvailabilitySet(az)
+		assert.NoError(t, err)
+		as := vmSet.(*availabilitySet)
+
+		vmSetName, err := as.GetNodeVMSetName(tc.node)
+		assert.Equal(t, tc.expectedErr, err, tc.description)
+		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
+	}
 }
