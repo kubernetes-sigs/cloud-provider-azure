@@ -232,6 +232,12 @@ type Config struct {
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
 	// The user agent for Azure customer usage attribution
 	UserAgent string `json:"userAgent,omitempty" yaml:"userAgent,omitempty"`
+	// LoadBalancerBackendPoolConfigurationType defines how vms join the load balancer backend pools. Supported values
+	// are `nodeIPConfiguration`, `nodeIP` and `podIP`.
+	// `nodeIPConfiguration`: vm network interfaces will be attached to the inbound backend pool of the load balancer (default);
+	// `nodeIP`: vm private IPs will be attached to the inbound backend pool of the load balancer;
+	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
+	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
 }
 
 type InitSecretConfig struct {
@@ -282,9 +288,10 @@ type Cloud struct {
 	privatednszonegroupclient       privatednszonegroupclient.Interface
 	virtualNetworkLinksClient       virtualnetworklinksclient.Interface
 
-	ResourceRequestBackoff wait.Backoff
-	metadata               *InstanceMetadataService
-	VMSet                  VMSet
+	ResourceRequestBackoff  wait.Backoff
+	metadata                *InstanceMetadataService
+	VMSet                   VMSet
+	LoadBalancerBackendPool BackendPool
 
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
 	ipv6DualStackEnabled bool
@@ -303,6 +310,7 @@ type Cloud struct {
 	unmanagedNodes sets.String
 	// excludeLoadBalancerNodes holds a list of nodes that should be excluded from LoadBalancer.
 	excludeLoadBalancerNodes sets.String
+	nodePrivateIPs           map[string]sets.String
 	// nodeInformerSynced is for determining if the informer has synced.
 	nodeInformerSynced cache.InformerSynced
 
@@ -415,6 +423,7 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 		unmanagedNodes:           sets.NewString(),
 		routeCIDRs:               map[string]string{},
 		excludeLoadBalancerNodes: sets.NewString(),
+		nodePrivateIPs:           map[string]sets.String{},
 	}
 
 	az.configSecretMetadata(secretName, secretNamespace, cloudConfigKey)
@@ -446,6 +455,7 @@ func NewCloudWithoutFeatureGates(configReader io.Reader, callFromCCM bool) (*Clo
 		unmanagedNodes:           sets.NewString(),
 		routeCIDRs:               map[string]string{},
 		excludeLoadBalancerNodes: sets.NewString(),
+		nodePrivateIPs:           map[string]sets.String{},
 	}
 
 	err = az.InitializeCloudFromConfig(config, false, callFromCCM)
@@ -494,6 +504,20 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 			string(cloudConfigTypeSecret))
 		if !supportedCloudConfigTypes.Has(string(config.CloudConfigType)) {
 			return fmt.Errorf("cloudConfigType %v is not supported, supported values are %v", config.CloudConfigType, supportedCloudConfigTypes.List())
+		}
+	}
+
+	if config.LoadBalancerBackendPoolConfigurationType == "" ||
+		// TODO(nilo19): support pod IP mode in the future
+		strings.EqualFold(config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypePODIP) {
+		config.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration
+	} else {
+		supportedLoadBalancerBackendPoolConfigurationTypes := sets.NewString(
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration),
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypeNodeIP),
+			strings.ToLower(consts.LoadBalancerBackendPoolConfigurationTypePODIP))
+		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
+			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.List())
 		}
 	}
 
@@ -569,6 +593,12 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 		}
 	}
 
+	if az.isLBBackendPoolTypeNodeIPConfig() {
+		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIPConfig(az)
+	} else if az.isLBBackendPoolTypeNodeIP() {
+		az.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(az)
+	}
+
 	err = az.initCaches()
 	if err != nil {
 		return err
@@ -599,6 +629,14 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 	}
 
 	return nil
+}
+
+func (az *Cloud) isLBBackendPoolTypeNodeIPConfig() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
+}
+
+func (az *Cloud) isLBBackendPoolTypeNodeIP() bool {
+	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
 }
 
 func (az *Cloud) initCaches() (err error) {
@@ -1004,6 +1042,12 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		if _, hasExcludeBalancerLabel := prevNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]; hasExcludeBalancerLabel {
 			az.excludeLoadBalancerNodes.Delete(prevNode.ObjectMeta.Name)
 		}
+
+		// Remove from nodePrivateIPs cache.
+		for _, address := range getNodePrivateIPAddresses(prevNode) {
+			klog.V(4).Infof("removing IP address %s of the node %s", address, prevNode.Name)
+			az.nodePrivateIPs[prevNode.Name].Delete(address)
+		}
 	}
 
 	if newNode != nil {
@@ -1034,7 +1078,18 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Add to excludeLoadBalancerNodes cache.
 		if _, hasExcludeBalancerLabel := newNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]; hasExcludeBalancerLabel {
+			klog.V(4).Infof("adding node %s from the exclude-from-lb list because the label %s is found", newNode.Name, v1.LabelNodeExcludeBalancers)
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+		}
+
+		// Add to nodePrivateIPs cache
+		for _, address := range getNodePrivateIPAddresses(newNode) {
+			if az.nodePrivateIPs[newNode.Name] == nil {
+				az.nodePrivateIPs[newNode.Name] = sets.NewString()
+			}
+
+			klog.V(4).Infof("adding IP address %s of the node %s", address, newNode.Name)
+			az.nodePrivateIPs[newNode.Name].Insert(address)
 		}
 	}
 }

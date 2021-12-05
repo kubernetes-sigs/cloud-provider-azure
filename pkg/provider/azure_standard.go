@@ -36,7 +36,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -686,7 +685,6 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMac
 			vmNameToAvailabilitySetID[*vm.Name] = *vm.AvailabilitySet.ID
 		}
 	}
-	availabilitySetIDs := sets.NewString()
 	agentPoolAvailabilitySets = &[]string{}
 	for nx := range nodes {
 		nodeName := (*nodes[nx]).Name
@@ -696,10 +694,6 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMac
 		asID, ok := vmNameToAvailabilitySetID[nodeName]
 		if !ok {
 			klog.Warningf("as.getNodeAvailabilitySet - Node(%s) has no availability sets", nodeName)
-			continue
-		}
-		if availabilitySetIDs.Has(asID) {
-			// already added in the list
 			continue
 		}
 		asName, err := getLastSegment(asID, "/")
@@ -762,6 +756,50 @@ func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) 
 	}
 
 	return availabilitySetNames, nil
+}
+
+func (as *availabilitySet) GetNodeVMSetName(node *v1.Node) (string, error) {
+	var hostName string
+	for _, nodeAddress := range node.Status.Addresses {
+		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeHostName)) {
+			hostName = nodeAddress.Address
+		}
+	}
+	if hostName == "" {
+		if name, ok := node.Labels[consts.NodeLabelHostName]; ok {
+			hostName = name
+		}
+	}
+	if hostName == "" {
+		klog.Warningf("as.GetNodeVMSetName: cannot get host name from node %s", node.Name)
+		return "", nil
+	}
+
+	vms, err := as.ListVirtualMachines(as.ResourceGroup)
+	if err != nil {
+		klog.Errorf("as.GetNodeVMSetName - ListVirtualMachines failed, err=%v", err)
+		return "", err
+	}
+
+	var asName string
+	for _, vm := range vms {
+		if strings.EqualFold(to.String(vm.Name), hostName) {
+			if vm.AvailabilitySet != nil && to.String(vm.AvailabilitySet.ID) != "" {
+				klog.V(4).Infof("as.GetNodeVMSetName: found vm %s", hostName)
+
+				asName, err = getLastSegment(to.String(vm.AvailabilitySet.ID), "/")
+				if err != nil {
+					klog.Errorf("as.GetNodeVMSetName: failed to get last segment of ID %s: %s", to.String(vm.AvailabilitySet.ID), err)
+					return "", err
+				}
+			}
+
+			break
+		}
+	}
+
+	klog.V(4).Infof("as.GetNodeVMSetName: found availability set name %s from node name %s", asName, node.Name)
+	return asName, nil
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name.
@@ -849,7 +887,7 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName stri
 
 // EnsureHostInPool ensures the given VM's Primary NIC's Primary IP Configuration is
 // participating in the specified LoadBalancer Backend Pool.
-func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string, isInternal bool) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
+func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.NodeName, backendPoolID string, vmSetName string) (string, string, string, *compute.VirtualMachineScaleSetVM, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	serviceName := getServiceName(service)
 	nic, _, err := as.getPrimaryInterfaceWithVMSet(vmName, vmSetName)
@@ -934,7 +972,7 @@ func (as *availabilitySet) EnsureHostInPool(service *v1.Service, nodeName types.
 
 // EnsureHostsInPool ensures the given Node's primary IP configurations are
 // participating in the specified LoadBalancer Backend Pool.
-func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string, isInternal bool) error {
+func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string) error {
 	mc := metrics.NewMetricContext("services", "vmas_ensure_hosts_in_pool", as.ResourceGroup, as.SubscriptionID, service.Name)
 	isOperationSucceeded := false
 	defer func() {
@@ -960,7 +998,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 		}
 
 		f := func() error {
-			_, _, _, _, err := as.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName, isInternal)
+			_, _, _, _, err := as.EnsureHostInPool(service, types.NodeName(localNodeName), backendPoolID, vmSetName)
 			if err != nil {
 				return fmt.Errorf("ensure(%s): backendPoolID(%s) - failed to ensure host in pool: %w", getServiceName(service), backendPoolID, err)
 			}

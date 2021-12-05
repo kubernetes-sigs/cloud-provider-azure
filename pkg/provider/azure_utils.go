@@ -23,13 +23,13 @@ import (
 	"strings"
 	"sync"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -234,4 +234,29 @@ func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+func getNodePrivateIPAddress(service *v1.Service, node *v1.Node) string {
+	isIPV6SVC := utilnet.IsIPv6String(service.Spec.ClusterIP)
+	for _, nodeAddress := range node.Status.Addresses {
+		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
+			utilnet.IsIPv6String(nodeAddress.Address) == isIPV6SVC {
+			klog.V(4).Infof("getNodePrivateIPAddress: node %s, ip %s", node.Name, nodeAddress.Address)
+			return nodeAddress.Address
+		}
+	}
+
+	klog.Warningf("getNodePrivateIPAddress: empty ip found for node %s", node.Name)
+	return ""
+}
+
+func getNodePrivateIPAddresses(node *v1.Node) []string {
+	addresses := make([]string, 0)
+	for _, nodeAddress := range node.Status.Addresses {
+		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) {
+			addresses = append(addresses, nodeAddress.Address)
+		}
+	}
+
+	return addresses
 }

@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -104,6 +105,10 @@ func TestAddPort(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -297,6 +302,10 @@ func testLoadBalancerServiceDefaultModeSelection(t *testing.T, isInternal bool) 
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, serviceCount)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	expectedLBs := make([]network.LoadBalancer, 0)
 
 	for index := 1; index <= serviceCount; index++ {
@@ -355,6 +364,10 @@ func testLoadBalancerServiceAutoModeSelection(t *testing.T, isInternal bool) {
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, serviceCount)
 
 	expectedLBs := make([]network.LoadBalancer, 0)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	for index := 1; index <= serviceCount; index++ {
 		svcName := fmt.Sprintf("service-%d", index)
@@ -427,6 +440,10 @@ func testLoadBalancerServicesSpecifiedSelection(t *testing.T, isInternal bool) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	for index := 1; index <= serviceCount; index++ {
 		svcName := fmt.Sprintf("service-%d", index)
 		var svc v1.Service
@@ -476,6 +493,10 @@ func testLoadBalancerMaxRulesServices(t *testing.T, isInternal bool) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	for index := 1; index <= az.Config.MaximumLoadBalancerRuleCount; index++ {
 		svcName := fmt.Sprintf("service-%d", index)
 		var svc v1.Service
@@ -516,12 +537,6 @@ func testLoadBalancerMaxRulesServices(t *testing.T, isInternal bool) {
 	} else {
 		svc = getTestService(svcName, v1.ProtocolTCP, nil, false, 8081)
 	}
-	//*expectedLBs[0].FrontendIPConfigurations = append(*expectedLBs[0].FrontendIPConfigurations, network.FrontendIPConfiguration{
-	//	Name: to.StringPtr(fmt.Sprintf("aservice%d", 2)),
-	//	FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-	//		PrivateIPAllocationMethod: "Dynamic",
-	//	},
-	//})
 
 	mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
 	az.LoadBalancerClient = mockLBsClient
@@ -556,6 +571,10 @@ func testLoadBalancerServiceAutoModeDeleteSelection(t *testing.T, isInternal boo
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, serviceCount)
 
 	expectedLBs := make([]network.LoadBalancer, 0)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	for index := 1; index <= serviceCount; index++ {
 		svcName := fmt.Sprintf("service-%d", index)
@@ -636,6 +655,10 @@ func TestReconcileLoadBalancerAddServiceOnInternalSubnet(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
@@ -706,6 +729,10 @@ func TestReconcileLoadBalancerAddServicesOnMultipleSubnets(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	// svc1 is using LB without "-internal" suffix
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -754,6 +781,10 @@ func TestReconcileLoadBalancerEditServiceSubnet(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling initial svc: %q", err)
@@ -795,6 +826,10 @@ func TestReconcileLoadBalancerNodeHealth(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
@@ -821,6 +856,10 @@ func TestReconcileLoadBalancerRemoveService(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	_, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -862,6 +901,10 @@ func TestReconcileLoadBalancerRemoveAllPortsRemovesFrontendConfig(t *testing.T) 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
@@ -900,6 +943,10 @@ func TestReconcileLoadBalancerRemovesPort(t *testing.T) {
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
 	svc := getTestService("service1", v1.ProtocolTCP, nil, false, 80, 443)
@@ -933,6 +980,10 @@ func TestReconcileLoadBalancerMultipleServices(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	_, err := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -992,6 +1043,10 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesaomitted1", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
@@ -1041,6 +1096,10 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 	az.PublicIPAddressesClient = mockPIPsClient
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
@@ -1094,6 +1153,10 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, err := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error reconciling svc1: %q", err)
@@ -1122,6 +1185,9 @@ func TestReconcileSecurityGroupNewServiceAddsPort(t *testing.T) {
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
 	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb)
 
@@ -1147,6 +1213,10 @@ func TestReconcileSecurityGroupNewInternalServiceAddsPort(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
 
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
 	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb)
 	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &lbStatus.Ingress[0].IP, true /* wantLb */)
@@ -1169,6 +1239,10 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &service1, clusterResources.nodes, true)
 	_, _ = az.reconcileLoadBalancer(testClusterName, &service2, clusterResources.nodes, true)
@@ -1194,6 +1268,10 @@ func TestReconcileSecurityGroupRemoveServiceRemovesPort(t *testing.T) {
 	svc := getTestService("service1", v1.ProtocolTCP, nil, false, 80, 443)
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	getTestSecurityGroup(az, svc)
 	svcUpdated := getTestService("service1", v1.ProtocolTCP, nil, false, 80)
@@ -1222,6 +1300,10 @@ func TestReconcileSecurityWithSourceRanges(t *testing.T) {
 	}
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	getTestSecurityGroup(az, svc)
 	expectedLBs := make([]network.LoadBalancer, 0)
@@ -1261,6 +1343,10 @@ func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
+
+	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
 	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb)
@@ -3330,6 +3416,18 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	err = az.InitializeCloudFromConfig(&config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 	assert.Equal(t, expectedErr, err)
+
+	config = Config{
+		LoadBalancerBackendPoolConfigurationType: "invalid",
+	}
+	err = az.InitializeCloudFromConfig(&config, false, true)
+	expectedErr = errors.New("loadBalancerBackendPoolConfigurationType invalid is not supported, supported values are")
+	assert.Contains(t, err.Error(), expectedErr.Error())
+
+	config = Config{}
+	err = az.InitializeCloudFromConfig(&config, false, true)
+	assert.NoError(t, err)
+	assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 }
 
 func TestFindSecurityRule(t *testing.T) {
