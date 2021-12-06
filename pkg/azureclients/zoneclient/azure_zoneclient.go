@@ -69,7 +69,7 @@ func New(config *azclients.ClientConfig) *Client {
 		apiVersion = AzureStackCloudAPIVersion
 	}
 
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	client := &Client{
 		armClient:      armClient,
 		subscriptionID: config.SubscriptionID,
