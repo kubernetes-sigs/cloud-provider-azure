@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
+
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
 
@@ -41,17 +43,18 @@ const (
 )
 
 func TestNew(t *testing.T) {
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, "", "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, "", "2019-01-01")
 	assert.NotNil(t, armClient.backoff)
 	assert.Equal(t, 3, armClient.backoff.Steps, "Backoff steps should be same as the value passed in")
 
-	backoff = &retry.Backoff{Steps: 0}
-	armClient = New(nil, "", "test", "2019-01-01", "eastus", backoff)
+	azConfig = azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 0}, UserAgent: "test", Location: "eastus"}
+	armClient = New(nil, azConfig, "", "2019-01-01")
 	assert.NotNil(t, armClient.backoff)
 	assert.Equal(t, 1, armClient.backoff.Steps, "Backoff steps should be default to 1 if it is 0")
 
-	armClient = New(nil, "", "test", "2019-01-01", "eastus", nil)
+	azConfig = azureclients.ClientConfig{UserAgent: "test", Location: "eastus"}
+	armClient = New(nil, azConfig, "", "2019-01-01")
 	assert.NotNil(t, armClient.backoff)
 	assert.Equal(t, 1, armClient.backoff.Steps, "Backoff steps should be default to 1 if it is not set")
 }
@@ -65,8 +68,8 @@ func TestSend(t *testing.T) {
 		}
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", "testgroup"),
 		"subscriptionId":    autorest.Encode("path", "testid"),
@@ -95,8 +98,8 @@ func TestSendFailure(t *testing.T) {
 		count++
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", "testgroup"),
 		"subscriptionId":    autorest.Encode("path", "testid"),
@@ -126,8 +129,8 @@ func TestSendThrottled(t *testing.T) {
 		count++
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", "testgroup"),
 		"subscriptionId":    autorest.Encode("path", "testid"),
@@ -155,8 +158,8 @@ func TestSendAsync(t *testing.T) {
 		http.Error(w, "failed", http.StatusForbidden)
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	pathParameters := map[string]interface{}{
@@ -186,8 +189,8 @@ func TestSendAsyncSuccess(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	pathParameters := map[string]interface{}{
@@ -254,8 +257,8 @@ func TestGetResource(t *testing.T) {
 		count++
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -279,8 +282,8 @@ func TestGetResourceWithDecorators(t *testing.T) {
 		count++
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	params := map[string]interface{}{
@@ -328,8 +331,8 @@ func TestPutResource(t *testing.T) {
 		}
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -341,23 +344,43 @@ func TestPutResource(t *testing.T) {
 }
 
 func TestPutResources(t *testing.T) {
-	total := 0
-	server := getTestServer(t, &total)
+	handlers := []func(http.ResponseWriter, *http.Request){
+		func(rw http.ResponseWriter, req *http.Request) {
+			assert.Equal(t, "PUT", req.Method)
+			assert.Equal(t, expectedURI, req.URL.String())
+			rw.Header().Set("Azure-AsyncOperation",
+				fmt.Sprintf("http://%s%s", req.Host, operationURI))
+			rw.WriteHeader(http.StatusCreated)
+		},
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+		func(rw http.ResponseWriter, req *http.Request) {
+			assert.Equal(t, "GET", req.Method)
+			assert.Equal(t, operationURI, req.URL.String())
+
+			rw.WriteHeader(http.StatusOK)
+			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
+		},
+	}
+
+	count := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlers[count](w, r)
+		count++
+		if count > 1 {
+			count = 1
+		}
+	}))
+
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
-	resources := map[string]interface{}{
-		"/id/1": nil,
-		"/id/2": nil,
-	}
-	responses := armClient.PutResources(ctx, nil)
-	assert.Nil(t, responses)
-	responses = armClient.PutResources(ctx, resources)
-	assert.NotNil(t, responses)
-	assert.Equal(t, 3, total)
+	response, rerr := armClient.PutResource(ctx, testResourceID, nil)
+	assert.Equal(t, 1, count)
+	assert.Nil(t, response)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, true, rerr.Retriable)
 }
 
 func getTestServer(t *testing.T, counter *int) *httptest.Server {
@@ -453,11 +476,9 @@ func TestPutResourcesInBatches(t *testing.T) {
 		t.Run(testCase.description, func(t *testing.T) {
 			total := 0
 			server := getTestServer(t, &total)
-
-			backoff := &retry.Backoff{Steps: 1}
-			armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+			azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+			armClient := New(nil, azConfig, server.URL, "2019-01-01")
 			armClient.client.RetryDuration = time.Millisecond * 1
-
 			ctx := context.Background()
 			responses := armClient.PutResourcesInBatches(ctx, testCase.resources, testCase.batchSize)
 			assert.Equal(t, testCase.resources == nil, responses == nil)
@@ -474,8 +495,8 @@ func TestPutResourceAsync(t *testing.T) {
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -494,8 +515,8 @@ func TestDeleteResourceAsync(t *testing.T) {
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -535,8 +556,8 @@ func TestPatchResource(t *testing.T) {
 		}
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -577,8 +598,8 @@ func TestPatchResourceAsync(t *testing.T) {
 		}
 	}))
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -594,9 +615,8 @@ func TestPostResource(t *testing.T) {
 		count++
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
-
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -615,8 +635,8 @@ func TestDeleteResource(t *testing.T) {
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -634,8 +654,8 @@ func TestHeadResource(t *testing.T) {
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
@@ -655,7 +675,7 @@ func TestGetResourceID(t *testing.T) {
 }
 
 func TestGetUserAgent(t *testing.T) {
-	armClient := New(nil, "", "", "2019-01-01", "eastus", nil)
+	armClient := New(nil, azureclients.ClientConfig{}, "", "2019-01-01")
 	assert.Contains(t, armClient.client.UserAgent, "kubernetes-cloudprovider")
 
 	userAgent := GetUserAgent(armClient.client)
