@@ -31,6 +31,8 @@ import (
 	"time"
 	"unicode"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
+
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 
@@ -75,20 +77,35 @@ type Client struct {
 }
 
 // New creates a ARM client
-func New(authorizer autorest.Authorizer, baseURI, userAgent, apiVersion, clientRegion string, clientBackoff *retry.Backoff) *Client {
-	restClient := autorest.NewClientWithUserAgent(userAgent)
-	restClient.PollingDelay = 5 * time.Second
-	restClient.RetryAttempts = 3
-	restClient.RetryDuration = time.Second * 1
+func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig, baseURI, apiVersion string) *Client {
+	restClient := autorest.NewClientWithUserAgent(clientConfig.UserAgent)
 	restClient.Authorizer = authorizer
 	restClient.Sender = getSender()
 	restClient.Sender = autorest.DecorateSender(restClient.Sender, autorest.DoCloseIfError())
 
-	if userAgent == "" {
+	if clientConfig.UserAgent == "" {
 		restClient.UserAgent = GetUserAgent(restClient)
 	}
 
-	backoff := clientBackoff
+	if clientConfig.RestClientConfig.PollingDelay == nil {
+		restClient.PollingDelay = 5 * time.Second
+	} else {
+		restClient.PollingDelay = *clientConfig.RestClientConfig.PollingDelay
+	}
+
+	if clientConfig.RestClientConfig.RetryAttempts == nil {
+		restClient.RetryAttempts = 3
+	} else {
+		restClient.RetryAttempts = *clientConfig.RestClientConfig.RetryAttempts
+	}
+
+	if clientConfig.RestClientConfig.RetryDuration == nil {
+		restClient.RetryDuration = 1 * time.Second
+	} else {
+		restClient.RetryDuration = *clientConfig.RestClientConfig.RetryDuration
+	}
+
+	backoff := clientConfig.Backoff
 	if backoff == nil {
 		backoff = &retry.Backoff{}
 	}
@@ -102,7 +119,7 @@ func New(authorizer autorest.Authorizer, baseURI, userAgent, apiVersion, clientR
 		baseURI:      baseURI,
 		backoff:      backoff,
 		apiVersion:   apiVersion,
-		clientRegion: NormalizeAzureRegion(clientRegion),
+		clientRegion: NormalizeAzureRegion(clientConfig.Location),
 	}
 }
 
