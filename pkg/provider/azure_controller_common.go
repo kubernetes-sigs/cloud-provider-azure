@@ -349,8 +349,9 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 			}
 		}
 	} else {
-		if lun, _, err := c.GetDiskLun(diskName, diskURI, nodeName); err == nil {
-			return fmt.Errorf("disk(%s) is still attatched to node(%s) on lun(%d)", diskURI, nodeName, lun)
+		lun, _, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
+		if errGetLun == nil || !strings.Contains(errGetLun.Error(), consts.CannotFindDiskLUN) {
+			return fmt.Errorf("disk(%s) is still attatched to node(%s) on lun(%d), error: %v", diskURI, nodeName, lun, errGetLun)
 		}
 	}
 
@@ -452,7 +453,7 @@ func (c *controllerCommon) GetDiskLun(diskName, diskURI string, nodeName types.N
 			}
 		}
 	}
-	return -1, provisioningState, fmt.Errorf("cannot find Lun for disk %s", diskName)
+	return -1, provisioningState, fmt.Errorf("%s for disk %s", consts.CannotFindDiskLUN, diskName)
 }
 
 // SetDiskLun find unused luns and allocate lun for every disk in diskMap.
