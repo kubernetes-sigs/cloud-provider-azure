@@ -94,6 +94,8 @@ const (
 	// StorageAccountNameMaxLength is the max length of a storage name
 	StorageAccountNameMaxLength = 24
 
+	CannotFindDiskLUN = "cannot find Lun"
+
 	// DefaultStorageAccountType is the default storage account type
 	DefaultStorageAccountType = string(storage.SkuNameStandardLRS)
 	// DefaultStorageAccountKind is the default storage account kind
