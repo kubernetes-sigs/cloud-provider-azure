@@ -29,30 +29,30 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
+// Get mocks base method
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateEndpointName, expand string) (network.PrivateEndpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, privateEndpointName, expand)
@@ -61,13 +61,13 @@ func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateEndpo
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
+// Get indicates an expected call of Get
 func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, privateEndpointName, expand interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, privateEndpointName, expand)
 }
 
-// CreateOrUpdate mocks base method.
+// CreateOrUpdate mocks base method
 func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, endpointName string, privateEndpoint network.PrivateEndpoint, waitForCompletion bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion)
@@ -75,7 +75,7 @@ func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, e
 	return ret0
 }
 
-// CreateOrUpdate indicates an expected call of CreateOrUpdate.
+// CreateOrUpdate indicates an expected call of CreateOrUpdate
 func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion)

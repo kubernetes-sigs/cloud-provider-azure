@@ -29,30 +29,30 @@ import (
 	fileclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// CreateFileShare mocks base method.
+// CreateFileShare mocks base method
 func (m *MockInterface) CreateFileShare(resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateFileShare", resourceGroupName, accountName, shareOptions)
@@ -60,13 +60,13 @@ func (m *MockInterface) CreateFileShare(resourceGroupName, accountName string, s
 	return ret0
 }
 
-// CreateFileShare indicates an expected call of CreateFileShare.
+// CreateFileShare indicates an expected call of CreateFileShare
 func (mr *MockInterfaceMockRecorder) CreateFileShare(resourceGroupName, accountName, shareOptions interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateFileShare", reflect.TypeOf((*MockInterface)(nil).CreateFileShare), resourceGroupName, accountName, shareOptions)
 }
 
-// DeleteFileShare mocks base method.
+// DeleteFileShare mocks base method
 func (m *MockInterface) DeleteFileShare(resourceGroupName, accountName, name string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteFileShare", resourceGroupName, accountName, name)
@@ -74,13 +74,13 @@ func (m *MockInterface) DeleteFileShare(resourceGroupName, accountName, name str
 	return ret0
 }
 
-// DeleteFileShare indicates an expected call of DeleteFileShare.
+// DeleteFileShare indicates an expected call of DeleteFileShare
 func (mr *MockInterfaceMockRecorder) DeleteFileShare(resourceGroupName, accountName, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFileShare", reflect.TypeOf((*MockInterface)(nil).DeleteFileShare), resourceGroupName, accountName, name)
 }
 
-// ResizeFileShare mocks base method.
+// ResizeFileShare mocks base method
 func (m *MockInterface) ResizeFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ResizeFileShare", resourceGroupName, accountName, name, sizeGiB)
@@ -88,13 +88,13 @@ func (m *MockInterface) ResizeFileShare(resourceGroupName, accountName, name str
 	return ret0
 }
 
-// ResizeFileShare indicates an expected call of ResizeFileShare.
+// ResizeFileShare indicates an expected call of ResizeFileShare
 func (mr *MockInterfaceMockRecorder) ResizeFileShare(resourceGroupName, accountName, name, sizeGiB interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResizeFileShare", reflect.TypeOf((*MockInterface)(nil).ResizeFileShare), resourceGroupName, accountName, name, sizeGiB)
 }
 
-// GetFileShare mocks base method.
+// GetFileShare mocks base method
 func (m *MockInterface) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFileShare", resourceGroupName, accountName, name)
@@ -103,13 +103,13 @@ func (m *MockInterface) GetFileShare(resourceGroupName, accountName, name string
 	return ret0, ret1
 }
 
-// GetFileShare indicates an expected call of GetFileShare.
+// GetFileShare indicates an expected call of GetFileShare
 func (mr *MockInterfaceMockRecorder) GetFileShare(resourceGroupName, accountName, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShare", reflect.TypeOf((*MockInterface)(nil).GetFileShare), resourceGroupName, accountName, name)
 }
 
-// GetServiceProperties mocks base method.
+// GetServiceProperties mocks base method
 func (m *MockInterface) GetServiceProperties(resourceGroupName, accountName string) (storage.FileServiceProperties, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetServiceProperties", resourceGroupName, accountName)
@@ -118,13 +118,13 @@ func (m *MockInterface) GetServiceProperties(resourceGroupName, accountName stri
 	return ret0, ret1
 }
 
-// GetServiceProperties indicates an expected call of GetServiceProperties.
+// GetServiceProperties indicates an expected call of GetServiceProperties
 func (mr *MockInterfaceMockRecorder) GetServiceProperties(resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceProperties", reflect.TypeOf((*MockInterface)(nil).GetServiceProperties), resourceGroupName, accountName)
 }
 
-// SetServiceProperties mocks base method.
+// SetServiceProperties mocks base method
 func (m *MockInterface) SetServiceProperties(resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetServiceProperties", resourceGroupName, accountName, parameters)
@@ -133,7 +133,7 @@ func (m *MockInterface) SetServiceProperties(resourceGroupName, accountName stri
 	return ret0, ret1
 }
 
-// SetServiceProperties indicates an expected call of SetServiceProperties.
+// SetServiceProperties indicates an expected call of SetServiceProperties
 func (mr *MockInterfaceMockRecorder) SetServiceProperties(resourceGroupName, accountName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetServiceProperties", reflect.TypeOf((*MockInterface)(nil).SetServiceProperties), resourceGroupName, accountName, parameters)

@@ -30,30 +30,30 @@ import (
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
+// Get mocks base method
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName string) (compute.AvailabilitySet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, VMScaleSetName)
@@ -62,13 +62,13 @@ func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetNa
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
+// Get indicates an expected call of Get
 func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, VMScaleSetName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, VMScaleSetName)
 }
 
-// List mocks base method.
+// List mocks base method
 func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]compute.AvailabilitySet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
@@ -77,7 +77,7 @@ func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]c
 	return ret0, ret1
 }
 
-// List indicates an expected call of List.
+// List indicates an expected call of List
 func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)

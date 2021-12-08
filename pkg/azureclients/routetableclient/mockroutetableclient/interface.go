@@ -30,30 +30,30 @@ import (
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
+// Get mocks base method
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, routeTableName, expand string) (network.RouteTable, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, routeTableName, expand)
@@ -62,13 +62,13 @@ func (m *MockInterface) Get(ctx context.Context, resourceGroupName, routeTableNa
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
+// Get indicates an expected call of Get
 func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, routeTableName, expand interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, routeTableName, expand)
 }
 
-// CreateOrUpdate mocks base method.
+// CreateOrUpdate mocks base method
 func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, routeTableName string, parameters network.RouteTable, etag string) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, routeTableName, parameters, etag)
@@ -76,7 +76,7 @@ func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, r
 	return ret0
 }
 
-// CreateOrUpdate indicates an expected call of CreateOrUpdate.
+// CreateOrUpdate indicates an expected call of CreateOrUpdate
 func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, routeTableName, parameters, etag interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, routeTableName, parameters, etag)

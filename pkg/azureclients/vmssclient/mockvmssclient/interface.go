@@ -32,30 +32,30 @@ import (
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
+// Get mocks base method
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetName string) (compute.VirtualMachineScaleSet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, VMScaleSetName)
@@ -64,13 +64,13 @@ func (m *MockInterface) Get(ctx context.Context, resourceGroupName, VMScaleSetNa
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
+// Get indicates an expected call of Get
 func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, VMScaleSetName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, VMScaleSetName)
 }
 
-// List mocks base method.
+// List mocks base method
 func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachineScaleSet, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
@@ -79,13 +79,13 @@ func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]c
 	return ret0, ret1
 }
 
-// List indicates an expected call of List.
+// List indicates an expected call of List
 func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
 }
 
-// CreateOrUpdate mocks base method.
+// CreateOrUpdate mocks base method
 func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, VMScaleSetName, parameters)
@@ -93,13 +93,13 @@ func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, V
 	return ret0
 }
 
-// CreateOrUpdate indicates an expected call of CreateOrUpdate.
+// CreateOrUpdate indicates an expected call of CreateOrUpdate
 func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, VMScaleSetName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, VMScaleSetName, parameters)
 }
 
-// CreateOrUpdateAsync mocks base method.
+// CreateOrUpdateAsync mocks base method
 func (m *MockInterface) CreateOrUpdateAsync(ctx context.Context, resourceGroupName, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdateAsync", ctx, resourceGroupName, VMScaleSetName, parameters)
@@ -108,13 +108,13 @@ func (m *MockInterface) CreateOrUpdateAsync(ctx context.Context, resourceGroupNa
 	return ret0, ret1
 }
 
-// CreateOrUpdateAsync indicates an expected call of CreateOrUpdateAsync.
+// CreateOrUpdateAsync indicates an expected call of CreateOrUpdateAsync
 func (mr *MockInterfaceMockRecorder) CreateOrUpdateAsync(ctx, resourceGroupName, VMScaleSetName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateAsync", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdateAsync), ctx, resourceGroupName, VMScaleSetName, parameters)
 }
 
-// WaitForAsyncOperationResult mocks base method.
+// WaitForAsyncOperationResult mocks base method
 func (m *MockInterface) WaitForAsyncOperationResult(ctx context.Context, future *azure.Future, resourceGroupName, request, asyncOpName string) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForAsyncOperationResult", ctx, future, resourceGroupName, request, asyncOpName)
@@ -123,13 +123,13 @@ func (m *MockInterface) WaitForAsyncOperationResult(ctx context.Context, future 
 	return ret0, ret1
 }
 
-// WaitForAsyncOperationResult indicates an expected call of WaitForAsyncOperationResult.
+// WaitForAsyncOperationResult indicates an expected call of WaitForAsyncOperationResult
 func (mr *MockInterfaceMockRecorder) WaitForAsyncOperationResult(ctx, future, resourceGroupName, request, asyncOpName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForAsyncOperationResult", reflect.TypeOf((*MockInterface)(nil).WaitForAsyncOperationResult), ctx, future, resourceGroupName, request, asyncOpName)
 }
 
-// DeleteInstances mocks base method.
+// DeleteInstances mocks base method
 func (m *MockInterface) DeleteInstances(ctx context.Context, resourceGroupName, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteInstances", ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
@@ -137,28 +137,28 @@ func (m *MockInterface) DeleteInstances(ctx context.Context, resourceGroupName, 
 	return ret0
 }
 
-// DeleteInstances indicates an expected call of DeleteInstances.
+// DeleteInstances indicates an expected call of DeleteInstances
 func (mr *MockInterfaceMockRecorder) DeleteInstances(ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteInstances", reflect.TypeOf((*MockInterface)(nil).DeleteInstances), ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
 }
 
-// DeleteInstancesAsync mocks base method.
-func (m *MockInterface) DeleteInstancesAsync(ctx context.Context, resourceGroupName, VMScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, forceDelete bool) (*azure.Future, *retry.Error) {
+// DeleteInstancesAsync mocks base method
+func (m *MockInterface) DeleteInstancesAsync(ctx context.Context, resourceGroupName, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, forceDelete bool) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteInstancesAsync", ctx, resourceGroupName, VMScaleSetName, vmInstanceIDs, forceDelete)
+	ret := m.ctrl.Call(m, "DeleteInstancesAsync", ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs, forceDelete)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
-// DeleteInstancesAsync indicates an expected call of DeleteInstancesAsync.
-func (mr *MockInterfaceMockRecorder) DeleteInstancesAsync(ctx, resourceGroupName, VMScaleSetName, vmInstanceIDs, forceDelete interface{}) *gomock.Call {
+// DeleteInstancesAsync indicates an expected call of DeleteInstancesAsync
+func (mr *MockInterfaceMockRecorder) DeleteInstancesAsync(ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs, forceDelete interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteInstancesAsync", reflect.TypeOf((*MockInterface)(nil).DeleteInstancesAsync), ctx, resourceGroupName, VMScaleSetName, vmInstanceIDs, forceDelete)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteInstancesAsync", reflect.TypeOf((*MockInterface)(nil).DeleteInstancesAsync), ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs, forceDelete)
 }
 
-// WaitForCreateOrUpdateResult mocks base method.
+// WaitForCreateOrUpdateResult mocks base method
 func (m *MockInterface) WaitForCreateOrUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName string) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForCreateOrUpdateResult", ctx, future, resourceGroupName)
@@ -167,13 +167,13 @@ func (m *MockInterface) WaitForCreateOrUpdateResult(ctx context.Context, future 
 	return ret0, ret1
 }
 
-// WaitForCreateOrUpdateResult indicates an expected call of WaitForCreateOrUpdateResult.
+// WaitForCreateOrUpdateResult indicates an expected call of WaitForCreateOrUpdateResult
 func (mr *MockInterfaceMockRecorder) WaitForCreateOrUpdateResult(ctx, future, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForCreateOrUpdateResult", reflect.TypeOf((*MockInterface)(nil).WaitForCreateOrUpdateResult), ctx, future, resourceGroupName)
 }
 
-// WaitForDeleteInstancesResult mocks base method.
+// WaitForDeleteInstancesResult mocks base method
 func (m *MockInterface) WaitForDeleteInstancesResult(ctx context.Context, future *azure.Future, resourceGroupName string) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForDeleteInstancesResult", ctx, future, resourceGroupName)
@@ -182,13 +182,13 @@ func (m *MockInterface) WaitForDeleteInstancesResult(ctx context.Context, future
 	return ret0, ret1
 }
 
-// WaitForDeleteInstancesResult indicates an expected call of WaitForDeleteInstancesResult.
+// WaitForDeleteInstancesResult indicates an expected call of WaitForDeleteInstancesResult
 func (mr *MockInterfaceMockRecorder) WaitForDeleteInstancesResult(ctx, future, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForDeleteInstancesResult", reflect.TypeOf((*MockInterface)(nil).WaitForDeleteInstancesResult), ctx, future, resourceGroupName)
 }
 
-// DeallocateInstancesAsync mocks base method.
+// DeallocateInstancesAsync mocks base method
 func (m *MockInterface) DeallocateInstancesAsync(ctx context.Context, resourceGroupName, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeallocateInstancesAsync", ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
@@ -197,13 +197,13 @@ func (m *MockInterface) DeallocateInstancesAsync(ctx context.Context, resourceGr
 	return ret0, ret1
 }
 
-// DeallocateInstancesAsync indicates an expected call of DeallocateInstancesAsync.
+// DeallocateInstancesAsync indicates an expected call of DeallocateInstancesAsync
 func (mr *MockInterfaceMockRecorder) DeallocateInstancesAsync(ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeallocateInstancesAsync", reflect.TypeOf((*MockInterface)(nil).DeallocateInstancesAsync), ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
 }
 
-// WaitForDeallocateInstancesResult mocks base method.
+// WaitForDeallocateInstancesResult mocks base method
 func (m *MockInterface) WaitForDeallocateInstancesResult(ctx context.Context, future *azure.Future, resourceGroupName string) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForDeallocateInstancesResult", ctx, future, resourceGroupName)
@@ -212,13 +212,13 @@ func (m *MockInterface) WaitForDeallocateInstancesResult(ctx context.Context, fu
 	return ret0, ret1
 }
 
-// WaitForDeallocateInstancesResult indicates an expected call of WaitForDeallocateInstancesResult.
+// WaitForDeallocateInstancesResult indicates an expected call of WaitForDeallocateInstancesResult
 func (mr *MockInterfaceMockRecorder) WaitForDeallocateInstancesResult(ctx, future, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForDeallocateInstancesResult", reflect.TypeOf((*MockInterface)(nil).WaitForDeallocateInstancesResult), ctx, future, resourceGroupName)
 }
 
-// StartInstancesAsync mocks base method.
+// StartInstancesAsync mocks base method
 func (m *MockInterface) StartInstancesAsync(ctx context.Context, resourceGroupName, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StartInstancesAsync", ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
@@ -227,13 +227,13 @@ func (m *MockInterface) StartInstancesAsync(ctx context.Context, resourceGroupNa
 	return ret0, ret1
 }
 
-// StartInstancesAsync indicates an expected call of StartInstancesAsync.
+// StartInstancesAsync indicates an expected call of StartInstancesAsync
 func (mr *MockInterfaceMockRecorder) StartInstancesAsync(ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartInstancesAsync", reflect.TypeOf((*MockInterface)(nil).StartInstancesAsync), ctx, resourceGroupName, vmScaleSetName, vmInstanceIDs)
 }
 
-// WaitForStartInstancesResult mocks base method.
+// WaitForStartInstancesResult mocks base method
 func (m *MockInterface) WaitForStartInstancesResult(ctx context.Context, future *azure.Future, resourceGroupName string) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForStartInstancesResult", ctx, future, resourceGroupName)
@@ -242,7 +242,7 @@ func (m *MockInterface) WaitForStartInstancesResult(ctx context.Context, future 
 	return ret0, ret1
 }
 
-// WaitForStartInstancesResult indicates an expected call of WaitForStartInstancesResult.
+// WaitForStartInstancesResult indicates an expected call of WaitForStartInstancesResult
 func (mr *MockInterfaceMockRecorder) WaitForStartInstancesResult(ctx, future, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForStartInstancesResult", reflect.TypeOf((*MockInterface)(nil).WaitForStartInstancesResult), ctx, future, resourceGroupName)

@@ -30,30 +30,30 @@ import (
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-// MockInterface is a mock of Interface interface.
+// MockInterface is a mock of Interface interface
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
 }
 
-// MockInterfaceMockRecorder is the mock recorder for MockInterface.
+// MockInterfaceMockRecorder is the mock recorder for MockInterface
 type MockInterfaceMockRecorder struct {
 	mock *MockInterface
 }
 
-// NewMockInterface creates a new mock instance.
+// NewMockInterface creates a new mock instance
 func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 	mock := &MockInterface{ctrl: ctrl}
 	mock.recorder = &MockInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Create mocks base method.
+// Create mocks base method
 func (m *MockInterface) Create(ctx context.Context, resourceGroupName, accountName string, parameters storage.AccountCreateParameters) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, resourceGroupName, accountName, parameters)
@@ -61,13 +61,13 @@ func (m *MockInterface) Create(ctx context.Context, resourceGroupName, accountNa
 	return ret0
 }
 
-// Create indicates an expected call of Create.
+// Create indicates an expected call of Create
 func (mr *MockInterfaceMockRecorder) Create(ctx, resourceGroupName, accountName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockInterface)(nil).Create), ctx, resourceGroupName, accountName, parameters)
 }
 
-// Update mocks base method.
+// Update mocks base method
 func (m *MockInterface) Update(ctx context.Context, resourceGroupName, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, accountName, parameters)
@@ -75,13 +75,13 @@ func (m *MockInterface) Update(ctx context.Context, resourceGroupName, accountNa
 	return ret0
 }
 
-// Update indicates an expected call of Update.
+// Update indicates an expected call of Update
 func (mr *MockInterfaceMockRecorder) Update(ctx, resourceGroupName, accountName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockInterface)(nil).Update), ctx, resourceGroupName, accountName, parameters)
 }
 
-// Delete mocks base method.
+// Delete mocks base method
 func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, accountName string) *retry.Error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, accountName)
@@ -89,13 +89,13 @@ func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, accountNa
 	return ret0
 }
 
-// Delete indicates an expected call of Delete.
+// Delete indicates an expected call of Delete
 func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, accountName)
 }
 
-// ListKeys mocks base method.
+// ListKeys mocks base method
 func (m *MockInterface) ListKeys(ctx context.Context, resourceGroupName, accountName string) (storage.AccountListKeysResult, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListKeys", ctx, resourceGroupName, accountName)
@@ -104,13 +104,13 @@ func (m *MockInterface) ListKeys(ctx context.Context, resourceGroupName, account
 	return ret0, ret1
 }
 
-// ListKeys indicates an expected call of ListKeys.
+// ListKeys indicates an expected call of ListKeys
 func (mr *MockInterfaceMockRecorder) ListKeys(ctx, resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListKeys", reflect.TypeOf((*MockInterface)(nil).ListKeys), ctx, resourceGroupName, accountName)
 }
 
-// ListByResourceGroup mocks base method.
+// ListByResourceGroup mocks base method
 func (m *MockInterface) ListByResourceGroup(ctx context.Context, resourceGroupName string) ([]storage.Account, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByResourceGroup", ctx, resourceGroupName)
@@ -119,13 +119,13 @@ func (m *MockInterface) ListByResourceGroup(ctx context.Context, resourceGroupNa
 	return ret0, ret1
 }
 
-// ListByResourceGroup indicates an expected call of ListByResourceGroup.
+// ListByResourceGroup indicates an expected call of ListByResourceGroup
 func (mr *MockInterfaceMockRecorder) ListByResourceGroup(ctx, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByResourceGroup", reflect.TypeOf((*MockInterface)(nil).ListByResourceGroup), ctx, resourceGroupName)
 }
 
-// GetProperties mocks base method.
+// GetProperties mocks base method
 func (m *MockInterface) GetProperties(ctx context.Context, resourceGroupName, accountName string) (storage.Account, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProperties", ctx, resourceGroupName, accountName)
@@ -134,7 +134,7 @@ func (m *MockInterface) GetProperties(ctx context.Context, resourceGroupName, ac
 	return ret0, ret1
 }
 
-// GetProperties indicates an expected call of GetProperties.
+// GetProperties indicates an expected call of GetProperties
 func (mr *MockInterfaceMockRecorder) GetProperties(ctx, resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProperties", reflect.TypeOf((*MockInterface)(nil).GetProperties), ctx, resourceGroupName, accountName)
