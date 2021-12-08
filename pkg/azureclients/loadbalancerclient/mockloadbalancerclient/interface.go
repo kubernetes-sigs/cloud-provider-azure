@@ -53,36 +53,6 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, loadBalancerName, expand string) (network.LoadBalancer, *retry.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, loadBalancerName, expand)
-	ret0, _ := ret[0].(network.LoadBalancer)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, loadBalancerName, expand interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, loadBalancerName, expand)
-}
-
-// List mocks base method.
-func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]network.LoadBalancer, *retry.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
-	ret0, _ := ret[0].([]network.LoadBalancer)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
-}
-
-// List indicates an expected call of List.
-func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
-}
-
 // CreateOrUpdate mocks base method.
 func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, loadBalancerName string, parameters network.LoadBalancer, etag string) *retry.Error {
 	m.ctrl.T.Helper()
@@ -123,4 +93,34 @@ func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, loadBalan
 func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, loadBalancerName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, loadBalancerName)
+}
+
+// Get mocks base method.
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, loadBalancerName, expand string) (network.LoadBalancer, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, loadBalancerName, expand)
+	ret0, _ := ret[0].(network.LoadBalancer)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, loadBalancerName, expand interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, loadBalancerName, expand)
+}
+
+// List mocks base method.
+func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]network.LoadBalancer, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
+	ret0, _ := ret[0].([]network.LoadBalancer)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
 }

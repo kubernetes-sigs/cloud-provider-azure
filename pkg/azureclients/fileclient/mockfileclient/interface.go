@@ -80,20 +80,6 @@ func (mr *MockInterfaceMockRecorder) DeleteFileShare(resourceGroupName, accountN
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFileShare", reflect.TypeOf((*MockInterface)(nil).DeleteFileShare), resourceGroupName, accountName, name)
 }
 
-// ResizeFileShare mocks base method.
-func (m *MockInterface) ResizeFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResizeFileShare", resourceGroupName, accountName, name, sizeGiB)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ResizeFileShare indicates an expected call of ResizeFileShare.
-func (mr *MockInterfaceMockRecorder) ResizeFileShare(resourceGroupName, accountName, name, sizeGiB interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResizeFileShare", reflect.TypeOf((*MockInterface)(nil).ResizeFileShare), resourceGroupName, accountName, name, sizeGiB)
-}
-
 // GetFileShare mocks base method.
 func (m *MockInterface) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
 	m.ctrl.T.Helper()
@@ -122,6 +108,20 @@ func (m *MockInterface) GetServiceProperties(resourceGroupName, accountName stri
 func (mr *MockInterfaceMockRecorder) GetServiceProperties(resourceGroupName, accountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceProperties", reflect.TypeOf((*MockInterface)(nil).GetServiceProperties), resourceGroupName, accountName)
+}
+
+// ResizeFileShare mocks base method.
+func (m *MockInterface) ResizeFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResizeFileShare", resourceGroupName, accountName, name, sizeGiB)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResizeFileShare indicates an expected call of ResizeFileShare.
+func (mr *MockInterfaceMockRecorder) ResizeFileShare(resourceGroupName, accountName, name, sizeGiB interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResizeFileShare", reflect.TypeOf((*MockInterface)(nil).ResizeFileShare), resourceGroupName, accountName, name, sizeGiB)
 }
 
 // SetServiceProperties mocks base method.

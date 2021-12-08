@@ -53,6 +53,34 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
+// CreateOrUpdate mocks base method.
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, publicIPAddressName, parameters)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// CreateOrUpdate indicates an expected call of CreateOrUpdate.
+func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, publicIPAddressName, parameters interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, publicIPAddressName, parameters)
+}
+
+// Delete mocks base method.
+func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, publicIPAddressName string) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, publicIPAddressName)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, publicIPAddressName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, publicIPAddressName)
+}
+
 // Get mocks base method.
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, publicIPAddressName, expand string) (network.PublicIPAddress, *retry.Error) {
 	m.ctrl.T.Helper()
@@ -111,32 +139,4 @@ func (m *MockInterface) ListAll(ctx context.Context) ([]network.PublicIPAddress,
 func (mr *MockInterfaceMockRecorder) ListAll(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockInterface)(nil).ListAll), ctx)
-}
-
-// CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, publicIPAddressName, parameters)
-	ret0, _ := ret[0].(*retry.Error)
-	return ret0
-}
-
-// CreateOrUpdate indicates an expected call of CreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, publicIPAddressName, parameters interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, publicIPAddressName, parameters)
-}
-
-// Delete mocks base method.
-func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, publicIPAddressName string) *retry.Error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, publicIPAddressName)
-	ret0, _ := ret[0].(*retry.Error)
-	return ret0
-}
-
-// Delete indicates an expected call of Delete.
-func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, publicIPAddressName interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, publicIPAddressName)
 }

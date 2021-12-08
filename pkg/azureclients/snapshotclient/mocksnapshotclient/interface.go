@@ -53,19 +53,18 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, snapshotName string) (compute.Snapshot, *retry.Error) {
+// CreateOrUpdate mocks base method.
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, snapshotName string, snapshot compute.Snapshot) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, snapshotName)
-	ret0, _ := ret[0].(compute.Snapshot)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, snapshotName, snapshot)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
 }
 
-// Get indicates an expected call of Get.
-func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, snapshotName interface{}) *gomock.Call {
+// CreateOrUpdate indicates an expected call of CreateOrUpdate.
+func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, snapshotName, snapshot interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, snapshotName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, snapshotName, snapshot)
 }
 
 // Delete mocks base method.
@@ -82,6 +81,21 @@ func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, snapshotName
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, snapshotName)
 }
 
+// Get mocks base method.
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, snapshotName string) (compute.Snapshot, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, snapshotName)
+	ret0, _ := ret[0].(compute.Snapshot)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, snapshotName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, snapshotName)
+}
+
 // ListByResourceGroup mocks base method.
 func (m *MockInterface) ListByResourceGroup(ctx context.Context, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
 	m.ctrl.T.Helper()
@@ -95,18 +109,4 @@ func (m *MockInterface) ListByResourceGroup(ctx context.Context, resourceGroupNa
 func (mr *MockInterfaceMockRecorder) ListByResourceGroup(ctx, resourceGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByResourceGroup", reflect.TypeOf((*MockInterface)(nil).ListByResourceGroup), ctx, resourceGroupName)
-}
-
-// CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, snapshotName string, snapshot compute.Snapshot) *retry.Error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, snapshotName, snapshot)
-	ret0, _ := ret[0].(*retry.Error)
-	return ret0
-}
-
-// CreateOrUpdate indicates an expected call of CreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, snapshotName, snapshot interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, snapshotName, snapshot)
 }

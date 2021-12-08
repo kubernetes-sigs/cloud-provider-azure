@@ -27,6 +27,15 @@ LINUX_ARCHS = amd64 arm arm64
 # The output type for `docker buildx build` could either be docker (local), or registry.
 OUTPUT_TYPE ?= docker
 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+GO-MODE-OUTDATED=${GOBIN}/go-mod-outdated
+
 AKSENGINE_VERSION ?= master
 ENABLE_GIT_COMMAND ?= true
 TEST_RESULTS_DIR=testResults
@@ -110,7 +119,7 @@ $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-co
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull docker/dockerfile:1.1-experimental
-	docker pull docker.io/library/golang:1.16.6-stretch
+	docker pull docker.io/library/golang:1.17-buster
 	docker pull gcr.io/distroless/static:latest
 
 buildx-setup:
@@ -258,10 +267,6 @@ test-boilerplate: ## Run boilerplate test.
 test-spelling: ## Run spelling test.
 	hack/verify-spelling.sh
 
-.PHONY: update-dependencies
-update-dependencies: ## Update dependencies and go modules.
-	hack/update-dependencies.sh
-
 .PHONY: update-gofmt
 update-gofmt: ## Update go formats.
 	hack/update-gofmt.sh
@@ -271,7 +276,11 @@ update-mocks: ## Create or update mock clients.
 	@hack/update-mock-clients.sh
 
 .PHONY: update
-update: update-dependencies update-gofmt update-mocks ## Update go formats, mocks and dependencies.
+update: update-gofmt update-mocks ## Update go formats, mocks and dependencies.
+
+.PHONY: list-updates 
+list-updates: ${GO-MODE-OUTDATED} ## List dependencies which needs upgrade
+	go list -u -m -json all | ${GO-MODE-OUTDATED} -update -direct
 
 test-e2e: ## Run k8s e2e tests.
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
@@ -297,3 +306,6 @@ deploy: image push ## Build, push and deploy an aks-engine cluster.
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
+
+${GO-MODE-OUTDATED}: ## Download golangci-lint locally if necessary.
+	go install github.com/psampaz/go-mod-outdated@v0.8.0
