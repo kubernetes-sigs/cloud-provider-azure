@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -588,4 +589,35 @@ func TestRequestBackoff(t *testing.T) {
 	backoff := az.RequestBackoff()
 	assert.Equal(t, wait.Backoff{Steps: 3}, backoff)
 
+}
+
+func TestCreateOrUpdateLBBackendPool(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description       string
+		createOrUpdateErr *retry.Error
+		expectedErr       bool
+	}{
+		{
+			description: "CreateOrUpdateLBBackendPool should not report an error if the api call succeeds",
+		},
+		{
+			description: "CreateOrUpdateLBBackendPool should report an error if the api call fails",
+			createOrUpdateErr: &retry.Error{
+				HTTPStatusCode: http.StatusPreconditionFailed,
+				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			},
+			expectedErr: true,
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+		lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.createOrUpdateErr)
+		az.LoadBalancerClient = lbClient
+
+		err := az.CreateOrUpdateLBBackendPool("kubernetes", network.BackendAddressPool{})
+		assert.Equal(t, tc.expectedErr, err != nil)
+	}
 }

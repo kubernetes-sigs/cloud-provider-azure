@@ -83,6 +83,8 @@ const (
 
 	// NodeLabelRole specifies the role of a node
 	NodeLabelRole = "kubernetes.io/role"
+	// NodeLabelHostName specifies the host name of a node
+	NodeLabelHostName = "kubernetes.io/hostname"
 	// MasterNodeRoleLabel specifies is the master node label for a node
 	MasterNodeRoleLabel = "node-role.kubernetes.io/master"
 	// ControlPlaneNodeRoleLabel specifies is the control-plane node label for a node
@@ -307,6 +309,14 @@ const (
 	FrontendIPConfigNameMaxLength = 80
 	// LoadBalancerRuleNameMaxLength is the max length of the load balancing rule
 	LoadBalancerRuleNameMaxLength = 80
+
+	// LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration is the lb backend pool config type node IP configuration
+	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
+	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
+	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
+	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
+	// TODO (nilo19): support pod IP in the future
+	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
 )
 
 // error messages
