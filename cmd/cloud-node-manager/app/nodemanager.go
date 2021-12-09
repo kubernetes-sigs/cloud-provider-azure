@@ -31,6 +31,7 @@ import (
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
+	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
 	"k8s.io/klog/v2"
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
@@ -104,8 +105,9 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 
 	// Start the controller manager HTTP server
 	var checks []healthz.HealthChecker
+	healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
 	if c.SecureServing != nil {
-		unsecuredMux := genericcontrollermanager.NewBaseHandler(nil, checks...)
+		unsecuredMux := genericcontrollermanager.NewBaseHandler(nil, healthzHandler)
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
 		if _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
@@ -113,7 +115,7 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 		}
 	}
 	if c.InsecureServing != nil {
-		unsecuredMux := genericcontrollermanager.NewBaseHandler(nil, checks...)
+		unsecuredMux := genericcontrollermanager.NewBaseHandler(nil, healthzHandler)
 		insecureSuperuserAuthn := server.AuthenticationInfo{Authenticator: &server.InsecureSuperuser{}}
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, nil, &insecureSuperuserAuthn)
 		if err := c.InsecureServing.Serve(handler, 0, stopCh); err != nil {
