@@ -43,6 +43,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
+	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
 )
 
@@ -604,7 +605,7 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
-	_, condition := cloudnodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
+	_, condition := nodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
 	if networkReady && condition != nil && condition.Status == v1.ConditionFalse {
 		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=false was canceled because it is already set", node.Name)
 		return nil
@@ -625,7 +626,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 		// patch in the retry loop.
 		currentTime := metav1.Now()
 		if networkReady {
-			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionFalse,
 				Reason:             "NodeInitialization",
@@ -633,7 +634,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 				LastTransitionTime: currentTime,
 			})
 		} else {
-			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionTrue,
 				Reason:             "NodeInitialization",

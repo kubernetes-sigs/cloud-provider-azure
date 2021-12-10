@@ -21,6 +21,7 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -52,14 +53,14 @@ const (
 	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 )
 
-func startCloudNodeController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the CloudNodeController
 	nodeController, err := nodecontroller.NewCloudNodeController(
-		ctx.SharedInformers.Core().V1().Nodes(),
+		completedConfig.SharedInformers.Core().V1().Nodes(),
 		// cloud node controller uses existing cluster role from node-controller
-		ctx.ClientBuilder.ClientOrDie("node-controller"),
+		completedConfig.ClientBuilder.ClientOrDie("node-controller"),
 		cloud,
-		ctx.ComponentConfig.NodeStatusUpdateFrequency.Duration,
+		completedConfig.ComponentConfig.NodeStatusUpdateFrequency.Duration,
 	)
 	if err != nil {
 		klog.Warningf("failed to start cloud node controller: %s", err)
@@ -71,33 +72,33 @@ func startCloudNodeController(ctx *cloudcontrollerconfig.CompletedConfig, cloud 
 	return nil, true, nil
 }
 
-func startCloudNodeLifecycleController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeLifecycleController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the cloudNodeLifecycleController
 	cloudNodeLifecycleController, err := nodelifecyclecontroller.NewCloudNodeLifecycleController(
-		ctx.SharedInformers.Core().V1().Nodes(),
+		completedConfig.SharedInformers.Core().V1().Nodes(),
 		// cloud node lifecycle controller uses existing cluster role from node-controller
-		ctx.ClientBuilder.ClientOrDie("node-controller"),
+		completedConfig.ClientBuilder.ClientOrDie("node-controller"),
 		cloud,
-		ctx.ComponentConfig.KubeCloudShared.NodeMonitorPeriod.Duration,
+		completedConfig.ComponentConfig.KubeCloudShared.NodeMonitorPeriod.Duration,
 	)
 	if err != nil {
 		klog.Warningf("failed to start cloud node lifecycle controller: %s", err)
 		return nil, false, nil
 	}
 
-	go cloudNodeLifecycleController.Run(stopCh)
+	go cloudNodeLifecycleController.Run(ctx)
 
 	return nil, true, nil
 }
 
-func startServiceController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startServiceController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,
-		ctx.ClientBuilder.ClientOrDie("service-controller"),
-		ctx.SharedInformers.Core().V1().Services(),
-		ctx.SharedInformers.Core().V1().Nodes(),
-		ctx.ComponentConfig.KubeCloudShared.ClusterName,
+		completedConfig.ClientBuilder.ClientOrDie("service-controller"),
+		completedConfig.SharedInformers.Core().V1().Services(),
+		completedConfig.SharedInformers.Core().V1().Nodes(),
+		completedConfig.ComponentConfig.KubeCloudShared.ClusterName,
 		utilfeature.DefaultFeatureGate,
 	)
 	if err != nil {
@@ -106,14 +107,14 @@ func startServiceController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cl
 		return nil, false, nil
 	}
 
-	go serviceController.Run(stopCh, int(ctx.ComponentConfig.ServiceController.ConcurrentServiceSyncs))
+	go serviceController.Run(ctx, int(completedConfig.ComponentConfig.ServiceController.ConcurrentServiceSyncs))
 
 	return nil, true, nil
 }
 
-func startRouteController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
-	if !ctx.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes {
-		klog.Infof("Will not configure cloud provider routes, --configure-cloud-routes: %v.", ctx.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes)
+func startRouteController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+	if !completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes {
+		klog.Infof("Will not configure cloud provider routes, --configure-cloud-routes: %v.", completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes)
 		return nil, false, nil
 	}
 
@@ -125,7 +126,7 @@ func startRouteController(ctx *cloudcontrollerconfig.CompletedConfig, cloud clou
 	}
 
 	// failure: bad cidrs in config
-	clusterCIDRs, dualStack, err := processCIDRs(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)
+	clusterCIDRs, dualStack, err := processCIDRs(completedConfig.ComponentConfig.KubeCloudShared.ClusterCIDR)
 	if err != nil {
 		return nil, false, err
 	}
@@ -147,27 +148,27 @@ func startRouteController(ctx *cloudcontrollerconfig.CompletedConfig, cloud clou
 
 	routeController := routecontroller.New(
 		routes,
-		ctx.ClientBuilder.ClientOrDie("route-controller"),
-		ctx.SharedInformers.Core().V1().Nodes(),
-		ctx.ComponentConfig.KubeCloudShared.ClusterName,
+		completedConfig.ClientBuilder.ClientOrDie("route-controller"),
+		completedConfig.SharedInformers.Core().V1().Nodes(),
+		completedConfig.ComponentConfig.KubeCloudShared.ClusterName,
 		clusterCIDRs,
 	)
-	go routeController.Run(stopCh, ctx.ComponentConfig.KubeCloudShared.RouteReconciliationPeriod.Duration)
+	go routeController.Run(ctx, completedConfig.ComponentConfig.KubeCloudShared.RouteReconciliationPeriod.Duration)
 
 	return nil, true, nil
 }
 
-func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startNodeIpamController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	var serviceCIDR *net.IPNet
 	var secondaryServiceCIDR *net.IPNet
 
 	// should we start nodeIPAM
-	if !ctx.ComponentConfig.KubeCloudShared.AllocateNodeCIDRs {
+	if !completedConfig.ComponentConfig.KubeCloudShared.AllocateNodeCIDRs {
 		return nil, false, nil
 	}
 
 	// failure: bad cidrs in config
-	clusterCIDRs, dualStack, err := processCIDRs(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)
+	clusterCIDRs, dualStack, err := processCIDRs(completedConfig.ComponentConfig.KubeCloudShared.ClusterCIDR)
 	if err != nil {
 		return nil, false, err
 	}
@@ -188,17 +189,17 @@ func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud c
 	}
 
 	// service cidr processing
-	if len(strings.TrimSpace(ctx.NodeIPAMControllerConfig.ServiceCIDR)) != 0 {
-		_, serviceCIDR, err = net.ParseCIDR(ctx.NodeIPAMControllerConfig.ServiceCIDR)
+	if len(strings.TrimSpace(completedConfig.NodeIPAMControllerConfig.ServiceCIDR)) != 0 {
+		_, serviceCIDR, err = net.ParseCIDR(completedConfig.NodeIPAMControllerConfig.ServiceCIDR)
 		if err != nil {
-			klog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.NodeIPAMControllerConfig.ServiceCIDR, err)
+			klog.Warningf("Unsuccessful parsing of service CIDR %v: %v", completedConfig.NodeIPAMControllerConfig.ServiceCIDR, err)
 		}
 	}
 
-	if len(strings.TrimSpace(ctx.NodeIPAMControllerConfig.SecondaryServiceCIDR)) != 0 {
-		_, secondaryServiceCIDR, err = net.ParseCIDR(ctx.NodeIPAMControllerConfig.SecondaryServiceCIDR)
+	if len(strings.TrimSpace(completedConfig.NodeIPAMControllerConfig.SecondaryServiceCIDR)) != 0 {
+		_, secondaryServiceCIDR, err = net.ParseCIDR(completedConfig.NodeIPAMControllerConfig.SecondaryServiceCIDR)
 		if err != nil {
-			klog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.NodeIPAMControllerConfig.SecondaryServiceCIDR, err)
+			klog.Warningf("Unsuccessful parsing of service CIDR %v: %v", completedConfig.NodeIPAMControllerConfig.SecondaryServiceCIDR, err)
 		}
 	}
 
@@ -223,11 +224,11 @@ func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud c
 	if utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack) {
 		// only --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 supported with dual stack clusters.
 		// --node-cidr-mask-size flag is incompatible with dual stack clusters.
-		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizesDualStack(ctx.NodeIPAMControllerConfig)
+		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizesDualStack(completedConfig.NodeIPAMControllerConfig)
 	} else {
 		// only --node-cidr-mask-size supported with single stack clusters.
 		// --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 flags are incompatible with dual stack clusters.
-		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizes(ctx.NodeIPAMControllerConfig)
+		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizes(completedConfig.NodeIPAMControllerConfig)
 	}
 
 	if err != nil {
@@ -238,14 +239,14 @@ func startNodeIpamController(ctx *cloudcontrollerconfig.CompletedConfig, cloud c
 	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
 
 	nodeIpamController, err := nodeipamcontroller.NewNodeIpamController(
-		ctx.SharedInformers.Core().V1().Nodes(),
+		completedConfig.SharedInformers.Core().V1().Nodes(),
 		cloud,
-		ctx.ClientBuilder.ClientOrDie("node-controller"),
+		completedConfig.ClientBuilder.ClientOrDie("node-controller"),
 		clusterCIDRs,
 		serviceCIDR,
 		secondaryServiceCIDR,
 		nodeCIDRMaskSizes,
-		ipam.CIDRAllocatorType(ctx.ComponentConfig.KubeCloudShared.CIDRAllocatorType),
+		ipam.CIDRAllocatorType(completedConfig.ComponentConfig.KubeCloudShared.CIDRAllocatorType),
 	)
 	if err != nil {
 		return nil, true, err
