@@ -14,8 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.17-buster AS builder
+FROM --platform=linux/amd64 golang:1.17-buster AS builder
+
 ARG ENABLE_GIT_COMMAND=true
+ARG ARCH=amd64
+
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
