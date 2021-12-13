@@ -183,16 +183,16 @@ endif
 ## --------------------------------------
 
 .PHONY: build-images
-build-images: build-ccm-image build-all-node-images ## Build all images.
+build-images: build-all-ccm-images build-all-node-images ## Build all images.
 
 .PHONY: image
-image: build-ccm-image build-all-node-images ## Build all images.
+image: build-all-ccm-images build-all-node-images ## Build all images.
 
 .PHONY: push-images
-push-images: push-ccm-image push-all-node-images ## Push all images.
+push-images: push-all-ccm-images push-all-node-images ## Push all images.
 
 .PHONY: push
-push: push-ccm-image push-all-node-images ## Push all images.
+push: push-all-ccm-images push-all-node-images ## Push all images.
 
 .PHONY: push-node-manager-manifest
 push-node-manager-manifest: push-all-node-images push-all-windows-node-images ## Create and push a manifest list containing all the Windows and Linux images.
@@ -234,6 +234,19 @@ push-node-image-windows-%: ## Push node-manager image for Windows.
 
 push-node-image-%:
 	$(MAKE) ARCH=$* push-node-image
+
+.PHONY: build-all-ccm-images
+build-all-ccm-images: $(addprefix build-ccm-image-,$(LINUX_ARCHS))
+
+build-ccm-image-%:
+	$(MAKE) ARCH=$* build-ccm-image
+
+.PHONY: push-all-ccm-images
+push-all-ccm-images: $(addprefix push-ccm-image-,$(LINUX_ARCHS))
+
+push-ccm-image-%:
+	$(MAKE) ARCH=$* push-ccm-image
+
 
 ## --------------------------------------
 ##@ Tests
