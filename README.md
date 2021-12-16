@@ -20,17 +20,18 @@ The latest version of azure-cloud-controller-manager and azure-cloud-node-manage
 
 Version matrix:
 
-|Kubernetes version|cloud-provider version|cloud-provider branch|
-|------------------|----------------------|---------------------|
-| master           | N/A                  | master              |
-| v1.22.x          | v1.1.3               | release-1.1         |
-| v1.21.x          | v1.0.7               | release-1.0         |
-| v1.20.x          | v0.7.10              | release-0.7         |
-| v1.19.x          | v0.6.0               | release-0.6         |
-| v1.18.x          | v0.5.1               | release-0.5         |
-| v1.17.x          | v0.4.1               | N/A                 |
-| v1.16.x          | v0.3.0               | N/A                 |
-| v1.15.x          | v0.2.0               | N/A                 |
+| Kubernetes version | cloud-provider version | cloud-provider branch | Notes                                                                   |
+|--------------------|------------------------|-----------------------|-------------------------------------------------------------------------|
+| master             | N/A                    | master                |
+| v1.23.x            | v1.23.0                | release-1.23          | The release versions will match the k8s release versions since v1.23.0. |
+| v1.22.x            | v1.1.3                 | release-1.1           |
+| v1.21.x            | v1.0.7                 | release-1.0           |
+| v1.20.x            | v0.7.10                | release-0.7           |
+| v1.19.x            | v0.6.0                 | release-0.6           |
+| v1.18.x            | v0.5.1                 | release-0.5           |
+| v1.17.x            | v0.4.1                 | N/A                   |
+| v1.16.x            | v0.3.0                 | N/A                   |
+| v1.15.x            | v0.2.0                 | N/A                   |
 
 ## Build
 
