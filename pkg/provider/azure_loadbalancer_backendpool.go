@@ -262,6 +262,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 					if strings.EqualFold(lbNamePrefix, clusterName) &&
 						strings.EqualFold(bi.LoadBalancerSku, consts.LoadBalancerSkuStandard) &&
 						bi.getVMSetNamesSharingPrimarySLB().Has(vmSetName) {
+						klog.V(4).Infof("bi.EnsureHostsInPool: the node %s in VMSet %s is supposed to share the primary SLB", node.Name, vmSetName)
 						shouldSkip = false
 					}
 				}
