@@ -285,8 +285,10 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 
 	for _, lb := range allLBs {
 		vmSetNameFromLBName := az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName)
-		if agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
+		if strings.EqualFold(strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix), clusterName) ||
+			agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
 			agentPoolLBs = append(agentPoolLBs, lb)
+			klog.V(4).Infof("ListManagedLBs: found agent pool LB %s", to.String(lb.Name))
 		}
 	}
 
