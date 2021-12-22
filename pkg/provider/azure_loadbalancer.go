@@ -1313,6 +1313,87 @@ func getIdleTimeout(s *v1.Service) (*int32, error) {
 	return &to32, nil
 }
 
+// getProbeIntervalInSecondsAndNumOfProbe parse probeInterval and numberOfProbes from the annotations of service object.
+func getProbeIntervalInSecondsAndNumOfProbe(s *v1.Service) (*int32, *int32, error) {
+	// get number of probes
+	numberOfProbes, err := getInt32FromAnnotations(s.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, func(val *int32) error {
+		//minimum number of unhealthy responses is 2. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+		const (
+			MinimumNumOfProbe = 2
+		)
+		if *val < MinimumNumOfProbe {
+			return fmt.Errorf("the minimum value of %s is %d", consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, MinimumNumOfProbe)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	// if numberOfProbes is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if numberOfProbes == nil {
+		numberOfProbes = to.Int32Ptr(2)
+	}
+
+	probeInterval, err := getInt32FromAnnotations(s.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeInterval, func(val *int32) error {
+		//minimum probe interval in seconds is 5. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+		const (
+			MinimumProbeIntervalInSecond = 5
+		)
+		if *val < 5 {
+			return fmt.Errorf("the minimum value of %s is %d", consts.ServiceAnnotationLoadBalancerHealthProbeInterval, MinimumProbeIntervalInSecond)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	// if probeInterval is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if probeInterval == nil {
+		probeInterval = to.Int32Ptr(5)
+	}
+
+	// total probe should be less than 120 seconds ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if (*probeInterval)*(*numberOfProbes) >= 120 {
+		return nil, nil, fmt.Errorf("total probe should be less than 120, please adjust interval and number of probe accordingly")
+	}
+
+	return probeInterval, numberOfProbes, nil
+}
+
+// Int32BusinessValidator is validator function which is invoked after values are parsed in order to make sure input value meets the businees need.
+type Int32BusinessValidator func(*int32) error
+
+// getInt32FromAnnotations parse integer value from annotation and return an reference to int32 object
+func getInt32FromAnnotations(annotations map[string]string, key string, businessValidator ...Int32BusinessValidator) (*int32, error) {
+	if len(key) <= 0 {
+		return nil, fmt.Errorf("annotation key should not be empty")
+	}
+	if annotations == nil {
+		// Return a nil here as this will set the value to the azure default
+		return nil, nil
+	}
+	val, ok := annotations[key]
+	if !ok {
+		// Return a nil here as this will set the value to the azure default
+		return nil, nil
+	}
+	errKey := fmt.Errorf("%s value must be a whole number", key)
+	toInt, err := strconv.ParseInt(val, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing %s value: %w: %v", key, err, errKey)
+	}
+	parsedInt := int32(toInt)
+	for _, validator := range businessValidator {
+		if validator != nil {
+			err := validator(&parsedInt)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing %s value: %w", key, err)
+			}
+		}
+	}
+	return &parsedInt, nil
+}
+
 func (az *Cloud) isFrontendIPChanged(clusterName string, config network.FrontendIPConfiguration, service *v1.Service, lbFrontendIPConfigName string) (bool, error) {
 	isServiceOwnsFrontendIP, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service)
 	if err != nil {
@@ -2140,6 +2221,10 @@ func (az *Cloud) getExpectedLBRules(
 		}
 
 		probeProtocol, requestPath := parseHealthProbeProtocolAndPath(service)
+		probeInterval, numberOfProbe, err := getProbeIntervalInSecondsAndNumOfProbe(service)
+		if err != nil {
+			return expectedProbes, expectedRules, err
+		}
 		if servicehelpers.NeedsHealthCheck(service) {
 			podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
 			if probeProtocol == "" {
@@ -2157,8 +2242,8 @@ func (az *Cloud) getExpectedLBRules(
 					RequestPath:       to.StringPtr(requestPath),
 					Protocol:          network.ProbeProtocol(probeProtocol),
 					Port:              to.Int32Ptr(podPresencePort),
-					IntervalInSeconds: to.Int32Ptr(5),
-					NumberOfProbes:    to.Int32Ptr(2),
+					IntervalInSeconds: probeInterval,
+					NumberOfProbes:    numberOfProbe,
 				},
 			})
 		} else if port.Protocol != v1.ProtocolUDP && port.Protocol != v1.ProtocolSCTP {
@@ -2180,8 +2265,8 @@ func (az *Cloud) getExpectedLBRules(
 					Protocol:          network.ProbeProtocol(probeProtocol),
 					RequestPath:       actualPath,
 					Port:              to.Int32Ptr(port.NodePort),
-					IntervalInSeconds: to.Int32Ptr(5),
-					NumberOfProbes:    to.Int32Ptr(2),
+					IntervalInSeconds: probeInterval,
+					NumberOfProbes:    numberOfProbe,
 				},
 			})
 		}
