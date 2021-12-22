@@ -259,6 +259,14 @@ const (
 	// If not set, the local service would use the HTTP and the cluster service would use the TCP by default.
 	ServiceAnnotationLoadBalancerHealthProbeProtocol = "service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol"
 
+	// ServiceAnnotationLoadBalancerHealthProbeInterval determines the probe interval of the load balancer health probe.
+	// The minimum probe interval is 5 seconds and the default value is 15. The total duration of all intervals cannot exceed 120 seconds.
+	ServiceAnnotationLoadBalancerHealthProbeInterval = "service.beta.kubernetes.io/azure-load-balancer-health-probe-interval"
+
+	// ServiceAnnotationLoadBalancerHealthProbeNumOfProbe determines the minimum number of unhealthy responses which load balancer cannot tolerate.
+	// The minimum number of probe is 1. The total duration of all intervals cannot exceed 120 seconds.
+	ServiceAnnotationLoadBalancerHealthProbeNumOfProbe = "service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe"
+
 	// ServiceAnnotationLoadBalancerHealthProbeRequestPath determines the request path of the load balancer health probe.
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
 	// `/healthz` would be configured by default.
