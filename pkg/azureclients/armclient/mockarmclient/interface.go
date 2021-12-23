@@ -240,6 +240,20 @@ func (mr *MockInterfaceMockRecorder) PutResources(ctx, resources interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResources", reflect.TypeOf((*MockInterface)(nil).PutResources), ctx, resources)
 }
 
+// PutResourcesInBatches mocks base method
+func (m *MockInterface) PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*armclient.PutResourcesResponse {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PutResourcesInBatches", ctx, resources, batchSize)
+	ret0, _ := ret[0].(map[string]*armclient.PutResourcesResponse)
+	return ret0
+}
+
+// PutResourcesInBatches indicates an expected call of PutResourcesInBatches
+func (mr *MockInterfaceMockRecorder) PutResourcesInBatches(ctx, resources, batchSize interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourcesInBatches", reflect.TypeOf((*MockInterface)(nil).PutResourcesInBatches), ctx, resources, batchSize)
+}
+
 // PutResourceWithDecorators mocks base method
 func (m *MockInterface) PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()

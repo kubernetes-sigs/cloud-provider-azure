@@ -384,7 +384,9 @@ func (page VirtualMachineScaleSetVMListResultPage) Values() []compute.VirtualMac
 }
 
 // UpdateVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string) *retry.Error {
+// If the batch size > 0, it will send sync requests concurrently in batches, or it will send sync requests in sequence.
+// No matter what the batch size is, it will process the async requests concurrently in one single batch.
+func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
 	mc := metrics.NewMetricContext("vmssvm", "update_vms", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
@@ -400,7 +402,7 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 		return rerr
 	}
 
-	rerr := c.updateVMSSVMs(ctx, resourceGroupName, VMScaleSetName, instances)
+	rerr := c.updateVMSSVMs(ctx, resourceGroupName, VMScaleSetName, instances, batchSize)
 	_ = mc.Observe(rerr.Error())
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -415,7 +417,7 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 }
 
 // updateVMSSVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM) *retry.Error {
+func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, batchSize int) *retry.Error {
 	resources := make(map[string]interface{})
 	for instanceID, parameter := range instances {
 		resourceID := armclient.GetChildResourceID(
@@ -429,7 +431,7 @@ func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VM
 		resources[resourceID] = parameter
 	}
 
-	responses := c.armClient.PutResources(ctx, resources)
+	responses := c.armClient.PutResourcesInBatches(ctx, resources, batchSize)
 	errors := make([]*retry.Error, 0)
 	for resourceID, resp := range responses {
 		if resp == nil {

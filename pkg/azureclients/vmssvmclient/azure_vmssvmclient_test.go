@@ -619,11 +619,11 @@ func TestUpdateVMs(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResources(gomock.Any(), testvmssVMs).Return(responses).Times(1)
+	armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs, 0).Return(responses).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
 
 	vmssvmClient := getTestVMSSVMClient(armClient)
-	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
+	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.Nil(t, rerr)
 }
 
@@ -648,11 +648,11 @@ func TestUpdateVMsWithUpdateVMsResponderError(t *testing.T) {
 		},
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResources(gomock.Any(), testvmssVMs).Return(responses).Times(1)
+	armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs, 0).Return(responses).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssvmClient := getTestVMSSVMClient(armClient)
-	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
+	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.NotNil(t, rerr)
 }
 
@@ -668,7 +668,7 @@ func TestUpdateVMsNeverRateLimiter(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssvmClient := getTestVMSSVMClientWithNeverRateLimiter(armClient)
-	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
+	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssvmUpdateVMsErr, rerr)
 }
@@ -686,7 +686,7 @@ func TestUpdateVMsRetryAfterReader(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmClient := getTestVMSSVMClientWithRetryAfterReader(armClient)
-	rerr := vmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
+	rerr := vmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssvmUpdateVMsErr, rerr)
 }
@@ -719,11 +719,11 @@ func TestUpdateVMsThrottle(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResources(gomock.Any(), testvmssVMs).Return(responses).Times(1)
+	armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs, 0).Return(responses).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssvmClient := getTestVMSSVMClient(armClient)
-	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test")
+	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
 	assert.NotNil(t, rerr)
 	assert.EqualError(t, throttleErr.Error(), rerr.RawError.Error())
 }
