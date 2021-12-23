@@ -240,6 +240,9 @@ type Config struct {
 	// `nodeIP`: vm private IPs will be attached to the inbound backend pool of the load balancer;
 	// `podIP`: pod IPs will be attached to the inbound backend pool of the load balancer (not supported yet).
 	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
+	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
+	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
+	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 }
 
 type InitSecretConfig struct {
@@ -638,6 +641,10 @@ func (az *Cloud) isLBBackendPoolTypeNodeIPConfig() bool {
 
 func (az *Cloud) isLBBackendPoolTypeNodeIP() bool {
 	return strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIP)
+}
+
+func (az *Cloud) getPutVMSSVMBatchSize() int {
+	return az.PutVMSSVMBatchSize
 }
 
 func (az *Cloud) initCaches() (err error) {
