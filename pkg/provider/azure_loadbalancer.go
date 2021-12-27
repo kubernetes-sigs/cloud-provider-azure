@@ -387,7 +387,7 @@ func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vm
 		}
 	}
 
-	klog.V(2).Infof("safeDeleteLoadBalancer: deleting LB %s because the corresponding vmSet is supposed to be in the primary SLB", to.String(lb.Name))
+	klog.V(2).Infof("safeDeleteLoadBalancer: deleting LB %s", to.String(lb.Name))
 	rerr := az.DeleteLB(service, to.String(lb.Name))
 	if rerr != nil {
 		return rerr
@@ -395,28 +395,6 @@ func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vm
 	_ = az.lbCache.Delete(to.String(lb.Name))
 
 	return nil
-}
-
-func extractBackendIPConfigurationIDsFromLB(lb network.LoadBalancer, lbBackendPoolName string) []string {
-	result := make([]string, 0)
-	if lb.LoadBalancerPropertiesFormat != nil &&
-		lb.BackendAddressPools != nil {
-		for i := 0; i < len(*lb.BackendAddressPools); i++ {
-			backendPool := (*lb.BackendAddressPools)[i]
-			if strings.EqualFold(to.String(backendPool.Name), lbBackendPoolName) {
-				if backendPool.BackendAddressPoolPropertiesFormat != nil &&
-					backendPool.BackendIPConfigurations != nil {
-					for _, ipConfiguration := range *backendPool.BackendIPConfigurations {
-						if ipConfiguration.ID != nil {
-							result = append(result, to.String(ipConfiguration.ID))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return result
 }
 
 // reconcileSharedLoadBalancer deletes the dedicated SLBs of the non-primary vmSets. There are
@@ -427,9 +405,8 @@ func extractBackendIPConfigurationIDsFromLB(lb network.LoadBalancer, lbBackendPo
 // It runs only once everytime the cloud controller manager restarts.
 func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node) ([]network.LoadBalancer, error) {
 	var (
-		primarySLBs, existingLBs []network.LoadBalancer
-		changed                  bool
-		err                      error
+		existingLBs []network.LoadBalancer
+		err         error
 	)
 
 	existingLBs, err = az.ListManagedLBs(service, nodes, clusterName)
@@ -452,15 +429,12 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		return existingLBs, nil
 	}
 
-	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	lbNamesToBeDeleted := sets.NewString()
-	// 1: delete unwanted LBs
+	// delete unwanted LBs
 	for _, lb := range existingLBs {
-		lbNamePrefix := strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix)
-
 		// skip the internal or external primary load balancer
+		lbNamePrefix := strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix)
 		if strings.EqualFold(lbNamePrefix, clusterName) {
-			primarySLBs = append(primarySLBs, lb)
 			continue
 		}
 
@@ -468,6 +442,7 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		// the vmSet is supposed to have dedicated SLBs
 		vmSetName := strings.ToLower(az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName))
 		if az.EnableMultipleStandardLoadBalancers && !az.getVMSetNamesSharingPrimarySLB().Has(vmSetName) {
+			klog.V(4).Infof("reconcileSharedLoadBalancer: skip deleting the LB %s because the vmSet %s needs a dedicated SLB", to.String(lb.Name), vmSetName)
 			continue
 		}
 
@@ -475,6 +450,7 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		// If the VMSet name is in az.NodePoolsWithoutDedicatedSLB, we should
 		// decouple the VMSet from the lb and delete the lb. Then adding the VMSet
 		// to the backend pool of the primary slb.
+		klog.V(2).Infof("reconcileSharedLoadBalancer: deleting LB %s because the corresponding vmSet is supposed to be in the primary SLB", to.String(lb.Name))
 		rerr := az.safeDeleteLoadBalancer(lb, clusterName, vmSetName, service)
 		if rerr != nil {
 			return nil, rerr.Error()
@@ -483,91 +459,15 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		// remove the deleted lb from the list and construct a new primary
 		// lb, so that getServiceLoadBalancer doesn't have to call list api again
 		lbNamesToBeDeleted.Insert(strings.ToLower(to.String(lb.Name)))
-		changed = true
 	}
 
-	if !changed {
-		klog.V(4).Infof("reconcileSharedLoadBalancer: no changes made, return now")
-		return existingLBs, nil
-	}
-
-	vmSetsToBeMovedToPrimarySLB := sets.NewString()
-	ipConfigIDsToBeAddedToPrimarySLB := sets.NewString()
-	// 2: add nodes to the backend pool of the primary SLBs
 	for i := len(existingLBs) - 1; i >= 0; i-- {
 		lb := existingLBs[i]
 		if !lbNamesToBeDeleted.Has(strings.ToLower(to.String(lb.Name))) {
 			continue
 		}
-
-		vmSetName := strings.ToLower(az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName))
-		vmSetsToBeMovedToPrimarySLB.Insert(vmSetName)
-		isInternalLB := strings.HasSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix)
-		primarySLBName := clusterName
-		if isInternalLB {
-			primarySLBName = fmt.Sprintf("%s%s", clusterName, consts.InternalLoadBalancerNameSuffix)
-		}
-		primaryLBBackendPoolID := az.getBackendPoolID(primarySLBName, az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
-
-		klog.V(2).Infof("reconcileSharedLoadBalancer: binding the vmSet %s to the backend pool %s", vmSetName, primaryLBBackendPoolID)
-		if strings.EqualFold(az.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration) {
-			err = az.VMSet.EnsureHostsInPool(service, nodes, primaryLBBackendPoolID, vmSetName)
-			if err != nil {
-				return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to EnsureHostsInPool: %w", err)
-			}
-
-			for _, id := range extractBackendIPConfigurationIDsFromLB(lb, lbBackendPoolName) {
-				ipConfigIDsToBeAddedToPrimarySLB.Insert(id)
-			}
-		}
-
 		// remove the deleted LB from the list
 		existingLBs = append(existingLBs[:i], existingLBs[i+1:]...)
-	}
-
-	for _, primarySLB := range primarySLBs {
-		if primarySLB.LoadBalancerPropertiesFormat != nil &&
-			primarySLB.BackendAddressPools != nil {
-			for i := 0; i < len(*primarySLB.BackendAddressPools); i++ {
-				if strings.EqualFold(to.String((*primarySLB.BackendAddressPools)[i].Name), lbBackendPoolName) {
-					if az.isLBBackendPoolTypeNodeIPConfig() {
-						backendPoolIPConfigs := (*primarySLB.BackendAddressPools)[i].BackendIPConfigurations
-						for _, id := range ipConfigIDsToBeAddedToPrimarySLB.List() {
-							*backendPoolIPConfigs = append(*backendPoolIPConfigs, network.InterfaceIPConfiguration{
-								ID: to.StringPtr(id),
-							})
-						}
-					} else if az.isLBBackendPoolTypeNodeIP() {
-						backendPool := (*primarySLB.BackendAddressPools)[i]
-						if backendPool.LoadBalancerBackendAddresses == nil {
-							lbBackendPoolAddresses := make([]network.LoadBalancerBackendAddress, 0)
-							backendPool.LoadBalancerBackendAddresses = &lbBackendPoolAddresses
-						}
-
-						if err := az.LoadBalancerBackendPool.EnsureHostsInPool(service, nodes, "", "", clusterName, to.String(primarySLB.Name), backendPool); err != nil {
-							return nil, fmt.Errorf("reconcileSharedLoadBalancer: failed to EnsureHostsInPool: %w", err)
-						}
-
-						(*primarySLB.BackendAddressPools)[i] = backendPool
-					}
-
-					break
-				}
-			}
-		}
-	}
-
-	for i, existingLB := range existingLBs {
-		for _, primarySLB := range primarySLBs {
-			if strings.EqualFold(to.String(existingLB.Name), to.String(primarySLB.Name)) {
-				// Proactively disable the etag to prevent etag mismatch error when putting lb later.
-				// This could happen because when we remove the hosts from the lb, the nrp
-				// would put the lb to remove the backend references as well.
-				primarySLB.Etag = nil
-
-				existingLBs[i] = primarySLB
-			}
-		}
 	}
 
 	return existingLBs, nil

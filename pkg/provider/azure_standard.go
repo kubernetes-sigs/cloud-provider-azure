@@ -860,6 +860,16 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName stri
 	} else if as.EnableMultipleStandardLoadBalancers {
 		// need to check the vmSet name when using multiple standard LBs
 		needCheck = true
+
+		// ensure the vm that is supposed to share the primary SLB in the backendpool of the primary SLB
+		if machine.AvailabilitySet != nil {
+			vmasName, _ := getLastSegment(to.String(machine.AvailabilitySet.ID), "/")
+			if strings.EqualFold(as.GetPrimaryVMSetName(), vmSetName) &&
+				as.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmasName)) {
+				klog.V(4).Infof("getPrimaryInterfaceWithVMSet: the vm %s in the vmSet %s is supposed to share the primary SLB", nodeName, vmasName)
+				needCheck = false
+			}
+		}
 	}
 	if vmSetName != "" && needCheck {
 		expectedAvailabilitySetID := as.getAvailabilitySetID(nodeResourceGroup, vmSetName)

@@ -4514,9 +4514,6 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 										{
 											ID: to.StringPtr("vmss2-nic-1"),
 										},
-										{
-											ID: to.StringPtr("vmss1-nic-1"),
-										},
 									},
 								},
 							},
@@ -4534,9 +4531,6 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 										{
 											ID: to.StringPtr("vmss2-nic-1"),
 										},
-										{
-											ID: to.StringPtr("vmss1-nic-1"),
-										},
 									},
 								},
 							},
@@ -4547,130 +4541,6 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 			expectedListCount:     1,
 			expectedGetNamesCount: 1,
 			expectedDeleteCount:   1,
-		},
-		{
-			description:             "reconcileSharedLoadBalancer should decouple the vmSet from its dedicated lb if the vmSet is sharing the primary slb",
-			useMultipleSLBs:         true,
-			useVMIP:                 true,
-			vmSetsSharingPrimarySLB: "vmss1,vmss2",
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "vmss1"},
-					Status: v1.NodeStatus{
-						Addresses: []v1.NodeAddress{
-							{
-								Type:    v1.NodeInternalIP,
-								Address: "10.0.0.1",
-							},
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "vmss2"},
-					Status: v1.NodeStatus{
-						Addresses: []v1.NodeAddress{
-							{
-								Type:    v1.NodeInternalIP,
-								Address: "10.0.0.2",
-							},
-						},
-					},
-				},
-			},
-			existingLBs: []network.LoadBalancer{
-				{
-					Name: to.StringPtr("kubernetes"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name:                               to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
-							},
-						},
-					},
-				},
-				{
-					Name: to.StringPtr("kubernetes-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name:                               to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
-							},
-						},
-					},
-				},
-				{
-					Name: to.StringPtr("vmss1"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name:                               to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
-							},
-						},
-					},
-				},
-				{
-					Name: to.StringPtr("vmss1-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name:                               to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
-							},
-						},
-					},
-				},
-			},
-			expectedLBs: []network.LoadBalancer{
-				{
-					Name: to.StringPtr("kubernetes"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-										{
-											Name: to.StringPtr("vmss1"),
-											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-												VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
-												IPAddress:      to.StringPtr("10.0.0.1"),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Name: to.StringPtr("kubernetes-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: to.StringPtr("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-										{
-											Name: to.StringPtr("vmss1"),
-											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-												VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
-												IPAddress:      to.StringPtr("10.0.0.1"),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedListCount:                      1,
-			expectedGetNamesCount:                  1,
-			expectedCreateOrUpdateBackendPoolCount: 2,
-			expectedDeleteCount:                    1,
 		},
 		{
 			description:       "reconcileSharedLoadBalancer should do nothing if the basic load balancer is used",
@@ -4735,27 +4605,9 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 			mockVMSet := NewMockVMSet(ctrl)
 			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
 			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1-internal/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes-internal/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedDeleteCount)
 			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmss1", "vmss2"}, nil).MaxTimes(tc.expectedGetNamesCount)
 			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss2").AnyTimes()
-			mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).DoAndReturn(func(node *v1.Node) (string, error) {
-				return node.ObjectMeta.Name, nil
-			}).AnyTimes()
 			cloud.VMSet = mockVMSet
-
-			mockLBBackendPool := cloud.LoadBalancerBackendPool.(*MockBackendPool)
-			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, clusterName, lbName string, backendPool network.BackendAddressPool) error {
-				*backendPool.LoadBalancerBackendAddresses = append(*backendPool.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
-					Name: to.StringPtr("vmss1"),
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
-						IPAddress:      to.StringPtr("10.0.0.1"),
-					},
-				})
-
-				return nil
-			}).AnyTimes()
 
 			service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 			lbs, err := cloud.reconcileSharedLoadBalancer(&service, "kubernetes", tc.nodes)
