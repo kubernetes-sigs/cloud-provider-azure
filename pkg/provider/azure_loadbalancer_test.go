@@ -34,10 +34,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
@@ -4853,5 +4851,135 @@ func TestGetClusterFromPIPClusterTags(t *testing.T) {
 	for i, c := range tests {
 		actual := getClusterFromPIPClusterTags(c.tags)
 		assert.Equal(t, actual, c.expected, "TestCase[%d]: %s", i, c.desc)
+	}
+}
+
+func Test_getInt32FromAnnotations(t *testing.T) {
+	type args struct {
+		annotations       map[string]string
+		key               string
+		businessValidator []Int32BusinessValidator
+	}
+	key := "testkey"
+	tests := []struct {
+		name    string
+		args    args
+		want    *int32
+		wantErr bool
+	}{
+		{name: "no key specified", args: args{}, want: nil, wantErr: true},
+		{name: "no key specified even though annotation set is not empty", args: args{annotations: map[string]string{key: ""}}, want: nil, wantErr: true},
+		{name: "no annotation", args: args{key: key}, want: nil, wantErr: false},
+		{name: "annotation empty value", args: args{annotations: map[string]string{key: ""}, key: key}, wantErr: true},
+		{name: "annotation not a number", args: args{annotations: map[string]string{key: "cookies"}, key: key}, wantErr: true},
+		{name: "annotation zero value", args: args{annotations: map[string]string{key: "0"}, key: key}, wantErr: false, want: to.Int32Ptr(0)},
+		{name: "annotation float value", args: args{annotations: map[string]string{key: "0.1"}, key: key}, wantErr: true},
+		{name: "annotation positive value", args: args{annotations: map[string]string{key: "24"}, key: key}, want: to.Int32Ptr(24), wantErr: false},
+		{name: "annotation negative value", args: args{annotations: map[string]string{key: "-6"}, key: key}, want: to.Int32Ptr(-6), wantErr: false},
+		{name: "validator is nil", args: args{annotations: map[string]string{key: "-6"}, key: key, businessValidator: []Int32BusinessValidator{
+			nil,
+		}}, want: to.Int32Ptr(-6), wantErr: false},
+		{name: "validator failed", args: args{annotations: map[string]string{key: "-6"}, key: key, businessValidator: []Int32BusinessValidator{
+			func(i *int32) error {
+				return fmt.Errorf("validator failed")
+			},
+		}}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getInt32FromAnnotations(tt.args.annotations, tt.args.key, tt.args.businessValidator...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getInt32FromAnnotations() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getInt32FromAnnotations() = %v, want %v", *got, *tt.want)
+			}
+		})
+	}
+}
+
+func Test_getProbeIntervalInSecondsAndNumOfProbe(t *testing.T) {
+	type args struct {
+		annotations map[string]string
+	}
+	tests := []struct {
+		name              string
+		args              args
+		wantProveInterval *int32
+		wantNumOfProbe    *int32
+		wantErr           bool
+	}{
+		{
+			name: "numOfProbe * probeInterval is not less than 120",
+			args: args{
+				annotations: map[string]string{
+					consts.ServiceAnnotationLoadBalancerHealthProbeInterval:   "60",
+					consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe: "2",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "numOfProbe and probeInterval should be type of integer",
+			args: args{
+				annotations: map[string]string{
+					consts.ServiceAnnotationLoadBalancerHealthProbeInterval:   "48.0",
+					consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe: "2",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid numOfProbe",
+			args: args{
+				annotations: map[string]string{
+					consts.ServiceAnnotationLoadBalancerHealthProbeInterval:   "48",
+					consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe: "1",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid probeInterval",
+			args: args{
+				annotations: map[string]string{
+					consts.ServiceAnnotationLoadBalancerHealthProbeInterval:   "3",
+					consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe: "5",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid numOfProbe and probeInterval",
+			args: args{
+				annotations: map[string]string{
+					consts.ServiceAnnotationLoadBalancerHealthProbeInterval:   "48",
+					consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe: "2",
+				},
+			},
+			wantProveInterval: to.Int32Ptr(48),
+			wantNumOfProbe:    to.Int32Ptr(2),
+			wantErr:           false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPodInterval, gotNumOfProbe, err := getProbeIntervalInSecondsAndNumOfProbe(&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.args.annotations,
+				},
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getProbeIntervalInSecondsAndNumOfProbe() gotPodInterval = %v, gotNumOfProbe = %v, error = %v, wantErr %v", *gotPodInterval, *gotNumOfProbe, err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotPodInterval, tt.wantProveInterval) {
+				t.Errorf("getProbeIntervalInSecondsAndNumOfProbe() got = %v, want %v", *gotPodInterval, *tt.wantProveInterval)
+			}
+			if !reflect.DeepEqual(gotNumOfProbe, tt.wantNumOfProbe) {
+				t.Errorf("getProbeIntervalInSecondsAndNumOfProbe() got1 = %v, want %v", *gotNumOfProbe, *tt.wantProveInterval)
+			}
+		})
 	}
 }
