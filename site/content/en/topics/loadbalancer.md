@@ -30,8 +30,10 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-pip-name` | Name of PIP | Specify the PIP that will be applied to load balancer | v1.16 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset` | `true` | Disable `enableTcpReset` for SLB | v1.16-v1.18. The annotation has been deprecated and would be removed in a future release. |
 | `service.beta.kubernetes.io/azure-pip-tags` | Tags of the PIP | Specify the tags of the PIP that will be associated to the load balancer typed service. [Doc](../tagging-resources) | v1.20 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service | Refer the detailed docs [here](../custom-health-probe) | v1.20 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer the detailed docs [here](../custom-health-probe) | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` | Health probe interval |  Refer the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe` | The minimum number of unhealthy responses of health probe  |  Refer the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service | Refer the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports` | Enable [high availability ports](https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-ha-ports-overview) on internal SLB | HA ports is required when applications require IP fragments | v1.20 and later |
 | `service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges` | `true` or `false` | Deny all traffic to the service. This is helpful when the `service.Spec.LoadBalancerSourceRanges` is set to an internal load balancer typed service. When set the loadBalancerSourceRanges field on the service in order to whitelist ip src addresses, although the generated NSG has added the rules for loadBalancerSourceRanges, the default rule (65000) will allow any vnet traffic, basically meaning the whitelist is of no use. This annotation solves this issue. | v1.21 and later |
 | `service.beta.kubernetes.io/azure-additional-public-ips` | External public IPs besides the service's own public IP | It is mainly used for global VIP on Azure cross-region LoadBalancer | v1.20 and later with out-of-tree cloud provider |
@@ -167,6 +169,8 @@ Since v1.20, two service annotations `service.beta.kubernetes.io/azure-load-bala
 | cluster | tcp | (ignored) | tcp | null |
 | cluster | http/https | | http/https | `/healthz` |
 | cluster | http/https | `/custom-path` | http/https | `/custom-path` |
+
+Since v1.21, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` and `load-balancer-health-probe-num-of-probe` are introduced, which customize the configuration of health probe. If `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` is not set, Default value of 5 is applied. If `load-balancer-health-probe-num-of-probe` is not set, Default value of 2 is applied. And total probe should be less than 120 seconds.
 
 ## Configure Load Balancer backend
 
