@@ -307,7 +307,7 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 
 // DetachDisk detaches a disk from VM
 func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI string, nodeName types.NodeName) error {
-	if _, err := c.cloud.InstanceID(context.TODO(), nodeName); err != nil {
+	if _, err := c.cloud.InstanceID(ctx, nodeName); err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
 			klog.Warningf("azureDisk - failed to get azure instance id(%q), DetachDisk(%s) will assume disk is already detached",
