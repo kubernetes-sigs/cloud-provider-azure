@@ -11,6 +11,7 @@
                 "loadBalancerSku": "Standard",
                 "excludeMasterFromStandardLB": true,
                 "networkPlugin": "kubenet",
+                "containerRuntime": "containerd",
                 "apiServerConfig": {
                     "--bind-address": "::"
                 },
