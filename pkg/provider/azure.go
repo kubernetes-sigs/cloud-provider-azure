@@ -225,6 +225,9 @@ type Config struct {
 	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
 	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
+	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
+	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
+	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 }
 
 type InitSecretConfig struct {
@@ -568,6 +571,10 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, syncZones
 	}
 
 	return nil
+}
+
+func (az *Cloud) getPutVMSSVMBatchSize() int {
+	return az.PutVMSSVMBatchSize
 }
 
 func (az *Cloud) initCaches() (err error) {
