@@ -70,6 +70,9 @@ type Interface interface {
 	// useful when the ARM API doesn't support concurrent requests.
 	PutResources(ctx context.Context, resources map[string]interface{}) map[string]*PutResourcesResponse
 
+	// PutResourcesInBatches is similar with PutResources, but it sends sync request concurrently in batches.
+	PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse
+
 	// PutResourceWithDecorators puts a resource with decorators by resource ID
 	PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error)
 

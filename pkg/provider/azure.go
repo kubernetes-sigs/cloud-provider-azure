@@ -232,6 +232,9 @@ type Config struct {
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
 	// The user agent for Azure customer usage attribution
 	UserAgent string `json:"userAgent,omitempty" yaml:"userAgent,omitempty"`
+	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
+	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
+	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 }
 
 type InitSecretConfig struct {
@@ -599,6 +602,10 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 	}
 
 	return nil
+}
+
+func (az *Cloud) getPutVMSSVMBatchSize() int {
+	return az.PutVMSSVMBatchSize
 }
 
 func (az *Cloud) initCaches() (err error) {

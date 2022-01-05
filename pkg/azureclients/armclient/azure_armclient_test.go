@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -340,6 +341,26 @@ func TestPutResource(t *testing.T) {
 }
 
 func TestPutResources(t *testing.T) {
+	total := 0
+	server := getTestServer(t, &total)
+
+	backoff := &retry.Backoff{Steps: 1}
+	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+	armClient.client.RetryDuration = time.Millisecond * 1
+
+	ctx := context.Background()
+	resources := map[string]interface{}{
+		"/id/1": nil,
+		"/id/2": nil,
+	}
+	responses := armClient.PutResources(ctx, nil)
+	assert.Nil(t, responses)
+	responses = armClient.PutResources(ctx, resources)
+	assert.NotNil(t, responses)
+	assert.Equal(t, 3, total)
+}
+
+func getTestServer(t *testing.T, counter *int) *httptest.Server {
 	serverFuncs := []func(rw http.ResponseWriter, req *http.Request){
 		func(rw http.ResponseWriter, req *http.Request) {
 			assert.Equal(t, "PUT", req.Method)
@@ -369,30 +390,81 @@ func TestPutResources(t *testing.T) {
 		},
 	}
 
-	i, total := 0, 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	i := 0
+	var l sync.Mutex
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		l.Lock()
 		serverFuncs[i](w, r)
 		i++
 		if i > 3 {
 			i = 3
 		}
-		total++
+		*counter++
+		l.Unlock()
 	}))
+}
 
-	backoff := &retry.Backoff{Steps: 1}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
+func TestPutResourcesInBatches(t *testing.T) {
+	for _, testCase := range []struct {
+		description                  string
+		resources                    map[string]interface{}
+		batchSize, expectedCallTimes int
+	}{
+		{
+			description: "",
+			resources: map[string]interface{}{
+				"/id/1": nil,
+				"/id/2": nil,
+			},
+			batchSize:         2,
+			expectedCallTimes: 3,
+		},
+		{
+			description: "",
+			resources: map[string]interface{}{
+				"/id/1": nil,
+				"/id/2": nil,
+			},
+			batchSize:         1,
+			expectedCallTimes: 3,
+		},
+		{
+			description: "",
+			resources:   nil,
+		},
+		{
+			description: "PutResourcesInBatches should set the batch size to the length of the resources if the batch size is larger than it",
+			resources: map[string]interface{}{
+				"/id/1": nil,
+				"/id/2": nil,
+			},
+			batchSize:         10,
+			expectedCallTimes: 3,
+		},
+		{
+			description: "PutResourcesInBatches should call PutResources if the batch size is smaller than or equal to zero",
+			resources: map[string]interface{}{
+				"/id/1": nil,
+				"/id/2": nil,
+			},
+			expectedCallTimes: 3,
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			total := 0
+			server := getTestServer(t, &total)
 
-	ctx := context.Background()
-	resources := map[string]interface{}{
-		"/id/1": nil,
-		"/id/2": nil,
+			backoff := &retry.Backoff{Steps: 1}
+			armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+			armClient.client.RetryDuration = time.Millisecond * 1
+
+			ctx := context.Background()
+			responses := armClient.PutResourcesInBatches(ctx, testCase.resources, testCase.batchSize)
+			assert.Equal(t, testCase.resources == nil, responses == nil)
+			assert.Equal(t, testCase.expectedCallTimes, total)
+		})
 	}
-	responses := armClient.PutResources(ctx, nil)
-	assert.Nil(t, responses)
-	responses = armClient.PutResources(ctx, resources)
-	assert.NotNil(t, responses)
-	assert.Equal(t, 3, total)
+
 }
 
 func TestPutResourceAsync(t *testing.T) {
