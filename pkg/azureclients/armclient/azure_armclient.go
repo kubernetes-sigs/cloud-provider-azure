@@ -416,46 +416,7 @@ func (c *Client) PutResource(ctx context.Context, resourceID string, parameters 
 	return c.PutResourceWithDecorators(ctx, resourceID, parameters, putDecorators)
 }
 
-// PutResources puts a list of resources from resources map[resourceID]parameters.
-// Those resources sync requests are sequential while async requests are concurrent. It's especially
-// useful when the ARM API doesn't support concurrent requests.
-func (c *Client) PutResources(ctx context.Context, resources map[string]interface{}) map[string]*PutResourcesResponse {
-	if len(resources) == 0 {
-		return nil
-	}
-
-	// Sequential sync requests.
-	futures := make(map[string]*azure.Future)
-	responses := make(map[string]*PutResourcesResponse)
-	for resourceID, parameters := range resources {
-		decorators := []autorest.PrepareDecorator{
-			autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-			autorest.WithJSON(parameters),
-		}
-		request, err := c.PreparePutRequest(ctx, decorators...)
-		dumpRequest(request, 10)
-		if err != nil {
-			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.prepare", resourceID, err)
-			responses[resourceID] = &PutResourcesResponse{
-				Error: retry.NewError(false, err),
-			}
-			continue
-		}
-
-		future, resp, clientErr := c.SendAsync(ctx, request)
-		defer c.CloseResponse(ctx, resp)
-		if clientErr != nil {
-			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "put.send", resourceID, clientErr.Error())
-			responses[resourceID] = &PutResourcesResponse{
-				Error: clientErr,
-			}
-			continue
-		}
-
-		futures[resourceID] = future
-	}
-
-	// Concurrent async requests.
+func (c *Client) waitAsync(ctx context.Context, futures map[string]*azure.Future, previousResponses map[string]*PutResourcesResponse) {
 	wg := sync.WaitGroup{}
 	var responseLock sync.Mutex
 	for resourceID, future := range futures {
@@ -478,22 +439,111 @@ func (c *Client) PutResources(ctx context.Context, resources map[string]interfac
 				}
 
 				responseLock.Lock()
-				responses[resourceID] = &PutResourcesResponse{
+				previousResponses[resourceID] = &PutResourcesResponse{
 					Error: retriableErr,
 				}
 				responseLock.Unlock()
 				return
 			}
-
-			responseLock.Lock()
-			responses[resourceID] = &PutResourcesResponse{
-				Response: response,
-			}
-			responseLock.Unlock()
 		}(resourceID, future)
 	}
-
 	wg.Wait()
+}
+
+// PutResources puts a list of resources from resources map[resourceID]parameters.
+// Those resources sync requests are sequential while async requests are concurrent. It's especially
+// useful when the ARM API doesn't support concurrent requests.
+func (c *Client) PutResources(ctx context.Context, resources map[string]interface{}) map[string]*PutResourcesResponse {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	// Sequential sync requests.
+	futures := make(map[string]*azure.Future)
+	responses := make(map[string]*PutResourcesResponse)
+	for resourceID, parameters := range resources {
+		future, rerr := c.PutResourceAsync(ctx, resourceID, parameters)
+		if rerr != nil {
+			responses[resourceID] = &PutResourcesResponse{
+				Error: rerr,
+			}
+			continue
+		}
+		futures[resourceID] = future
+	}
+
+	c.waitAsync(ctx, futures, responses)
+
+	return responses
+}
+
+// PutResourcesInBatches is similar with PutResources, but it sends sync request concurrently in batches.
+func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	if batchSize <= 0 {
+		klog.V(4).Infof("PutResourcesInBatches: batch size %d, put resources in sequence", batchSize)
+		return c.PutResources(ctx, resources)
+	}
+
+	if batchSize > len(resources) {
+		klog.V(4).Infof("PutResourcesInBatches: batch size %d, but the number of the resources is %d", batchSize, resources)
+		batchSize = len(resources)
+	}
+	klog.V(4).Infof("PutResourcesInBatches: send sync requests in parallel with the batch size %d", batchSize)
+
+	// Convert map to slice because it is more straightforward to
+	// loop over slice in batches than map.
+	type resourcesMeta struct {
+		resourceID string
+		parameters interface{}
+	}
+	resourcesList := make([]resourcesMeta, 0)
+	for resourceID, parameters := range resources {
+		resourcesList = append(resourcesList, resourcesMeta{
+			resourceID: resourceID,
+			parameters: parameters,
+		})
+	}
+
+	// Concurrent sync requests in batches.
+	futures := make(map[string]*azure.Future)
+	responses := make(map[string]*PutResourcesResponse)
+	wg := sync.WaitGroup{}
+	var responseLock, futuresLock sync.Mutex
+	for i := 0; i < len(resourcesList); i += batchSize {
+		j := i + batchSize
+		if j > len(resourcesList) {
+			j = len(resourcesList)
+		}
+
+		for k := i; k < j; k++ {
+			wg.Add(1)
+			go func(resourceID string, parameters interface{}) {
+				defer wg.Done()
+				future, rerr := c.PutResourceAsync(ctx, resourceID, parameters)
+				if rerr != nil {
+					responseLock.Lock()
+					responses[resourceID] = &PutResourcesResponse{
+						Error: rerr,
+					}
+					responseLock.Unlock()
+					return
+				}
+
+				futuresLock.Lock()
+				futures[resourceID] = future
+				futuresLock.Unlock()
+			}(resourcesList[k].resourceID, resourcesList[k].parameters)
+		}
+		wg.Wait()
+	}
+
+	// Concurrent async requests.
+	c.waitAsync(ctx, futures, responses)
+
 	return responses
 }
 
