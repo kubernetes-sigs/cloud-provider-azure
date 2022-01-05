@@ -359,6 +359,11 @@ test-e2e-capz: ## Run k8s e2e tests with capz
 	hack/test_k8s_e2e_capz.sh $(TEST_E2E_ARGS)
 
 test-ccm-e2e: ## Run cloud provider e2e tests.
+	echo $(KUBECONFIG)
+	pwd
+	KUBECONFIG="" kubectl config get-contexts
+	KUBECONFIG="" kubectl get machinepool -A
+	KUBECONFIG="" kubectl get clusters
 	go test ./tests/e2e/ -timeout 0 -v -ginkgo.v $(CCM_E2E_ARGS)
 
 .PHONY: clean
