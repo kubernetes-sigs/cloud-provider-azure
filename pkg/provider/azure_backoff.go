@@ -271,6 +271,11 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 		return nil, nil
 	}
 
+	// return early if wantLb=false
+	if nodes == nil {
+		return allLBs, nil
+	}
+
 	agentPoolLBs := make([]network.LoadBalancer, 0)
 	agentPoolVMSetNames, err := az.VMSet.GetAgentPoolVMSetNames(nodes)
 	if err != nil {
