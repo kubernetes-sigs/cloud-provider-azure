@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -38,7 +39,7 @@ const k8sVNetPrefix = "k8s-vnet-"
 func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwork.VirtualNetworkListResultPage, err error) {
 	Logf("Getting virtual network list")
 	vNetClient := azureTestClient.createVirtualNetworksClient()
-	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+	if err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = vNetClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
 			if !IsRetryableAPIError(err) {
@@ -46,8 +47,17 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 			}
 			return false, nil
 		}
+		if len(result.Values()) != 1 {
+			return false, nil
+		}
 		return true, nil
-	})
+	}); errors.Is(err, wait.ErrWaitTimeout) {
+		var vns []string
+		for _, v := range result.Values() {
+			vns = append(vns, *v.Name)
+		}
+		err = fmt.Errorf("failed to get 1 expected virtual network list: %s", strings.Join(vns, ","))
+	}
 	return
 }
 
@@ -71,13 +81,13 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 	}
 	switch k8sVNetCount {
 	case 0:
-		err = fmt.Errorf("Found no virtual network of the corresponding cluster in resource group")
+		err = fmt.Errorf("found no virtual network of the corresponding cluster in resource group")
 		return
 	case 1:
 		virtualNetwork = vNetList.Values()[returnIndex]
 		return
 	default:
-		err = fmt.Errorf("Found more than one virtual network of the corresponding cluster in resource group")
+		err = fmt.Errorf("found more than one virtual network of the corresponding cluster in resource group")
 		return
 	}
 }
@@ -136,7 +146,7 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
 
 // getSecurityGroupList is a wrapper around listing VirtualNetwork
 func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork.SecurityGroupListResultPage, err error) {
-	Logf("Getting virtual network list")
+	Logf("Getting security group list")
 	securityGroupsClient := azureTestClient.CreateSecurityGroupsClient()
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
@@ -162,7 +172,12 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroup() (ret *aznetwor
 
 	// Assume there is only one cluster in one resource group
 	if len(securityGroupsList.Values()) != 1 {
-		err = fmt.Errorf("Found no or more than 1 virtual network in resource group same as cluster name")
+		var sgs []string
+		for _, v := range securityGroupsList.Values() {
+			sgs = append(sgs, *v.Name)
+		}
+		err = fmt.Errorf("found no or more than 1 virtual network in resource group same as cluster name: %s",
+			strings.Join(sgs, ","))
 		return
 	}
 	ret = &securityGroupsList.Values()[0]

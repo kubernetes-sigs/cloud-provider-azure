@@ -119,25 +119,33 @@ func GetMaster(cs clientset.Interface) (*v1.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	var nodesDetailList []string
 	for i, node := range nodesList.Items {
 		if isMasterNode(&nodesList.Items[i]) {
 			return &node, nil
 		}
+		var labels []string
+		for k, v := range nodesList.Items[i].Labels {
+			labels = append(labels, fmt.Sprintf("%s:%s", k, v))
+		}
+		nodesDetailList = append(nodesDetailList, fmt.Sprintf("%s,%s", nodesList.Items[i].Name, strings.Join(labels, ",")))
 	}
-	return nil, fmt.Errorf("cannot obtain the master node")
+	return nil, fmt.Errorf("cannot obtain the master node. Available Nodes are: %s", strings.Join(nodesDetailList, ";"))
 }
 
 // GetNodeList is a wapper around listing nodes
 func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	var nodes *v1.NodeList
 	var err error
-	if wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+	if pollErr := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		nodes, err = cs.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
+		if err != nil || len(nodes.Items) == 0 {
 			return false, nil
 		}
 		return true, nil
-	}) != nil {
+	}); errors.Is(pollErr, wait.ErrWaitTimeout) {
+		return nodes, fmt.Errorf("failed to get a non-empty Node list")
+	} else if pollErr != nil {
 		return nodes, err
 	}
 	return nodes, nil
