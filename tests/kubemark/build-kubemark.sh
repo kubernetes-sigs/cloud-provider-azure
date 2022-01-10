@@ -214,7 +214,7 @@ if ! command -v aks-engine > /dev/null; then
     echo "getting aks-engine"
     curl -o get-akse.sh https://raw.githubusercontent.com/Azure/aks-engine/master/scripts/get-akse.sh
     chmod 700 get-akse.sh
-    DESIRED_VERSION=v0.48.0 ./get-akse.sh
+    DESIRED_VERSION=v0.66.1 ./get-akse.sh
 fi
 AKS_ENGINE="aks-engine"
 "${AKS_ENGINE}" version
