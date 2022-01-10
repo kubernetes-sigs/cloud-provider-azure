@@ -25,6 +25,7 @@ import (
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -93,9 +94,9 @@ var _ = Describe("Network security group", func() {
 
 		By("Validating ip exists in Security Group")
 		port := fmt.Sprintf("%v", nginxPort)
-		nsg, err := tc.GetClusterSecurityGroup()
+		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(validateUnsharedSecurityRuleExists(nsg, ip, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
+		Expect(validateUnsharedSecurityRuleExists(nsgs, ip, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 
 		By("Validating network security group working")
 		var code int
@@ -124,9 +125,9 @@ var _ = Describe("Network security group", func() {
 		Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
 		isDeleted := false
 		for i := 1; i <= 30; i++ {
-			nsg, err := tc.GetClusterSecurityGroup()
+			nsgs, err := tc.GetClusterSecurityGroups()
 			Expect(err).NotTo(HaveOccurred())
-			if !validateUnsharedSecurityRuleExists(nsg, ip, port) {
+			if !validateUnsharedSecurityRuleExists(nsgs, ip, port) {
 				utils.Logf("Target rule successfully deleted")
 				isDeleted = true
 				break
@@ -141,18 +142,33 @@ var _ = Describe("Network security group", func() {
 		annotation := map[string]string{
 			consts.ServiceAnnotationAllowedServiceTag: "AzureCloud",
 		}
-		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-		By("Validating if the corresponding IP prefix existing in nsg")
-		nsg, err := tc.GetClusterSecurityGroup()
+		By("Waiting for the service to be exposed")
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
-		rules := nsg.SecurityRules
-		Expect(len(*rules)).NotTo(Equal(0))
+		By("Validating if the corresponding IP prefix existing in nsg")
+		nsgs, err := tc.GetClusterSecurityGroups()
+		Expect(err).NotTo(HaveOccurred())
+
 		var found bool
-		for _, rule := range *rules {
-			if rule.SourceAddressPrefix != nil && strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
-				found = true
+		for _, nsg := range nsgs {
+			rules := nsg.SecurityRules
+			if rules == nil {
+				continue
+			}
+			for _, rule := range *rules {
+				if rule.SourceAddressPrefix != nil && strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
+					found = true
+					break
+				}
+			}
+			if found {
 				break
 			}
 		}
@@ -170,13 +186,13 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIP, err := utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		internalIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if there is a deny_all rule")
-		nsg, err := tc.GetClusterSecurityGroup()
+		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		found := validateDenyAllSecurityRuleExists(nsg, internalIP)
+		found := validateDenyAllSecurityRuleExists(nsgs, internalIP)
 		Expect(found).ToNot(BeTrue())
 
 		By("Deleting the service")
@@ -189,50 +205,30 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIP, err = utils.WaitServiceExposure(cs, ns.Name, serviceName)
+		internalIP, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if there is a LoadBalancerSourceRanges rule")
-		nsg, err = tc.GetClusterSecurityGroup()
+		nsgs, err = tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		found = validateLoadBalancerSourceRangesRuleExists(nsg, internalIP, "1.2.3.4/32", "1.2.3.4_32")
+		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, "1.2.3.4/32", "1.2.3.4_32")
 		Expect(found).To(BeTrue())
 
 		By("Checking if there is a deny_all rule")
-		found = validateDenyAllSecurityRuleExists(nsg, internalIP)
+		found = validateDenyAllSecurityRuleExists(nsgs, internalIP)
 		Expect(found).To(BeTrue())
 	})
 
 })
 
-func validateUnsharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ip string, port string) bool {
-	if nsg == nil || nsg.SecurityRules == nil {
-		return false
-	}
-	for _, securityRule := range *nsg.SecurityRules {
-		if strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) && strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
-			utils.Logf("Find target security rule")
-			return true
+func validateUnsharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip string, port string) bool {
+	for _, nsg := range nsgs {
+		if nsg.SecurityRules == nil {
+			continue
 		}
-	}
-	return false
-}
-
-func validateSharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ips []string, port string) bool {
-	if nsg == nil || nsg.SecurityRules == nil {
-		return false
-	}
-	for _, securityRule := range *nsg.SecurityRules {
-		if strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
-			isFind := true
-			for _, ip := range ips {
-				if !utils.StringInSlice(ip, *securityRule.DestinationAddressPrefixes) {
-					utils.Logf("Find target security rule")
-					isFind = false
-					break
-				}
-			}
-			if isFind {
+		for _, securityRule := range *nsg.SecurityRules {
+			if strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) && strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
+				utils.Logf("Found target security rule")
 				return true
 			}
 		}
@@ -240,32 +236,60 @@ func validateSharedSecurityRuleExists(nsg *aznetwork.SecurityGroup, ips []string
 	return false
 }
 
-func validateLoadBalancerSourceRangesRuleExists(nsg *aznetwork.SecurityGroup, ip, sourceAddressPrefix, ipRangesSuffix string) bool {
-	if nsg == nil || nsg.SecurityRules == nil {
-		return false
+func validateSharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []string, port string) bool {
+	for _, nsg := range nsgs {
+		if nsg.SecurityRules == nil {
+			continue
+		}
+		for _, securityRule := range *nsg.SecurityRules {
+			if strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
+				found := true
+				for _, ip := range ips {
+					if !utils.StringInSlice(ip, *securityRule.DestinationAddressPrefixes) {
+						found = false
+						break
+					}
+				}
+				if found {
+					utils.Logf("Found target security rule")
+					return true
+				}
+			}
+		}
 	}
-	for _, securityRule := range *nsg.SecurityRules {
-		if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
-			strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
-			strings.HasSuffix(to.String(securityRule.Name), ipRangesSuffix) &&
-			strings.EqualFold(to.String(securityRule.SourceAddressPrefix), sourceAddressPrefix) {
-			return true
+	return false
+}
+
+func validateLoadBalancerSourceRangesRuleExists(nsgs []aznetwork.SecurityGroup, ip, sourceAddressPrefix, ipRangesSuffix string) bool {
+	for _, nsg := range nsgs {
+		if nsg.SecurityRules == nil {
+			continue
+		}
+		for _, securityRule := range *nsg.SecurityRules {
+			if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
+				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
+				strings.HasSuffix(to.String(securityRule.Name), ipRangesSuffix) &&
+				strings.EqualFold(to.String(securityRule.SourceAddressPrefix), sourceAddressPrefix) {
+				return true
+			}
 		}
 	}
 
 	return false
 }
 
-func validateDenyAllSecurityRuleExists(nsg *aznetwork.SecurityGroup, ip string) bool {
-	if nsg == nil || nsg.SecurityRules == nil {
-		return false
-	}
-	for _, securityRule := range *nsg.SecurityRules {
-		if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
-			strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
-			strings.HasSuffix(to.String(securityRule.Name), "deny_all") &&
-			strings.EqualFold(to.String(securityRule.SourceAddressPrefix), "*") {
-			return true
+func validateDenyAllSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip string) bool {
+	for _, nsg := range nsgs {
+		if nsg.SecurityRules == nil {
+			continue
+		}
+		for _, securityRule := range *nsg.SecurityRules {
+			if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
+				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
+				strings.HasSuffix(to.String(securityRule.Name), "deny_all") &&
+				strings.EqualFold(to.String(securityRule.SourceAddressPrefix), "*") {
+				return true
+			}
 		}
 	}
 

@@ -37,6 +37,7 @@ import (
 
 const (
 	reportDirEnv     = "CCM_JUNIT_REPORT_DIR"
+	artifactsDirEnv  = "ARTIFACTS"
 	defaultReportDir = "_report/"
 )
 
@@ -56,7 +57,12 @@ func TestAzureTest(t *testing.T) {
 	RegisterFailHandler(Fail)
 	reportDir := os.Getenv(reportDirEnv)
 	if reportDir == "" {
-		reportDir = defaultReportDir
+		artifactsDir := os.Getenv(artifactsDirEnv)
+		if artifactsDir != "" {
+			reportDir = artifactsDir
+		} else {
+			reportDir = defaultReportDir
+		}
 	}
 	var r []Reporter
 	if reportDir != "" {

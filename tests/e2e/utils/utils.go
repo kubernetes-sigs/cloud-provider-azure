@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -170,7 +171,8 @@ func IsRetryableAPIError(err error) bool {
 // ExtractDNSPrefix obtains the cluster DNS prefix
 func ExtractDNSPrefix() string {
 	c := obtainConfig()
-	return c.CurrentContext
+	parts := strings.Split(c.CurrentContext, "@")
+	return parts[len(parts)-1]
 }
 
 // Load config from file
@@ -187,17 +189,6 @@ func StringInSlice(s string, list []string) bool {
 			return true
 		}
 	}
-	return false
-}
-
-// IsMasterNode returns true if the node has a master role label.
-// The master role is determined by looking for:
-// * a kubernetes.io/role="master" label
-func IsMasterNode(node *v1.Node) bool {
-	if val, ok := node.Labels[nodeLabelRole]; ok && val == "master" {
-		return true
-	}
-
 	return false
 }
 
