@@ -62,7 +62,11 @@ endif
 DOCKER_CLI_EXPERIMENTAL := enabled
 
 # cloud controller manager image
+ifeq ($(ARCH), amd64)
 IMAGE_NAME=azure-cloud-controller-manager
+else
+IMAGE_NAME=azure-cloud-controller-manager-$(ARCH)
+endif
 IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 # cloud node manager image
 NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
@@ -101,7 +105,7 @@ $(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node
 	CGO_ENABLED=0 GOOS=windows go build -a -o $(BIN_DIR)/azure-cloud-node-manager.exe $(shell cat $(PKG_CONFIG)) ./cmd/cloud-node-manager
 
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*) ## Build binary for controller-manager.
-	CGO_ENABLED=0 GOOS=linux go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
+	CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
 
 ## --------------------------------------
 ##@ Images
@@ -121,8 +125,16 @@ buildx-setup:
 	docker run --rm --privileged tonistiigi/binfmt --install all
 
 .PHONY: build-ccm-image
-build-ccm-image: docker-pull-prerequisites ## Build controller-manager image.
-	DOCKER_BUILDKIT=1 docker build -t $(IMAGE) --build-arg ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) .
+build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-manager image.
+	docker buildx build \
+		--pull \
+		--output=type=$(OUTPUT_TYPE) \
+		--platform linux/$(ARCH) \
+		--build-arg ENABLE_GIT_COMMAND="$(ENABLE_GIT_COMMAND)" \
+		--build-arg ARCH="$(ARCH)" \
+		--build-arg VERSION="$(VERSION)" \
+		--file Dockerfile \
+		--tag $(IMAGE) .
 
 .PHONY: build-node-image
 build-node-image: buildx-setup docker-pull-prerequisites ## Build node-manager image.
@@ -171,16 +183,16 @@ endif
 ## --------------------------------------
 
 .PHONY: build-images
-build-images: build-ccm-image build-all-node-images ## Build all images.
+build-images: build-all-ccm-images build-all-node-images ## Build all images.
 
 .PHONY: image
-image: build-ccm-image build-all-node-images ## Build all images.
+image: build-all-ccm-images build-all-node-images ## Build all images.
 
 .PHONY: push-images
-push-images: push-ccm-image push-all-node-images ## Push all images.
+push-images: push-all-ccm-images push-all-node-images ## Push all images.
 
 .PHONY: push
-push: push-ccm-image push-all-node-images ## Push all images.
+push: push-all-ccm-images push-all-node-images ## Push all images.
 
 .PHONY: push-node-manager-manifest
 push-node-manager-manifest: push-all-node-images push-all-windows-node-images ## Create and push a manifest list containing all the Windows and Linux images.
@@ -222,6 +234,19 @@ push-node-image-windows-%: ## Push node-manager image for Windows.
 
 push-node-image-%:
 	$(MAKE) ARCH=$* push-node-image
+
+.PHONY: build-all-ccm-images
+build-all-ccm-images: $(addprefix build-ccm-image-,$(LINUX_ARCHS))
+
+build-ccm-image-%:
+	$(MAKE) ARCH=$* build-ccm-image
+
+.PHONY: push-all-ccm-images
+push-all-ccm-images: $(addprefix push-ccm-image-,$(LINUX_ARCHS))
+
+push-ccm-image-%:
+	$(MAKE) ARCH=$* push-ccm-image
+
 
 ## --------------------------------------
 ##@ Tests

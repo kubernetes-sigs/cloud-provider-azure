@@ -14,8 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.16.6-stretch AS builder
+FROM --platform=linux/amd64 golang:1.16.6-stretch AS builder
+
 ARG ENABLE_GIT_COMMAND=true
+ARG ARCH=amd64
+
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
@@ -24,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build ./cmd/cloud-controller-manager
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-     make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
+     make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
 FROM gcr.io/distroless/static
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager
