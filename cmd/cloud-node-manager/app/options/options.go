@@ -26,6 +26,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
@@ -171,17 +172,6 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 		return err
 	}
 
-	c.EventRecorder = createRecorder(c.Client, userAgent)
-	c.ClientBuilder = clientbuilder.SimpleControllerClientBuilder{
-		ClientConfig: c.Kubeconfig,
-	}
-	c.VersionedClient = c.ClientBuilder.ClientOrDie("shared-informers")
-	// TODO(feiskyer): filter watch by node name whenever it's supported.
-	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, resyncPeriod(c)())
-	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
-	c.UseInstanceMetadata = o.UseInstanceMetadata
-	c.CloudConfigFilePath = o.CloudConfigFilePath
-
 	// Default NodeName is hostname.
 	c.NodeName = strings.ToLower(o.NodeName)
 	if c.NodeName == "" {
@@ -192,6 +182,19 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 
 		c.NodeName = strings.ToLower(hostname)
 	}
+
+	c.EventRecorder = createRecorder(c.Client, userAgent)
+	c.ClientBuilder = clientbuilder.SimpleControllerClientBuilder{
+		ClientConfig: c.Kubeconfig,
+	}
+	c.VersionedClient = c.ClientBuilder.ClientOrDie("shared-informers")
+	// Only need to watch the node itself. There is no need to set up a watch on the nodes in the cluster.
+	c.SharedInformers = informers.NewSharedInformerFactoryWithOptions(c.VersionedClient, resyncPeriod(c)(), informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("metadata.name", c.NodeName).String()
+	}))
+	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
+	c.UseInstanceMetadata = o.UseInstanceMetadata
+	c.CloudConfigFilePath = o.CloudConfigFilePath
 
 	return nil
 }
