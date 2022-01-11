@@ -88,8 +88,8 @@ sudo mv kubectl /usr/local/bin/
 &lt;span style="color:#204a87">cd&lt;/span> &lt;span style="color:#000">$GOPATH&lt;/span>/src/sigs.k8s.io/cloud-provider-azure
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">IMAGE_REGISTRY&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&amp;lt;username&amp;gt;
 &lt;span style="color:#204a87">export&lt;/span> &lt;span style="color:#000">IMAGE_TAG&lt;/span>&lt;span style="color:#ce5c00;font-weight:bold">=&lt;/span>&amp;lt;tag&amp;gt;
-make build-images
-make push-images &lt;span style="color:#8f5902;font-style:italic"># or manually `docker push` &lt;/span>
+make image
+make push &lt;span style="color:#8f5902;font-style:italic"># or manually `docker push`&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;/li>
 &lt;li>
 &lt;p>Deploy a Kubernetes cluster with the above &lt;code>azure-cloud-controller-manager&lt;/code> image.&lt;/p>
