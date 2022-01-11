@@ -63,8 +63,8 @@ description: >
     cd $GOPATH/src/sigs.k8s.io/cloud-provider-azure
     export IMAGE_REGISTRY=<username>
     export IMAGE_TAG=<tag>
-    make build-images
-    make push-images # or manually `docker push` 
+    make image
+    make push # or manually `docker push`
     ```
 
 3. Deploy a Kubernetes cluster with the above `azure-cloud-controller-manager` image.

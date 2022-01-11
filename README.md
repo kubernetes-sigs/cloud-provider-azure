@@ -47,6 +47,8 @@ Build docker image for azure-cloud-controller-manager:
 IMAGE_REGISTRY=<registry> make image
 ```
 
+More detailed directions for image building, please read [here](http://kubernetes-sigs.github.io/cloud-provider-azure/development/image-building/).
+
 ## Run
 
 Run azure-cloud-controller-manager locally:
