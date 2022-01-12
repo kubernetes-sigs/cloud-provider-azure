@@ -149,19 +149,8 @@ build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-man
 		--file cloud-node-manager.Dockerfile \
 		--tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) .
 
-# TODO(mainred): When using ACR, `az acr login` impacts the authentication of `docker buildx build --push` when the
-# ACR, capz in our case, has anonymous pull enabled.
-# Use `docker login` as a suggested workaround and remove this target when the issue is resolved.
-# Issue link: https://github.com/Azure/acr/issues/582
-# Failed building link: https://prow.k8s.io/view/gs/kubernetes-jenkins/pr-logs/pull/kubernetes-sigs_cloud-provider-azure/974/pull-cloud-provider-azure-e2e-ccm-capz/1480459040440979456
-.PHONY: docker-login-acr
-docker-login-acr:
-ifneq (,$(findstring capzci.azurecr.io,$(IMAGE_REGISTRY)))
-	docker login -u $(AZURE_CLIENT_ID) -p $(AZURE_CLIENT_SECRET) capzci.azurecr.io
-endif
-
 .PHONY: build-node-image-windows
-build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe docker-login-acr ## Build node-manager image for Windows.
+build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
 	docker buildx build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \
