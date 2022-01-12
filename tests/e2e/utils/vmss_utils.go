@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -59,7 +59,7 @@ func ScaleVMSS(tc *AzureTestClient, vmssName, rgName string, instanceCount int64
 
 	vmssClient := tc.createVMSSClient()
 
-	vmss, err := vmssClient.Get(context.Background(), rgName, vmssName)
+	vmss, err := vmssClient.Get(context.Background(), rgName, vmssName, azcompute.ExpandTypesForGetVMScaleSetsUserData)
 	if err != nil {
 		return err
 	}
