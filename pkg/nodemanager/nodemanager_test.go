@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestEnsureNodeExistsByProviderID(t *testing.T) {
@@ -175,7 +177,6 @@ func TestNodeInitialized(t *testing.T) {
 		},
 	}, nil)
 
-	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
 		factory.Core().V1().Nodes(),
@@ -183,7 +184,6 @@ func TestNodeInitialized(t *testing.T) {
 		mockNP,
 		time.Second,
 		false)
-	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 
@@ -420,7 +420,9 @@ func TestZoneInitialized(t *testing.T) {
 
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized and
 // and nodeAddresses are updated from the cloudprovider
-func TestNodeAddresses(t *testing.T) {
+func TestAddCloudNode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -459,16 +461,14 @@ func TestNodeAddresses(t *testing.T) {
 		DeleteWaitChan: make(chan struct{}),
 	}
 
-	ctx := context.TODO()
-	factory := informers.NewSharedInformerFactory(fnh, 0)
 	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP.On("InstanceID", mock.Anything, types.NodeName("node0")).Return("node0", nil)
+	mockNP.On("InstanceType", mock.Anything, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.On("GetZone", mock.Anything).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.On("NodeAddresses", mock.Anything, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -483,23 +483,82 @@ func TestNodeAddresses(t *testing.T) {
 		},
 	}, nil)
 
-	eventBroadcaster := record.NewBroadcaster()
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		nodeInformer,
 		fnh,
 		mockNP,
 		time.Second,
 		false)
-	eventBroadcaster.StartLogging(klog.Infof)
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	factory.Start(ctx.Done())
+	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
 
+	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 3, len(fnh.UpdatedNodes[0].Status.Addresses), "Node status not updated")
+}
 
-	mockNP.ExpectedCalls = nil
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+func TestUpdateNodeAddresses(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fnh := &testutil.FakeNodeHandler{
+		Existing: []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node0",
+					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					Labels:            map[string]string{},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:               v1.NodeReady,
+							Status:             v1.ConditionUnknown,
+							LastHeartbeatTime:  metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+							LastTransitionTime: metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key:    "ImproveCoverageTaint",
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+		Clientset:      fake.NewSimpleClientset(&v1.PodList{}),
+		DeleteWaitChan: make(chan struct{}),
+	}
+
+	mockNP := &mocknodeprovider.NodeProvider{}
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		nodeInformer,
+		fnh,
+		mockNP,
+		time.Second,
+		false)
+	factory.Start(ctx.Done())
+	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
+
+	mockNP.On("InstanceID", mock.Anything, types.NodeName("node0")).Return("node0", nil)
+	mockNP.On("InstanceType", mock.Anything, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.On("GetZone", mock.Anything).Return(cloudprovider.Zone{
+		Region:        "eastus",
+		FailureDomain: "eastus-1",
+	}, nil)
+	mockNP.On("NodeAddresses", mock.Anything, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -509,7 +568,7 @@ func TestNodeAddresses(t *testing.T) {
 			Address: "10.0.0.1",
 		},
 	}, nil)
-	cloudNodeController.UpdateNodeStatus(context.TODO())
+	cloudNodeController.UpdateNodeStatus(ctx)
 	updatedNodes := fnh.GetUpdatedNodesCopy()
 	assert.Equal(t, 2, len(updatedNodes[0].Status.Addresses), "Node Addresses not correctly updated")
 }
@@ -614,6 +673,12 @@ func Test_reconcileNodeLabels(t *testing.T) {
 		expectedErr    error
 	}{
 		{
+			name:           "no labels",
+			labels:         map[string]string{},
+			expectedLabels: map[string]string{},
+			expectedErr:    nil,
+		},
+		{
 			name: "requires reconcile",
 			labels: map[string]string{
 				v1.LabelZoneFailureDomain: "foo",
@@ -694,7 +759,7 @@ func Test_reconcileNodeLabels(t *testing.T) {
 			factory.Start(nil)
 			factory.WaitForCacheSync(nil)
 
-			err := cnc.reconcileNodeLabels("node01")
+			err := cnc.reconcileNodeLabels(testNode)
 			if !errors.Is(err, test.expectedErr) {
 				t.Logf("actual err: %v", err)
 				t.Logf("expected err: %v", test.expectedErr)
@@ -913,7 +978,10 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
 		nodeStatusUpdateFrequency: 1 * time.Second,
 	}
-	cloudNodeController.updateNodeAddress(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.updateNodeAddress(context.TODO(), fnh.Existing[0])
+	if err != nil {
+		t.Errorf("unexpected error when updating node address: %v", err)
+	}
 
 	if len(fnh.UpdatedNodes) != 0 {
 		t.Errorf("Node was not correctly updated, the updated len(nodes) got: %v, wanted=0", len(fnh.UpdatedNodes))
