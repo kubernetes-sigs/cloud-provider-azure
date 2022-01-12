@@ -20,9 +20,9 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/golang/mock/gomock"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	gomock "github.com/golang/mock/gomock"
+	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface
