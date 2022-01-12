@@ -17,7 +17,6 @@ limitations under the License.
 package provider
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -33,7 +32,6 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -1099,15 +1097,6 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			az.nodePrivateIPs[newNode.Name].Insert(address)
 		}
 	}
-}
-
-func (az *Cloud) ListNodes(ctx context.Context) ([]v1.Node, error) {
-	nodes, err := az.KubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return []v1.Node{}, fmt.Errorf("ListAllNodes: failed to list nodes: %w", err)
-	}
-
-	return nodes.Items, nil
 }
 
 // GetActiveZones returns all the zones in which k8s nodes are currently running.
