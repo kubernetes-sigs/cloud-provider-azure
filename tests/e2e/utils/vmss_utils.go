@@ -227,5 +227,5 @@ func GetVMSSVMComputerName(vm azcompute.VirtualMachineScaleSetVM) (string, error
 
 // IsSpotVMSS checks whether the vmss support azure spot vm instance
 func IsSpotVMSS(vmss azcompute.VirtualMachineScaleSet) bool {
-	return vmss.VirtualMachineProfile.Priority == azcompute.Spot
+	return vmss.VirtualMachineProfile.Priority == azcompute.VirtualMachinePriorityTypesSpot
 }
