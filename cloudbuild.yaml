@@ -16,6 +16,7 @@ steps:
       - ENABLE_GIT_COMMAND=false
       - DOCKER_CLI_EXPERIMENTAL=enabled
       - DOCKER_BUILDKIT=1
+      - IMAGE_REGISTRY=gcr.io/k8s-staging-provider-azure
     args:
       - release-staging
 substitutions:
