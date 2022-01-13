@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -189,7 +189,7 @@ func (az *Cloud) newVMCache() (*azcache.TimedCache, error) {
 			return nil, err
 		}
 
-		vm, verr := az.VirtualMachinesClient.Get(ctx, resourceGroup, key, compute.InstanceView)
+		vm, verr := az.VirtualMachinesClient.Get(ctx, resourceGroup, key, compute.InstanceViewTypesInstanceView)
 		exists, rerr := checkResourceExistsFromError(verr)
 		if rerr != nil {
 			return nil, rerr.Error()

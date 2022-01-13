@@ -23,7 +23,7 @@ package mockvmssvmclient
 
 import (
 	context "context"
-	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
