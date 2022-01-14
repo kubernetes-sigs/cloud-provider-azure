@@ -38,10 +38,15 @@ export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:-Sta
 export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:-Standard_D2s_v3}"
 export AZURE_LOCATION="${AZURE_LOCATION:-westus2}"
 export AZURE_CLOUD_CONTROLLER_MANAGER_IMG="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.1}"
-export AZURE_CLOUD_NODE_MANAGER_IMG="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.1}"
+export AZURE_CLOUD_NODE_MANAGER_IMG="${AZURE_CLOUD_NODE_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.1}"
 export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.23.0}"
 export EXP_MACHINE_POOL=true
 export EXP_CLUSTER_RESOURCE_SET=true
+
+export LB_SKU="${LB_SKU:-Standard}"
+export ENABLE_MULTI_SLB="${ENABLE_MULTI_SLB:-false}"
+export LB_BACKEND_POOL_CONFIG_TYPE="${LB_BACKEND_POOL_CONFIG_TYPE:-nodeIPConfiguration}"
+export PUT_VMSS_VM_BATCH_SIZE="${PUT_VMSS_VM_BATCH_SIZE:-0}"
 
 source "${REPO_ROOT}/hack/ensure-kind.sh"
 source "${REPO_ROOT}/hack/ensure-clusterctl.sh"
@@ -87,6 +92,8 @@ function create_workload_cluster() {
   fi
 
   echo "Creating workload cluster from ${WORKLOAD_CLUSTER_TEMPLATE}"
+  echo "Using cloud-controller-manager image: ${AZURE_CLOUD_CONTROLLER_MANAGER_IMG}"
+  echo "Using cloud-node-manager image: ${AZURE_CLOUD_NODE_MANAGER_IMG}"
   envsubst < "${WORKLOAD_CLUSTER_TEMPLATE}" | kubectl apply -f -
 
   echo "Waiting for the kubeconfig to become available"
@@ -103,7 +110,7 @@ function create_workload_cluster() {
     echo "Timeout waiting for the control plane nodes"
     return 124
   fi
-  echo "Run \"kubectl --kubeconfig=./${CLUSTER_NAME}-cluster-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
+  echo "Run \"kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
 }
 
 create_management_cluster

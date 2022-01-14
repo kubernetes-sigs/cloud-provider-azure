@@ -13,12 +13,12 @@
   "vnetResourceGroup": "${AZURE_RESOURCE_GROUP}",
   "subnetName": "node-subnet",
   "routeTableName": "${CLUSTER_NAME}-node-routetable",
-  "loadBalancerSku": "Standard",
+  "loadBalancerSku": "${LB_SKU}",
   "maximumLoadBalancerRuleCount": 250,
   "useManagedIdentityExtension": false,
   "useInstanceMetadata": true,
   "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
-  "enableMultipleStandardLoadBalancers": false,
-  "loadBalancerBackendPoolConfigurationType": "nodeIPConfiguration",
-  "putVMSSVMBatchSize": 0
+  "enableMultipleStandardLoadBalancers": ${ENABLE_MULTI_SLB},
+  "loadBalancerBackendPoolConfigurationType": "${LB_BACKEND_POOL_CONFIG_TYPE}",
+  "putVMSSVMBatchSize": ${PUT_VMSS_VM_BATCH_SIZE}
 }
