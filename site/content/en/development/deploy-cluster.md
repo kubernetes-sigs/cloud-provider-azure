@@ -47,4 +47,5 @@ Customizations are supported by environment variables:
 | ENABLE_MULTI_SLB                        | false    | Enable multiple standard LoadBalancers per cluster                                 | false                                                                   |
 | LB_BACKEND_POOL_CONFIG_TYPE             | false    | LoadBalancer backend pool configuration type, nodeIPConfiguration, nodeIP or podIP | nodeIPConfiguration                                                     |
 | PUT_VMSS_VM_BATCH_SIZE                  | false    | Batch size when updating VMSS VM concurrently                                      | 0                                                                       |
+| AZURE_SSH_PUBLIC_KEY                    | false    | SSH public key to connecet to the VMs                                              | ""                                                                      |
 

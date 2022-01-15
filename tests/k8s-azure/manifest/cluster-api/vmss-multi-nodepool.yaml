@@ -147,7 +147,7 @@ spec:
       osDisk:
         diskSizeGB: 128
         osType: Linux
-      sshPublicKey: ""
+      sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
       vmSize: ${AZURE_CONTROL_PLANE_MACHINE_TYPE}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -190,7 +190,7 @@ spec:
       diskSizeGB: 30
       managedDisk:
         storageAccountType: "Premium_LRS"
-    sshPublicKey: ""
+    sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfig
@@ -253,7 +253,7 @@ spec:
       diskSizeGB: 30
       managedDisk:
         storageAccountType: "Premium_LRS"
-    sshPublicKey: ""
+    sshPublicKey: "${AZURE_SSH_PUBLIC_KEY_B64}"
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfig
