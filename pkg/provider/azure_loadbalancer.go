@@ -3155,7 +3155,7 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, ser
 
 // ensureLoadBalancerTagged ensures every load balancer in the resource group is tagged as configured
 func (az *Cloud) ensureLoadBalancerTagged(lb *network.LoadBalancer) bool {
-	if az.Tags == "" {
+	if az.Tags == "" && (az.TagsMap == nil || len(az.TagsMap) == 0) {
 		return false
 	}
 	tags := parseTags(az.Tags, az.TagsMap)
@@ -3171,7 +3171,7 @@ func (az *Cloud) ensureLoadBalancerTagged(lb *network.LoadBalancer) bool {
 
 // ensureSecurityGroupTagged ensures the security group is tagged as configured
 func (az *Cloud) ensureSecurityGroupTagged(sg *network.SecurityGroup) bool {
-	if az.Tags == "" {
+	if az.Tags == "" && (az.TagsMap == nil || len(az.TagsMap) == 0) {
 		return false
 	}
 	tags := parseTags(az.Tags, az.TagsMap)
