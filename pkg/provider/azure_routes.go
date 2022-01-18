@@ -563,7 +563,7 @@ func cidrtoRfc1035(cidr string) string {
 
 // ensureRouteTableTagged ensures the route table is tagged as configured
 func (az *Cloud) ensureRouteTableTagged(rt *network.RouteTable) (map[string]*string, bool) {
-	if az.Tags == "" {
+	if az.Tags == "" && (az.TagsMap == nil || len(az.TagsMap) == 0) {
 		return nil, false
 	}
 	tags := parseTags(az.Tags, az.TagsMap)
