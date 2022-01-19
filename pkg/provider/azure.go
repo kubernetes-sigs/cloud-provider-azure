@@ -692,7 +692,7 @@ func (az *Cloud) configureMultiTenantClients(servicePrincipalToken *adal.Service
 	var err error
 	var multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken
 	var networkResourceServicePrincipalToken *adal.ServicePrincipalToken
-	if az.Config.UsesNetworkResourceInDifferentTenant() {
+	if az.Config.UsesNetworkResourceInDifferentTenantOrSubscription() {
 		multiTenantServicePrincipalToken, err = auth.GetMultiTenantServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
 		if err != nil {
 			return err
