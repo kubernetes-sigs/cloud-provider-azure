@@ -237,14 +237,12 @@ func ParseAzureEnvironment(cloudName, resourceManagerEndpoint, identitySystem st
 	return &env, err
 }
 
-// UsesNetworkResourceInDifferentTenant determines whether the AzureAuthConfig indicates to use network resources in different AAD Tenant and Subscription than those for the cluster
-// Return true only when both NetworkResourceTenantID and NetworkResourceSubscriptionID are specified
-// and they are not equals to TenantID and SubscriptionID
-func (config *AzureAuthConfig) UsesNetworkResourceInDifferentTenant() bool {
-	return len(config.NetworkResourceTenantID) > 0 &&
-		len(config.NetworkResourceSubscriptionID) > 0 &&
-		!strings.EqualFold(config.NetworkResourceTenantID, config.TenantID) &&
-		!strings.EqualFold(config.NetworkResourceSubscriptionID, config.SubscriptionID)
+// UsesNetworkResourceInDifferentTenantOrSubscription determines whether the AzureAuthConfig indicates to use network resources in different AAD Tenant and Subscription than those for the cluster
+// Return true when one of NetworkResourceTenantID and NetworkResourceSubscriptionID are specified
+// and equal to one defined in global configs
+func (config *AzureAuthConfig) UsesNetworkResourceInDifferentTenantOrSubscription() bool {
+	return (len(config.NetworkResourceTenantID) > 0 && !strings.EqualFold(config.NetworkResourceTenantID, config.TenantID)) ||
+		(len(config.NetworkResourceSubscriptionID) > 0 && !strings.EqualFold(config.NetworkResourceSubscriptionID, config.SubscriptionID))
 }
 
 // decodePkcs12 decodes a PKCS#12 client certificate by extracting the public certificate and
@@ -276,7 +274,7 @@ func azureStackOverrides(env *azure.Environment, resourceManagerEndpoint, identi
 
 // checkConfigWhenNetworkResourceInDifferentTenant checks configuration for the scenario of using network resource in different tenant
 func (config *AzureAuthConfig) checkConfigWhenNetworkResourceInDifferentTenant() error {
-	if !config.UsesNetworkResourceInDifferentTenant() {
+	if !config.UsesNetworkResourceInDifferentTenantOrSubscription() {
 		return fmt.Errorf("NetworkResourceTenantID and NetworkResourceSubscriptionID must be configured")
 	}
 
