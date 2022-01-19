@@ -115,6 +115,10 @@ jobs:
           VERSION_PATCH="${VERSION##*.}"
 
           BRANCH=release-${VERSION_MAJOR}.${VERSION_MINOR}
+          if [[ ! `git branch --list ${BRANCH}` ]]; then
+            BRANCH=master
+          fi
+
           if [[ "${VERSION_PATCH}" = "0" ]]; then
             START_SHA=$(git rev-parse v${VERSION_MAJOR}.$((VERSION_MINOR-1)).0)
           else
