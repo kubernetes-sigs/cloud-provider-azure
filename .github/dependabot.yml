@@ -7,7 +7,12 @@ updates:
     labels:
       - "release-note-none"
     open-pull-requests-limit: 5
-
+  
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -17,9 +22,81 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "npm"
-    directory: "/site"
+    directory: "/site/"
     schedule:
       interval: daily
     labels:
       - "release-note-none"
     open-pull-requests-limit: 5
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: daily
+    labels:
+      - "release-note-none"
+    open-pull-requests-limit: 5
+    target-branch: "release-1.23"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.24.0"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "release-1.23"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: daily
+    labels:
+      - "release-note-none"
+    open-pull-requests-limit: 5
+    target-branch: "release-1.1"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.23.0"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "release-1.1"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: daily
+    labels:
+      - "release-note-none"
+    open-pull-requests-limit: 5
+    target-branch: "release-1.0"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.22.0"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "release-1.0"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: daily
+    labels:
+      - "release-note-none"
+    open-pull-requests-limit: 5
+    target-branch: "release-0.7"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.21.0"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "release-0.7"
