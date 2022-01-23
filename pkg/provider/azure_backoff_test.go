@@ -621,3 +621,34 @@ func TestCreateOrUpdateLBBackendPool(t *testing.T) {
 		assert.Equal(t, tc.expectedErr, err != nil)
 	}
 }
+
+func TestDeleteLBBackendPool(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description string
+		deleteErr   *retry.Error
+		expectedErr bool
+	}{
+		{
+			description: "DeleteLBBackendPool should not report an error if the api call succeeds",
+		},
+		{
+			description: "DeleteLBBackendPool should report an error if the api call fails",
+			deleteErr: &retry.Error{
+				HTTPStatusCode: http.StatusPreconditionFailed,
+				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			},
+			expectedErr: true,
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+		lbClient.EXPECT().DeleteLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.deleteErr)
+		az.LoadBalancerClient = lbClient
+
+		err := az.DeleteLBBackendPool("kubernetes", "kubernetes")
+		assert.Equal(t, tc.expectedErr, err != nil)
+	}
+}
