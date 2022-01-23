@@ -4064,7 +4064,7 @@ func TestCheckLoadBalancerResourcesConflicted(t *testing.T) {
 
 func buildLBWithVMIPs(clusterName string, vmIPs []string) *network.LoadBalancer {
 	lb := network.LoadBalancer{
-		Name: to.StringPtr("clusterName"),
+		Name: to.StringPtr(clusterName),
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 			BackendAddressPools: &[]network.BackendAddressPool{
 				{

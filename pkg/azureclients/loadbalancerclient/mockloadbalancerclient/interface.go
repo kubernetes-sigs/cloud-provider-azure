@@ -95,6 +95,20 @@ func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, loadBalancer
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, loadBalancerName)
 }
 
+// DeleteLBBackendPool mocks base method.
+func (m *MockInterface) DeleteLBBackendPool(ctx context.Context, resourceGroupName, loadBalancerName, backendPoolName string) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLBBackendPool", ctx, resourceGroupName, loadBalancerName, backendPoolName)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// DeleteLBBackendPool indicates an expected call of DeleteLBBackendPool.
+func (mr *MockInterfaceMockRecorder) DeleteLBBackendPool(ctx, resourceGroupName, loadBalancerName, backendPoolName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLBBackendPool", reflect.TypeOf((*MockInterface)(nil).DeleteLBBackendPool), ctx, resourceGroupName, loadBalancerName, backendPoolName)
+}
+
 // Get mocks base method.
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, loadBalancerName, expand string) (network.LoadBalancer, *retry.Error) {
 	m.ctrl.T.Helper()

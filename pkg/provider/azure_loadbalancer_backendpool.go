@@ -137,7 +137,6 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	}
 
 	foundBackendPool := false
-	wantLb := true
 	changed := false
 	lbName := *lb.Name
 
@@ -146,10 +145,29 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	lbBackendPoolID := bc.getBackendPoolID(lbName, bc.getLoadBalancerResourceGroup(), lbBackendPoolName)
 	vmSetName := bc.mapLoadBalancerNameToVMSet(lbName, clusterName)
 
-	for _, bp := range newBackendPools {
+	for i := len(newBackendPools) - 1; i >= 0; i-- {
+		bp := newBackendPools[i]
 		if strings.EqualFold(*bp.Name, lbBackendPoolName) {
-			klog.V(10).Infof("bc.ReconcileBackendPools for service (%s)(%t): lb backendpool - found wanted backendpool. not adding anything", serviceName, wantLb)
+			klog.V(10).Infof("bc.ReconcileBackendPools for service (%s): lb backendpool - found wanted backendpool. not adding anything", serviceName)
 			foundBackendPool = true
+
+			// If the LB backend pool type is configured from nodeIP or podIP
+			// to nodeIPConfiguration, we need to decouple the VM NICs from the LB
+			// before attaching nodeIPs/podIPs to the LB backend pool.
+			if bp.BackendAddressPoolPropertiesFormat != nil &&
+				(bp.BackendIPConfigurations == nil || len(*bp.BackendIPConfigurations) == 0) {
+				// It is not allowed to change the type of the backend pool, so we delete it
+				// and create a new empty backend pool.
+				if err := bc.DeleteLBBackendPool(lbName, to.String(bp.Name)); err != nil {
+					klog.Errorf("bc.ReconcileBackendPools for service (%s): failed to DeleteLBBackendPool: %s", serviceName, err.Error())
+					return false, false, err
+				}
+				newBackendPools = append(newBackendPools[:i], newBackendPools[i+1:]...)
+				lb.BackendAddressPools = &newBackendPools
+				lb.Etag = nil
+				foundBackendPool = false
+				break
+			}
 
 			var backendIPConfigurationsToBeDeleted []network.InterfaceIPConfiguration
 			if bp.BackendAddressPoolPropertiesFormat != nil && bp.BackendIPConfigurations != nil {
@@ -170,7 +188,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 						return false, false, err
 					}
 					if shouldExcludeLoadBalancer {
-						klog.V(2).Infof("bc.ReconcileBackendPools for service (%s)(%t): lb backendpool - found unwanted node %s, decouple it from the LB %s", serviceName, wantLb, nodeName, lbName)
+						klog.V(2).Infof("bc.ReconcileBackendPools for service (%s): lb backendpool - found unwanted node %s, decouple it from the LB %s", serviceName, nodeName, lbName)
 						// construct a backendPool that only contains the IP config of the node to be deleted
 						backendIPConfigurationsToBeDeleted = append(backendIPConfigurationsToBeDeleted, network.InterfaceIPConfiguration{ID: to.StringPtr(ipConfID)})
 					}
@@ -193,7 +211,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 			}
 			break
 		} else {
-			klog.V(10).Infof("bc.ReconcileBackendPools for service (%s)(%t): lb backendpool - found unmanaged backendpool %s", serviceName, wantLb, *bp.Name)
+			klog.V(10).Infof("bc.ReconcileBackendPools for service (%s): lb backendpool - found unmanaged backendpool %s", serviceName, *bp.Name)
 		}
 	}
 
@@ -358,27 +376,53 @@ func (bi *backendPoolTypeNodeIP) CleanupVMSetFromBackendPoolByCondition(slb *net
 
 func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, error) {
 	var newBackendPools []network.BackendAddressPool
-	var err error
 	if lb.BackendAddressPools != nil {
 		newBackendPools = *lb.BackendAddressPools
 	}
 
 	foundBackendPool := false
-	wantLb := true
 	changed := false
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
+	vmSetName := bi.mapLoadBalancerNameToVMSet(lbName, clusterName)
+	lbBackendPoolID := bi.getBackendPoolID(to.String(lb.Name), bi.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
 
-	for i, bp := range newBackendPools {
+	for i := len(newBackendPools) - 1; i >= 0; i-- {
+		bp := newBackendPools[i]
 		if strings.EqualFold(*bp.Name, lbBackendPoolName) {
-			klog.V(10).Infof("bi.ReconcileBackendPools for service (%s)(%t): lb backendpool - found wanted backendpool. not adding anything", serviceName, wantLb)
+			klog.V(10).Infof("bi.ReconcileBackendPools for service (%s): found wanted backendpool. not adding anything", serviceName)
 			foundBackendPool = true
+
+			// If the LB backend pool type is configured from nodeIPConfiguration
+			// to nodeIP, we need to decouple the VM NICs from the LB
+			// before attaching nodeIPs/podIPs to the LB backend pool.
+			if bp.BackendAddressPoolPropertiesFormat != nil &&
+				bp.BackendIPConfigurations != nil &&
+				len(*bp.BackendIPConfigurations) > 0 {
+				// It is not allowed to change the type of the backend pool, so we delete it
+				// and create a new empty backend pool. Note that for IP configuration based
+				// backend pools, we must decouple it from the vmSets before deleting.
+				klog.V(2).Infof("bi.ReconcileBackendPools for service (%s): ensuring the LB is decoupled from the VMSet", serviceName)
+				if err := bi.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools, true); err != nil {
+					klog.Errorf("bi.ReconcileBackendPools for service (%s): failed to EnsureBackendPoolDeleted: %s", serviceName, err.Error())
+					return false, false, err
+				}
+				if err := bi.DeleteLBBackendPool(lbName, to.String(bp.Name)); err != nil {
+					klog.Errorf("bi.ReconcileBackendPools for service (%s): failed to DeleteLBBackendPool: %s", serviceName, err.Error())
+					return false, false, err
+				}
+				newBackendPools = append(newBackendPools[:i], newBackendPools[i+1:]...)
+				lb.BackendAddressPools = &newBackendPools
+				lb.Etag = nil
+				foundBackendPool = false
+				break
+			}
 
 			var nodeIPAddressesToBeDeleted []string
 			for nodeName := range bi.excludeLoadBalancerNodes {
 				for ip := range bi.nodePrivateIPs[nodeName] {
-					klog.V(2).Infof("bi.ReconcileBackendPools for service (%s)(%t): lb backendpool - found unwanted node private IP %s, decouple it from the LB %s", serviceName, wantLb, ip, lbName)
+					klog.V(2).Infof("bi.ReconcileBackendPools for service (%s): found unwanted node private IP %s, decoupling it from the LB %s", serviceName, ip, lbName)
 					nodeIPAddressesToBeDeleted = append(nodeIPAddressesToBeDeleted, ip)
 				}
 			}
@@ -387,13 +431,13 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 				if updated {
 					(*lb.BackendAddressPools)[i] = bp
 					if err := bi.CreateOrUpdateLBBackendPool(lbName, bp); err != nil {
-						return false, false, fmt.Errorf("bi.ReconcileBackendPools for service (%s)(%t): lb backendpool - failed to update backend pool %s for load balancer %s: %w", serviceName, wantLb, lbBackendPoolName, lbName, err)
+						return false, false, fmt.Errorf("bi.ReconcileBackendPools for service (%s): lb backendpool - failed to update backend pool %s for load balancer %s: %w", serviceName, lbBackendPoolName, lbName, err)
 					}
 				}
 			}
 			break
 		} else {
-			klog.V(10).Infof("bi.ReconcileBackendPools for service (%s)(%t): lb backendpool - found unmanaged backendpool %s", serviceName, wantLb, *bp.Name)
+			klog.V(10).Infof("bi.ReconcileBackendPools for service (%s): found unmanaged backendpool %s", serviceName, *bp.Name)
 		}
 	}
 
@@ -403,7 +447,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		changed = true
 	}
 
-	return isBackendPoolPreConfigured, changed, err
+	return isBackendPoolPreConfigured, changed, nil
 }
 
 func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, preConfiguredBackendPoolLoadBalancerTypes, serviceName, lbBackendPoolName string) bool {
