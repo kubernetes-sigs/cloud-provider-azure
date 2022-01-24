@@ -63,7 +63,7 @@ github.com/davecgh/go-spew/spew
 # github.com/emicklei/go-restful v2.9.5+incompatible
 github.com/emicklei/go-restful
 github.com/emicklei/go-restful/log
-# github.com/evanphx/json-patch v4.11.0+incompatible
+# github.com/evanphx/json-patch v5.6.0+incompatible
 ## explicit
 github.com/evanphx/json-patch
 # github.com/felixge/httpsnoop v1.0.1

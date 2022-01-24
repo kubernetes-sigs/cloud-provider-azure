@@ -10,7 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/Azure/go-autorest/autorest/validation v0.1.0 // indirect
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
-	github.com/evanphx/json-patch v4.11.0+incompatible
+	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/mock v1.6.0
