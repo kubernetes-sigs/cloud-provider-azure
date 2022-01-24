@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -208,12 +209,12 @@ func (c *Client) Send(ctx context.Context, request *http.Request) (*http.Respons
 	}
 
 	if strings.HasPrefix(strings.ToLower(currentHost), c.clientRegion) {
-		klog.V(5).Infof("Send.sendRequest: current host %s is regional host. Skip retrying regional host.", currentHost)
+		klog.V(5).Infof("Send.sendRequest: current host %s is regional host. Skip retrying regional host.", html.EscapeString(currentHost))
 		return response, rerr
 	}
 
 	request.Host = fmt.Sprintf("%s.%s", c.clientRegion, strings.ToLower(currentHost))
-	klog.V(5).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", request.Host)
+	klog.V(5).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
 	regionalResponse, regionalError := c.sendRequest(ctx, request)
 
 	// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
@@ -359,13 +360,13 @@ func (c *Client) WaitForAsyncOperationResult(ctx context.Context, future *azure.
 func (c *Client) SendAsync(ctx context.Context, request *http.Request) (*azure.Future, *http.Response, *retry.Error) {
 	asyncResponse, rerr := c.Send(ctx, request)
 	if rerr != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "sendAsync.send", request.URL.String(), rerr.Error())
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "sendAsync.send", html.EscapeString(request.URL.String()), rerr.Error())
 		return nil, nil, rerr
 	}
 
 	future, err := azure.NewFutureFromResponse(asyncResponse)
 	if err != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "sendAsync.respond", request.URL.String(), err)
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "sendAsync.respond", html.EscapeString(request.URL.String()), err)
 		return nil, asyncResponse, retry.GetError(asyncResponse, err)
 	}
 
