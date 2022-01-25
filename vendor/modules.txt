@@ -96,7 +96,7 @@ github.com/docker/spdystream/spdy
 ## explicit
 github.com/emicklei/go-restful
 github.com/emicklei/go-restful/log
-# github.com/evanphx/json-patch v4.11.0+incompatible
+# github.com/evanphx/json-patch v5.6.0+incompatible
 ## explicit
 github.com/evanphx/json-patch
 # github.com/form3tech-oss/jwt-go v3.2.2+incompatible

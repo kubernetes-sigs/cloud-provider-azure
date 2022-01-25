@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.13
 	github.com/Azure/go-autorest/autorest/mocks v0.4.1
 	github.com/Azure/go-autorest/autorest/to v0.4.0
-	github.com/evanphx/json-patch v4.11.0+incompatible
+	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/mock v1.4.4
 	github.com/onsi/ginkgo v1.14.0
 	github.com/onsi/gomega v1.10.1
