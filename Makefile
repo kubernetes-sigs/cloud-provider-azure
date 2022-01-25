@@ -108,6 +108,12 @@ $(BIN_DIR)/azure-cloud-node-manager.exe: $(PKG_CONFIG) $(wildcard cmd/cloud-node
 $(BIN_DIR)/azure-cloud-controller-manager: $(PKG_CONFIG) $(wildcard cmd/cloud-controller-manager/*) $(wildcard cmd/cloud-controller-manager/**/*) $(wildcard pkg/**/*) ## Build binary for controller-manager.
 	CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-cloud-controller-manager $(shell cat $(PKG_CONFIG)) ./cmd/cloud-controller-manager
 
+$(BIN_DIR)/azure-acr-credential-provider: $(PKG_CONFIG) $(wildcard cmd/acr-credential-provider/*) $(wildcard cmd/acr-credential-provider/**/*) $(wildcard pkg/**/*) ## Build binary for acr-credential-provider.
+	CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
+
+$(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-credential-provider/*) $(wildcard cmd/acr-credential-provider/**/*) $(wildcard pkg/**/*) ## Build binary for acr-credential-provider.
+	CGO_ENABLED=0 GOOS=windows GOARCH=${ARCH} go build -a -o $(BIN_DIR)/azure-acr-credential-provider.exe $(shell cat $(PKG_CONFIG)) ./cmd/acr-credential-provider
+
 ## --------------------------------------
 ##@ Images
 ## --------------------------------------
