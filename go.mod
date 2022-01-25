@@ -11,7 +11,7 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.1.0 // indirect
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/evanphx/json-patch v4.11.0+incompatible
-	github.com/fsnotify/fsnotify v1.4.9
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo v1.16.4
