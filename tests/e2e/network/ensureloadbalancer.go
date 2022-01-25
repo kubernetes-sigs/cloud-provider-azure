@@ -271,7 +271,9 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		service1 = updateServiceBalanceIP(service1, false, targetIP)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service1, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		ip, err := utils.WaitServiceExposure(cs, ns.Name, "service1")
+		var ip string
+		ip, err = utils.WaitServiceExposure(cs, ns.Name, "service1")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(ip).To(Equal(targetIP))
 		utils.Logf("Successfully created LoadBalancer service1 in namespace %s with IP %s", ns.Name, ip)
 

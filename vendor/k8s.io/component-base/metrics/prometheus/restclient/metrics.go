@@ -121,7 +121,6 @@ var (
 func init() {
 
 	legacyregistry.MustRegister(requestLatency)
-	legacyregistry.MustRegister(rateLimiterLatency)
 	legacyregistry.MustRegister(requestResult)
 	legacyregistry.RawMustRegister(execPluginCertTTL)
 	legacyregistry.MustRegister(execPluginCertRotation)

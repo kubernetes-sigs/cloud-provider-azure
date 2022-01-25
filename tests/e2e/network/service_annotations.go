@@ -670,7 +670,7 @@ func validateInternalLoadBalancer(c clientset.Interface, ns string, url string) 
 		if err != nil {
 			return false, nil
 		}
-		return strings.Contains(fmt.Sprintf("%s", log), "200"), nil
+		return strings.Contains(string(log), "200"), nil
 	})
 	utils.Logf("validation finished")
 	return err
