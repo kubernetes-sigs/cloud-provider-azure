@@ -4203,7 +4203,6 @@ type ServiceSpec struct {
 	// value, if used, only makes sense as the last value in the list.
 	// If this is not specified or empty, no topology constraints will be applied.
 	// This field is alpha-level and is only honored by servers that enable the ServiceTopology feature.
-	// This field is deprecated and will be removed in a future version.
 	// +optional
 	TopologyKeys []string `json:"topologyKeys,omitempty" protobuf:"bytes,16,opt,name=topologyKeys"`
 
@@ -4265,6 +4264,7 @@ type ServicePort struct {
 
 	// The IP protocol for this port. Supports "TCP", "UDP", and "SCTP".
 	// Default is TCP.
+	// +default="TCP"
 	// +optional
 	Protocol Protocol `json:"protocol,omitempty" protobuf:"bytes,2,opt,name=protocol,casttype=Protocol"`
 
@@ -5614,9 +5614,9 @@ const (
 type ResourceQuotaScope string
 
 const (
-	// Match all pod objects where spec.activeDeadlineSeconds >=0
+	// Match all pod objects where spec.activeDeadlineSeconds
 	ResourceQuotaScopeTerminating ResourceQuotaScope = "Terminating"
-	// Match all pod objects where spec.activeDeadlineSeconds is nil
+	// Match all pod objects where !spec.activeDeadlineSeconds
 	ResourceQuotaScopeNotTerminating ResourceQuotaScope = "NotTerminating"
 	// Match all pod objects that have best effort quality of service
 	ResourceQuotaScopeBestEffort ResourceQuotaScope = "BestEffort"

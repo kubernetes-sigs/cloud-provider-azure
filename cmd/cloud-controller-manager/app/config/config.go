@@ -23,7 +23,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
-	ccmconfig "k8s.io/cloud-provider/app/apis/config"
+	ccmconfig "k8s.io/cloud-provider/config"
 
 	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 )
