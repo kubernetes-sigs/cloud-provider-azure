@@ -16,8 +16,10 @@ limitations under the License.
 
 package ports
 
-// In this file, we can see all default port of cluster.
-// It's also a important documentation for us. So don't remove them easily.
+import (
+	"k8s.io/cloud-provider"
+)
+
 const (
 	// ProxyStatusPort is the default port for the proxy metrics server.
 	// May be overridden by a flag at startup.
@@ -43,5 +45,5 @@ const (
 	KubeControllerManagerPort = 10257
 	// CloudControllerManagerPort is the default port for the cloud controller manager server.
 	// This value may be overridden by a flag at startup.
-	CloudControllerManagerPort = 10258
+	CloudControllerManagerPort = cloudprovider.CloudControllerManagerPort
 )

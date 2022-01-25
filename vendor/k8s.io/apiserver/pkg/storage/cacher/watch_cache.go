@@ -216,8 +216,6 @@ func newWatchCache(
 		versioner:           versioner,
 		objectType:          objectType,
 	}
-	objType := objectType.String()
-	watchCacheCapacity.WithLabelValues(objType).Set(float64(wc.capacity))
 	wc.cond = sync.NewCond(wc.RLocker())
 	return wc
 }

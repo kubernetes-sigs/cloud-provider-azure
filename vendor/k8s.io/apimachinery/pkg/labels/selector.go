@@ -318,7 +318,7 @@ func (r *Requirement) String() string {
 	return buffer.String()
 }
 
-// safeSort sorts input strings without modification
+// safeSort sort input strings without modification
 func safeSort(in []string) []string {
 	if sort.StringsAreSorted(in) {
 		return in
@@ -366,7 +366,7 @@ func (s internalSelector) String() string {
 	return strings.Join(reqs, ",")
 }
 
-// RequiresExactMatch introspects whether a given selector requires a single specific field
+// RequiresExactMatch introspect whether a given selector requires a single specific field
 // to be set, and if so returns the value it requires.
 func (s internalSelector) RequiresExactMatch(label string) (value string, found bool) {
 	for ix := range s {
@@ -444,7 +444,7 @@ func isWhitespace(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
 }
 
-// isSpecialSymbol detects if the character ch can be an operator
+// isSpecialSymbol detect if the character ch can be an operator
 func isSpecialSymbol(ch byte) bool {
 	switch ch {
 	case '=', '!', '(', ')', ',', '>', '<':
@@ -462,7 +462,7 @@ type Lexer struct {
 	pos int
 }
 
-// read returns the character currently lexed
+// read return the character currently lexed
 // increment the position and check the buffer overflow
 func (l *Lexer) read() (b byte) {
 	b = 0
@@ -698,7 +698,7 @@ func (p *Parser) parseKeyAndInferOperator() (string, selection.Operator, error) 
 	return literal, operator, nil
 }
 
-// parseOperator returns operator and eventually matchType
+// parseOperator return operator and eventually matchType
 // matchType can be exact
 func (p *Parser) parseOperator() (op selection.Operator, err error) {
 	tok, lit := p.consume(KeyAndOperator)
