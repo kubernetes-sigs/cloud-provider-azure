@@ -160,7 +160,7 @@ replace (
 	github.com/go-toolsmith/typep => github.com/go-toolsmith/typep v1.0.0
 	github.com/gobwas/glob => github.com/gobwas/glob v0.2.3
 	github.com/godbus/dbus => github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f
-	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	github.com/golang/freetype => github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/golang/glog => github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache => github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903
@@ -358,7 +358,7 @@ replace (
 	go.uber.org/zap => go.uber.org/zap v1.10.0
 	go4.org => go4.org v0.0.0-20180809161055-417644f6feb5
 	golang.org/x/build => golang.org/x/build v0.0.0-20190927031335-2835ba2e683f
-	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
+	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/image => golang.org/x/image v0.0.0-20190227222117-0694c2d4d067
 	golang.org/x/lint => golang.org/x/lint v0.0.0-20190409202823-959b441ac422
@@ -369,7 +369,7 @@ replace (
 	golang.org/x/perf => golang.org/x/perf v0.0.0-20180704124530-6e6d33e29852
 	golang.org/x/sync => golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys => golang.org/x/sys v0.0.0-20191022100944-742c48ecaeb7
-	golang.org/x/text => golang.org/x/text v0.3.2
+	golang.org/x/text => golang.org/x/text v0.3.7
 	golang.org/x/time => golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools => golang.org/x/tools v0.0.0-20190920225731-5eefd052ad72
 	golang.org/x/xerrors => golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
