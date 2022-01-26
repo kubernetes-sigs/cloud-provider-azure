@@ -40,9 +40,10 @@ const (
 
 	// LabelFailureDomainBetaZone refer to https://github.com/kubernetes/api/blob/8519c5ea46199d57724725d5b969c5e8e0533692/core/v1/well_known_labels.go#L22-L23
 	LabelFailureDomainBetaZone = "failure-domain.beta.kubernetes.io/zone"
-
 	// LabelFailureDomainBetaRegion failure-domain region label
 	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
+	// LabelPlatformSubFaultDomain is the label key of platformSubFaultDomain
+	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 
 	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
 	ADFSIdentitySystem = "adfs"
