@@ -30,7 +30,7 @@ require (
 	k8s.io/controller-manager v0.21.9
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
-	sigs.k8s.io/yaml v1.2.0
+	sigs.k8s.io/yaml v1.3.0
 
 )
 
