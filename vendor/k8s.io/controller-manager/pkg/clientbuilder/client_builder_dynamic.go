@@ -116,7 +116,7 @@ func (t *DynamicControllerClientBuilder) Config(saName string) (*restclient.Conf
 
 	rt, ok := t.roundTripperFuncMap[saName]
 	if ok {
-		configCopy.Wrap(rt)
+		configCopy.WrapTransport = rt
 	} else {
 		cachedTokenSource := transport.NewCachedTokenSource(&tokenSourceImpl{
 			namespace:          t.Namespace,
@@ -125,7 +125,7 @@ func (t *DynamicControllerClientBuilder) Config(saName string) (*restclient.Conf
 			expirationSeconds:  t.expirationSeconds,
 			leewayPercent:      t.leewayPercent,
 		})
-		configCopy.Wrap(transport.ResettableTokenSourceWrapTransport(cachedTokenSource))
+		configCopy.WrapTransport = transport.ResettableTokenSourceWrapTransport(cachedTokenSource)
 		t.roundTripperFuncMap[saName] = configCopy.WrapTransport
 	}
 
@@ -235,11 +235,7 @@ func (ts *tokenSourceImpl) Token() (*oauth2.Token, error) {
 
 func constructClient(saNamespace, saName string, config *restclient.Config) restclient.Config {
 	username := apiserverserviceaccount.MakeUsername(saNamespace, saName)
-	// make a shallow copy
-	// the caller already castrated the config during creation
-	// this allows for potential extensions in the future
-	// for example it preserve HTTP wrappers for custom behavior per request
-	ret := *config
+	ret := *restclient.AnonymousClientConfig(config)
 	restclient.AddUserAgent(&ret, username)
 	return ret
 }
