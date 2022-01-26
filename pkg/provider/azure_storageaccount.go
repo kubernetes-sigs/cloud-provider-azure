@@ -98,7 +98,7 @@ func (az *Cloud) getStorageAccounts(accountOptions *AccountOptions) ([]accountWi
 				}
 			}
 
-			if acct.Sku.Tier != storage.SkuTier(compute.PremiumLRS) && accountOptions.EnableLargeFileShare && (len(acct.LargeFileSharesState) == 0 || acct.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
+			if acct.Sku.Tier != storage.SkuTier(compute.DiskStorageAccountTypesPremiumLRS) && accountOptions.EnableLargeFileShare && (len(acct.LargeFileSharesState) == 0 || acct.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
 				continue
 			}
 

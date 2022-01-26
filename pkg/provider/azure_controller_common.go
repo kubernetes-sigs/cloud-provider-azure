@@ -205,8 +205,8 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 				diskEncryptionSetID = *disk.DiskProperties.Encryption.DiskEncryptionSetID
 			}
 
-			if disk.DiskProperties.DiskState != compute.Unattached && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
-				return -1, fmt.Errorf("state of disk(%s) is %s, not in expected %s state", diskURI, disk.DiskProperties.DiskState, compute.Unattached)
+			if disk.DiskProperties.DiskState != compute.DiskStateUnattached && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
+				return -1, fmt.Errorf("state of disk(%s) is %s, not in expected %s state", diskURI, disk.DiskProperties.DiskState, compute.DiskStateUnattached)
 			}
 		}
 
@@ -605,7 +605,7 @@ func (c *controllerCommon) checkDiskExists(ctx context.Context, diskURI string) 
 func getValidCreationData(subscriptionID, resourceGroup, sourceResourceID, sourceType string) (compute.CreationData, error) {
 	if sourceResourceID == "" {
 		return compute.CreationData{
-			CreateOption: compute.Empty,
+			CreateOption: compute.DiskCreateOptionEmpty,
 		}, nil
 	}
 
@@ -621,7 +621,7 @@ func getValidCreationData(subscriptionID, resourceGroup, sourceResourceID, sourc
 		}
 	default:
 		return compute.CreationData{
-			CreateOption: compute.Empty,
+			CreateOption: compute.DiskCreateOptionEmpty,
 		}, nil
 	}
 
@@ -633,7 +633,7 @@ func getValidCreationData(subscriptionID, resourceGroup, sourceResourceID, sourc
 		return compute.CreationData{}, fmt.Errorf("sourceResourceID(%s) is invalid, correct format: %s", sourceResourceID, managedDiskPathRE)
 	}
 	return compute.CreationData{
-		CreateOption:     compute.Copy,
+		CreateOption:     compute.DiskCreateOptionCopy,
 		SourceResourceID: &sourceResourceID,
 	}, nil
 }

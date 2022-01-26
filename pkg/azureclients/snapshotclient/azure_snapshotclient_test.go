@@ -211,7 +211,7 @@ func TestListByResourceGroup(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snList := []compute.Snapshot{getTestSnapshot("sn1"), getTestSnapshot("sn2"), getTestSnapshot("sn3")}
-	responseBody, err := json.Marshal(compute.SnapshotList{Value: &snList})
+	responseBody, err := json.Marshal(map[string]interface{}{"value": snList, "nextLink": ""})
 	assert.NoError(t, err)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
 		&http.Response{
