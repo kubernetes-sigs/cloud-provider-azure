@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -227,5 +228,5 @@ func GetVMSSVMComputerName(vm azcompute.VirtualMachineScaleSetVM) (string, error
 
 // IsSpotVMSS checks whether the vmss support azure spot vm instance
 func IsSpotVMSS(vmss azcompute.VirtualMachineScaleSet) bool {
-	return vmss.VirtualMachineProfile.Priority == azcompute.Spot
+	return vmss.VirtualMachineProfile.Priority == compute.VirtualMachinePriorityTypesSpot
 }
