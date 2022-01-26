@@ -189,7 +189,7 @@ func (az *Cloud) newVMCache() (*azcache.TimedCache, error) {
 			return nil, err
 		}
 
-		vm, verr := az.VirtualMachinesClient.Get(ctx, resourceGroup, key, compute.InstanceView)
+		vm, verr := az.VirtualMachinesClient.Get(ctx, resourceGroup, key, compute.InstanceViewTypesInstanceView)
 		exists, rerr := checkResourceExistsFromError(verr)
 		if rerr != nil {
 			return nil, rerr.Error()
