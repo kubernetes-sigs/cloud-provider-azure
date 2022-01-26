@@ -468,7 +468,7 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 }
 
 func isLargeFileSharesPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if account.Sku.Tier != storage.SkuTier(compute.PremiumLRS) && accountOptions.EnableLargeFileShare && (len(account.LargeFileSharesState) == 0 || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
+	if account.Sku.Tier != storage.SkuTier(compute.DiskStorageAccountTypesPremiumLRS) && accountOptions.EnableLargeFileShare && (len(account.LargeFileSharesState) == 0 || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
 		return false
 	}
 	return true

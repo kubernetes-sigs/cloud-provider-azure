@@ -70,7 +70,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 		ipConfig = append(ipConfig, compute.VirtualMachineScaleSetIPConfiguration{
 			VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 				LoadBalancerBackendAddressPools: &lbBackendpools,
-				PrivateIPAddressVersion:         compute.IPv6,
+				PrivateIPAddressVersion:         compute.IPVersionIPv6,
 			},
 		})
 	}
@@ -164,7 +164,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 								Primary:                         to.BoolPtr(false),
 								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: to.StringPtr(testLBBackendpoolID0)}},
-								PrivateIPAddressVersion:         compute.IPv6,
+								PrivateIPAddressVersion:         compute.IPVersionIPv6,
 							},
 						},
 					},
@@ -1757,13 +1757,13 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPv4,
+						PrivateIPAddressVersion: compute.IPVersionIPv4,
 					},
 				},
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPv6,
+						PrivateIPAddressVersion: compute.IPVersionIPv6,
 					},
 				},
 			},
