@@ -1734,9 +1734,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 			}
 		}
 	} else {
+		var (
+			previousZone *[]string
+			isFipChanged bool
+		)
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
-			isFipChanged, err := az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName)
+			isFipChanged, err = az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1744,6 +1748,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb frontendconfig(%s) - dropping", serviceName, wantLb, *config.Name)
 				newConfigs = append(newConfigs[:i], newConfigs[i+1:]...)
 				dirtyConfigs = true
+				previousZone = config.Zones
 			}
 		}
 
@@ -1810,14 +1815,11 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				FrontendIPConfigurationPropertiesFormat: fipConfigurationProperties,
 			}
 
-			// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
-			location := az.Location
-			zones, err := az.getRegionZonesBackoff(location)
-			if err != nil {
-				return nil, false, err
-			}
-			if isInternal && az.useStandardLoadBalancer() && len(zones) > 0 && !az.HasExtendedLocation() {
-				newConfig.Zones = &zones
+			if isInternal {
+				if err := az.getFrontendZones(&newConfig, previousZone, isFipChanged, serviceName, defaultLBFrontendIPConfigName); err != nil {
+					klog.Errorf("reconcileLoadBalancer for service (%s)(%t): failed to getFrontendZones: %s", serviceName, wantLb, err.Error())
+					return nil, false, err
+				}
 			}
 			newConfigs = append(newConfigs, newConfig)
 			klog.V(2).Infof("reconcileLoadBalancer for service (%s)(%t): lb frontendconfig(%s) - adding", serviceName, wantLb, defaultLBFrontendIPConfigName)
@@ -1830,6 +1832,33 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 	}
 
 	return ownedFIPConfig, dirtyConfigs, err
+}
+
+func (az *Cloud) getFrontendZones(
+	fipConfig *network.FrontendIPConfiguration,
+	previousZone *[]string,
+	isFipChanged bool,
+	serviceName, defaultLBFrontendIPConfigName string) error {
+	if !isFipChanged { // fetch zone information from API for new frontends
+		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
+		location := az.Location
+		zones, err := az.getRegionZonesBackoff(location)
+		if err != nil {
+			return err
+		}
+		if az.useStandardLoadBalancer() && len(zones) > 0 && !az.HasExtendedLocation() {
+			fipConfig.Zones = &zones
+		}
+	} else {
+		if previousZone == nil { // keep the existing zone information for existing frontends
+			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to nil", serviceName, defaultLBFrontendIPConfigName)
+		} else {
+			zoneStr := strings.Join(*previousZone, ",")
+			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to %s", serviceName, defaultLBFrontendIPConfigName, zoneStr)
+		}
+		fipConfig.Zones = previousZone
+	}
+	return nil
 }
 
 // checkLoadBalancerResourcesConflicts checks if the service is consuming
