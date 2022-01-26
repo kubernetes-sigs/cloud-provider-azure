@@ -44,6 +44,8 @@ import (
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -56,6 +58,8 @@ type NodeProvider interface {
 	InstanceType(ctx context.Context, name types.NodeName) (string, error)
 	// GetZone returns the Zone containing the current failure zone and locality region that the program is running in
 	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
+	// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+	GetPlatformSubFaultDomain() (string, error)
 }
 
 // labelReconcileInfo lists Node labels to reconcile, and how to reconcile them.
@@ -492,6 +496,20 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		})
 	}
 
+	platformSubFaultDomain, err := cnc.getPlatformSubFaultDomain()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get platformSubFaultDomain: %w", err)
+	}
+	if platformSubFaultDomain != "" {
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", consts.LabelPlatformSubFaultDomain, platformSubFaultDomain)
+		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
+			if n.Labels == nil {
+				n.Labels = map[string]string{}
+			}
+			n.Labels[consts.LabelPlatformSubFaultDomain] = platformSubFaultDomain
+		})
+	}
+
 	return nodeModifiers, nil
 }
 
@@ -596,6 +614,14 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 	}
 
 	return zone, nil
+}
+
+func (cnc *CloudNodeController) getPlatformSubFaultDomain() (string, error) {
+	subFD, err := cnc.nodeProvider.GetPlatformSubFaultDomain()
+	if err != nil {
+		return "", fmt.Errorf("cnc.getPlatformSubfaultDomain: %w", err)
+	}
+	return subFD, nil
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
