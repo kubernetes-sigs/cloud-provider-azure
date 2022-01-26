@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build plan9
 // +build plan9
 
 // Package plan9 contains an interface to the low-level operating system
@@ -24,9 +25,6 @@
 // holds a value of type syscall.ErrorString.
 package plan9 // import "golang.org/x/sys/plan9"
 
-<<<<<<< HEAD
-import "unsafe"
-=======
 import (
 	"bytes"
 	"strings"
@@ -34,21 +32,13 @@ import (
 
 	"golang.org/x/sys/internal/unsafeheader"
 )
->>>>>>> bf8118795 (chore(deps): bump github.com/Azure/azure-sdk-for-go)
 
 // ByteSliceFromString returns a NUL-terminated slice of bytes
 // containing the text of s. If s contains a NUL byte at any
 // location, it returns (nil, EINVAL).
 func ByteSliceFromString(s string) ([]byte, error) {
-<<<<<<< HEAD
-	for i := 0; i < len(s); i++ {
-		if s[i] == 0 {
-			return nil, EINVAL
-		}
-=======
 	if strings.IndexByte(s, 0) != -1 {
 		return nil, EINVAL
->>>>>>> bf8118795 (chore(deps): bump github.com/Azure/azure-sdk-for-go)
 	}
 	a := make([]byte, len(s)+1)
 	copy(a, s)
@@ -66,8 +56,6 @@ func BytePtrFromString(s string) (*byte, error) {
 	return &a[0], nil
 }
 
-<<<<<<< HEAD
-=======
 // ByteSliceToString returns a string form of the text represented by the slice s, with a terminating NUL and any
 // bytes after the NUL removed.
 func ByteSliceToString(s []byte) string {
@@ -103,7 +91,6 @@ func BytePtrToString(p *byte) string {
 	return string(s)
 }
 
->>>>>>> bf8118795 (chore(deps): bump github.com/Azure/azure-sdk-for-go)
 // Single-word zero for use when we need a valid pointer to 0 bytes.
 // See mksyscall.pl.
 var _zero uintptr
