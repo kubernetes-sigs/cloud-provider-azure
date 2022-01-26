@@ -78,3 +78,8 @@ func (np *IMDSNodeProvider) InstanceType(ctx context.Context, name types.NodeNam
 func (np *IMDSNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error) {
 	return np.azure.GetZone(ctx)
 }
+
+// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+func (np *IMDSNodeProvider) GetPlatformSubFaultDomain() (string, error) {
+	return np.azure.GetPlatformSubFaultDomain()
+}
