@@ -1618,6 +1618,7 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 func getInternalTestService(identifier string, requestedPorts ...int32) v1.Service {
 	return getTestServiceWithAnnotation(identifier, map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, requestedPorts...)
 }
+
 func getTestServiceWithAnnotation(identifier string, annotations map[string]string, requestedPorts ...int32) v1.Service {
 	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
 	for k, v := range annotations {
