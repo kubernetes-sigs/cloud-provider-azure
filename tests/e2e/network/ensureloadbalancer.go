@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -567,7 +567,7 @@ func defaultPublicIPAddress(ipName string) aznetwork.PublicIPAddress {
 			Name: skuName,
 		},
 		PublicIPAddressPropertiesFormat: &aznetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: aznetwork.Static,
+			PublicIPAllocationMethod: aznetwork.IPAllocationMethodStatic,
 		},
 	}
 }
