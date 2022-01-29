@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Kubernetes Authors.
+# Copyright 2022 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,22 +16,37 @@
 
 set -e
 
-KUBECONFIG=${KUBECONFIG:-""}
+REPO_ROOT=$(realpath $(dirname ${BASH_SOURCE})/..)
 
-if [ -z "$KUBECONFIG" ]
-echo "KUBECONFIG not set"
-exit 1
+# Check KUBECONFIG env var is set or not
+# If not, then check if kubeconfig is under cloud-provider-azure repo's root
+# If still not, then exist 1
+if [ -z "$KUBECONFIG" ]; then
+  if [ -f "${REPO_ROOT}/kubernetes" ]; then
+    export KUBECONFIG="${REPO_ROOT}/kubeconfig"
+  else
+    echo "KUBECONFIG not set"
+    exit 1
+  fi
 fi
 
-cd $GOPATH/src/k8s.io/kubernetes
- [ ! -d "$GOPATH/src/k8s.io/kubernetes" ] && cd $GOPATH/src/k8s.io && git clone https://github.com/kubernetes/kubernetes.git	
+K8S_ORG_PATH="$GOPATH/src/k8s.io/kubernetes"
+mkdir -p "${K8S_ORG_PATH}"
+if [ ! -d "${K8S_ORG_PATH}/kubernetes" ]; then
+  echo "Kubernetes repo not exists, clone one"
+  cd "${K8S_ORG_PATH}"
+  git clone https://github.com/kubernetes/kubernetes.git
+fi
 
+cd "${K8S_ORG_PATH}/kubernetes"
 make WHAT='test/e2e/e2e.test'
 make WHAT=cmd/kubectl
+make ginkgo
+
 export KUBERNETES_PROVIDER=azure
 export KUBERNETES_CONFORMANCE_TEST=y
 export KUBERNETES_CONFORMANCE_PROVIDER=azure
 export CLOUD_CONFIG=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/tests/k8s-azure/manifest/azure.json
 
-# Replace the test_args with your own.
-go run hack/e2e.go -- --test --provider=local --check-version-skew=false --test_args=$1
+# Set GINKGO_ARGS env var with your preferred ginkgo options like ginkgo.focus and ginkgo.skip.
+./hack/ginkgo-e2e.sh ${GINKGO_ARGS}
