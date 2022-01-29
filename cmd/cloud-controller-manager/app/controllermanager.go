@@ -40,6 +40,7 @@ import (
 	"k8s.io/component-base/configz"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
+	"k8s.io/controller-manager/controller"
 	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
 	"k8s.io/klog/v2"
 
@@ -78,7 +79,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
-			err = StartHTTPServer(c.Complete(), wait.NeverStop)
+			healthHandler, err := StartHTTPServer(c.Complete(), wait.NeverStop)
 			if err != nil {
 				klog.Errorf("Run: railed to start HTTP server: %v", err)
 				os.Exit(1)
@@ -120,7 +121,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					RenewDeadline: c.ComponentConfig.Generic.LeaderElection.RenewDeadline.Duration,
 					RetryPeriod:   c.ComponentConfig.Generic.LeaderElection.RetryPeriod.Duration,
 					Callbacks: leaderelection.LeaderCallbacks{
-						OnStartedLeading: RunWrapper(s, c),
+						OnStartedLeading: RunWrapper(s, c, healthHandler),
 						OnStoppedLeading: func() {
 							panic("leaderelection lost")
 						},
@@ -132,7 +133,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 				panic("unreachable")
 			}
 
-			RunWrapper(s, c)(context.TODO())
+			RunWrapper(s, c, healthHandler)(context.TODO())
 			panic("unreachable")
 		},
 	}
@@ -161,11 +162,11 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 }
 
 // RunWrapper adapts the ccm boot logic to the leader elector call back function
-func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config) func(ctx context.Context) {
+func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config, h *controllerhealthz.MutableHealthzHandler) func(ctx context.Context) {
 	return func(ctx context.Context) {
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			klog.V(1).Infof("using static initialization from config file %s", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
-			if err := Run(context.TODO(), c.Complete()); err != nil {
+			if err := Run(context.TODO(), c.Complete(), h); err != nil {
 				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
 				os.Exit(1)
 			}
@@ -184,7 +185,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 			}
 
 			errCh := make(chan error, 1)
-			cancelFunc := runAsync(s, errCh)
+			cancelFunc := runAsync(s, errCh, h)
 			for {
 				select {
 				case <-updateCh:
@@ -207,7 +208,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 
 					if !shouldRemainStopped {
 						klog.Info("RunWrapper: restarting all controllers")
-						cancelFunc = runAsync(s, errCh)
+						cancelFunc = runAsync(s, errCh, h)
 					} else {
 						klog.Warningf("All controllers are stopped!")
 					}
@@ -240,7 +241,7 @@ func shouldDisableCloudProvider(configFilePath string) (bool, error) {
 	return c.DisableCloudProvider, nil
 }
 
-func runAsync(s *options.CloudControllerManagerOptions, errCh chan error) context.CancelFunc {
+func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *controllerhealthz.MutableHealthzHandler) context.CancelFunc {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	go func() {
@@ -250,7 +251,7 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error) contex
 			os.Exit(1)
 		}
 
-		if err := Run(ctx, c.Complete()); err != nil {
+		if err := Run(ctx, c.Complete(), h); err != nil {
 			klog.Errorf("RunAsync: failed to run cloud controller manager: %v", err)
 			errCh <- err
 		}
@@ -262,7 +263,7 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error) contex
 }
 
 // StartHTTPServer starts the controller manager HTTP server
-func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) error {
+func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}) (*controllerhealthz.MutableHealthzHandler, error) {
 	// Setup any healthz checks we will want to use.
 	var checks []healthz.HealthChecker
 	var electionChecker *leaderelection.HealthzAdaptor
@@ -278,7 +279,7 @@ func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan str
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
 		if _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
-			return err
+			return nil, err
 		}
 
 		healthz.InstallReadyzHandler(unsecuredMux, checks...)
@@ -288,17 +289,17 @@ func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan str
 		insecureSuperuserAuthn := server.AuthenticationInfo{Authenticator: &server.InsecureSuperuser{}}
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, nil, &insecureSuperuserAuthn)
 		if err := c.InsecureServing.Serve(handler, 0, stopCh); err != nil {
-			return err
+			return nil, err
 		}
 
 		healthz.InstallReadyzHandler(unsecuredMux, checks...)
 	}
 
-	return nil
+	return healthzHandler, nil
 }
 
 // Run runs the ExternalCMServer.  This should never exit.
-func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig) error {
+func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *controllerhealthz.MutableHealthzHandler) error {
 	// To help debugging, immediately log version
 	klog.Infof("Version: %+v", version.Get())
 
@@ -338,7 +339,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig) error {
 		klog.Errorf("unable to register configz: %v", err)
 	}
 
-	if err := startControllers(ctx, c, ctx.Done(), cloud, newControllerInitializers()); err != nil {
+	if err := startControllers(ctx, c, ctx.Done(), cloud, newControllerInitializers(), h); err != nil {
 		klog.Fatalf("error running controllers: %v", err)
 	}
 
@@ -346,7 +347,8 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig) error {
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}, cloud cloudprovider.Interface, controllers map[string]initFunc) error {
+func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{},
+	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, stopCh)
 	// Set the informer on the user cloud object
@@ -354,6 +356,7 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 		informerUserCloud.SetInformers(completedConfig.SharedInformers)
 	}
 
+	var controllerChecks []healthz.HealthChecker
 	for controllerName, initFn := range controllers {
 		if !genericcontrollermanager.IsControllerEnabled(controllerName, ControllersDisabledByDefault, completedConfig.ComponentConfig.Generic.Controllers) {
 			klog.Warningf("%q is disabled", controllerName)
@@ -361,7 +364,7 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 		}
 
 		klog.V(1).Infof("Starting %q", controllerName)
-		_, started, err := initFn(ctx, completedConfig, cloud, stopCh)
+		ctrl, started, err := initFn(ctx, completedConfig, cloud, stopCh)
 		if err != nil {
 			klog.Errorf("Error starting %q: %s", controllerName, err.Error())
 			return err
@@ -370,9 +373,21 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 			klog.Warningf("Skipping %q", controllerName)
 			continue
 		}
+		check := controllerhealthz.NamedPingChecker(controllerName)
+		if ctrl != nil {
+			if healthCheckable, ok := ctrl.(controller.HealthCheckable); ok {
+				if realCheck := healthCheckable.HealthChecker(); realCheck != nil {
+					check = controllerhealthz.NamedHealthChecker(controllerName, realCheck)
+				}
+			}
+		}
+		controllerChecks = append(controllerChecks, check)
 		klog.Infof("Started %q", controllerName)
 
 		time.Sleep(wait.Jitter(completedConfig.ComponentConfig.Generic.ControllerStartInterval.Duration, ControllerStartJitter))
+	}
+	if healthzHandler != nil {
+		healthzHandler.AddHealthChecker(controllerChecks...)
 	}
 
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
