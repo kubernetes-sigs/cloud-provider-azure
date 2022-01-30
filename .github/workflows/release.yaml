@@ -164,20 +164,22 @@ jobs:
           VERSION_PATCH="${VERSION##*.}"
 
           BRANCH=release-${VERSION_MAJOR}.${VERSION_MINOR}
-          if [[ ! `git branch --list ${BRANCH}` ]]; then
+          if [[ ! `git show-ref ${BRANCH}` ]]; then
             BRANCH=master
           fi
 
           if [[ "${VERSION_PATCH}" = "0" ]]; then
-            START_SHA=$(git rev-parse v${VERSION_MAJOR}.$((VERSION_MINOR-1)).0)
+            START_TAG=remotes/origin/release-${VERSION_MAJOR}.$((VERSION_MINOR-1))
           else
-            START_SHA=$(git rev-parse v${VERSION_MAJOR}.${VERSION_MINOR}.$((VERSION_PATCH-1)))
+            START_TAG=v${VERSION_MAJOR}.${VERSION_MINOR}.$((VERSION_PATCH-1))
           fi
-          END_SHA=$(git rev-parse ${GITHUB_REF_NAME})
+          START_SHA=$(git rev-parse ${START_TAG}) 
+          END_TAG=${GITHUB_REF_NAME}
+          END_SHA=$(git rev-parse ${END_TAG})
 
-          echo ${BRANCH}
-          echo ${START_SHA}
-          echo ${END_SHA}
+          echo "BRANCH=${BRANCH}"
+          echo "START_TAG=${START_TAG} START_SHA=${START_SHA}"
+          echo "END_TAG=${END_TAG} END_SHA=${END_SHA}"
 
           GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
           release-notes --repo=cloud-provider-azure \
