@@ -2065,7 +2065,7 @@ func (az *Cloud) getExpectedLBRules(
 		ports = []v1.ServicePort{}
 	}
 
-	var enableTCPReset *bool
+	var enableTCPReset, nilTCPReset *bool
 	if az.useStandardLoadBalancer() {
 		enableTCPReset = to.BoolPtr(true)
 	}
@@ -2143,6 +2143,10 @@ func (az *Cloud) getExpectedLBRules(
 			loadDistribution = network.LoadDistributionSourceIP
 		}
 
+		tcpReset := enableTCPReset
+		if port.Protocol != v1.ProtocolTCP {
+			tcpReset = nilTCPReset
+		}
 		expectedRule := network.LoadBalancingRule{
 			Name: &lbRuleName,
 			LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
@@ -2157,7 +2161,7 @@ func (az *Cloud) getExpectedLBRules(
 				FrontendPort:        to.Int32Ptr(port.Port),
 				BackendPort:         to.Int32Ptr(port.Port),
 				DisableOutboundSnat: to.BoolPtr(az.disableLoadBalancerOutboundSNAT()),
-				EnableTCPReset:      enableTCPReset,
+				EnableTCPReset:      tcpReset,
 				EnableFloatingIP:    to.BoolPtr(true),
 			},
 		}
@@ -2936,14 +2940,21 @@ func equalLoadBalancingRulePropertiesFormat(s *network.LoadBalancingRuleProperti
 		return false
 	}
 
-	properties := reflect.DeepEqual(s.Protocol, t.Protocol) &&
-		reflect.DeepEqual(s.FrontendIPConfiguration, t.FrontendIPConfiguration) &&
+	properties := reflect.DeepEqual(s.Protocol, t.Protocol)
+	if !properties {
+		return false
+	}
+
+	if reflect.DeepEqual(s.Protocol, network.TransportProtocolTCP) {
+		properties = properties && reflect.DeepEqual(to.Bool(s.EnableTCPReset), to.Bool(t.EnableTCPReset))
+	}
+
+	properties = properties && reflect.DeepEqual(s.FrontendIPConfiguration, t.FrontendIPConfiguration) &&
 		reflect.DeepEqual(s.BackendAddressPool, t.BackendAddressPool) &&
 		reflect.DeepEqual(s.LoadDistribution, t.LoadDistribution) &&
 		reflect.DeepEqual(s.FrontendPort, t.FrontendPort) &&
 		reflect.DeepEqual(s.BackendPort, t.BackendPort) &&
 		reflect.DeepEqual(s.EnableFloatingIP, t.EnableFloatingIP) &&
-		reflect.DeepEqual(to.Bool(s.EnableTCPReset), to.Bool(t.EnableTCPReset)) &&
 		reflect.DeepEqual(to.Bool(s.DisableOutboundSnat), to.Bool(t.DisableOutboundSnat))
 
 	if wantLB && s.IdleTimeoutInMinutes != nil && t.IdleTimeoutInMinutes != nil {
