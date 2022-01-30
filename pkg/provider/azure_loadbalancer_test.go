@@ -1790,7 +1790,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			wantLb:          true,
-			expectedRules:   getHATestRules(true, false, v1.ProtocolSCTP),
+			expectedRules:   getHATestRules(false, false, v1.ProtocolSCTP),
 		},
 		{
 			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with HA enabled multi-ports services)",
@@ -4906,5 +4906,50 @@ func TestGetClusterFromPIPClusterTags(t *testing.T) {
 	for i, c := range tests {
 		actual := getClusterFromPIPClusterTags(c.tags)
 		assert.Equal(t, actual, c.expected, "TestCase[%d]: %s", i, c.desc)
+	}
+}
+
+func TestEqualLoadBalancingRulePropertiesFormat(t *testing.T) {
+	var enableTCPReset, disableTCPReset *bool = to.BoolPtr(true), to.BoolPtr(false)
+	var frontPort *int32 = to.Int32Ptr(80)
+
+	testcases := []struct {
+		s        *network.LoadBalancingRulePropertiesFormat
+		t        *network.LoadBalancingRulePropertiesFormat
+		wantLb   bool
+		expected bool
+	}{
+		{
+			s: &network.LoadBalancingRulePropertiesFormat{
+				Protocol:       network.TransportProtocolTCP,
+				EnableTCPReset: enableTCPReset,
+				FrontendPort:   frontPort,
+			},
+			t: &network.LoadBalancingRulePropertiesFormat{
+				Protocol:       network.TransportProtocolTCP,
+				EnableTCPReset: enableTCPReset,
+				FrontendPort:   frontPort,
+			},
+			wantLb:   true,
+			expected: true,
+		},
+		{
+			s: &network.LoadBalancingRulePropertiesFormat{
+				Protocol:       network.TransportProtocolUDP,
+				EnableTCPReset: disableTCPReset,
+				FrontendPort:   frontPort,
+			},
+			t: &network.LoadBalancingRulePropertiesFormat{
+				Protocol:       network.TransportProtocolUDP,
+				EnableTCPReset: enableTCPReset,
+				FrontendPort:   frontPort,
+			},
+			wantLb:   true,
+			expected: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		assert.Equal(t, tc.expected, equalLoadBalancingRulePropertiesFormat(tc.s, tc.t, tc.wantLb))
 	}
 }
