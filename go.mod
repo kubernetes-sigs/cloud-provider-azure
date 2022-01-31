@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.17
 
 require (
-	github.com/Azure/azure-sdk-for-go v61.3.0+incompatible
+	github.com/Azure/azure-sdk-for-go v61.4.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.24
 	github.com/Azure/go-autorest/autorest/adal v0.9.18
 	github.com/Azure/go-autorest/autorest/mocks v0.4.1
@@ -92,7 +92,6 @@ require (
 	github.com/prometheus/common v0.10.0 // indirect
 	github.com/prometheus/procfs v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
-	github.com/stretchr/objx v0.2.0 // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
