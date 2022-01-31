@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -4358,9 +4359,11 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 		existingFrontendIPConfigs []network.FrontendIPConfiguration
 		existingPIP               network.PublicIPAddress
 		getPIPError               *retry.Error
+		getZoneError              *retry.Error
 		regionZonesMap            map[string][]string
 		expectedZones             *[]string
 		expectedDirty             bool
+		expectedErr               error
 	}{
 		{
 			description:               "reconcileFrontendIPConfigs should reconcile the zones for the new fip config",
@@ -4381,6 +4384,48 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			expectedZones:             &[]string{"1", "2", "3"},
 			expectedDirty:             true,
 		},
+		{
+			description:  "reconcileFrontendIPConfigs should report an error if failed to get zones",
+			service:      getInternalTestService("test", 80),
+			getZoneError: retry.NewError(false, errors.New("get zone failed")),
+			expectedErr:  errors.New("get zone failed"),
+		},
+		{
+			description: "reconcileFrontendIPConfigs should use the nil zones of the existing frontend",
+			service: getTestServiceWithAnnotation("test", map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue}, 80),
+			existingFrontendIPConfigs: []network.FrontendIPConfiguration{
+				{
+					Name: to.StringPtr("atest1"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						Subnet: &network.Subnet{
+							Name: to.StringPtr("subnet-1"),
+						},
+					},
+				},
+			},
+			expectedDirty: true,
+		},
+		{
+			description: "reconcileFrontendIPConfigs should use the non-nil zones of the existing frontend",
+			service: getTestServiceWithAnnotation("test", map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue}, 80),
+			existingFrontendIPConfigs: []network.FrontendIPConfiguration{
+				{
+					Name: to.StringPtr("atest1"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						Subnet: &network.Subnet{
+							Name: to.StringPtr("subnet-1"),
+						},
+					},
+					Zones: &[]string{"1"},
+				},
+			},
+			expectedZones: &[]string{"1"},
+			expectedDirty: true,
+		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
@@ -4398,9 +4443,17 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			subnetClient := cloud.SubnetsClient.(*mocksubnetclient.MockInterface)
 			subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(network.Subnet{}, nil).MaxTimes(1)
 
+			zoneClient := mockzoneclient.NewMockInterface(ctrl)
+			zoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(1)
+			cloud.ZoneClient = zoneClient
+
 			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&tc.service)
 			_, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, true, defaultLBFrontendIPConfigName)
-			assert.NoError(t, err)
+			if tc.expectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Contains(t, err.Error(), tc.expectedErr.Error())
+			}
 			assert.Equal(t, tc.expectedDirty, dirty)
 
 			for _, fip := range *lb.FrontendIPConfigurations {
