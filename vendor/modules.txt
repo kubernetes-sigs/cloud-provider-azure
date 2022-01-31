@@ -1,10 +1,9 @@
-# github.com/Azure/azure-sdk-for-go v61.3.0+incompatible
+# github.com/Azure/azure-sdk-for-go v61.4.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute
 github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry
 github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice
-github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network
 github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network
 github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources
@@ -256,13 +255,9 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stretchr/objx v0.1.1
-## explicit
-github.com/stretchr/objx
 # github.com/stretchr/testify v1.7.0
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
-github.com/stretchr/testify/mock
 # go.etcd.io/etcd/api/v3 v3.5.1
 ## explicit; go 1.16
 go.etcd.io/etcd/api/v3/authpb
