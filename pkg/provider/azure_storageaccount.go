@@ -285,7 +285,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 			// Create private endpoint
 			privateEndpointName := accountName + "-pvtendpoint"
-			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup, vnetName, subnetName); err != nil {
+			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location); err != nil {
 				return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
 			}
 
@@ -312,7 +312,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	return accountName, accountKey, nil
 }
 
-func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName string) error {
+func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string) error {
 	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
 
 	subnet, _, err := az.getSubnet(vnetName, subnetName)
@@ -336,7 +336,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 	}
 	privateLinkServiceConnections := []network.PrivateLinkServiceConnection{privateLinkServiceConnection}
 	privateEndpoint := network.PrivateEndpoint{
-		Location:                  &az.Location,
+		Location:                  &location,
 		PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
 	}
 	return az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint, true)
@@ -388,12 +388,10 @@ func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName
 }
 
 // AddStorageAccountTags add tags to storage account
-func (az *Cloud) AddStorageAccountTags(resourceGroup, account string, tags map[string]*string) *retry.Error {
+func (az *Cloud) AddStorageAccountTags(ctx context.Context, resourceGroup, account string, tags map[string]*string) *retry.Error {
 	if az.StorageAccountClient == nil {
 		return retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
 	}
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	result, rerr := az.StorageAccountClient.GetProperties(ctx, resourceGroup, account)
 	if rerr != nil {
 		return rerr
@@ -414,12 +412,10 @@ func (az *Cloud) AddStorageAccountTags(resourceGroup, account string, tags map[s
 }
 
 // RemoveStorageAccountTag remove tag from storage account
-func (az *Cloud) RemoveStorageAccountTag(resourceGroup, account, key string) *retry.Error {
+func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, resourceGroup, account, key string) *retry.Error {
 	if az.StorageAccountClient == nil {
 		return retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
 	}
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	result, rerr := az.StorageAccountClient.GetProperties(ctx, resourceGroup, account)
 	if rerr != nil {
 		return rerr
