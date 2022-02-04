@@ -39,6 +39,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	testCases := []struct {
 		desc           string
@@ -125,7 +128,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = &options
 		}
-		_, err = ss.AttachDisk(test.vmssvmName, diskMap)
+		_, err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
@@ -136,6 +139,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 func TestDetachDiskWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	diskName := "disk-name"
@@ -247,7 +253,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err = ss.DetachDisk(test.vmssvmName, diskMap)
+		err = ss.DetachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
@@ -263,6 +269,9 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 func TestUpdateVMWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	diskName := "disk-name"
@@ -350,7 +359,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		err = ss.UpdateVM(test.vmssvmName)
+		err = ss.UpdateVM(ctx, test.vmssvmName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)

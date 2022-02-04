@@ -46,6 +46,9 @@ func TestCreateManagedDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	maxShare := int32(2)
 	goodDiskEncryptionSetID := fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/diskEncryptionSets/%s", "diskEncryptionSet-name")
 	badDiskEncryptionSetID := "badDiskEncryptionSetID"
@@ -227,7 +230,7 @@ func TestCreateManagedDisk(t *testing.T) {
 		mockDisksClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, test.diskName, gomock.Any()).Return(nil).AnyTimes()
 		mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, nil).AnyTimes()
 
-		actualDiskID, err := managedDiskController.CreateManagedDisk(volumeOptions)
+		actualDiskID, err := managedDiskController.CreateManagedDisk(ctx, volumeOptions)
 		assert.Equal(t, test.expectedDiskID, actualDiskID, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
@@ -239,6 +242,9 @@ func TestCreateManagedDisk(t *testing.T) {
 func TestCreateManagedDiskWithExtendedLocation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	testCloud := GetTestCloudWithExtendedLocation(ctrl)
 	diskName := disk1Name
@@ -275,7 +281,7 @@ func TestCreateManagedDiskWithExtendedLocation(t *testing.T) {
 
 	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, diskName).Return(diskreturned, nil).AnyTimes()
 
-	actualDiskID, err := managedDiskController.CreateManagedDisk(volumeOptions)
+	actualDiskID, err := managedDiskController.CreateManagedDisk(ctx, volumeOptions)
 	assert.Equal(t, expectedDiskID, actualDiskID, "Disk ID does not match.")
 	assert.Nil(t, err, "There should not be an error.")
 }
@@ -346,6 +352,9 @@ func TestGetDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	testCases := []struct {
 		desc                      string
 		diskName                  string
@@ -385,7 +394,7 @@ func TestGetDisk(t *testing.T) {
 			mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, nil).AnyTimes()
 		}
 
-		provisioningState, diskid, err := managedDiskController.GetDisk(testCloud.ResourceGroup, test.diskName)
+		provisioningState, diskid, err := managedDiskController.GetDisk(ctx, testCloud.ResourceGroup, test.diskName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)
@@ -398,6 +407,9 @@ func TestGetDisk(t *testing.T) {
 func TestResizeDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	diskSizeGB := int32(2)
 	diskName := disk1Name
@@ -490,7 +502,7 @@ func TestResizeDisk(t *testing.T) {
 			mockDisksClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, test.diskName, gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		result, err := managedDiskController.ResizeDisk(diskURI, test.oldSize, test.newSize, false)
+		result, err := managedDiskController.ResizeDisk(ctx, diskURI, test.oldSize, test.newSize, false)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected: %v, return: %v", i, test.desc, test.expectedErrMsg, err)

@@ -161,7 +161,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 			if strings.EqualFold(string(nodeName), string(attachedNode)) {
 				klog.Warningf("volume %q is actually attached to current node %q, invalidate vm cache and return error", diskURI, nodeName)
 				// update VM(invalidate vm cache)
-				if errUpdate := c.UpdateVM(nodeName); errUpdate != nil {
+				if errUpdate := c.UpdateVM(ctx, nodeName); errUpdate != nil {
 					return -1, errUpdate
 				}
 				lun, _, err := c.GetDiskLun(diskName, diskURI, nodeName)
@@ -243,7 +243,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
-	future, err := vmset.AttachDisk(nodeName, diskMap)
+	future, err := vmset.AttachDisk(ctx, nodeName, diskMap)
 	if err != nil {
 		return -1, err
 	}
@@ -340,7 +340,7 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 	if len(diskMap) > 0 {
 		c.diskStateMap.Store(disk, "detaching")
 		defer c.diskStateMap.Delete(disk)
-		if err = vmset.DetachDisk(nodeName, diskMap); err != nil {
+		if err = vmset.DetachDisk(ctx, nodeName, diskMap); err != nil {
 			if isInstanceNotFoundError(err) {
 				// if host doesn't exist, no need to detach
 				klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
@@ -365,7 +365,7 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 }
 
 // UpdateVM updates a vm
-func (c *controllerCommon) UpdateVM(nodeName types.NodeName) error {
+func (c *controllerCommon) UpdateVM(ctx context.Context, nodeName types.NodeName) error {
 	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return err
@@ -373,7 +373,7 @@ func (c *controllerCommon) UpdateVM(nodeName types.NodeName) error {
 	node := strings.ToLower(string(nodeName))
 	c.lockMap.LockEntry(node)
 	defer c.lockMap.UnlockEntry(node)
-	return vmset.UpdateVM(nodeName)
+	return vmset.UpdateVM(ctx, nodeName)
 }
 
 func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName string) error {
