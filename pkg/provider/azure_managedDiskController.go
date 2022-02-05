@@ -83,7 +83,7 @@ type ManagedDiskOptions struct {
 }
 
 //CreateManagedDisk : create managed disk
-func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (string, error) {
+func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *ManagedDiskOptions) (string, error) {
 	var err error
 	klog.V(4).Infof("azureDisk - creating new managed Name:%s StorageAccountType:%s Size:%v", options.DiskName, options.StorageAccountType, options.SizeGB)
 
@@ -211,8 +211,6 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 	}
 
 	cloud := c.common.cloud
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	rerr := cloud.DisksClient.CreateOrUpdate(ctx, options.ResourceGroup, options.DiskName, model)
 	if rerr != nil {
 		return "", rerr.Error()
@@ -224,7 +222,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		klog.Warningf("azureDisk - GetDisk(%s, StorageAccountType:%s) is throttled, unable to confirm provisioningState in poll process", options.DiskName, options.StorageAccountType)
 	} else {
 		err = kwait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
-			provisionState, id, err := c.GetDisk(options.ResourceGroup, options.DiskName)
+			provisionState, id, err := c.GetDisk(ctx, options.ResourceGroup, options.DiskName)
 			if err == nil {
 				if id != "" {
 					diskID = id
@@ -289,10 +287,7 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 }
 
 // GetDisk return: disk provisionState, diskID, error
-func (c *ManagedDiskController) GetDisk(resourceGroup, diskName string) (string, string, error) {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
+func (c *ManagedDiskController) GetDisk(ctx context.Context, resourceGroup, diskName string) (string, string, error) {
 	result, rerr := c.common.cloud.DisksClient.Get(ctx, resourceGroup, diskName)
 	if rerr != nil {
 		return "", "", rerr.Error()
@@ -301,15 +296,11 @@ func (c *ManagedDiskController) GetDisk(resourceGroup, diskName string) (string,
 	if result.DiskProperties != nil && (*result.DiskProperties).ProvisioningState != nil {
 		return *(*result.DiskProperties).ProvisioningState, *result.ID, nil
 	}
-
 	return "", "", nil
 }
 
 // ResizeDisk Expand the disk to new size
-func (c *ManagedDiskController) ResizeDisk(diskURI string, oldSize resource.Quantity, newSize resource.Quantity, supportOnlineResize bool) (resource.Quantity, error) {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
+func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, oldSize resource.Quantity, newSize resource.Quantity, supportOnlineResize bool) (resource.Quantity, error) {
 	diskName := path.Base(diskURI)
 	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
 	if err != nil {
@@ -349,14 +340,11 @@ func (c *ManagedDiskController) ResizeDisk(diskURI string, oldSize resource.Quan
 		},
 	}
 
-	ctx, cancel = getContextWithCancel()
-	defer cancel()
 	if rerr := c.common.cloud.DisksClient.Update(ctx, resourceGroup, diskName, diskParameter); rerr != nil {
 		return oldSize, rerr.Error()
 	}
 
 	klog.V(2).Infof("azureDisk - resize disk(%s) with new size(%d) completed", diskName, requestGiB)
-
 	return newSizeQuant, nil
 }
 
@@ -383,11 +371,11 @@ func (c *Cloud) GetLabelsForVolume(ctx context.Context, pv *v1.PersistentVolume)
 		return nil, nil
 	}
 
-	return c.GetAzureDiskLabels(pv.Spec.AzureDisk.DataDiskURI)
+	return c.GetAzureDiskLabels(ctx, pv.Spec.AzureDisk.DataDiskURI)
 }
 
 // GetAzureDiskLabels gets availability zone labels for Azuredisk.
-func (c *Cloud) GetAzureDiskLabels(diskURI string) (map[string]string, error) {
+func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[string]string, error) {
 	// Get disk's resource group.
 	diskName := path.Base(diskURI)
 	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
@@ -403,9 +391,6 @@ func (c *Cloud) GetAzureDiskLabels(diskURI string) (map[string]string, error) {
 	if c.DisksClient == nil {
 		return labels, nil
 	}
-	// Get information of the disk.
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 	disk, rerr := c.DisksClient.Get(ctx, resourceGroup, diskName)
 	if rerr != nil {
 		klog.Errorf("Failed to get information for AzureDisk %q: %v", diskName, rerr)

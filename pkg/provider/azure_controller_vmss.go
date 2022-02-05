@@ -33,7 +33,7 @@ import (
 )
 
 // AttachDisk attaches a disk to vm
-func (ss *ScaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) (*azure.Future, error) {
+func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) (*azure.Future, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -98,9 +98,6 @@ func (ss *ScaleSet) AttachDisk(nodeName types.NodeName, diskMap map[string]*Atta
 		},
 	}
 
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
 	// Invalidate the cache right after updating
 	defer func() {
 		_ = ss.deleteCacheForNode(vmName)
@@ -134,7 +131,7 @@ func (ss *ScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Futur
 }
 
 // DetachDisk detaches a disk from VM
-func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]string) error {
+func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string) error {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -188,10 +185,6 @@ func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 			},
 		},
 	}
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
 	// Invalidate the cache right after updating
 	defer func() {
 		_ = ss.deleteCacheForNode(vmName)
@@ -217,7 +210,7 @@ func (ss *ScaleSet) DetachDisk(nodeName types.NodeName, diskMap map[string]strin
 }
 
 // UpdateVM updates a vm
-func (ss *ScaleSet) UpdateVM(nodeName types.NodeName) error {
+func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error {
 	vmName := mapNodeNameToVMName(nodeName)
 	ssName, instanceID, _, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
@@ -228,9 +221,6 @@ func (ss *ScaleSet) UpdateVM(nodeName types.NodeName) error {
 	if err != nil {
 		return err
 	}
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 
 	// Invalidate the cache right after updating
 	defer func() {
