@@ -1,4 +1,592 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.11</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v0.7.11/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v0.7.11/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.13</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</guid><description>
+&lt;h1 id="changelog-since-v0712">Changelog since v0.7.12&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Chore: upgrade &lt;code>github.com/gogo/protobuf&lt;/code> to v1.3.2, &lt;code>golang.org/x/crypto&lt;/code> to v0.0.0-20220112180741-5e0467b6c7ce and &lt;code>golang.org/x/text&lt;/code> to v0.3.7 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1036">#1036&lt;/a>, &lt;a href="https://github.com/lodrem">@lodrem&lt;/a>)&lt;/li>
+&lt;li>Feat: support platformSubFaultDomain node label (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1081">#1081&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: use zones in the pre-existing frontend IP configurations for internal LBs (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1089">#1089&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/DataDog/datadog-go: &lt;a href="https://github.com/DataDog/datadog-go/tree/v3.2.0">v3.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/OneOfOne/xxhash: &lt;a href="https://github.com/OneOfOne/xxhash/tree/v1.2.2">v1.2.2&lt;/a>&lt;/li>
+&lt;li>github.com/antihax/optional: &lt;a href="https://github.com/antihax/optional/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash: &lt;a href="https://github.com/cespare/xxhash/tree/v1.1.0">v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonus-gometrics: &lt;a href="https://github.com/circonus-labs/circonus-gometrics/tree/v2.3.1">v2.3.1+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonusllhist: &lt;a href="https://github.com/circonus-labs/circonusllhist/tree/v0.1.3">v0.1.3&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/udpa/go: &lt;a href="https://github.com/cncf/udpa/go/tree/04548b0">04548b0&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/xds/go: &lt;a href="https://github.com/cncf/xds/go/tree/a8f9461">a8f9461&lt;/a>&lt;/li>
+&lt;li>github.com/dgryski/go-sip13: &lt;a href="https://github.com/dgryski/go-sip13/tree/e10d5fe">e10d5fe&lt;/a>&lt;/li>
+&lt;li>github.com/go-task/slim-sprig: &lt;a href="https://github.com/go-task/slim-sprig/tree/348f09d">348f09d&lt;/a>&lt;/li>
+&lt;li>github.com/golang-jwt/jwt/v4: &lt;a href="https://github.com/golang-jwt/jwt/v4/tree/v4.2.0">v4.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-hclog: &lt;a href="https://github.com/hashicorp/go-hclog/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-retryablehttp: &lt;a href="https://github.com/hashicorp/go-retryablehttp/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/iancoleman/strcase: &lt;a href="https://github.com/iancoleman/strcase/tree/v0.2.0">v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/kr/fs: &lt;a href="https://github.com/kr/fs/tree/v0.1.0">v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/lyft/protoc-gen-star: &lt;a href="https://github.com/lyft/protoc-gen-star/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/nxadm/tail: &lt;a href="https://github.com/nxadm/tail/tree/v1.4.8">v1.4.8&lt;/a>&lt;/li>
+&lt;li>github.com/oklog/ulid: &lt;a href="https://github.com/oklog/ulid/tree/v1.3.1">v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo/v2: &lt;a href="https://github.com/onsi/ginkgo/v2/tree/v2.0.0">v2.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/pkg/sftp: &lt;a href="https://github.com/pkg/sftp/tree/v1.10.1">v1.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/tsdb: &lt;a href="https://github.com/prometheus/tsdb/tree/v0.7.1">v0.7.1&lt;/a>&lt;/li>
+&lt;li>github.com/sagikazarmark/crypt: &lt;a href="https://github.com/sagikazarmark/crypt/tree/v0.3.0">v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spaolacci/murmur3: &lt;a href="https://github.com/spaolacci/murmur3/tree/f09979e">f09979e&lt;/a>&lt;/li>
+&lt;li>github.com/tv42/httpunix: &lt;a href="https://github.com/tv42/httpunix/tree/b75d861">b75d861&lt;/a>&lt;/li>
+&lt;li>github.com/ugorji/go: &lt;a href="https://github.com/ugorji/go/tree/v1.1.4">v1.1.4&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd/api/v3: v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/pkg/v3: v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v2: v2.305.1&lt;/li>
+&lt;li>go.opentelemetry.io/proto/otlp: v0.7.0&lt;/li>
+&lt;li>gopkg.in/yaml.v3: 496545a&lt;/li>
+&lt;li>rsc.io/quote/v3: v3.1.0&lt;/li>
+&lt;li>rsc.io/sampler: v1.3.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/firestore: v1.1.0 → v1.6.1&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v53.1.0...v61.4.0">v53.1.0+incompatible → v61.4.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.10...v0.9.18">v0.9.10 → v0.9.18&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/mocks: &lt;a href="https://github.com/Azure/go-autorest/autorest/mocks/compare/v0.3.0...v0.4.1">v0.3.0 → v0.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/to: &lt;a href="https://github.com/Azure/go-autorest/autorest/to/compare/v0.2.0...v0.4.0">v0.2.0 → v0.4.0&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.17...v0.11.24">v0.11.17 → v0.11.24&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/logger: &lt;a href="https://github.com/Azure/go-autorest/logger/compare/v0.2.0...v0.2.1">v0.2.0 → v0.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-metrics: &lt;a href="https://github.com/armon/go-metrics/compare/f0300d1...v0.3.10">f0300d1 → v0.3.10&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-radix: &lt;a href="https://github.com/armon/go-radix/compare/7fddfc3...v1.0.0">7fddfc3 → v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/beorn7/perks: &lt;a href="https://github.com/beorn7/perks/compare/v1.0.0...v1.0.1">v1.0.0 → v1.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/blang/semver: &lt;a href="https://github.com/blang/semver/compare/v3.5.0...v3.5.1">v3.5.0+incompatible → v3.5.1+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/census-instrumentation/opencensus-proto: &lt;a href="https://github.com/census-instrumentation/opencensus-proto/compare/v0.2.1...v0.3.0">v0.2.1 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash/v2: &lt;a href="https://github.com/cespare/xxhash/v2/compare/v2.1.1...v2.1.2">v2.1.1 → v2.1.2&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/go-systemd/v22: &lt;a href="https://github.com/coreos/go-systemd/v22/compare/v22.1.0...v22.3.2">v22.1.0 → v22.3.2&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/pkg: &lt;a href="https://github.com/coreos/pkg/compare/97fdf19...399ea9e">97fdf19 → 399ea9e&lt;/a>&lt;/li>
+&lt;li>github.com/cpuguy83/go-md2man/v2: &lt;a href="https://github.com/cpuguy83/go-md2man/v2/compare/v2.0.0...v2.0.1">v2.0.0 → v2.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/creack/pty: &lt;a href="https://github.com/creack/pty/compare/v1.1.9...v1.1.7">v1.1.9 → v1.1.7&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/go-control-plane: &lt;a href="https://github.com/envoyproxy/go-control-plane/compare/5f8ba28...v0.10.1">5f8ba28 → v0.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/protoc-gen-validate: &lt;a href="https://github.com/envoyproxy/protoc-gen-validate/compare/v0.1.0...v0.6.2">v0.1.0 → v0.6.2&lt;/a>&lt;/li>
+&lt;li>github.com/evanphx/json-patch: &lt;a href="https://github.com/evanphx/json-patch/compare/v4.2.0...v5.6.0">v4.2.0+incompatible → v5.6.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/fatih/color: &lt;a href="https://github.com/fatih/color/compare/v1.7.0...v1.13.0">v1.7.0 → v1.13.0&lt;/a>&lt;/li>
+&lt;li>github.com/fsnotify/fsnotify: &lt;a href="https://github.com/fsnotify/fsnotify/compare/v1.4.9...v1.5.1">v1.4.9 → v1.5.1&lt;/a>&lt;/li>
+&lt;li>github.com/go-logr/logr: &lt;a href="https://github.com/go-logr/logr/compare/v0.2.0...v0.4.0">v0.2.0 → v0.4.0&lt;/a>&lt;/li>
+&lt;li>github.com/godbus/dbus/v5: &lt;a href="https://github.com/godbus/dbus/v5/compare/v5.0.3...v5.0.4">v5.0.3 → v5.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/gofrs/uuid: &lt;a href="https://github.com/gofrs/uuid/compare/v4.0.0...v4.2.0">v4.0.0+incompatible → v4.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/gogo/protobuf: &lt;a href="https://github.com/gogo/protobuf/compare/v1.3.1...v1.3.2">v1.3.1 → v1.3.2&lt;/a>&lt;/li>
+&lt;li>github.com/golang/groupcache: &lt;a href="https://github.com/golang/groupcache/compare/02826c3...41bb18b">02826c3 → 41bb18b&lt;/a>&lt;/li>
+&lt;li>github.com/golang/mock: &lt;a href="https://github.com/golang/mock/compare/v1.3.1...v1.6.0">v1.3.1 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang/protobuf: &lt;a href="https://github.com/golang/protobuf/compare/v1.3.2...v1.5.2">v1.3.2 → v1.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/google/cadvisor: &lt;a href="https://github.com/google/cadvisor/compare/v0.38.5...v0.38.8">v0.38.5 → v0.38.8&lt;/a>&lt;/li>
+&lt;li>github.com/google/go-cmp: &lt;a href="https://github.com/google/go-cmp/compare/v0.3.0...v0.5.6">v0.3.0 → v0.5.6&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/1ebb73c...94a9f03">1ebb73c → 94a9f03&lt;/a>&lt;/li>
+&lt;li>github.com/google/uuid: &lt;a href="https://github.com/google/uuid/compare/v1.1.1...v1.1.2">v1.1.1 → v1.1.2&lt;/a>&lt;/li>
+&lt;li>github.com/googleapis/gax-go/v2: &lt;a href="https://github.com/googleapis/gax-go/v2/compare/v2.0.5...v2.1.1">v2.0.5 → v2.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/grpc-ecosystem/grpc-gateway: &lt;a href="https://github.com/grpc-ecosystem/grpc-gateway/compare/v1.9.5...v1.16.0">v1.9.5 → v1.16.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/api: &lt;a href="https://github.com/hashicorp/consul/api/compare/v1.1.0...v1.11.0">v1.1.0 → v1.11.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/sdk: &lt;a href="https://github.com/hashicorp/consul/sdk/compare/v0.1.1...v0.8.0">v0.1.1 → v0.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-cleanhttp: &lt;a href="https://github.com/hashicorp/go-cleanhttp/compare/v0.5.1...v0.5.2">v0.5.1 → v0.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-immutable-radix: &lt;a href="https://github.com/hashicorp/go-immutable-radix/compare/v1.0.0...v1.3.1">v1.0.0 → v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-multierror: &lt;a href="https://github.com/hashicorp/go-multierror/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-rootcerts: &lt;a href="https://github.com/hashicorp/go-rootcerts/compare/v1.0.0...v1.0.2">v1.0.0 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/golang-lru: &lt;a href="https://github.com/hashicorp/golang-lru/compare/v0.5.1...v0.5.4">v0.5.1 → v0.5.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/mdns: &lt;a href="https://github.com/hashicorp/mdns/compare/v1.0.0...v1.0.4">v1.0.0 → v1.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/memberlist: &lt;a href="https://github.com/hashicorp/memberlist/compare/v0.1.3...v0.3.0">v0.1.3 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/serf: &lt;a href="https://github.com/hashicorp/serf/compare/v0.8.2...v0.9.6">v0.8.2 → v0.9.6&lt;/a>&lt;/li>
+&lt;li>github.com/ianlancetaylor/demangle: &lt;a href="https://github.com/ianlancetaylor/demangle/compare/5e5cf60...28f6c0f">5e5cf60 → 28f6c0f&lt;/a>&lt;/li>
+&lt;li>github.com/json-iterator/go: &lt;a href="https://github.com/json-iterator/go/compare/v1.1.8...v1.1.12">v1.1.8 → v1.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/kisielk/errcheck: &lt;a href="https://github.com/kisielk/errcheck/compare/v1.2.0...v1.5.0">v1.2.0 → v1.5.0&lt;/a>&lt;/li>
+&lt;li>github.com/konsorten/go-windows-terminal-sequences: &lt;a href="https://github.com/konsorten/go-windows-terminal-sequences/compare/v1.0.1...v1.0.3">v1.0.1 → v1.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/kr/text: &lt;a href="https://github.com/kr/text/compare/v0.2.0...v0.1.0">v0.2.0 → v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/magiconair/properties: &lt;a href="https://github.com/magiconair/properties/compare/v1.8.1...v1.8.5">v1.8.1 → v1.8.5&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-colorable: &lt;a href="https://github.com/mattn/go-colorable/compare/v0.0.9...v0.1.12">v0.0.9 → v0.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-isatty: &lt;a href="https://github.com/mattn/go-isatty/compare/v0.0.4...v0.0.14">v0.0.4 → v0.0.14&lt;/a>&lt;/li>
+&lt;li>github.com/matttproud/golang_protobuf_extensions: &lt;a href="https://github.com/matttproud/golang_protobuf_extensions/compare/v1.0.1...c182aff">v1.0.1 → c182aff&lt;/a>&lt;/li>
+&lt;li>github.com/miekg/dns: &lt;a href="https://github.com/miekg/dns/compare/v1.1.4...v1.1.41">v1.1.4 → v1.1.41&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/cli: &lt;a href="https://github.com/mitchellh/cli/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/mapstructure: &lt;a href="https://github.com/mitchellh/mapstructure/compare/v1.1.2...v1.4.3">v1.1.2 → v1.4.3&lt;/a>&lt;/li>
+&lt;li>github.com/modern-go/reflect2: &lt;a href="https://github.com/modern-go/reflect2/compare/v1.0.1...v1.0.2">v1.0.1 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo: &lt;a href="https://github.com/onsi/ginkgo/compare/v1.11.0...v1.16.5">v1.11.0 → v1.16.5&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.7.0...v1.18.1">v1.7.0 → v1.18.1&lt;/a>&lt;/li>
+&lt;li>github.com/opencontainers/go-digest: &lt;a href="https://github.com/opencontainers/go-digest/compare/v1.0.0-rc1...v1.0.0">v1.0.0-rc1 → v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/pascaldekloe/goe: &lt;a href="https://github.com/pascaldekloe/goe/compare/57f6aae...v0.1.0">57f6aae → v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/pelletier/go-toml: &lt;a href="https://github.com/pelletier/go-toml/compare/v1.2.0...v1.9.4">v1.2.0 → v1.9.4&lt;/a>&lt;/li>
+&lt;li>github.com/pkg/errors: &lt;a href="https://github.com/pkg/errors/compare/v0.8.1...v0.9.1">v0.8.1 → v0.9.1&lt;/a>&lt;/li>
+&lt;li>github.com/posener/complete: &lt;a href="https://github.com/posener/complete/compare/v1.1.1...v1.2.3">v1.1.1 → v1.2.3&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/procfs: &lt;a href="https://github.com/prometheus/procfs/compare/v0.0.2...v0.2.0">v0.0.2 → v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/rogpeppe/fastuuid: &lt;a href="https://github.com/rogpeppe/fastuuid/compare/6724a57...v1.2.0">6724a57 → v1.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/rubiojr/go-vhd: &lt;a href="https://github.com/rubiojr/go-vhd/compare/0bfd3b3...02e2102">0bfd3b3 → 02e2102&lt;/a>&lt;/li>
+&lt;li>github.com/russross/blackfriday/v2: &lt;a href="https://github.com/russross/blackfriday/v2/compare/v2.0.1...v2.1.0">v2.0.1 → v2.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/sirupsen/logrus: &lt;a href="https://github.com/sirupsen/logrus/compare/v1.4.2...v1.6.0">v1.4.2 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/afero: &lt;a href="https://github.com/spf13/afero/compare/v1.2.2...v1.6.0">v1.2.2 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cast: &lt;a href="https://github.com/spf13/cast/compare/v1.3.0...v1.4.1">v1.3.0 → v1.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cobra: &lt;a href="https://github.com/spf13/cobra/compare/v0.0.5...v1.3.0">v0.0.5 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/viper: &lt;a href="https://github.com/spf13/viper/compare/v1.7.0...v1.10.0">v1.7.0 → v1.10.0&lt;/a>&lt;/li>
+&lt;li>github.com/stretchr/testify: &lt;a href="https://github.com/stretchr/testify/compare/v1.4.0...v1.7.0">v1.4.0 → v1.7.0&lt;/a>&lt;/li>
+&lt;li>github.com/yuin/goldmark: &lt;a href="https://github.com/yuin/goldmark/compare/v1.1.27...v1.3.5">v1.1.27 → v1.3.5&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd: 262c939 → dd1b699&lt;/li>
+&lt;li>go.opencensus.io: v0.22.3 → v0.23.0&lt;/li>
+&lt;li>go.uber.org/atomic: v1.3.2 → v1.7.0&lt;/li>
+&lt;li>go.uber.org/multierr: v1.1.0 → v1.6.0&lt;/li>
+&lt;li>go.uber.org/zap: v1.10.0 → v1.17.0&lt;/li>
+&lt;li>golang.org/x/crypto: bac4c82 → 5e0467b&lt;/li>
+&lt;li>golang.org/x/lint: 738671d → 6edffad&lt;/li>
+&lt;li>golang.org/x/mod: v0.3.0 → v0.5.0&lt;/li>
+&lt;li>golang.org/x/net: ac852fb → 69e39ba&lt;/li>
+&lt;li>golang.org/x/oauth2: 0f29369 → d3ed0bb&lt;/li>
+&lt;li>golang.org/x/sync: cd5d95a → 036812b&lt;/li>
+&lt;li>golang.org/x/sys: 742c48e → 1d35b9e&lt;/li>
+&lt;li>golang.org/x/text: v0.3.2 → v0.3.7&lt;/li>
+&lt;li>golang.org/x/time: 9d24e82 → 3af7569&lt;/li>
+&lt;li>golang.org/x/tools: c1934b7 → v0.1.5&lt;/li>
+&lt;li>google.golang.org/api: v0.20.0 → v0.62.0&lt;/li>
+&lt;li>google.golang.org/appengine: v1.5.0 → v1.6.7&lt;/li>
+&lt;li>google.golang.org/genproto: 24fa4b2 → 3a66f56&lt;/li>
+&lt;li>google.golang.org/grpc: v1.27.1 → v1.27.0&lt;/li>
+&lt;li>google.golang.org/protobuf: v1.25.0 → v1.27.1&lt;/li>
+&lt;li>gopkg.in/check.v1: 8fa4692 → 41f04d3&lt;/li>
+&lt;li>gopkg.in/ini.v1: v1.51.0 → v1.66.2&lt;/li>
+&lt;li>gopkg.in/yaml.v2: v2.2.8 → v2.4.0&lt;/li>
+&lt;li>k8s.io/api: fcac651 → v0.20.15&lt;/li>
+&lt;li>k8s.io/apiextensions-apiserver: a7ee1ef → v0.20.15&lt;/li>
+&lt;li>k8s.io/apimachinery: 15c5dba → v0.20.15&lt;/li>
+&lt;li>k8s.io/apiserver: aed7ab0 → v0.20.15&lt;/li>
+&lt;li>k8s.io/cli-runtime: 2e4b259 → v0.20.15&lt;/li>
+&lt;li>k8s.io/client-go: e24efdc → v0.20.15&lt;/li>
+&lt;li>k8s.io/cloud-provider: 82fca6d → v0.20.15&lt;/li>
+&lt;li>k8s.io/cluster-bootstrap: 614b98e → v0.20.15&lt;/li>
+&lt;li>k8s.io/code-generator: v0.21.0-alpha.0 → v0.20.15&lt;/li>
+&lt;li>k8s.io/component-base: 1e84b32 → v0.20.15&lt;/li>
+&lt;li>k8s.io/component-helpers: 7cb42b6 → v0.20.15&lt;/li>
+&lt;li>k8s.io/controller-manager: b2c380a → v0.20.15&lt;/li>
+&lt;li>k8s.io/cri-api: v0.21.0-alpha.0 → v0.20.15&lt;/li>
+&lt;li>k8s.io/csi-translation-lib: 8333033 → v0.20.15&lt;/li>
+&lt;li>k8s.io/gengo: e0e292d → 83324d8&lt;/li>
+&lt;li>k8s.io/klog/v2: v2.4.0 → v2.9.0&lt;/li>
+&lt;li>k8s.io/kube-aggregator: 6c47de4 → v0.20.15&lt;/li>
+&lt;li>k8s.io/kube-controller-manager: 18c28a4 → v0.20.15&lt;/li>
+&lt;li>k8s.io/kube-openapi: d219536 → 83f114c&lt;/li>
+&lt;li>k8s.io/kube-proxy: deb12d4 → v0.20.15&lt;/li>
+&lt;li>k8s.io/kube-scheduler: 0f62d39 → v0.20.15&lt;/li>
+&lt;li>k8s.io/kubectl: 5cfbd40 → v0.20.15&lt;/li>
+&lt;li>k8s.io/kubelet: 92ded5e → v0.20.15&lt;/li>
+&lt;li>k8s.io/kubernetes: f58c4d8 → v1.20.15&lt;/li>
+&lt;li>k8s.io/legacy-cloud-providers: 716c3da → v0.20.15&lt;/li>
+&lt;li>k8s.io/metrics: d70c0e0 → v0.20.15&lt;/li>
+&lt;li>k8s.io/mount-utils: v0.21.0-alpha.0 → v0.20.15&lt;/li>
+&lt;li>k8s.io/sample-apiserver: 1f4e6a9 → v0.20.15&lt;/li>
+&lt;li>k8s.io/utils: 6e3d28b → 67b214c&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.9 → v0.0.22&lt;/li>
+&lt;li>sigs.k8s.io/structured-merge-diff/v4: v4.0.2 → v4.1.2&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/coreos/go-etcd: &lt;a href="https://github.com/coreos/go-etcd/tree/v2.0.0">v2.0.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/cpuguy83/go-md2man: &lt;a href="https://github.com/cpuguy83/go-md2man/tree/v1.0.10">v1.0.10&lt;/a>&lt;/li>
+&lt;li>github.com/niemeyer/pretty: &lt;a href="https://github.com/niemeyer/pretty/tree/a10e7ca">a10e7ca&lt;/a>&lt;/li>
+&lt;li>github.com/ugorji/go/codec: &lt;a href="https://github.com/ugorji/go/codec/tree/d75b2dc">d75b2dc&lt;/a>&lt;/li>
+&lt;li>rsc.io/binaryregexp: v0.2.0&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v1.0.10</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.0.10/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.0.10/</guid><description>
+&lt;h1 id="changelog-since-v109">Changelog since v1.0.9&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Feat: support platformSubFaultDomain node label (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1082">#1082&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: use zones in the pre-existing frontend IP configurations for internal LBs (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1095">#1095&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/DataDog/datadog-go: &lt;a href="https://github.com/DataDog/datadog-go/tree/v3.2.0">v3.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/OneOfOne/xxhash: &lt;a href="https://github.com/OneOfOne/xxhash/tree/v1.2.2">v1.2.2&lt;/a>&lt;/li>
+&lt;li>github.com/antihax/optional: &lt;a href="https://github.com/antihax/optional/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash: &lt;a href="https://github.com/cespare/xxhash/tree/v1.1.0">v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonus-gometrics: &lt;a href="https://github.com/circonus-labs/circonus-gometrics/tree/v2.3.1">v2.3.1+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonusllhist: &lt;a href="https://github.com/circonus-labs/circonusllhist/tree/v0.1.3">v0.1.3&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/udpa/go: &lt;a href="https://github.com/cncf/udpa/go/tree/04548b0">04548b0&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/xds/go: &lt;a href="https://github.com/cncf/xds/go/tree/a8f9461">a8f9461&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/go-systemd/v22: &lt;a href="https://github.com/coreos/go-systemd/v22/tree/v22.3.2">v22.3.2&lt;/a>&lt;/li>
+&lt;li>github.com/dgryski/go-sip13: &lt;a href="https://github.com/dgryski/go-sip13/tree/e10d5fe">e10d5fe&lt;/a>&lt;/li>
+&lt;li>github.com/go-gl/glfw: &lt;a href="https://github.com/go-gl/glfw/tree/e6da0ac">e6da0ac&lt;/a>&lt;/li>
+&lt;li>github.com/go-stack/stack: &lt;a href="https://github.com/go-stack/stack/tree/v1.8.0">v1.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/go-task/slim-sprig: &lt;a href="https://github.com/go-task/slim-sprig/tree/348f09d">348f09d&lt;/a>&lt;/li>
+&lt;li>github.com/godbus/dbus/v5: &lt;a href="https://github.com/godbus/dbus/v5/tree/v5.0.4">v5.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/golang-jwt/jwt/v4: &lt;a href="https://github.com/golang-jwt/jwt/v4/tree/v4.2.0">v4.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang/snappy: &lt;a href="https://github.com/golang/snappy/tree/v0.0.3">v0.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/google/martian/v3: &lt;a href="https://github.com/google/martian/v3/tree/v3.2.1">v3.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-hclog: &lt;a href="https://github.com/hashicorp/go-hclog/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-retryablehttp: &lt;a href="https://github.com/hashicorp/go-retryablehttp/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/iancoleman/strcase: &lt;a href="https://github.com/iancoleman/strcase/tree/v0.2.0">v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/konsorten/go-windows-terminal-sequences: &lt;a href="https://github.com/konsorten/go-windows-terminal-sequences/tree/v1.0.1">v1.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/kr/fs: &lt;a href="https://github.com/kr/fs/tree/v0.1.0">v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/kr/pty: &lt;a href="https://github.com/kr/pty/tree/v1.1.5">v1.1.5&lt;/a>&lt;/li>
+&lt;li>github.com/lyft/protoc-gen-star: &lt;a href="https://github.com/lyft/protoc-gen-star/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/nxadm/tail: &lt;a href="https://github.com/nxadm/tail/tree/v1.4.8">v1.4.8&lt;/a>&lt;/li>
+&lt;li>github.com/oklog/ulid: &lt;a href="https://github.com/oklog/ulid/tree/v1.3.1">v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo/v2: &lt;a href="https://github.com/onsi/ginkgo/v2/tree/v2.0.0">v2.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/pkg/sftp: &lt;a href="https://github.com/pkg/sftp/tree/v1.10.1">v1.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/tsdb: &lt;a href="https://github.com/prometheus/tsdb/tree/v0.7.1">v0.7.1&lt;/a>&lt;/li>
+&lt;li>github.com/sagikazarmark/crypt: &lt;a href="https://github.com/sagikazarmark/crypt/tree/v0.3.0">v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spaolacci/murmur3: &lt;a href="https://github.com/spaolacci/murmur3/tree/f09979e">f09979e&lt;/a>&lt;/li>
+&lt;li>github.com/tv42/httpunix: &lt;a href="https://github.com/tv42/httpunix/tree/b75d861">b75d861&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd/api/v3: v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/pkg/v3: v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v2: v2.305.1&lt;/li>
+&lt;li>go.opentelemetry.io/proto/otlp: v0.7.0&lt;/li>
+&lt;li>google.golang.org/grpc/cmd/protoc-gen-go-grpc: v1.1.0&lt;/li>
+&lt;li>rsc.io/binaryregexp: v0.2.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/bigquery: v1.4.0 → v1.8.0&lt;/li>
+&lt;li>cloud.google.com/go/firestore: v1.1.0 → v1.6.1&lt;/li>
+&lt;li>cloud.google.com/go/pubsub: v1.2.0 → v1.3.1&lt;/li>
+&lt;li>cloud.google.com/go/storage: v1.6.0 → v1.10.0&lt;/li>
+&lt;li>cloud.google.com/go: v0.54.0 → v0.99.0&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v54.1.0...v61.4.0">v54.1.0+incompatible → v61.4.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.10...v0.9.18">v0.9.10 → v0.9.18&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/to: &lt;a href="https://github.com/Azure/go-autorest/autorest/to/compare/v0.2.0...v0.4.0">v0.2.0 → v0.4.0&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/validation: &lt;a href="https://github.com/Azure/go-autorest/autorest/validation/compare/v0.1.0...v0.3.1">v0.1.0 → v0.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.17...v0.11.24">v0.11.17 → v0.11.24&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/logger: &lt;a href="https://github.com/Azure/go-autorest/logger/compare/v0.2.0...v0.2.1">v0.2.0 → v0.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-metrics: &lt;a href="https://github.com/armon/go-metrics/compare/f0300d1...v0.3.10">f0300d1 → v0.3.10&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-radix: &lt;a href="https://github.com/armon/go-radix/compare/7fddfc3...v1.0.0">7fddfc3 → v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/census-instrumentation/opencensus-proto: &lt;a href="https://github.com/census-instrumentation/opencensus-proto/compare/v0.2.1...v0.3.0">v0.2.1 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash/v2: &lt;a href="https://github.com/cespare/xxhash/v2/compare/v2.1.1...v2.1.2">v2.1.1 → v2.1.2&lt;/a>&lt;/li>
+&lt;li>github.com/cpuguy83/go-md2man/v2: &lt;a href="https://github.com/cpuguy83/go-md2man/v2/compare/v2.0.0...v2.0.1">v2.0.0 → v2.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/dnaeon/go-vcr: &lt;a href="https://github.com/dnaeon/go-vcr/compare/v1.1.0...v1.2.0">v1.1.0 → v1.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/go-control-plane: &lt;a href="https://github.com/envoyproxy/go-control-plane/compare/5f8ba28...v0.10.1">5f8ba28 → v0.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/protoc-gen-validate: &lt;a href="https://github.com/envoyproxy/protoc-gen-validate/compare/v0.1.0...v0.6.2">v0.1.0 → v0.6.2&lt;/a>&lt;/li>
+&lt;li>github.com/evanphx/json-patch: &lt;a href="https://github.com/evanphx/json-patch/compare/v4.9.0...v5.6.0">v4.9.0+incompatible → v5.6.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/fatih/color: &lt;a href="https://github.com/fatih/color/compare/v1.7.0...v1.13.0">v1.7.0 → v1.13.0&lt;/a>&lt;/li>
+&lt;li>github.com/fsnotify/fsnotify: &lt;a href="https://github.com/fsnotify/fsnotify/compare/v1.4.7...v1.5.1">v1.4.7 → v1.5.1&lt;/a>&lt;/li>
+&lt;li>github.com/gofrs/uuid: &lt;a href="https://github.com/gofrs/uuid/compare/v4.0.0...v4.2.0">v4.0.0+incompatible → v4.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/golang/groupcache: &lt;a href="https://github.com/golang/groupcache/compare/8c9f03a...41bb18b">8c9f03a → 41bb18b&lt;/a>&lt;/li>
+&lt;li>github.com/golang/mock: &lt;a href="https://github.com/golang/mock/compare/v1.4.1...v1.6.0">v1.4.1 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang/protobuf: &lt;a href="https://github.com/golang/protobuf/compare/v1.4.3...v1.5.2">v1.4.3 → v1.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/google/go-cmp: &lt;a href="https://github.com/google/go-cmp/compare/v0.5.2...v0.5.6">v0.5.2 → v0.5.6&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/1ebb73c...4bb14d4">1ebb73c → 4bb14d4&lt;/a>&lt;/li>
+&lt;li>github.com/googleapis/gax-go/v2: &lt;a href="https://github.com/googleapis/gax-go/v2/compare/v2.0.5...v2.1.1">v2.0.5 → v2.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/grpc-ecosystem/grpc-gateway: &lt;a href="https://github.com/grpc-ecosystem/grpc-gateway/compare/v1.9.5...v1.16.0">v1.9.5 → v1.16.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/api: &lt;a href="https://github.com/hashicorp/consul/api/compare/v1.1.0...v1.11.0">v1.1.0 → v1.11.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/sdk: &lt;a href="https://github.com/hashicorp/consul/sdk/compare/v0.1.1...v0.8.0">v0.1.1 → v0.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-cleanhttp: &lt;a href="https://github.com/hashicorp/go-cleanhttp/compare/v0.5.1...v0.5.2">v0.5.1 → v0.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-immutable-radix: &lt;a href="https://github.com/hashicorp/go-immutable-radix/compare/v1.0.0...v1.3.1">v1.0.0 → v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-multierror: &lt;a href="https://github.com/hashicorp/go-multierror/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-rootcerts: &lt;a href="https://github.com/hashicorp/go-rootcerts/compare/v1.0.0...v1.0.2">v1.0.0 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/golang-lru: &lt;a href="https://github.com/hashicorp/golang-lru/compare/v0.5.1...v0.5.4">v0.5.1 → v0.5.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/mdns: &lt;a href="https://github.com/hashicorp/mdns/compare/v1.0.0...v1.0.4">v1.0.0 → v1.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/memberlist: &lt;a href="https://github.com/hashicorp/memberlist/compare/v0.1.3...v0.3.0">v0.1.3 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/serf: &lt;a href="https://github.com/hashicorp/serf/compare/v0.8.2...v0.9.6">v0.8.2 → v0.9.6&lt;/a>&lt;/li>
+&lt;li>github.com/ianlancetaylor/demangle: &lt;a href="https://github.com/ianlancetaylor/demangle/compare/5e5cf60...28f6c0f">5e5cf60 → 28f6c0f&lt;/a>&lt;/li>
+&lt;li>github.com/json-iterator/go: &lt;a href="https://github.com/json-iterator/go/compare/v1.1.10...v1.1.12">v1.1.10 → v1.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/magiconair/properties: &lt;a href="https://github.com/magiconair/properties/compare/v1.8.1...v1.8.5">v1.8.1 → v1.8.5&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-colorable: &lt;a href="https://github.com/mattn/go-colorable/compare/v0.0.9...v0.1.12">v0.0.9 → v0.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-isatty: &lt;a href="https://github.com/mattn/go-isatty/compare/v0.0.4...v0.0.14">v0.0.4 → v0.0.14&lt;/a>&lt;/li>
+&lt;li>github.com/miekg/dns: &lt;a href="https://github.com/miekg/dns/compare/v1.0.14...v1.1.41">v1.0.14 → v1.1.41&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/cli: &lt;a href="https://github.com/mitchellh/cli/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/mapstructure: &lt;a href="https://github.com/mitchellh/mapstructure/compare/v1.1.2...v1.4.3">v1.1.2 → v1.4.3&lt;/a>&lt;/li>
+&lt;li>github.com/modern-go/reflect2: &lt;a href="https://github.com/modern-go/reflect2/compare/v1.0.1...v1.0.2">v1.0.1 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo: &lt;a href="https://github.com/onsi/ginkgo/compare/v1.11.0...v1.16.5">v1.11.0 → v1.16.5&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.8.1...v1.18.1">v1.8.1 → v1.18.1&lt;/a>&lt;/li>
+&lt;li>github.com/pascaldekloe/goe: &lt;a href="https://github.com/pascaldekloe/goe/compare/57f6aae...v0.1.0">57f6aae → v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/pelletier/go-toml: &lt;a href="https://github.com/pelletier/go-toml/compare/v1.2.0...v1.9.4">v1.2.0 → v1.9.4&lt;/a>&lt;/li>
+&lt;li>github.com/posener/complete: &lt;a href="https://github.com/posener/complete/compare/v1.1.1...v1.2.3">v1.1.1 → v1.2.3&lt;/a>&lt;/li>
+&lt;li>github.com/rogpeppe/fastuuid: &lt;a href="https://github.com/rogpeppe/fastuuid/compare/6724a57...v1.2.0">6724a57 → v1.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/rubiojr/go-vhd: &lt;a href="https://github.com/rubiojr/go-vhd/compare/02e2102...ccecf6c">02e2102 → ccecf6c&lt;/a>&lt;/li>
+&lt;li>github.com/russross/blackfriday/v2: &lt;a href="https://github.com/russross/blackfriday/v2/compare/v2.0.1...v2.1.0">v2.0.1 → v2.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/sirupsen/logrus: &lt;a href="https://github.com/sirupsen/logrus/compare/v1.7.0...v1.8.1">v1.7.0 → v1.8.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/afero: &lt;a href="https://github.com/spf13/afero/compare/v1.2.2...v1.6.0">v1.2.2 → v1.6.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cast: &lt;a href="https://github.com/spf13/cast/compare/v1.3.0...v1.4.1">v1.3.0 → v1.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cobra: &lt;a href="https://github.com/spf13/cobra/compare/v1.1.1...v1.3.0">v1.1.1 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/jwalterweatherman: &lt;a href="https://github.com/spf13/jwalterweatherman/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/viper: &lt;a href="https://github.com/spf13/viper/compare/v1.7.0...v1.10.0">v1.7.0 → v1.10.0&lt;/a>&lt;/li>
+&lt;li>github.com/stretchr/testify: &lt;a href="https://github.com/stretchr/testify/compare/v1.6.1...v1.7.0">v1.6.1 → v1.7.0&lt;/a>&lt;/li>
+&lt;li>github.com/yuin/goldmark: &lt;a href="https://github.com/yuin/goldmark/compare/v1.2.1...v1.3.5">v1.2.1 → v1.3.5&lt;/a>&lt;/li>
+&lt;li>go.opencensus.io: v0.22.3 → v0.23.0&lt;/li>
+&lt;li>go.uber.org/atomic: v1.6.0 → v1.7.0&lt;/li>
+&lt;li>go.uber.org/multierr: v1.5.0 → v1.6.0&lt;/li>
+&lt;li>go.uber.org/zap: v1.16.0 → v1.17.0&lt;/li>
+&lt;li>golang.org/x/crypto: 5ea612d → 5e0467b&lt;/li>
+&lt;li>golang.org/x/lint: 738671d → 6edffad&lt;/li>
+&lt;li>golang.org/x/mod: ce943fd → v0.5.0&lt;/li>
+&lt;li>golang.org/x/net: 3d97a24 → 491a49a&lt;/li>
+&lt;li>golang.org/x/oauth2: bf48bf1 → d3ed0bb&lt;/li>
+&lt;li>golang.org/x/sync: 67f06af → 036812b&lt;/li>
+&lt;li>golang.org/x/sys: a50acf3 → 1d35b9e&lt;/li>
+&lt;li>golang.org/x/text: v0.3.4 → v0.3.7&lt;/li>
+&lt;li>golang.org/x/tools: v0.1.0 → v0.1.5&lt;/li>
+&lt;li>google.golang.org/api: v0.20.0 → v0.62.0&lt;/li>
+&lt;li>google.golang.org/appengine: v1.6.5 → v1.6.7&lt;/li>
+&lt;li>google.golang.org/genproto: 8816d57 → 3a66f56&lt;/li>
+&lt;li>google.golang.org/protobuf: v1.25.0 → v1.27.1&lt;/li>
+&lt;li>gopkg.in/ini.v1: v1.51.0 → v1.66.2&lt;/li>
+&lt;li>gopkg.in/yaml.v3: 9f266ea → 496545a&lt;/li>
+&lt;li>honnef.co/go/tools: v0.0.1-2020.1.3 → v0.0.1-2020.1.4&lt;/li>
+&lt;li>k8s.io/api: 648b778 → v0.21.9&lt;/li>
+&lt;li>k8s.io/apimachinery: 8daf289 → v0.21.9&lt;/li>
+&lt;li>k8s.io/apiserver: 940c107 → v0.21.9&lt;/li>
+&lt;li>k8s.io/client-go: 8c8fa70 → v0.21.9&lt;/li>
+&lt;li>k8s.io/cloud-provider: 1ea896e → v0.21.9&lt;/li>
+&lt;li>k8s.io/component-base: 5860d9b → v0.21.9&lt;/li>
+&lt;li>k8s.io/controller-manager: 146a790 → v0.21.9&lt;/li>
+&lt;li>k8s.io/klog/v2: v2.8.0 → v2.9.0&lt;/li>
+&lt;li>k8s.io/kube-openapi: 591a79e → 3cc51fd&lt;/li>
+&lt;li>k8s.io/utils: 67b214c → da69540&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.15 → v0.0.27&lt;/li>
+&lt;li>sigs.k8s.io/structured-merge-diff/v4: v4.1.1 → v4.2.1&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;ul>
+&lt;li>go.uber.org/tools: 2cfd321&lt;/li>
+&lt;/ul></description></item><item><title>Blog: v1.1.6</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.1.6/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.1.6/</guid><description>
+&lt;h1 id="changelog-since-v115">Changelog since v1.1.5&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Feat: support platformSubFaultDomain node label (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1083">#1083&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: use zones in the pre-existing frontend IP configurations for internal LBs (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1096">#1096&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/DataDog/datadog-go: &lt;a href="https://github.com/DataDog/datadog-go/tree/v3.2.0">v3.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonus-gometrics: &lt;a href="https://github.com/circonus-labs/circonus-gometrics/tree/v2.3.1">v2.3.1+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonusllhist: &lt;a href="https://github.com/circonus-labs/circonusllhist/tree/v0.1.3">v0.1.3&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/xds/go: &lt;a href="https://github.com/cncf/xds/go/tree/a8f9461">a8f9461&lt;/a>&lt;/li>
+&lt;li>github.com/golang-jwt/jwt/v4: &lt;a href="https://github.com/golang-jwt/jwt/v4/tree/v4.2.0">v4.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang/snappy: &lt;a href="https://github.com/golang/snappy/tree/v0.0.3">v0.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-hclog: &lt;a href="https://github.com/hashicorp/go-hclog/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-retryablehttp: &lt;a href="https://github.com/hashicorp/go-retryablehttp/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/iancoleman/strcase: &lt;a href="https://github.com/iancoleman/strcase/tree/v0.2.0">v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/lyft/protoc-gen-star: &lt;a href="https://github.com/lyft/protoc-gen-star/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo/v2: &lt;a href="https://github.com/onsi/ginkgo/v2/tree/v2.0.0">v2.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/sagikazarmark/crypt: &lt;a href="https://github.com/sagikazarmark/crypt/tree/v0.3.0">v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/tv42/httpunix: &lt;a href="https://github.com/tv42/httpunix/tree/b75d861">b75d861&lt;/a>&lt;/li>
+&lt;li>google.golang.org/grpc/cmd/protoc-gen-go-grpc: v1.1.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/firestore: v1.1.0 → v1.6.1&lt;/li>
+&lt;li>cloud.google.com/go: v0.81.0 → v0.99.0&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v55.8.0...v61.3.0">v55.8.0+incompatible → v61.3.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.14...v0.9.18">v0.9.14 → v0.9.18&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.19...v0.11.24">v0.11.19 → v0.11.24&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-metrics: &lt;a href="https://github.com/armon/go-metrics/compare/f0300d1...v0.3.10">f0300d1 → v0.3.10&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-radix: &lt;a href="https://github.com/armon/go-radix/compare/7fddfc3...v1.0.0">7fddfc3 → v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/bketelsen/crypt: &lt;a href="https://github.com/bketelsen/crypt/compare/v0.0.4...5cbc8cc">v0.0.4 → 5cbc8cc&lt;/a>&lt;/li>
+&lt;li>github.com/census-instrumentation/opencensus-proto: &lt;a href="https://github.com/census-instrumentation/opencensus-proto/compare/v0.2.1...v0.3.0">v0.2.1 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash/v2: &lt;a href="https://github.com/cespare/xxhash/v2/compare/v2.1.1...v2.1.2">v2.1.1 → v2.1.2&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/udpa/go: &lt;a href="https://github.com/cncf/udpa/go/compare/5459f2c...04548b0">5459f2c → 04548b0&lt;/a>&lt;/li>
+&lt;li>github.com/cpuguy83/go-md2man/v2: &lt;a href="https://github.com/cpuguy83/go-md2man/v2/compare/v2.0.0...v2.0.1">v2.0.0 → v2.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/go-control-plane: &lt;a href="https://github.com/envoyproxy/go-control-plane/compare/668b12f...v0.10.1">668b12f → v0.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/protoc-gen-validate: &lt;a href="https://github.com/envoyproxy/protoc-gen-validate/compare/v0.1.0...v0.6.2">v0.1.0 → v0.6.2&lt;/a>&lt;/li>
+&lt;li>github.com/evanphx/json-patch: &lt;a href="https://github.com/evanphx/json-patch/compare/v4.11.0...v5.6.0">v4.11.0+incompatible → v5.6.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/fatih/color: &lt;a href="https://github.com/fatih/color/compare/v1.7.0...v1.13.0">v1.7.0 → v1.13.0&lt;/a>&lt;/li>
+&lt;li>github.com/fsnotify/fsnotify: &lt;a href="https://github.com/fsnotify/fsnotify/compare/v1.4.9...v1.5.1">v1.4.9 → v1.5.1&lt;/a>&lt;/li>
+&lt;li>github.com/google/go-cmp: &lt;a href="https://github.com/google/go-cmp/compare/v0.5.5...v0.5.6">v0.5.5 → v0.5.6&lt;/a>&lt;/li>
+&lt;li>github.com/google/martian/v3: &lt;a href="https://github.com/google/martian/v3/compare/v3.1.0...v3.2.1">v3.1.0 → v3.2.1&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/cbba55b...4bb14d4">cbba55b → 4bb14d4&lt;/a>&lt;/li>
+&lt;li>github.com/googleapis/gax-go/v2: &lt;a href="https://github.com/googleapis/gax-go/v2/compare/v2.0.5...v2.1.1">v2.0.5 → v2.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/api: &lt;a href="https://github.com/hashicorp/consul/api/compare/v1.1.0...v1.11.0">v1.1.0 → v1.11.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/sdk: &lt;a href="https://github.com/hashicorp/consul/sdk/compare/v0.1.1...v0.8.0">v0.1.1 → v0.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-cleanhttp: &lt;a href="https://github.com/hashicorp/go-cleanhttp/compare/v0.5.1...v0.5.2">v0.5.1 → v0.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-immutable-radix: &lt;a href="https://github.com/hashicorp/go-immutable-radix/compare/v1.0.0...v1.3.1">v1.0.0 → v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-multierror: &lt;a href="https://github.com/hashicorp/go-multierror/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-rootcerts: &lt;a href="https://github.com/hashicorp/go-rootcerts/compare/v1.0.0...v1.0.2">v1.0.0 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/golang-lru: &lt;a href="https://github.com/hashicorp/golang-lru/compare/v0.5.1...v0.5.4">v0.5.1 → v0.5.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/mdns: &lt;a href="https://github.com/hashicorp/mdns/compare/v1.0.0...v1.0.4">v1.0.0 → v1.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/memberlist: &lt;a href="https://github.com/hashicorp/memberlist/compare/v0.1.3...v0.3.0">v0.1.3 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/serf: &lt;a href="https://github.com/hashicorp/serf/compare/v0.8.2...v0.9.6">v0.8.2 → v0.9.6&lt;/a>&lt;/li>
+&lt;li>github.com/json-iterator/go: &lt;a href="https://github.com/json-iterator/go/compare/v1.1.11...v1.1.12">v1.1.11 → v1.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-colorable: &lt;a href="https://github.com/mattn/go-colorable/compare/v0.0.9...v0.1.12">v0.0.9 → v0.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-isatty: &lt;a href="https://github.com/mattn/go-isatty/compare/v0.0.3...v0.0.14">v0.0.3 → v0.0.14&lt;/a>&lt;/li>
+&lt;li>github.com/miekg/dns: &lt;a href="https://github.com/miekg/dns/compare/v1.0.14...v1.1.41">v1.0.14 → v1.1.41&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/cli: &lt;a href="https://github.com/mitchellh/cli/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/mapstructure: &lt;a href="https://github.com/mitchellh/mapstructure/compare/v1.4.1...v1.4.3">v1.4.1 → v1.4.3&lt;/a>&lt;/li>
+&lt;li>github.com/modern-go/reflect2: &lt;a href="https://github.com/modern-go/reflect2/compare/v1.0.1...v1.0.2">v1.0.1 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo: &lt;a href="https://github.com/onsi/ginkgo/compare/v1.16.4...v1.16.5">v1.16.4 → v1.16.5&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.15.0...v1.18.1">v1.15.0 → v1.18.1&lt;/a>&lt;/li>
+&lt;li>github.com/pascaldekloe/goe: &lt;a href="https://github.com/pascaldekloe/goe/compare/57f6aae...v0.1.0">57f6aae → v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/pelletier/go-toml: &lt;a href="https://github.com/pelletier/go-toml/compare/v1.9.3...v1.9.4">v1.9.3 → v1.9.4&lt;/a>&lt;/li>
+&lt;li>github.com/posener/complete: &lt;a href="https://github.com/posener/complete/compare/v1.1.1...v1.2.3">v1.1.1 → v1.2.3&lt;/a>&lt;/li>
+&lt;li>github.com/rubiojr/go-vhd: &lt;a href="https://github.com/rubiojr/go-vhd/compare/02e2102...ccecf6c">02e2102 → ccecf6c&lt;/a>&lt;/li>
+&lt;li>github.com/russross/blackfriday/v2: &lt;a href="https://github.com/russross/blackfriday/v2/compare/v2.0.1...v2.1.0">v2.0.1 → v2.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cast: &lt;a href="https://github.com/spf13/cast/compare/v1.3.1...v1.4.1">v1.3.1 → v1.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cobra: &lt;a href="https://github.com/spf13/cobra/compare/v1.2.1...v1.3.0">v1.2.1 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/viper: &lt;a href="https://github.com/spf13/viper/compare/v1.8.1...v1.10.0">v1.8.1 → v1.10.0&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd/api/v3: v3.5.0 → v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/pkg/v3: v3.5.0 → v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v2: v2.305.0 → v2.305.1&lt;/li>
+&lt;li>golang.org/x/crypto: 5ea612d → e495a2d&lt;/li>
+&lt;li>golang.org/x/mod: v0.4.2 → v0.5.0&lt;/li>
+&lt;li>golang.org/x/net: 37e1c6a → 491a49a&lt;/li>
+&lt;li>golang.org/x/oauth2: 2e8d934 → d3ed0bb&lt;/li>
+&lt;li>golang.org/x/sys: 59db8d7 → 1d35b9e&lt;/li>
+&lt;li>golang.org/x/text: v0.3.6 → v0.3.7&lt;/li>
+&lt;li>golang.org/x/tools: v0.1.2 → v0.1.5&lt;/li>
+&lt;li>google.golang.org/api: v0.44.0 → v0.62.0&lt;/li>
+&lt;li>google.golang.org/genproto: f16073e → 3a66f56&lt;/li>
+&lt;li>google.golang.org/grpc: v1.38.0 → v1.42.0&lt;/li>
+&lt;li>google.golang.org/protobuf: v1.26.0 → v1.27.1&lt;/li>
+&lt;li>gopkg.in/ini.v1: v1.62.0 → v1.66.2&lt;/li>
+&lt;li>k8s.io/api: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/apimachinery: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/apiserver: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/client-go: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/cloud-provider: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/component-base: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/controller-manager: v0.22.0 → v0.22.6&lt;/li>
+&lt;li>k8s.io/kube-openapi: 9528897 → 2043435&lt;/li>
+&lt;li>k8s.io/utils: 4b05e18 → bdf08cb&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.22 → v0.0.27&lt;/li>
+&lt;li>sigs.k8s.io/structured-merge-diff/v4: v4.1.2 → v4.2.1&lt;/li>
+&lt;li>sigs.k8s.io/yaml: v1.2.0 → v1.3.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.23.3</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.23.3/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v1.23.3/</guid><description>
+&lt;h1 id="changelog-since-v1232">Changelog since v1.23.2&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Feat: support platformSubFaultDomain node label (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1080">#1080&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: use zones in the pre-existing frontend IP configurations for internal LBs (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1097">#1097&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/datastore: v1.1.0&lt;/li>
+&lt;li>cloud.google.com/go/pubsub: v1.3.1&lt;/li>
+&lt;li>github.com/DataDog/datadog-go: &lt;a href="https://github.com/DataDog/datadog-go/tree/v3.2.0">v3.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/alecthomas/template: &lt;a href="https://github.com/alecthomas/template/tree/fb15b89">fb15b89&lt;/a>&lt;/li>
+&lt;li>github.com/alecthomas/units: &lt;a href="https://github.com/alecthomas/units/tree/f65c72e">f65c72e&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonus-gometrics: &lt;a href="https://github.com/circonus-labs/circonus-gometrics/tree/v2.3.1">v2.3.1+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/circonus-labs/circonusllhist: &lt;a href="https://github.com/circonus-labs/circonusllhist/tree/v0.1.3">v0.1.3&lt;/a>&lt;/li>
+&lt;li>github.com/client9/misspell: &lt;a href="https://github.com/client9/misspell/tree/v0.3.4">v0.3.4&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/bbolt: &lt;a href="https://github.com/coreos/bbolt/tree/v1.3.2">v1.3.2&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/etcd: &lt;a href="https://github.com/coreos/etcd/tree/v3.3.13">v3.3.13+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/go-systemd: &lt;a href="https://github.com/coreos/go-systemd/tree/95778df">95778df&lt;/a>&lt;/li>
+&lt;li>github.com/coreos/pkg: &lt;a href="https://github.com/coreos/pkg/tree/399ea9e">399ea9e&lt;/a>&lt;/li>
+&lt;li>github.com/dgrijalva/jwt-go: &lt;a href="https://github.com/dgrijalva/jwt-go/tree/v3.2.0">v3.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/dgryski/go-sip13: &lt;a href="https://github.com/dgryski/go-sip13/tree/e10d5fe">e10d5fe&lt;/a>&lt;/li>
+&lt;li>github.com/go-gl/glfw: &lt;a href="https://github.com/go-gl/glfw/tree/e6da0ac">e6da0ac&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-hclog: &lt;a href="https://github.com/hashicorp/go-hclog/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-retryablehttp: &lt;a href="https://github.com/hashicorp/go-retryablehttp/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/hpcloud/tail: &lt;a href="https://github.com/hpcloud/tail/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/iancoleman/strcase: &lt;a href="https://github.com/iancoleman/strcase/tree/v0.2.0">v0.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/jpillora/backoff: &lt;a href="https://github.com/jpillora/backoff/tree/v1.0.0">v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/konsorten/go-windows-terminal-sequences: &lt;a href="https://github.com/konsorten/go-windows-terminal-sequences/tree/v1.0.3">v1.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/kr/logfmt: &lt;a href="https://github.com/kr/logfmt/tree/b84e30a">b84e30a&lt;/a>&lt;/li>
+&lt;li>github.com/kr/pty: &lt;a href="https://github.com/kr/pty/tree/v1.1.1">v1.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/lyft/protoc-gen-star: &lt;a href="https://github.com/lyft/protoc-gen-star/tree/v0.5.3">v0.5.3&lt;/a>&lt;/li>
+&lt;li>github.com/oklog/ulid: &lt;a href="https://github.com/oklog/ulid/tree/v1.3.1">v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo/v2: &lt;a href="https://github.com/onsi/ginkgo/v2/tree/v2.0.0">v2.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/prometheus/tsdb: &lt;a href="https://github.com/prometheus/tsdb/tree/v0.7.1">v0.7.1&lt;/a>&lt;/li>
+&lt;li>github.com/sagikazarmark/crypt: &lt;a href="https://github.com/sagikazarmark/crypt/tree/v0.3.0">v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/tv42/httpunix: &lt;a href="https://github.com/tv42/httpunix/tree/b75d861">b75d861&lt;/a>&lt;/li>
+&lt;li>gopkg.in/fsnotify.v1: v1.4.7&lt;/li>
+&lt;li>gopkg.in/resty.v1: v1.12.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/firestore: v1.1.0 → v1.6.1&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v55.8.0...v61.4.0">v55.8.0+incompatible → v61.4.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.17...v0.9.18">v0.9.17 → v0.9.18&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.22...v0.11.24">v0.11.22 → v0.11.24&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-metrics: &lt;a href="https://github.com/armon/go-metrics/compare/f0300d1...v0.3.10">f0300d1 → v0.3.10&lt;/a>&lt;/li>
+&lt;li>github.com/armon/go-radix: &lt;a href="https://github.com/armon/go-radix/compare/7fddfc3...v1.0.0">7fddfc3 → v1.0.0&lt;/a>&lt;/li>
+&lt;li>github.com/census-instrumentation/opencensus-proto: &lt;a href="https://github.com/census-instrumentation/opencensus-proto/compare/v0.2.1...v0.3.0">v0.2.1 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/cespare/xxhash/v2: &lt;a href="https://github.com/cespare/xxhash/v2/compare/v2.1.1...v2.1.2">v2.1.1 → v2.1.2&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/udpa/go: &lt;a href="https://github.com/cncf/udpa/go/compare/5459f2c...04548b0">5459f2c → 04548b0&lt;/a>&lt;/li>
+&lt;li>github.com/cncf/xds/go: &lt;a href="https://github.com/cncf/xds/go/compare/fbca930...a8f9461">fbca930 → a8f9461&lt;/a>&lt;/li>
+&lt;li>github.com/cpuguy83/go-md2man/v2: &lt;a href="https://github.com/cpuguy83/go-md2man/v2/compare/v2.0.0...v2.0.1">v2.0.0 → v2.0.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/go-control-plane: &lt;a href="https://github.com/envoyproxy/go-control-plane/compare/63b5d3c...v0.10.1">63b5d3c → v0.10.1&lt;/a>&lt;/li>
+&lt;li>github.com/envoyproxy/protoc-gen-validate: &lt;a href="https://github.com/envoyproxy/protoc-gen-validate/compare/v0.1.0...v0.6.2">v0.1.0 → v0.6.2&lt;/a>&lt;/li>
+&lt;li>github.com/evanphx/json-patch: &lt;a href="https://github.com/evanphx/json-patch/compare/v4.12.0...v5.6.0">v4.12.0+incompatible → v5.6.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/fatih/color: &lt;a href="https://github.com/fatih/color/compare/v1.7.0...v1.13.0">v1.7.0 → v1.13.0&lt;/a>&lt;/li>
+&lt;li>github.com/golang-jwt/jwt/v4: &lt;a href="https://github.com/golang-jwt/jwt/v4/compare/v4.0.0...v4.2.0">v4.0.0 → v4.2.0&lt;/a>&lt;/li>
+&lt;li>github.com/google/go-cmp: &lt;a href="https://github.com/google/go-cmp/compare/v0.5.5...v0.5.6">v0.5.5 → v0.5.6&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/cbba55b...94a9f03">cbba55b → 94a9f03&lt;/a>&lt;/li>
+&lt;li>github.com/googleapis/gax-go/v2: &lt;a href="https://github.com/googleapis/gax-go/v2/compare/v2.0.5...v2.1.1">v2.0.5 → v2.1.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/api: &lt;a href="https://github.com/hashicorp/consul/api/compare/v1.1.0...v1.11.0">v1.1.0 → v1.11.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/consul/sdk: &lt;a href="https://github.com/hashicorp/consul/sdk/compare/v0.1.1...v0.8.0">v0.1.1 → v0.8.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-cleanhttp: &lt;a href="https://github.com/hashicorp/go-cleanhttp/compare/v0.5.1...v0.5.2">v0.5.1 → v0.5.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-immutable-radix: &lt;a href="https://github.com/hashicorp/go-immutable-radix/compare/v1.0.0...v1.3.1">v1.0.0 → v1.3.1&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-multierror: &lt;a href="https://github.com/hashicorp/go-multierror/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/go-rootcerts: &lt;a href="https://github.com/hashicorp/go-rootcerts/compare/v1.0.0...v1.0.2">v1.0.0 → v1.0.2&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/golang-lru: &lt;a href="https://github.com/hashicorp/golang-lru/compare/v0.5.1...v0.5.4">v0.5.1 → v0.5.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/mdns: &lt;a href="https://github.com/hashicorp/mdns/compare/v1.0.0...v1.0.4">v1.0.0 → v1.0.4&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/memberlist: &lt;a href="https://github.com/hashicorp/memberlist/compare/v0.1.3...v0.3.0">v0.1.3 → v0.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/hashicorp/serf: &lt;a href="https://github.com/hashicorp/serf/compare/v0.8.2...v0.9.6">v0.8.2 → v0.9.6&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-colorable: &lt;a href="https://github.com/mattn/go-colorable/compare/v0.0.9...v0.1.12">v0.0.9 → v0.1.12&lt;/a>&lt;/li>
+&lt;li>github.com/mattn/go-isatty: &lt;a href="https://github.com/mattn/go-isatty/compare/v0.0.3...v0.0.14">v0.0.3 → v0.0.14&lt;/a>&lt;/li>
+&lt;li>github.com/miekg/dns: &lt;a href="https://github.com/miekg/dns/compare/v1.0.14...v1.1.41">v1.0.14 → v1.1.41&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/cli: &lt;a href="https://github.com/mitchellh/cli/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/go-homedir: &lt;a href="https://github.com/mitchellh/go-homedir/compare/v1.0.0...v1.1.0">v1.0.0 → v1.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/mitchellh/mapstructure: &lt;a href="https://github.com/mitchellh/mapstructure/compare/v1.4.1...v1.4.3">v1.4.1 → v1.4.3&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.16.0...v1.18.1">v1.16.0 → v1.18.1&lt;/a>&lt;/li>
+&lt;li>github.com/pascaldekloe/goe: &lt;a href="https://github.com/pascaldekloe/goe/compare/57f6aae...v0.1.0">57f6aae → v0.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/pelletier/go-toml: &lt;a href="https://github.com/pelletier/go-toml/compare/v1.9.3...v1.9.4">v1.9.3 → v1.9.4&lt;/a>&lt;/li>
+&lt;li>github.com/posener/complete: &lt;a href="https://github.com/posener/complete/compare/v1.1.1...v1.2.3">v1.1.1 → v1.2.3&lt;/a>&lt;/li>
+&lt;li>github.com/russross/blackfriday/v2: &lt;a href="https://github.com/russross/blackfriday/v2/compare/v2.0.1...v2.1.0">v2.0.1 → v2.1.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cast: &lt;a href="https://github.com/spf13/cast/compare/v1.3.1...v1.4.1">v1.3.1 → v1.4.1&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/cobra: &lt;a href="https://github.com/spf13/cobra/compare/v1.2.1...v1.3.0">v1.2.1 → v1.3.0&lt;/a>&lt;/li>
+&lt;li>github.com/spf13/viper: &lt;a href="https://github.com/spf13/viper/compare/v1.8.1...v1.10.0">v1.8.1 → v1.10.0&lt;/a>&lt;/li>
+&lt;li>go.etcd.io/etcd/api/v3: v3.5.0 → v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/pkg/v3: v3.5.0 → v3.5.1&lt;/li>
+&lt;li>go.etcd.io/etcd/client/v2: v2.305.0 → v2.305.1&lt;/li>
+&lt;li>golang.org/x/crypto: 089bfa5 → 5e0467b&lt;/li>
+&lt;li>golang.org/x/mod: v0.4.2 → v0.5.0&lt;/li>
+&lt;li>golang.org/x/net: e898025 → 491a49a&lt;/li>
+&lt;li>golang.org/x/oauth2: 2bc19b1 → d3ed0bb&lt;/li>
+&lt;li>golang.org/x/sys: f4d4317 → da31bd3&lt;/li>
+&lt;li>google.golang.org/api: v0.44.0 → v0.62.0&lt;/li>
+&lt;li>google.golang.org/genproto: fe13028 → 3a66f56&lt;/li>
+&lt;li>google.golang.org/grpc: v1.40.0 → v1.42.0&lt;/li>
+&lt;li>gopkg.in/ini.v1: v1.62.0 → v1.66.2&lt;/li>
+&lt;li>k8s.io/api: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/apimachinery: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/apiserver: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/client-go: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/cloud-provider: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/component-base: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/component-helpers: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/controller-manager: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/kubelet: v0.23.0 → v0.23.3&lt;/li>
+&lt;li>k8s.io/utils: cb0fa31 → 6203023&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.25 → v0.0.27&lt;/li>
+&lt;li>sigs.k8s.io/structured-merge-diff/v4: v4.1.2 → v4.2.1&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.12</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/20/v0.7.12/</link><pubDate>Thu, 20 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/20/v0.7.12/</guid><description>
+&lt;h1 id="changelog-since-v0711">Changelog since v0.7.11&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Chore: upgrade azure-sdk-for-go to v58.2.0 and compute sdk to 2021-07-01 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/991">#991&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not update tags on load balancer, security group and route table if both tags and tagsMap are empty (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1004">#1004&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>This PR helps solve failure in ci-kubernetes-kubemark-100-azure-test. It was using an old aks-engine that doesn&amp;rsquo;t support K8s v1.19.
+&lt;a href="https://storage.googleapis.com/kubernetes-jenkins/logs/ci-kubernetes-kubemark-100-azure-test/1480408092028964864/build-log.txt">https://storage.googleapis.com/kubernetes-jenkins/logs/ci-kubernetes-kubemark-100-azure-test/1480408092028964864/build-log.txt&lt;/a> (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/985">#985&lt;/a>, &lt;a href="https://github.com/lzhecheng">@lzhecheng&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Upgrade docker/dockerfile image (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/990">#990&lt;/a>, &lt;a href="https://github.com/lzhecheng">@lzhecheng&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.11</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v0.7.11/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v0.7.11/</guid><description>
 &lt;h1 id="changelog-since-v0710">Changelog since v0.7.10&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
@@ -46,6 +634,27 @@ Cherry-pick #841 to solve &amp;ldquo;not equal 0&amp;rdquo; issue&lt;/p>
 &lt;h3 id="changed">Changed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
 &lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.9</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.0.9/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.0.9/</guid><description>
+&lt;h1 id="changelog-since-v108">Changelog since v1.0.8&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not update tags on load balancer, security group and route table if both tags and tagsMap are empty (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1006">#1006&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: reduce node LIST APIs in cloud-node-manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/997">#997&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Null (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/974">#974&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.4</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.4/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.4/</guid><description>
 &lt;h1 id="changelog-since-v113">Changelog since v1.1.3&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
@@ -56,6 +665,48 @@ Cherry-pick #841 to solve &amp;ldquo;not equal 0&amp;rdquo; issue&lt;/p>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
 &lt;li>Fix: return all LBs in the resource group in ListManagedLBs when deleting the LB, so the LB deleting will not be skipped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/973">#973&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.5</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.5/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.5/</guid><description>
+&lt;h1 id="changelog-since-v114">Changelog since v1.1.4&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not update tags on load balancer, security group and route table if both tags and tagsMap are empty (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1007">#1007&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: reduce node LIST APIs in cloud-node-manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/998">#998&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Null (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/974">#974&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.23.2</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.23.2/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.23.2/</guid><description>
+&lt;h1 id="changelog-since-v1231">Changelog since v1.23.1&lt;/h1>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Introduce a configuration option &lt;code>putVMSSVMBatchSize&lt;/code>. If set, the sync requests will be sent concurrently in batches when putting vmss vms. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/964">#964&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: do not update tags on load balancer, security group and route table if both tags and tagsMap are empty (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1008">#1008&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Chore: reduce node LIST APIs in cloud-node-manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/996">#996&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
