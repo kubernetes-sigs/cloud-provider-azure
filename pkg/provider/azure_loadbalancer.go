@@ -1240,112 +1240,6 @@ func getDomainNameLabel(pip *network.PublicIPAddress) string {
 	return to.String(pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel)
 }
 
-func getIdleTimeout(s *v1.Service) (*int32, error) {
-	const (
-		min = 4
-		max = 30
-	)
-
-	val, ok := s.Annotations[consts.ServiceAnnotationLoadBalancerIdleTimeout]
-	if !ok {
-		// Return a nil here as this will set the value to the azure default
-		return nil, nil
-	}
-
-	errInvalidTimeout := fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d", min, max)
-	toInt, err := strconv.ParseInt(val, 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing idle timeout value: %w: %v", err, errInvalidTimeout)
-	}
-	to32 := int32(toInt)
-
-	if to32 < min || to32 > max {
-		return nil, errInvalidTimeout
-	}
-	return &to32, nil
-}
-
-// getProbeIntervalInSecondsAndNumOfProbe parse probeInterval and numberOfProbes from the annotations of service object.
-func getProbeIntervalInSecondsAndNumOfProbe(s *v1.Service) (*int32, *int32, error) {
-	// get number of probes
-	numberOfProbes, err := getInt32FromAnnotations(s.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, func(val *int32) error {
-		//minimum number of unhealthy responses is 2. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
-		const (
-			MinimumNumOfProbe = 2
-		)
-		if *val < MinimumNumOfProbe {
-			return fmt.Errorf("the minimum value of %s is %d", consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, MinimumNumOfProbe)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	// if numberOfProbes is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
-	if numberOfProbes == nil {
-		numberOfProbes = to.Int32Ptr(2)
-	}
-
-	probeInterval, err := getInt32FromAnnotations(s.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeInterval, func(val *int32) error {
-		//minimum probe interval in seconds is 5. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
-		const (
-			MinimumProbeIntervalInSecond = 5
-		)
-		if *val < 5 {
-			return fmt.Errorf("the minimum value of %s is %d", consts.ServiceAnnotationLoadBalancerHealthProbeInterval, MinimumProbeIntervalInSecond)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	// if probeInterval is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
-	if probeInterval == nil {
-		probeInterval = to.Int32Ptr(5)
-	}
-
-	// total probe should be less than 120 seconds ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
-	if (*probeInterval)*(*numberOfProbes) >= 120 {
-		return nil, nil, fmt.Errorf("total probe should be less than 120, please adjust interval and number of probe accordingly")
-	}
-
-	return probeInterval, numberOfProbes, nil
-}
-
-// Int32BusinessValidator is validator function which is invoked after values are parsed in order to make sure input value meets the businees need.
-type Int32BusinessValidator func(*int32) error
-
-// getInt32FromAnnotations parse integer value from annotation and return an reference to int32 object
-func getInt32FromAnnotations(annotations map[string]string, key string, businessValidator ...Int32BusinessValidator) (*int32, error) {
-	if len(key) <= 0 {
-		return nil, fmt.Errorf("annotation key should not be empty")
-	}
-	if annotations == nil {
-		// Return a nil here as this will set the value to the azure default
-		return nil, nil
-	}
-	val, ok := annotations[key]
-	if !ok {
-		// Return a nil here as this will set the value to the azure default
-		return nil, nil
-	}
-	errKey := fmt.Errorf("%s value must be a whole number", key)
-	toInt, err := strconv.ParseInt(val, 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing %s value: %w: %v", key, err, errKey)
-	}
-	parsedInt := int32(toInt)
-	for _, validator := range businessValidator {
-		if validator != nil {
-			err := validator(&parsedInt)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing %s value: %w", key, err)
-			}
-		}
-	}
-	return &parsedInt, nil
-}
-
 func (az *Cloud) isFrontendIPChanged(clusterName string, config network.FrontendIPConfiguration, service *v1.Service, lbFrontendIPConfigName string) (bool, error) {
 	isServiceOwnsFrontendIP, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service)
 	if err != nil {
@@ -1551,11 +1445,6 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	defaultLBFrontendIPConfigID := az.getFrontendIPConfigID(lbName, lbResourceGroup, defaultLBFrontendIPConfigName)
 	dirtyLb := false
 
-	lbIdleTimeout, err := getIdleTimeout(service)
-	if wantLb && err != nil {
-		return nil, err
-	}
-
 	// reconcile the load balancer's backend pool configuration.
 	if wantLb {
 		preConfig, changed, err := az.reconcileBackendPools(clusterName, service, nodes, lb, isBackendPoolPreConfigured)
@@ -1593,9 +1482,13 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		}
 	}
 
-	expectedProbes, expectedRules, err := az.getExpectedLBRules(service, wantLb, defaultLBFrontendIPConfigID, lbBackendPoolID, lbName, lbIdleTimeout)
-	if err != nil {
-		return nil, err
+	var expectedProbes []network.Probe
+	var expectedRules []network.LoadBalancingRule
+	if wantLb {
+		expectedProbes, expectedRules, err = az.getExpectedLBRules(service, defaultLBFrontendIPConfigID, lbBackendPoolID, lbName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	changed = az.reconcileLBProbes(lb, service, serviceName, wantLb, expectedProbes)
@@ -2114,167 +2007,302 @@ func lbRuleConflictsWithPort(rule network.LoadBalancingRule, frontendIPConfigID 
 		*rule.FrontendPort == port.Port
 }
 
-func parseHealthProbeProtocolAndPath(service *v1.Service) (string, string) {
-	var protocol, path string
-	if v, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeProtocol]; ok {
-		protocol = v
-	} else {
-		return protocol, path
+// buildHealthProbeRulesForPort
+// for following sku: basic loadbalancer vs standard load balancer
+// for following protocols: TCP HTTP HTTPS(SLB only)
+func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, port v1.ServicePort, lbrule string) (*network.Probe, error) {
+	properties := &network.ProbePropertiesFormat{}
+	// get request path ,only used with http/https probe
+	path, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsRequestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsRequestPath), err)
 	}
-	// ignore the request path if using TCP
-	if strings.EqualFold(protocol, string(network.ProbeProtocolHTTP)) ||
-		strings.EqualFold(protocol, string(network.ProbeProtocolHTTPS)) {
-		if v, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath]; ok {
-			path = v
+	if path == nil {
+		if path, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath); err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath, err)
 		}
 	}
-	return protocol, path
+	if path == nil {
+		path = to.StringPtr(consts.HealthProbeDefaultRequestPath)
+	}
+	if port.AppProtocol == nil {
+		if port.AppProtocol, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeProtocol); err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeProtocol, err)
+		}
+		if port.AppProtocol == nil {
+			if port.Protocol == v1.ProtocolTCP {
+				port.AppProtocol = to.StringPtr(string(network.ProtocolTCP))
+			}
+		}
+		if port.AppProtocol == nil {
+			// health probe not set, return
+			return nil, nil
+		}
+	}
+	switch protocol := strings.TrimSpace(*port.AppProtocol); {
+	case strings.EqualFold(protocol, string(network.ProtocolHTTPS)):
+		//HTTPS probe is only supported in standard loadbalancer
+		if !az.useStandardLoadBalancer() {
+			return nil, fmt.Errorf("HTTPS protocol is not supported in health probe when basic lb is used")
+		}
+		//HTTP and HTTPS share the same configuration
+		properties.Protocol = network.ProbeProtocolHTTPS
+		properties.RequestPath = path
+	case strings.EqualFold(protocol, string(network.ProtocolHTTP)):
+		properties.Protocol = network.ProbeProtocolHTTP
+		properties.RequestPath = path
+	case strings.EqualFold(protocol, string(network.ProtocolTCP)):
+		properties.Protocol = network.ProbeProtocolTCP
+	default:
+		return nil, fmt.Errorf("unsupported protocol %s", protocol)
+	}
+
+	// get number of probes
+	var numOfProbeValidator = func(val *int32) error {
+		//minimum number of unhealthy responses is 2. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+		const (
+			MinimumNumOfProbe = 2
+		)
+		if *val < MinimumNumOfProbe {
+			return fmt.Errorf("the minimum value of %s is %d", consts.HealthProbeParamsNumOfProbe, MinimumNumOfProbe)
+		}
+		return nil
+	}
+	numberOfProbes, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsNumOfProbe, numOfProbeValidator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsNumOfProbe), err)
+	}
+	if numberOfProbes == nil {
+		if numberOfProbes, err = consts.Getint32ValueFromK8sSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, numOfProbeValidator); err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, err)
+		}
+	}
+
+	// if numberOfProbes is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if numberOfProbes == nil {
+		numberOfProbes = to.Int32Ptr(consts.HealthProbeDefaultNumOfProbe)
+	}
+
+	// get probe interval in seconds
+	var probeIntervalValidator = func(val *int32) error {
+		//minimum probe interval in seconds is 5. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+		const (
+			MinimumProbeIntervalInSecond = 5
+		)
+		if *val < 5 {
+			return fmt.Errorf("the minimum value of %s is %d", consts.HealthProbeParamsProbeInterval, MinimumProbeIntervalInSecond)
+		}
+		return nil
+	}
+	probeInterval, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsProbeInterval, probeIntervalValidator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s:%w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsProbeInterval), err)
+	}
+	if probeInterval == nil {
+		if probeInterval, err = consts.Getint32ValueFromK8sSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeInterval, probeIntervalValidator); err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeInterval, err)
+		}
+	}
+	// if probeInterval is not set, set it to default instead ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if probeInterval == nil {
+		probeInterval = to.Int32Ptr(consts.HealthProbeDefaultProbeInterval)
+	}
+
+	// total probe should be less than 120 seconds ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+	if (*probeInterval)*(*numberOfProbes) >= 120 {
+		return nil, fmt.Errorf("total probe should be less than 120, please adjust interval and number of probe accordingly")
+	}
+	properties.IntervalInSeconds = probeInterval
+	properties.NumberOfProbes = numberOfProbes
+	properties.Port = &port.NodePort
+	probe := &network.Probe{
+		Name:                  &lbrule,
+		ProbePropertiesFormat: properties,
+	}
+	return probe, nil
 }
 
+// buildLBRules
+// for following sku: basic loadbalancer vs standard load balancer
+// for following scenario: internal vs external
 func (az *Cloud) getExpectedLBRules(
 	service *v1.Service,
-	wantLb bool,
 	lbFrontendIPConfigID string,
 	lbBackendPoolID string,
-	lbName string,
-	lbIdleTimeout *int32) ([]network.Probe, []network.LoadBalancingRule, error) {
+	lbName string) ([]network.Probe, []network.LoadBalancingRule, error) {
 
-	var ports []v1.ServicePort
-	if wantLb {
-		ports = service.Spec.Ports
-	} else {
-		ports = []v1.ServicePort{}
-	}
-
-	var enableTCPReset, nilTCPReset *bool
-	if az.useStandardLoadBalancer() {
-		enableTCPReset = to.BoolPtr(true)
-		if _, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerDisableTCPReset]; ok {
-			klog.Warning("annotation service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset has been removed as of Kubernetes 1.20. TCP Resets are always enabled on Standard SKU load balancers.")
-		}
-	}
-
-	var expectedProbes []network.Probe
 	var expectedRules []network.LoadBalancingRule
-	highAvailabilityPortsEnabled := false
-	for _, port := range ports {
-		if highAvailabilityPortsEnabled {
-			// Since the port is always 0 when enabling HA, only one rule should be configured.
-			break
-		}
+	var expectedProbes []network.Probe
 
-		lbRuleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port)
-		klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s)", lbName, lbRuleName)
+	// support podPresence health check when External Traffic Policy is local
+	// take precedence over user defined probe configuration
+	// healthcheck proxy server serves http requests
+	// https://github.com/kubernetes/kubernetes/blob/7c013c3f64db33cf19f38bb2fc8d9182e42b0b7b/pkg/proxy/healthcheck/service_health.go#L236
+	var nodeEndpointHealthprobe *network.Probe
+	if servicehelpers.NeedsHealthCheck(service) {
+		podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
+		lbRuleName := az.getLoadBalancerRuleName(service, v1.ProtocolTCP, podPresencePort)
 
-		transportProto, _, probeProto, err := getProtocolsFromKubernetesProtocol(port.Protocol)
-		if err != nil {
-			return expectedProbes, expectedRules, err
-		}
-
-		probeProtocol, requestPath := parseHealthProbeProtocolAndPath(service)
-		probeInterval, numberOfProbe, err := getProbeIntervalInSecondsAndNumOfProbe(service)
-		if err != nil {
-			return expectedProbes, expectedRules, err
-		}
-		if servicehelpers.NeedsHealthCheck(service) {
-			podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
-			if probeProtocol == "" {
-				probeProtocol = string(network.ProbeProtocolHTTP)
-			}
-
-			needRequestPath := strings.EqualFold(probeProtocol, string(network.ProbeProtocolHTTP)) || strings.EqualFold(probeProtocol, string(network.ProbeProtocolHTTPS))
-			if requestPath == "" && needRequestPath {
-				requestPath = podPresencePath
-			}
-
-			expectedProbes = append(expectedProbes, network.Probe{
-				Name: &lbRuleName,
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					RequestPath:       to.StringPtr(requestPath),
-					Protocol:          network.ProbeProtocol(probeProtocol),
-					Port:              to.Int32Ptr(podPresencePort),
-					IntervalInSeconds: probeInterval,
-					NumberOfProbes:    numberOfProbe,
-				},
-			})
-		} else if port.Protocol != v1.ProtocolUDP && port.Protocol != v1.ProtocolSCTP {
-			// we only add the expected probe if we're doing TCP
-			if probeProtocol == "" {
-				probeProtocol = string(*probeProto)
-			}
-			var actualPath *string
-			if !strings.EqualFold(probeProtocol, string(network.ProbeProtocolTCP)) {
-				if requestPath != "" {
-					actualPath = to.StringPtr(requestPath)
-				} else {
-					actualPath = to.StringPtr("/healthz")
-				}
-			}
-			expectedProbes = append(expectedProbes, network.Probe{
-				Name: &lbRuleName,
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Protocol:          network.ProbeProtocol(probeProtocol),
-					RequestPath:       actualPath,
-					Port:              to.Int32Ptr(port.NodePort),
-					IntervalInSeconds: probeInterval,
-					NumberOfProbes:    numberOfProbe,
-				},
-			})
-		}
-
-		loadDistribution := network.LoadDistributionDefault
-		if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
-			loadDistribution = network.LoadDistributionSourceIP
-		}
-
-		tcpReset := enableTCPReset
-		if port.Protocol != v1.ProtocolTCP {
-			tcpReset = nilTCPReset
-		}
-		expectedRule := network.LoadBalancingRule{
+		nodeEndpointHealthprobe = &network.Probe{
 			Name: &lbRuleName,
-			LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
-				Protocol: *transportProto,
-				FrontendIPConfiguration: &network.SubResource{
-					ID: to.StringPtr(lbFrontendIPConfigID),
-				},
-				BackendAddressPool: &network.SubResource{
-					ID: to.StringPtr(lbBackendPoolID),
-				},
-				LoadDistribution:    loadDistribution,
-				FrontendPort:        to.Int32Ptr(port.Port),
-				BackendPort:         to.Int32Ptr(port.Port),
-				DisableOutboundSnat: to.BoolPtr(az.disableLoadBalancerOutboundSNAT()),
-				EnableTCPReset:      tcpReset,
-				EnableFloatingIP:    to.BoolPtr(true),
+			ProbePropertiesFormat: &network.ProbePropertiesFormat{
+				RequestPath:       to.StringPtr(podPresencePath),
+				Protocol:          network.ProbeProtocolHTTP,
+				Port:              to.Int32Ptr(podPresencePort),
+				IntervalInSeconds: to.Int32Ptr(consts.HealthProbeDefaultProbeInterval),
+				NumberOfProbes:    to.Int32Ptr(consts.HealthProbeDefaultNumOfProbe),
 			},
 		}
+		expectedProbes = append(expectedProbes, *nodeEndpointHealthprobe)
+	}
 
-		if port.Protocol == v1.ProtocolTCP {
-			expectedRule.LoadBalancingRulePropertiesFormat.IdleTimeoutInMinutes = lbIdleTimeout
+	// In HA mode, lb forward traffic of all port to backend
+	// HA mode is only supported on standard loadbalancer SKU in internal mode
+	if consts.IsK8sServiceUsingInternalLoadBalancer(service) &&
+		az.useStandardLoadBalancer() &&
+		consts.IsK8sServiceHasHAModeEnabled(service) {
+
+		lbRuleName := az.getloadbalancerHAmodeRuleName(service)
+		klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s)", lbName, lbRuleName)
+
+		props, err := az.getExpectedHAModeLoadBalancingRuleProperties(service, lbFrontendIPConfigID, lbBackendPoolID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 		}
-
-		if requiresInternalLoadBalancer(service) &&
-			strings.EqualFold(az.LoadBalancerSku, consts.LoadBalancerSkuStandard) &&
-			strings.EqualFold(service.Annotations[consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts], consts.TrueAnnotationValue) {
-			expectedRule.FrontendPort = to.Int32Ptr(0)
-			expectedRule.BackendPort = to.Int32Ptr(0)
-			expectedRule.Protocol = network.TransportProtocolAll
-			highAvailabilityPortsEnabled = true
-		}
-
-		// we didn't construct the probe objects for UDP or SCTP because they're not allowed on Azure.
-		// However, when externalTrafficPolicy is Local, Kubernetes HTTP health check would be used for probing.
-		if servicehelpers.NeedsHealthCheck(service) || (port.Protocol != v1.ProtocolUDP && port.Protocol != v1.ProtocolSCTP) {
-			expectedRule.Probe = &network.SubResource{
-				ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), lbRuleName)),
+		//Here we need to find one health probe rule for the HA lb rule.
+		var probe *network.Probe = nodeEndpointHealthprobe
+		if probe == nil {
+			// use user customized health probe rule if any
+			for _, port := range service.Spec.Ports {
+				if probe, err = az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName); err != nil {
+					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
+						"rule-name", lbRuleName, "port", port.Port)
+					//ignore error because we only need one correct rule
+				} else if probe != nil {
+					expectedProbes = append(expectedProbes, *probe)
+					break
+				}
 			}
 		}
 
-		expectedRules = append(expectedRules, expectedRule)
+		// if we found one valid probe, append it to lb rule.
+		if probe != nil {
+			props.Probe = &network.SubResource{
+				ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *probe.Name)),
+			}
+		}
+
+		expectedRules = append(expectedRules, network.LoadBalancingRule{
+			Name:                              &lbRuleName,
+			LoadBalancingRulePropertiesFormat: props,
+		})
+		// end of HA mode handling
+	} else {
+		// generate lb rule for each port defined in svc object
+
+		for _, port := range service.Spec.Ports {
+			lbRuleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port)
+			klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s)", lbName, lbRuleName)
+
+			if port.Protocol == v1.ProtocolSCTP && !(az.useStandardLoadBalancer() && consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
+				return expectedProbes, expectedRules, fmt.Errorf("SCTP is only supported on standard loadbalancer in internal mode")
+			}
+
+			transportProto, _, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
+			if err != nil {
+				return expectedProbes, expectedRules, fmt.Errorf("failed to parse transport protocol: %w", err)
+			}
+			props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, to.Int32Ptr(port.Port), *transportProto)
+			if err != nil {
+				return expectedProbes, expectedRules, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
+			}
+
+			var probe *network.Probe = nodeEndpointHealthprobe
+			if probe == nil {
+				if probe, err = az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName); err != nil {
+					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
+						"rule-name", lbRuleName, "port", port.Port)
+					return expectedProbes, expectedRules, err
+				} else if probe != nil {
+					expectedProbes = append(expectedProbes, *probe)
+				}
+			}
+			if probe != nil {
+				props.Probe = &network.SubResource{
+					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *probe.Name)),
+				}
+			}
+			expectedRules = append(expectedRules, network.LoadBalancingRule{
+				Name:                              &lbRuleName,
+				LoadBalancingRulePropertiesFormat: props,
+			})
+
+		}
 	}
 
 	return expectedProbes, expectedRules, nil
+}
+
+//getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port
+func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
+	service *v1.Service,
+	lbFrontendIPConfigID string,
+	lbBackendPoolID string, port *int32, transportProto network.TransportProtocol) (*network.LoadBalancingRulePropertiesFormat, error) {
+	var err error
+
+	loadDistribution := network.LoadDistributionDefault
+	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
+		loadDistribution = network.LoadDistributionSourceIP
+	}
+
+	var lbIdleTimeout *int32
+	if lbIdleTimeout, err = consts.Getint32ValueFromK8sSvcAnnotation(service.Annotations, consts.ServiceAnnotationLoadBalancerIdleTimeout, func(val *int32) error {
+		const (
+			min = 4
+			max = 30
+		)
+		if *val < min || *val > max {
+			return fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d, actual value: %d", min, max, *val)
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("error parsing idle timeout key: %s, err: %w", consts.ServiceAnnotationLoadBalancerIdleTimeout, err)
+	} else if lbIdleTimeout == nil {
+		lbIdleTimeout = to.Int32Ptr(4)
+	}
+
+	props := &network.LoadBalancingRulePropertiesFormat{
+		Protocol:            transportProto,
+		FrontendPort:        port,
+		BackendPort:         port,
+		DisableOutboundSnat: to.BoolPtr(az.disableLoadBalancerOutboundSNAT()),
+		EnableFloatingIP:    to.BoolPtr(true),
+		LoadDistribution:    loadDistribution,
+		FrontendIPConfiguration: &network.SubResource{
+			ID: to.StringPtr(lbFrontendIPConfigID),
+		},
+		BackendAddressPool: &network.SubResource{
+			ID: to.StringPtr(lbBackendPoolID),
+		},
+		IdleTimeoutInMinutes: lbIdleTimeout,
+	}
+	if strings.EqualFold(string(transportProto), string(network.TransportProtocolTCP)) && az.useStandardLoadBalancer() {
+		props.EnableTCPReset = to.BoolPtr(true)
+	}
+	return props, nil
+}
+
+//getExpectedHAModeLoadBalancingRuleProperties build load balancing rule for lb in HA mode
+func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
+	service *v1.Service,
+	lbFrontendIPConfigID string,
+	lbBackendPoolID string) (*network.LoadBalancingRulePropertiesFormat, error) {
+	props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, to.Int32Ptr(0), network.TransportProtocolAll)
+	if err != nil {
+		return nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
+	}
+	props.EnableTCPReset = to.BoolPtr(true)
+	return props, nil
 }
 
 // This reconciles the Network Security Group similar to how the LB is reconciled.

@@ -87,6 +87,10 @@ var _ = Describe("Service with annotation", func() {
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		utils.Logf("Waiting for backend pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
 		utils.Logf("Creating Azure clients")
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
@@ -407,6 +411,58 @@ var _ = Describe("Service with annotation", func() {
 		By("Waiting for service IP to be updated")
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip2.IPAddress))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe' and port specific configs", func() {
+		By("Creating a service with health probe annotations")
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                  "5",
+			consts.BuildHealthProbeAnnotationKeyForPort(nginxPort, consts.HealthProbeParamsNumOfProbe): "3",
+		}
+
+		// create service with given annotation and wait it to expose
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			By("Cleaning up service and public IP")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		// get lb from azure client
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+
+		By("Validating health probe configs")
+		var numberOfProbes *int32
+		for _, probe := range *lb.Probes {
+			if probe.NumberOfProbes != nil {
+				numberOfProbes = probe.NumberOfProbes
+			}
+		}
+		Expect(*numberOfProbes).To(Equal(int32(3)))
+	})
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol' and port specific configs", func() {
+		By("Creating a service with health probe annotations")
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:    "Http",
+			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/",
+		}
+
+		// create service with given annotation and wait it to expose
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			By("Cleaning up service and public IP")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		// get lb from azure client
+		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+		By("Validating health probe configs")
+		probes := *lb.Probes
+		Expect((len(probes))).To(Equal(1))
+		Expect(probes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
 	})
 })
 

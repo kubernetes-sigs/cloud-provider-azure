@@ -370,3 +370,39 @@ const (
 	// in 1.16 when the ServiceNodeExclusion gate is on.
 	LabelNodeRoleExcludeBalancer = "node.kubernetes.io/exclude-from-external-load-balancers"
 )
+
+// cloud provider config secret
+const (
+	DefaultCloudProviderConfigSecName      = "azure-cloud-provider"
+	DefaultCloudProviderConfigSecNamespace = "kube-system"
+	DefaultCloudProviderConfigSecKey       = "cloud-config"
+)
+
+// RateLimited error string
+const RateLimited = "rate limited"
+
+// CreatedByTag tag key for CSI drivers
+const CreatedByTag = "k8s-azure-created-by"
+
+// health probe
+const (
+	HealthProbeAnnotationPrefixPattern = "service.beta.kubernetes.io/port_%d_health-probe_"
+
+	// HealthProbeParamsProbeInterval determines the probe interval of the load balancer health probe.
+	// The minimum probe interval is 5 seconds and the default value is 5. The total duration of all intervals cannot exceed 120 seconds.
+	HealthProbeParamsProbeInterval  HealthProbeParams = "interval"
+	HealthProbeDefaultProbeInterval int32             = 5
+
+	// HealthProbeParamsNumOfProbe determines the minimum number of unhealthy responses which load balancer cannot tolerate.
+	// The minimum number of probe is 2. The total duration of all intervals cannot exceed 120 seconds.
+	HealthProbeParamsNumOfProbe  HealthProbeParams = "num-of-probe"
+	HealthProbeDefaultNumOfProbe int32             = 2
+
+	// HealthProbeParamsRequestPath determines the request path of the load balancer health probe.
+	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
+	// `/healthz` would be configured by default.
+	HealthProbeParamsRequestPath  HealthProbeParams = "request-path"
+	HealthProbeDefaultRequestPath string            = "/healthz"
+)
+
+type HealthProbeParams string
