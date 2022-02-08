@@ -2194,7 +2194,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 
 	var sourceAddressPrefixes []string
 	if (sourceRanges == nil || servicehelpers.IsAllowAll(sourceRanges)) && len(serviceTags) == 0 {
-		if !requiresInternalLoadBalancer(service) {
+		if !requiresInternalLoadBalancer(service) || len(service.Spec.LoadBalancerSourceRanges) > 0 {
 			sourceAddressPrefixes = []string{"Internet"}
 		}
 	} else {
