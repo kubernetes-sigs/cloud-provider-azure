@@ -143,6 +143,7 @@ jobs:
           	--branch=${BRANCH} \
           	--start-sha=${START_SHA} \
           	--end-sha=${END_SHA} \
+          	--markdown-links=true \
           	--output=${RELEASE_NOTE}
           
           NOTE_HEAD="---\ntitle: "v${VERSION}"\nlinkTitle: "v${VERSION}"\ndate: $(date '+%Y-%m-%d')\ndescription: Cloud Provider Azure v${VERSION}\n---\n\n"
