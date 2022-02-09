@@ -150,6 +150,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          ref: master
           fetch-depth: 0
       - name: Setup Golang
         uses: actions/setup-go@v2
@@ -212,6 +213,7 @@ jobs:
       - name: Update site release note
         uses: peter-evans/create-pull-request@v3
         with:
+          branch: doc/release-note-${{github.ref_name}}
           delete-branch: true
           base: master
           commit-message: Update release notes for ${{github.ref_name}}
