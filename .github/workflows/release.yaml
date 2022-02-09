@@ -164,7 +164,7 @@ jobs:
       - name: Update site release note
         uses: peter-evans/create-pull-request@v3
         with:
-          branch: feat/release-note-${{github.ref_name}}
+          branch: doc/release-note-${{github.ref_name}}
           delete-branch: true
           base: master
           commit-message: Update release notes for ${{github.ref_name}}
