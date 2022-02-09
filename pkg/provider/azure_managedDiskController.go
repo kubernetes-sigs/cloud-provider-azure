@@ -80,6 +80,8 @@ type ManagedDiskOptions struct {
 	DiskAccessID *string
 	// BurstingEnabled - Set to true to enable bursting beyond the provisioned performance target of the disk.
 	BurstingEnabled *bool
+	// SubscrtionID - specify a different SubscrtionID
+	SubscrtionID string
 }
 
 //CreateManagedDisk : create managed disk
@@ -111,7 +113,19 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 	diskSizeGB := int32(options.SizeGB)
 	diskSku := options.StorageAccountType
 
-	creationData, err := getValidCreationData(c.common.subscriptionID, options.ResourceGroup, options.SourceResourceID, options.SourceType)
+	rg := c.common.resourceGroup
+	if options.ResourceGroup != "" {
+		rg = options.ResourceGroup
+	}
+	subsID := c.common.subscriptionID
+	if options.SubscrtionID != "" {
+		subsID = options.SubscrtionID
+	}
+	if options.SubscrtionID != "" && !strings.EqualFold(options.SubscrtionID, c.common.subscriptionID) && options.ResourceGroup == "" {
+		return "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", subsID)
+	}
+
+	creationData, err := getValidCreationData(subsID, rg, options.SourceResourceID, options.SourceType)
 	if err != nil {
 		return "", err
 	}
@@ -206,23 +220,17 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		model.Zones = &createZones
 	}
 
-	if options.ResourceGroup == "" {
-		options.ResourceGroup = c.common.resourceGroup
-	}
-
-	cloud := c.common.cloud
-	rerr := cloud.DisksClient.CreateOrUpdate(ctx, options.ResourceGroup, options.DiskName, model)
-	if rerr != nil {
+	if rerr := c.common.cloud.DisksClient.CreateOrUpdate(ctx, subsID, rg, options.DiskName, model); rerr != nil {
 		return "", rerr.Error()
 	}
 
-	diskID := fmt.Sprintf(managedDiskPath, cloud.subscriptionID, options.ResourceGroup, options.DiskName)
+	diskID := fmt.Sprintf(managedDiskPath, subsID, rg, options.DiskName)
 
 	if options.SkipGetDiskOperation {
 		klog.Warningf("azureDisk - GetDisk(%s, StorageAccountType:%s) is throttled, unable to confirm provisioningState in poll process", options.DiskName, options.StorageAccountType)
 	} else {
 		err = kwait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
-			provisionState, id, err := c.GetDisk(ctx, options.ResourceGroup, options.DiskName)
+			provisionState, id, err := c.GetDisk(ctx, subsID, rg, options.DiskName)
 			if err == nil {
 				if id != "" {
 					diskID = id
@@ -250,7 +258,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 
 //DeleteManagedDisk : delete managed disk
 func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI string) error {
-	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
 		return err
 	}
@@ -260,7 +268,7 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 	}
 
 	diskName := path.Base(diskURI)
-	disk, rerr := c.common.cloud.DisksClient.Get(ctx, resourceGroup, diskName)
+	disk, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.V(2).Infof("azureDisk - disk(%s) is already deleted", diskURI)
@@ -275,7 +283,7 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 		return fmt.Errorf("disk(%s) already attached to node(%s), could not be deleted", diskURI, *disk.ManagedBy)
 	}
 
-	if rerr := c.common.cloud.DisksClient.Delete(ctx, resourceGroup, diskName); rerr != nil {
+	if rerr := c.common.cloud.DisksClient.Delete(ctx, subsID, resourceGroup, diskName); rerr != nil {
 		return rerr.Error()
 	}
 	// We don't need poll here, k8s will immediately stop referencing the disk
@@ -287,8 +295,8 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 }
 
 // GetDisk return: disk provisionState, diskID, error
-func (c *ManagedDiskController) GetDisk(ctx context.Context, resourceGroup, diskName string) (string, string, error) {
-	result, rerr := c.common.cloud.DisksClient.Get(ctx, resourceGroup, diskName)
+func (c *ManagedDiskController) GetDisk(ctx context.Context, subsID, resourceGroup, diskName string) (string, string, error) {
+	result, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		return "", "", rerr.Error()
 	}
@@ -302,12 +310,12 @@ func (c *ManagedDiskController) GetDisk(ctx context.Context, resourceGroup, disk
 // ResizeDisk Expand the disk to new size
 func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, oldSize resource.Quantity, newSize resource.Quantity, supportOnlineResize bool) (resource.Quantity, error) {
 	diskName := path.Base(diskURI)
-	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
 		return oldSize, err
 	}
 
-	result, rerr := c.common.cloud.DisksClient.Get(ctx, resourceGroup, diskName)
+	result, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		return oldSize, rerr.Error()
 	}
@@ -340,7 +348,7 @@ func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, 
 		},
 	}
 
-	if rerr := c.common.cloud.DisksClient.Update(ctx, resourceGroup, diskName, diskParameter); rerr != nil {
+	if rerr := c.common.cloud.DisksClient.Update(ctx, subsID, resourceGroup, diskName, diskParameter); rerr != nil {
 		return oldSize, rerr.Error()
 	}
 
@@ -348,15 +356,15 @@ func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, 
 	return newSizeQuant, nil
 }
 
-// get resource group name from a managed disk URI, e.g. return {group-name} according to
+// get resource group name, subs id from a managed disk URI, e.g. return {group-name}, {sub-id} according to
 // /subscriptions/{sub-id}/resourcegroups/{group-name}/providers/microsoft.compute/disks/{disk-id}
 // according to https://docs.microsoft.com/en-us/rest/api/compute/disks/get
-func getResourceGroupFromDiskURI(diskURI string) (string, error) {
+func getInfoFromDiskURI(diskURI string) (string, string, error) {
 	fields := strings.Split(diskURI, "/")
 	if len(fields) != 9 || strings.ToLower(fields[3]) != "resourcegroups" {
-		return "", fmt.Errorf("invalid disk URI: %s", diskURI)
+		return "", "", fmt.Errorf("invalid disk URI: %s", diskURI)
 	}
-	return fields[4], nil
+	return fields[4], fields[2], nil
 }
 
 // GetLabelsForVolume implements PVLabeler.GetLabelsForVolume
@@ -378,7 +386,7 @@ func (c *Cloud) GetLabelsForVolume(ctx context.Context, pv *v1.PersistentVolume)
 func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[string]string, error) {
 	// Get disk's resource group.
 	diskName := path.Base(diskURI)
-	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
 		klog.Errorf("Failed to get resource group for AzureDisk %q: %v", diskName, err)
 		return nil, err
@@ -391,7 +399,7 @@ func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[str
 	if c.DisksClient == nil {
 		return labels, nil
 	}
-	disk, rerr := c.DisksClient.Get(ctx, resourceGroup, diskName)
+	disk, rerr := c.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		klog.Errorf("Failed to get information for AzureDisk %q: %v", diskName, rerr)
 		return nil, rerr.Error()

@@ -255,7 +255,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	} else {
 		klog.Warningf("azureDisk - switch to batch operation due to rate limited(async: %t), QPS: %f", async, c.diskOpRateLimiter.QPS())
 	}
-	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	resourceGroup, _, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
 		return -1, err
 	}
@@ -597,12 +597,12 @@ func (c *controllerCommon) filterNonExistingDisks(ctx context.Context, unfiltere
 
 func (c *controllerCommon) checkDiskExists(ctx context.Context, diskURI string) (bool, error) {
 	diskName := path.Base(diskURI)
-	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
 		return false, err
 	}
 
-	if _, rerr := c.cloud.DisksClient.Get(ctx, resourceGroup, diskName); rerr != nil {
+	if _, rerr := c.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName); rerr != nil {
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			return false, nil
 		}
