@@ -272,7 +272,7 @@ var _ = Describe("Service with annotation", func() {
 		pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName))
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
-			By("Cleaning up service and public IP")
+			utils.Logf("Cleaning up service and public IP")
 			err = utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, testPIPName, *rg.Name)
