@@ -86,8 +86,11 @@ func New(config *azclients.ClientConfig) *Client {
 }
 
 // Get gets a Snapshot.
-func (c *Client) Get(ctx context.Context, resourceGroupName string, snapshotName string) (compute.Snapshot, *retry.Error) {
-	mc := metrics.NewMetricContext("snapshot", "get", resourceGroupName, c.subscriptionID, "")
+func (c *Client) Get(ctx context.Context, subsID, resourceGroupName, snapshotName string) (compute.Snapshot, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("snapshot", "get", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
@@ -102,7 +105,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, snapshotName
 		return compute.Snapshot{}, rerr
 	}
 
-	result, rerr := c.getSnapshot(ctx, resourceGroupName, snapshotName)
+	result, rerr := c.getSnapshot(ctx, subsID, resourceGroupName, snapshotName)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -117,9 +120,9 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, snapshotName
 }
 
 // getSnapshot gets a Snapshot.
-func (c *Client) getSnapshot(ctx context.Context, resourceGroupName string, snapshotName string) (compute.Snapshot, *retry.Error) {
+func (c *Client) getSnapshot(ctx context.Context, subsID, resourceGroupName, snapshotName string) (compute.Snapshot, *retry.Error) {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
 		"Microsoft.Compute/snapshots",
 		snapshotName,
@@ -147,8 +150,11 @@ func (c *Client) getSnapshot(ctx context.Context, resourceGroupName string, snap
 }
 
 // Delete deletes a Snapshot by name.
-func (c *Client) Delete(ctx context.Context, resourceGroupName string, snapshotName string) *retry.Error {
-	mc := metrics.NewMetricContext("snapshot", "delete", resourceGroupName, c.subscriptionID, "")
+func (c *Client) Delete(ctx context.Context, subsID, resourceGroupName, snapshotName string) *retry.Error {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("snapshot", "delete", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
@@ -163,7 +169,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, snapshotN
 		return rerr
 	}
 
-	rerr := c.deleteSnapshot(ctx, resourceGroupName, snapshotName)
+	rerr := c.deleteSnapshot(ctx, subsID, resourceGroupName, snapshotName)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -178,9 +184,9 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, snapshotN
 }
 
 // deleteSnapshot deletes a PublicIPAddress by name.
-func (c *Client) deleteSnapshot(ctx context.Context, resourceGroupName string, snapshotName string) *retry.Error {
+func (c *Client) deleteSnapshot(ctx context.Context, subsID, resourceGroupName, snapshotName string) *retry.Error {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
 		"Microsoft.Compute/snapshots",
 		snapshotName,
@@ -190,8 +196,11 @@ func (c *Client) deleteSnapshot(ctx context.Context, resourceGroupName string, s
 }
 
 // CreateOrUpdate creates or updates a Snapshot.
-func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, snapshotName string, snapshot compute.Snapshot) *retry.Error {
-	mc := metrics.NewMetricContext("snapshot", "create_or_update", resourceGroupName, c.subscriptionID, "")
+func (c *Client) CreateOrUpdate(ctx context.Context, subsID, resourceGroupName, snapshotName string, snapshot compute.Snapshot) *retry.Error {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("snapshot", "create_or_update", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
@@ -206,7 +215,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, s
 		return rerr
 	}
 
-	rerr := c.createOrUpdateSnapshot(ctx, resourceGroupName, snapshotName, snapshot)
+	rerr := c.createOrUpdateSnapshot(ctx, subsID, resourceGroupName, snapshotName, snapshot)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -221,9 +230,9 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, s
 }
 
 // createOrUpdateSnapshot creates or updates a Snapshot.
-func (c *Client) createOrUpdateSnapshot(ctx context.Context, resourceGroupName string, snapshotName string, snapshot compute.Snapshot) *retry.Error {
+func (c *Client) createOrUpdateSnapshot(ctx context.Context, subsID, resourceGroupName, snapshotName string, snapshot compute.Snapshot) *retry.Error {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
 		"Microsoft.Compute/snapshots",
 		snapshotName,
@@ -258,8 +267,11 @@ func (c *Client) createOrUpdateResponder(resp *http.Response) (*compute.Snapshot
 }
 
 // ListByResourceGroup get a list snapshots by resourceGroup.
-func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
-	mc := metrics.NewMetricContext("snapshot", "list_by_resource_group", resourceGroupName, c.subscriptionID, "")
+func (c *Client) ListByResourceGroup(ctx context.Context, subsID, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("snapshot", "list_by_resource_group", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
@@ -274,7 +286,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 		return nil, rerr
 	}
 
-	result, rerr := c.listSnapshotsByResourceGroup(ctx, resourceGroupName)
+	result, rerr := c.listSnapshotsByResourceGroup(ctx, subsID, resourceGroupName)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -289,9 +301,12 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 }
 
 // listSnapshotsByResourceGroup gets a list of snapshots in the resource group.
-func (c *Client) listSnapshotsByResourceGroup(ctx context.Context, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
+func (c *Client) listSnapshotsByResourceGroup(ctx context.Context, subsID, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
 	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/snapshots",
-		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", subsID),
 		autorest.Encode("path", resourceGroupName))
 	result := make([]compute.Snapshot, 0)
 	page := &SnapshotListPage{}

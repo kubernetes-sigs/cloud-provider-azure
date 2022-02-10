@@ -97,7 +97,7 @@ func TestGetNotFound(t *testing.T) {
 
 	diskClient := getTestDiskClient(armClient)
 	expected := compute.Disk{Response: autorest.Response{}}
-	result, rerr := diskClient.Get(context.TODO(), "rg", "disk1")
+	result, rerr := diskClient.Get(context.TODO(), "", "rg", "disk1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
@@ -117,7 +117,7 @@ func TestGetInternalError(t *testing.T) {
 
 	diskClient := getTestDiskClient(armClient)
 	expected := compute.Disk{Response: autorest.Response{}}
-	result, rerr := diskClient.Get(context.TODO(), "rg", "disk1")
+	result, rerr := diskClient.Get(context.TODO(), "", "rg", "disk1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
@@ -142,7 +142,7 @@ func TestGetThrottle(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
-	result, rerr := diskClient.Get(context.TODO(), "rg", "disk1")
+	result, rerr := diskClient.Get(context.TODO(), "", "rg", "disk1")
 	assert.Empty(t, result)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -161,7 +161,7 @@ func TestCreateOrUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
-	rerr := diskClient.CreateOrUpdate(context.TODO(), "rg", "disk1", disk)
+	rerr := diskClient.CreateOrUpdate(context.TODO(), "", "rg", "disk1", disk)
 	assert.Nil(t, rerr)
 
 	response = &http.Response{
@@ -177,7 +177,7 @@ func TestCreateOrUpdate(t *testing.T) {
 
 	armClient.EXPECT().PutResource(gomock.Any(), to.String(disk.ID), disk).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	rerr = diskClient.CreateOrUpdate(context.TODO(), "rg", "disk1", disk)
+	rerr = diskClient.CreateOrUpdate(context.TODO(), "", "rg", "disk1", disk)
 	assert.Equal(t, throttleErr, rerr)
 }
 
@@ -195,7 +195,7 @@ func TestUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
-	rerr := diskClient.Update(context.TODO(), "rg", "disk1", diskUpdate)
+	rerr := diskClient.Update(context.TODO(), "", "rg", "disk1", diskUpdate)
 	assert.Nil(t, rerr)
 
 	response = &http.Response{
@@ -211,7 +211,7 @@ func TestUpdate(t *testing.T) {
 
 	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, diskUpdate).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	rerr = diskClient.Update(context.TODO(), "rg", "disk1", diskUpdate)
+	rerr = diskClient.Update(context.TODO(), "", "rg", "disk1", diskUpdate)
 	assert.Equal(t, throttleErr, rerr)
 }
 
@@ -232,7 +232,7 @@ func TestDelete(t *testing.T) {
 	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
-	rerr := diskClient.Delete(context.TODO(), "rg", "disk1")
+	rerr := diskClient.Delete(context.TODO(), "", "rg", "disk1")
 	assert.Nil(t, rerr)
 
 	throttleErr := &retry.Error{
@@ -242,7 +242,7 @@ func TestDelete(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
-	rerr = diskClient.Delete(context.TODO(), "rg", "disk1")
+	rerr = diskClient.Delete(context.TODO(), "", "rg", "disk1")
 	assert.Equal(t, throttleErr, rerr)
 }
 

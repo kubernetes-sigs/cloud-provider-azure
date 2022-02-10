@@ -763,8 +763,8 @@ func TestCheckDiskExists(t *testing.T) {
 		testCloud.SubscriptionID, testCloud.ResourceGroup, newDiskName)
 
 	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, newDiskName).Return(compute.Disk{}, nil).AnyTimes()
-	mockDisksClient.EXPECT().Get(gomock.Any(), gomock.Not(testCloud.ResourceGroup), gomock.Any()).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, newDiskName).Return(compute.Disk{}, nil).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Not(testCloud.ResourceGroup), gomock.Any()).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 
 	testCases := []struct {
 		diskURI        string
@@ -818,8 +818,8 @@ func TestFilterNonExistingDisks(t *testing.T) {
 	newDiskURI := diskURIPrefix + newDiskName
 
 	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, newDiskName).Return(compute.Disk{}, nil).AnyTimes()
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Not(newDiskName)).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, newDiskName).Return(compute.Disk{}, nil).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, gomock.Not(newDiskName)).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 
 	disks := []compute.DataDisk{
 		{
@@ -880,7 +880,7 @@ func TestFilterNonExistingDisksWithSpecialHTTPStatusCode(t *testing.T) {
 	newDiskURI := diskURIPrefix + newDiskName
 
 	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Eq(newDiskName)).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusBadRequest, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, gomock.Eq(newDiskName)).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusBadRequest, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 
 	disks := []compute.DataDisk{
 		{
