@@ -50,4 +50,7 @@ type Interface interface {
 
 	// Delete deletes a LoadBalancer by name.
 	Delete(ctx context.Context, resourceGroupName string, loadBalancerName string) *retry.Error
+
+	// DeleteLBBackendPool deletes a LoadBalancer backend pool by name.
+	DeleteLBBackendPool(ctx context.Context, resourceGroupName, loadBalancerName, backendPoolName string) *retry.Error
 }
