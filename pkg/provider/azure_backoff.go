@@ -293,6 +293,34 @@ func (az *Cloud) CreateOrUpdateLBBackendPool(lbName string, backendPool network.
 	return rerr.Error()
 }
 
+func (az *Cloud) DeleteLBBackendPool(lbName, backendPoolName string) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	klog.V(4).Infof("DeleteLBBackendPool: deleting backend pool %s in LB %s", backendPoolName, lbName)
+	rerr := az.LoadBalancerClient.DeleteLBBackendPool(ctx, az.getLoadBalancerResourceGroup(), lbName, backendPoolName)
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.lbCache.Delete(lbName)
+		return nil
+	}
+
+	// Invalidate the cache because ETAG precondition mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	retryErrorMessage := rerr.Error().Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	return rerr.Error()
+}
+
 // ListManagedLBs invokes az.LoadBalancerClient.List and filter out
 // those that are not managed by cloud provider azure or not associated to a managed VMSet.
 func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
