@@ -1,4 +1,4 @@
-# github.com/Azure/azure-sdk-for-go v61.4.0+incompatible
+# github.com/Azure/azure-sdk-for-go v61.5.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute
