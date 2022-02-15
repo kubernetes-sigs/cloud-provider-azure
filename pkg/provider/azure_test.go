@@ -1645,6 +1645,7 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 			foundProbe := false
 			if servicehelpers.NeedsHealthCheck(&services[i]) {
 				path, port := servicehelpers.GetServiceHealthCheckPathPort(&services[i])
+				wantedRuleName := az.getLoadBalancerRuleName(&services[i], v1.ProtocolTCP, port)
 				for _, actualProbe := range *loadBalancer.Probes {
 					if strings.EqualFold(*actualProbe.Name, wantedRuleName) &&
 						*actualProbe.Port == port &&
