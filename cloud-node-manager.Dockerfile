@@ -14,15 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.17-buster AS builder
-
-ARG ENABLE_GIT_COMMAND=true
-ARG ARCH=amd64
-
+FROM --platform=linux/amd64 golang:1.17-buster AS builder-factory
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
-RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
+FROM builder-factory AS builder
+# Build cross platform binaries
+ARG ENABLE_GIT_COMMAND=true
+ARG TARGETPLATFORM
+RUN ARCH=$(echo $TARGETPLATFORM | cut -f2 -d/) && \
+    GOARM=$(echo $TARGETPLATFORM | cut -f3 -d/ | sed "s/v//" ) && \
+    echo $ARCH && \
+    ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=$ARCH make bin/azure-cloud-node-manager 
 
 FROM gcr.io/distroless/static
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
