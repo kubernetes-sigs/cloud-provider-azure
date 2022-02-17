@@ -256,29 +256,42 @@ func (c *Client) createOrUpdateLB(ctx context.Context, resourceGroupName string,
 		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
-	if etag != "" {
-		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
-	}
-
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
-	defer c.armClient.CloseResponse(ctx, response)
+	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.put.request", resourceID, rerr.Error())
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.createorpatch.request", resourceID, rerr.Error())
 		return rerr
 	}
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		decorators := []autorest.PrepareDecorator{
+			autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+			autorest.WithJSON(parameters),
+		}
+		if etag != "" {
+			decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
+		}
 
+		response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+		defer c.armClient.CloseResponse(ctx, response)
+		if rerr != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.createorpatch.request", resourceID, rerr.Error())
+			return rerr
+		}
+		return nil
+	}
+	response, rerr := c.armClient.PatchResource(ctx, resourceID, parameters)
+	defer c.armClient.CloseResponse(ctx, response)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.createorpatch.request", resourceID, rerr.Error())
+		return rerr
+	}
 	if response != nil && response.StatusCode != http.StatusNoContent {
 		_, rerr = c.createOrUpdateResponder(response)
 		if rerr != nil {
-			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.put.respond", resourceID, rerr.Error())
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.createorpatch.respond", resourceID, rerr.Error())
 			return rerr
 		}
 	}
-
 	return nil
 }
 

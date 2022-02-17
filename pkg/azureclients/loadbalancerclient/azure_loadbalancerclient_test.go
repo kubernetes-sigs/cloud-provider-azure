@@ -267,11 +267,17 @@ func TestCreateOrUpdate(t *testing.T) {
 
 	lb := getTestLoadBalancer("lb1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
+	listResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient.EXPECT().GetResource(gomock.Any(), to.String(lb.ID), "").Return(listResponse, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(lb.ID), lb, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PatchResource(gomock.Any(), to.String(lb.ID), lb).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
