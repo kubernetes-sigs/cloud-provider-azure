@@ -30,15 +30,15 @@ if [ -z "$KUBECONFIG" ]; then
   fi
 fi
 
-K8S_ORG_PATH="$GOPATH/src/k8s.io/kubernetes"
-mkdir -p "${K8S_ORG_PATH}"
-if [ ! -d "${K8S_ORG_PATH}/kubernetes" ]; then
+K8S_ORG_PATH="$GOPATH/src/k8s.io"
+K8S_REPO_PATH="${K8S_ORG_PATH}/kubernetes"
+if [ ! -d "${K8S_REPO_PATH}" ]; then
   echo "Kubernetes repo not exists, clone one"
-  cd "${K8S_ORG_PATH}"
+  mkdir -p "${K8S_ORG_PATH}" && cd "${K8S_ORG_PATH}"
   git clone https://github.com/kubernetes/kubernetes.git
 fi
 
-cd "${K8S_ORG_PATH}/kubernetes"
+cd "${K8S_REPO_PATH}"
 make WHAT='test/e2e/e2e.test'
 make WHAT=cmd/kubectl
 make ginkgo
