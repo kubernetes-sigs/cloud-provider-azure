@@ -69,7 +69,7 @@ const (
 
 var client = &http.Client{
 	Transport: utilnet.SetTransportDefaults(&http.Transport{}),
-	Timeout:   time.Second * 10,
+	Timeout:   time.Second * 60,
 }
 
 type authDirective struct {
