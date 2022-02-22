@@ -20,11 +20,11 @@ require (
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
 	k8s.io/api v0.22.7
 	k8s.io/apimachinery v0.22.7
-	k8s.io/apiserver v0.22.6
+	k8s.io/apiserver v0.22.7
 	k8s.io/client-go v0.22.7
-	k8s.io/cloud-provider v0.22.6
+	k8s.io/cloud-provider v0.22.7
 	k8s.io/component-base v0.22.7
-	k8s.io/controller-manager v0.22.6
+	k8s.io/controller-manager v0.22.7
 	k8s.io/klog/v2 v2.10.0
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
 	sigs.k8s.io/yaml v1.3.0
