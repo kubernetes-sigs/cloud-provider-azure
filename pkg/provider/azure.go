@@ -65,6 +65,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	nodemanager "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 
 	// ensure the newly added package from azure-sdk-for-go is in vendor/
@@ -947,16 +948,20 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			delete(az.nodeResourceGroups, prevNode.ObjectMeta.Name)
 		}
 
-		// Remove from unmanagedNodes cache.
 		managed, ok := prevNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
-		if ok && strings.EqualFold(managed, consts.NotManagedByAzureLabelValue) {
+		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
+
+		klog.Infof("managed=%v, ok=%v, isNodeManagedByCloudProvider=%v",
+			managed, ok, isNodeManagedByCloudProvider)
+
+		// Remove from unmanagedNodes cache
+		if !isNodeManagedByCloudProvider {
 			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
-			az.excludeLoadBalancerNodes.Delete(prevNode.ObjectMeta.Name)
 		}
 
-		// Remove from excludeLoadBalancerNodes cache.
-		if _, hasExcludeBalancerLabel := prevNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]; hasExcludeBalancerLabel {
-			az.excludeLoadBalancerNodes.Delete(prevNode.ObjectMeta.Name)
+		// if the node is being deleted from the cluster, exclude it from load balancers
+		if newNode == nil {
+			az.excludeLoadBalancerNodes.Insert(prevNode.ObjectMeta.Name)
 		}
 	}
 
@@ -979,16 +984,35 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			az.nodeResourceGroups[newNode.ObjectMeta.Name] = strings.ToLower(newRG)
 		}
 
-		// Add to unmanagedNodes cache.
+		_, hasExcludeBalancerLabel := newNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]
 		managed, ok := newNode.ObjectMeta.Labels[consts.ManagedByAzureLabel]
-		if ok && strings.EqualFold(managed, consts.NotManagedByAzureLabelValue) {
+		isNodeManagedByCloudProvider := !ok || !strings.EqualFold(managed, consts.NotManagedByAzureLabelValue)
+
+		// Update unmanagedNodes cache
+		if !isNodeManagedByCloudProvider {
 			az.unmanagedNodes.Insert(newNode.ObjectMeta.Name)
-			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
 		}
 
-		// Add to excludeLoadBalancerNodes cache.
-		if _, hasExcludeBalancerLabel := newNode.ObjectMeta.Labels[v1.LabelNodeExcludeBalancers]; hasExcludeBalancerLabel {
+		// Update excludeLoadBalancerNodes cache
+		switch {
+		case !isNodeManagedByCloudProvider:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+
+		case hasExcludeBalancerLabel:
+			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+
+		case !isNodeReady(newNode) && nodemanager.GetCloudTaint(newNode.Spec.Taints) == nil:
+			// If not in ready state and not a newly created node, add to excludeLoadBalancerNodes cache.
+			// New nodes (tainted with "node.cloudprovider.kubernetes.io/uninitialized") should not be
+			// excluded from load balancers regardless of their state, so as to reduce the number of
+			// VMSS API calls and not provoke VMScaleSetActiveModelsCountLimitReached.
+			// (https://github.com/kubernetes-sigs/cloud-provider-azure/issues/851)
+			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+
+		default:
+			// Nodes not falling into the three cases above are valid backends and
+			// should not appear in excludeLoadBalancerNodes cache.
+			az.excludeLoadBalancerNodes.Delete(newNode.ObjectMeta.Name)
 		}
 	}
 }
@@ -1113,4 +1137,13 @@ func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(nodeName string) (bool, erro
 	}
 
 	return az.excludeLoadBalancerNodes.Has(nodeName), nil
+}
+
+func isNodeReady(node *v1.Node) bool {
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == v1.NodeReady && cond.Status == v1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
