@@ -377,9 +377,16 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 		}
 	}
 
-	nodeModifiers, err := cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
+	var nodeModifiers []nodeModifier
+	err = clientretry.OnError(UpdateNodeSpecBackoff, func(err error) bool {
+		return err != nil && strings.HasPrefix(err.Error(), "failed to set node provider id")
+	}, func() error {
+		nodeModifiers, err = cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
+		return err
+	})
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
+		// Instead of just logging the error, panic and node manager can restart
+		utilruntime.Must(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
 		return
 	}
 
@@ -434,10 +441,9 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 				}
 			})
 		} else {
-			// we should attempt to set providerID on node, but
-			// we can continue if we fail since we will attempt to set
-			// node addresses given the node name in getNodeAddressesByName
-			klog.Errorf("failed to set node provider id: %v", err)
+			// if we are not able to get node provider id,
+			// we return error here and retry in the caller initializeNode()
+			return nil, fmt.Errorf("failed to set node provider id: %w", err)
 		}
 	}
 
