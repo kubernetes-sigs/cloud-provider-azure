@@ -439,7 +439,6 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 					n.Spec.ProviderID = providerID
 				}
 			})
-			klog.Infof("Successfully getting providerID %s for node %s", providerID, node.Name)
 		} else {
 			// if we are not able to get node provider id,
 			// we return error here and retry in the caller initializeNode()
