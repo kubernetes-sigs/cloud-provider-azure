@@ -103,3 +103,7 @@ func OnError(backoff wait.Backoff, retriable func(error) bool, fn func() error) 
 func RetryOnConflict(backoff wait.Backoff, fn func() error) error {
 	return OnError(backoff, errors.IsConflict, fn)
 }
+
+func RetryOnNotFound(backoff wait.Backoff, fn func() error) error {
+	return OnError(backoff, errors.IsNotFound, fn)
+}
