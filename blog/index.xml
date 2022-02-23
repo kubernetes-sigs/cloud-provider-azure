@@ -1,4 +1,40 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.13</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.14</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/23/v0.7.14/</link><pubDate>Wed, 23 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/23/v0.7.14/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>
+&lt;p>Following configuration will be applied to the all ports of service.&lt;/p>
+&lt;p>&amp;ldquo;service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol&amp;rdquo;
+&amp;ldquo;service.beta.kubernetes.io/azure-load-balancer-health-probe-interval&amp;rdquo;
+&amp;ldquo;service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe&amp;rdquo;
+&amp;ldquo;service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path&amp;rdquo;&lt;/p>
+&lt;p>If health probe is needed, user should specify AppProtocol in port object of Service spec.
+And following protocols are supported: http, tcp, https&lt;/p>
+&lt;p>Additional annotations are added. where port is the port number of port object&lt;/p>
+&lt;p>service.beta.kubernetes.io/port_{port}_health-probe_interval
+service.beta.kubernetes.io/port_{port}_health-probe_num-of-probe
+service.beta.kubernetes.io/port_{port}_health-probe_request-path&lt;/p>
+&lt;p>Please refer to docs. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1131">#1131&lt;/a>, &lt;a href="https://github.com/MartinForReal">@MartinForReal&lt;/a>)&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>This code change fixes the bug that UDP services would trigger unnecessary LoadBalancer updates. The root cause is that a field not working for non-TCP protocols is considered.
+ref: #1090 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1108">#1108&lt;/a>, &lt;a href="https://github.com/lzhecheng">@lzhecheng&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>If spec.LoadBalancerSourceRanges is specified and lb is in internal mode, LB is open for public access.(close by default for security reasons) (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1124">#1124&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v61.4.0...v61.6.0">v61.4.0+incompatible → v61.6.0+incompatible&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.13</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</link><pubDate>Mon, 07 Feb 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/02/07/v0.7.13/</guid><description>
 &lt;h1 id="changelog-since-v0712">Changelog since v0.7.12&lt;/h1>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
