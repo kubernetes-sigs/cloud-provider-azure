@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -758,9 +759,9 @@ func TestGetVmssVM(t *testing.T) {
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, test.existedVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		_, _, vmssVM, err := ss.getVmssVM(test.nodeName, azcache.CacheReadTypeDefault)
+		vmssVM, err := ss.getVmssVM(test.nodeName, azcache.CacheReadTypeDefault)
 		if vmssVM != nil {
-			assert.Equal(t, expectedVMSSVM, *vmssVM, test.description)
+			assert.Equal(t, expectedVMSSVM, *vmssVM.AsVirtualMachineScaleSetVM(), test.description)
 		}
 		assert.Equal(t, test.expectedError, err, test.description)
 	}
@@ -1017,7 +1018,7 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 			vm.VirtualMachineScaleSetVMProperties.NetworkProfile = nil
 		}
 
-		id, err := ss.getPrimaryInterfaceID(vm)
+		id, err := ss.getPrimaryInterfaceID(virtualmachine.FromVirtualMachineScaleSetVM(&vm, virtualmachine.ByVMSS("vmss")))
 		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
 		assert.Equal(t, test.expectedID, id, test.description)
 	}
