@@ -137,7 +137,6 @@ jobs:
 
           GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
           
-          RELEASE_NOTE=site/content/en/blog/releases/${{github.ref_name}}.md
           
           release-notes --repo=cloud-provider-azure \
           	--org=kubernetes-sigs \
@@ -145,10 +144,14 @@ jobs:
           	--start-sha=${START_SHA} \
           	--end-sha=${END_SHA} \
           	--markdown-links=true \
-          	--output=${RELEASE_NOTE}
+          	--output=release-notes.md
           
-          NOTE_HEAD="---\ntitle: "v${VERSION}"\nlinkTitle: "v${VERSION}"\ndate: $(date '+%Y-%m-%d')\ndescription: Cloud Provider Azure v${VERSION}\n---\n\n"
-          sed -i "1i${NOTE_HEAD}" ${RELEASE_NOTE}
+          # Generate release note for site
+          # Prepend site header
+          SITE_RELEASE_NOTE=site/content/en/blog/releases/${{github.ref_name}}.md
+          SITE_HEAD="---\ntitle: "v${VERSION}"\nlinkTitle: "v${VERSION}"\ndate: $(date '+%Y-%m-%d')\ndescription: Cloud Provider Azure v${VERSION}\n---\n\n"
+          cp release-notes.md ${SITE_RELEASE_NOTE}
+          sed -i "1i${SITE_HEAD}" ${SITE_RELEASE_NOTE}
       - name: Download artifacts
         uses: actions/download-artifact@v2
         with:
@@ -156,7 +159,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v1
         with:
-          body_path: site/content/en/blog/releases/${{github.ref_name}}.md
+          body_path: release-notes.md
           files: |
             ./artifacts/cloud-node-manager-*-*/*
             ./artifacts/cloud-controller-manager-*-*/*
