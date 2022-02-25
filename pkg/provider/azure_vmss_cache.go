@@ -337,5 +337,6 @@ func (ss *ScaleSet) isNodeManagedByAvailabilitySet(nodeName string, crt azcache.
 	}
 
 	cachedVMs := cached.(availabilitySetNodeEntry).vmNames
+	fmt.Println("test")
 	return cachedVMs.Has(nodeName), nil
 }
