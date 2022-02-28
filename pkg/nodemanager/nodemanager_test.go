@@ -1149,3 +1149,78 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	// CCM node controller should not overwrite provider if it's already set
 	assert.Equal(t, "test-provider-id", fnh.UpdatedNodes[0].Spec.ProviderID, "Node ProviderID not set correctly")
 }
+
+// This test checks that a node manager should retry 20 times when failing to get providerID and then panic
+func TestNodeProviderIDNotSet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fnh := &testutil.FakeNodeHandler{
+		Existing: []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node0",
+					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					Labels:            map[string]string{},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:               v1.NodeReady,
+							Status:             v1.ConditionUnknown,
+							LastHeartbeatTime:  metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+							LastTransitionTime: metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key:    "ImproveCoverageTaint",
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+						{
+							Key:    cloudproviderapi.TaintExternalCloudProvider,
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+		Clientset:      fake.NewSimpleClientset(&v1.PodList{}),
+		DeleteWaitChan: make(chan struct{}),
+	}
+
+	ctx := context.TODO()
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	// InstanceID function should be retried for 20 times when error happens consistently
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("", cloudprovider.InstanceNotFound).MinTimes(20).MaxTimes(20)
+
+	eventBroadcaster := record.NewBroadcaster()
+	cloudNodeController := &CloudNodeController{
+		kubeClient:                fnh,
+		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeName:                  "node0",
+		nodeProvider:              mockNP,
+		nodeStatusUpdateFrequency: 1 * time.Second,
+		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
+	}
+	eventBroadcaster.StartLogging(klog.Infof)
+
+	// Expect AddCloudNode() to panic when providerID is not set properly
+	func() {
+		defer func() {
+			err := recover()
+			assert.NotNil(t, err, "AddCloudNode() didn't panic")
+		}()
+
+		cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+		t.Errorf("AddCloudNode() didn't panic when providerID not found")
+	}()
+
+	// Node update should fail
+	assert.Equal(t, 0, len(fnh.UpdatedNodes), "Node was updated (unexpected)")
+}
