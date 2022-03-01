@@ -519,6 +519,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 			if err != nil {
 				return nil, nil, false, err
 			}
+			_ = az.lbCache.Delete(*cleanedLB.Name)
 			existingLB = *cleanedLB
 			existingLBs[i] = *cleanedLB
 		}
@@ -1384,6 +1385,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		}
 		if changed {
 			dirtyLb = true
+			_ = az.lbCache.Delete(*lb.Name)
 		}
 		isBackendPoolPreConfigured = preConfig
 	}
@@ -1395,6 +1397,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	}
 	if changed {
 		dirtyLb = true
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	// update probes/rules
@@ -1424,14 +1427,17 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 
 	if changed := az.reconcileLBProbes(lb, service, serviceName, wantLb, expectedProbes); changed {
 		dirtyLb = true
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	if changed := az.reconcileLBRules(lb, service, serviceName, wantLb, expectedRules); changed {
 		dirtyLb = true
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	if changed := az.ensureLoadBalancerTagged(lb); changed {
 		dirtyLb = true
+		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	// We don't care if the LB exists or not
