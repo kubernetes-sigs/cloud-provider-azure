@@ -227,8 +227,6 @@ The backend pool type can be configured by specifying `loadBalancerBackendPoolCo
 2. `nodeIP`. In this case we attach nodes to the LB by calling the LB API to add the node private IP addresses to the LB backend pool.
 3. `podIP` (not supported yet). In this case we do not attach nodes to the LB. Instead we directly adding pod IPs to the LB backend pool.
 
-> Currently, we do NOT support changing the backend pool type in existing clusters
-
 ## Load balancer limits
 
 The limits of the load balancer related resources are listed below:
