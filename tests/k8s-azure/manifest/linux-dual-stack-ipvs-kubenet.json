@@ -25,7 +25,7 @@
                     "--max-pods": "110"
                 },
                 "controllerManagerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
+                    "--feature-gates": "IPv6DualStack=true,LegacyServiceAccountTokenNoAutoGeneration=false"
                 },
                 "addons": [
                     {
