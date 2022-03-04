@@ -1,4 +1,13 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.0.12</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v1.0.12/</link><pubDate>Fri, 04 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v1.0.12/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.15</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v0.7.15/</link><pubDate>Fri, 04 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v0.7.15/</guid><description>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v61.6.0...v62.0.0">v61.6.0+incompatible → v62.0.0+incompatible&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.12</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v1.0.12/</link><pubDate>Fri, 04 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/04/v1.0.12/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
