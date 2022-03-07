@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -480,6 +481,75 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 
 	for _, test := range tests {
 		result := isPrivateEndpointAsExpected(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsTagsEqual(t *testing.T) {
+	tests := []struct {
+		desc           string
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			desc: "empty tags",
+			account: storage.Account{
+				Tags: nil,
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key":  to.StringPtr("value"),
+					"key2": nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				Tags: map[string]string{
+					"key":  "value",
+					"key2": "",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			desc: "identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key":  to.StringPtr("value"),
+					"key2": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				Tags: map[string]string{
+					"key2": "value2",
+					"key":  "value",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			desc: "non-identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				Tags: map[string]string{
+					"key": "value",
+				},
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isTagsEqual(test.account, test.accountOptions)
 		assert.Equal(t, result, test.expectedResult)
 	}
 }

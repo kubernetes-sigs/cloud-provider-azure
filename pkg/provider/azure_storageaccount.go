@@ -80,6 +80,7 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				isLocationEqual(acct, accountOptions) &&
 				AreVNetRulesEqual(acct, accountOptions) &&
 				isLargeFileSharesPropertyEqual(acct, accountOptions) &&
+				isTagsEqual(acct, accountOptions) &&
 				isTaggedWithSkip(acct) &&
 				isHnsPropertyEqual(acct, accountOptions) &&
 				isEnableNfsV3PropertyEqual(acct, accountOptions) &&
@@ -493,6 +494,26 @@ func isTaggedWithSkip(account storage.Account) bool {
 			return false
 		}
 	}
+	return true
+}
+
+func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	// nil and empty map should be regarded as equal
+	if len(account.Tags) == 0 && len(accountOptions.Tags) == 0 {
+		return true
+	}
+
+	for k, v := range account.Tags {
+		var value string
+		// nil and empty value should be regarded as equal
+		if v != nil {
+			value = *v
+		}
+		if accountOptions.Tags[k] != value {
+			return false
+		}
+	}
+
 	return true
 }
 
