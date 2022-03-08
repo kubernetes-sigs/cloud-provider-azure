@@ -5,7 +5,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
   
   - package-ecosystem: "docker"
@@ -18,7 +20,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
 
   - package-ecosystem: "npm"
@@ -26,7 +30,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
 
   - package-ecosystem: "gomod"
@@ -34,7 +40,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
     target-branch: "release-1.23"
     ignore:
@@ -46,7 +54,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
     target-branch: "release-1.1"
     ignore:
@@ -58,7 +68,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
     target-branch: "release-1.0"
     ignore:
@@ -70,7 +82,9 @@ updates:
     schedule:
       interval: daily
     labels:
+      - "area/dependency"
       - "release-note-none"
+      - "ok-to-test"
     open-pull-requests-limit: 5
     target-branch: "release-0.7"
     ignore:
