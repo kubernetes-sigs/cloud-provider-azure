@@ -159,6 +159,10 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(request *http.Request) (*http.Response, error) {
 			response, rerr := s.Do(request)
+			if response == nil {
+				klog.V(2).Infof("response is empty")
+				return response, rerr
+			}
 			if rerr == nil || response.StatusCode == http.StatusNotFound || c.regionalEndpoint == "" {
 				return response, rerr
 			}
