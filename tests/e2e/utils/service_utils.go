@@ -44,9 +44,8 @@ const (
 
 // DeleteService deletes a service
 func DeleteService(cs clientset.Interface, ns string, serviceName string) error {
-	zero := int64(0)
-	err := cs.CoreV1().Services(ns).Delete(context.TODO(), serviceName, metav1.DeleteOptions{GracePeriodSeconds: &zero})
 	Logf("Deleting service %s in namespace %s", serviceName, ns)
+	err := cs.CoreV1().Services(ns).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
