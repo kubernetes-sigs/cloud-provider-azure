@@ -86,20 +86,9 @@ func getPublicIPDomainNameLabel(service *v1.Service) (string, bool) {
 	return "", false
 }
 
-// EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
-func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	// When a client updates the internal load balancer annotation,
-	// the service may be switched from an internal LB to a public one, or vise versa.
-	// Here we'll firstly ensure service do not lie in the opposite LB.
+// reconcileService reconcile the LoadBalancer service. It returns LoadBalancerStatus on success.
+func (az *Cloud) reconcileService(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	serviceName := getServiceName(service)
-	klog.V(5).Infof("ensureloadbalancer(%s): START clusterName=%q", serviceName, clusterName)
-
-	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
-	isOperationSucceeded := false
-	defer func() {
-		mc.ObserveOperationWithResult(isOperationSucceeded)
-	}()
-
 	lb, err := az.reconcileLoadBalancer(clusterName, service, nodes, true /* wantLb */)
 	if err != nil {
 		klog.Errorf("reconcileLoadBalancer(%s) failed: %v", serviceName, err)
@@ -116,7 +105,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	if lbStatus != nil && len(lbStatus.Ingress) > 0 {
 		serviceIP = &lbStatus.Ingress[0].IP
 	}
-	klog.V(2).Infof("EnsureLoadBalancer: reconciling security group for service %q with IP %q, wantLb = true", serviceName, logSafe(serviceIP))
+	klog.V(2).Infof("reconcileService: reconciling security group for service %q with IP %q, wantLb = true", serviceName, logSafe(serviceIP))
 	if _, err := az.reconcileSecurityGroup(clusterName, service, serviceIP, true /* wantLb */); err != nil {
 		klog.Errorf("reconcileSecurityGroup(%s) failed: %#v", serviceName, err)
 		return nil, err
@@ -130,9 +119,33 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	}
 
 	// lb is not reused here because the ETAG may be changed in above operations, hence reconcilePublicIP() would get lb again from cache.
-	klog.V(2).Infof("EnsureLoadBalancer: reconciling pip")
+	klog.V(2).Infof("reconcileService: reconciling pip")
 	if _, err := az.reconcilePublicIP(clusterName, updateService, to.String(lb.Name), true /* wantLb */); err != nil {
 		klog.Errorf("reconcilePublicIP(%s) failed: %#v", serviceName, err)
+		return nil, err
+	}
+
+	return lbStatus, nil
+}
+
+// EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
+func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+	// When a client updates the internal load balancer annotation,
+	// the service may be switched from an internal LB to a public one, or vise versa.
+	// Here we'll firstly ensure service do not lie in the opposite LB.
+	var err error
+	serviceName := getServiceName(service)
+	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
+	klog.V(5).InfoS("EnsureLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
+
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+		klog.V(5).InfoS("EnsureLoadBalancer Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
+	}()
+
+	lbStatus, err := az.reconcileService(ctx, clusterName, service, nodes)
+	if err != nil {
 		return nil, err
 	}
 
@@ -142,12 +155,30 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	if !az.shouldUpdateLoadBalancer(clusterName, service, nodes) {
+	var err error
+	serviceName := getServiceName(service)
+	mc := metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
+	klog.V(5).InfoS("UpdateLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+		klog.V(5).InfoS("UpdateLoadBalancer Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
+	}()
+
+	shouldUpdateLB := az.shouldUpdateLoadBalancer(clusterName, service, nodes)
+	if !shouldUpdateLB {
+		isOperationSucceeded = true
 		klog.V(2).Infof("UpdateLoadBalancer: skipping service %s because it is either being deleted or does not exist anymore", service.Name)
 		return nil
 	}
-	_, err := az.EnsureLoadBalancer(ctx, clusterName, service, nodes)
-	return err
+
+	_, err = az.reconcileService(ctx, clusterName, service, nodes)
+	if err != nil {
+		return err
+	}
+
+	isOperationSucceeded = true
+	return nil
 }
 
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it
@@ -157,14 +188,15 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // have multiple underlying components, meaning a Get could say that the LB
 // doesn't exist even if some part of it is still laying around.
 func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	var err error
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
-	klog.V(5).Infof("Delete service (%s): START clusterName=%q", serviceName, clusterName)
-
 	mc := metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.SubscriptionID, serviceName)
+	klog.V(5).InfoS("EnsureLoadBalancerDeleted Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
+		klog.V(5).InfoS("EnsureLoadBalancerDeleted Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
 	}()
 
 	serviceIPToCleanup, err := az.findServiceIPAddress(ctx, clusterName, service, isInternal)
@@ -173,15 +205,18 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	}
 
 	klog.V(2).Infof("EnsureLoadBalancerDeleted: reconciling security group for service %q with IP %q, wantLb = false", serviceName, serviceIPToCleanup)
-	if _, err := az.reconcileSecurityGroup(clusterName, service, &serviceIPToCleanup, false /* wantLb */); err != nil {
+	_, err = az.reconcileSecurityGroup(clusterName, service, &serviceIPToCleanup, false /* wantLb */)
+	if err != nil {
 		return err
 	}
 
-	if _, err := az.reconcileLoadBalancer(clusterName, service, nil, false /* wantLb */); err != nil && !retry.HasStatusForbiddenOrIgnoredError(err) {
+	_, err = az.reconcileLoadBalancer(clusterName, service, nil, false /* wantLb */)
+	if err != nil && !retry.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
 
-	if _, err := az.reconcilePublicIP(clusterName, service, "", false /* wantLb */); err != nil {
+	_, err = az.reconcilePublicIP(clusterName, service, "", false /* wantLb */)
+	if err != nil {
 		return err
 	}
 
