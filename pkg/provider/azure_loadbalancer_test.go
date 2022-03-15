@@ -4754,8 +4754,16 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 			expectedListCount: 1,
 		},
 		{
+			description:       "reconcileSharedLoadBalancer should do nothing if `nodes` is nil",
+			expectedListCount: 1,
+		},
+		{
 			description:     "reconcileSharedLoadBalancer should do nothing if the vmSet is not sharing the primary slb",
 			useMultipleSLBs: true,
+			nodes: []*v1.Node{
+				{ObjectMeta: metav1.ObjectMeta{Name: "kubernetes"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "vmss1"}},
+			},
 			existingLBs: []network.LoadBalancer{
 				{
 					Name: to.StringPtr("kubernetes"),
@@ -4791,8 +4799,8 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 
 			cloud.NodePoolsWithoutDedicatedSLB = tc.vmSetsSharingPrimarySLB
 
+			cloud.LoadBalancerSku = consts.VMTypeStandard
 			if tc.useMultipleSLBs {
-				cloud.LoadBalancerSku = consts.VMTypeStandard
 				cloud.EnableMultipleStandardLoadBalancers = true
 			} else if tc.useBasicLB {
 				cloud.LoadBalancerSku = consts.LoadBalancerSkuBasic
