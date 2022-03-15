@@ -336,6 +336,7 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 
 	// return early if wantLb=false
 	if nodes == nil {
+		klog.V(4).Infof("ListManagedLBs: return all LBs in the resource group %s, including unmanaged LBs", az.getLoadBalancerResourceGroup())
 		return allLBs, nil
 	}
 
