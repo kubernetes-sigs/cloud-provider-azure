@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/component-base/config"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/component-base/config"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
 	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
