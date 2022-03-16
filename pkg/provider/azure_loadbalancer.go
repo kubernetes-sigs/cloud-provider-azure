@@ -462,9 +462,18 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		return existingLBs, nil
 	}
 
+	// Skip if nodes is nil, which means the service is being deleted.
+	// When nodes is nil, all LBs included unmanaged LBs will be returned,
+	// if we don't skip this function, the unmanaged ones may be deleted later.
+	if nodes == nil {
+		klog.V(4).Infof("reconcileSharedLoadBalancer: returning early because the service %s is being deleted", service.Name)
+		return existingLBs, nil
+	}
+
 	lbNamesToBeDeleted := sets.NewString()
 	// delete unwanted LBs
 	for _, lb := range existingLBs {
+		klog.V(4).Infof("reconcileSharedLoadBalancer: checking LB %s", to.String(lb.Name))
 		// skip the internal or external primary load balancer
 		lbNamePrefix := strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix)
 		if strings.EqualFold(lbNamePrefix, clusterName) {
