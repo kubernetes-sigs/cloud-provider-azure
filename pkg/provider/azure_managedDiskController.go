@@ -388,7 +388,7 @@ func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[str
 	diskName := path.Base(diskURI)
 	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {
-		klog.Errorf("Failed to get resource group for AzureDisk %q: %v", diskName, err)
+		klog.Errorf("Failed to get resource group for AzureDisk %s: %v", diskName, err)
 		return nil, err
 	}
 
@@ -401,13 +401,13 @@ func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[str
 	}
 	disk, rerr := c.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
-		klog.Errorf("Failed to get information for AzureDisk %q: %v", diskName, rerr)
+		klog.Errorf("Failed to get information for AzureDisk %s: %v", diskName, rerr)
 		return nil, rerr.Error()
 	}
 
 	// Check whether availability zone is specified.
 	if disk.Zones == nil || len(*disk.Zones) == 0 {
-		klog.V(4).Infof("Azure disk %q is not zoned", diskName)
+		klog.V(4).Infof("Azure disk %s is not zoned", diskName)
 		return labels, nil
 	}
 
@@ -418,7 +418,7 @@ func (c *Cloud) GetAzureDiskLabels(ctx context.Context, diskURI string) (map[str
 	}
 
 	zone := c.makeZone(c.Location, zoneID)
-	klog.V(4).Infof("Got zone %q for Azure disk %q", zone, diskName)
+	klog.V(4).Infof("Got zone %s for Azure disk %s", zone, diskName)
 	labels[consts.LabelFailureDomainBetaZone] = zone
 	return labels, nil
 }
