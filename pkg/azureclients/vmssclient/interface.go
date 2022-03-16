@@ -52,7 +52,7 @@ type Interface interface {
 	CreateOrUpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) (*azure.Future, *retry.Error)
 
 	// WaitForAsyncOperationResult waits for the response of the request
-	WaitForAsyncOperationResult(ctx context.Context, future *azure.Future) (*http.Response, error)
+	WaitForAsyncOperationResult(ctx context.Context, future *azure.Future, resourceGroupName, request, asyncOpName string) (*http.Response, error)
 
 	// DeleteInstances deletes the instances for a VirtualMachineScaleSet.
 	DeleteInstances(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) *retry.Error

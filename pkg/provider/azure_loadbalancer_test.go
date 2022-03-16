@@ -48,6 +48,15 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+// LBInUseRawError is the LoadBalancerInUseByVirtualMachineScaleSet raw error
+const LBInUseRawError = `{
+	"error": {
+    	"code": "LoadBalancerInUseByVirtualMachineScaleSet",
+    	"message": "Cannot delete load balancer /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb since its child resources lb are in use by virtual machine scale set /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss.",
+    	"details": []
+  	}
+}`
+
 func TestFindProbe(t *testing.T) {
 	tests := []struct {
 		msg           string
@@ -4452,7 +4461,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
 
 		mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "test").Return(&retry.Error{RawError: errors.New(retry.LBInUseRawError)})
+		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "test").Return(&retry.Error{RawError: errors.New(LBInUseRawError)})
 		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "test").Return(nil)
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)

@@ -22,8 +22,10 @@ import (
 
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 var (
@@ -79,23 +81,35 @@ func (mc *MetricContext) ThrottledCount() {
 }
 
 // Observe observes the request latency and failed requests.
-func (mc *MetricContext) Observe(err error) error {
-	apiMetrics.latency.WithLabelValues(mc.attributes...).Observe(
-		time.Since(mc.start).Seconds())
-	if err != nil {
-		apiMetrics.errors.WithLabelValues(mc.attributes...).Inc()
+func (mc *MetricContext) Observe(rerr *retry.Error, labelAndValues ...interface{}) {
+	latency := time.Since(mc.start).Seconds()
+	apiMetrics.latency.WithLabelValues(mc.attributes...).Observe(latency)
+	if rerr != nil {
+		errorCode := rerr.ServiceErrorCode()
+		attributes := append(mc.attributes, errorCode)
+		apiMetrics.errors.WithLabelValues(attributes...).Inc()
 	}
-
-	return err
+	mc.logLatency(latency, append(labelAndValues, "error_code", rerr.ServiceErrorCode())...)
 }
 
 // ObserveOperationWithResult observes the request latency and failed requests of an operation.
-func (mc *MetricContext) ObserveOperationWithResult(isOperationSucceeded bool) {
-	operationMetrics.operationLatency.WithLabelValues(mc.attributes...).Observe(
-		time.Since(mc.start).Seconds())
+func (mc *MetricContext) ObserveOperationWithResult(isOperationSucceeded bool, labelAndValues ...interface{}) {
+	latency := time.Since(mc.start).Seconds()
+	operationMetrics.operationLatency.WithLabelValues(mc.attributes...).Observe(latency)
+	resultCode := "succeeded"
 	if !isOperationSucceeded {
+		resultCode = "failed"
 		mc.CountFailedOperation()
 	}
+	mc.logLatency(latency, append(labelAndValues, "result_code", resultCode)...)
+}
+
+func (mc *MetricContext) logLatency(latency float64, additionalKeysAndValues ...interface{}) {
+	keysAndValues := []interface{}{"latency_seconds", latency}
+	for i, label := range metricLabels {
+		keysAndValues = append(keysAndValues, label, mc.attributes[i])
+	}
+	klog.V(3).InfoS("Observed Request Latency", append(keysAndValues, additionalKeysAndValues...)...)
 }
 
 // CountFailedOperation increase the number of failed operations
@@ -123,7 +137,7 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 				Help:           "Number of errors for an Azure API call",
 				StabilityLevel: metrics.ALPHA,
 			},
-			attributes,
+			append(attributes, "code"),
 		),
 		rateLimitedCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{

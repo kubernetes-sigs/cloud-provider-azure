@@ -104,7 +104,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, VMScaleSetNa
 	}
 
 	result, rerr := c.getVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -167,7 +167,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMach
 	}
 
 	result, rerr := c.listVMSSVM(ctx, resourceGroupName, virtualMachineScaleSetName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -241,7 +241,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSe
 	}
 
 	rerr := c.updateVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -403,7 +403,7 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 	}
 
 	rerr := c.updateVMSSVMs(ctx, resourceGroupName, VMScaleSetName, instances, batchSize)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
