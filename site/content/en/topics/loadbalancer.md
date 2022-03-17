@@ -28,11 +28,9 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-allowed-service-tags`      | List of allowed service tags | Specify a list of allowed [service tags](https://docs.microsoft.com/en-us/azure/virtual-network/security-overview#service-tags) separated by comma. | v1.11.0 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout` | TCP idle timeouts in minutes | Specify the time, in minutes, for TCP connection idle timeouts to occur on the load balancer. Default and minimum value is 4. Maximum value is 30. Must be an integer. |  v1.11.4, v1.12.0 and later |
 | `service.beta.kubernetes.io/azure-pip-name` | Name of PIP | Specify the PIP that will be applied to load balancer | v1.16 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset` | `true` | Disable `enableTcpReset` for SLB | v1.16-v1.18. The annotation has been deprecated and would be removed in a future release. |
 | `service.beta.kubernetes.io/azure-pip-tags` | Tags of the PIP | Specify the tags of the PIP that will be associated to the load balancer typed service. [Doc](../tagging-resources) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` | Health probe interval | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe` | The minimum number of unhealthy responses of health probe  |  Refer to the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later |
-| `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | Health probe protocol of the load balancer typed service | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later |
 | `service.beta.kubernetes.io/port_{port}_health-probe_interval` | Health probe interval |  {port} is port number of service.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  |
 | `service.beta.kubernetes.io/port_{port}_health-probe_num-of-probe` | The minimum number of unhealthy responses of health probe  | {port} is port number of service. Refer to the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later |
@@ -162,9 +160,9 @@ Currently, the default protocol of the health probe varies among services with d
 1. for cluster TCP services, TCP would be used.
 1. for cluster UDP services, no health probes.
 
-Since v1.20, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` and `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` are introduced, which determine the new health probe behavior. If the `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` is set, both local and cluster TCP services would use the specified health probe protocol. If the `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is set, the specified request path would be used instead of `/healthz`. Note that the request path would be ignored when using TCP or the `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` is empty. More specifically:
+Since v1.20, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` are introduced, which determine the new health probe behavior. If the spec.ports.appProtocol is set, both local and cluster TCP services would use the specified health probe protocol. If the `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is set, the specified request path would be used instead of `/healthz`. Note that the request path would be ignored when using TCP or the spec.ports.appProtocol is empty. More specifically:
 
-| `externalTrafficPolicy` | `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol` | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | protocol | request path |
+| `externalTrafficPolicy` | spec.ports.AppProtocol | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | protocol | request path |
 | ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------ |------| ----- |
 | local |  | (ignored) | http | `/healthz` |
 | local | tcp | (ignored) | tcp | null |
@@ -182,8 +180,6 @@ Since v1.21, two service annotations `service.beta.kubernetes.io/azure-load-bala
 
 Because [MixedProtocolLBService](https://kubernetes.io/docs/concepts/services-networking/service/#load-balancers-with-mixed-protocol-types) feature is in alpha stage, Ports in one service may have different probe configurations. Following annotations are introduced to customize probe configuration for one port.
 
-[AppProtocol field in port becomes GA in kubernetes 1.20.](https://kubernetes.io/docs/concepts/services-networking/service/#application-protocol) The value of AppProtocol in port will overwrite the one defined in `service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol`
-
 | port specific annotation | global probe annotation | 
 | --| -- | 
 |service.beta.kubernetes.io/port_{port}_health-probe_request-path|service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path|
@@ -198,7 +194,6 @@ kind: Service
 metadata:
   name: appservice
   annotations:
-    service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol: "http"
     service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe: "5"
     service.beta.kubernetes.io/port_443_health-probe_num-of-probe: "4"
 spec:
