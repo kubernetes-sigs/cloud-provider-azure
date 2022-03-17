@@ -66,6 +66,8 @@ endif
 
 DOCKER_CLI_EXPERIMENTAL := enabled
 
+DOCKER_BUILDX ?= docker buildx
+
 # cloud controller manager image
 ifeq ($(ARCH), amd64)
 IMAGE_NAME=azure-cloud-controller-manager
@@ -125,7 +127,7 @@ docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull gcr.io/distroless/static:latest
 
 buildx-setup:
-	docker buildx inspect img-builder > /dev/null || docker buildx create --name img-builder --use
+	$(DOCKER_BUILDX) inspect img-builder > /dev/null || $(DOCKER_BUILDX) create --name img-builder --use
 	# enable qemu for arm64 build
 	# https://github.com/docker/buildx/issues/464#issuecomment-741507760
 	docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-aarch64
@@ -133,7 +135,7 @@ buildx-setup:
 
 .PHONY: build-ccm-image
 build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-manager image.
-	docker buildx build \
+	$(DOCKER_BUILDX) build \
 		--pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform linux/$(ARCH) \
@@ -145,7 +147,7 @@ build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-mana
 
 .PHONY: build-node-image-linux
 build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-manager image.
-	docker buildx build \
+	$(DOCKER_BUILDX) build \
 		--pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform linux/$(ARCH) \
@@ -157,7 +159,7 @@ build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-man
 
 .PHONY: build-node-image-windows
 build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe ## Build node-manager image for Windows.
-	docker buildx build --pull \
+	$(DOCKER_BUILDX) build --pull \
 		--output=type=$(OUTPUT_TYPE) \
 		--platform windows/$(ARCH) \
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH) \
