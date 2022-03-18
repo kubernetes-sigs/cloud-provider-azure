@@ -20,10 +20,10 @@ require (
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
 	k8s.io/api v0.22.8
 	k8s.io/apimachinery v0.22.8
-	k8s.io/apiserver v0.22.7
+	k8s.io/apiserver v0.22.8
 	k8s.io/client-go v0.22.8
 	k8s.io/cloud-provider v0.22.7
-	k8s.io/component-base v0.22.7
+	k8s.io/component-base v0.22.8
 	k8s.io/controller-manager v0.22.7
 	k8s.io/klog/v2 v2.10.0
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
@@ -115,6 +115,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.27 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.30 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
