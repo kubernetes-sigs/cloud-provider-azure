@@ -48,7 +48,7 @@ For example,
 ```shell script
 kubelet ... \
   --cloud-provider=azure \
-  --cloud-config=/etc/kubernetes/azure.json \
+  --cloud-config=/etc/kubernetes/cloud-config/azure.json \
   --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/resource-group=<rg-name>
 ```
 

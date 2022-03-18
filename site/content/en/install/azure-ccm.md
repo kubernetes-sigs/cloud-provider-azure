@@ -22,7 +22,7 @@ To deploy Azure cloud controller manager, the following components need to be co
 |Flag|Value|Remark|
 |----|-----|------|
 |`--cloud-provider`|external|cloud-provider should be set external|
-|`--azure-container-registry-config`|/etc/kubernetes/azure.json|Used for Azure credential provider|
+|`--azure-container-registry-config`|/etc/kubernetes/cloud-config/azure.json|Used for Azure credential provider|
 
 ### kube-controller-manager
 
@@ -39,10 +39,12 @@ Do not set flag `--cloud-provider`.
 
 ### azure-cloud-controller-manager
 
+azure-cloud-controller-manager should be run as Deployment with multiple replicas or Kubelet static Pods on each master Node.
+
 |Flag|Value|Remark|
 |---|---|---|
 |`--cloud-provider`|azure|cloud-provider should be set azure|
-|`--cloud-config`|/etc/kubernetes/azure.json|Path for [cloud provider config](../configs)|
+|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json|Path for [cloud provider config](../configs.md)|
 |`--controllers`|*,-cloud-node | cloud node controller should be disabled|
 |`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters |
 

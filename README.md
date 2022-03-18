@@ -58,7 +58,7 @@ azure-cloud-controller-manager \
     --cloud-provider=azure \
     --cluster-name=kubernetes \
     --controllers=*,-cloud-node \
-    --cloud-config=/etc/kubernetes/azure.json \
+    --cloud-config=/etc/kubernetes/cloud-config/azure.json \
     --kubeconfig=/etc/kubernetes/kubeconfig \
     --allocate-node-cidrs=true \
     --configure-cloud-routes=true \
@@ -77,7 +77,7 @@ azure-cloud-node-manager \
     --wait-routes=true
 ```
 
-It is recommended to run azure-cloud-controller-manager as Pods on master nodes. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
+It is recommended to run azure-cloud-controller-manager as Deployment with multiple replicas or Kubelet static Pods on each master Node. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
 
 Please checkout more details at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
 

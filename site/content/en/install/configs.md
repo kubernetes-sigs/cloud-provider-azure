@@ -225,7 +225,7 @@ Here is an example of per-client config:
 
 When running Kubelet with kube-controller-manager, it also supports running without Azure identity since v1.15.0.
 
-Both kube-controller-manager and kubelet should configure `--cloud-provider=azure --cloud-config=/etc/kubernetes/azure.json`, but the contents for `azure.json` are different:
+Both kube-controller-manager and kubelet should configure `--cloud-provider=azure --cloud-config=/etc/kubernetes/cloud-config/azure.json`, but the contents for `azure.json` are different:
 
 (1) For kube-controller-manager, refer the above part for setting `azure.json`.
 
