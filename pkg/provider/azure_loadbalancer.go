@@ -324,9 +324,14 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 		return false
 	}
 
-	// if the current LB is what we want, keep it
 	lbName := strings.TrimSuffix(currLBName, consts.InternalLoadBalancerNameSuffix)
+	// change the LB from vmSet dedicated to primary if the vmSet becomes the primary one
 	if strings.EqualFold(lbName, vmSetName) {
+		if lbName != clusterName &&
+			strings.EqualFold(az.VMSet.GetPrimaryVMSetName(), vmSetName) {
+			klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one", service.Name, currLBName, clusterName)
+			return true
+		}
 		return false
 	}
 	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) && strings.EqualFold(clusterName, lbName) {
