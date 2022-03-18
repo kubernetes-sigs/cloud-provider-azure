@@ -89,7 +89,7 @@ func (mc *MetricContext) Observe(rerr *retry.Error, labelAndValues ...interface{
 		attributes := append(mc.attributes, errorCode)
 		apiMetrics.errors.WithLabelValues(attributes...).Inc()
 	}
-	mc.logLatency(latency, append(labelAndValues, "error_code", rerr.ServiceErrorCode())...)
+	mc.logLatency(6, latency, append(labelAndValues, "error_code", rerr.ServiceErrorCode())...)
 }
 
 // ObserveOperationWithResult observes the request latency and failed requests of an operation.
@@ -101,15 +101,15 @@ func (mc *MetricContext) ObserveOperationWithResult(isOperationSucceeded bool, l
 		resultCode = "failed"
 		mc.CountFailedOperation()
 	}
-	mc.logLatency(latency, append(labelAndValues, "result_code", resultCode)...)
+	mc.logLatency(3, latency, append(labelAndValues, "result_code", resultCode)...)
 }
 
-func (mc *MetricContext) logLatency(latency float64, additionalKeysAndValues ...interface{}) {
+func (mc *MetricContext) logLatency(logLevel int32, latency float64, additionalKeysAndValues ...interface{}) {
 	keysAndValues := []interface{}{"latency_seconds", latency}
 	for i, label := range metricLabels {
 		keysAndValues = append(keysAndValues, label, mc.attributes[i])
 	}
-	klog.V(3).InfoS("Observed Request Latency", append(keysAndValues, additionalKeysAndValues...)...)
+	klog.V(klog.Level(logLevel)).InfoS("Observed Request Latency", append(keysAndValues, additionalKeysAndValues...)...)
 }
 
 // CountFailedOperation increase the number of failed operations
