@@ -4404,6 +4404,18 @@ func TestShouldChangeLoadBalancer(t *testing.T) {
 		res := cloud.shouldChangeLoadBalancer(&service, "testCluster-internal", "testCluster")
 		assert.False(t, res)
 	})
+
+	t.Run("shouldChangeLoadBalancer should return true if the mode is the same as the current LB but the vmSet is the primary one", func(t *testing.T) {
+		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
+		cloud.EnableMultipleStandardLoadBalancers = true
+		cloud.PrimaryAvailabilitySetName = "vmss-1"
+		annotations := map[string]string{
+			consts.ServiceAnnotationLoadBalancerMode: "vmss-1",
+		}
+		service := getTestService("service1", v1.ProtocolTCP, annotations, false, 80)
+		res := cloud.shouldChangeLoadBalancer(&service, "vmss-1", "testCluster")
+		assert.True(t, res)
+	})
 }
 
 func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
