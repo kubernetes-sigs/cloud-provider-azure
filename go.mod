@@ -40,7 +40,7 @@ require (
 	k8s.io/client-go v0.21.11
 	k8s.io/cloud-provider v0.21.10
 	k8s.io/component-base v0.21.11
-	k8s.io/controller-manager v0.21.10
+	k8s.io/controller-manager v0.21.11
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
 	sigs.k8s.io/yaml v1.2.0
