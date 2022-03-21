@@ -948,7 +948,7 @@ k8s.io/component-base/metrics/prometheus/workqueue
 k8s.io/component-base/metrics/testutil
 k8s.io/component-base/term
 k8s.io/component-base/version
-# k8s.io/controller-manager v0.21.10
+# k8s.io/controller-manager v0.21.11
 ## explicit
 k8s.io/controller-manager/app
 k8s.io/controller-manager/config
