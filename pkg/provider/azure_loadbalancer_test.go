@@ -1319,6 +1319,37 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 			expectedExists: false,
 			expectedError:  false,
 		},
+		{
+			desc:    "getServiceLoadBalancer should create a new lb and return the status of the previous lb",
+			sku:     "Basic",
+			wantLB:  true,
+			service: getTestService("service1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerMode: "as", consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, false, 80),
+			existingLBs: []network.LoadBalancer{
+				{
+					Name:     to.StringPtr("as-internal"),
+					Location: to.StringPtr("westus"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+							{
+								Name: to.StringPtr("aservice1"),
+								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+									PrivateIPAddress: to.StringPtr("1.2.3.4"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedLB: &network.LoadBalancer{
+				Name:     to.StringPtr("testCluster-internal"),
+				Location: to.StringPtr("westus"),
+				Sku: &network.LoadBalancerSku{
+					Name: network.LoadBalancerSkuNameBasic,
+				},
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+			},
+			expectedStatus: &v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "1.2.3.4", Hostname: ""}}},
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -1331,6 +1362,7 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 		mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
 		mockLBsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingLBs, nil)
+		mockLBsClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		az.LoadBalancerClient = mockLBsClient
 
 		for _, existingLB := range test.existingLBs {
@@ -1339,7 +1371,9 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		test.service.Annotations = test.annotations
+		if test.annotations != nil {
+			test.service.Annotations = test.annotations
+		}
 		az.LoadBalancerSku = test.sku
 		lb, status, exists, err := az.getServiceLoadBalancer(&test.service, testClusterName,
 			clusterResources.nodes, test.wantLB, []network.LoadBalancer{})
@@ -4521,11 +4555,13 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 		service                   v1.Service
 		existingFrontendIPConfigs []network.FrontendIPConfiguration
 		existingPIP               network.PublicIPAddress
+		status                    *v1.LoadBalancerStatus
 		getPIPError               *retry.Error
 		getZoneError              *retry.Error
 		regionZonesMap            map[string][]string
 		expectedZones             *[]string
 		expectedDirty             bool
+		expectedIP                string
 		expectedErr               error
 	}{
 		{
@@ -4589,6 +4625,17 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			expectedZones: &[]string{"1"},
 			expectedDirty: true,
 		},
+		{
+			description: "reconcileFrontendIPConfigs should reuse the existing private IP for internal services",
+			service:     getInternalTestService("test", 80),
+			status: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "1.2.3.4"},
+				},
+			},
+			expectedIP:    "1.2.3.4",
+			expectedDirty: true,
+		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
@@ -4611,7 +4658,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			cloud.ZoneClient = zoneClient
 
 			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&tc.service)
-			_, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, true, defaultLBFrontendIPConfigName)
+			_, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, tc.status, true, defaultLBFrontendIPConfigName)
 			if tc.expectedErr == nil {
 				assert.NoError(t, err)
 			} else {
@@ -4623,6 +4670,11 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 				if strings.EqualFold(to.String(fip.Name), defaultLBFrontendIPConfigName) {
 					assert.Equal(t, tc.expectedZones, fip.Zones)
 				}
+			}
+
+			if tc.expectedIP != "" {
+				assert.Equal(t, network.IPAllocationMethodStatic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
+				assert.Equal(t, tc.expectedIP, to.String((*lb.FrontendIPConfigurations)[0].PrivateIPAddress))
 			}
 		})
 	}
