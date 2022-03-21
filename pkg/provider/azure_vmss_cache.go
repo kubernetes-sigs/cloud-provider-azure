@@ -159,10 +159,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache(resourceGroupName, vmssName, cac
 		if vmssCache, ok := ss.vmssVMCache.Load(cacheKey); ok {
 			// get old cache before refreshing the cache
 			cache := vmssCache.(*azcache.TimedCache)
-			entry, exists, err := cache.Store.GetByKey(cacheKey)
-			if err != nil {
-				return nil, err
-			}
+			entry, exists := cache.Store.Load(cacheKey)
 			if exists {
 				cached := entry.(*azcache.AzureCacheEntry).Data
 				if cached != nil {
