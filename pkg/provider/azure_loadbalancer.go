@@ -675,7 +675,8 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		if isInternalLoadBalancer(&existingLB) != isInternal {
 			continue
 		}
-		status, fipConfig, err := az.getServiceLoadBalancerStatus(service, &existingLB)
+		var fipConfig *network.FrontendIPConfiguration
+		status, fipConfig, err = az.getServiceLoadBalancerStatus(service, &existingLB)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -683,6 +684,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 			// service is not on this load balancer
 			continue
 		}
+		klog.V(4).Infof("getServiceLoadBalancer(%s, %s, %v): current lb ip: %s", service.Name, clusterName, wantLb, status.Ingress[0].IP)
 
 		// select another load balancer instead of returning
 		// the current one if the change is needed
@@ -708,7 +710,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 			return nil, nil, false, err
 		}
 
-		return selectedLB, nil, exists, err
+		return selectedLB, status, exists, err
 	}
 
 	// create a default LB with meta data if not present
@@ -1510,11 +1512,12 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		return nil, err
 	}
 
-	lb, _, _, err := az.getServiceLoadBalancer(service, clusterName, nodes, wantLb, existingLBs)
+	lb, lbStatus, _, err := az.getServiceLoadBalancer(service, clusterName, nodes, wantLb, existingLBs)
 	if err != nil {
 		klog.Errorf("reconcileLoadBalancer: failed to get load balancer for service %q, error: %v", serviceName, err)
 		return nil, err
 	}
+
 	lbName := *lb.Name
 	lbResourceGroup := az.getLoadBalancerResourceGroup()
 	lbBackendPoolID := az.getBackendPoolID(lbName, az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
@@ -1536,7 +1539,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	}
 
 	// reconcile the load balancer's frontend IP configurations.
-	ownedFIPConfig, changed, err := az.reconcileFrontendIPConfigs(clusterName, service, lb, wantLb, defaultLBFrontendIPConfigName)
+	ownedFIPConfig, changed, err := az.reconcileFrontendIPConfigs(clusterName, service, lb, lbStatus, wantLb, defaultLBFrontendIPConfigName)
 	if err != nil {
 		return lb, err
 	}
@@ -1728,7 +1731,7 @@ func (az *Cloud) reconcileLBRules(lb *network.LoadBalancer, service *v1.Service,
 	return dirtyRules
 }
 
-func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Service, lb *network.LoadBalancer, wantLb bool, defaultLBFrontendIPConfigName string) (*network.FrontendIPConfiguration, bool, error) {
+func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Service, lb *network.LoadBalancer, status *v1.LoadBalancerStatus, wantLb bool, defaultLBFrontendIPConfigName string) (*network.FrontendIPConfiguration, bool, error) {
 	var err error
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
@@ -1828,8 +1831,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				if loadBalancerIP != "" {
 					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = &loadBalancerIP
+				} else if status != nil && len(status.Ingress) > 0 {
+					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): keep the original private IP %s", serviceName, status.Ingress[0].IP)
+					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
+					configProperties.PrivateIPAddress = to.StringPtr(status.Ingress[0].IP)
 				} else {
 					// We'll need to call GetLoadBalancer later to retrieve allocated IP.
+					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): dynamically allocate the private IP", serviceName)
 					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodDynamic
 				}
 
