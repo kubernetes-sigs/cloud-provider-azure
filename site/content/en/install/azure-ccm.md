@@ -50,7 +50,7 @@ azure-cloud-controller-manager should be run as Deployment with multiple replica
 
 For other flags such as `--allocate-node-cidrs`, `--cluster-cidr` and `--cluster-name`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
-For details of those flags, please refer to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/).
+For details of those flags, please refer to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/).
 
 ### azure-cloud-node-manager
 
