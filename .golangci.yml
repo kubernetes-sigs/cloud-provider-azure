@@ -12,13 +12,12 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
+    - revive
     - gosec
     - gosimple
     - govet
     - ineffassign
 #    - interfacer
-    - maligned
     - misspell
     - nakedret
 #    - prealloc
@@ -29,12 +28,16 @@ linters:
     - unused
     - varcheck
   # Run with --fast=false for more extensive checks
-  fast: true
+  fast: false
+  govet:
+    # Report about shadowed variables.
+    # Default: false
+    check-shadowing: true
 issues:
   exclude-rules:
     - path: tests/e2e
       linters:
-        - golint
+        - revive
   #include:
   #  - EXC0002 # include "missing comments" issues from golint
   max-issues-per-linter: 0
