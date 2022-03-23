@@ -123,7 +123,7 @@ $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-c
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull docker/dockerfile:1.3.1
-	docker pull docker.io/library/golang:1.17-buster
+	docker pull docker.io/library/golang:1.18-buster
 	docker pull gcr.io/distroless/static:latest
 
 buildx-setup:
@@ -284,15 +284,7 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint test-boilerplate test-spelling test-gofmt test-govet ## Run all static checks.
-
-.PHONY: test-gofmt
-test-gofmt: ## Run gofmt test.
-	hack/verify-gofmt.sh
-
-.PHONY: test-govet
-test-govet: ## Run govet test.
-	hack/verify-govet.sh
+test-check: test-lint test-boilerplate ## Run all static checks.
 
 .PHONY: test-lint
 test-lint: ## Run golint test.
@@ -301,10 +293,6 @@ test-lint: ## Run golint test.
 .PHONY: test-boilerplate
 test-boilerplate: ## Run boilerplate test.
 	hack/verify-boilerplate.sh
-
-.PHONY: test-spelling
-test-spelling: ## Run spelling test.
-	hack/verify-spelling.sh
 
 .PHONY: update-dependencies
 update-dependencies: ## Update dependencies and go modules.

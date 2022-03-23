@@ -33,6 +33,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2103,6 +2105,7 @@ func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol) []netwo
 }
 
 func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service v1.Service, lbSku string) network.LoadBalancer {
+	caser := cases.Title(language.English)
 	lb := network.LoadBalancer{
 		Name: name,
 		Sku: &network.LoadBalancerSku{
@@ -2135,8 +2138,7 @@ func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service 
 					Name: to.StringPtr(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
 						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port))),
 					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
-						Protocol: network.TransportProtocol(strings.Title(
-							strings.ToLower(string(service.Spec.Ports[0].Protocol)))),
+						Protocol: network.TransportProtocol(caser.String((strings.ToLower(string(service.Spec.Ports[0].Protocol))))),
 						FrontendIPConfiguration: &network.SubResource{
 							ID: to.StringPtr("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
 								"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/aservice1"),
