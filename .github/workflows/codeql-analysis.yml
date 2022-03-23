@@ -40,7 +40,7 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.17
+        go-version: ^1.18
       id: go
 
     - name: Checkout repository
@@ -61,6 +61,7 @@ jobs:
     - name: Autobuild
       run: |
         make all
+        hack/verify-updates.sh
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
