@@ -338,8 +338,7 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 	var isPrimaryService bool
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
 	if strings.HasPrefix(to.String(fip.Name), baseName) {
-		klog.V(6).Infof("serviceOwnsFrontendIP: found primary service %s of the "+
-			"frontend IP config %s", service.Name, *fip.Name)
+		klog.V(6).Infof("serviceOwnsFrontendIP: found primary service %s of the frontend IP config %s", service.Name, *fip.Name)
 		isPrimaryService = true
 		return true, isPrimaryService, nil
 	}

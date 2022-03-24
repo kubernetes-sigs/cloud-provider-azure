@@ -4653,6 +4653,15 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 				consts.ServiceAnnotationLoadBalancerInternal:       consts.TrueAnnotationValue}, 80),
 			existingFrontendIPConfigs: []network.FrontendIPConfiguration{
 				{
+					Name: to.StringPtr("not-this-one"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						Subnet: &network.Subnet{
+							Name: to.StringPtr("subnet-1"),
+						},
+					},
+					Zones: &[]string{"2"},
+				},
+				{
 					Name: to.StringPtr("atest1"),
 					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 						Subnet: &network.Subnet{
