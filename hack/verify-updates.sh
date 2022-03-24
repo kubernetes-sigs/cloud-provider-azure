@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Kubernetes Authors.
+# Copyright 2022 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -euo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
 
-echo "Verifying gofmt"
+REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
-readonly diff=$(find . -name "*.go" | grep -v "\/vendor\/" | xargs gofmt -s -d 2>&1)
-if [[ -n "${diff}" ]]; then
-  echo "${diff}"
-  echo
-  echo "Please run hack/update-gofmt.sh to fix the issue(s)"
-  exit 1
+make update
+diff="$(git status --porcelain)"
+
+if [ ! -z "$diff" ]; then
+    echo "Please use 'make update' to ensure generated code is up-to-date"
+    echo "git status and diff are: ${diff}"
+    git diff
+    exit 1
 fi
-echo "No issue found"
+echo "Verify updates: Success"
