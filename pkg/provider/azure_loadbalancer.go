@@ -2080,25 +2080,26 @@ func (az *Cloud) getExpectedLBRules(
 			return nil, nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 		}
 		//Here we need to find one health probe rule for the HA lb rule.
-		var probe *network.Probe = nodeEndpointHealthprobe
-		if probe == nil {
+		if nodeEndpointHealthprobe == nil {
 			// use user customized health probe rule if any
 			for _, port := range service.Spec.Ports {
-				if probe, err = az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName); err != nil {
+				portprobe, err := az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName)
+				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
 					//ignore error because we only need one correct rule
-				} else if probe != nil {
-					expectedProbes = append(expectedProbes, *probe)
+				}
+				if portprobe != nil {
+					expectedProbes = append(expectedProbes, *portprobe)
+					props.Probe = &network.SubResource{
+						ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+					}
 					break
 				}
 			}
-		}
-
-		// if we found one valid probe, append it to lb rule.
-		if probe != nil {
+		} else {
 			props.Probe = &network.SubResource{
-				ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *probe.Name)),
+				ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 			}
 		}
 
@@ -2127,19 +2128,22 @@ func (az *Cloud) getExpectedLBRules(
 				return expectedProbes, expectedRules, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 			}
 
-			var probe *network.Probe = nodeEndpointHealthprobe
-			if probe == nil {
-				if probe, err = az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName); err != nil {
+			if nodeEndpointHealthprobe == nil {
+				portprobe, err := az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName)
+				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
 					return expectedProbes, expectedRules, err
-				} else if probe != nil {
-					expectedProbes = append(expectedProbes, *probe)
 				}
-			}
-			if probe != nil {
+				if portprobe != nil {
+					expectedProbes = append(expectedProbes, *portprobe)
+					props.Probe = &network.SubResource{
+						ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+					}
+				}
+			} else {
 				props.Probe = &network.SubResource{
-					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *probe.Name)),
+					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 				}
 			}
 			expectedRules = append(expectedRules, network.LoadBalancingRule{
