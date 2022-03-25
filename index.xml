@@ -1,4 +1,20 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.16</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</link><pubDate>Tue, 22 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.17</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v0.7.17/</link><pubDate>Fri, 25 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v0.7.17/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: only check the frontend IP config that is owned by the service (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1323">#1323&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Fixed a bug in health probe generator. Probe related configuration is not updated due to variable scope (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1324">#1324&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.16</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</link><pubDate>Tue, 22 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</guid><description>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
@@ -2403,17 +2419,4 @@ ree/02e2102)&lt;/li>
 &lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.6.0&lt;/code>&lt;/li>
 &lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.6.0&lt;/code>&lt;/li>
 &lt;/ul>
-&lt;p>Since v0.5.0, our docs are moved to &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/">a dedicated website&lt;/a> and the &lt;code>docs/&lt;/code> directory is deprecated.&lt;/p></description></item><item><title>Blog: v0.5.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</link><pubDate>Mon, 27 Apr 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/04/27/v0.5.1/</guid><description>
-&lt;h2 id="changes-since-v050">Changes since v0.5.0&lt;/h2>
-&lt;hr>
-&lt;ul>
-&lt;li>Update Kubernetes vendor to adopt bug fixes from in-tree cloud provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/330">#330&lt;/a>)&lt;/li>
-&lt;li>Use a service account for CCM (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/329">#329&lt;/a>)&lt;/li>
-&lt;li>Update images for out-of-tree examples (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/328">#328&lt;/a>)&lt;/li>
-&lt;li>Fix wrong init url for kubemark tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/327">#327&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;p>The image is available at&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.5.1&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.5.1&lt;/code>&lt;/li>
-&lt;/ul></description></item></channel></rss>
+&lt;p>Since v0.5.0, our docs are moved to &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/">a dedicated website&lt;/a> and the &lt;code>docs/&lt;/code> directory is deprecated.&lt;/p></description></item></channel></rss>
