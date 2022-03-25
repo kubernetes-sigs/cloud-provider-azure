@@ -299,12 +299,13 @@ func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, 
 	mc := metrics.NewMetricContext("vmss", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
 	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMSSWaitForUpdateResult")
 	mc.Observe(retry.NewErrorOrNil(false, err))
-	if response != nil && response.StatusCode != http.StatusNoContent {
-		_, rerr := c.updateResponder(response)
-		if rerr != nil {
-			klog.V(5).Infof("Received error: %s", "vmss.put.respond", rerr.Error())
-			return rerr
+	if err != nil {
+		if response != nil {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', response code %d", err.Error(), response.StatusCode)
+		} else {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', no response", err.Error())
 		}
+		return retry.GetError(response, err)
 	}
 	return nil
 }

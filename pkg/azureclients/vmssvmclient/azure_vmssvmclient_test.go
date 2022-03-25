@@ -531,16 +531,37 @@ func TestWaitForUpdateResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	preemptErr := fmt.Errorf("operation execution has been preempted by a more recent operation")
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(response, nil).Times(1)
 
-	vmssClient := getTestVMSSVMClient(armClient)
-	err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
-	assert.Nil(t, err)
+	tests := []struct {
+		name           string
+		respondError   error
+		expectedResult *retry.Error
+	}{
+		{
+			name:           "Success",
+			respondError:   nil,
+			expectedResult: nil,
+		},
+		{
+			name:           "Failed",
+			respondError:   preemptErr,
+			expectedResult: retry.GetError(response, preemptErr),
+		},
+	}
+
+	for _, test := range tests {
+		armClient := mockarmclient.NewMockInterface(ctrl)
+		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(response, test.respondError).Times(1)
+
+		vmssClient := getTestVMSSVMClient(armClient)
+		err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
+		assert.Equal(t, err, test.expectedResult)
+	}
 }
 
 func TestUpdateWithUpdateResponderError(t *testing.T) {
