@@ -14,6 +14,22 @@
 &lt;h3 id="changed">Changed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
 &lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.14</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.0.14/</link><pubDate>Fri, 25 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.0.14/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: only check the frontend IP config that is owned by the service (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1321">#1321&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;li>Fix: remove agent pool LB if that vmSet is changed to primary vmSet
+fix: reuse previous private IP address when changing load balancers (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1299">#1299&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v62.2.0...v62.3.0">v62.2.0+incompatible → v62.3.0+incompatible&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.16</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</link><pubDate>Tue, 22 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/22/v0.7.16/</guid><description>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
@@ -2401,22 +2417,4 @@ ree/02e2102)&lt;/li>
 &lt;li>k8s.io/kubernetes/staging/src/k8s.io/metrics: 70a6823&lt;/li>
 &lt;li>k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver: 70a6823&lt;/li>
 &lt;li>vbom.ml/util: db5cfe1&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.6.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</link><pubDate>Tue, 01 Sep 2020 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2020/09/01/v0.6.0/</guid><description>
-&lt;h2 id="major-changes-since-v050">Major changes since v0.5.0&lt;/h2>
-&lt;hr>
-&lt;ul>
-&lt;li>Update vendor against k/k release-1.19(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/385">#385&lt;/a>)&lt;/li>
-&lt;li>Increase the e2e test coverage for cluster autoscaler(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/364">#364&lt;/a>)&lt;/li>
-&lt;li>Use hugo to generate doc website(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/358">#358&lt;/a>)&lt;/li>
-&lt;li>Update E2E test related docs and script(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/355">#355&lt;/a>)&lt;/li>
-&lt;li>Partly decouple k/k(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/350">#350&lt;/a>)&lt;/li>
-&lt;li>Update go module against k8s.io/cloud-provider(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/348">#348&lt;/a>)&lt;/li>
-&lt;li>Use distroless/static as base image(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/333">#333&lt;/a>)&lt;/li>
-&lt;li>Enable running ccm e2e test in a job(&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/345">#345&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;p>The image is available at&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.6.0&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.6.0&lt;/code>&lt;/li>
-&lt;/ul>
-&lt;p>Since v0.5.0, our docs are moved to &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/">a dedicated website&lt;/a> and the &lt;code>docs/&lt;/code> directory is deprecated.&lt;/p></description></item></channel></rss>
+&lt;/ul></description></item></channel></rss>
