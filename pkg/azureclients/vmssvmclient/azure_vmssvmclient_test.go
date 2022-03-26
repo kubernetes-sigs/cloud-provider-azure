@@ -539,24 +539,39 @@ func TestWaitForUpdateResult(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		respondError   error
+		response       *http.Response
+		responseErr    error
 		expectedResult *retry.Error
 	}{
 		{
 			name:           "Success",
-			respondError:   nil,
+			response:       response,
+			responseErr:    nil,
+			expectedResult: nil,
+		},
+		{
+			name:           "Success with nil response",
+			response:       nil,
+			responseErr:    nil,
 			expectedResult: nil,
 		},
 		{
 			name:           "Failed",
-			respondError:   preemptErr,
+			response:       response,
+			responseErr:    preemptErr,
 			expectedResult: retry.GetError(response, preemptErr),
+		},
+		{
+			name:           "Failed with nil response",
+			response:       nil,
+			responseErr:    preemptErr,
+			expectedResult: retry.GetError(nil, preemptErr),
 		},
 	}
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(response, test.respondError).Times(1)
+		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(test.response, test.responseErr).Times(1)
 
 		vmssClient := getTestVMSSVMClient(armClient)
 		err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
