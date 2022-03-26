@@ -172,7 +172,7 @@ build-ccm-e2e-test-image: ## Build e2e test image.
 	docker build -t $(CCM_E2E_TEST_IMAGE) -f ./e2e.Dockerfile .
 
 .PHONY: push-ccm-image
-push-ccm-image: build-ccm-image ## Push controller-manager image.
+push-ccm-image: ## Push controller-manager image.
 	docker push $(IMAGE)
 
 .PHONY: push-node-image-linux
