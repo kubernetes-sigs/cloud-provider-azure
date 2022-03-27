@@ -21,7 +21,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/gomega v1.19.0
 	github.com/rubiojr/go-vhd v0.0.0-20200706122120-ccecf6c0760f
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cobra v1.4.0
