@@ -333,9 +333,13 @@ $(PKG_CONFIG):
 deploy: image push ## Build, push and deploy an aks-engine cluster.
 	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
 
+.PHONY: cloud-build-prerequisites
+cloud-build-prerequisites:
+	apk add --no-cache jq
+
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
-	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) image push
+	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites image push
 
 ## --------------------------------------
 ##@ Deploy clusters
