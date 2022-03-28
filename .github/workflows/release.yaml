@@ -193,6 +193,7 @@ jobs:
           	--start-sha=${START_SHA} \
           	--end-sha=${END_SHA} \
           	--markdown-links=true \
+          	--required-author='' \
           	--output=release-notes.md
           
           # Generate release note for site
