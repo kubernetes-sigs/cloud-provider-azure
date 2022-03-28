@@ -284,7 +284,7 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint test-boilerplate ## Run all static checks.
+test-check: test-lint test-boilerplate test-helm ## Run all static checks.
 
 .PHONY: test-lint
 test-lint: ## Run golint test.
@@ -293,6 +293,10 @@ test-lint: ## Run golint test.
 .PHONY: test-boilerplate
 test-boilerplate: ## Run boilerplate test.
 	hack/verify-boilerplate.sh
+
+.PHONY: test-helm
+test-helm: ## Validate helm charts
+	hack/verify-helm-repo.sh
 
 .PHONY: update-dependencies
 update-dependencies: ## Update dependencies and go modules.

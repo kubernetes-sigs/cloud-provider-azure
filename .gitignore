@@ -25,3 +25,6 @@ public/
 
 # goland
 .idea
+
+# helm chart verification
+chart_verify/
