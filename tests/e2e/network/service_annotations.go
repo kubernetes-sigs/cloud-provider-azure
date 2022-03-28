@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -429,8 +430,14 @@ var _ = Describe("Service with annotation", func() {
 			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		// get lb from azure client
-		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+
+		var lb *network.LoadBalancer
+		//wait for backend update
+		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+			return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating health probe configs")
 		var numberOfProbes *int32
@@ -457,8 +464,15 @@ var _ = Describe("Service with annotation", func() {
 			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		var lb *network.LoadBalancer
+		//wait for backend update
+		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+			return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 		// get lb from azure client
-		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 		By("Validating health probe configs")
 		probes := *lb.Probes
 		Expect((len(probes))).To(Equal(1))
@@ -467,8 +481,8 @@ var _ = Describe("Service with annotation", func() {
 })
 
 var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
-	basename := "service"
-	serviceName := "annotation-test"
+	basename := "vmssservice"
+	serviceName := "vmss-test"
 
 	var (
 		cs clientset.Interface
@@ -548,6 +562,153 @@ var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 		for _, vmss := range vmssList {
 			validateLoadBalancerBackendPools(tc, vmss, cs, serviceName, labels, ns.Name, ports, resourceGroupName)
 		}
+	})
+})
+
+var _ = Describe("Multi-ports service", func() {
+	basename := "mpservice"
+	serviceName := "multiport-test"
+
+	var (
+		cs clientset.Interface
+		tc *utils.AzureTestClient
+		ns *v1.Namespace
+	)
+
+	labels := map[string]string{
+		"app": serviceName,
+	}
+	ports := []v1.ServicePort{{
+		AppProtocol: to.StringPtr("Tcp"),
+		Port:        nginxPort,
+		Name:        "port1",
+		TargetPort:  intstr.FromInt(nginxPort),
+	}, {
+		Port:        nginxPort + 1,
+		Name:        "port2",
+		TargetPort:  intstr.FromInt(nginxPort),
+		AppProtocol: to.StringPtr("Tcp"),
+	},
+	}
+
+	BeforeEach(func() {
+		var err error
+		cs, err = utils.CreateKubeClientSet()
+		Expect(err).NotTo(HaveOccurred())
+
+		ns, err = utils.CreateTestingNamespace(basename, cs)
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating deployment " + serviceName)
+		deployment := createNginxDeploymentManifest(serviceName, labels)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Waiting for backend pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating Azure clients")
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+	})
+
+	AfterEach(func() {
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = utils.DeleteNamespace(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		cs = nil
+		ns = nil
+		tc = nil
+	})
+	Context("When ExternalTrafficPolicy is updated", func() {
+		It("Should not have error occurred", func() {
+			By("Getting the service")
+			annotation := map[string]string{}
+			utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
+			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+			service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+			//wait and get service's public IP Address
+			utils.Logf("Waiting service to expose...")
+			publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+			Expect(err).NotTo(HaveOccurred())
+			// create service with given annotation and wait it to expose
+
+			defer func() {
+				By("Cleaning up service and public IP")
+				err := utils.DeleteService(cs, ns.Name, serviceName)
+				Expect(err).NotTo(HaveOccurred())
+				err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			By("Changing ExternalTrafficPolicy of the service to Local")
+
+			utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
+			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+				_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+				return err
+			})
+			Expect(retryErr).NotTo(HaveOccurred())
+			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+			By("Getting updated service object from server")
+			retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				if service.Spec.HealthCheckNodePort == 0 {
+					return fmt.Errorf("service HealthCheckNodePort is not updated")
+				}
+				return nil
+			})
+			Expect(retryErr).NotTo(HaveOccurred())
+
+			var lb *network.LoadBalancer
+			//wait for backend update
+			err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+				lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1 && *(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port == service.Spec.HealthCheckNodePort, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			var nodeHealthCheckPort = service.Spec.HealthCheckNodePort
+			By("Changing ExternalTrafficPolicy of the service to Cluster")
+			utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
+			retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeCluster
+				_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+				return err
+			})
+			Expect(retryErr).NotTo(HaveOccurred())
+			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+
+			//wait for backend update
+			err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+				lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 2 &&
+					*(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port != nodeHealthCheckPort &&
+					*(*lb.LoadBalancerPropertiesFormat.Probes)[1].Port != nodeHealthCheckPort, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 })
 
