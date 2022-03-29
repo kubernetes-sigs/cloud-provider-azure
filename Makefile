@@ -179,6 +179,14 @@ push-ccm-image: ## Push controller-manager image.
 push-node-image-linux: ## Push node-manager image for Linux.
 	docker push $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
 
+push-node-image-linux-push-name-%:
+	$(MAKE) ARCH=$* push-node-image-linux-push-name
+
+.PHONY: push-node-image-linux-push-name
+ push-node-image-linux-push-name:
+	docker tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_IMAGE)
+	docker push $(NODE_MANAGER_IMAGE)
+
 .PHONY: release-ccm-e2e-test-image
 release-ccm-e2e-test-image: ## Build and release e2e test image.
 	docker build -t $(CCM_E2E_TEST_RELEASE_IMAGE) -f ./e2e.Dockerfile .
@@ -270,6 +278,16 @@ push-all-ccm-images: $(addprefix push-ccm-image-,$(ALL_ARCH.linux))
 push-ccm-image-%:
 	$(MAKE) ARCH=$* push-ccm-image
 
+manifest-node-manager-image-windows-%:
+	$(MAKE) WINDOWS_OSVERSION=$(call word-hyphen,$*,1) ARCH=$(call word-hyphen,$*,2) manifest-node-manager-image-windows
+
+.PHONY: manifest-node-manager-image-windows
+manifest-node-manager-image-windows:
+	set -x
+	docker manifest create $(NODE_MANAGER_IMAGE) --amend $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) --amend $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	docker manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
+	docker manifest annotate --os windows --arch $(ARCH) --os-version $(WINDOWS_OSVERSION) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	docker manifest push --purge $(NODE_MANAGER_IMAGE)
 
 ## --------------------------------------
 ##@ Tests
