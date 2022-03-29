@@ -72,6 +72,19 @@ fix: reuse previous private IP address when changing load balancers (&lt;a href=
 &lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v62.2.0...v62.3.0">v62.2.0+incompatible → v62.3.0+incompatible&lt;/a>&lt;/li>
 &lt;/ul>
 &lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.11</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.1.11/</link><pubDate>Fri, 25 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.1.11/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix: only check the frontend IP config that is owned by the service (#1320, @nilo19)&lt;/li>
+&lt;li>Fix: update load balancer rule when probe changes (#1348, @k8s-infra-cherrypick-robot)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.23.7</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.23.7/</link><pubDate>Fri, 25 Mar 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/03/25/v1.23.7/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
@@ -2130,22 +2143,4 @@ ree/02e2102)&lt;/li>
 &lt;li>Chore: completely decouple k/k (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/601">#601&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;li>Chore: only logs rate limiting configurations when rate limit is enabled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/608">#608&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
 &lt;li>Update cloud-provider vendor to v1.21 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/603">#603&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.7.4</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/04/23/v0.7.4/</link><pubDate>Fri, 23 Apr 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/04/23/v0.7.4/</guid><description>
-&lt;h1 id="major-changes-since-v073">Major changes since v0.7.3&lt;/h1>
-&lt;p>Cloud Provider Azure v0.7.4 includes several critical bug fixes. The images are available at:&lt;/p>
-&lt;ul>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v0.7.4&lt;/code>&lt;/li>
-&lt;li>&lt;code>mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v0.7.4&lt;/code>&lt;/li>
-&lt;/ul>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="documentation">Documentation&lt;/h3>
-&lt;ul>
-&lt;li>Chore: enrich docs (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/590">#590&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: arm node provider Windows initialization (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/595">#595&lt;/a>, &lt;a href="https://github.com/JesusAlvarezTorres">@JesusAlvarezTorres&lt;/a>)&lt;/li>
-&lt;li>Fix: call the counterpart function of availabilitySet when the instance is not a vmss vm (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/597">#597&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: potential race condition in detach disk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/593">#593&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: support sharing the primary slb when there are both external and internal load balancers in the cluster (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/588">#588&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;/ul></description></item></channel></rss>
