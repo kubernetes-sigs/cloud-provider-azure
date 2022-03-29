@@ -144,12 +144,18 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	lbBackendPoolID := bc.getBackendPoolID(lbName, bc.getLoadBalancerResourceGroup(), lbBackendPoolName)
 	vmSetName := bc.mapLoadBalancerNameToVMSet(lbName, clusterName)
+	isBackendPoolPreConfigured := bc.isBackendPoolPreConfigured(service)
 
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
 		bp := newBackendPools[i]
 		if strings.EqualFold(*bp.Name, lbBackendPoolName) {
 			klog.V(10).Infof("bc.ReconcileBackendPools for service (%s): lb backendpool - found wanted backendpool. not adding anything", serviceName)
 			foundBackendPool = true
+
+			// Don't bother to remove unused nodeIPConfiguration if backend pool is pre configured
+			if isBackendPoolPreConfigured {
+				break
+			}
 
 			// If the LB backend pool type is configured from nodeIP or podIP
 			// to nodeIPConfiguration, we need to decouple the VM NICs from the LB
@@ -215,7 +221,6 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 		}
 	}
 
-	isBackendPoolPreConfigured := bc.isBackendPoolPreConfigured(service)
 	if !foundBackendPool {
 		isBackendPoolPreConfigured = newBackendPool(lb, isBackendPoolPreConfigured, bc.PreConfiguredBackendPoolLoadBalancerTypes, getServiceName(service), getBackendPoolName(clusterName, service))
 		changed = true
@@ -387,12 +392,18 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	vmSetName := bi.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	lbBackendPoolID := bi.getBackendPoolID(to.String(lb.Name), bi.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
+	isBackendPoolPreConfigured := bi.isBackendPoolPreConfigured(service)
 
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
 		bp := newBackendPools[i]
 		if strings.EqualFold(*bp.Name, lbBackendPoolName) {
 			klog.V(10).Infof("bi.ReconcileBackendPools for service (%s): found wanted backendpool. not adding anything", serviceName)
 			foundBackendPool = true
+
+			// Don't bother to remove unused nodeIP if backend pool is pre configured
+			if isBackendPoolPreConfigured {
+				break
+			}
 
 			// If the LB backend pool type is configured from nodeIPConfiguration
 			// to nodeIP, we need to decouple the VM NICs from the LB
@@ -434,7 +445,6 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		}
 	}
 
-	isBackendPoolPreConfigured := bi.isBackendPoolPreConfigured(service)
 	if !foundBackendPool {
 		isBackendPoolPreConfigured = newBackendPool(lb, isBackendPoolPreConfigured, bi.PreConfiguredBackendPoolLoadBalancerTypes, getServiceName(service), getBackendPoolName(clusterName, service))
 		changed = true
