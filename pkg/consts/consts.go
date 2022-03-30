@@ -408,3 +408,49 @@ const (
 )
 
 type HealthProbeParams string
+
+// private link service
+const (
+	// ServiceAnnotationPLSCreation determines whether a PLS needs to be created.
+	ServiceAnnotationPLSCreation = "service.beta.kubernetes.io/azure-pls-create"
+
+	// ServiceAnnotationPLSName determines name of the PLS resource to create.
+	ServiceAnnotationPLSName = "service.beta.kubernetes.io/azure-pls-name"
+
+	// ServiceAnnotationPLSIpConfigurationSubnet determines the subnet name to deploy the PLS resource.
+	ServiceAnnotationPLSIpConfigurationSubnet = "service.beta.kubernetes.io/azure-pls-ip-configuration-subnet"
+
+	// ServiceAnnotationPLSIpConfigurationIPAddressCount determines number of IPs to be associated with the PLS.
+	ServiceAnnotationPLSIpConfigurationIPAddressCount = "service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count"
+
+	// ServiceAnnotationPLSIPConfigurationIPAddress determines a space separated list of static IPs for the PLS.
+	// Total number of IPs should not be greater than the IP count specified in ServiceAnnotationPLSIpConfigurationIPAddressCount.
+	// If there are fewer IPs specified, the rest are dynamically allocated. The first IP in the list is set as Primary.
+	ServiceAnnotationPLSIpConfigurationIPAddress = "service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address"
+
+	// ServiceAnnotationPLSFqdns determines a space separated list of fqdns associated with the PLS.
+	ServiceAnnotationPLSFqdns = "service.beta.kubernetes.io/azure-pls-fqdns"
+
+	// ServiceAnnotationPLSProxyProtocol determines whether TCP Proxy protocol needs to be enabled on the PLS.
+	ServiceAnnotationPLSProxyProtocol = "service.beta.kubernetes.io/azure-pls-proxy-protocol"
+
+	// ServiceAnnotationPLSVisibility determines a space separated list of Azure subscription IDs for which the PLS is visible.
+	// Use "*" to expose the PLS to all subscriptions.
+	ServiceAnnotationPLSVisibility = "service.beta.kubernetes.io/azure-pls-visibility"
+
+	// ServiceAnnotationPLSAutoApproval determines a space separated list of Azure subscription IDs from which requests can be
+	// automatically approved, only works when visibility is set to "*".
+	ServiceAnnotationPLSAutoApproval = "service.beta.kubernetes.io/azure-pls-auto-approval"
+
+	// ID string used to create a not existing PLS placehold in plsCache to avoid redundant
+	PrivateLinkServiceNotExistID = "PrivateLinkServiceNotExistID"
+
+	// Key of tag indicating owner service of the PLS.
+	OwnerServiceTagKey = "k8s-azure-owner-service"
+
+	// Key of tag indicating cluster name of the service that owns PLS.
+	ClusterNameTagKey = "k8s-azure-cluster-name"
+
+	// Default number of IP configs for PLS
+	PLSDefaultNumOfIPConfig = 1
+)
