@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient/mockdiskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient/mockrouteclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
@@ -66,19 +67,20 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 				TenantID:       "tenant",
 				SubscriptionID: "subscription",
 			},
-			ResourceGroup:                "rg",
-			VnetResourceGroup:            "rg",
-			RouteTableResourceGroup:      "rg",
-			SecurityGroupResourceGroup:   "rg",
-			Location:                     "westus",
-			VnetName:                     "vnet",
-			SubnetName:                   "subnet",
-			SecurityGroupName:            "nsg",
-			RouteTableName:               "rt",
-			PrimaryAvailabilitySetName:   "as",
-			PrimaryScaleSetName:          "vmss",
-			MaximumLoadBalancerRuleCount: 250,
-			VMType:                       consts.VMTypeStandard,
+			ResourceGroup:                   "rg",
+			VnetResourceGroup:               "rg",
+			RouteTableResourceGroup:         "rg",
+			SecurityGroupResourceGroup:      "rg",
+			PrivateLinkServiceResourceGroup: "rg",
+			Location:                        "westus",
+			VnetName:                        "vnet",
+			SubnetName:                      "subnet",
+			SecurityGroupName:               "nsg",
+			RouteTableName:                  "rt",
+			PrimaryAvailabilitySetName:      "as",
+			PrimaryScaleSetName:             "vmss",
+			MaximumLoadBalancerRuleCount:    250,
+			VMType:                          consts.VMTypeStandard,
 		},
 		nodeZones:                map[string]sets.String{},
 		nodeInformerSynced:       func() bool { return true },
@@ -99,12 +101,14 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.VirtualMachineScaleSetsClient = mockvmssclient.NewMockInterface(ctrl)
 	az.VirtualMachineScaleSetVMsClient = mockvmssvmclient.NewMockInterface(ctrl)
 	az.VirtualMachinesClient = mockvmclient.NewMockInterface(ctrl)
+	az.PrivateLinkServiceClient = mockprivatelinkserviceclient.NewMockInterface(ctrl)
 	az.VMSet, _ = newAvailabilitySet(az)
 	az.vmCache, _ = az.newVMCache()
 	az.lbCache, _ = az.newLBCache()
 	az.nsgCache, _ = az.newNSGCache()
 	az.rtCache, _ = az.newRouteTableCache()
 	az.pipCache, _ = az.newPIPCache()
+	az.plsCache, _ = az.newPLSCache()
 
 	common := &controllerCommon{cloud: az, resourceGroup: "rg", location: "westus"}
 	az.controllerCommon = common
