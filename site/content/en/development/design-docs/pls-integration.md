@@ -10,7 +10,7 @@ Azure Private Link Service (PLS) is an infrastructure component that allows user
 
 Before Private Link Service for AKS Load Balancer, users who wanted private connectivity from on-premises or other VNETs to their services in the AKS cluster were required to create a Private Link Service (PLS) to reference the AKS Internal LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, the PLS to the LB would already be created in the `MC_` resource group when the LB frontend is instantiated, and the user would only be required to create PE connections to it for private connectivity. 
 
-Currently, AKS managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../../../loadbalancer)).
+Currently, AKS managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../../../topics/loadbalancer)).
 
 ## PrivateLinkService annotations
 
@@ -52,7 +52,7 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 ### Sharing AKS managed PrivateLinkService
 
-Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../../../shared-ip)). If a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
+Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../../../topics/shared-ip)). If a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
 
 AKS tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>\<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>\<service name>` pattern.
 
