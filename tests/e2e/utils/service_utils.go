@@ -90,9 +90,10 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespac
 
 	if !isInternalService(service) {
 		Logf("checking the connectivity of the public IP %s", ip)
-		port := service.Spec.Ports[0].Port
-		if err := ValidateExternalServiceConnectivity(ip, int(port)); err != nil {
-			return ip, err
+		for _, port := range service.Spec.Ports {
+			if err := ValidateExternalServiceConnectivity(ip, int(port.Port)); err != nil {
+				return ip, err
+			}
 		}
 	}
 
