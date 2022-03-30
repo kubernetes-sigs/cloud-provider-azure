@@ -235,3 +235,27 @@ func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
 
 	return result, nil
 }
+
+func getBoolValueFromServiceAnnotations(service *v1.Service, key string) bool {
+	if l, found := service.Annotations[key]; found {
+		return strings.EqualFold(strings.TrimSpace(l), consts.TrueAnnotationValue)
+	}
+	return false
+}
+
+func sameContentInSlices(s1 []string, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	map1 := make(map[string]int)
+	for _, s := range s1 {
+		map1[s]++
+	}
+	for _, s := range s2 {
+		if v, ok := map1[s]; !ok || v <= 0 {
+			return false
+		}
+		map1[s]--
+	}
+	return true
+}
