@@ -401,7 +401,7 @@ const (
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
 	// `/healthz` would be configured by default.
 	HealthProbeParamsRequestPath  HealthProbeParams = "request-path"
-	HealthProbeDefaultRequestPath string            = "/healthz"
+	HealthProbeDefaultRequestPath string            = "/"
 )
 
 type HealthProbeParams string
