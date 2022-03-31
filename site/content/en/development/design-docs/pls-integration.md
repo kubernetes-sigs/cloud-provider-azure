@@ -20,12 +20,12 @@ Below is a list of annotations supported for Kubernetes services with Azure PLS 
 | ------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------ |------|------|
 | `service.beta.kubernetes.io/azure-pls-create`                            | `"true"`                           | Boolean indicating whether a PLS needs to be created. | Required | |
 | `service.beta.kubernetes.io/azure-pls-name`                              | `<PLS name>`                       | String specifying the name of the PLS resource to be created. | Optional | `"pls-<LB frontend config id>"` |
-| `service.beta.kubernetes.io/azure-pls-ip-configuration-subnet`           |`<Subnet name>`                     | String indicating the subnet to which the PLS will be deployed.  This subnet must exist in the same VNET as the backend pool. | Required | |
+| `service.beta.kubernetes.io/azure-pls-ip-configuration-subnet`           |`<Subnet name>`                     | String indicating the subnet to which the PLS will be deployed. This subnet must exist in the same VNET as the backend pool. PLS NAT IPs are allocated within this subnet. | Required | |
 | `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-version`       | `"ipv4"` or `"ipv6"`               | IP version of the private IP address. | Optional | `"ipv4"` |
 | `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count` | `[1-8]`                            | Total number of private NAT IPs to allocate. | Optional | 1 |
 | `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address`       | `"10.0.0.7 ... 10.0.0.10"`         | A space separated list of static IPs to be allocated. Total number of IPs should not be greater than the ip count specifed in `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count`. If there are fewer IPs specified, the rest are dynamically allocated. The first IP in the list is set as `Primary`. |  Optional | All IPs are dynamically allocated. |
 | `service.beta.kubernetes.io/azure-pls-fqdns`                             | `"fqdn1 fqdn2"`                    | A space separated list of fqdns associated with the PLS. | Optional | `[]` |
-| `service.beta.kubernetes.io/azure-pls-proxy-protocol`                    | `"true"` or `"false"`              | Boolean indicatin whether the TCP Proxy protocol needs to be enabled on the PLS to determine true source IP address. | Optional | `false` |
+| `service.beta.kubernetes.io/azure-pls-proxy-protocol`                    | `"true"` or `"false"`              | Boolean indicating whether the TCP PROXY protocol should be enabled on the PLS to pass through connection information, including the link ID and source IP address. Note that the backend service MUST support the PROXY protocol or the connections will fail. | Optional | `false` |
 | `service.beta.kubernetes.io/azure-pls-visibility`                        | `"sub1 sub2 sub3 … subN"` or `"*"` | A space separated list of Azure subscription ids for which the private link service is visible. Use `"*"` to expose the PLS to all subs (Least restrictive). | Optional | Empty list `[]` indicating role-based access control only: This private link service will only be available to individuals with role-based access control permissions within your directory. (Most restrictive) |
 | `service.beta.kubernetes.io/azure-pls-auto-approval`                     | `"sub1 sub2 sub3 … subN"`          | A space separated list of Azure subscription ids. This allows PE connection requests from the subscriptions listed to the PLS to be automatically approved. |  Optional | `[]` |
 
@@ -36,9 +36,9 @@ For more details about each configuration, please refer to [Azure Private Link S
 
 ### Creating AKS managed PrivateLinkService
 
-When a `LoadBalancer` typed service is created, a LB frontend IP configuration is created with either a dynamically generated or user specified IP. Or if the service has `loadBalancerIP` in its spec, an existing LB frontend IP configuration may be reused. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the `MC_` resource group for the AKS cluster. 
+When a `LoadBalancer` typed service is created without the `loadBalancerIP` field specified, an LB frontend IP configuration is created with a dynamically generated IP. If the service has `loadBalancerIP` in its spec, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the `MC_` resource group for the AKS cluster. 
 
-The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with service name `kubernetes-owner-service: <namespace>\<service name>`. Only the owner service can later update the properties of the PLS resource.
+The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with service name `kubernetes-owner-service: <namespace>/<service name>`. Only the owner service can later update the properties of the PLS resource.
 
 If there's an AKS managed PLS already created for the LB frontend, the same PLS is reused automatically since each LB frontend can be referenced by only one PLS. If the LB frontend is attached to a user defined PLS, service creation should fail with proper error logged. 
 
@@ -54,7 +54,7 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../../../topics/shared-ip)). If a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
 
-AKS tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>\<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>\<service name>` pattern.
+AKS tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
 
 PLS is only automatically deleted when the LB frontend IP configuration is deleted. One can delete a service while preserving the PLS by creating a temporary service referring to the same LB frontend. 
 
