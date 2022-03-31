@@ -1733,11 +1733,20 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(false),
 		},
 		{
-			desc:            "getExpectedLBRules shall return error on non supported protocols",
+			desc:            "getExpectedLBRules shall return tcp probe on non supported protocols when basic slb sku is used",
+			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{}, false, 80),
+			loadBalancerSku: "basic",
+			probeProtocol:   "Mongodb",
+			expectedRules:   getDefaultTestRules(false),
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+		},
+		{
+			desc:            "getExpectedLBRules shall return tcp probe on https protocols when basic slb sku is used",
 			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{}, false, 80),
 			loadBalancerSku: "basic",
 			probeProtocol:   "Https",
-			expectedErr:     true,
+			expectedRules:   getDefaultTestRules(false),
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
 		},
 		{
 			desc:            "getExpectedLBRules shall return error (slb with external mode and SCTP)",
@@ -1808,13 +1817,24 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "getExpectedLBRules should return error when invalid protocol is defined",
+			desc: "getExpectedLBRules should return tcp probe when invalid protocol is defined",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_request-path": "/healthy1",
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "TCP1",
-			expectedErr:     true,
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+			expectedRules:   getDefaultTestRules(true),
+		},
+		{
+			desc: "getExpectedLBRules should return tcp probe when invalid protocol is defined",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_request-path": "/healthy1",
+			}, false, 80),
+			loadBalancerSku: "basic",
+			probeProtocol:   "TCP1",
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+			expectedRules:   getDefaultTestRules(false),
 		},
 		{
 			desc: "getExpectedLBRules should return correct rule when deprecated annotations are added",
@@ -1908,7 +1928,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Http",
-			expectedProbes:  getTestProbes("Http", "/healthz", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
