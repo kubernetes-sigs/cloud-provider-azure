@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -395,44 +396,94 @@ func TestPutResources(t *testing.T) {
 	assert.Equal(t, 3, total)
 }
 
-func TestPutResourceAsync(t *testing.T) {
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		http.Error(w, "failed", http.StatusInternalServerError)
-	}))
+func TestResourceAction(t *testing.T) {
+	for _, tc := range []struct {
+		description string
+		action      func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error)
+		assertion   func(count int, future *azure.Future, response *http.Response, rerr *retry.Error)
+	}{
+		{
+			description: "put resource async",
+			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+				future, rerr := armClient.PutResourceAsync(ctx, resourceID, "")
+				return future, nil, rerr
+			},
+			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+				assert.Equal(t, 3, count, "count")
+				assert.Nil(t, future, "future")
+				assert.NotNil(t, rerr, "rerr")
+				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
+			},
+		},
+		{
+			description: "delete resource async",
+			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID, "")
+				return future, nil, rerr
+			},
+			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+				assert.Equal(t, 3, count, "count")
+				assert.Nil(t, future, "future")
+				assert.NotNil(t, rerr, "rerr")
+				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
+			},
+		},
+		{
+			description: "post resource",
+			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+				response, rerr := armClient.PostResource(ctx, resourceID, "post", "")
+				return nil, response, rerr
+			},
+			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+				assert.Equal(t, 3, count, "count")
+				assert.NotNil(t, response, "response")
+				assert.NotNil(t, rerr, "rerr")
+				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
+			},
+		},
+		{
+			description: "delete resource",
+			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+				rerr := armClient.DeleteResource(ctx, resourceID, "")
+				return nil, nil, rerr
+			},
+			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+				assert.Equal(t, 3, count, "count")
+				assert.NotNil(t, rerr, "rerr")
+				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
+			},
+		},
+		{
+			description: "head resource",
+			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+				response, rerr := armClient.HeadResource(ctx, resourceID)
+				return nil, response, rerr
+			},
+			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+				assert.Equal(t, 3, count, "count")
+				assert.NotNil(t, response, "response")
+				assert.NotNil(t, rerr, "rerr")
+				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
+			},
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			count := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				count++
+				http.Error(w, "failed", http.StatusInternalServerError)
+			}))
 
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
+			backoff := &retry.Backoff{Steps: 3}
+			armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
+			armClient.client.RetryDuration = time.Millisecond * 1
 
-	ctx := context.Background()
-	resourceID := testResourceID
-	future, rerr := armClient.PutResourceAsync(ctx, resourceID, "")
-	assert.Equal(t, 3, count)
-	assert.Nil(t, future)
-	assert.NotNil(t, rerr)
-	assert.Equal(t, true, rerr.Retriable)
-}
-
-func TestDeleteResourceAsync(t *testing.T) {
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		http.Error(w, "failed", http.StatusInternalServerError)
-	}))
-
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	resourceID := testResourceID
-	future, rerr := armClient.DeleteResourceAsync(ctx, resourceID, "")
-	assert.Equal(t, 3, count)
-	assert.Nil(t, future)
-	assert.NotNil(t, rerr)
-	assert.Equal(t, true, rerr.Retriable)
+			ctx := context.Background()
+			resourceID := testResourceID
+			future, response, rerr := tc.action(armClient, ctx, resourceID, "")
+			tc.assertion(count, future, response, rerr)
+		})
+	}
 }
 
 func TestPatchResource(t *testing.T) {
@@ -477,96 +528,40 @@ func TestPatchResource(t *testing.T) {
 	assert.Equal(t, true, rerr.Retriable)
 }
 
-func TestPostResource(t *testing.T) {
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		http.Error(w, "failed", http.StatusInternalServerError)
-	}))
-
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	resourceID := testResourceID
-	future, rerr := armClient.PostResource(ctx, resourceID, "post", "")
-	assert.Equal(t, 3, count)
-	assert.NotNil(t, future)
-	assert.NotNil(t, rerr)
-	assert.Equal(t, true, rerr.Retriable)
-}
-
-func TestDeleteResource(t *testing.T) {
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		http.Error(w, "failed", http.StatusInternalServerError)
-	}))
-
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	resourceID := testResourceID
-	rerr := armClient.DeleteResource(ctx, resourceID, "")
-	assert.Equal(t, 3, count)
-	assert.NotNil(t, rerr)
-	assert.Equal(t, true, rerr.Retriable)
-}
-
-func TestHeadResource(t *testing.T) {
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		http.Error(w, "failed", http.StatusInternalServerError)
-	}))
-
-	backoff := &retry.Backoff{Steps: 3}
-	armClient := New(nil, server.URL, "test", "2019-01-01", "eastus", backoff)
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	resourceID := testResourceID
-	response, rerr := armClient.HeadResource(ctx, resourceID)
-	assert.Equal(t, 3, count)
-	assert.NotNil(t, response)
-	assert.NotNil(t, rerr)
-	assert.Equal(t, true, rerr.Retriable)
-}
-
 func TestGetResourceID(t *testing.T) {
-	expectedResourceID := "/subscriptions/sub/resourceGroups/rg/providers/type/name"
-
-	resourceID := GetResourceID("sub", "rg", "type", "name")
-	assert.Equal(t, expectedResourceID, resourceID)
-}
-
-func TestGetChildResourceID(t *testing.T) {
-	expectedResourceID := "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/name-2/name-3"
-
-	resourceID := GetChildResourceID("sub", "rg", "type", "name-1", "name-2", "name-3")
-	assert.Equal(t, expectedResourceID, resourceID)
-}
-
-func TestGetChildResourcesListID(t *testing.T) {
-	expectedResourceID := "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/name-2"
-
-	resourceID := GetChildResourcesListID("sub", "rg", "type", "name-1", "name-2")
-	assert.Equal(t, expectedResourceID, resourceID)
-}
-
-func TestGetProviderResourceID(t *testing.T) {
-	expectedResourceID := "/subscriptions/sub/providers/namespace"
-
-	resourceID := GetProviderResourceID("sub", "namespace")
-	assert.Equal(t, expectedResourceID, resourceID)
-}
-
-func TestGetProviderResourcesListID(t *testing.T) {
-	expectedResourceID := "/subscriptions/sub/providers"
-
-	resourceID := GetProviderResourcesListID("sub")
-	assert.Equal(t, expectedResourceID, resourceID)
+	for _, tc := range []struct {
+		description        string
+		resourceID         string
+		expectedResourceID string
+	}{
+		{
+			description:        "resource ID",
+			resourceID:         GetResourceID("sub", "rg", "type", "name"),
+			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type/name",
+		},
+		{
+			description:        "child resource ID",
+			resourceID:         GetChildResourceID("sub", "rg", "type", "name-1", "childType", "name-3"),
+			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/childType/name-3",
+		},
+		{
+			description:        "child resource list ID",
+			resourceID:         GetChildResourcesListID("sub", "rg", "type", "name-1", "childType"),
+			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/childType",
+		},
+		{
+			description:        "provider resource ID",
+			resourceID:         GetProviderResourceID("sub", "namespace"),
+			expectedResourceID: "/subscriptions/sub/providers/namespace",
+		},
+		{
+			description:        "provider resource list ID",
+			resourceID:         GetProviderResourcesListID("sub"),
+			expectedResourceID: "/subscriptions/sub/providers",
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			assert.Equal(t, tc.expectedResourceID, tc.resourceID)
+		})
+	}
 }
