@@ -156,22 +156,27 @@ As documented [here](https://docs.microsoft.com/en-us/azure/load-balancer/load-b
 
 Currently, the default protocol of the health probe varies among services with different transport protocols, app protocols, annotations and external traffic policies.
 
-1. for local services, HTTP and /healthz would be used.
+1. for local services, HTTP and /healthz would be used. The health probe will query NodeHealthPort rather than actual backend service
 1. for cluster TCP services, TCP would be used.
 1. for cluster UDP services, no health probes.
 
 Since v1.20, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` are introduced, which determine the new health probe behavior. If the spec.ports.appProtocol is set, both local and cluster TCP services would use the specified health probe protocol. If the `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is set, the specified request path would be used instead of `/healthz`. Note that the request path would be ignored when using TCP or the spec.ports.appProtocol is empty. More specifically:
 
-| `externalTrafficPolicy` | spec.ports.AppProtocol | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | protocol | request path |
-| ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------ |------| ----- |
-| local |  | (ignored) | http | `/healthz` |
-| local | tcp | (ignored) | tcp | null |
-| local | http/https | | http/https | `/healthz` |
-| local | http/https | `/custom-path` | http/https | `/custom-path` |
-| cluster |  | (ignored) | tcp | null |
-| cluster | tcp | (ignored) | tcp | null |
-| cluster | http/https | | http/https | `/healthz` |
-| cluster | http/https | `/custom-path` | http/https | `/custom-path` |
+|loadbalancer sku| `externalTrafficPolicy` | spec.ports.Protocol |spec.ports.AppProtocol| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | protocol | request path |
+|---| ------------------------------------------------------------ | ---------------------------- | ----------------------------------------------------|-------- |------| ----- |
+| standard| local |any| any | any | http | `/healthz` |
+| standard| cluster |udp| any | any | null | null |
+| standard| cluster |tcp|  | (ignored) | tcp | null |
+| standard| cluster |tcp| tcp | (ignored) | tcp | null |
+| standard| cluster |tcp| http/https | | http/https | `/` |
+| standard| cluster |tcp| http/https | `/custom-path` | http/https | `/custom-path` |
+| standard| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null (For backward compatibility) |
+| basic| local |any| any | any | http | `/healthz` |
+| basic| cluster |tcp|  | (ignored) | tcp | null |
+| basic| cluster |tcp| tcp | (ignored) | tcp | null |
+| basic| cluster |tcp| http | | http | `/` |
+| basic| cluster |tcp| http | `/custom-path` | http | `/custom-path` |
+| basic| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null (For backward compatibility)|
 
 Since v1.21, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` and `load-balancer-health-probe-num-of-probe` are introduced, which customize the configuration of health probe. If `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` is not set, Default value of 5 is applied. If `load-balancer-health-probe-num-of-probe` is not set, Default value of 2 is applied. And total probe should be less than 120 seconds.
 
