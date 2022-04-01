@@ -24,7 +24,7 @@ github.com/Azure/go-autorest/autorest/azure
 github.com/Azure/go-autorest/autorest/adal
 # github.com/Azure/go-autorest/autorest/date v0.3.0
 github.com/Azure/go-autorest/autorest/date
-# github.com/Azure/go-autorest/autorest/mocks v0.4.1
+# github.com/Azure/go-autorest/autorest/mocks v0.4.2
 ## explicit
 github.com/Azure/go-autorest/autorest/mocks
 # github.com/Azure/go-autorest/autorest/to v0.4.0
