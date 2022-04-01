@@ -18,6 +18,7 @@ package cache
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -54,7 +55,6 @@ type AzureCacheEntry struct {
 // TimedCache is a cache with TTL.
 type TimedCache struct {
 	Store  sync.Map
-	Lock   sync.Mutex
 	Getter GetFunc
 	TTL    time.Duration
 }
@@ -73,36 +73,53 @@ func NewTimedcache(ttl time.Duration, getter GetFunc) (*TimedCache, error) {
 
 // Get returns the requested item by key.
 func (t *TimedCache) Get(key string, crt AzureCacheReadType) (interface{}, error) {
-	rawEntry, _ := t.Store.LoadOrStore(key, &AzureCacheEntry{
+	rawEntry, loaded := t.Store.LoadOrStore(key, &AzureCacheEntry{
 		Key:  key,
 		Data: nil,
 	})
-
 	entry := rawEntry.(*AzureCacheEntry)
-	// entry exists and if cache is not force refreshed
-	if entry.Data != nil && crt != CacheReadTypeForceRefresh {
-		// allow unsafe read, so return data even if expired
-		if crt == CacheReadTypeUnsafe {
-			return entry.Data, nil
+
+	// spin lock is introduced to make sure one ARM call only for one resource
+	for loaded {
+		if entry.Data != nil {
+			switch crt {
+			case CacheReadTypeUnsafe:
+				return entry.Data, nil
+			case CacheReadTypeDefault:
+				if time.Since(entry.CreatedOn) < t.TTL {
+					return entry.Data, nil
+				}
+				fallthrough
+			case CacheReadTypeForceRefresh:
+				t.Store.Delete(key)
+			}
 		}
-		// if cached data is not expired, return cached data
-		if crt == CacheReadTypeDefault && time.Since(entry.CreatedOn) < t.TTL {
-			return entry.Data, nil
-		}
-	}
-	// Data is not cached yet, cache data is expired or requested force refresh
-	// cache it by getter. entry is locked before getting to ensure concurrent
-	// gets don't result in multiple ARM calls.
-	data, err := t.Getter(key)
-	if err != nil {
-		return nil, err
+		runtime.Gosched()
+		rawEntry, loaded = t.Store.LoadOrStore(key, &AzureCacheEntry{
+			Key:  key,
+			Data: nil,
+		})
+		entry = rawEntry.(*AzureCacheEntry)
 	}
 
-	// set the data in cache and also set the last update time
-	// to now as the data was recently fetched
-	t.Set(key, data)
-
-	return data, nil
+	return func() (data interface{}, reterr error) {
+		defer func() {
+			if err := recover(); err != nil {
+				reterr = err.(error)
+			}
+			if reterr != nil {
+				t.Store.Delete(key)
+			}
+		}()
+		data, reterr = t.Getter(key)
+		if reterr != nil {
+			return nil, reterr
+		}
+		// set the data in cache and also set the last update time
+		// to now as the data was recently fetched
+		t.Set(key, data)
+		return data, nil
+	}()
 }
 
 // Delete removes an item from the cache.
