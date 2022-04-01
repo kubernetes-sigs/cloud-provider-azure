@@ -18,6 +18,7 @@ steps:
       - DOCKER_BUILDKIT=1
       - IMAGE_REGISTRY=gcr.io/k8s-staging-provider-azure
       - DOCKER_BUILDX=/root/.docker/cli-plugins/docker-buildx
+      - CLOUD_BUILD_IMAGE=${_CLOUD_BUILD_IMAGE}
     args:
       - release-staging
 substitutions:
@@ -30,3 +31,5 @@ substitutions:
   # The default gcr.io staging project for Cloud Provider Azure artifacts
   # (=> https://console.cloud.google.com/gcr/images/k8s-staging-provider-azure/GLOBAL).
   _STAGING_PROJECT: "k8s-staging-provider-azure"
+  # CLOUD_BUILD_IMAGE decides to build ccm or cnm images.
+  _CLOUD_BUILD_IMAGE: "ccm"

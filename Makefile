@@ -70,11 +70,14 @@ DOCKER_BUILDX ?= docker buildx
 
 # cloud controller manager image
 ifeq ($(ARCH), amd64)
-IMAGE_NAME=azure-cloud-controller-manager
+CONTROLLER_MANAGER_IMAGE_NAME=azure-cloud-controller-manager
 else
-IMAGE_NAME=azure-cloud-controller-manager-$(ARCH)
+CONTROLLER_MANAGER_IMAGE_NAME=azure-cloud-controller-manager-$(ARCH)
 endif
-IMAGE=$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+CONTROLLER_MANAGER_FULL_IMAGE_NAME=$(IMAGE_REGISTRY)/$(CONTROLLER_MANAGER_IMAGE_NAME)
+CONTROLLER_MANAGER_IMAGE=$(IMAGE_REGISTRY)/$(CONTROLLER_MANAGER_IMAGE_NAME):$(IMAGE_TAG)
+ALL_CONTROLLER_MANAGER_IMAGES = $(foreach arch, ${ALL_ARCH.linux}, $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-${arch}:$(IMAGE_TAG))
+
 # cloud node manager image
 NODE_MANAGER_IMAGE_NAME=azure-cloud-node-manager
 NODE_MANAGER_FULL_IMAGE_NAME=$(IMAGE_REGISTRY)/$(NODE_MANAGER_IMAGE_NAME)
@@ -88,6 +91,8 @@ CCM_E2E_TEST_IMAGE_NAME=cloud-provider-azure-e2e
 CCM_E2E_TEST_IMAGE=$(IMAGE_REGISTRY)/$(CCM_E2E_TEST_IMAGE_NAME):$(IMAGE_TAG)
 CCM_E2E_TEST_RELEASE_IMAGE=docker.pkg.github.com/kubernetes-sigs/cloud-provider-azure/cloud-provider-azure-e2e:$(IMAGE_TAG)
 
+# cloud build variables
+CLOUD_BUILD_IMAGE ?= ccm
 
 ##@ General
 
@@ -143,7 +148,7 @@ build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-mana
 		--build-arg ARCH="$(ARCH)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file Dockerfile \
-		--tag $(IMAGE) .
+		--tag $(CONTROLLER_MANAGER_IMAGE) .
 
 .PHONY: build-node-image-linux
 build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-manager image.
@@ -173,7 +178,7 @@ build-ccm-e2e-test-image: ## Build e2e test image.
 
 .PHONY: push-ccm-image
 push-ccm-image: ## Push controller-manager image.
-	docker push $(IMAGE)
+	docker push $(CONTROLLER_MANAGER_IMAGE)
 
 .PHONY: push-node-image-linux
 push-node-image-linux: ## Push node-manager image for Linux.
@@ -214,7 +219,19 @@ push-images: push
 image: build-all-ccm-images build-all-node-images ## Build all images.
 
 .PHONY: push
-push: push-all-ccm-images push-multi-arch-node-manager-image ## Push all images.
+push: push-multi-arch-controller-manager-image push-multi-arch-node-manager-image ## Push all images.
+
+.PHONY: push-multi-arch-controller-manager-image ## Push multi-arch controller-manager image
+push-multi-arch-controller-manager-image: push-all-ccm-images ## Create and push a manifest list containing all the Linux ccm images.
+	## Linux amd64 ccm image name has no amd64
+	docker tag $(CONTROLLER_MANAGER_FULL_IMAGE_NAME):$(IMAGE_TAG) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
+	docker push $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-amd64:$(IMAGE_TAG)
+
+	docker manifest create --amend $(CONTROLLER_MANAGER_IMAGE) $(ALL_CONTROLLER_MANAGER_IMAGES)
+	for arch in $(ALL_ARCH.linux); do \
+		docker manifest annotate --os linux --arch $${arch} $(CONTROLLER_MANAGER_IMAGE) $(CONTROLLER_MANAGER_FULL_IMAGE_NAME)-$${arch}:$(IMAGE_TAG); \
+	done
+	docker manifest push --purge $(CONTROLLER_MANAGER_IMAGE)
 
 .PHONY: push-multi-arch-node-manager-image ## Push multi-arch node-manager image
 push-multi-arch-node-manager-image: push-all-node-images ## Create and push a manifest list containing all the Windows and Linux images.
@@ -353,7 +370,7 @@ $(PKG_CONFIG):
 
 .PHONY: deploy
 deploy: image push ## Build, push and deploy an aks-engine cluster.
-	IMAGE=$(IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
+	CCM_IMAGE=$(CONTROLLER_MANAGER_IMAGE) CNM_IMAGE=$(NODE_MANAGER_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) hack/deploy-cluster.sh
 
 .PHONY: cloud-build-prerequisites
 cloud-build-prerequisites:
@@ -361,8 +378,11 @@ cloud-build-prerequisites:
 
 .PHONY: release-staging
 release-staging: ## Release the cloud provider images.
-	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites image push
-
+ifeq ($(CLOUD_BUILD_IMAGE),ccm)
+	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) build-all-ccm-images push-multi-arch-controller-manager-image
+else
+	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites build-all-node-images push-multi-arch-node-manager-image
+endif
 ## --------------------------------------
 ##@ Deploy clusters
 ## --------------------------------------
