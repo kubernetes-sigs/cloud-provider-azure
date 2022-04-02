@@ -19,9 +19,12 @@ package utils
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 
@@ -35,6 +38,8 @@ import (
 const (
 	serviceTimeout        = 5 * time.Minute
 	serviceTimeoutBasicLB = 10 * time.Minute
+	pullInterval          = 20 * time.Second
+	pullTimeout           = 1 * time.Minute
 )
 
 // DeleteService deletes a service
@@ -70,10 +75,36 @@ func GetServiceDomainName(prefix string) (ret string) {
 	return
 }
 
-// WaitServiceExposure returns ip of ingress
-func WaitServiceExposure(cs clientset.Interface, namespace string, name string) (string, error) {
+// WaitServiceExposureAndValidateConnectivity returns ip of the service and check the connectivity if it is a public IP
+func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespace string, name string, targetIP string) (string, error) {
 	var service *v1.Service
 	var err error
+	var ip string
+
+	service, err = WaitServiceExposure(cs, namespace, name, targetIP)
+	if err != nil {
+		return "", err
+	}
+
+	ip = service.Status.LoadBalancer.Ingress[0].IP
+
+	if !isInternalService(service) {
+		Logf("checking the connectivity of the public IP %s", ip)
+		for _, port := range service.Spec.Ports {
+			if err := ValidateExternalServiceConnectivity(ip, int(port.Port)); err != nil {
+				return ip, err
+			}
+		}
+	}
+
+	return ip, nil
+}
+
+// WaitServiceExposure waits for the exposure of the external IP of the service
+func WaitServiceExposure(cs clientset.Interface, namespace string, name string, targetIP string) (*v1.Service, error) {
+	var service *v1.Service
+	var err error
+	var ip string
 
 	timeout := serviceTimeout
 	if skuEnv := os.Getenv(LoadBalancerSkuEnv); skuEnv != "" {
@@ -94,51 +125,62 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string) 
 		IngressList := service.Status.LoadBalancer.Ingress
 		if len(IngressList) == 0 {
 			err = fmt.Errorf("Cannot find Ingress in limited time")
-			Logf("Fail to find ingress, retry it in 10 seconds")
+			Logf("Fail to find ingress, retry in 10 seconds")
 			return false, nil
 		}
+
+		ip = service.Status.LoadBalancer.Ingress[0].IP
+		if targetIP != "" && !strings.EqualFold(ip, targetIP) {
+			Logf("expected IP is %s, current IP is %s, retry in 10 seconds", targetIP, ip)
+			return false, nil
+		}
+
 		return true, nil
 	}) != nil {
-		return "", err
+		return nil, err
 	}
-	ip := service.Status.LoadBalancer.Ingress[0].IP
+
 	Logf("Exposure successfully, get external ip: %s", ip)
-	return ip, nil
+	return service, nil
 }
 
-// WaitUpdateServiceExposure returns ip of ingress
-func WaitUpdateServiceExposure(cs clientset.Interface, namespace string, name string, targetIP string, expectSame bool) error {
-	var service *v1.Service
-	var err error
-	poll := 10 * time.Second
-	timeout := 10 * time.Minute
+func isInternalService(service *v1.Service) bool {
+	var (
+		val string
+		ok  bool
+	)
+	if val, ok = service.Annotations[consts.ServiceAnnotationLoadBalancerInternal]; !ok {
+		return false
+	}
 
-	return wait.PollImmediate(poll, timeout, func() (bool, error) {
-		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	return strings.EqualFold(val, "true")
+}
+
+// ValidateExternalServiceConnectivity validates the connectivity of the service IP
+func ValidateExternalServiceConnectivity(serviceIP string, port int) error {
+	// the default nginx port is 80, skip other ports
+	if port != 80 {
+		return nil
+	}
+
+	err := wait.PollImmediate(pullInterval, pullTimeout, func() (done bool, err error) {
+		resp, err := http.Get(fmt.Sprintf("http://%s:%d", serviceIP, port))
 		if err != nil {
-			if IsRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
+			Logf("got error %v, will retry", err)
+			return false, nil
 		}
 
-		IngressList := service.Status.LoadBalancer.Ingress
-		if len(IngressList) == 0 {
-			err = fmt.Errorf("Cannot find Ingress in limited time")
-			Logf("Fail to get ingress, retry it in %v seconds", poll)
-			return false, nil
+		if 200 <= resp.StatusCode && resp.StatusCode < 300 {
+			Logf("succeeded")
+			return true, nil
 		}
-		if targetIP != service.Status.LoadBalancer.Ingress[0].IP == expectSame {
-			if expectSame {
-				Logf("still unmatched external IP, retry it in %v seconds", poll)
-			} else {
-				Logf("External IP is still %s", targetIP)
-			}
-			return false, nil
-		}
-		Logf("Exposure successfully")
-		return true, nil
+
+		Logf("got status code %d", resp.StatusCode)
+		return false, nil
 	})
+
+	Logf("validation finished")
+	return err
 }
 
 // extractSuffix obtains the server domain name suffix

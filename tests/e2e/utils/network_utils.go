@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -29,7 +28,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -293,14 +291,4 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
 	lbClient := azureTestClient.creteLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
-}
-
-func WaitServiceIPEqualTo(cs clientset.Interface, expectedIP, serviceName, namespace string) error {
-	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
-		ip, err := WaitServiceExposure(cs, namespace, serviceName)
-		if err != nil {
-			return false, err
-		}
-		return strings.EqualFold(ip, expectedIP), nil
-	})
 }
