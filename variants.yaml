@@ -1,0 +1,5 @@
+variants:
+  cloud-controller-manager:
+    CLOUD_BUILD_IMAGE: ccm
+  cloud-node-manager:
+    CLOUD_BUILD_IMAGE: cnm
