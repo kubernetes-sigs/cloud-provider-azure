@@ -19,6 +19,7 @@ package privatelinkserviceclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog/v2"
@@ -39,7 +41,7 @@ import (
 var _ Interface = &Client{}
 
 const (
-	PLSResourceKinkd = "Microsoft.Network/privatelinkservices"
+	PLSResourceType = "Microsoft.Network/privatelinkservices"
 )
 
 // Client implements privatelinkservice Interface.
@@ -119,7 +121,7 @@ func (c *Client) createOrUpdatePLS(ctx context.Context, resourceGroupName string
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		PLSResourceKinkd,
+		PLSResourceType,
 		privateLinkServiceName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -191,7 +193,7 @@ func (c *Client) getPLS(ctx context.Context, resourceGroupName string, privateLi
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		PLSResourceKinkd,
+		PLSResourceType,
 		privateLinkServiceName,
 	)
 	result := network.PrivateLinkService{}
@@ -212,6 +214,78 @@ func (c *Client) getPLS(ctx context.Context, resourceGroupName string, privateLi
 	}
 
 	result.Response = autorest.Response{Response: response}
+	return result, nil
+}
+
+/// List gets a list of PrivateLinkServices in the resource group.
+func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.PrivateLinkService, *retry.Error) {
+	mc := metrics.NewMetricContext("private_link_services", "list", resourceGroupName, c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(false, "PLSList")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("PLSList", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listPLS(ctx, resourceGroupName)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// listPLS gets a list of PrivateLinkServices in the resource group.
+func (c *Client) listPLS(ctx context.Context, resourceGroupName string) ([]network.PrivateLinkService, *retry.Error) {
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		PLSResourceType)
+	result := make([]network.PrivateLinkService, 0)
+	page := &PrivateLinkServiceListResultPage{}
+	page.fn = c.listNextResults
+
+	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	defer c.armClient.CloseResponse(ctx, resp)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatelinkservice.list.request", resourceID, rerr.Error())
+		return result, rerr
+	}
+
+	var err error
+	page.plslr, err = c.listResponder(resp)
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatelinkservice.list.respond", resourceID, err)
+		return result, retry.GetError(resp, err)
+	}
+
+	for {
+		result = append(result, page.Values()...)
+
+		// Abort the loop when there's no nextLink in the response.
+		if to.String(page.Response().NextLink) == "" {
+			break
+		}
+
+		if err = page.NextWithContext(ctx); err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatelinkservice.list.next", resourceID, err)
+			return result, retry.GetError(page.Response().Response.Response, err)
+		}
+	}
+
 	return result, nil
 }
 
@@ -250,9 +324,99 @@ func (c *Client) deletePLS(ctx context.Context, resourceGroupName string, privat
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		PLSResourceKinkd,
+		PLSResourceType,
 		privateLinkServiceName,
 	)
 
 	return c.armClient.DeleteResource(ctx, resourceID, "")
+}
+
+func (c *Client) listResponder(resp *http.Response) (result network.PrivateLinkServiceListResult, err error) {
+	err = autorest.Respond(
+		resp,
+		autorest.ByIgnoring(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result))
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// privateLinkServiceListResultPreparer prepares a request to retrieve the next set of results.
+// It returns nil if no more results exist.
+func (c *Client) privateLinkServiceListResultPreparer(ctx context.Context, plslr network.PrivateLinkServiceListResult) (*http.Request, error) {
+	if plslr.NextLink == nil || len(to.String(plslr.NextLink)) < 1 {
+		return nil, nil
+	}
+
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithBaseURL(to.String(plslr.NextLink)),
+	}
+	return c.armClient.PrepareGetRequest(ctx, decorators...)
+}
+
+// listNextResults retrieves the next set of results, if any.
+func (c *Client) listNextResults(ctx context.Context, lastResults network.PrivateLinkServiceListResult) (result network.PrivateLinkServiceListResult, err error) {
+	req, err := c.privateLinkServiceListResultPreparer(ctx, lastResults)
+	if err != nil {
+		return result, autorest.NewErrorWithError(err, "privatelinkserviceclient", "listNextResults", nil, "Failure preparing next results request")
+	}
+	if req == nil {
+		return
+	}
+
+	resp, rerr := c.armClient.Send(ctx, req)
+	defer c.armClient.CloseResponse(ctx, resp)
+	if rerr != nil {
+		result.Response = autorest.Response{Response: resp}
+		return result, autorest.NewErrorWithError(rerr.Error(), "privatelinkserviceclient", "listNextResults", resp, "Failure sending next results request")
+	}
+
+	result, err = c.listResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "privatelinkserviceclient", "listNextResults", resp, "Failure responding to next results request")
+	}
+
+	return
+}
+
+// PrivateLinkServiceListResultPage contains a page of PrivateLinkService values.
+type PrivateLinkServiceListResultPage struct {
+	fn    func(context.Context, network.PrivateLinkServiceListResult) (network.PrivateLinkServiceListResult, error)
+	plslr network.PrivateLinkServiceListResult
+}
+
+// NextWithContext advances to the next page of values.  If there was an error making
+// the request the page does not advance and the error is returned.
+func (page *PrivateLinkServiceListResultPage) NextWithContext(ctx context.Context) (err error) {
+	next, err := page.fn(ctx, page.plslr)
+	if err != nil {
+		return err
+	}
+	page.plslr = next
+	return nil
+}
+
+// Next advances to the next page of values.  If there was an error making
+// the request the page does not advance and the error is returned.
+// Deprecated: Use NextWithContext() instead.
+func (page *PrivateLinkServiceListResultPage) Next() error {
+	return page.NextWithContext(context.Background())
+}
+
+// NotDone returns true if the page enumeration should be started or is not yet complete.
+func (page PrivateLinkServiceListResultPage) NotDone() bool {
+	return !page.plslr.IsEmpty()
+}
+
+// Response returns the raw server response from the last page request.
+func (page PrivateLinkServiceListResultPage) Response() network.PrivateLinkServiceListResult {
+	return page.plslr
+}
+
+// Values returns the slice of values for the current page or nil if there are no values.
+func (page PrivateLinkServiceListResultPage) Values() []network.PrivateLinkService {
+	if page.plslr.IsEmpty() {
+		return nil
+	}
+	return *page.plslr.Value
 }

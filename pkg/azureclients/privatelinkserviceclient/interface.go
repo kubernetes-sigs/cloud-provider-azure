@@ -40,6 +40,9 @@ type Interface interface {
 	// Get gets the private link service
 	Get(ctx context.Context, resourceGroupName string, privateLinkServiceName string, expand string) (result network.PrivateLinkService, rerr *retry.Error)
 
+	// List gets a list of PrivateLinkService in the resource group.
+	List(ctx context.Context, resourceGroupName string) (result []network.PrivateLinkService, rerr *retry.Error)
+
 	// CreateOrUpdate creates or updates a private link service.
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, privateLinkServiceName string, privateLinkService network.PrivateLinkService, etag string) *retry.Error
 
