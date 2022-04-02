@@ -95,3 +95,18 @@ func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, privateLinkS
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, privateLinkServiceName, waitForCompletion)
 }
+
+// List mocks base method.
+func (m *MockInterface) List(ctx context.Context, resourceGroupName string) ([]network.PrivateLinkService, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName)
+	ret0, _ := ret[0].([]network.PrivateLinkService)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
+}
