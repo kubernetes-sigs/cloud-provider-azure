@@ -82,8 +82,8 @@ func TestGetStorageAccessKeys(t *testing.T) {
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
-		key, err := cloud.GetStorageAccesskey(ctx, "acct", "rg")
+		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "", "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
+		key, err := cloud.GetStorageAccesskey(ctx, "", "acct", "rg")
 		if test.expectErr && err == nil {
 			t.Errorf("Unexpected non-error")
 			continue
@@ -142,7 +142,7 @@ func TestGetStorageAccount(t *testing.T) {
 	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 	cloud.StorageAccountClient = mockStorageAccountsClient
 
-	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(testResourceGroups, nil).Times(1)
+	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(testResourceGroups, nil).Times(1)
 
 	accountsWithLocations, err := cloud.getStorageAccounts(ctx, accountOptions)
 	if err != nil {
@@ -317,7 +317,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
 
-		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(test.testResourceGroups, nil).AnyTimes()
 
 		accountsWithLocations, err := cloud.getStorageAccounts(ctx, test.testAccountOptions)
 		if !errors.Is(err, test.expectedError) {
@@ -383,13 +383,13 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
-		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
 		if test.AccountName == "" {
-			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
+			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
 		} else {
-			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
+			mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
 		}
 		cloud.StorageAccountClient = mockStorageAccountsClient
 
