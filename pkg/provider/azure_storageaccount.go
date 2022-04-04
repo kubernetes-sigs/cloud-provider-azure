@@ -143,6 +143,15 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		subnetName = az.SubnetName
 	}
 
+	if accountOptions.SubscriptionID != "" && !strings.EqualFold(accountOptions.SubscriptionID, az.Config.SubscriptionID) && accountOptions.ResourceGroup == "" {
+		return "", "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", accountOptions.SubscriptionID)
+	}
+
+	subsID := az.Config.SubscriptionID
+	if accountOptions.SubscriptionID != "" {
+		subsID = accountOptions.SubscriptionID
+	}
+
 	var createNewAccount bool
 	if len(accountName) == 0 {
 		createNewAccount = true
@@ -167,7 +176,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		createNewAccount = false
 		if accountOptions.CreateAccount {
 			// check whether account exists
-			if _, err := az.GetStorageAccesskey(ctx, accountOptions.SubscriptionID, accountName, resourceGroup); err != nil {
+			if _, err := az.GetStorageAccesskey(ctx, subsID, accountName, resourceGroup); err != nil {
 				klog.V(2).Infof("get storage key for storage account %s returned with %v", accountName, err)
 				createNewAccount = true
 			}
@@ -259,7 +268,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			return "", "", fmt.Errorf("StorageAccountClient is nil")
 		}
 
-		if rerr := az.StorageAccountClient.Create(ctx, accountOptions.SubscriptionID, resourceGroup, accountName, cp); rerr != nil {
+		if rerr := az.StorageAccountClient.Create(ctx, subsID, resourceGroup, accountName, cp); rerr != nil {
 			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 		}
 
@@ -280,7 +289,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 		if accountOptions.CreatePrivateEndpoint {
 			// Get properties of the storageAccount
-			storageAccount, err := az.StorageAccountClient.GetProperties(ctx, accountOptions.SubscriptionID, resourceGroup, accountName)
+			storageAccount, err := az.StorageAccountClient.GetProperties(ctx, subsID, resourceGroup, accountName)
 			if err != nil {
 				return "", "", fmt.Errorf("Failed to get the properties of storage account(%s), resourceGroup(%s), error: %v", accountName, resourceGroup, err)
 			}
@@ -306,7 +315,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	// find the access key with this account
-	accountKey, err := az.GetStorageAccesskey(ctx, accountOptions.SubscriptionID, accountName, resourceGroup)
+	accountKey, err := az.GetStorageAccesskey(ctx, subsID, accountName, resourceGroup)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %w", accountName, err)
 	}
