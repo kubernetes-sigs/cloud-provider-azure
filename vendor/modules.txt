@@ -1,7 +1,7 @@
 # cloud.google.com/go v0.99.0 => cloud.google.com/go v0.54.0
 ## explicit; go 1.11
 cloud.google.com/go/compute/metadata
-# github.com/Azure/azure-sdk-for-go v63.0.0+incompatible
+# github.com/Azure/azure-sdk-for-go v63.1.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute
