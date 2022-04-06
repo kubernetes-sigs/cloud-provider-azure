@@ -153,9 +153,9 @@ func TestCreateFileShare(t *testing.T) {
 
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.keys, nil).AnyTimes()
-		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.accounts, nil).AnyTimes()
-		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "", "rg", gomock.Any()).Return(test.keys, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), "rg").Return(test.accounts, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), "", "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		mockAccount := &AccountOptions{
 			Name:          test.acct,

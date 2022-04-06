@@ -80,8 +80,8 @@ type ManagedDiskOptions struct {
 	DiskAccessID *string
 	// BurstingEnabled - Set to true to enable bursting beyond the provisioned performance target of the disk.
 	BurstingEnabled *bool
-	// SubscrtionID - specify a different SubscrtionID
-	SubscrtionID string
+	// SubscriptionID - specify a different SubscriptionID
+	SubscriptionID string
 }
 
 //CreateManagedDisk : create managed disk
@@ -117,12 +117,12 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 	if options.ResourceGroup != "" {
 		rg = options.ResourceGroup
 	}
-	subsID := c.common.subscriptionID
-	if options.SubscrtionID != "" {
-		subsID = options.SubscrtionID
+	if options.SubscriptionID != "" && !strings.EqualFold(options.SubscriptionID, c.common.subscriptionID) && options.ResourceGroup == "" {
+		return "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", options.SubscriptionID)
 	}
-	if options.SubscrtionID != "" && !strings.EqualFold(options.SubscrtionID, c.common.subscriptionID) && options.ResourceGroup == "" {
-		return "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", subsID)
+	subsID := c.common.subscriptionID
+	if options.SubscriptionID != "" {
+		subsID = options.SubscriptionID
 	}
 
 	creationData, err := getValidCreationData(subsID, rg, options.SourceResourceID, options.SourceType)

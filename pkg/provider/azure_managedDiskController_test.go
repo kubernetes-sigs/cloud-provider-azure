@@ -236,7 +236,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			MaxShares:           maxShare,
 			NetworkAccessPolicy: test.networkAccessPolicy,
 			DiskAccessID:        test.diskAccessID,
-			SubscrtionID:        test.subscriptionID,
+			SubscriptionID:      test.subscriptionID,
 		}
 
 		mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
