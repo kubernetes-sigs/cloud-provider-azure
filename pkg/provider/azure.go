@@ -220,6 +220,8 @@ type Config struct {
 	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
 	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
+	// The user agent for Azure customer usage attribution
+	UserAgent string `json:"userAgent,omitempty" yaml:"userAgent,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.
@@ -671,6 +673,7 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 		Authorizer:              autorest.NewBearerAuthorizer(servicePrincipalToken),
 		Backoff:                 &retry.Backoff{Steps: 1},
 		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
+		UserAgent:               az.Config.UserAgent,
 	}
 
 	if az.Config.CloudProviderBackoff {
