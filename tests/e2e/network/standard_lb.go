@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest/to"
@@ -80,14 +81,13 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should add all nodes in different agent pools to backends [MultipleAgentPools]", func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+			Skip("only test standard load balancer")
+		}
+
 		rgName := tc.GetResourceGroup()
 		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
-
-		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
-			utils.Logf("sku: %s", lb.Sku.Name)
-			Skip("only support standard load balancer")
-		}
 
 		nodeList, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
@@ -130,14 +130,13 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+			Skip("only test standard load balancer")
+		}
+
 		rgName := tc.GetResourceGroup()
 		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
-
-		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
-			utils.Logf("sku: %s", lb.Sku.Name)
-			Skip("only support standard load balancer")
-		}
 
 		Expect(lb.OutboundRules).NotTo(BeNil())
 		var fipConfigIDs []string
