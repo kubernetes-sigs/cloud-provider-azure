@@ -4,7 +4,15 @@ This helm chart enables installation and maintenance of Azure cloud provider com
 
 # Defaults
 
-By default the chart will choose the correct, latest released version of `cloud-controller-manager` and `cloud-node-manager` that corresponds with the cloud-provider-azure-supported version of Kubernetes that you are running. If you are running a version of Kubernetes prior to 1.21, then you must provide a known-working image URI that references a build of the cloud-provider-azure runtimes that works with your version of Kubernetes. For example:
+## Installation
+
+By default the chart will choose the correct, latest released version of `cloud-controller-manager` and `cloud-node-manager` that corresponds with the cloud-provider-azure-supported version of Kubernetes that you are running.
+
+```bash
+$ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set cloudControllerManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudControllerManager.imageName=azure-cloud-controller-manager --set cloudNodeManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudNodeManager.imageName=azure-cloud-node-manager
+```
+
+If you are running a version of Kubernetes prior to 1.21, then you must provide a known-working image URI that references a build of the cloud-provider-azure runtimes that works with your version of Kubernetes. For example:
 
 ```bash
 $ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set cloudControllerManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudControllerManager.imageName=azure-cloud-controller-manager --set cloudControllerManager.imageTag=v0.6.0 --set cloudNodeManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudNodeManager.imageName=azure-cloud-node-manager --set cloudNodeManager.imageTag=v0.6.0
@@ -23,6 +31,15 @@ Error: INSTALLATION FAILED: DaemonSet.apps "cloud-node-manager" is invalid: spec
 ```
 
 The matrix defining Azure cloud provider releases and their corresponding supported Kubernetes versions can always be found [here](../../README.md)
+
+## Uninstallation
+
+Use the following commands to get the `cloud-provider-azure` helm chart release name and uninstall it.
+
+```bash
+$ helm list
+$ helm delete <cloud-provider-azure-chart-release-name>
+```
 
 # Helm Repo
 
@@ -81,6 +98,7 @@ The following configuration is made available for advanced users. There are no d
 
 | configuration value | description |
 | --- | --- |
+| `cloudControllerManager.imageTag` | `"v1.23.8"` | container image tag for the Azure `cloud-controller-manager` runtime |
 | `cloudControllerManager.bindAddress` | The IP address on which to listen for the --secure-port port. The associated interface(s) must be reachable by the rest of the cluster, and by CLI/web clients. If blank or an unspecified address (0.0.0.0 or ::), all interfaces will be used.|
 | `cloudControllerManager.certDir` | The directory where the TLS certs are located. If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored. |
 | `cloudControllerManager.cloudConfigSecretName` | The name of the cloud config secret. |
@@ -107,6 +125,7 @@ The following configuration is made available for advanced users. There are no d
 
 | configuration value | description |
 | --- | --- |
+| `cloudNodeManager.imageTag` | `"v1.23.8"` | container image tag for the Azure `cloud-node-manager` runtime |
 | `cloudNodeManager.cloudConfig` | The path to the cloud config file to be used when using ARM (i.e., when `cloudNodeManager.useInstanceMetadata=false`) to fetch node information. |
 | `cloudNodeManager.kubeAPIBurst` | Burst to use while talking with kubernetes apiserver. |
 | `cloudNodeManager.kubeAPIContentType` | Content type of requests sent to apiserver. |
