@@ -333,6 +333,10 @@ test-boilerplate: ## Run boilerplate test.
 test-helm: ## Validate helm charts
 	hack/verify-helm-repo.sh
 
+.PHONY: update-helm
+update-helm: ## Update helm charts
+	hack/update-helm-repo.sh
+
 .PHONY: update-dependencies
 update-dependencies: ## Update dependencies and go modules.
 	hack/update-dependencies.sh

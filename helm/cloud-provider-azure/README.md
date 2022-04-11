@@ -144,7 +144,7 @@ Whenever changes have been made to the `cloud-provider-azure` helm chart, a new 
 From the git root:
 
 ```bash
-$ hack/update-helm-repo.sh
+$ make update-helm
 Successfully packaged chart and saved it to: helm/repo/cloud-provider-azure-1.23.8.tgz
 ```
 

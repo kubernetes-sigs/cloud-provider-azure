@@ -32,7 +32,7 @@ for chart in "cloud-provider-azure"; do
   rm -Rf ${REPO_ROOT}/chart_verify
   mkdir ${REPO_ROOT}/chart_verify
   tar -xf $LATEST_CHART -C chart_verify
-  diff -r ${REPO_ROOT}/chart_verify/cloud-provider-azure/ ${REPO_ROOT}/helm/cloud-provider-azure/ || exit 1
+  diff -r ${REPO_ROOT}/chart_verify/cloud-provider-azure/ ${REPO_ROOT}/helm/cloud-provider-azure/ --exclude README.md || exit 1
   rm -Rf ${REPO_ROOT}/chart_verify
 done
 
