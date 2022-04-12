@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -161,8 +161,8 @@ func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
 			Name:     to.StringPtr("testCluster-aservicea"),
 			Location: &az.Location,
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				PublicIPAllocationMethod: network.Static,
-				PublicIPAddressVersion:   network.IPv4,
+				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+				PublicIPAddressVersion:   network.IPVersionIPv4,
 				IPAddress:                to.StringPtr("1.2.3.4"),
 			},
 			Tags: map[string]*string{
@@ -974,8 +974,8 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 		Name:     to.StringPtr("testCluster-aservicesaomitted1"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.Static,
-			PublicIPAddressVersion:   network.IPv4,
+			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+			PublicIPAddressVersion:   network.IPVersionIPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  to.StringPtr("aservicesaomitted1"),
@@ -1024,8 +1024,8 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 		Name:     to.StringPtr("testCluster-aservicesanone"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.Static,
-			PublicIPAddressVersion:   network.IPv4,
+			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+			PublicIPAddressVersion:   network.IPVersionIPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  to.StringPtr("aservicesanone"),
@@ -1076,8 +1076,8 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 		Name:     to.StringPtr("testCluster-aservicesaclientip"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.Static,
-			PublicIPAddressVersion:   network.IPv4,
+			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+			PublicIPAddressVersion:   network.IPVersionIPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  to.StringPtr("aservicesaclientip"),
@@ -1532,6 +1532,7 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 func getInternalTestService(identifier string, requestedPorts ...int32) v1.Service {
 	return getTestServiceWithAnnotation(identifier, map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, requestedPorts...)
 }
+
 func getTestServiceWithAnnotation(identifier string, annotations map[string]string, requestedPorts ...int32) v1.Service {
 	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
 	for k, v := range annotations {

@@ -17,8 +17,11 @@ limitations under the License.
 package provider
 
 import (
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"context"
+
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,7 +33,7 @@ import (
 // VMSet defines functions all vmsets (including scale set and availability
 // set) should be implemented.
 // Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_vmsets.go -package=provider VMSet > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_mock_vmsets.go
+// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_vmsets.go -package=provider VMSet > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/provider/azure_mock_vmsets_test.go
 type VMSet interface {
 	// GetInstanceIDByNodeName gets the cloud provider ID by node name.
 	// It must return ("", cloudprovider.InstanceNotFound) if the instance does
@@ -68,9 +71,12 @@ type VMSet interface {
 	EnsureBackendPoolDeletedFromVMSets(vmSetNamesMap map[string]bool, backendPoolID string) error
 
 	// AttachDisk attaches a disk to vm
-	AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) error
+	AttachDisk(nodeName types.NodeName, diskMap map[string]*AttachDiskOptions) (*azure.Future, error)
 	// DetachDisk detaches a disk from vm
-	DetachDisk(nodeName types.NodeName, diskMap map[string]string) error
+	DetachDisk(nodeName types.NodeName, diskMap map[string]string) (*azure.Future, error)
+	// WaitForUpdateResult waits for the response of the update request
+	WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) error
+
 	// GetDataDisks gets a list of data disks attached to the node.
 	GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error)
 

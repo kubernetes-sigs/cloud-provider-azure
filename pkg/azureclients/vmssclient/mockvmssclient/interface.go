@@ -17,14 +17,14 @@ limitations under the License.
 package mockvmssclient
 
 import (
-	"context"
-	"net/http"
-	"reflect"
+	context "context"
+	http "net/http"
+	reflect "reflect"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/golang/mock/gomock"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	azure "github.com/Azure/go-autorest/autorest/azure"
+	gomock "github.com/golang/mock/gomock"
+	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface

@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -37,7 +37,6 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
@@ -149,11 +148,6 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	diskEncryptionSetID := ""
 	writeAcceleratorEnabled := false
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
-	if err != nil {
-		return -1, err
-	}
-
 	if isManagedDisk {
 		diskName := path.Base(diskURI)
 		resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
@@ -170,18 +164,22 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 		}
 
 		if disk.ManagedBy != nil && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
+			vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+			if err != nil {
+				return -1, err
+			}
 			attachedNode, err := vmset.GetNodeNameByProviderID(*disk.ManagedBy)
 			if err != nil {
 				return -1, err
 			}
 			if strings.EqualFold(string(nodeName), string(attachedNode)) {
-				err := fmt.Errorf("volume %q is actually attached to current node %q, invalidate vm cache and return error", diskURI, nodeName)
-				klog.Warningf("%v", err)
+				klog.Warningf("volume %q is actually attached to current node %q, invalidate vm cache and return error", diskURI, nodeName)
 				// update VM(invalidate vm cache)
 				if errUpdate := c.UpdateVM(nodeName); errUpdate != nil {
 					return -1, errUpdate
 				}
-				return -1, err
+				lun, _, err := c.GetDiskLun(diskName, diskURI, nodeName)
+				return lun, err
 			}
 
 			attachErr := fmt.Sprintf(
@@ -232,7 +230,13 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	}
 
 	c.lockMap.LockEntry(node)
-	defer c.lockMap.UnlockEntry(node)
+	unlock := false
+	defer func() {
+		if !unlock {
+			c.lockMap.UnlockEntry(node)
+		}
+	}()
+
 	diskMap, err := c.cleanAttachDiskRequests(node)
 	if err != nil {
 		return -1, err
@@ -247,9 +251,31 @@ func (c *controllerCommon) AttachDisk(isManagedDisk bool, diskName, diskURI stri
 	if len(diskMap) == 0 {
 		return lun, nil
 	}
+
+	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return -1, err
+	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
-	return lun, vmset.AttachDisk(nodeName, diskMap)
+	future, err := vmset.AttachDisk(nodeName, diskMap)
+	if err != nil {
+		return -1, err
+	}
+
+	// unlock and wait for attach disk complete
+	unlock = true
+	c.lockMap.UnlockEntry(node)
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+	if err != nil {
+		return -1, err
+	}
+
+	return lun, vmset.WaitForUpdateResult(ctx, future, resourceGroup, "attach_disk")
 }
 
 func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {
@@ -297,7 +323,9 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 
 // DetachDisk detaches a disk from VM
 func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.NodeName) error {
-	_, err := c.cloud.InstanceID(context.TODO(), nodeName)
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+	_, err := c.cloud.InstanceID(ctx, nodeName)
 	if err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
@@ -309,11 +337,6 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 		return fmt.Errorf("failed to get azure instance id for node %q: %w", nodeName, err)
 	}
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
-	if err != nil {
-		return err
-	}
-
 	node := strings.ToLower(string(nodeName))
 	disk := strings.ToLower(diskURI)
 	if err := c.insertDetachDiskRequest(diskName, disk, node); err != nil {
@@ -321,7 +344,12 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 	}
 
 	c.lockMap.LockEntry(node)
-	defer c.lockMap.UnlockEntry(node)
+	unlock := false
+	defer func() {
+		if !unlock {
+			c.lockMap.UnlockEntry(node)
+		}
+	}()
 	diskMap, err := c.cleanDetachDiskRequests(node)
 	if err != nil {
 		return err
@@ -329,19 +357,31 @@ func (c *controllerCommon) DetachDisk(diskName, diskURI string, nodeName types.N
 
 	klog.V(2).Infof("Trying to detach volume %q from node %q, diskMap: %s", diskURI, nodeName, diskMap)
 	if len(diskMap) > 0 {
+		vmset, errVMSet := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+		if errVMSet != nil {
+			return errVMSet
+		}
 		c.diskStateMap.Store(disk, "detaching")
 		defer c.diskStateMap.Delete(disk)
-		if err = vmset.DetachDisk(nodeName, diskMap); err != nil {
+		future, err := vmset.DetachDisk(nodeName, diskMap)
+		if err != nil {
 			if isInstanceNotFoundError(err) {
 				// if host doesn't exist, no need to detach
 				klog.Warningf("azureDisk - got InstanceNotFoundError(%v), DetachDisk(%s) will assume disk is already detached",
 					err, diskURI)
 				return nil
 			}
-			if retry.IsErrorRetriable(err) && c.cloud.CloudProviderBackoff {
-				klog.Warningf("azureDisk - update backing off: detach disk(%s, %s), err: %w", diskName, diskURI, err)
-				err = vmset.DetachDisk(nodeName, diskMap)
-			}
+		}
+		resourceGroup, err := getResourceGroupFromDiskURI(diskURI)
+		if err != nil {
+			return err
+		}
+		// unlock and wait for attach disk complete
+		unlock = true
+		c.lockMap.UnlockEntry(node)
+		if err := vmset.WaitForUpdateResult(ctx, future, resourceGroup, "detach_disk"); err != nil {
+			klog.Errorf("azureDisk - detach disk(%s, %s) failed with error: %v", diskName, diskURI, err)
+			return err
 		}
 	}
 

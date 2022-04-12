@@ -26,12 +26,17 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
+
+var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
+	"edgezone": network.ExtendedLocationTypesEdgeZone,
+}
 
 // lockMap used to lock on entries
 type lockMap struct {
@@ -221,4 +226,11 @@ func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
 	}
 
 	return result, nil
+}
+func getExtendedLocationTypeFromString(extendedLocationType string) network.ExtendedLocationTypes {
+	extendedLocationType = strings.ToLower(extendedLocationType)
+	if val, ok := strToExtendedLocationType[extendedLocationType]; ok {
+		return val
+	}
+	return network.ExtendedLocationTypesEdgeZone
 }

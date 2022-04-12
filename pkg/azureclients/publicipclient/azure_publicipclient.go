@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -63,7 +63,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -495,4 +495,69 @@ func (page PublicIPAddressListResultPage) Values() []network.PublicIPAddress {
 		return nil
 	}
 	return *page.pialr.Value
+}
+
+// ListAll gets all of PublicIPAddress in the subscription.
+func (c *Client) ListAll(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		return nil, retry.GetRateLimitError(false, "PublicIPListAll")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		rerr := retry.GetThrottlingError("PublicIPListAll", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listAllPublicIPAddress(ctx)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// listAllPublicIPAddress gets all of PublicIPAddress in the subscription.
+func (c *Client) listAllPublicIPAddress(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
+	resourceID := fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Network/publicIPAddresses",
+		autorest.Encode("path", c.subscriptionID))
+	result := make([]network.PublicIPAddress, 0)
+	page := &PublicIPAddressListResultPage{}
+	page.fn = c.listNextResults
+
+	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	defer c.armClient.CloseResponse(ctx, resp)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.listall.request", resourceID, rerr.Error())
+		return result, rerr
+	}
+
+	var err error
+	page.pialr, err = c.listResponder(resp)
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.listall.respond", resourceID, err)
+		return result, retry.GetError(resp, err)
+	}
+
+	for {
+		result = append(result, page.Values()...)
+
+		// Abort the loop when there's no nextLink in the response.
+		if to.String(page.Response().NextLink) == "" {
+			break
+		}
+
+		if err = page.NextWithContext(ctx); err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.listall.next", resourceID, err)
+			return result, retry.GetError(page.Response().Response.Response, err)
+		}
+	}
+
+	return result, nil
 }

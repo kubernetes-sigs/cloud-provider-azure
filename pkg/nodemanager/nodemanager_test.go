@@ -184,6 +184,7 @@ func TestNodeInitialized(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
 
+	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
 		factory.Core().V1().Nodes(),
@@ -191,6 +192,7 @@ func TestNodeInitialized(t *testing.T) {
 		mockNP,
 		time.Second,
 		false)
+	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 
@@ -203,7 +205,6 @@ func TestNodeInitialized(t *testing.T) {
 func TestUpdateCloudNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -488,6 +489,7 @@ func TestAddCloudNode(t *testing.T) {
 
 	factory := informers.NewSharedInformerFactory(fnh, 0)
 	nodeInformer := factory.Core().V1().Nodes()
+	eventBroadcaster := record.NewBroadcaster()
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -498,6 +500,8 @@ func TestAddCloudNode(t *testing.T) {
 		false)
 	factory.Start(ctx.Done())
 	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
+	eventBroadcaster.StartLogging(klog.Infof)
+	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
 
 	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")

@@ -19,14 +19,14 @@ package publicipclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
 	// APIVersion is the API version for network.
-	APIVersion = "2020-08-01"
+	APIVersion = "2021-02-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2018-11-01"
 
@@ -51,6 +51,9 @@ type Interface interface {
 
 	// List gets a list of PublicIPAddress in the resource group.
 	List(ctx context.Context, resourceGroupName string) (result []network.PublicIPAddress, rerr *retry.Error)
+
+	// ListAll gets all of PublicIPAddress in the subscription.
+	ListAll(ctx context.Context) (result []network.PublicIPAddress, rerr *retry.Error)
 
 	// CreateOrUpdate creates or updates a PublicIPAddress.
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error

@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -149,6 +149,10 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 		if options.LogicalSectorSize != 0 {
 			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS disk type")
 		}
+	}
+
+	if diskSku == compute.DiskStorageAccountTypesPremiumLRS || diskSku == compute.DiskStorageAccountTypesPremiumZRS {
+		diskProperties.BurstingEnabled = to.BoolPtr(true)
 	}
 
 	if options.DiskEncryptionSetID != "" {
