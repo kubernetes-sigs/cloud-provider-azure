@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
@@ -392,6 +393,11 @@ func (az *Cloud) getDefaultFrontendIPConfigName(service *v1.Service) string {
 		// Azure lb front end configuration name must not exceed 80 characters
 		if len(ipcName) > consts.FrontendIPConfigNameMaxLength {
 			ipcName = ipcName[:consts.FrontendIPConfigNameMaxLength]
+			// Cutting the string may result in char like "-" as the string end.
+			// If the last char is not a letter or '_', replace it with "_".
+			if !unicode.IsLetter(rune(ipcName[len(ipcName)-1:][0])) && ipcName[len(ipcName)-1:] != "_" {
+				ipcName = ipcName[:len(ipcName)-1] + "_"
+			}
 		}
 		return ipcName
 	}

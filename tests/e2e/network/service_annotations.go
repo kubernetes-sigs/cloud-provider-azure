@@ -169,7 +169,8 @@ var _ = Describe("Service with annotation", func() {
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal-subnet'", func() {
 		By("creating environment")
-		subnetName := "lb-subnet"
+		// This subnetName verifies a bug fix in an issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1443
+		subnetName := "a--------------------------------------------------z"
 
 		vNet, err := tc.GetClusterVirtualNetwork()
 		Expect(err).NotTo(HaveOccurred())
