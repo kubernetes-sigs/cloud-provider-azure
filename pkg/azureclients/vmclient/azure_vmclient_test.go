@@ -530,16 +530,52 @@ func TestWaitForUpdateResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	preemptErr := fmt.Errorf("operation execution has been preempted by a more recent operation")
 	response := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMWaitForUpdateResult").Return(response, nil).Times(1)
 
-	vmClient := getTestVMClient(armClient)
-	err := vmClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
-	assert.Nil(t, err)
+	tests := []struct {
+		name           string
+		response       *http.Response
+		responseErr    error
+		expectedResult *retry.Error
+	}{
+		{
+			name:           "Success",
+			response:       response,
+			responseErr:    nil,
+			expectedResult: nil,
+		},
+		{
+			name:           "Success with nil response",
+			response:       nil,
+			responseErr:    nil,
+			expectedResult: nil,
+		},
+		{
+			name:           "Failed",
+			response:       response,
+			responseErr:    preemptErr,
+			expectedResult: retry.GetError(response, preemptErr),
+		},
+		{
+			name:           "Failed with nil response",
+			response:       nil,
+			responseErr:    preemptErr,
+			expectedResult: retry.GetError(nil, preemptErr),
+		},
+	}
+
+	for _, test := range tests {
+		armClient := mockarmclient.NewMockInterface(ctrl)
+		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMWaitForUpdateResult").Return(test.response, test.responseErr).Times(1)
+
+		vmClient := getTestVMClient(armClient)
+		err := vmClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
+		assert.Equal(t, err, test.expectedResult)
+	}
 }
 
 func TestUpdateWithUpdateResponderError(t *testing.T) {
