@@ -25,8 +25,11 @@ import (
 )
 
 const (
+	ARGAPIVersion = "2021-05-01"
+
 	// APIVersion is the API version for network.
 	APIVersion = "2021-02-01"
+
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2018-11-01"
 

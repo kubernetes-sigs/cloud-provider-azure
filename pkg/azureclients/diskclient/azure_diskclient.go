@@ -63,9 +63,12 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
+	if config.EnableARG {
+		apiVersion = ARGAPIVersion
+	}
 
 	klog.V(2).Infof("Azure DisksClient using API version: %s", apiVersion)
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, config.EnableARG)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	ARGAPIVersion = "2022-04-01"
 	// APIVersion is the API version for containerservice.
 	APIVersion = "2020-04-01"
 )

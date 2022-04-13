@@ -10,5 +10,6 @@
     "securityGroupName": "fakeName",
     "vnetName": "fakeName",
     "routeTableName": "fakeName",
-    "primaryAvailabilitySetName": "fakeName"
+    "primaryAvailabilitySetName": "fakeName",
+    "enableARG": true
 }

@@ -63,7 +63,10 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	if config.EnableARG {
+		apiVersion = ARGAPIVersion
+	}
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, config.EnableARG)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -192,13 +195,7 @@ func (c *Client) getVMSSPublicIPAddress(ctx context.Context, resourceGroupName s
 	)
 
 	result := network.PublicIPAddress{}
-	computeAPIVersion := ComputeAPIVersion
-	if strings.EqualFold(c.cloudName, AzureStackCloudName) && !c.disableAzureStackCloud {
-		computeAPIVersion = AzureStackComputeAPIVersion
-	}
-	queryParameters := map[string]interface{}{
-		"api-version": computeAPIVersion,
-	}
+	queryParameters := map[string]interface{}{}
 	if len(expand) > 0 {
 		queryParameters["$expand"] = autorest.Encode("query", expand)
 	}

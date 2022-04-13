@@ -38,6 +38,7 @@ type ClientConfig struct {
 	Backoff                 *retry.Backoff
 	UserAgent               string
 	DisableAzureStackCloud  bool
+	EnableARG               bool
 }
 
 // WithRateLimiter returns a new ClientConfig with rateLimitConfig set.

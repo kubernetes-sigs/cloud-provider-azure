@@ -56,7 +56,7 @@ type Client struct {
 func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
 	authorizer := config.Authorizer
-	armClient := armclient.New(authorizer, *config, baseURI, APIVersion)
+	armClient := armclient.New(authorizer, *config, baseURI, APIVersion, false) // ARG not supported
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

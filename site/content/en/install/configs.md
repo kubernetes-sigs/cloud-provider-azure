@@ -112,6 +112,7 @@ If more than one value is set, the order is `Managed Identity` > `Service Princi
 | enableMultipleStandardLoadBalancers                        | Enable multiple standard Load Balancers per cluster.                                                                                                                                                              | Optional. Supported since v1.20.0                                                                                                     |
 | loadBalancerBackendPoolConfigurationType                   | The type of the Load Balancer backend pool. Supported values are `nodeIPConfiguration` (default) and `nodeIP`                                                                                                     | Optional. Supported since v1.23.0                                                                                                     |
 | putVMSSVMBatchSize                                         | The number of requests the client sends concurrently in a batch when putting the VMSS VMs. Anything smaller than or equal to 0 means to update VMSS VMs one by one in sequence.                                   | Optional. Supported since v1.24.0.                                                                                                    |
+| enableARG | enable ARG or not | Optional. Default is false (working in progress) |
 
 ### primaryAvailabilitySetName
 

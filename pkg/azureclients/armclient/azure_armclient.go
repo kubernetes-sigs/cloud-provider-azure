@@ -76,10 +76,12 @@ type Client struct {
 	baseURI          string
 	apiVersion       string
 	regionalEndpoint string
+
+	enableARG bool
 }
 
 // New creates a ARM client
-func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig, baseURI, apiVersion string) *Client {
+func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig, baseURI, apiVersion string, enableARG bool) *Client {
 	restClient := autorest.NewClientWithUserAgent(clientConfig.UserAgent)
 	restClient.Authorizer = authorizer
 	restClient.Sender = getSender()
@@ -124,6 +126,7 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		backoff:          backoff,
 		apiVersion:       apiVersion,
 		regionalEndpoint: fmt.Sprintf("%s.%s", clientConfig.Location, url.Host),
+		enableARG:        enableARG,
 	}
 }
 
@@ -393,6 +396,12 @@ func (c *Client) GetResource(ctx context.Context, resourceID, expand string) (*h
 		}
 		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
 	}
+	if c.enableARG {
+		queryParameters := map[string]interface{}{
+			"useResourceGraph": autorest.Encode("query", true),
+		}
+		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
+	}
 	request, err := c.PrepareGetRequest(ctx, decorators...)
 	if err != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "get.prepare", resourceID, err)
@@ -406,6 +415,12 @@ func (c *Client) GetResource(ctx context.Context, resourceID, expand string) (*h
 func (c *Client) GetResourceWithDecorators(ctx context.Context, resourceID string, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	getDecorators := []autorest.PrepareDecorator{
 		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+	}
+	if c.enableARG {
+		queryParameters := map[string]interface{}{
+			"useResourceGraph": autorest.Encode("query", true),
+		}
+		getDecorators = append(getDecorators, autorest.WithQueryParameters(queryParameters))
 	}
 	getDecorators = append(getDecorators, decorators...)
 	request, err := c.PrepareGetRequest(ctx, getDecorators...)

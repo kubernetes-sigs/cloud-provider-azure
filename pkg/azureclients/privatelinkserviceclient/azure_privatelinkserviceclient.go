@@ -66,7 +66,10 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion)
+	if config.EnableARG {
+		apiVersion = ARGAPIVersion
+	}
+	armClient := armclient.New(config.Authorizer, *config, config.ResourceManagerEndpoint, apiVersion, config.EnableARG)
 
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {

@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	ARGAPIVersion = "2021-12-01"
 	// APIVersion is the API version for compute.
 	APIVersion = "2021-04-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack

@@ -63,7 +63,10 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
+	if config.EnableARG {
+		apiVersion = ARGAPIVersion
+	}
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion, config.EnableARG)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -128,7 +131,7 @@ func (c *Client) getNetworkInterface(ctx context.Context, resourceGroupName stri
 	)
 	result := network.Interface{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResource(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "nic.get.request", resourceID, rerr.Error())
@@ -190,13 +193,7 @@ func (c *Client) getVMSSNetworkInterface(ctx context.Context, resourceGroupName 
 	)
 
 	result := network.Interface{}
-	computeAPIVersion := ComputeAPIVersion
-	if strings.EqualFold(c.cloudName, AzureStackCloudName) && !c.disableAzureStackCloud {
-		computeAPIVersion = AzureStackComputeAPIVersion
-	}
-	queryParameters := map[string]interface{}{
-		"api-version": computeAPIVersion,
-	}
+	queryParameters := map[string]interface{}{}
 	if len(expand) > 0 {
 		queryParameters["$expand"] = autorest.Encode("query", expand)
 	}

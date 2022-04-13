@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	ARGAPIVersion = "2021-07-01"
+
 	// APIVersion is the API version for VMSS.
 	APIVersion = "2020-12-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack

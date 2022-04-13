@@ -241,7 +241,8 @@ type Config struct {
 	LoadBalancerBackendPoolConfigurationType string `json:"loadBalancerBackendPoolConfigurationType,omitempty" yaml:"loadBalancerBackendPoolConfigurationType,omitempty"`
 	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
 	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
-	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
+	PutVMSSVMBatchSize int  `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
+	EnableARG          bool `json:"enableARG,omitempty" yaml:"enableARG,omitempty"`
 }
 
 type InitSecretConfig struct {
@@ -841,6 +842,7 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 		Backoff:                 &retry.Backoff{Steps: 1},
 		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
 		UserAgent:               az.Config.UserAgent,
+		EnableARG:               az.Config.EnableARG,
 	}
 
 	if az.Config.CloudProviderBackoff {
