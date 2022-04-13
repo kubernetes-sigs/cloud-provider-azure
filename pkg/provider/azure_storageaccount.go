@@ -152,6 +152,12 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		subsID = accountOptions.SubscriptionID
 	}
 
+	if len(accountOptions.Tags) == 0 {
+		accountOptions.Tags = make(map[string]string)
+	}
+	// set built-in tags
+	accountOptions.Tags[consts.CreatedByTag] = "azure"
+
 	var createNewAccount bool
 	if len(accountName) == 0 {
 		createNewAccount = true
@@ -234,10 +240,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		if accountKind != "" {
 			kind = storage.Kind(accountKind)
 		}
-		if len(accountOptions.Tags) == 0 {
-			accountOptions.Tags = make(map[string]string)
-		}
-		accountOptions.Tags[consts.CreatedByTag] = "azure"
 		tags := convertMapToMapPointer(accountOptions.Tags)
 
 		klog.V(2).Infof("azure - no matching account found, begin to create a new account %s in resource group %s, location: %s, accountType: %s, accountKind: %s, tags: %+v",
