@@ -353,7 +353,7 @@ const (
 // metadata service
 const (
 	// ImdsInstanceAPIVersion is the imds instance api version
-	ImdsInstanceAPIVersion = "2019-03-11"
+	ImdsInstanceAPIVersion = "2021-10-01"
 	// ImdsLoadBalancerAPIVersion is the imds load balancer api version
 	ImdsLoadBalancerAPIVersion = "2020-10-01"
 	// ImdsServer is the imds server endpoint
