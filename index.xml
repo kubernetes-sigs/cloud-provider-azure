@@ -29,6 +29,38 @@
 &lt;li>golang.org/x/term: 6a3ed07 → 03fcf44&lt;/li>
 &lt;/ul>
 &lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.12</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v1.1.12/</link><pubDate>Wed, 13 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v1.1.12/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>The cloud provider will create TCP probe rule if the probe protocol is not supported. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1395">#1395&lt;/a>, &lt;a href="https://github.com/MartinForReal">@MartinForReal&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Chore: add mixed protocol service e2e test (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1437">#1437&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Chore: detect data race in unit tests (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1435">#1435&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Chore: enable mixed protocol service feature gates in e2e templates (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1439">#1439&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fix a bug: If users specify a subnet name like &amp;ldquo;a&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;z&amp;rdquo;, it leads to &amp;ldquo;InvalidResourceName&amp;rdquo; error. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1467">#1467&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fix: disk attach/detach failure when operation is preempted (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1459">#1459&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fix: panic due to nil pointer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1441">#1441&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fix: report an error when route table name is not configured (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1428">#1428&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v62.3.0...v63.2.0">v62.3.0+incompatible → v63.2.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/mocks: &lt;a href="https://github.com/Azure/go-autorest/autorest/mocks/compare/v0.4.1...v0.4.2">v0.4.1 → v0.4.2&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.24...v0.11.25">v0.11.24 → v0.11.25&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/94a9f03...1a94d86">94a9f03 → 1a94d86&lt;/a>&lt;/li>
+&lt;li>github.com/ianlancetaylor/demangle: &lt;a href="https://github.com/ianlancetaylor/demangle/compare/28f6c0f...5e5cf60">28f6c0f → 5e5cf60&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/ginkgo/v2: &lt;a href="https://github.com/onsi/ginkgo/v2/compare/v2.0.0...v2.1.3">v2.0.0 → v2.1.3&lt;/a>&lt;/li>
+&lt;li>github.com/onsi/gomega: &lt;a href="https://github.com/onsi/gomega/compare/v1.18.1...v1.19.0">v1.18.1 → v1.19.0&lt;/a>&lt;/li>
+&lt;li>golang.org/x/net: 491a49a → 27dd868&lt;/li>
+&lt;li>golang.org/x/term: 6a3ed07 → 03fcf44&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.23.9</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v1.23.9/</link><pubDate>Wed, 13 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v1.23.9/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
@@ -2070,63 +2102,4 @@ ree/02e2102)&lt;/li>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
 &lt;li>Fix: not send availability zones as part of create for edge zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/709">#709&lt;/a>, &lt;a href="https://github.com/MirzaSikander">@MirzaSikander&lt;/a>)&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.7.5</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/06/21/v0.7.5/</link><pubDate>Mon, 21 Jun 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/06/21/v0.7.5/</guid><description>
-&lt;h1 id="major-changes-since-v074">Major changes since v0.7.4&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="feature">Feature&lt;/h3>
-&lt;ul>
-&lt;li>Chore: upgrade TLS1.0 to TLS1.2 in account creation (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/675">#675&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Feat: Enable creation of storage accounts that support large file shares (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/606">#606&lt;/a>, &lt;a href="https://github.com/nearora-msft">@nearora-msft&lt;/a>)&lt;/li>
-&lt;li>Feat: add support for additional public IPs via service annotation &amp;ldquo;service.beta.kubernetes.io/azure-additional-public-ips&amp;rdquo; (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/691">#691&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Feat: enable creation of private endpoint for storage account (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/652">#652&lt;/a>, &lt;a href="https://github.com/nearora-msft">@nearora-msft&lt;/a>)&lt;/li>
-&lt;li>Feat: support reloading cloud controller manager from secret dynamically (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/613">#613&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="documentation">Documentation&lt;/h3>
-&lt;ul>
-&lt;li>Chore: update docs for service tags NSG (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/647">#647&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Docs: add &amp;lsquo;securityGroupResourceGroup&amp;rsquo; cloud-config value (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/668">#668&lt;/a>, &lt;a href="https://github.com/aslafy-z">@aslafy-z&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="failing-test">Failing Test&lt;/h3>
-&lt;ul>
-&lt;li>Fix: serviceOwnsFrontendIP shouldn&amp;rsquo;t report error when the public IP doesn&amp;rsquo;t match (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/649">#649&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Do not set cached Sku when updating VMSS and VMSS instances (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/630">#630&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: avoid nil-pointer panic when checking the frontend IP configuration (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/615">#615&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: cleanup outdated routes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/661">#661&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: detach disk panic on Azure Stack (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/688">#688&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: make tags case-insensitive for both keys and values (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/669">#669&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: not tagging static public IP (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/616">#616&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: remove GetDisk operation in AttachDisk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/678">#678&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: return empty VMAS name if using standalone VM (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/679">#679&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: add e2e test for byo public IP (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/627">#627&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: add more buckets for operation metrics (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/656">#656&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Chore: completely decouple k/k (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/601">#601&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: only logs rate limiting configurations when rate limit is enabled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/608">#608&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Chore: only put pip if it is necessary (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/686">#686&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: only reconciling routes in cloud controller manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/671">#671&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Chore: set default config secret name and namespace (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/662">#662&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: wait for the success of the initial run of syncRegionZonesMap (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/646">#646&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Update Azure Go SDK to v55.0.0 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/643">#643&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Update cloud-provider vendor to v1.21 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/603">#603&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Upgrade to 2020-02-01/storage (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/628">#628&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>&lt;code>GetTestCloud&lt;/code> properly initializes the disk controller fields enabling them to be used in unit tests and mocked. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/689">#689&lt;/a>, &lt;a href="https://github.com/edreed">@edreed&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
-&lt;ul>
-&lt;li>Add CreateOrUpdateBackendPools() interface for LoadBalancer client (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/620">#620&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Feat: add NFSv3 account creation support (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/633">#633&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: leave the probe path empty for TCP probes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/680">#680&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: no sleep when GetDisk is throttled (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/629">#629&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h2 id="dependencies">Dependencies&lt;/h2>
-&lt;h3 id="added">Added&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="changed">Changed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="removed">Removed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item></channel></rss>
+&lt;/ul></description></item></channel></rss>
