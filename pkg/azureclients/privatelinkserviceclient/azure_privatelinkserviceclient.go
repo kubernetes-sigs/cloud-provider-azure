@@ -41,7 +41,8 @@ import (
 var _ Interface = &Client{}
 
 const (
-	PLSResourceType = "Microsoft.Network/privatelinkservices"
+	PLSResourceType    = "Microsoft.Network/privatelinkservices"
+	PEConnResourceType = "privateEndpointConnections"
 )
 
 // Client implements privatelinkservice Interface.
@@ -326,6 +327,50 @@ func (c *Client) deletePLS(ctx context.Context, resourceGroupName string, privat
 		resourceGroupName,
 		PLSResourceType,
 		privateLinkServiceName,
+	)
+
+	return c.armClient.DeleteResource(ctx, resourceID, "")
+}
+
+func (c *Client) DeletePEConnection(ctx context.Context, resourceGroupName string, privateLinkServiceName string, privateEndpointConnectionName string) *retry.Error {
+	mc := metrics.NewMetricContext("private_endpoint_connection", "delete", resourceGroupName, c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return retry.GetRateLimitError(true, "PEConnDelete")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("PEConnDelete", "client throttled", c.RetryAfterWriter)
+		return rerr
+	}
+
+	rerr := c.deletePEConn(ctx, resourceGroupName, privateLinkServiceName, privateEndpointConnectionName)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return rerr
+	}
+
+	return nil
+}
+
+// deletePLS deletes a private endpoint connection by name.
+func (c *Client) deletePEConn(ctx context.Context, resourceGroupName string, privateLinkServiceName string, privateEndpointConnectionName string) *retry.Error {
+	resourceID := armclient.GetChildResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		PLSResourceType,
+		privateLinkServiceName,
+		PEConnResourceType,
+		privateEndpointConnectionName,
 	)
 
 	return c.armClient.DeleteResource(ctx, resourceID, "")

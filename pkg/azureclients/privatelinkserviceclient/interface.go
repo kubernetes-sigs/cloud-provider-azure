@@ -48,4 +48,7 @@ type Interface interface {
 
 	// Delete deletes a private link service by name.
 	Delete(ctx context.Context, resourceGroupName string, privateLinkServiceName string) *retry.Error
+
+	// Delete deletes a private endpoint connection to the private link service by name
+	DeletePEConnection(ctx context.Context, resourceGroupName string, privateLinkServiceName string, privateEndpointConnectionName string) *retry.Error
 }
