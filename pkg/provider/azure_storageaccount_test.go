@@ -546,9 +546,17 @@ func TestIsTagsEqual(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			desc: "empty tags",
+			desc: "nil tags",
 			account: storage.Account{
 				Tags: nil,
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "empty tags",
+			account: storage.Account{
+				Tags: map[string]*string{},
 			},
 			accountOptions: &AccountOptions{},
 			expectedResult: true,
