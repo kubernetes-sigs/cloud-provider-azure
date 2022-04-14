@@ -39,13 +39,21 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/logging"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-// GetLoadBalancer returns whether the specified load balancer and its components exist, and
+// GetLoadBalancer returns whether the specified load balancer exists, and
 // if so, what its status is.
 func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+	serviceName := getServiceName(service)
+
+	logger := klog.FromContext(ctx).WithValues(
+		"cluster", clusterName,
+		"service", serviceName,
+	)
+
 	// Since public IP is not a part of the load balancer on Azure,
 	// there is a chance that we could orphan public IP resources while we delete the load blanacer (kubernetes/kubernetes#80571).
 	// We need to make sure the existence of the load balancer depends on the load balancer resource and public IP resource on Azure.
@@ -64,13 +72,13 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 
 	_, status, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false, []network.LoadBalancer{})
 	if err != nil {
-		return nil, existsPip, err
+		logger.Error(err, "failed to fetch load balancer", "public-ip-found", existsPip)
+		return nil, false, err
 	}
 
 	// Return exists = false only if the load balancer and the public IP are not found on Azure
 	if !existsLb && !existsPip {
-		serviceName := getServiceName(service)
-		klog.V(5).Infof("getloadbalancer (cluster:%s) (service:%s) - doesn't exist", clusterName, serviceName)
+		logger.V(5).Info("load balancer not found")
 		return nil, false, nil
 	}
 
@@ -88,15 +96,21 @@ func getPublicIPDomainNameLabel(service *v1.Service) (string, bool) {
 // reconcileService reconcile the LoadBalancer service. It returns LoadBalancerStatus on success.
 func (az *Cloud) reconcileService(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	serviceName := getServiceName(service)
+
+	logger := klog.FromContext(ctx).WithValues(
+		"cluster", clusterName,
+		"service", serviceName,
+	)
+
 	lb, err := az.reconcileLoadBalancer(clusterName, service, nodes, true /* wantLb */)
 	if err != nil {
-		klog.Errorf("reconcileLoadBalancer(%s) failed: %v", serviceName, err)
+		logger.Error(err, "failed to reconcile load balancer")
 		return nil, err
 	}
 
 	lbStatus, _, err := az.getServiceLoadBalancerStatus(service, lb, nil)
 	if err != nil {
-		klog.Errorf("getServiceLoadBalancerStatus(%s) failed: %v", serviceName, err)
+		logger.Error(err, "failed to get service load balancer status")
 		return nil, err
 	}
 
@@ -104,23 +118,23 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	if lbStatus != nil && len(lbStatus.Ingress) > 0 {
 		serviceIP = &lbStatus.Ingress[0].IP
 	}
-	klog.V(2).Infof("reconcileService: reconciling security group for service %q with IP %q, wantLb = true", serviceName, logSafe(serviceIP))
+	logger.V(2).Info("reconciling security group for service", "ip", logSafe(serviceIP), "want-lb", true)
 	if _, err := az.reconcileSecurityGroup(clusterName, service, serviceIP, true /* wantLb */); err != nil {
-		klog.Errorf("reconcileSecurityGroup(%s) failed: %#v", serviceName, err)
+		logger.Error(err, "failed to reconcile security group")
 		return nil, err
 	}
 
 	updateService := updateServiceLoadBalancerIP(service, to.String(serviceIP))
 	flippedService := flipServiceInternalAnnotation(updateService)
 	if _, err := az.reconcileLoadBalancer(clusterName, flippedService, nil, false /* wantLb */); err != nil {
-		klog.Errorf("reconcileLoadBalancer(%s) failed: %#v", serviceName, err)
+		logger.Error(err, "failed to reconcile load balancer")
 		return nil, err
 	}
 
 	// lb is not reused here because the ETAG may be changed in above operations, hence reconcilePublicIP() would get lb again from cache.
-	klog.V(2).Infof("reconcileService: reconciling pip")
+	logger.V(2).Info("reconciling public-IP")
 	if _, err := az.reconcilePublicIP(clusterName, updateService, to.String(lb.Name), true /* wantLb */); err != nil {
-		klog.Errorf("reconcilePublicIP(%s) failed: %#v", serviceName, err)
+		logger.Error(err, "failed to reconcile public-IP")
 		return nil, err
 	}
 
@@ -134,13 +148,14 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	var err error
 	serviceName := getServiceName(service)
+
 	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
-	klog.V(5).InfoS("EnsureLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
+	elapsed := logging.SpanForFunc("cluster", clusterName, "service", serviceName).Start()
 
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
-		klog.V(5).InfoS("EnsureLoadBalancer Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
+		elapsed.Finish(err)
 	}()
 
 	lbStatus, err := az.reconcileService(ctx, clusterName, service, nodes)
@@ -157,11 +172,12 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 	var err error
 	serviceName := getServiceName(service)
 	mc := metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
-	klog.V(5).InfoS("UpdateLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
+	elapsed := logging.SpanForFunc("service", serviceName, "cluster", clusterName, "service-spec", service).Start()
+
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
-		klog.V(5).InfoS("UpdateLoadBalancer Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
+		elapsed.Finish(err)
 	}()
 
 	shouldUpdateLB, err := az.shouldUpdateLoadBalancer(clusterName, service, nodes)
@@ -171,7 +187,7 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 
 	if !shouldUpdateLB {
 		isOperationSucceeded = true
-		klog.V(2).Infof("UpdateLoadBalancer: skipping service %s because it is either being deleted or does not exist anymore", service.Name)
+		klog.V(2).InfoS("skipping update load balancer anymore", "service", serviceName, "cluster", clusterName)
 		return nil
 	}
 
@@ -195,19 +211,22 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	mc := metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.SubscriptionID, serviceName)
-	klog.V(5).InfoS("EnsureLoadBalancerDeleted Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
+	elapsed := logging.SpanForFunc("cluster", clusterName, "service", serviceName, "service-spec", service).Start()
+
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
-		klog.V(5).InfoS("EnsureLoadBalancerDeleted Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
+		elapsed.Finish(err)
 	}()
+
+	log := klog.NewKlogr().WithValues("cluster", clusterName, "service", serviceName)
 
 	serviceIPToCleanup, err := az.findServiceIPAddress(ctx, clusterName, service, isInternal)
 	if err != nil && !retry.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
 
-	klog.V(2).Infof("EnsureLoadBalancerDeleted: reconciling security group for service %q with IP %q, wantLb = false", serviceName, serviceIPToCleanup)
+	log.V(2).Info("reconciling security group for service", "ip", serviceIPToCleanup, "want-lb", false)
 	_, err = az.reconcileSecurityGroup(clusterName, service, &serviceIPToCleanup, false /* wantLb */)
 	if err != nil {
 		return err
@@ -223,7 +242,6 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		return err
 	}
 
-	klog.V(2).Infof("Delete service (%s): FINISH", serviceName)
 	isOperationSucceeded = true
 
 	return nil
@@ -246,6 +264,13 @@ func (az *Cloud) getLoadBalancerResourceGroup() string {
 // according to the mode annotation on the service. This could be happened when the LB selection mode of an
 // existing service is changed to another VMSS/VMAS.
 func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clusterName string) bool {
+
+	logger := klog.Background().WithValues(
+		"cluster", clusterName,
+		"service", service.Name,
+		"load-balancer", currLBName,
+	)
+
 	hasMode, isAuto, vmSetName := az.getServiceLoadBalancerMode(service)
 
 	// if no mode is given or the mode is `__auto__`, the current LB should be kept
@@ -264,7 +289,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 	if strings.EqualFold(lbName, vmSetName) {
 		if lbName != clusterName &&
 			strings.EqualFold(az.VMSet.GetPrimaryVMSetName(), vmSetName) {
-			klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one", service.Name, currLBName, clusterName)
+			logger.V(2).Info("change the LB to another one")
 			return true
 		}
 		return false
@@ -284,7 +309,7 @@ func (az *Cloud) shouldChangeLoadBalancer(service *v1.Service, currLBName, clust
 
 	// if the VMSS/VMAS of the current LB is different from the mode, change the LB
 	// to another one
-	klog.V(2).Infof("shouldChangeLoadBalancer(%s, %s, %s): change the LB to another one", service.Name, currLBName, clusterName)
+	logger.V(2).Info("change the LB to another one")
 	return true
 }
 
@@ -321,18 +346,25 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(lb *network.LoadB
 		lb.Probes = &lbProbes
 	}
 
+	logger := klog.Background().WithValues(
+		"load-balancer", to.String(lb.Name),
+		"frontend-IP", to.String(fip.Name),
+		"cluster", clusterName,
+		"service", service.Name,
+	)
+
 	if len(fipConfigs) == 0 {
-		klog.V(2).Infof("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): deleting load balancer because there is no remaining frontend IP configurations", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name)
+		logger.V(2).Info("deleting load balancer because there is no remaining frontend IP configurations")
 		err := az.cleanOrphanedLoadBalancer(lb, existingLBs, service, clusterName)
 		if err != nil {
-			klog.Errorf("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): failed to cleanupOrphanedLoadBalancer: %v", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name, err)
+			logger.Error(err, "failed to cleanupOrphanedLoadBalancer")
 			return err
 		}
 	} else {
-		klog.V(2).Infof("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): updating the load balancer", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name)
+		logger.V(2).Info("updating the load balancer")
 		err := az.CreateOrUpdateLB(service, *lb)
 		if err != nil {
-			klog.Errorf("removeFrontendIPConfigurationFromLoadBalancer(%s, %s, %s, %s): failed to CreateOrUpdateLB: %v", to.String(lb.Name), to.String(fip.Name), clusterName, service.Name, err)
+			logger.Error(err, "failed to CreateOrUpdateLB")
 			return err
 		}
 		_ = az.lbCache.Delete(to.String(lb.Name))
