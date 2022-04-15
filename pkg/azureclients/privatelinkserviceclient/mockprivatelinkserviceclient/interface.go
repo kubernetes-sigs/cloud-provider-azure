@@ -81,6 +81,20 @@ func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, privateLinkS
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, privateLinkServiceName)
 }
 
+// DeletePEConnection mocks base method.
+func (m *MockInterface) DeletePEConnection(ctx context.Context, resourceGroupName, privateLinkServiceName, privateEndpointConnectionName string) *retry.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePEConnection", ctx, resourceGroupName, privateLinkServiceName, privateEndpointConnectionName)
+	ret0, _ := ret[0].(*retry.Error)
+	return ret0
+}
+
+// DeletePEConnection indicates an expected call of DeletePEConnection.
+func (mr *MockInterfaceMockRecorder) DeletePEConnection(ctx, resourceGroupName, privateLinkServiceName, privateEndpointConnectionName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePEConnection", reflect.TypeOf((*MockInterface)(nil).DeletePEConnection), ctx, resourceGroupName, privateLinkServiceName, privateEndpointConnectionName)
+}
+
 // Get mocks base method.
 func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateLinkServiceName, expand string) (network.PrivateLinkService, *retry.Error) {
 	m.ctrl.T.Helper()
