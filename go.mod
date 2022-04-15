@@ -23,7 +23,7 @@ require (
 	k8s.io/apimachinery v0.22.8
 	k8s.io/apiserver v0.22.8
 	k8s.io/client-go v0.22.8
-	k8s.io/cloud-provider v0.22.7
+	k8s.io/cloud-provider v0.22.8
 	k8s.io/component-base v0.22.8
 	k8s.io/controller-manager v0.22.8
 	k8s.io/klog/v2 v2.10.0
@@ -117,4 +117,16 @@ require (
 	k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.30 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+)
+
+replace (
+	k8s.io/api => k8s.io/api v0.22.8
+	k8s.io/apimachinery => k8s.io/apimachinery v0.22.8
+	k8s.io/apiserver => k8s.io/apiserver v0.22.8
+	k8s.io/client-go => k8s.io/client-go v0.22.8
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.22.8
+	k8s.io/component-base => k8s.io/component-base v0.22.8
+	k8s.io/component-helpers => k8s.io/component-helpers v0.22.8
+	k8s.io/controller-manager => k8s.io/controller-manager v0.22.8
+	k8s.io/kubelet => k8s.io/kubelet v0.22.8
 )
