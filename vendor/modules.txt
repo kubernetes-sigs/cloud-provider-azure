@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.99.0 => cloud.google.com/go v0.54.0
+# cloud.google.com/go v0.99.0
 ## explicit; go 1.11
 cloud.google.com/go/compute/metadata
 # github.com/Azure/azure-sdk-for-go v63.2.0+incompatible
@@ -1091,7 +1091,7 @@ k8s.io/klog
 # k8s.io/klog/v2 v2.9.0
 ## explicit; go 1.13
 k8s.io/klog/v2
-# k8s.io/kube-openapi v0.0.0-20211110013926-83f114cd0513 => k8s.io/kube-openapi v0.0.0-20211110013926-83f114cd0513
+# k8s.io/kube-openapi v0.0.0-20211110013926-83f114cd0513
 ## explicit; go 1.12
 k8s.io/kube-openapi/pkg/builder
 k8s.io/kube-openapi/pkg/common
@@ -1153,11 +1153,12 @@ k8s.io/kubernetes/test/utils/image
 # k8s.io/legacy-cloud-providers v0.0.0 => k8s.io/legacy-cloud-providers v0.20.15
 ## explicit; go 1.15
 k8s.io/legacy-cloud-providers/gce
-# k8s.io/utils v0.0.0-20211116205334-6203023598ed => k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+# k8s.io/utils v0.0.0-20211116205334-6203023598ed
 ## explicit; go 1.12
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
+k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/path
 k8s.io/utils/pointer
@@ -1173,10 +1174,9 @@ sigs.k8s.io/structured-merge-diff/v4/merge
 sigs.k8s.io/structured-merge-diff/v4/schema
 sigs.k8s.io/structured-merge-diff/v4/typed
 sigs.k8s.io/structured-merge-diff/v4/value
-# sigs.k8s.io/yaml v1.2.0 => sigs.k8s.io/yaml v1.2.0
+# sigs.k8s.io/yaml v1.2.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
-# cloud.google.com/go => cloud.google.com/go v0.54.0
 # google.golang.org/grpc => google.golang.org/grpc v1.27.0
 # k8s.io/api => k8s.io/api v0.20.15
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.15
@@ -1195,7 +1195,6 @@ sigs.k8s.io/yaml
 # k8s.io/klog => k8s.io/klog v1.0.0
 # k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.15
 # k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.15
-# k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20211110013926-83f114cd0513
 # k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.15
 # k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.15
 # k8s.io/kubectl => k8s.io/kubectl v0.20.15
@@ -1205,5 +1204,3 @@ sigs.k8s.io/yaml
 # k8s.io/mount-utils => k8s.io/mount-utils v0.20.15
 # k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.20.15
 # k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.15
-# k8s.io/utils => k8s.io/utils v0.0.0-20201110183641-67b214c5f920
-# sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
