@@ -36,7 +36,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -1753,11 +1752,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		mockPIPClient := mockpublicipclient.NewMockInterface(ctrl)
-		cloud.PublicIPAddressesClient = mockPIPClient
-		mockPIPClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(test.existingPIPs, nil).MaxTimes(1)
-
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service)
+		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
 		assert.Equal(t, test.expectedErr, err, test.desc)
 		assert.Equal(t, test.isOwned, isOwned, test.desc)
 		assert.Equal(t, test.isPrimary, isPrimary, test.desc)

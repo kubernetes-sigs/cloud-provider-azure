@@ -51,7 +51,7 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 	// there is a chance that we could orphan public IP resources while we delete the load blanacer (kubernetes/kubernetes#80571).
 	// We need to make sure the existence of the load balancer depends on the load balancer resource and public IP resource on Azure.
 	existsPip := func() bool {
-		pipName, _, err := az.determinePublicIPName(clusterName, service)
+		pipName, _, err := az.determinePublicIPName(clusterName, service, nil)
 		if err != nil {
 			return false
 		}
@@ -106,7 +106,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 		return nil, err
 	}
 
-	lbStatus, _, err := az.getServiceLoadBalancerStatus(service, lb)
+	lbStatus, _, err := az.getServiceLoadBalancerStatus(service, lb, nil)
 	if err != nil {
 		klog.Errorf("getServiceLoadBalancerStatus(%s) failed: %v", serviceName, err)
 		return nil, err
@@ -648,6 +648,9 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		}
 	}
 
+	// reuse pip list to reduce api call
+	var pips *[]network.PublicIPAddress
+
 	// check if the service already has a load balancer
 	for i := range existingLBs {
 		existingLB := existingLBs[i]
@@ -683,7 +686,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		if isInternalLoadBalancer(&existingLB) != isInternal {
 			continue
 		}
-		status, fipConfig, err := az.getServiceLoadBalancerStatus(service, &existingLB)
+		status, fipConfig, err := az.getServiceLoadBalancerStatus(service, &existingLB, pips)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -816,7 +819,7 @@ func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, exi
 	return selectedLB, existsLb, nil
 }
 
-func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.LoadBalancer) (status *v1.LoadBalancerStatus, fipConfig *network.FrontendIPConfiguration, err error) {
+func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.LoadBalancer, pips *[]network.PublicIPAddress) (status *v1.LoadBalancerStatus, fipConfig *network.FrontendIPConfiguration, err error) {
 	if lb == nil {
 		klog.V(10).Info("getServiceLoadBalancerStatus: lb is nil")
 		return nil, nil, nil
@@ -828,7 +831,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	for _, ipConfiguration := range *lb.FrontendIPConfigurations {
-		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(ipConfiguration, service)
+		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(ipConfiguration, service, pips)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get(%s): lb(%s) - failed to filter frontend IP configs with error: %w", serviceName, to.String(lb.Name), err)
 		}
@@ -882,7 +885,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 	return nil, nil, nil
 }
 
-func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service) (string, bool, error) {
+func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
 	var shouldPIPExisted bool
 	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
 		shouldPIPExisted = true
@@ -900,7 +903,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service) 
 
 	// For the services with loadBalancerIP set, an existing public IP is required, primary
 	// or secondary, or a public IP not found error would be reported.
-	pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
+	pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup, pips)
 	if err != nil {
 		return "", shouldPIPExisted, err
 	}
@@ -912,13 +915,15 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service) 
 	return "", shouldPIPExisted, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
 }
 
-func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
-	pips, err := az.ListPIP(service, pipResourceGroup)
-	if err != nil {
-		return nil, err
+func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalancerIP, pipResourceGroup string, pips *[]network.PublicIPAddress) (*network.PublicIPAddress, error) {
+	if pips == nil {
+		pipList, err := az.ListPIP(service, pipResourceGroup)
+		if err != nil {
+			return nil, err
+		}
+		pips = &pipList
 	}
-
-	for _, pip := range pips {
+	for _, pip := range *pips {
 		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
 			*pip.PublicIPAddressPropertiesFormat.IPAddress == loadBalancerIP {
 			return &pip, nil
@@ -1240,8 +1245,8 @@ func getDomainNameLabel(pip *network.PublicIPAddress) string {
 	return to.String(pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel)
 }
 
-func (az *Cloud) isFrontendIPChanged(clusterName string, config network.FrontendIPConfiguration, service *v1.Service, lbFrontendIPConfigName string) (bool, error) {
-	isServiceOwnsFrontendIP, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service)
+func (az *Cloud) isFrontendIPChanged(clusterName string, config network.FrontendIPConfiguration, service *v1.Service, lbFrontendIPConfigName string, pips *[]network.PublicIPAddress) (bool, error) {
+	isServiceOwnsFrontendIP, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service, pips)
 	if err != nil {
 		return false, err
 	}
@@ -1273,7 +1278,7 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 		}
 		return config.PrivateIPAllocationMethod != network.Static || !strings.EqualFold(loadBalancerIP, to.String(config.PrivateIPAddress)), nil
 	}
-	pipName, _, err := az.determinePublicIPName(clusterName, service)
+	pipName, _, err := az.determinePublicIPName(clusterName, service, pips)
 	if err != nil {
 		return false, err
 	}
@@ -1402,9 +1407,10 @@ func findMatchedOutboundRuleFIPConfig(fipConfigID *string, outboundRuleFIPConfig
 func (az *Cloud) findFrontendIPConfigOfService(
 	fipConfigs *[]network.FrontendIPConfiguration,
 	service *v1.Service,
+	pips *[]network.PublicIPAddress,
 ) (*network.FrontendIPConfiguration, bool, error) {
 	for _, config := range *fipConfigs {
-		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service)
+		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service, pips)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1657,11 +1663,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 		newConfigs = *lb.FrontendIPConfigurations
 	}
 
+	// Save pip list so it can be reused in loop
+	var pips *[]network.PublicIPAddress
 	var ownedFIPConfig *network.FrontendIPConfiguration
 	if !wantLb {
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
-			isServiceOwnsFrontendIP, _, err := az.serviceOwnsFrontendIP(config, service)
+			isServiceOwnsFrontendIP, _, err := az.serviceOwnsFrontendIP(config, service, pips)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1698,13 +1706,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 		)
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
-			isServiceOwnsFrontendIP, _, _ := az.serviceOwnsFrontendIP(config, service)
+			isServiceOwnsFrontendIP, _, _ := az.serviceOwnsFrontendIP(config, service, pips)
 			if !isServiceOwnsFrontendIP {
 				klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): the frontend IP configuration %s does not belong to the service", serviceName, to.String(config.Name))
 				continue
 			}
 			klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): checking owned frontend IP cofiguration %s", serviceName, to.String(config.Name))
-			isFipChanged, err = az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName)
+			isFipChanged, err = az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName, pips)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1717,7 +1725,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 			break
 		}
 
-		ownedFIPConfig, _, err = az.findFrontendIPConfigOfService(&newConfigs, service)
+		ownedFIPConfig, _, err = az.findFrontendIPConfigOfService(&newConfigs, service, pips)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1760,7 +1768,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 
 				fipConfigurationProperties = &configProperties
 			} else {
-				pipName, shouldPIPExisted, err := az.determinePublicIPName(clusterName, service)
+				pipName, shouldPIPExisted, err := az.determinePublicIPName(clusterName, service, pips)
 				if err != nil {
 					return nil, false, err
 				}
@@ -2829,8 +2837,15 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 		shouldPIPExisted bool
 	)
 
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+
+	pips, err := az.ListPIP(service, pipResourceGroup)
+	if err != nil {
+		return nil, err
+	}
+
 	if !isInternal && wantLb {
-		desiredPipName, shouldPIPExisted, err = az.determinePublicIPName(clusterName, service)
+		desiredPipName, shouldPIPExisted, err = az.determinePublicIPName(clusterName, service, &pips)
 		if err != nil {
 			return nil, err
 		}
@@ -2842,13 +2857,6 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 			return nil, err
 		}
 		lb = &loadBalancer
-	}
-
-	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-
-	pips, err := az.ListPIP(service, pipResourceGroup)
-	if err != nil {
-		return nil, err
 	}
 
 	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, serviceIPTagRequest, shouldPIPExisted)
