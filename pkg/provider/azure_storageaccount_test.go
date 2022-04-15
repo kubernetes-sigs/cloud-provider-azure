@@ -594,6 +594,21 @@ func TestIsTagsEqual(t *testing.T) {
 			expectedResult: true,
 		},
 		{
+			desc: "non-identitical tags while MatchTags is false",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				MatchTags: false,
+				Tags: map[string]string{
+					"key": "value",
+				},
+			},
+			expectedResult: true,
+		},
+		{
 			desc: "non-identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
@@ -601,6 +616,7 @@ func TestIsTagsEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
+				MatchTags: true,
 				Tags: map[string]string{
 					"key": "value",
 				},

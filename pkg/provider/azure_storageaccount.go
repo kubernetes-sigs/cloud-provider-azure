@@ -57,6 +57,7 @@ type AccountOptions struct {
 	VNetResourceGroup                       string
 	VNetName                                string
 	SubnetName                              string
+	MatchTags                               bool
 }
 
 type accountWithLocation struct {
@@ -510,6 +511,11 @@ func isTaggedWithSkip(account storage.Account) bool {
 }
 
 func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if !accountOptions.MatchTags {
+		// always return true when tags matching is false (by default)
+		return true
+	}
+
 	// nil and empty map should be regarded as equal
 	if len(account.Tags) == 0 && len(accountOptions.Tags) == 0 {
 		return true
