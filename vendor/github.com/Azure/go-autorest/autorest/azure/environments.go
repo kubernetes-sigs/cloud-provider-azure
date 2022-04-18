@@ -52,6 +52,7 @@ type ResourceIdentifier struct {
 	SQLDatabase         string `json:"sqlDatabase"`
 	CosmosDB            string `json:"cosmosDB"`
 	ManagedHSM          string `json:"managedHSM"`
+	MicrosoftGraph      string `json:"microsoftGraph"`
 }
 
 // Environment represents a set of endpoints for each of Azure's Clouds.
@@ -68,6 +69,7 @@ type Environment struct {
 	GraphEndpoint                string             `json:"graphEndpoint"`
 	ServiceBusEndpoint           string             `json:"serviceBusEndpoint"`
 	BatchManagementEndpoint      string             `json:"batchManagementEndpoint"`
+	MicrosoftGraphEndpoint       string             `json:"microsoftGraphEndpoint"`
 	StorageEndpointSuffix        string             `json:"storageEndpointSuffix"`
 	CosmosDBDNSSuffix            string             `json:"cosmosDBDNSSuffix"`
 	MariaDBDNSSuffix             string             `json:"mariaDBDNSSuffix"`
@@ -84,6 +86,7 @@ type Environment struct {
 	TokenAudience                string             `json:"tokenAudience"`
 	APIManagementHostNameSuffix  string             `json:"apiManagementHostNameSuffix"`
 	SynapseEndpointSuffix        string             `json:"synapseEndpointSuffix"`
+	DatalakeSuffix               string             `json:"datalakeSuffix"`
 	ResourceIdentifiers          ResourceIdentifier `json:"resourceIdentifiers"`
 }
 
@@ -102,6 +105,7 @@ var (
 		GraphEndpoint:                "https://graph.windows.net/",
 		ServiceBusEndpoint:           "https://servicebus.windows.net/",
 		BatchManagementEndpoint:      "https://batch.core.windows.net/",
+		MicrosoftGraphEndpoint:       "https://graph.microsoft.com/",
 		StorageEndpointSuffix:        "core.windows.net",
 		CosmosDBDNSSuffix:            "documents.azure.com",
 		MariaDBDNSSuffix:             "mariadb.database.azure.com",
@@ -118,6 +122,7 @@ var (
 		TokenAudience:                "https://management.azure.com/",
 		APIManagementHostNameSuffix:  "azure-api.net",
 		SynapseEndpointSuffix:        "dev.azuresynapse.net",
+		DatalakeSuffix:               "azuredatalakestore.net",
 		ResourceIdentifiers: ResourceIdentifier{
 			Graph:               "https://graph.windows.net/",
 			KeyVault:            "https://vault.azure.net",
@@ -131,6 +136,7 @@ var (
 			SQLDatabase:         "https://database.windows.net/",
 			CosmosDB:            "https://cosmos.azure.com",
 			ManagedHSM:          "https://managedhsm.azure.net",
+			MicrosoftGraph:      "https://graph.microsoft.com/",
 		},
 	}
 
@@ -148,6 +154,7 @@ var (
 		GraphEndpoint:                "https://graph.windows.net/",
 		ServiceBusEndpoint:           "https://servicebus.usgovcloudapi.net/",
 		BatchManagementEndpoint:      "https://batch.core.usgovcloudapi.net/",
+		MicrosoftGraphEndpoint:       "https://graph.microsoft.us/",
 		StorageEndpointSuffix:        "core.usgovcloudapi.net",
 		CosmosDBDNSSuffix:            "documents.azure.us",
 		MariaDBDNSSuffix:             "mariadb.database.usgovcloudapi.net",
@@ -163,7 +170,8 @@ var (
 		ContainerRegistryDNSSuffix:   "azurecr.us",
 		TokenAudience:                "https://management.usgovcloudapi.net/",
 		APIManagementHostNameSuffix:  "azure-api.us",
-		SynapseEndpointSuffix:        NotAvailable,
+		SynapseEndpointSuffix:        "dev.azuresynapse.usgovcloudapi.net",
+		DatalakeSuffix:               NotAvailable,
 		ResourceIdentifiers: ResourceIdentifier{
 			Graph:               "https://graph.windows.net/",
 			KeyVault:            "https://vault.usgovcloudapi.net",
@@ -172,11 +180,12 @@ var (
 			OperationalInsights: "https://api.loganalytics.us",
 			OSSRDBMS:            "https://ossrdbms-aad.database.usgovcloudapi.net",
 			Storage:             "https://storage.azure.com/",
-			Synapse:             NotAvailable,
+			Synapse:             "https://dev.azuresynapse.usgovcloudapi.net",
 			ServiceBus:          "https://servicebus.azure.net/",
 			SQLDatabase:         "https://database.usgovcloudapi.net/",
 			CosmosDB:            "https://cosmos.azure.com",
 			ManagedHSM:          NotAvailable,
+			MicrosoftGraph:      "https://graph.microsoft.us/",
 		},
 	}
 
@@ -194,6 +203,7 @@ var (
 		GraphEndpoint:                "https://graph.chinacloudapi.cn/",
 		ServiceBusEndpoint:           "https://servicebus.chinacloudapi.cn/",
 		BatchManagementEndpoint:      "https://batch.chinacloudapi.cn/",
+		MicrosoftGraphEndpoint:       "https://microsoftgraph.chinacloudapi.cn/",
 		StorageEndpointSuffix:        "core.chinacloudapi.cn",
 		CosmosDBDNSSuffix:            "documents.azure.cn",
 		MariaDBDNSSuffix:             "mariadb.database.chinacloudapi.cn",
@@ -210,6 +220,7 @@ var (
 		TokenAudience:                "https://management.chinacloudapi.cn/",
 		APIManagementHostNameSuffix:  "azure-api.cn",
 		SynapseEndpointSuffix:        "dev.azuresynapse.azure.cn",
+		DatalakeSuffix:               NotAvailable,
 		ResourceIdentifiers: ResourceIdentifier{
 			Graph:               "https://graph.chinacloudapi.cn/",
 			KeyVault:            "https://vault.azure.cn",
@@ -223,6 +234,7 @@ var (
 			SQLDatabase:         "https://database.chinacloudapi.cn/",
 			CosmosDB:            "https://cosmos.azure.com",
 			ManagedHSM:          NotAvailable,
+			MicrosoftGraph:      "https://microsoftgraph.chinacloudapi.cn",
 		},
 	}
 
@@ -240,6 +252,7 @@ var (
 		GraphEndpoint:                "https://graph.cloudapi.de/",
 		ServiceBusEndpoint:           "https://servicebus.cloudapi.de/",
 		BatchManagementEndpoint:      "https://batch.cloudapi.de/",
+		MicrosoftGraphEndpoint:       NotAvailable,
 		StorageEndpointSuffix:        "core.cloudapi.de",
 		CosmosDBDNSSuffix:            "documents.microsoftazure.de",
 		MariaDBDNSSuffix:             "mariadb.database.cloudapi.de",
@@ -256,6 +269,7 @@ var (
 		TokenAudience:                "https://management.microsoftazure.de/",
 		APIManagementHostNameSuffix:  NotAvailable,
 		SynapseEndpointSuffix:        NotAvailable,
+		DatalakeSuffix:               NotAvailable,
 		ResourceIdentifiers: ResourceIdentifier{
 			Graph:               "https://graph.cloudapi.de/",
 			KeyVault:            "https://vault.microsoftazure.de",
@@ -269,6 +283,7 @@ var (
 			SQLDatabase:         "https://database.cloudapi.de/",
 			CosmosDB:            "https://cosmos.azure.com",
 			ManagedHSM:          NotAvailable,
+			MicrosoftGraph:      NotAvailable,
 		},
 	}
 )
