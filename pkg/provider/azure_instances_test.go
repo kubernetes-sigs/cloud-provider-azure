@@ -930,3 +930,40 @@ func TestInstanceMetadata(t *testing.T) {
 		assert.Equal(t, expectedMetadata, *meta)
 	})
 }
+
+func TestCloud_InstanceExists(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	t.Run("should not return error when instance not found by node name", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.VMSet = NewMockVMSet(ctrl) // FIXME(lodrem): implement MockCloud and init in MockCloud constructor
+
+		ctx := context.Background()
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+		}
+
+		cloud.VMSet.(*MockVMSet).EXPECT().GetInstanceIDByNodeName("foo").Return("", cloudprovider.InstanceNotFound)
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.False(t, exist)
+		assert.NoError(t, err)
+	})
+
+	t.Run("should not return error when instance not found by provider id", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.VMSet = NewMockVMSet(ctrl) // FIXME(lodrem): implement MockCloud and init in MockCloud constructor
+
+		ctx := context.Background()
+		node := &v1.Node{
+			Spec: v1.NodeSpec{ProviderID: "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm"},
+		}
+
+		cloud.VMSet.(*MockVMSet).EXPECT().GetNodeNameByProviderID(node.Spec.ProviderID).Return(types.NodeName(""), cloudprovider.InstanceNotFound)
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.NoError(t, err)
+		assert.False(t, exist)
+	})
+}
