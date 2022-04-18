@@ -231,6 +231,10 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 		var err error
 		providerID, err = cloudprovider.GetInstanceProviderID(ctx, az, types.NodeName(node.Name))
 		if err != nil {
+			if strings.Contains(err.Error(), cloudprovider.InstanceNotFound.Error()) {
+				return false, nil
+			}
+
 			klog.Errorf("InstanceExists: failed to get the provider ID by node name %s: %v", node.Name, err)
 			return false, err
 		}
