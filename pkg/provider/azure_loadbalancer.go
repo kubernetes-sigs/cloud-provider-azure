@@ -1981,6 +1981,32 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 		properties.Protocol = network.ProbeProtocolTCP
 	}
 
+	// Lookup or Override Health Probe Port
+	properties.Port = &port.NodePort
+
+	// Look up port-specific override
+	var probePortValidator = func(val *int32) error {
+		//minimum number of unhealthy responses is 2. ref: https://docs.microsoft.com/en-us/rest/api/load-balancer/load-balancers/create-or-update#probe
+		const (
+			MinProbePort = 1
+			MaxProbePort = 65535
+		)
+		if *val < MinProbePort || *val > MaxProbePort {
+			return fmt.Errorf("the value of %s must be between %d and %d inclusive", consts.HealthProbeParamsPort, MinProbePort, MaxProbePort)
+		}
+		return nil
+	}
+
+	probePort, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsPort, probePortValidator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsPort), err)
+	}
+
+	if probePort != nil {
+		properties.Port = probePort
+	}
+
+	// Select request path
 	if strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTPS)) || strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTP)) {
 		// get request path ,only used with http/https probe
 		path, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsRequestPath)
@@ -2054,7 +2080,6 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 	}
 	properties.IntervalInSeconds = probeInterval
 	properties.NumberOfProbes = numberOfProbes
-	properties.Port = &port.NodePort
 	probe := &network.Probe{
 		Name:                  &lbrule,
 		ProbePropertiesFormat: properties,

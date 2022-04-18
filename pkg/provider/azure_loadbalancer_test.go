@@ -1961,7 +1961,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			loadBalancerSku: "standard",
 			probeProtocol:   "Https",
 			probePath:       "/healthy1",
-			expectedProbes:  getTestProbes("Https", "/healthy1", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Https", "/healthy1", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
@@ -1972,7 +1972,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Http",
-			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
@@ -1983,7 +1983,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Tcp",
-			expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
@@ -2063,6 +2063,15 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:  getDefaultTestRules(false),
 			expectedProbes: getDefaultTestProbes("Tcp", ""),
 		},
+		{
+			desc: "getExpectedLBRules should allow setting port specific health probe port",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "Http",
+				"service.beta.kubernetes.io/port_80_health-probe_port":     "15012",
+			}, false, 80),
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getTestProbes("Http", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(15012), to.Int32Ptr(2)),
+		},
 	}
 	rules := getDefaultTestRules(true)
 	rules[0].IdleTimeoutInMinutes = to.Int32Ptr(5)
@@ -2084,7 +2093,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		}, false, 80),
 		loadBalancerSku: "standard",
 		probeProtocol:   "Tcp",
-		expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(10), to.Int32Ptr(10080), to.Int32Ptr(10)),
+		expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(10), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(10)),
 		expectedRules:   rules,
 	})
 	rules1 := []network.LoadBalancingRule{
@@ -2095,14 +2104,19 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 	rules1[0].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
 	rules1[1].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
 	rules1[2].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
+
+	// When the service spec externalTrafficPolicy is Local all of these annotations should be ignored
 	svc := getTestService("test1", v1.ProtocolTCP, map[string]string{
-		"service.beta.kubernetes.io/port_80_health-probe_interval":     "10",
-		"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "10",
+		"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/broken/global/path",
+		"service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol":     "tcp",
+		"service.beta.kubernetes.io/port_80_health-probe_protocol":                 "https",
+		"service.beta.kubernetes.io/port_80_health-probe_request-path":             "/broken/local/path",
+		"service.beta.kubernetes.io/port_80_health-probe_interval":                 "99",
+		"service.beta.kubernetes.io/port_80_health-probe_num-of-probe":             "98",
 	}, false, 80, 443, 421)
 	svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 	svc.Spec.HealthCheckNodePort = 34567
-	probes := getTestProbes("Http", "/healthz", to.Int32Ptr(5), to.Int32Ptr(34567), to.Int32Ptr(2))
-	probes[0].Name = to.StringPtr("atest1-TCP-34567")
+	probes := getTestProbes("Http", "/healthz", to.Int32Ptr(5), to.Int32Ptr(34567), to.Int32Ptr(34567), to.Int32Ptr(2))
 	testCases = append(testCases, struct {
 		desc            string
 		service         v1.Service
@@ -2113,7 +2127,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedRules   []network.LoadBalancingRule
 		expectedErr     bool
 	}{
-		desc:            "getExpectedLBRules should expected rules when externaltrafficpolicy is local",
+		desc:            "getExpectedLBRules should expected rules when externalTrafficPolicy is local",
 		service:         svc,
 		loadBalancerSku: "standard",
 		probeProtocol:   "Http",
@@ -2143,18 +2157,19 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		}
 	}
 }
-func getTestProbes(protocol, path string, interval, port, numOfProbe *int32) []network.Probe {
+
+func getTestProbes(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) []network.Probe {
 	return []network.Probe{
-		getTestProbe(protocol, path, interval, port, numOfProbe),
+		getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe),
 	}
 }
 
-func getTestProbe(protocol, path string, interval, port, numOfProbe *int32) network.Probe {
+func getTestProbe(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) network.Probe {
 	expectedProbes := network.Probe{
-		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", *port-10000)),
+		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", *servicePort)),
 		ProbePropertiesFormat: &network.ProbePropertiesFormat{
 			Protocol:          network.ProbeProtocol(protocol),
-			Port:              port,
+			Port:              probePort,
 			IntervalInSeconds: interval,
 			NumberOfProbes:    numOfProbe,
 		},
@@ -2165,7 +2180,7 @@ func getTestProbe(protocol, path string, interval, port, numOfProbe *int32) netw
 	return expectedProbes
 }
 func getDefaultTestProbes(protocol, path string) []network.Probe {
-	return getTestProbes(protocol, path, to.Int32Ptr(5), to.Int32Ptr(10080), to.Int32Ptr(2))
+	return getTestProbes(protocol, path, to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2))
 }
 
 func getDefaultTestRules(enableTCPReset bool) []network.LoadBalancingRule {
