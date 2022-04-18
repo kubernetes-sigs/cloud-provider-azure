@@ -202,6 +202,12 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
 			return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
 		}
+
+		// Create virtual link to the private DNS zone
+		vNetLinkName := accountName + "-vnetlink"
+		if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName); err != nil {
+			return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", vnetName, PrivateDNSZoneName, vnetResourceGroup, err)
+		}
 	}
 
 	if createNewAccount {
@@ -301,12 +307,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			privateEndpointName := accountName + "-pvtendpoint"
 			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location); err != nil {
 				return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
-			}
-
-			// Create virtual link to the zone private DNS zone
-			vNetLinkName := accountName + "-vnetlink"
-			if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName); err != nil {
-				return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", vnetName, PrivateDNSZoneName, vnetResourceGroup, err)
 			}
 
 			// Create dns zone group
