@@ -124,7 +124,6 @@ require (
 )
 
 replace (
-	cloud.google.com/go => cloud.google.com/go v0.54.0 // indirect
 	google.golang.org/grpc => google.golang.org/grpc v1.27.0
 	k8s.io/api => k8s.io/api v0.20.15
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.15
@@ -143,7 +142,6 @@ replace (
 	k8s.io/klog => k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.20.15
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.20.15
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20211110013926-83f114cd0513
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.20.15
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.20.15
 	k8s.io/kubectl => k8s.io/kubectl v0.20.15
@@ -153,6 +151,4 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.20.15
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.20.15
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.20.15
-	k8s.io/utils => k8s.io/utils v0.0.0-20201110183641-67b214c5f920
-	sigs.k8s.io/yaml => sigs.k8s.io/yaml v1.2.0
 )
