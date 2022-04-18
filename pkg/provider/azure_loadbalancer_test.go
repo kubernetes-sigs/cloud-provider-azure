@@ -1933,22 +1933,20 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedProbes:  getDefaultTestProbes("Https", "/healthy2"),
 			expectedRules:   getDefaultTestRules(true)},
 		{
-			desc: "getExpectedLBRules should return error when deprecated tcp health probe annotations and protocols are added and config is not valid",
+			desc: "getExpectedLBRules should return error when probe interval * num > 120",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
-				"service.beta.kubernetes.io/port_80_health-probe_interval":             "10",
-				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe":         "20",
-				"service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol": "https",
+				"service.beta.kubernetes.io/port_80_health-probe_interval":     "13",
+				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "10",
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Tcp",
 			expectedErr:     true,
 		},
 		{
-			desc: "getExpectedLBRules should return error when deprecated tcp health probe annotations and protocols are added and config is not valid",
+			desc: "getExpectedLBRules should return error when probe interval * num ==  120",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
-				"service.beta.kubernetes.io/port_80_health-probe_interval":             "10",
-				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe":         "20",
-				"service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol": "tcp",
+				"service.beta.kubernetes.io/port_80_health-probe_interval":     "10",
+				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "12",
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Tcp",
@@ -1967,7 +1965,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "getExpectedLBRules should return correct rule when health probe annotations are added,default path should be /healthy",
+			desc: "getExpectedLBRules should return correct rule when health probe annotations are added,default path should be /",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":     "20",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "5",
@@ -2027,6 +2025,43 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			loadBalancerSku: "standard",
 			probeProtocol:   "Tcp",
 			expectedErr:     true,
+		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over defaults",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "HtTp",
+			}, false, 80),
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Http", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over appProtocol",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "HtTp",
+			}, false, 80),
+			probeProtocol:  "Mongodb",
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Http", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over deprecated annotation",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol":             "HtTpS",
+				"service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol": "TcP",
+			}, false, 80),
+			loadBalancerSku: "standard",
+			probeProtocol:   "Https",
+			expectedRules:   getDefaultTestRules(true),
+			expectedProbes:  getDefaultTestProbes("Https", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should default to Tcp on invalid port specific probe protocol",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "FooBar",
+			}, false, 80),
+			probeProtocol:  "Http",
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Tcp", ""),
 		},
 	}
 	rules := getDefaultTestRules(true)

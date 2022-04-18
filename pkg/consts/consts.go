@@ -387,6 +387,10 @@ const CreatedByTag = "k8s-azure-created-by"
 const (
 	HealthProbeAnnotationPrefixPattern = "service.beta.kubernetes.io/port_%d_health-probe_"
 
+	// HealthProbeParamsProtocol determines the protocol for the health probe params.
+	// It always takes priority over spec.appProtocol or any other specified protocol
+	HealthProbeParamsProtocol HealthProbeParams = "protocol"
+
 	// HealthProbeParamsProbeInterval determines the probe interval of the load balancer health probe.
 	// The minimum probe interval is 5 seconds and the default value is 5. The total duration of all intervals cannot exceed 120 seconds.
 	HealthProbeParamsProbeInterval  HealthProbeParams = "interval"
