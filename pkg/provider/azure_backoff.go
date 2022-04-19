@@ -246,7 +246,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 		}
 		pipRG, pipName := matches[1], matches[2]
 		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, to.String(lb.Name))
-		pip, _, err := az.getPublicIPAddress(pipRG, pipName)
+		pip, _, err := az.getPublicIPAddress(pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
 			return rerr.Error()
@@ -411,17 +411,33 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 
 	rerr := az.PublicIPAddressesClient.CreateOrUpdate(ctx, pipResourceGroup, to.String(pip.Name), pip)
 	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, to.String(pip.Name))
-	if rerr != nil {
-		pipJSON, _ := json.Marshal(pip)
-		klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error(), string(pipJSON))
-		az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
-		return rerr.Error()
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+		return nil
 	}
 
-	return nil
+	pipJSON, _ := json.Marshal(pip)
+	klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error(), string(pipJSON))
+	az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
+
+	// Invalidate the cache because ETAG precondition mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, to.String(pip.Name))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+	}
+
+	retryErrorMessage := rerr.Error().Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, to.String(pip.Name))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+	}
+
+	return rerr.Error()
 }
 
-// CreateOrUpdateInterface invokes az.PublicIPAddressesClient.CreateOrUpdate with exponential backoff retry
+// CreateOrUpdateInterface invokes az.InterfacesClient.CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateInterface(service *v1.Service, nic network.Interface) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
@@ -454,6 +470,8 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 		return rerr.Error()
 	}
 
+	// Invalidate the cache right after deleting
+	_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pipName))
 	return nil
 }
 

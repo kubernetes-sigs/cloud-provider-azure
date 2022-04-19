@@ -290,6 +290,11 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		shouldBeEmpty, err := az.lbCache.Get("lb", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
+
+		// public ip cache should be populated since there's GetPIP
+		shouldNotBeEmpty, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "pip"), cache.CacheReadTypeDefault)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
 }
 
@@ -377,12 +382,49 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-	mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	tests := []struct {
+		clientErr          *retry.Error
+		expectedErr        error
+		cacheExpectedEmpty bool
+	}{
+		{
+			clientErr:          &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+			cacheExpectedEmpty: true,
+		},
+		{
+			clientErr:          &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
+			cacheExpectedEmpty: true,
+		},
+		{
+			clientErr:          &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			cacheExpectedEmpty: false,
+		},
+	}
 
-	err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	for _, test := range tests {
+		az := GetTestCloud(ctrl)
+		cacheKey := az.getPIPCacheKey(az.ResourceGroup, "nic")
+		az.pipCache.Set(cacheKey, "test")
+		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(test.clientErr)
+		if test.cacheExpectedEmpty {
+			mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(network.PublicIPAddress{}, nil)
+		}
+
+		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
+		assert.EqualError(t, test.expectedErr, err.Error())
+
+		cachedPIP, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
+		assert.NoError(t, err)
+		if test.cacheExpectedEmpty {
+			assert.Empty(t, cachedPIP)
+		} else {
+			assert.NotEmpty(t, cachedPIP)
+		}
+	}
 }
 
 func TestCreateOrUpdateInterface(t *testing.T) {
