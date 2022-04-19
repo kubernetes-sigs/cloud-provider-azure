@@ -1,4 +1,31 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.0.17</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.0.17/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.0.17/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.20</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Fix InstanceV2.InstanceExists: it should return false&lt;bool> instead of ErrInstanceNotFound&lt;error> (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1510">#1510&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/golang/snappy: &lt;a href="https://github.com/golang/snappy/tree/v0.0.3">v0.0.3&lt;/a>&lt;/li>
+&lt;li>github.com/google/martian/v3: &lt;a href="https://github.com/google/martian/v3/tree/v3.2.1">v3.2.1&lt;/a>&lt;/li>
+&lt;li>google.golang.org/grpc/cmd/protoc-gen-go-grpc: v1.1.0&lt;/li>
+&lt;li>rsc.io/binaryregexp: v0.2.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>cloud.google.com/go/bigquery: v1.4.0 → v1.8.0&lt;/li>
+&lt;li>cloud.google.com/go/pubsub: v1.2.0 → v1.3.1&lt;/li>
+&lt;li>cloud.google.com/go/storage: v1.6.0 → v1.10.0&lt;/li>
+&lt;li>cloud.google.com/go: v0.54.0 → v0.99.0&lt;/li>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v63.2.0...v63.3.0">v63.2.0+incompatible → v63.3.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/google/pprof: &lt;a href="https://github.com/google/pprof/compare/1ebb73c...4bb14d4">1ebb73c → 4bb14d4&lt;/a>&lt;/li>
+&lt;li>github.com/ianlancetaylor/demangle: &lt;a href="https://github.com/ianlancetaylor/demangle/compare/5e5cf60...28f6c0f">5e5cf60 → 28f6c0f&lt;/a>&lt;/li>
+&lt;li>honnef.co/go/tools: v0.0.1-2020.1.3 → v0.0.1-2020.1.4&lt;/li>
+&lt;li>k8s.io/utils: 67b214c → 6203023&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.17</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.0.17/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.0.17/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
@@ -1916,19 +1943,4 @@ ree/02e2102)&lt;/li>
 &lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v55.0.0...v55.8.0">v55.0.0+incompatible → v55.8.0+incompatible&lt;/a>&lt;/li>
 &lt;/ul>
 &lt;h3 id="removed">Removed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.7</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v0.7.7/</link><pubDate>Fri, 13 Aug 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/13/v0.7.7/</guid><description>
-&lt;h1 id="changelog-since-v076">Changelog since v0.7.6&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: ensure NSG rules are handled regardless of case
-&lt;ul>
-&lt;li>fix: enable git command by default&lt;/li>
-&lt;li>fix: ensure VM with provisioningState=Creating and powerState=Stopped is treated as Creating instead of Stopped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/747">#747&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h3 id="features">Features&lt;/h3>
-&lt;ul>
-&lt;li>Feat: Provide IPv6 support for internal load balancer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/712">#712&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul></description></item></channel></rss>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item></channel></rss>
