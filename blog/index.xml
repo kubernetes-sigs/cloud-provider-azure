@@ -1,4 +1,34 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.19</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v0.7.19/</link><pubDate>Wed, 13 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v0.7.19/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.23.10</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.23.10/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v1.23.10/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
+&lt;ul>
+&lt;li>Add azure private link service client interface to delete a private endpoint connection. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1496">#1496&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fix InstanceV2.InstanceExists: it should return false&lt;bool> instead of ErrInstanceNotFound&lt;error> (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1513">#1513&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;ul>
+&lt;li>github.com/google/martian: &lt;a href="https://github.com/google/martian/tree/v2.1.0">v2.1.0+incompatible&lt;/a>&lt;/li>
+&lt;li>rsc.io/binaryregexp: v0.2.0&lt;/li>
+&lt;li>rsc.io/quote/v3: v3.1.0&lt;/li>
+&lt;li>rsc.io/sampler: v1.3.0&lt;/li>
+&lt;/ul>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.25...v0.11.26">v0.11.25 → v0.11.26&lt;/a>&lt;/li>
+&lt;li>k8s.io/api: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/apimachinery: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/apiserver: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/client-go: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/cloud-provider: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/component-base: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/component-helpers: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/controller-manager: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>k8s.io/kubelet: v0.23.3 → v0.23.5&lt;/li>
+&lt;li>sigs.k8s.io/apiserver-network-proxy/konnectivity-client: v0.0.27 → v0.0.30&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.19</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v0.7.19/</link><pubDate>Wed, 13 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/13/v0.7.19/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
@@ -2109,14 +2139,4 @@ ree/02e2102)&lt;/li>
 &lt;li>go.etcd.io/etcd: dd1b699&lt;/li>
 &lt;li>go.uber.org/tools: 2cfd321&lt;/li>
 &lt;li>gopkg.in/cheggaaa/pb.v1: v1.0.25&lt;/li>
-&lt;/ul></description></item><item><title>Blog: v0.7.6</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</link><pubDate>Tue, 20 Jul 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/07/20/v0.7.6/</guid><description>
-&lt;h1 id="changelog-since-v075">Changelog since v0.7.5&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="feature">Feature&lt;/h3>
-&lt;ul>
-&lt;li>Feat: Provide IPv6 support for internal load balancer (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/703">#703&lt;/a>, &lt;a href="https://github.com/tomkerkhove">@tomkerkhove&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: not send availability zones as part of create for edge zones (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/709">#709&lt;/a>, &lt;a href="https://github.com/MirzaSikander">@MirzaSikander&lt;/a>)&lt;/li>
 &lt;/ul></description></item></channel></rss>
