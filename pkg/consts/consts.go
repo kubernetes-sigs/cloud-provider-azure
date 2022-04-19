@@ -311,6 +311,9 @@ const (
 	FrontendIPConfigNameMaxLength = 80
 	// LoadBalancerRuleNameMaxLength is the max length of the load balancing rule
 	LoadBalancerRuleNameMaxLength = 80
+
+	// To get pip, we need both resource group name and pip name, key in cache has format: pip_rg:pip_name
+	PIPCacheKeySeparator = ":"
 )
 
 // error messages

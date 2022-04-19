@@ -106,6 +106,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.lbCache, _ = az.newLBCache()
 	az.nsgCache, _ = az.newNSGCache()
 	az.rtCache, _ = az.newRouteTableCache()
+	az.pipCache, _ = az.newPIPCache()
 
 	_ = initDiskControllers(az)
 
