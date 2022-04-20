@@ -1,9 +1,9 @@
 {{- if eq .Capabilities.KubeVersion.Minor "21" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.0.15" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.0.17" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "22" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.1.11" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.1.13" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "23" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.23.8" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.23.10" }}
 {{- else -}}
   {{- $_ := set . "unsupportedKubernetesVersion" "true" }}
 {{- end -}}
