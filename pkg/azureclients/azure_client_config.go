@@ -21,6 +21,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -38,6 +39,7 @@ type ClientConfig struct {
 	Backoff                 *retry.Backoff
 	UserAgent               string
 	DisableAzureStackCloud  bool
+	EnabledARG              bool
 }
 
 // WithRateLimiter returns a new ClientConfig with rateLimitConfig set.
@@ -59,6 +61,15 @@ type RateLimitConfig struct {
 	CloudProviderRateLimitQPSWrite float32 `json:"cloudProviderRateLimitQPSWrite,omitempty" yaml:"cloudProviderRateLimitQPSWrite,omitempty"`
 	// Rate limit Bucket Size
 	CloudProviderRateLimitBucketWrite int `json:"cloudProviderRateLimitBucketWrite,omitempty" yaml:"cloudProviderRateLimitBucketWrite,omitempty"`
+}
+
+func (cfg *ClientConfig) CheckARG(enabledARGClients map[string]bool, client string) *ClientConfig {
+	newClientConfig := *cfg
+	if enabled, ok := enabledARGClients[client]; ok && enabled {
+		klog.V(5).Infof("ARG is enabled for %s", client)
+		newClientConfig.EnabledARG = true
+	}
+	return &newClientConfig
 }
 
 type RestClientConfig struct {

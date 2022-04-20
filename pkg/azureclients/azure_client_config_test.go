@@ -32,6 +32,34 @@ func TestWithRateLimiter(t *testing.T) {
 	assert.Nil(t, config.RateLimitConfig)
 }
 
+// TestCheckARG checks if ARG clients are correctly enabled.
+func TestCheckARG(t *testing.T) {
+	config := &ClientConfig{}
+	assert.False(t, config.EnabledARG)
+
+	testcases := []struct {
+		description        string
+		enabledARGClients  map[string]bool
+		expectedEnabledARG bool
+	}{
+		{
+			description:        "fakeARGClient",
+			enabledARGClients:  map[string]bool{"fakeClient": true},
+			expectedEnabledARG: true,
+		},
+		{
+			description:        "nilARGClient",
+			expectedEnabledARG: false,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.description, func(t *testing.T) {
+			c := config.CheckARG(tc.enabledARGClients, "fakeClient")
+			assert.Equal(t, tc.expectedEnabledARG, c.EnabledARG)
+		})
+	}
+}
+
 func TestRateLimitEnabled(t *testing.T) {
 	assert.Equal(t, false, RateLimitEnabled(nil))
 	config := &RateLimitConfig{}

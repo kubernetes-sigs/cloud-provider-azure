@@ -45,6 +45,8 @@ type Client struct {
 	baseURI          string
 	apiVersion       string
 	regionalEndpoint string
+
+	enabledARG bool
 }
 
 // New creates a ARM client
@@ -90,6 +92,7 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		baseURI:          baseURI,
 		apiVersion:       apiVersion,
 		regionalEndpoint: fmt.Sprintf("%s.%s", clientConfig.Location, url.Host),
+		enabledARG:       clientConfig.EnabledARG,
 	}
 	client.client.Sender = autorest.DecorateSender(client.client,
 		autorest.DoCloseIfError(),
@@ -257,6 +260,12 @@ func (c *Client) GetResourceWithExpandQuery(ctx context.Context, resourceID, exp
 		}
 		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
 	}
+	if c.enabledARG {
+		queryParameters := map[string]interface{}{
+			"useResourceGraph": autorest.Encode("query", true),
+		}
+		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
+	}
 	return c.GetResource(ctx, resourceID, decorators...)
 }
 
@@ -290,6 +299,12 @@ func (c *Client) GetResource(ctx context.Context, resourceID string, decorators 
 	getDecorators := append([]autorest.PrepareDecorator{
 		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
 	}, decorators...)
+	if c.enabledARG {
+		queryParameters := map[string]interface{}{
+			"useResourceGraph": autorest.Encode("query", true),
+		}
+		getDecorators = append(getDecorators, autorest.WithQueryParameters(queryParameters))
+	}
 	request, err := c.PrepareGetRequest(ctx, getDecorators...)
 	if err != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "get.prepare", resourceID, err)
