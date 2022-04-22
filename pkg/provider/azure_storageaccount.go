@@ -360,12 +360,12 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup str
 	klog.V(2).Infof("Creating private dns zone(%s) in resourceGroup (%s)", PrivateDNSZoneName, vnetResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
-	if err := az.privatednsclient.CreateOrUpdate(ctx, vnetResourceGroup, PrivateDNSZoneName, privateDNSZone, true); err != nil {
-		if strings.Contains(err.Error(), "exists already") {
+	if err := az.privatednsclient.CreateOrUpdate(ctx, vnetResourceGroup, PrivateDNSZoneName, privateDNSZone, "", true); err != nil {
+		if strings.Contains(err.Error().Error(), "exists already") {
 			klog.V(2).Infof("private dns zone(%s) in resourceGroup (%s) already exists", PrivateDNSZoneName, vnetResourceGroup)
 			return nil
 		}
-		return err
+		return err.Error()
 	}
 	return nil
 }
@@ -398,7 +398,7 @@ func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName
 			PrivateDNSZoneConfigs: &privateDNSZoneConfigs,
 		},
 	}
-	return az.privatednszonegroupclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, privateDNSZoneGroup, false)
+	return az.privatednszonegroupclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, privateDNSZoneGroup, "", false).Error()
 }
 
 // AddStorageAccountTags add tags to storage account
