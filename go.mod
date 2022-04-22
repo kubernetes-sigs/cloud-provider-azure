@@ -9,7 +9,7 @@ require (
 	github.com/Azure/go-autorest/autorest/mocks v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
-	github.com/fsnotify/fsnotify v1.5.2
+	github.com/fsnotify/fsnotify v1.5.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -21,12 +21,12 @@ require (
 	golang.org/x/text v0.3.7
 	k8s.io/api v0.23.6
 	k8s.io/apimachinery v0.23.6
-	k8s.io/apiserver v0.23.5
+	k8s.io/apiserver v0.23.6
 	k8s.io/client-go v0.23.6
 	k8s.io/cloud-provider v0.23.5
 	k8s.io/component-base v0.23.6
 	k8s.io/component-helpers v0.23.5
-	k8s.io/controller-manager v0.23.5
+	k8s.io/controller-manager v0.23.6
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/kubelet v0.23.6
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
