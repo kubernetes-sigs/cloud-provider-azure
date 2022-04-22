@@ -21,7 +21,7 @@ require (
 	golang.org/x/text v0.3.7
 	k8s.io/api v0.23.6
 	k8s.io/apimachinery v0.23.6
-	k8s.io/apiserver v0.23.5
+	k8s.io/apiserver v0.23.6
 	k8s.io/client-go v0.23.6
 	k8s.io/cloud-provider v0.23.5
 	k8s.io/component-base v0.23.6
