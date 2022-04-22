@@ -326,12 +326,12 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		scaleSets, err := utils.ListVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())
 
-		if len(*scaleSets) == 0 {
+		if len(scaleSets) == 0 {
 			Skip("At least one VMSS is needed in this scenario")
 		}
 
 		foundSpotVMSS := false
-		for _, scaleSet := range *scaleSets {
+		for _, scaleSet := range scaleSets {
 			if utils.IsSpotVMSS(scaleSet) {
 				foundSpotVMSS = true
 				break
