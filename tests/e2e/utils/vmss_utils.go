@@ -24,7 +24,8 @@ import (
 
 	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
-
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -88,12 +89,12 @@ func IsNodeInVMSS(tc *AzureTestClient, nodeName, vmssName string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	if vms == nil || len(*vms) == 0 {
+	if len(vms) == 0 {
 		return false, fmt.Errorf("failed to find any VM in VMSS %s", vmssName)
 	}
 
 	var vmsInVMSS []azcompute.VirtualMachineScaleSetVM
-	for _, vm := range *vms {
+	for _, vm := range vms {
 		vmssNameMatches := vmssVMRE.FindStringSubmatch(*vm.ID)
 		if len(vmssNameMatches) != 2 {
 			return false, fmt.Errorf("cannot obtain the name of VMSS from vmssVM.ID")
@@ -105,8 +106,7 @@ func IsNodeInVMSS(tc *AzureTestClient, nodeName, vmssName string) (bool, error) 
 	}
 
 	for _, vmInVMSS := range vmsInVMSS {
-		if vmInVMSS.OsProfile != nil && vmInVMSS.OsProfile.ComputerName != nil &&
-			strings.EqualFold(nodeName, *vmInVMSS.OsProfile.ComputerName) {
+		if vmInVMSS.OsProfile != nil && vmInVMSS.OsProfile.ComputerName != nil && strings.EqualFold(nodeName, *vmInVMSS.OsProfile.ComputerName) {
 			return true, nil
 		}
 	}
@@ -140,11 +140,65 @@ func waitVMSSVMCountToEqual(tc *AzureTestClient, expected int, vmssName string) 
 			count++
 		}
 
-		Logf("current = %d, expected = %d", count, expected)
+		Logf("Number of VMSS instance: current = %d, expected = %d (will retry)", count, expected)
 		return count == expected, nil
 	})
 
 	return err
+}
+
+func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
+	k8sCli, err := CreateKubeClientSet()
+	if err != nil {
+		return err
+	}
+
+	return wait.PollImmediate(vmssOperationInterval, vmssOperationTimeout, func() (bool, error) {
+		var (
+			err         error
+			nodes       []v1.Node
+			vmssVMs     []azcompute.VirtualMachineScaleSetVM
+			nodeSet     = sets.NewString()
+			instanceSet = sets.NewString()
+		)
+
+		// log progress
+		defer func() {
+			if err != nil {
+				Logf("Failed to validate VMSS instances: %s", err)
+			}
+
+			Logf("Matching cluster nodes[%s] with VMSS instances[%s]",
+				strings.Join(nodeSet.List(), ","),
+				strings.Join(instanceSet.List(), ","))
+		}()
+
+		nodes, err = GetAgentNodes(k8sCli)
+		if err != nil {
+			return false, err
+		}
+
+		// ignore error; check intersection of sets instead.
+		vmssList, _ := ListVMSSes(tc)
+		for _, vmss := range vmssList {
+			vms, _ := ListVMSSVMs(tc, *vmss.Name)
+			vmssVMs = append(vmssVMs, vms...)
+		}
+
+		for _, node := range nodes {
+			nodeSet.Insert(node.Name)
+		}
+		for _, vm := range vmssVMs {
+			var nodeName string
+			nodeName, err = GetVMSSVMComputerName(vm)
+			if err != nil {
+				return false, err
+			}
+			instanceSet.Insert(strings.ToLower(nodeName))
+		}
+
+		return nodeSet.Equal(instanceSet), nil
+	})
 }
 
 // ValidateVMSSNodeLabels gets the label of VMs in VMSS with retry
@@ -183,7 +237,7 @@ func ValidateVMSSNodeLabels(tc *AzureTestClient, vmss *azcompute.VirtualMachineS
 }
 
 // ListVMSSVMs returns the VM list of the given VMSS
-func ListVMSSVMs(tc *AzureTestClient, vmssName string) (*[]azcompute.VirtualMachineScaleSetVM, error) {
+func ListVMSSVMs(tc *AzureTestClient, vmssName string) ([]azcompute.VirtualMachineScaleSetVM, error) {
 	vmssVMClient := tc.createVMSSVMClient()
 
 	list, err := vmssVMClient.List(context.Background(), tc.GetResourceGroup(), vmssName, "", "", "")
@@ -196,11 +250,11 @@ func ListVMSSVMs(tc *AzureTestClient, vmssName string) (*[]azcompute.VirtualMach
 		return nil, fmt.Errorf("cannot find any VMSS VM in VMSS %s of resource group %s", vmssName, tc.GetResourceGroup())
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 // ListVMSSes returns the list of scale sets
-func ListVMSSes(tc *AzureTestClient) (*[]azcompute.VirtualMachineScaleSet, error) {
+func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
 
 	list, err := vmssClient.List(context.Background(), tc.GetResourceGroup())
@@ -213,7 +267,7 @@ func ListVMSSes(tc *AzureTestClient) (*[]azcompute.VirtualMachineScaleSet, error
 		return nil, errVMSSNotFound
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
