@@ -1027,8 +1027,9 @@ k8s.io/cloud-provider v0.23.5/go.mod h1:xMZFA6pIYKweqTkWCYVgRSVMAjqOvxVr3u/kmfyx
 k8s.io/component-base v0.23.5/go.mod h1:c5Nq44KZyt1aLl0IpHX82fhsn84Sb0jjzwjpcA42bY0=
 k8s.io/component-base v0.23.6 h1:8dhVZ4VrRcNdV2EGjl8tj8YOHwX6ysgCGMJ2Oyy0NW8=
 k8s.io/component-base v0.23.6/go.mod h1:FGMPeMrjYu0UZBSAFcfloVDplj9IvU+uRMTOdE23Fj0=
-k8s.io/component-helpers v0.23.5 h1:6uTMNP6xxJrSzYTC7BCcH2S/PbSZGxSUZG0PG+nT4tM=
 k8s.io/component-helpers v0.23.5/go.mod h1:5riXJgjTIs+ZB8xnf5M2anZ8iQuq37a0B/0BgoPQuSM=
+k8s.io/component-helpers v0.23.6 h1:95O4LX4mk2LHWfdn/5rQJ7hOzd/teKRh9fCNXr2tJic=
+k8s.io/component-helpers v0.23.6/go.mod h1:kgvl6wvnYg9oebklLPpbW8UhvAZ9Qds26/RANEbny/8=
 k8s.io/controller-manager v0.23.5/go.mod h1:n/KRlUzAtkFcZodZ/w0GlQdmErVKh7lS/wS0bbo7W4I=
 k8s.io/controller-manager v0.23.6 h1:xSGCCOeAvc7oPYfbrlAX+kWVLVxApV3izP5zmukQ6t8=
 k8s.io/controller-manager v0.23.6/go.mod h1:szOgeulY0c3xLUa9RWX1uPCjLr76RmVttghr4xQzC5U=
