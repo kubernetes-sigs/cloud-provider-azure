@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -28,7 +29,10 @@ func nowStamp() string {
 }
 
 func log(level string, format string, args ...interface{}) {
-	fmt.Fprintf(ginkgo.GinkgoWriter, nowStamp()+": "+level+": "+format+"\n", args...)
+	_, file, line, _ := runtime.Caller(2)
+	extra := fmt.Sprintf(" [%s:%d]", file, line)
+
+	fmt.Fprintf(ginkgo.GinkgoWriter, nowStamp()+": "+level+": "+format+extra+"\n", args...)
 }
 
 // Logf prints info logs
