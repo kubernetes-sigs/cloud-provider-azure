@@ -1170,6 +1170,14 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster", gomock.Any()).Return(
+		getTestLoadBalancer(to.StringPtr(testClusterName),
+			to.StringPtr(az.ResourceGroup),
+			to.StringPtr(testClusterName),
+			to.StringPtr("aservice1"),
+			service1,
+			"Standard"), nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &service1, clusterResources.nodes, true)
 	_, _ = az.reconcileLoadBalancer(testClusterName, &service2, clusterResources.nodes, true)
@@ -1200,6 +1208,14 @@ func TestReconcileSecurityGroupRemoveServiceRemovesPort(t *testing.T) {
 	svcUpdated := getTestService("service1", v1.ProtocolTCP, nil, false, 80)
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster", gomock.Any()).Return(
+		getTestLoadBalancer(to.StringPtr(testClusterName),
+			to.StringPtr(az.ResourceGroup),
+			to.StringPtr(testClusterName),
+			to.StringPtr("aservice1"),
+			svc,
+			"Standard"), nil).AnyTimes()
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true)
 	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc, lb, nil)
 
@@ -1262,6 +1278,14 @@ func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
 
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
+	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+	mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster", gomock.Any()).Return(
+		getTestLoadBalancer(to.StringPtr(testClusterName),
+			to.StringPtr(az.ResourceGroup),
+			to.StringPtr(testClusterName),
+			to.StringPtr("aservice1"),
+			svc1,
+			"Standard"), nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
 	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)

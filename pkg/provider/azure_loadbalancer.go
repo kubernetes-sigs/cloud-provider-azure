@@ -866,7 +866,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 		klog.V(10).Info("getServiceLoadBalancerStatus: lb is nil")
 		return nil, nil, nil
 	}
-	if lb.FrontendIPConfigurations == nil || *lb.FrontendIPConfigurations == nil {
+	if lb.FrontendIPConfigurations == nil || len(*lb.FrontendIPConfigurations) == 0 {
 		klog.V(10).Info("getServiceLoadBalancerStatus: lb.FrontendIPConfigurations is nil")
 		return nil, nil, nil
 	}
@@ -1517,7 +1517,6 @@ func (az *Cloud) findFrontendIPConfigOfService(
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*network.LoadBalancer, error) {
-	isInternal := requiresInternalLoadBalancer(service)
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
 	serviceName := getServiceName(service)
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s) - wantLb(%t): started", serviceName, wantLb)
@@ -1621,18 +1620,16 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 				return nil, err
 			}
 
-			if isInternal {
-				// Refresh updated lb which will be used later in other places.
-				newLB, exist, err := az.getAzureLoadBalancer(lbName, azcache.CacheReadTypeDefault)
-				if err != nil {
-					klog.V(2).Infof("reconcileLoadBalancer for service(%s): getAzureLoadBalancer(%s) failed: %v", serviceName, lbName, err)
-					return nil, err
-				}
-				if !exist {
-					return nil, fmt.Errorf("load balancer %q not found", lbName)
-				}
-				lb = &newLB
+			// Refresh updated lb which will be used later in other places.
+			newLB, exist, err := az.getAzureLoadBalancer(lbName, azcache.CacheReadTypeDefault)
+			if err != nil {
+				klog.Errorf("reconcileLoadBalancer for service(%s): getAzureLoadBalancer(%s) failed: %v", serviceName, lbName, err)
+				return nil, err
 			}
+			if !exist {
+				return nil, fmt.Errorf("load balancer %q not found", lbName)
+			}
+			lb = &newLB
 		}
 	}
 
