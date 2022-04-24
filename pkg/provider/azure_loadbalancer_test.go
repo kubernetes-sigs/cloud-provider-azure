@@ -1630,7 +1630,6 @@ func TestIsFrontendIPChanged(t *testing.T) {
 		}
 
 		mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).AnyTimes()
 		mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		for _, existingPIP := range test.existingPIPs {
 			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", *existingPIP.Name, gomock.Any()).Return(existingPIP, nil).AnyTimes()
@@ -1642,7 +1641,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 		test.service.Spec.LoadBalancerIP = test.loadBalancerIP
 		test.service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations
 		flag, rerr := az.isFrontendIPChanged("testCluster", test.config,
-			&test.service, test.lbFrontendIPConfigName)
+			&test.service, test.lbFrontendIPConfigName, &test.existingPIPs)
 		if rerr != nil {
 			fmt.Println(rerr.Error())
 		}
@@ -1690,13 +1689,14 @@ func TestDeterminePublicIPName(t *testing.T) {
 			expectedError: false,
 		},
 	}
+
 	for i, test := range testCases {
 		az := GetTestCloud(ctrl)
 		service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
 		service.Spec.LoadBalancerIP = test.loadBalancerIP
 
 		mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).AnyTimes()
+		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(1)
 		mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		for _, existingPIP := range test.existingPIPs {
 			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", *existingPIP.Name, gomock.Any()).Return(existingPIP, nil).AnyTimes()
@@ -1705,7 +1705,7 @@ func TestDeterminePublicIPName(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		ip, _, err := az.determinePublicIPName("testCluster", &service)
+		ip, _, err := az.determinePublicIPName("testCluster", &service, nil)
 		assert.Equal(t, test.expectedIP, ip, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
@@ -2753,7 +2753,7 @@ func TestGetServiceLoadBalancerStatus(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		status, _, err := az.getServiceLoadBalancerStatus(test.service, test.lb)
+		status, _, err := az.getServiceLoadBalancerStatus(test.service, test.lb, nil)
 		assert.Equal(t, test.expectedStatus, status, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
