@@ -241,7 +241,7 @@ func getNodePrivateIPAddress(service *v1.Service, node *v1.Node) string {
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
 			utilnet.IsIPv6String(nodeAddress.Address) == isIPV6SVC {
-			klog.V(4).Infof("getNodePrivateIPAddress: node %s, ip %s", node.Name, nodeAddress.Address)
+			klog.V(6).Infof("getNodePrivateIPAddress: node %s, ip %s", node.Name, nodeAddress.Address)
 			return nodeAddress.Address
 		}
 	}
