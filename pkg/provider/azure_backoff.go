@@ -349,7 +349,7 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 	agentPoolVMSetNamesSet := sets.NewString()
 	if agentPoolVMSetNames != nil && len(*agentPoolVMSetNames) > 0 {
 		for _, vmSetName := range *agentPoolVMSetNames {
-			klog.V(5).Infof("ListManagedLBs: found agent pool vmSet name %s", vmSetName)
+			klog.V(6).Infof("ListManagedLBs: found agent pool vmSet name %s", vmSetName)
 			agentPoolVMSetNamesSet.Insert(strings.ToLower(vmSetName))
 		}
 	}

@@ -317,7 +317,7 @@ func (ss *ScaleSet) newAvailabilitySetNodesCache() (*azcache.TimedCache, error) 
 func (ss *ScaleSet) isNodeManagedByAvailabilitySet(nodeName string, crt azcache.AzureCacheReadType) (bool, error) {
 	// Assume all nodes are managed by VMSS when DisableAvailabilitySetNodes is enabled.
 	if ss.DisableAvailabilitySetNodes {
-		klog.V(2).Infof("Assuming node %q is managed by VMSS since DisableAvailabilitySetNodes is set to true", nodeName)
+		klog.V(6).Infof("Assuming node %q is managed by VMSS since DisableAvailabilitySetNodes is set to true", nodeName)
 		return false, nil
 	}
 
