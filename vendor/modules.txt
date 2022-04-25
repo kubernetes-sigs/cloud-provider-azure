@@ -82,8 +82,8 @@ github.com/emicklei/go-restful/log
 # github.com/evanphx/json-patch v5.6.0+incompatible
 ## explicit
 github.com/evanphx/json-patch
-# github.com/fsnotify/fsnotify v1.5.2
-## explicit; go 1.16
+# github.com/fsnotify/fsnotify v1.5.3
+## explicit; go 1.13
 github.com/fsnotify/fsnotify
 # github.com/go-logr/logr v0.4.0
 ## explicit; go 1.14
