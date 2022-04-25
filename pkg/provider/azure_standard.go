@@ -653,7 +653,7 @@ func (as *availabilitySet) GetIPByNodeName(name string) (string, string, error) 
 		if err != nil {
 			return "", "", fmt.Errorf("failed to publicIP name for node %q with pipID %q", name, pipID)
 		}
-		pip, existsPip, err := as.getPublicIPAddress(as.ResourceGroup, pipName)
+		pip, existsPip, err := as.getPublicIPAddress(as.ResourceGroup, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return "", "", err
 		}

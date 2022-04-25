@@ -55,7 +55,7 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 			return false
 		}
 		pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-		_, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName)
+		_, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return false
 		}
@@ -747,7 +747,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 				if err != nil {
 					return nil, nil, fmt.Errorf("get(%s): lb(%s) - failed to get LB PublicIPAddress Name from ID(%s)", serviceName, *lb.Name, *pipID)
 				}
-				pip, existsPip, err := az.getPublicIPAddress(az.getPublicIPAddressResourceGroup(service), pipName)
+				pip, existsPip, err := az.getPublicIPAddress(az.getPublicIPAddressResourceGroup(service), pipName, azcache.CacheReadTypeDefault)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -877,7 +877,7 @@ func (az *Cloud) findServiceIPAddress(ctx context.Context, clusterName string, s
 
 func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domainNameLabel, clusterName string, shouldPIPExisted, foundDNSLabelAnnotation bool) (*network.PublicIPAddress, error) {
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-	pip, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName)
+	pip, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
 	}
@@ -1263,7 +1263,7 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 		return false, err
 	}
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-	pip, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName)
+	pip, existsPip, err := az.getPublicIPAddress(pipResourceGroup, pipName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return false, err
 	}
