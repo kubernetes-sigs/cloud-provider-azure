@@ -31,12 +31,11 @@ func NewManagedClustersClientWithBaseURI(baseURI string, subscriptionID string) 
 	return ManagedClustersClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
 
-// CreateOrUpdate creates or updates a managed cluster with the specified configuration for agents and Kubernetes
-// version.
+// CreateOrUpdate sends the create or update request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-// parameters - parameters supplied to the Create or Update a Managed Cluster operation.
+// parameters - the managed cluster to create or update.
 func (client ManagedClustersClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, parameters ManagedCluster) (result ManagedClustersCreateOrUpdateFuture, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.CreateOrUpdate")
@@ -82,6 +81,10 @@ func (client ManagedClustersClient) CreateOrUpdate(ctx context.Context, resource
 										Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.ManagedOutboundIPs.Count", Name: validation.InclusiveMaximum, Rule: int64(100), Chain: nil},
 											{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.ManagedOutboundIPs.Count", Name: validation.InclusiveMinimum, Rule: int64(1), Chain: nil},
 										}},
+										{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.ManagedOutboundIPs.CountIPv6", Name: validation.Null, Rule: false,
+											Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.ManagedOutboundIPs.CountIPv6", Name: validation.InclusiveMaximum, Rule: int64(100), Chain: nil},
+												{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.ManagedOutboundIPs.CountIPv6", Name: validation.InclusiveMinimum, Rule: int64(0), Chain: nil},
+											}},
 									}},
 									{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.AllocatedOutboundPorts", Name: validation.Null, Rule: false,
 										Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.AllocatedOutboundPorts", Name: validation.InclusiveMaximum, Rule: int64(64000), Chain: nil},
@@ -90,6 +93,18 @@ func (client ManagedClustersClient) CreateOrUpdate(ctx context.Context, resource
 									{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.IdleTimeoutInMinutes", Name: validation.Null, Rule: false,
 										Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.IdleTimeoutInMinutes", Name: validation.InclusiveMaximum, Rule: int64(120), Chain: nil},
 											{Target: "parameters.ManagedClusterProperties.NetworkProfile.LoadBalancerProfile.IdleTimeoutInMinutes", Name: validation.InclusiveMinimum, Rule: int64(4), Chain: nil},
+										}},
+								}},
+							{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile", Name: validation.Null, Rule: false,
+								Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.ManagedOutboundIPProfile", Name: validation.Null, Rule: false,
+									Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.ManagedOutboundIPProfile.Count", Name: validation.Null, Rule: false,
+										Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.ManagedOutboundIPProfile.Count", Name: validation.InclusiveMaximum, Rule: int64(16), Chain: nil},
+											{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.ManagedOutboundIPProfile.Count", Name: validation.InclusiveMinimum, Rule: int64(1), Chain: nil},
+										}},
+									}},
+									{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.IdleTimeoutInMinutes", Name: validation.Null, Rule: false,
+										Chain: []validation.Constraint{{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.IdleTimeoutInMinutes", Name: validation.InclusiveMaximum, Rule: int64(120), Chain: nil},
+											{Target: "parameters.ManagedClusterProperties.NetworkProfile.NatGatewayProfile.IdleTimeoutInMinutes", Name: validation.InclusiveMinimum, Rule: int64(4), Chain: nil},
 										}},
 								}},
 						}},
@@ -120,7 +135,7 @@ func (client ManagedClustersClient) CreateOrUpdatePreparer(ctx context.Context, 
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -163,7 +178,7 @@ func (client ManagedClustersClient) CreateOrUpdateResponder(resp *http.Response)
 	return
 }
 
-// Delete deletes the managed cluster with a specified resource group and name.
+// Delete sends the delete request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -211,7 +226,7 @@ func (client ManagedClustersClient) DeletePreparer(ctx context.Context, resource
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -251,7 +266,7 @@ func (client ManagedClustersClient) DeleteResponder(resp *http.Response) (result
 	return
 }
 
-// Get gets the details of the managed cluster with a specified resource group and name.
+// Get sends the get request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -306,7 +321,7 @@ func (client ManagedClustersClient) GetPreparer(ctx context.Context, resourceGro
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -337,12 +352,9 @@ func (client ManagedClustersClient) GetResponder(resp *http.Response) (result Ma
 	return
 }
 
-// GetAccessProfile gets the accessProfile for the specified role name of the managed cluster with a specified resource
-// group and name. **WARNING**: This API will be deprecated. Instead use
-// [ListClusterUserCredentials](https://docs.microsoft.com/en-us/rest/api/aks/managedclusters/listclusterusercredentials)
-// or
-// [ListClusterAdminCredentials](https://docs.microsoft.com/en-us/rest/api/aks/managedclusters/listclusteradmincredentials)
-// .
+// GetAccessProfile **WARNING**: This API will be deprecated. Instead use
+// [ListClusterUserCredentials](https://docs.microsoft.com/rest/api/aks/managedclusters/listclusterusercredentials) or
+// [ListClusterAdminCredentials](https://docs.microsoft.com/rest/api/aks/managedclusters/listclusteradmincredentials) .
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -399,7 +411,7 @@ func (client ManagedClustersClient) GetAccessProfilePreparer(ctx context.Context
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -430,8 +442,173 @@ func (client ManagedClustersClient) GetAccessProfileResponder(resp *http.Respons
 	return
 }
 
-// GetUpgradeProfile gets the details of the upgrade profile for a managed cluster with a specified resource group and
-// name.
+// GetCommandResult sends the get command result request.
+// Parameters:
+// resourceGroupName - the name of the resource group.
+// resourceName - the name of the managed cluster resource.
+// commandID - id of the command.
+func (client ManagedClustersClient) GetCommandResult(ctx context.Context, resourceGroupName string, resourceName string, commandID string) (result RunCommandResult, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.GetCommandResult")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	if err := validation.Validate([]validation.Validation{
+		{TargetValue: resourceGroupName,
+			Constraints: []validation.Constraint{{Target: "resourceGroupName", Name: validation.MinLength, Rule: 1, Chain: nil}}},
+		{TargetValue: resourceName,
+			Constraints: []validation.Constraint{{Target: "resourceName", Name: validation.MaxLength, Rule: 63, Chain: nil},
+				{Target: "resourceName", Name: validation.MinLength, Rule: 1, Chain: nil},
+				{Target: "resourceName", Name: validation.Pattern, Rule: `^[a-zA-Z0-9]$|^[a-zA-Z0-9][-_a-zA-Z0-9]{0,61}[a-zA-Z0-9]$`, Chain: nil}}}}); err != nil {
+		return result, validation.NewError("containerservice.ManagedClustersClient", "GetCommandResult", err.Error())
+	}
+
+	req, err := client.GetCommandResultPreparer(ctx, resourceGroupName, resourceName, commandID)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetCommandResult", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetCommandResultSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetCommandResult", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetCommandResultResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetCommandResult", resp, "Failure responding to request")
+		return
+	}
+
+	return
+}
+
+// GetCommandResultPreparer prepares the GetCommandResult request.
+func (client ManagedClustersClient) GetCommandResultPreparer(ctx context.Context, resourceGroupName string, resourceName string, commandID string) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"commandId":         autorest.Encode("path", commandID),
+		"resourceGroupName": autorest.Encode("path", resourceGroupName),
+		"resourceName":      autorest.Encode("path", resourceName),
+		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/commandResults/{commandId}", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetCommandResultSender sends the GetCommandResult request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) GetCommandResultSender(req *http.Request) (*http.Response, error) {
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+}
+
+// GetCommandResultResponder handles the response to the GetCommandResult request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) GetCommandResultResponder(resp *http.Response) (result RunCommandResult, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetOSOptions sends the get os options request.
+// Parameters:
+// location - the name of a supported Azure region.
+// resourceType - the resource type for which the OS options needs to be returned
+func (client ManagedClustersClient) GetOSOptions(ctx context.Context, location string, resourceType string) (result OSOptionProfile, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.GetOSOptions")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetOSOptionsPreparer(ctx, location, resourceType)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetOSOptions", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetOSOptionsSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetOSOptions", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetOSOptionsResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "GetOSOptions", resp, "Failure responding to request")
+		return
+	}
+
+	return
+}
+
+// GetOSOptionsPreparer prepares the GetOSOptions request.
+func (client ManagedClustersClient) GetOSOptionsPreparer(ctx context.Context, location string, resourceType string) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"location":       autorest.Encode("path", location),
+		"subscriptionId": autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+	if len(resourceType) > 0 {
+		queryParameters["resource-type"] = autorest.Encode("query", resourceType)
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/providers/Microsoft.ContainerService/locations/{location}/osOptions/default", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetOSOptionsSender sends the GetOSOptions request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) GetOSOptionsSender(req *http.Request) (*http.Response, error) {
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+}
+
+// GetOSOptionsResponder handles the response to the GetOSOptions request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) GetOSOptionsResponder(resp *http.Response) (result OSOptionProfile, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetUpgradeProfile sends the get upgrade profile request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -486,7 +663,7 @@ func (client ManagedClustersClient) GetUpgradeProfilePreparer(ctx context.Contex
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -517,8 +694,7 @@ func (client ManagedClustersClient) GetUpgradeProfileResponder(resp *http.Respon
 	return
 }
 
-// List gets a list of managed clusters in the specified subscription. The operation returns properties of each managed
-// cluster.
+// List sends the list request.
 func (client ManagedClustersClient) List(ctx context.Context) (result ManagedClusterListResultPage, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.List")
@@ -563,7 +739,7 @@ func (client ManagedClustersClient) ListPreparer(ctx context.Context) (*http.Req
 		"subscriptionId": autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -631,8 +807,7 @@ func (client ManagedClustersClient) ListComplete(ctx context.Context) (result Ma
 	return
 }
 
-// ListByResourceGroup lists managed clusters in the specified subscription and resource group. The operation returns
-// properties of each managed cluster.
+// ListByResourceGroup sends the list by resource group request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 func (client ManagedClustersClient) ListByResourceGroup(ctx context.Context, resourceGroupName string) (result ManagedClusterListResultPage, err error) {
@@ -686,7 +861,7 @@ func (client ManagedClustersClient) ListByResourceGroupPreparer(ctx context.Cont
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -754,12 +929,12 @@ func (client ManagedClustersClient) ListByResourceGroupComplete(ctx context.Cont
 	return
 }
 
-// ListClusterAdminCredentials gets cluster admin credential of the managed cluster with a specified resource group and
-// name.
+// ListClusterAdminCredentials sends the list cluster admin credentials request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-func (client ManagedClustersClient) ListClusterAdminCredentials(ctx context.Context, resourceGroupName string, resourceName string) (result CredentialResults, err error) {
+// serverFqdn - server fqdn type for credentials to be returned
+func (client ManagedClustersClient) ListClusterAdminCredentials(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (result CredentialResults, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ListClusterAdminCredentials")
 		defer func() {
@@ -780,7 +955,7 @@ func (client ManagedClustersClient) ListClusterAdminCredentials(ctx context.Cont
 		return result, validation.NewError("containerservice.ManagedClustersClient", "ListClusterAdminCredentials", err.Error())
 	}
 
-	req, err := client.ListClusterAdminCredentialsPreparer(ctx, resourceGroupName, resourceName)
+	req, err := client.ListClusterAdminCredentialsPreparer(ctx, resourceGroupName, resourceName, serverFqdn)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListClusterAdminCredentials", nil, "Failure preparing request")
 		return
@@ -803,16 +978,19 @@ func (client ManagedClustersClient) ListClusterAdminCredentials(ctx context.Cont
 }
 
 // ListClusterAdminCredentialsPreparer prepares the ListClusterAdminCredentials request.
-func (client ManagedClustersClient) ListClusterAdminCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+func (client ManagedClustersClient) ListClusterAdminCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (*http.Request, error) {
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", resourceGroupName),
 		"resourceName":      autorest.Encode("path", resourceName),
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
+	}
+	if len(serverFqdn) > 0 {
+		queryParameters["server-fqdn"] = autorest.Encode("query", serverFqdn)
 	}
 
 	preparer := autorest.CreatePreparer(
@@ -841,12 +1019,12 @@ func (client ManagedClustersClient) ListClusterAdminCredentialsResponder(resp *h
 	return
 }
 
-// ListClusterMonitoringUserCredentials gets cluster monitoring user credential of the managed cluster with a specified
-// resource group and name.
+// ListClusterMonitoringUserCredentials sends the list cluster monitoring user credentials request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-func (client ManagedClustersClient) ListClusterMonitoringUserCredentials(ctx context.Context, resourceGroupName string, resourceName string) (result CredentialResults, err error) {
+// serverFqdn - server fqdn type for credentials to be returned
+func (client ManagedClustersClient) ListClusterMonitoringUserCredentials(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (result CredentialResults, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ListClusterMonitoringUserCredentials")
 		defer func() {
@@ -867,7 +1045,7 @@ func (client ManagedClustersClient) ListClusterMonitoringUserCredentials(ctx con
 		return result, validation.NewError("containerservice.ManagedClustersClient", "ListClusterMonitoringUserCredentials", err.Error())
 	}
 
-	req, err := client.ListClusterMonitoringUserCredentialsPreparer(ctx, resourceGroupName, resourceName)
+	req, err := client.ListClusterMonitoringUserCredentialsPreparer(ctx, resourceGroupName, resourceName, serverFqdn)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListClusterMonitoringUserCredentials", nil, "Failure preparing request")
 		return
@@ -890,16 +1068,19 @@ func (client ManagedClustersClient) ListClusterMonitoringUserCredentials(ctx con
 }
 
 // ListClusterMonitoringUserCredentialsPreparer prepares the ListClusterMonitoringUserCredentials request.
-func (client ManagedClustersClient) ListClusterMonitoringUserCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+func (client ManagedClustersClient) ListClusterMonitoringUserCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (*http.Request, error) {
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", resourceGroupName),
 		"resourceName":      autorest.Encode("path", resourceName),
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
+	}
+	if len(serverFqdn) > 0 {
+		queryParameters["server-fqdn"] = autorest.Encode("query", serverFqdn)
 	}
 
 	preparer := autorest.CreatePreparer(
@@ -928,12 +1109,12 @@ func (client ManagedClustersClient) ListClusterMonitoringUserCredentialsResponde
 	return
 }
 
-// ListClusterUserCredentials gets cluster user credential of the managed cluster with a specified resource group and
-// name.
+// ListClusterUserCredentials sends the list cluster user credentials request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-func (client ManagedClustersClient) ListClusterUserCredentials(ctx context.Context, resourceGroupName string, resourceName string) (result CredentialResults, err error) {
+// serverFqdn - server fqdn type for credentials to be returned
+func (client ManagedClustersClient) ListClusterUserCredentials(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (result CredentialResults, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ListClusterUserCredentials")
 		defer func() {
@@ -954,7 +1135,7 @@ func (client ManagedClustersClient) ListClusterUserCredentials(ctx context.Conte
 		return result, validation.NewError("containerservice.ManagedClustersClient", "ListClusterUserCredentials", err.Error())
 	}
 
-	req, err := client.ListClusterUserCredentialsPreparer(ctx, resourceGroupName, resourceName)
+	req, err := client.ListClusterUserCredentialsPreparer(ctx, resourceGroupName, resourceName, serverFqdn)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListClusterUserCredentials", nil, "Failure preparing request")
 		return
@@ -977,16 +1158,19 @@ func (client ManagedClustersClient) ListClusterUserCredentials(ctx context.Conte
 }
 
 // ListClusterUserCredentialsPreparer prepares the ListClusterUserCredentials request.
-func (client ManagedClustersClient) ListClusterUserCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+func (client ManagedClustersClient) ListClusterUserCredentialsPreparer(ctx context.Context, resourceGroupName string, resourceName string, serverFqdn string) (*http.Request, error) {
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", resourceGroupName),
 		"resourceName":      autorest.Encode("path", resourceName),
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
+	}
+	if len(serverFqdn) > 0 {
+		queryParameters["server-fqdn"] = autorest.Encode("query", serverFqdn)
 	}
 
 	preparer := autorest.CreatePreparer(
@@ -1015,11 +1199,140 @@ func (client ManagedClustersClient) ListClusterUserCredentialsResponder(resp *ht
 	return
 }
 
-// ResetAADProfile update the AAD Profile for a managed cluster.
+// ListOutboundNetworkDependenciesEndpoints gets a list of egress endpoints (network endpoints of all outbound
+// dependencies) in the specified managed cluster. The operation returns properties of each egress endpoint.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-// parameters - parameters supplied to the Reset AAD Profile operation for a Managed Cluster.
+func (client ManagedClustersClient) ListOutboundNetworkDependenciesEndpoints(ctx context.Context, resourceGroupName string, resourceName string) (result OutboundEnvironmentEndpointCollectionPage, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ListOutboundNetworkDependenciesEndpoints")
+		defer func() {
+			sc := -1
+			if result.oeec.Response.Response != nil {
+				sc = result.oeec.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	if err := validation.Validate([]validation.Validation{
+		{TargetValue: resourceGroupName,
+			Constraints: []validation.Constraint{{Target: "resourceGroupName", Name: validation.MinLength, Rule: 1, Chain: nil}}},
+		{TargetValue: resourceName,
+			Constraints: []validation.Constraint{{Target: "resourceName", Name: validation.MaxLength, Rule: 63, Chain: nil},
+				{Target: "resourceName", Name: validation.MinLength, Rule: 1, Chain: nil},
+				{Target: "resourceName", Name: validation.Pattern, Rule: `^[a-zA-Z0-9]$|^[a-zA-Z0-9][-_a-zA-Z0-9]{0,61}[a-zA-Z0-9]$`, Chain: nil}}}}); err != nil {
+		return result, validation.NewError("containerservice.ManagedClustersClient", "ListOutboundNetworkDependenciesEndpoints", err.Error())
+	}
+
+	result.fn = client.listOutboundNetworkDependenciesEndpointsNextResults
+	req, err := client.ListOutboundNetworkDependenciesEndpointsPreparer(ctx, resourceGroupName, resourceName)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListOutboundNetworkDependenciesEndpoints", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.ListOutboundNetworkDependenciesEndpointsSender(req)
+	if err != nil {
+		result.oeec.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListOutboundNetworkDependenciesEndpoints", resp, "Failure sending request")
+		return
+	}
+
+	result.oeec, err = client.ListOutboundNetworkDependenciesEndpointsResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "ListOutboundNetworkDependenciesEndpoints", resp, "Failure responding to request")
+		return
+	}
+	if result.oeec.hasNextLink() && result.oeec.IsEmpty() {
+		err = result.NextWithContext(ctx)
+		return
+	}
+
+	return
+}
+
+// ListOutboundNetworkDependenciesEndpointsPreparer prepares the ListOutboundNetworkDependenciesEndpoints request.
+func (client ManagedClustersClient) ListOutboundNetworkDependenciesEndpointsPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", resourceGroupName),
+		"resourceName":      autorest.Encode("path", resourceName),
+		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/outboundNetworkDependenciesEndpoints", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// ListOutboundNetworkDependenciesEndpointsSender sends the ListOutboundNetworkDependenciesEndpoints request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) ListOutboundNetworkDependenciesEndpointsSender(req *http.Request) (*http.Response, error) {
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+}
+
+// ListOutboundNetworkDependenciesEndpointsResponder handles the response to the ListOutboundNetworkDependenciesEndpoints request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) ListOutboundNetworkDependenciesEndpointsResponder(resp *http.Response) (result OutboundEnvironmentEndpointCollection, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// listOutboundNetworkDependenciesEndpointsNextResults retrieves the next set of results, if any.
+func (client ManagedClustersClient) listOutboundNetworkDependenciesEndpointsNextResults(ctx context.Context, lastResults OutboundEnvironmentEndpointCollection) (result OutboundEnvironmentEndpointCollection, err error) {
+	req, err := lastResults.outboundEnvironmentEndpointCollectionPreparer(ctx)
+	if err != nil {
+		return result, autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "listOutboundNetworkDependenciesEndpointsNextResults", nil, "Failure preparing next results request")
+	}
+	if req == nil {
+		return
+	}
+	resp, err := client.ListOutboundNetworkDependenciesEndpointsSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		return result, autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "listOutboundNetworkDependenciesEndpointsNextResults", resp, "Failure sending next results request")
+	}
+	result, err = client.ListOutboundNetworkDependenciesEndpointsResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "listOutboundNetworkDependenciesEndpointsNextResults", resp, "Failure responding to next results request")
+	}
+	return
+}
+
+// ListOutboundNetworkDependenciesEndpointsComplete enumerates all values, automatically crossing page boundaries as required.
+func (client ManagedClustersClient) ListOutboundNetworkDependenciesEndpointsComplete(ctx context.Context, resourceGroupName string, resourceName string) (result OutboundEnvironmentEndpointCollectionIterator, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ListOutboundNetworkDependenciesEndpoints")
+		defer func() {
+			sc := -1
+			if result.Response().Response.Response != nil {
+				sc = result.page.Response().Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	result.page, err = client.ListOutboundNetworkDependenciesEndpoints(ctx, resourceGroupName, resourceName)
+	return
+}
+
+// ResetAADProfile sends the reset aad profile request.
+// Parameters:
+// resourceGroupName - the name of the resource group.
+// resourceName - the name of the managed cluster resource.
+// parameters - the AAD profile to set on the Managed Cluster
 func (client ManagedClustersClient) ResetAADProfile(ctx context.Context, resourceGroupName string, resourceName string, parameters ManagedClusterAADProfile) (result ManagedClustersResetAADProfileFuture, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ResetAADProfile")
@@ -1064,7 +1377,7 @@ func (client ManagedClustersClient) ResetAADProfilePreparer(ctx context.Context,
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -1106,11 +1419,11 @@ func (client ManagedClustersClient) ResetAADProfileResponder(resp *http.Response
 	return
 }
 
-// ResetServicePrincipalProfile update the service principal Profile for a managed cluster.
+// ResetServicePrincipalProfile this action cannot be performed on a cluster that is not using a service principal
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
-// parameters - parameters supplied to the Reset Service Principal Profile operation for a Managed Cluster.
+// parameters - the service principal profile to set on the managed cluster.
 func (client ManagedClustersClient) ResetServicePrincipalProfile(ctx context.Context, resourceGroupName string, resourceName string, parameters ManagedClusterServicePrincipalProfile) (result ManagedClustersResetServicePrincipalProfileFuture, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.ResetServicePrincipalProfile")
@@ -1157,7 +1470,7 @@ func (client ManagedClustersClient) ResetServicePrincipalProfilePreparer(ctx con
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -1199,7 +1512,8 @@ func (client ManagedClustersClient) ResetServicePrincipalProfileResponder(resp *
 	return
 }
 
-// RotateClusterCertificates rotate certificates of a managed cluster.
+// RotateClusterCertificates see [Certificate rotation](https://docs.microsoft.com/azure/aks/certificate-rotation) for
+// more details about rotating managed cluster certificates.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -1247,7 +1561,7 @@ func (client ManagedClustersClient) RotateClusterCertificatesPreparer(ctx contex
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -1287,7 +1601,282 @@ func (client ManagedClustersClient) RotateClusterCertificatesResponder(resp *htt
 	return
 }
 
-// UpdateTags updates a managed cluster with the specified tags.
+// RunCommand AKS will create a pod to run the command. This is primarily useful for private clusters. For more
+// information see [AKS Run Command](https://docs.microsoft.com/azure/aks/private-clusters#aks-run-command-preview).
+// Parameters:
+// resourceGroupName - the name of the resource group.
+// resourceName - the name of the managed cluster resource.
+// requestPayload - the run command request
+func (client ManagedClustersClient) RunCommand(ctx context.Context, resourceGroupName string, resourceName string, requestPayload RunCommandRequest) (result ManagedClustersRunCommandFuture, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.RunCommand")
+		defer func() {
+			sc := -1
+			if result.FutureAPI != nil && result.FutureAPI.Response() != nil {
+				sc = result.FutureAPI.Response().StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	if err := validation.Validate([]validation.Validation{
+		{TargetValue: resourceGroupName,
+			Constraints: []validation.Constraint{{Target: "resourceGroupName", Name: validation.MinLength, Rule: 1, Chain: nil}}},
+		{TargetValue: resourceName,
+			Constraints: []validation.Constraint{{Target: "resourceName", Name: validation.MaxLength, Rule: 63, Chain: nil},
+				{Target: "resourceName", Name: validation.MinLength, Rule: 1, Chain: nil},
+				{Target: "resourceName", Name: validation.Pattern, Rule: `^[a-zA-Z0-9]$|^[a-zA-Z0-9][-_a-zA-Z0-9]{0,61}[a-zA-Z0-9]$`, Chain: nil}}},
+		{TargetValue: requestPayload,
+			Constraints: []validation.Constraint{{Target: "requestPayload.Command", Name: validation.Null, Rule: true, Chain: nil}}}}); err != nil {
+		return result, validation.NewError("containerservice.ManagedClustersClient", "RunCommand", err.Error())
+	}
+
+	req, err := client.RunCommandPreparer(ctx, resourceGroupName, resourceName, requestPayload)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "RunCommand", nil, "Failure preparing request")
+		return
+	}
+
+	result, err = client.RunCommandSender(req)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "RunCommand", result.Response(), "Failure sending request")
+		return
+	}
+
+	return
+}
+
+// RunCommandPreparer prepares the RunCommand request.
+func (client ManagedClustersClient) RunCommandPreparer(ctx context.Context, resourceGroupName string, resourceName string, requestPayload RunCommandRequest) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", resourceGroupName),
+		"resourceName":      autorest.Encode("path", resourceName),
+		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPost(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/runCommand", pathParameters),
+		autorest.WithJSON(requestPayload),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// RunCommandSender sends the RunCommand request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) RunCommandSender(req *http.Request) (future ManagedClustersRunCommandFuture, err error) {
+	var resp *http.Response
+	future.FutureAPI = &azure.Future{}
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	if err != nil {
+		return
+	}
+	var azf azure.Future
+	azf, err = azure.NewFutureFromResponse(resp)
+	future.FutureAPI = &azf
+	future.Result = future.result
+	return
+}
+
+// RunCommandResponder handles the response to the RunCommand request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) RunCommandResponder(resp *http.Response) (result RunCommandResult, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// Start see [starting a cluster](https://docs.microsoft.com/azure/aks/start-stop-cluster) for more details about
+// starting a cluster.
+// Parameters:
+// resourceGroupName - the name of the resource group.
+// resourceName - the name of the managed cluster resource.
+func (client ManagedClustersClient) Start(ctx context.Context, resourceGroupName string, resourceName string) (result ManagedClustersStartFuture, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.Start")
+		defer func() {
+			sc := -1
+			if result.FutureAPI != nil && result.FutureAPI.Response() != nil {
+				sc = result.FutureAPI.Response().StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	if err := validation.Validate([]validation.Validation{
+		{TargetValue: resourceGroupName,
+			Constraints: []validation.Constraint{{Target: "resourceGroupName", Name: validation.MinLength, Rule: 1, Chain: nil}}},
+		{TargetValue: resourceName,
+			Constraints: []validation.Constraint{{Target: "resourceName", Name: validation.MaxLength, Rule: 63, Chain: nil},
+				{Target: "resourceName", Name: validation.MinLength, Rule: 1, Chain: nil},
+				{Target: "resourceName", Name: validation.Pattern, Rule: `^[a-zA-Z0-9]$|^[a-zA-Z0-9][-_a-zA-Z0-9]{0,61}[a-zA-Z0-9]$`, Chain: nil}}}}); err != nil {
+		return result, validation.NewError("containerservice.ManagedClustersClient", "Start", err.Error())
+	}
+
+	req, err := client.StartPreparer(ctx, resourceGroupName, resourceName)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "Start", nil, "Failure preparing request")
+		return
+	}
+
+	result, err = client.StartSender(req)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "Start", result.Response(), "Failure sending request")
+		return
+	}
+
+	return
+}
+
+// StartPreparer prepares the Start request.
+func (client ManagedClustersClient) StartPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", resourceGroupName),
+		"resourceName":      autorest.Encode("path", resourceName),
+		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsPost(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/start", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// StartSender sends the Start request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) StartSender(req *http.Request) (future ManagedClustersStartFuture, err error) {
+	var resp *http.Response
+	future.FutureAPI = &azure.Future{}
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	if err != nil {
+		return
+	}
+	var azf azure.Future
+	azf, err = azure.NewFutureFromResponse(resp)
+	future.FutureAPI = &azf
+	future.Result = future.result
+	return
+}
+
+// StartResponder handles the response to the Start request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) StartResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusNoContent),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// Stop this can only be performed on Azure Virtual Machine Scale set backed clusters. Stopping a cluster stops the
+// control plane and agent nodes entirely, while maintaining all object and cluster state. A cluster does not accrue
+// charges while it is stopped. See [stopping a cluster](https://docs.microsoft.com/azure/aks/start-stop-cluster) for
+// more details about stopping a cluster.
+// Parameters:
+// resourceGroupName - the name of the resource group.
+// resourceName - the name of the managed cluster resource.
+func (client ManagedClustersClient) Stop(ctx context.Context, resourceGroupName string, resourceName string) (result ManagedClustersStopFuture, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/ManagedClustersClient.Stop")
+		defer func() {
+			sc := -1
+			if result.FutureAPI != nil && result.FutureAPI.Response() != nil {
+				sc = result.FutureAPI.Response().StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	if err := validation.Validate([]validation.Validation{
+		{TargetValue: resourceGroupName,
+			Constraints: []validation.Constraint{{Target: "resourceGroupName", Name: validation.MinLength, Rule: 1, Chain: nil}}},
+		{TargetValue: resourceName,
+			Constraints: []validation.Constraint{{Target: "resourceName", Name: validation.MaxLength, Rule: 63, Chain: nil},
+				{Target: "resourceName", Name: validation.MinLength, Rule: 1, Chain: nil},
+				{Target: "resourceName", Name: validation.Pattern, Rule: `^[a-zA-Z0-9]$|^[a-zA-Z0-9][-_a-zA-Z0-9]{0,61}[a-zA-Z0-9]$`, Chain: nil}}}}); err != nil {
+		return result, validation.NewError("containerservice.ManagedClustersClient", "Stop", err.Error())
+	}
+
+	req, err := client.StopPreparer(ctx, resourceGroupName, resourceName)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "Stop", nil, "Failure preparing request")
+		return
+	}
+
+	result, err = client.StopSender(req)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "containerservice.ManagedClustersClient", "Stop", result.Response(), "Failure sending request")
+		return
+	}
+
+	return
+}
+
+// StopPreparer prepares the Stop request.
+func (client ManagedClustersClient) StopPreparer(ctx context.Context, resourceGroupName string, resourceName string) (*http.Request, error) {
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", resourceGroupName),
+		"resourceName":      autorest.Encode("path", resourceName),
+		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
+	}
+
+	const APIVersion = "2021-10-01"
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsPost(),
+		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{resourceName}/stop", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// StopSender sends the Stop request. The method will close the
+// http.Response Body if it receives an error.
+func (client ManagedClustersClient) StopSender(req *http.Request) (future ManagedClustersStopFuture, err error) {
+	var resp *http.Response
+	future.FutureAPI = &azure.Future{}
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	if err != nil {
+		return
+	}
+	var azf azure.Future
+	azf, err = azure.NewFutureFromResponse(resp)
+	future.FutureAPI = &azf
+	future.Result = future.result
+	return
+}
+
+// StopResponder handles the response to the Stop request. The method always
+// closes the http.Response Body.
+func (client ManagedClustersClient) StopResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusNoContent),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateTags sends the update tags request.
 // Parameters:
 // resourceGroupName - the name of the resource group.
 // resourceName - the name of the managed cluster resource.
@@ -1336,7 +1925,7 @@ func (client ManagedClustersClient) UpdateTagsPreparer(ctx context.Context, reso
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2020-04-01"
+	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
