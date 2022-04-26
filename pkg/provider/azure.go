@@ -223,6 +223,8 @@ type Config struct {
 	RouteTableCacheTTLInSeconds int `json:"routeTableCacheTTLInSeconds,omitempty" yaml:"routeTableCacheTTLInSeconds,omitempty"`
 	// AvailabilitySetsCacheTTLInSeconds sets the cache TTL for VMAS
 	AvailabilitySetsCacheTTLInSeconds int `json:"availabilitySetsCacheTTLInSeconds,omitempty" yaml:"availabilitySetsCacheTTLInSeconds,omitempty"`
+	// PublicIPCacheTTLInSeconds sets the cache TTL for public ip
+	PublicIPCacheTTLInSeconds int `json:"publicIPCacheTTLInSeconds,omitempty" yaml:"publicIPCacheTTLInSeconds,omitempty"`
 	// RouteUpdateWaitingInSeconds is the delay time for waiting route updates to take effect. This waiting delay is added
 	// because the routes are not taken effect when the async route updating operation returns success. Default is 30 seconds.
 	RouteUpdateWaitingInSeconds int `json:"routeUpdateWaitingInSeconds,omitempty" yaml:"routeUpdateWaitingInSeconds,omitempty"`
@@ -317,6 +319,7 @@ type Cloud struct {
 	lbCache  *azcache.TimedCache
 	nsgCache *azcache.TimedCache
 	rtCache  *azcache.TimedCache
+	pipCache *azcache.TimedCache
 
 	*BlobDiskController
 	*ManagedDiskController
@@ -596,6 +599,11 @@ func (az *Cloud) initCaches() (err error) {
 	}
 
 	az.rtCache, err = az.newRouteTableCache()
+	if err != nil {
+		return err
+	}
+
+	az.pipCache, err = az.newPIPCache()
 	if err != nil {
 		return err
 	}
