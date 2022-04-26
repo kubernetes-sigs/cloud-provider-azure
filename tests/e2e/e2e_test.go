@@ -33,6 +33,7 @@ import (
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/auth"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/network"
+	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/node"
 )
 
 const (
