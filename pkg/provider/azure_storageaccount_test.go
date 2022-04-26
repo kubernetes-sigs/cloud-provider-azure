@@ -408,11 +408,11 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 		cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
 
 		mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
-		mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+		mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
 		cloud.privateendpointclient = mockPrivateEndpointClient
 
 		mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
-		mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+		mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
 		cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
 
 		testAccountOptions := &AccountOptions{
