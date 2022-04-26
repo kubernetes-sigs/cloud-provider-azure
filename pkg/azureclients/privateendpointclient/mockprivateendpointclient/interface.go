@@ -27,6 +27,7 @@ import (
 
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	gomock "github.com/golang/mock/gomock"
+	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface.
@@ -53,25 +54,25 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, endpointName string, privateEndpoint network.PrivateEndpoint, waitForCompletion bool) error {
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, endpointName string, privateEndpoint network.PrivateEndpoint, etag string, waitForCompletion bool) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion)
-	ret0, _ := ret[0].(error)
+	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, endpointName, privateEndpoint, etag, waitForCompletion)
+	ret0, _ := ret[0].(*retry.Error)
 	return ret0
 }
 
 // CreateOrUpdate indicates an expected call of CreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, endpointName, privateEndpoint, etag, waitForCompletion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, endpointName, privateEndpoint, waitForCompletion)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, endpointName, privateEndpoint, etag, waitForCompletion)
 }
 
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateEndpointName, expand string) (network.PrivateEndpoint, error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateEndpointName, expand string) (network.PrivateEndpoint, *retry.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, privateEndpointName, expand)
 	ret0, _ := ret[0].(network.PrivateEndpoint)
-	ret1, _ := ret[1].(error)
+	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
