@@ -129,7 +129,7 @@ func (c *Client) getDisk(ctx context.Context, resourceGroupName string, diskName
 	)
 	result := compute.Disk{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "disk.get.request", resourceID, rerr.Error())
@@ -338,7 +338,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 	page := &DiskListPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "disk.list.request", resourceID, rerr.Error())
