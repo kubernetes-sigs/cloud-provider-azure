@@ -129,7 +129,7 @@ func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScal
 	)
 	result := compute.VirtualMachineScaleSetVM{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, string(expand))
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, string(expand))
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.get.request", resourceID, rerr.Error())
@@ -192,7 +192,7 @@ func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtu
 	page := &VirtualMachineScaleSetVMListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, expand)
+	resp, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.list.request", resourceID, rerr.Error())

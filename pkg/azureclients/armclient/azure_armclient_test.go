@@ -265,7 +265,7 @@ func TestNormalizeAzureRegion(t *testing.T) {
 	}
 }
 
-func TestGetResource(t *testing.T) {
+func TestGetResourceWithExpandQuery(t *testing.T) {
 	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01"
 	count := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +281,7 @@ func TestGetResource(t *testing.T) {
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
-	response, rerr := armClient.GetResource(ctx, testResourceID, "data")
+	response, rerr := armClient.GetResourceWithExpandQuery(ctx, testResourceID, "data")
 	byteResponseBody, _ := ioutil.ReadAll(response.Body)
 	stringResponseBody := string(byteResponseBody)
 	assert.Nil(t, rerr)
@@ -289,7 +289,7 @@ func TestGetResource(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-func TestGetResourceWithDecorators(t *testing.T) {
+func TestGetResource(t *testing.T) {
 	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2"
 
 	count := 0
@@ -314,7 +314,7 @@ func TestGetResourceWithDecorators(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	response, rerr := armClient.GetResourceWithDecorators(ctx, testResourceID, decorators)
+	response, rerr := armClient.GetResource(ctx, testResourceID, decorators...)
 	byteResponseBody, _ := ioutil.ReadAll(response.Body)
 	stringResponseBody := string(byteResponseBody)
 	assert.Nil(t, rerr)
