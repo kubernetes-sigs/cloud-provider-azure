@@ -9,7 +9,7 @@ require (
 	github.com/Azure/go-autorest/autorest/mocks v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
-	github.com/fsnotify/fsnotify v1.5.3
+	github.com/fsnotify/fsnotify v1.5.4
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -17,7 +17,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
-	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
+	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	golang.org/x/text v0.3.7
 	k8s.io/api v0.23.5
 	k8s.io/apimachinery v0.23.5
