@@ -183,6 +183,9 @@ func (d *delayedRouteUpdater) updateRoutes() {
 				break
 			}
 		}
+		if rt.operation == routeOperationDelete && !dirty {
+			klog.Warningf("updateRoutes: route to be deleted %s does not match any of the existing route", to.String(rt.route.Name))
+		}
 
 		// Add missing routes if the operation is add.
 		if rt.operation == routeOperationAdd {
