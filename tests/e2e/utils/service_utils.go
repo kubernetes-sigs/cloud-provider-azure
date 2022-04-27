@@ -18,13 +18,12 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 
@@ -33,6 +32,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 const (
@@ -85,6 +86,9 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespac
 	if err != nil {
 		return "", err
 	}
+	if service == nil {
+		return "", errors.New("the service is nil")
+	}
 
 	ip = service.Status.LoadBalancer.Ingress[0].IP
 
@@ -113,7 +117,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		}
 	}
 
-	if wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
+	if err := wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
 		service, err = cs.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if IsRetryableAPIError(err) {
@@ -136,7 +140,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		}
 
 		return true, nil
-	}) != nil {
+	}); err != nil {
 		return nil, err
 	}
 
