@@ -126,7 +126,7 @@ func (c *Client) getVM(ctx context.Context, resourceGroupName string, VMName str
 	)
 	result := compute.VirtualMachine{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, string(expand))
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, string(expand))
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.get.request", resourceID, rerr.Error())
@@ -188,7 +188,7 @@ func (c *Client) listVM(ctx context.Context, resourceGroupName string) ([]comput
 	page := &VirtualMachineListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.request", resourceID, rerr.Error())
