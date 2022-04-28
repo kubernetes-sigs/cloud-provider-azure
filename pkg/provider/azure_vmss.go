@@ -167,8 +167,12 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 		}
 
 		virtualMachines := cached.(*sync.Map)
-		if vm, ok := virtualMachines.Load(nodeName); ok {
-			result := vm.(*vmssVirtualMachinesEntry)
+		if entry, ok := virtualMachines.Load(nodeName); ok {
+			result := entry.(*vmssVirtualMachinesEntry)
+			if result.virtualMachine == nil {
+				klog.Warningf("failed to get VM with vmssVirtualMachinesEntry on Node %q", nodeName)
+				return nil, false, nil
+			}
 			found = true
 			return virtualmachine.FromVirtualMachineScaleSetVM(result.virtualMachine, virtualmachine.ByVMSS(result.vmssName)), found, nil
 		}
