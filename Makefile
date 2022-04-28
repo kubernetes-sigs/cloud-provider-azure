@@ -354,6 +354,6 @@ deploy: image push ## Build, push and deploy an aks-engine cluster.
 release-staging: ## Release the cloud provider images.
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
 
-.PHONY: manage-mocks
+.PHONY: update-mocks
 manage-mocks: # create/update mocks for specific/all modules
-	@hack/manage-mocks.sh
+	@hack/update-mock-clients.sh
