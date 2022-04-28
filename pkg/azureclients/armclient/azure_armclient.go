@@ -248,7 +248,7 @@ func (c *Client) SendAsync(ctx context.Context, request *http.Request) (*azure.F
 	return &future, asyncResponse, nil
 }
 
-// GetResource get a resource by resource ID
+// GetResourceWithExpandQuery get a resource by resource ID with expand
 func (c *Client) GetResourceWithExpandQuery(ctx context.Context, resourceID, expand string) (*http.Response, *retry.Error) {
 	var decorators []autorest.PrepareDecorator
 	if expand != "" {
@@ -258,6 +258,29 @@ func (c *Client) GetResourceWithExpandQuery(ctx context.Context, resourceID, exp
 		decorators = append(decorators, autorest.WithQueryParameters(queryParameters))
 	}
 	return c.GetResource(ctx, resourceID, decorators...)
+}
+
+// GetResourceWithExpandAPIVersionQuery get a resource by resource ID with expand and API version.
+func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resourceID, expand, apiVersion string) (*http.Response, *retry.Error) {
+	decorators := []autorest.PrepareDecorator{
+		autorest.AsGet(),
+		autorest.WithBaseURL(c.baseURI),
+		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
+		autorest.WithQueryParameters(map[string]interface{}{
+			"$expand": autorest.Encode("query", expand),
+		}),
+		withAPIVersion(apiVersion),
+	}
+
+	preparer := autorest.CreatePreparer(decorators...)
+	request, err := preparer.Prepare((&http.Request{}).WithContext(ctx))
+
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "get.prepare", resourceID, err)
+		return nil, retry.NewError(false, err)
+	}
+
+	return c.Send(ctx, request)
 }
 
 // GetResourceWithDecorators get a resource with decorators by resource ID
