@@ -96,19 +96,3 @@ updates:
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.22.0"]
-
-  - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-    target-branch: "release-0.7"
-    ignore:
-      - dependency-name: "k8s.io/*"
-        versions: [">=0.21.0"]
