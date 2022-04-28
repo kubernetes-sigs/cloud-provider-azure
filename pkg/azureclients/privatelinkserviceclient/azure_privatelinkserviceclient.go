@@ -198,7 +198,7 @@ func (c *Client) getPLS(ctx context.Context, resourceGroupName string, privateLi
 		privateLinkServiceName,
 	)
 	result := network.PrivateLinkService{}
-	response, rerr := c.armClient.GetResource(ctx, resourceID, expand)
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatelinkservice.get.request", resourceID, rerr.Error())
@@ -259,7 +259,7 @@ func (c *Client) listPLS(ctx context.Context, resourceGroupName string) ([]netwo
 	page := &PrivateLinkServiceListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatelinkservice.list.request", resourceID, rerr.Error())
