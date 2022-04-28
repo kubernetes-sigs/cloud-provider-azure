@@ -71,6 +71,9 @@ var _ = Describe("Lifecycle of VMSS", func() {
 			By("reset VMSS instance")
 			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
 			Expect(err).NotTo(HaveOccurred())
+
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
+			Expect(err).NotTo(HaveOccurred())
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
@@ -93,6 +96,9 @@ var _ = Describe("Lifecycle of VMSS", func() {
 		defer func() {
 			By("reset VMSS instance")
 			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
