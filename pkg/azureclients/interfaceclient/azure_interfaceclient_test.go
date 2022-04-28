@@ -158,13 +158,15 @@ func TestGetVirtualMachineScaleSetNetworkInterface(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader(networkInterface)),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, gomock.Any()).Return(response, nil).Times(1)
+	expand := ""
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), resourceID, expand, AzureStackCloudAPIVersion).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
+	nicClient.computeAPIVersion = AzureStackCloudAPIVersion
 	expected := getTestVMSSInterface("nic1")
 	expected.Response = autorest.Response{Response: response}
-	result, rerr := nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", "")
+	result, rerr := nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", expand)
 	assert.Equal(t, expected, result)
 	assert.Nil(t, rerr)
 
@@ -179,9 +181,10 @@ func TestGetVirtualMachineScaleSetNetworkInterface(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().GetResource(gomock.Any(), resourceID, gomock.Any()).Return(response, throttleErr).Times(1)
+	expand = "test"
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), resourceID, expand, AzureStackCloudAPIVersion).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	result, rerr = nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", "test")
+	result, rerr = nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", expand)
 	assert.Empty(t, result)
 	assert.Equal(t, throttleErr, rerr)
 }
