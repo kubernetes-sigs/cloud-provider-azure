@@ -18,7 +18,6 @@ package containerserviceclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -179,9 +178,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]containe
 
 // listManagedCluster gets a list of ManagedClusters in the resource group.
 func (c *Client) listManagedCluster(ctx context.Context, resourceGroupName string) ([]containerservice.ManagedCluster, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerService/managedClusters",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.ContainerService/managedClusters")
 	result := make([]containerservice.ManagedCluster, 0)
 	page := &ManagedClusterResultPage{}
 	page.fn = c.listNextResults
