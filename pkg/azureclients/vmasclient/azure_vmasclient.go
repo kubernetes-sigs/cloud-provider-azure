@@ -36,7 +36,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-//var _ Interface = &Client{}
+var _ Interface = &Client{}
+
+const vmasResourceType = "Microsoft.Compute/availabilitySets"
 
 // Client implements VMAS client Interface.
 type Client struct {
@@ -120,7 +122,7 @@ func (c *Client) getVMAS(ctx context.Context, resourceGroupName string, vmasName
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/availabilitySets",
+		vmasResourceType,
 		vmasName,
 	)
 	result := compute.AvailabilitySet{}
@@ -178,7 +180,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 
 // listVMAS gets a list of AvailabilitySets in the resource group.
 func (c *Client) listVMAS(ctx context.Context, resourceGroupName string) ([]compute.AvailabilitySet, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Compute/availabilitySets")
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, vmasResourceType)
 	result := make([]compute.AvailabilitySet, 0)
 	page := &AvailabilitySetListResultPage{}
 	page.fn = c.listNextResults
