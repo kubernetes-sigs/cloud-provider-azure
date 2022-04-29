@@ -38,6 +38,8 @@ import (
 
 var _ Interface = &Client{}
 
+const saResourceType = "Microsoft.Storage/storageAccounts"
+
 // Client implements StorageAccount client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -120,7 +122,7 @@ func (c *Client) getStorageAccount(ctx context.Context, resourceGroupName string
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 	result := storage.Account{}
@@ -181,7 +183,7 @@ func (c *Client) listStorageAccountKeys(ctx context.Context, resourceGroupName s
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -242,7 +244,7 @@ func (c *Client) createStorageAccount(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -308,7 +310,7 @@ func (c *Client) updateStorageAccount(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -376,7 +378,7 @@ func (c *Client) deleteStorageAccount(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -416,7 +418,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 
 // ListStorageAccountByResourceGroup get a list storage accounts by resourceGroup.
 func (c *Client) ListStorageAccountByResourceGroup(ctx context.Context, resourceGroupName string) ([]storage.Account, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Storage/storageAccounts")
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, saResourceType)
 	result := make([]storage.Account, 0)
 	page := &AccountListResultPage{}
 	page.fn = c.listNextResults
