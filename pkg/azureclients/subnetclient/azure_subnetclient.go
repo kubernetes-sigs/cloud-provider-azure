@@ -38,6 +38,8 @@ import (
 
 var _ Interface = &Client{}
 
+const vnetResourceType = "Microsoft.Network/virtualNetworks"
+
 // Client implements Subnet client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -120,7 +122,7 @@ func (c *Client) getSubnet(ctx context.Context, resourceGroupName string, virtua
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName,
@@ -183,7 +185,7 @@ func (c *Client) listSubnet(ctx context.Context, resourceGroupName string, virtu
 	resourceID := armclient.GetChildResourcesListID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets")
 
@@ -258,7 +260,7 @@ func (c *Client) createOrUpdateSubnet(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName)
@@ -327,7 +329,7 @@ func (c *Client) deleteSubnet(ctx context.Context, resourceGroupName string, vir
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName)

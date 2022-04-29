@@ -39,6 +39,11 @@ import (
 
 var _ Interface = &Client{}
 
+const (
+	vmssResourceType = "Microsoft.Compute/virtualMachineScaleSets"
+	vmResourceType   = "virtualMachines"
+)
+
 // Client implements VMSS client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -121,9 +126,9 @@ func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScal
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		VMScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 		instanceID,
 	)
 	result := compute.VirtualMachineScaleSetVM{}
@@ -184,9 +189,9 @@ func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtu
 	resourceID := armclient.GetChildResourcesListID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		virtualMachineScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 	)
 
 	result := make([]compute.VirtualMachineScaleSetVM, 0)
@@ -275,9 +280,9 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMSc
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		VMScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 		instanceID,
 	)
 
@@ -316,9 +321,9 @@ func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMS
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		VMScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 		instanceID,
 	)
 
@@ -480,9 +485,9 @@ func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VM
 		resourceID := armclient.GetChildResourceID(
 			c.subscriptionID,
 			resourceGroupName,
-			"Microsoft.Compute/virtualMachineScaleSets",
+			vmssResourceType,
 			VMScaleSetName,
-			"virtualMachines",
+			vmResourceType,
 			instanceID,
 		)
 		resources[resourceID] = parameter

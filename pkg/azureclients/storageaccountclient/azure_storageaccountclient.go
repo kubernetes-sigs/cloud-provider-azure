@@ -38,6 +38,8 @@ import (
 
 var _ Interface = &Client{}
 
+const saResourceType = "Microsoft.Storage/storageAccounts"
+
 // Client implements StorageAccount client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -123,7 +125,7 @@ func (c *Client) getStorageAccount(ctx context.Context, subsID, resourceGroupNam
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 	result := storage.Account{}
@@ -187,7 +189,7 @@ func (c *Client) listStorageAccountKeys(ctx context.Context, subsID, resourceGro
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -249,7 +251,7 @@ func (c *Client) createStorageAccount(ctx context.Context, subsID, resourceGroup
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -318,7 +320,7 @@ func (c *Client) updateStorageAccount(ctx context.Context, subsID, resourceGroup
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -389,7 +391,7 @@ func (c *Client) deleteStorageAccount(ctx context.Context, subsID, resourceGroup
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -433,7 +435,7 @@ func (c *Client) ListStorageAccountByResourceGroup(ctx context.Context, subsID, 
 	if subsID == "" {
 		subsID = c.subscriptionID
 	}
-	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, "Microsoft.Storage/storageAccounts")
+	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, saResourceType)
 	result := make([]storage.Account, 0)
 	page := &AccountListResultPage{}
 	page.fn = c.listNextResults
