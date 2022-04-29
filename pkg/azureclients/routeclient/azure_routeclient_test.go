@@ -107,10 +107,7 @@ func TestCreateOrUpdateWithNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	rcCreateOrUpdateErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "RouteCreateOrUpdate"),
-		Retriable: true,
-	}
+	rcCreateOrUpdateErr := retry.GetRateLimitError(true, "RouteCreateOrUpdate")
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -124,11 +121,7 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	rcCreateOrUpdateErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "RouteCreateOrUpdate", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	rcCreateOrUpdateErr := retry.GetThrottlingError("RouteCreateOrUpdate", "client throttled", getFutureTime())
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
