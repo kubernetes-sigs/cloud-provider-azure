@@ -18,7 +18,6 @@ package snapshotclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -290,9 +289,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 
 // listSnapshotsByResourceGroup gets a list of snapshots in the resource group.
 func (c *Client) listSnapshotsByResourceGroup(ctx context.Context, resourceGroupName string) ([]compute.Snapshot, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/snapshots",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Compute/snapshots")
 	result := make([]compute.Snapshot, 0)
 	page := &SnapshotListPage{}
 	page.fn = c.listNextResults

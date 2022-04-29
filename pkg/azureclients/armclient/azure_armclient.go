@@ -768,6 +768,14 @@ func GetResourceID(subscriptionID, resourceGroupName, resourceType, resourceName
 		autorest.Encode("path", resourceName))
 }
 
+// GetResourceListID gets Azure resource list ID
+func GetResourceListID(subscriptionID, resourceGroupName, resourceType string) string {
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s",
+		autorest.Encode("path", subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		resourceType)
+}
+
 // GetChildResourceID gets Azure child resource ID
 func GetChildResourceID(subscriptionID, resourceGroupName, resourceType, resourceName, childResourceType, childResourceName string) string {
 	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s/%s/%s/%s",

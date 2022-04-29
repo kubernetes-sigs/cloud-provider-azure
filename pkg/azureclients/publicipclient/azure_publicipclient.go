@@ -258,9 +258,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listPublicIPAddress gets a list of PublicIPAddress in the resource group.
 func (c *Client) listPublicIPAddress(ctx context.Context, resourceGroupName string) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Network/publicIPAddresses")
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults
@@ -525,8 +523,7 @@ func (c *Client) ListAll(ctx context.Context) ([]network.PublicIPAddress, *retry
 
 // listAllPublicIPAddress gets all of PublicIPAddress in the subscription.
 func (c *Client) listAllPublicIPAddress(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Network/publicIPAddresses",
-		autorest.Encode("path", c.subscriptionID))
+	resourceID := armclient.GetProviderResourceID(c.subscriptionID, "Microsoft.Network/publicIPAddresses")
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults
