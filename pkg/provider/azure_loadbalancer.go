@@ -2022,7 +2022,7 @@ func lbRuleConflictsWithPort(rule network.LoadBalancingRule, frontendIPConfigID 
 		*rule.FrontendPort == port.Port
 }
 
-// buildHealthProbeRulesForPort
+// buildHealthProbeRulesForPort builds the LoadBalancer probe rules for the given port.
 // for following sku: basic loadbalancer vs standard load balancer
 // for following protocols: TCP HTTP HTTPS(SLB only)
 func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, port v1.ServicePort, lbrule string) (*network.Probe, error) {
@@ -2031,8 +2031,22 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 	}
 	// protocol should be tcp, because sctp is handled in outer loop
 
+	// get request path for http/https probe
+	requestPath, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsRequestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsRequestPath), err)
+	}
+	if requestPath == nil {
+		if requestPath, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath); err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath, err)
+		}
+	}
+	if requestPath == nil {
+		// TCP would be used as default probe protocol for backward compatibility when probe requestPath is not set.
+		port.AppProtocol = to.StringPtr(string(network.ProtocolTCP))
+	}
+
 	properties := &network.ProbePropertiesFormat{}
-	var err error
 	if port.AppProtocol == nil {
 		if port.AppProtocol, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeProtocol); err != nil {
 			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeProtocol, err)
@@ -2046,8 +2060,8 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 	case strings.EqualFold(protocol, string(network.ProtocolTCP)):
 		properties.Protocol = network.ProbeProtocolTCP
 	case strings.EqualFold(protocol, string(network.ProtocolHTTPS)):
-		//HTTPS probe is only supported in standard loadbalancer
-		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
+		// HTTPS probe is only supported in standard loadbalancer
+		// For backward compatibility, fall back to TCP protocol for basic LoadBalancer.
 		if !az.useStandardLoadBalancer() {
 			properties.Protocol = network.ProbeProtocolTCP
 		} else {
@@ -2056,25 +2070,16 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 	case strings.EqualFold(protocol, string(network.ProtocolHTTP)):
 		properties.Protocol = network.ProbeProtocolHTTP
 	default:
-		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
+		// For backward compatibility, fall back to TCP protocol when unsupported protocol is used.
 		properties.Protocol = network.ProbeProtocolTCP
 	}
 
 	if strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTPS)) || strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTP)) {
-		// get request path ,only used with http/https probe
-		path, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsRequestPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsRequestPath), err)
+		if requestPath == nil {
+			// "/" is the default request path for HTTP/HTTPS probe
+			requestPath = to.StringPtr(consts.HealthProbeDefaultRequestPath)
 		}
-		if path == nil {
-			if path, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath); err != nil {
-				return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath, err)
-			}
-		}
-		if path == nil {
-			path = to.StringPtr(consts.HealthProbeDefaultRequestPath)
-		}
-		properties.RequestPath = path
+		properties.RequestPath = requestPath
 	}
 	// get number of probes
 	var numOfProbeValidator = func(val *int32) error {
