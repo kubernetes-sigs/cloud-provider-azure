@@ -108,7 +108,49 @@ func TestFindProbe(t *testing.T) {
 			expected: false,
 		},
 		{
-			msg: "both probe ports and names match should return true",
+			msg: "probe path don't match should return false",
+			existingProbe: []network.Probe{
+				{
+					Name: to.StringPtr("probe1"),
+					ProbePropertiesFormat: &network.ProbePropertiesFormat{
+						Port:        to.Int32Ptr(1),
+						RequestPath: to.StringPtr("/path1"),
+					},
+				},
+			},
+			curProbe: network.Probe{
+				Name: to.StringPtr("probe2"),
+				ProbePropertiesFormat: &network.ProbePropertiesFormat{
+					Port:        to.Int32Ptr(1),
+					RequestPath: to.StringPtr("/path2"),
+				},
+			},
+			expected: false,
+		},
+		{
+			msg: "probe interval don't match should return false",
+			existingProbe: []network.Probe{
+				{
+					Name: to.StringPtr("probe1"),
+					ProbePropertiesFormat: &network.ProbePropertiesFormat{
+						Port:              to.Int32Ptr(1),
+						RequestPath:       to.StringPtr("/path"),
+						IntervalInSeconds: to.Int32Ptr(5),
+					},
+				},
+			},
+			curProbe: network.Probe{
+				Name: to.StringPtr("probe2"),
+				ProbePropertiesFormat: &network.ProbePropertiesFormat{
+					Port:              to.Int32Ptr(1),
+					RequestPath:       to.StringPtr("/path"),
+					IntervalInSeconds: to.Int32Ptr(10),
+				},
+			},
+			expected: false,
+		},
+		{
+			msg: "probe match should return true",
 			existingProbe: []network.Probe{
 				{
 					Name: to.StringPtr("matchName"),
@@ -2223,7 +2265,10 @@ func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service 
 					Name: to.StringPtr(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
 						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port))),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: to.Int32Ptr(10080),
+						Port:              to.Int32Ptr(10080),
+						Protocol:          network.ProbeProtocolTCP,
+						IntervalInSeconds: to.Int32Ptr(5),
+						NumberOfProbes:    to.Int32Ptr(2),
 					},
 				},
 			},
