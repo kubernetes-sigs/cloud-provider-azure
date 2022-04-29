@@ -37,6 +37,8 @@ import (
 
 var _ Interface = &Client{}
 
+const deploymentResourceType = "Microsoft.Resources/deployments"
+
 // Client implements ContainerService client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -113,7 +115,7 @@ func (c *Client) getDeployment(ctx context.Context, resourceGroupName string, de
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 	result := resources.DeploymentExtended{}
@@ -171,7 +173,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]resource
 
 // listDeployment gets a list of deployments in the resource group.
 func (c *Client) listDeployment(ctx context.Context, resourceGroupName string) ([]resources.DeploymentExtended, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Resources/deployments")
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, deploymentResourceType)
 	result := make([]resources.DeploymentExtended, 0)
 	page := &DeploymentResultPage{}
 	page.fn = c.listNextResults
@@ -332,7 +334,7 @@ func (c *Client) createOrUpdateDeployment(ctx context.Context, resourceGroupName
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -407,7 +409,7 @@ func (c *Client) deleteDeployment(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 
@@ -434,7 +436,7 @@ func (c *Client) ExportTemplate(ctx context.Context, resourceGroupName string, d
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 	response, rerr := c.armClient.PostResource(ctx, resourceID, "exportTemplate", struct{}{}, map[string]interface{}{})

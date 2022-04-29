@@ -37,6 +37,8 @@ import (
 
 var _ Interface = &Client{}
 
+const routeTablesResourceType = "Microsoft.Network/routeTables"
+
 // Client implements RouteTable client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -119,7 +121,7 @@ func (c *Client) getRouteTable(ctx context.Context, resourceGroupName string, ro
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/routeTables",
+		routeTablesResourceType,
 		routeTableName,
 	)
 	result := network.RouteTable{}
@@ -180,7 +182,7 @@ func (c *Client) createOrUpdateRouteTable(ctx context.Context, resourceGroupName
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/routeTables",
+		routeTablesResourceType,
 		routeTableName,
 	)
 	decorators := []autorest.PrepareDecorator{
