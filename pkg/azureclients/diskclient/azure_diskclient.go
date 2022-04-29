@@ -18,7 +18,6 @@ package diskclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -330,9 +329,7 @@ func (c *Client) deleteDisk(ctx context.Context, resourceGroupName string, diskN
 
 // ListByResourceGroup lists all the disks under a resource group.
 func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName string) ([]compute.Disk, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Compute/disks")
 
 	result := make([]compute.Disk, 0)
 	page := &DiskListPage{}
