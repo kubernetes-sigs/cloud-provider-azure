@@ -3043,7 +3043,12 @@ func (az *Cloud) safeDeletePublicIP(service *v1.Service, pipResourceGroup string
 
 func findProbe(probes []network.Probe, probe network.Probe) bool {
 	for _, existingProbe := range probes {
-		if strings.EqualFold(to.String(existingProbe.Name), to.String(probe.Name)) && to.Int32(existingProbe.Port) == to.Int32(probe.Port) {
+		if strings.EqualFold(to.String(existingProbe.Name), to.String(probe.Name)) &&
+			to.Int32(existingProbe.Port) == to.Int32(probe.Port) &&
+			strings.EqualFold(string(existingProbe.Protocol), string(probe.Protocol)) &&
+			strings.EqualFold(to.String(existingProbe.RequestPath), to.String(probe.RequestPath)) &&
+			to.Int32(existingProbe.IntervalInSeconds) == to.Int32(probe.IntervalInSeconds) &&
+			to.Int32(existingProbe.NumberOfProbes) == to.Int32(probe.NumberOfProbes) {
 			return true
 		}
 	}
