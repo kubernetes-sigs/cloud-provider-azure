@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -41,23 +40,6 @@ const (
 	operationURI   = "/subscriptions/subscription/providers/Microsoft.Network/locations/eastus/operations/op?api-version=2019-01-01"
 	expectedURI    = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01"
 )
-
-func TestNew(t *testing.T) {
-	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
-	armClient := New(nil, azConfig, "", "2019-01-01")
-	assert.NotNil(t, armClient.backoff)
-	assert.Equal(t, 3, armClient.backoff.Steps, "Backoff steps should be same as the value passed in")
-
-	azConfig = azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 0}, UserAgent: "test", Location: "eastus"}
-	armClient = New(nil, azConfig, "", "2019-01-01")
-	assert.NotNil(t, armClient.backoff)
-	assert.Equal(t, 1, armClient.backoff.Steps, "Backoff steps should be default to 1 if it is 0")
-
-	azConfig = azureclients.ClientConfig{UserAgent: "test", Location: "eastus"}
-	armClient = New(nil, azConfig, "", "2019-01-01")
-	assert.NotNil(t, armClient.backoff)
-	assert.Equal(t, 1, armClient.backoff.Steps, "Backoff steps should be default to 1 if it is not set")
-}
 
 func TestSend(t *testing.T) {
 	count := 0
@@ -281,7 +263,7 @@ func TestNormalizeAzureRegion(t *testing.T) {
 	}
 }
 
-func TestGetResource(t *testing.T) {
+func TestGetResourceWithExpandQuery(t *testing.T) {
 	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01"
 	count := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +279,7 @@ func TestGetResource(t *testing.T) {
 	armClient.client.RetryDuration = time.Millisecond * 1
 
 	ctx := context.Background()
-	response, rerr := armClient.GetResource(ctx, testResourceID, "data")
+	response, rerr := armClient.GetResourceWithExpandQuery(ctx, testResourceID, "data")
 	byteResponseBody, _ := ioutil.ReadAll(response.Body)
 	stringResponseBody := string(byteResponseBody)
 	assert.Nil(t, rerr)
@@ -305,7 +287,7 @@ func TestGetResource(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-func TestGetResourceWithDecorators(t *testing.T) {
+func TestGetResource(t *testing.T) {
 	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2"
 
 	count := 0
@@ -330,7 +312,7 @@ func TestGetResourceWithDecorators(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	response, rerr := armClient.GetResourceWithDecorators(ctx, testResourceID, decorators)
+	response, rerr := armClient.GetResource(ctx, testResourceID, decorators...)
 	byteResponseBody, _ := ioutil.ReadAll(response.Body)
 	stringResponseBody := string(byteResponseBody)
 	assert.Nil(t, rerr)
@@ -575,7 +557,7 @@ func TestPostResource(t *testing.T) {
 
 	ctx := context.Background()
 	resourceID := testResourceID
-	future, rerr := armClient.PostResource(ctx, resourceID, "post", "")
+	future, rerr := armClient.PostResource(ctx, resourceID, "post", "", map[string]interface{}{})
 	assert.Equal(t, 3, count)
 	assert.NotNil(t, future)
 	assert.NotNil(t, rerr)
@@ -638,13 +620,6 @@ func TestGetResourceID(t *testing.T) {
 			assert.Equal(t, tc.expectedResourceID, tc.resourceID)
 		})
 	}
-}
-
-func TestGetSender(t *testing.T) {
-	sender := getSender()
-	j, _ := cookiejar.New(nil)
-	assert.Equal(t, j, sender.(*http.Client).Jar)
-	assert.Equal(t, commTransport, sender.(*http.Client).Transport)
 }
 
 func TestGetChildResourceID(t *testing.T) {

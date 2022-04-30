@@ -98,33 +98,38 @@ func (mr *MockInterfaceMockRecorder) DeleteResourceAsync(ctx, resourceID, ifMatc
 }
 
 // GetResource mocks base method.
-func (m *MockInterface) GetResource(ctx context.Context, resourceID, expand string) (*http.Response, *retry.Error) {
+func (m *MockInterface) GetResource(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetResource", ctx, resourceID, expand)
+	varargs := []interface{}{ctx, resourceID}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetResource", varargs...)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // GetResource indicates an expected call of GetResource.
-func (mr *MockInterfaceMockRecorder) GetResource(ctx, resourceID, expand interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetResource(ctx, resourceID interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResource", reflect.TypeOf((*MockInterface)(nil).GetResource), ctx, resourceID, expand)
+	varargs := append([]interface{}{ctx, resourceID}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResource", reflect.TypeOf((*MockInterface)(nil).GetResource), varargs...)
 }
 
-// GetResourceWithDecorators mocks base method.
-func (m *MockInterface) GetResourceWithDecorators(ctx context.Context, resourceID string, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
+// GetResourceWithExpandQuery mocks base method.
+func (m *MockInterface) GetResourceWithExpandQuery(ctx context.Context, resourceID, expand string) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetResourceWithDecorators", ctx, resourceID, decorators)
+	ret := m.ctrl.Call(m, "GetResourceWithExpandQuery", ctx, resourceID, expand)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
-// GetResourceWithDecorators indicates an expected call of GetResourceWithDecorators.
-func (mr *MockInterfaceMockRecorder) GetResourceWithDecorators(ctx, resourceID, decorators interface{}) *gomock.Call {
+// GetResourceWithExpandQuery indicates an expected call of GetResourceWithExpandQuery.
+func (mr *MockInterfaceMockRecorder) GetResourceWithExpandQuery(ctx, resourceID, expand interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceWithDecorators", reflect.TypeOf((*MockInterface)(nil).GetResourceWithDecorators), ctx, resourceID, decorators)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceWithExpandQuery", reflect.TypeOf((*MockInterface)(nil).GetResourceWithExpandQuery), ctx, resourceID, expand)
 }
 
 // HeadResource mocks base method.
@@ -173,18 +178,18 @@ func (mr *MockInterfaceMockRecorder) PatchResourceAsync(ctx, resourceID, paramet
 }
 
 // PostResource mocks base method.
-func (m *MockInterface) PostResource(ctx context.Context, resourceID, action string, parameters interface{}) (*http.Response, *retry.Error) {
+func (m *MockInterface) PostResource(ctx context.Context, resourceID, action string, parameters interface{}, queryParameters map[string]interface{}) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PostResource", ctx, resourceID, action, parameters)
+	ret := m.ctrl.Call(m, "PostResource", ctx, resourceID, action, parameters, queryParameters)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PostResource indicates an expected call of PostResource.
-func (mr *MockInterfaceMockRecorder) PostResource(ctx, resourceID, action, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PostResource(ctx, resourceID, action, parameters, queryParameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostResource", reflect.TypeOf((*MockInterface)(nil).PostResource), ctx, resourceID, action, parameters)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostResource", reflect.TypeOf((*MockInterface)(nil).PostResource), ctx, resourceID, action, parameters, queryParameters)
 }
 
 // PrepareDeleteRequest mocks base method.
@@ -361,18 +366,23 @@ func (mr *MockInterfaceMockRecorder) PutResourcesInBatches(ctx, resources, batch
 }
 
 // Send mocks base method.
-func (m *MockInterface) Send(ctx context.Context, request *http.Request) (*http.Response, *retry.Error) {
+func (m *MockInterface) Send(ctx context.Context, request *http.Request, decorators ...autorest.SendDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Send", ctx, request)
+	varargs := []interface{}{ctx, request}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Send", varargs...)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // Send indicates an expected call of Send.
-func (mr *MockInterfaceMockRecorder) Send(ctx, request interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Send(ctx, request interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockInterface)(nil).Send), ctx, request)
+	varargs := append([]interface{}{ctx, request}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockInterface)(nil).Send), varargs...)
 }
 
 // SendAsync mocks base method.
