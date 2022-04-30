@@ -355,5 +355,5 @@ release-staging: ## Release the cloud provider images.
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) IMAGE_REGISTRY=$(STAGING_REGISTRY) $(MAKE) build-images push-images
 
 .PHONY: update-mocks
-manage-mocks: # create/update mocks for specific/all modules
-	@hack/update-mock-clients.sh
+update-mocks: # create/update mocks for specific/all modules
+	hack/update-mock-clients.sh
