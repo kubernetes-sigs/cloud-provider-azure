@@ -1,4 +1,27 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v0.7.20</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Cloud Provider Azure</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/</link><description>Recent content on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.23.11</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/30/v1.23.11/</link><pubDate>Sat, 30 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/30/v1.23.11/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Reduce ListPublicIPAddress call count by avoiding each call in loops (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1546">#1546&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Rename GetResource to GetResourceWithExpandQuery and rename GetResourceWithDecorators to GetResource in armclient (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1603">#1603&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Fix-0.7: update probe when protocol or request path change (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1629">#1629&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
+&lt;li>Fix: always get LB after updating it (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1619">#1619&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v63.2.0...v63.4.0">v63.2.0+incompatible → v63.4.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest: &lt;a href="https://github.com/Azure/go-autorest/autorest/compare/v0.11.26...v0.11.27">v0.11.26 → v0.11.27&lt;/a>&lt;/li>
+&lt;li>github.com/fsnotify/fsnotify: &lt;a href="https://github.com/fsnotify/fsnotify/compare/v1.5.1...v1.5.4">v1.5.1 → v1.5.4&lt;/a>&lt;/li>
+&lt;li>golang.org/x/sys: da31bd3 → 33da011&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v0.7.20</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</link><pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/04/19/v0.7.20/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="uncategorized">Uncategorized&lt;/h3>
 &lt;ul>
@@ -1917,30 +1940,5 @@ ree/02e2102)&lt;/li>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
 &lt;h3 id="changed">Changed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="removed">Removed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.1</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/30/v1.1.1/</link><pubDate>Mon, 30 Aug 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/08/30/v1.1.1/</guid><description>
-&lt;h1 id="changelog-since-v110">Changelog since v1.1.0&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="feature">Feature&lt;/h3>
-&lt;ul>
-&lt;li>Feat: reloading ccm when the config file changes (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/776">#776&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: ignore GetDisk throttling in DeleteDisk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/757">#757&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;li>Fix: use correct gitVersion in userAgent (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/764">#764&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;li>Fix: ensure major and minor versions are set correctly (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/749">#749&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: expose some public functions (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/754">#754&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h2 id="dependencies">Dependencies&lt;/h2>
-&lt;h3 id="added">Added&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="changed">Changed&lt;/h3>
-&lt;ul>
-&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v55.0.0...v55.8.0">v55.0.0+incompatible → v55.8.0+incompatible&lt;/a>&lt;/li>
-&lt;/ul>
 &lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item></channel></rss>
