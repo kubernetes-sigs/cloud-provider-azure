@@ -1996,7 +1996,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedErr:     true,
 		},
 		{
-			desc: "getExpectedLBRules should return correct rule when health probe annotations are added",
+			desc: "getExpectedLBRules should return correct rule when health probe annotations are added with probe path",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":     "20",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "5",
@@ -2008,14 +2008,14 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "getExpectedLBRules should return correct rule when health probe annotations are added,default path should be /healthy",
+			desc: "getExpectedLBRules should return correct rule when health probe annotations are added with default TCP protocol",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":     "20",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "5",
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Http",
-			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{

@@ -387,7 +387,7 @@ const (
 
 	// HealthProbeParamsRequestPath determines the request path of the load balancer health probe.
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
-	// `/healthz` would be configured by default.
+	// `/` would be configured by default.
 	HealthProbeParamsRequestPath  HealthProbeParams = "request-path"
 	HealthProbeDefaultRequestPath string            = "/"
 )
