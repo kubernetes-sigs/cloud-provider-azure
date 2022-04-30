@@ -160,23 +160,28 @@ Currently, the default protocol of the health probe varies among services with d
 1. for cluster TCP services, TCP would be used.
 1. for cluster UDP services, no health probes.
 
-Since v1.20, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` are introduced, which determine the new health probe behavior. If the spec.ports.appProtocol is set, both local and cluster TCP services would use the specified health probe protocol. If the `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is set, the specified request path would be used instead of `/healthz`. Note that the request path would be ignored when using TCP or the spec.ports.appProtocol is empty. More specifically:
+Since v1.20, service annotation `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is introduced to determine the health probe behavior.
 
-|loadbalancer sku| `externalTrafficPolicy` | spec.ports.Protocol |spec.ports.AppProtocol| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | protocol | request path |
+* For clusters <=1.23, `spec.ports.appProtocol` would only be used as probe protocol when `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is also set.
+* For clusters >1.24,  `spec.ports.appProtocol` would be used as probe protocol and `/` would be used as default probe request path (`service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` could be used to change to a different request path).
+
+Note that the request path would be ignored when using TCP or the `spec.ports.appProtocol` is empty. More specifically:
+
+|loadbalancer sku| `externalTrafficPolicy` | spec.ports.Protocol |spec.ports.AppProtocol| `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | LB Probe Protocol | LB Probe Request Path |
 |---| ------------------------------------------------------------ | ---------------------------- | ----------------------------------------------------|-------- |------| ----- |
 | standard| local |any| any | any | http | `/healthz` |
 | standard| cluster |udp| any | any | null | null |
 | standard| cluster |tcp|  | (ignored) | tcp | null |
 | standard| cluster |tcp| tcp | (ignored) | tcp | null |
-| standard| cluster |tcp| http/https | | http/https | `/` |
+| standard| cluster |tcp| http/https | | TCP(<=1.23) or http/https(>=1.24) | null(<=1.23) or `/`(>=1.24) |
 | standard| cluster |tcp| http/https | `/custom-path` | http/https | `/custom-path` |
-| standard| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null (For backward compatibility) |
+| standard| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null|
 | basic| local |any| any | any | http | `/healthz` |
 | basic| cluster |tcp|  | (ignored) | tcp | null |
 | basic| cluster |tcp| tcp | (ignored) | tcp | null |
-| basic| cluster |tcp| http | | http | `/` |
+| basic| cluster |tcp| http | |  TCP(<=1.23) or http/https(>=1.24) | null(<=1.23) or `/`(>=1.24) |
 | basic| cluster |tcp| http | `/custom-path` | http | `/custom-path` |
-| basic| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null (For backward compatibility)|
+| basic| cluster |tcp| unsupported protocol | `/custom-path` | tcp | null |
 
 Since v1.21, two service annotations `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` and `load-balancer-health-probe-num-of-probe` are introduced, which customize the configuration of health probe. If `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` is not set, Default value of 5 is applied. If `load-balancer-health-probe-num-of-probe` is not set, Default value of 2 is applied. And total probe should be less than 120 seconds.
 
@@ -185,13 +190,13 @@ Since v1.21, two service annotations `service.beta.kubernetes.io/azure-load-bala
 
 Because [MixedProtocolLBService](https://kubernetes.io/docs/concepts/services-networking/service/#load-balancers-with-mixed-protocol-types) feature is in alpha stage, Ports in one service may have different probe configurations. Following annotations are introduced to customize probe configuration for one port.
 
-| port specific annotation | global probe annotation | 
-| --| -- | 
+| port specific annotation | global probe annotation |
+| --| -- |
 |service.beta.kubernetes.io/port_{port}_health-probe_request-path|service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path|
 |service.beta.kubernetes.io/port_{port}_health-probe_num-of-probe|service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe|
 |service.beta.kubernetes.io/port_{port}_health-probe_interval    |service.beta.kubernetes.io/azure-load-balancer-health-probe-interval    |
 
-For following manifest, probe rule for port httpsserver is different from the one for httpserver because annoations for port httpsserver are specified. 
+For following manifest, probe rule for port httpsserver is different from the one for httpserver because annoations for port httpsserver are specified.
 
 ```yaml
 apiVersion: v1
