@@ -40,6 +40,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
@@ -495,6 +496,12 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		if c.wrongRGAtDelete {
 			az.LoadBalancerResourceGroup = "nil"
 		}
+
+		expectedPLS := make([]network.PrivateLinkService, 0)
+		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
+		mockPLSClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+		az.PrivateLinkServiceClient = mockPLSClient
+
 		err = az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &c.service)
 		expectedLBs = make([]network.LoadBalancer, 0)
 		mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
@@ -1412,6 +1419,7 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
 							{
 								Name: to.StringPtr("aservice1"),
+								ID:   to.StringPtr("as-internal-aservice1"),
 								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 									PrivateIPAddress: to.StringPtr("1.2.3.4"),
 								},
@@ -1444,6 +1452,11 @@ func TestGetServiceLoadBalancer(t *testing.T) {
 		mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingLBs, nil)
 		mockLBsClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		az.LoadBalancerClient = mockLBsClient
+
+		expectedPLS := make([]network.PrivateLinkService, 0)
+		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
+		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
+		az.PrivateLinkServiceClient = mockPLSClient
 
 		for _, existingLB := range test.existingLBs {
 			err := az.LoadBalancerClient.CreateOrUpdate(context.TODO(), "rg", *existingLB.Name, existingLB, "")
@@ -4603,7 +4616,10 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	t.Run("removeFrontendIPConfigurationFromLoadBalancer should remove the unwanted frontend IP configuration and delete the orphaned LB", func(t *testing.T) {
-		fip := &network.FrontendIPConfiguration{Name: to.StringPtr("testCluster")}
+		fip := &network.FrontendIPConfiguration{
+			Name: to.StringPtr("testCluster"),
+			ID:   to.StringPtr("testCluster-fip"),
+		}
 		service := getTestService("svc1", v1.ProtocolTCP, nil, false, 80)
 		lb := getTestLoadBalancer(to.StringPtr("lb"), to.StringPtr("rg"), to.StringPtr("testCluster"), to.StringPtr("testCluster"), service, "standard")
 		bid := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-0/ipConfigurations/ipconfig1"
@@ -4620,6 +4636,9 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
 		mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "lb").Return(nil)
+		expectedPLS := make([]network.PrivateLinkService, 0)
+		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
 		existingLBs := []network.LoadBalancer{{Name: to.StringPtr("lb")}}
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, fip, "testCluster", &service)
 		assert.NoError(t, err)
@@ -4630,13 +4649,19 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	t.Run("removeFrontendIPConfigurationFromLoadBalancer should remove the unwanted frontend IP configuration and update the LB if there are remaining frontend IP configurations", func(t *testing.T) {
-		fip := &network.FrontendIPConfiguration{Name: to.StringPtr("testCluster")}
+		fip := &network.FrontendIPConfiguration{
+			Name: to.StringPtr("testCluster"),
+			ID:   to.StringPtr("testCluster-fip"),
+		}
 		service := getTestService("svc1", v1.ProtocolTCP, nil, false, 80)
 		lb := getTestLoadBalancer(to.StringPtr("lb"), to.StringPtr("rg"), to.StringPtr("testCluster"), to.StringPtr("testCluster"), service, "standard")
 		*lb.FrontendIPConfigurations = append(*lb.FrontendIPConfigurations, network.FrontendIPConfiguration{Name: to.StringPtr("fip1")})
 		cloud := GetTestCloud(ctrl)
 		mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "lb", gomock.Any(), gomock.Any()).Return(nil)
+		expectedPLS := make([]network.PrivateLinkService, 0)
+		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MinTimes(1).MaxTimes(1)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, fip, "testCluster", &service)
 		assert.NoError(t, err)
 	})
@@ -4810,7 +4835,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			cloud.ZoneClient = zoneClient
 
 			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&tc.service)
-			_, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, tc.status, true, defaultLBFrontendIPConfigName)
+			_, _, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &tc.service, &lb, tc.status, true, defaultLBFrontendIPConfigName)
 			if tc.expectedErr == nil {
 				assert.NoError(t, err)
 			} else {
