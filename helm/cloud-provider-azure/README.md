@@ -98,7 +98,7 @@ The following configuration is made available for advanced users. There are no d
 
 | configuration value | description |
 | --- | --- |
-| `cloudControllerManager.imageTag` | `"v1.23.8"` | container image tag for the Azure `cloud-controller-manager` runtime |
+| `cloudControllerManager.imageTag` | `"v1.23.11"` | container image tag for the Azure `cloud-controller-manager` runtime |
 | `cloudControllerManager.bindAddress` | The IP address on which to listen for the --secure-port port. The associated interface(s) must be reachable by the rest of the cluster, and by CLI/web clients. If blank or an unspecified address (0.0.0.0 or ::), all interfaces will be used.|
 | `cloudControllerManager.certDir` | The directory where the TLS certs are located. If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored. |
 | `cloudControllerManager.cloudConfigSecretName` | The name of the cloud config secret. |
@@ -125,7 +125,7 @@ The following configuration is made available for advanced users. There are no d
 
 | configuration value | description |
 | --- | --- |
-| `cloudNodeManager.imageTag` | `"v1.23.8"` | container image tag for the Azure `cloud-node-manager` runtime |
+| `cloudNodeManager.imageTag` | `"v1.23.11"` | container image tag for the Azure `cloud-node-manager` runtime |
 | `cloudNodeManager.cloudConfig` | The path to the cloud config file to be used when using ARM (i.e., when `cloudNodeManager.useInstanceMetadata=false`) to fetch node information. |
 | `cloudNodeManager.kubeAPIBurst` | Burst to use while talking with kubernetes apiserver. |
 | `cloudNodeManager.kubeAPIContentType` | Content type of requests sent to apiserver. |
