@@ -2158,6 +2158,11 @@ func (az *Cloud) getExpectedLBRules(
 					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 				}
 			}
+
+			if v, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerFloatingIP]; ok && v == "false" {
+				props.BackendPort = to.Int32Ptr(port.NodePort)
+				props.EnableFloatingIP = to.BoolPtr(false)
+			}
 			expectedRules = append(expectedRules, network.LoadBalancingRule{
 				Name:                              &lbRuleName,
 				LoadBalancingRulePropertiesFormat: props,
@@ -2251,6 +2256,11 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		return nil, err
 	}
 
+	enableFloatingIp := true
+	if v, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerFloatingIP]; ok && v == "false" {
+		enableFloatingIp = false
+	}
+
 	destinationIPAddress := ""
 	if wantLb && lbIP == nil {
 		return nil, fmt.Errorf("no load balancer IP for setting up security rules for service %s", service.Name)
@@ -2294,7 +2304,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		sourceAddressPrefixes = append(sourceAddressPrefixes, serviceTags...)
 	}
 
-	expectedSecurityRules, err := az.getExpectedSecurityRules(wantLb, ports, sourceAddressPrefixes, service, destinationIPAddresses, sourceRanges)
+	expectedSecurityRules, err := az.getExpectedSecurityRules(wantLb, ports, sourceAddressPrefixes, service, destinationIPAddresses, sourceRanges, enableFloatingIp)
 	if err != nil {
 		return nil, err
 	}
@@ -2434,7 +2444,7 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup, service *v1.Se
 	return dirtySg, updatedRules, nil
 }
 
-func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, sourceAddressPrefixes []string, service *v1.Service, destinationIPAddresses []string, sourceRanges utilnet.IPNetSet) ([]network.SecurityRule, error) {
+func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, sourceAddressPrefixes []string, service *v1.Service, destinationIPAddresses []string, sourceRanges utilnet.IPNetSet, enableFloatingIp bool) ([]network.SecurityRule, error) {
 	expectedSecurityRules := []network.SecurityRule{}
 
 	if wantLb {
@@ -2445,6 +2455,12 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 			if err != nil {
 				return nil, err
 			}
+
+			dstPort := port.Port
+			if !enableFloatingIp {
+				dstPort = port.NodePort
+			}
+
 			for j := range sourceAddressPrefixes {
 				ix := i*len(sourceAddressPrefixes) + j
 				securityRuleName := az.getSecurityRuleName(service, port, sourceAddressPrefixes[j])
@@ -2453,7 +2469,7 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 						Protocol:             *securityProto,
 						SourcePortRange:      to.StringPtr("*"),
-						DestinationPortRange: to.StringPtr(strconv.Itoa(int(port.Port))),
+						DestinationPortRange: to.StringPtr(strconv.Itoa(int(dstPort))),
 						SourceAddressPrefix:  to.StringPtr(sourceAddressPrefixes[j]),
 						Access:               network.SecurityRuleAccessAllow,
 						Direction:            network.SecurityRuleDirectionInbound,
@@ -2461,7 +2477,11 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 				}
 				if len(destinationIPAddresses) == 1 {
 					// continue to use DestinationAddressPrefix to avoid NSG updates for existing rules.
-					nsgRule.DestinationAddressPrefix = to.StringPtr(destinationIPAddresses[0])
+					dstAddr := destinationIPAddresses[0]
+					if !enableFloatingIp {
+						dstAddr = "VirtualNetwork"
+					}
+					nsgRule.DestinationAddressPrefix = to.StringPtr(dstAddr)
 				} else {
 					nsgRule.DestinationAddressPrefixes = to.StringSlicePtr(destinationIPAddresses)
 				}
