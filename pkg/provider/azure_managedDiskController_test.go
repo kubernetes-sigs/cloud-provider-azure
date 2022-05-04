@@ -62,6 +62,7 @@ func TestCreateManagedDisk(t *testing.T) {
 		diskIOPSReadWrite   string
 		diskMBPSReadWrite   string
 		diskEncryptionSetID string
+		diskEncryptionType  string
 		subscriptionID      string
 		resouceGroup        string
 		networkAccessPolicy compute.NetworkAccessPolicy
@@ -135,6 +136,18 @@ func TestCreateManagedDisk(t *testing.T) {
 			expectedErrMsg:      fmt.Errorf("AzureDisk - format of DiskEncryptionSetID(%s) is incorrect, correct format: %s", badDiskEncryptionSetID, consts.DiskEncryptionSetIDFormat),
 		},
 		{
+			desc:                "DiskEncryptionType should be empty when DiskEncryptionSetID is not set",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
+			storageAccountType:  compute.DiskStorageAccountTypesStandardLRS,
+			diskEncryptionSetID: "",
+			diskEncryptionType:  "EncryptionAtRestWithCustomerKey",
+			expectedDiskID:      "",
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			expectedErr:         true,
+			expectedErrMsg:      fmt.Errorf("AzureDisk - DiskEncryptionType(EncryptionAtRestWithCustomerKey) should be empty when DiskEncryptionSetID is not set"),
+		},
+		{
 			desc:                "disk Id and no error shall be returned if everything is good with StandardLRS storage account with not empty diskIOPSReadWrite",
 			diskID:              disk1ID,
 			diskName:            disk1Name,
@@ -177,6 +190,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskName:            disk1Name,
 			storageAccountType:  compute.DiskStorageAccountTypesStandardLRS,
 			diskEncryptionSetID: goodDiskEncryptionSetID,
+			diskEncryptionType:  "EncryptionAtRestWithCustomerKey",
 			networkAccessPolicy: compute.NetworkAccessPolicyAllowAll,
 			expectedDiskID:      disk1ID,
 			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
@@ -233,6 +247,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			DiskIOPSReadWrite:   test.diskIOPSReadWrite,
 			DiskMBpsReadWrite:   test.diskMBPSReadWrite,
 			DiskEncryptionSetID: test.diskEncryptionSetID,
+			DiskEncryptionType:  test.diskEncryptionType,
 			MaxShares:           maxShare,
 			NetworkAccessPolicy: test.networkAccessPolicy,
 			DiskAccessID:        test.diskAccessID,
