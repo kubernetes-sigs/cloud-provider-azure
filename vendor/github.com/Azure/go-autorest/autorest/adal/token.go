@@ -365,6 +365,25 @@ func (secret ServicePrincipalAuthorizationCodeSecret) MarshalJSON() ([]byte, err
 	})
 }
 
+// ServicePrincipalFederatedSecret implements ServicePrincipalSecret for Federated JWTs.
+type ServicePrincipalFederatedSecret struct {
+	jwt string
+}
+
+// SetAuthenticationValues is a method of the interface ServicePrincipalSecret.
+// It will populate the form submitted during OAuth Token Acquisition using a JWT signed by an OIDC issuer.
+func (secret *ServicePrincipalFederatedSecret) SetAuthenticationValues(spt *ServicePrincipalToken, v *url.Values) error {
+
+	v.Set("client_assertion", secret.jwt)
+	v.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (secret ServicePrincipalFederatedSecret) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("marshalling ServicePrincipalFederatedSecret is not supported")
+}
+
 // ServicePrincipalToken encapsulates a Token created for a Service Principal.
 type ServicePrincipalToken struct {
 	inner             servicePrincipalToken
@@ -419,6 +438,8 @@ func (spt *ServicePrincipalToken) UnmarshalJSON(data []byte) error {
 		spt.inner.Secret = &ServicePrincipalUsernamePasswordSecret{}
 	case "ServicePrincipalAuthorizationCodeSecret":
 		spt.inner.Secret = &ServicePrincipalAuthorizationCodeSecret{}
+	case "ServicePrincipalFederatedSecret":
+		return errors.New("unmarshalling ServicePrincipalFederatedSecret is not supported")
 	default:
 		return fmt.Errorf("unrecognized token type '%s'", secret["type"])
 	}
@@ -660,6 +681,31 @@ func NewServicePrincipalTokenFromAuthorizationCode(oauthConfig OAuthConfig, clie
 			ClientSecret:      clientSecret,
 			AuthorizationCode: authorizationCode,
 			RedirectURI:       redirectURI,
+		},
+		callbacks...,
+	)
+}
+
+// NewServicePrincipalTokenFromFederatedToken creates a ServicePrincipalToken from the supplied federated OIDC JWT.
+func NewServicePrincipalTokenFromFederatedToken(oauthConfig OAuthConfig, clientID string, jwt string, resource string, callbacks ...TokenRefreshCallback) (*ServicePrincipalToken, error) {
+	if err := validateOAuthConfig(oauthConfig); err != nil {
+		return nil, err
+	}
+	if err := validateStringParam(clientID, "clientID"); err != nil {
+		return nil, err
+	}
+	if err := validateStringParam(resource, "resource"); err != nil {
+		return nil, err
+	}
+	if jwt == "" {
+		return nil, fmt.Errorf("parameter 'jwt' cannot be empty")
+	}
+	return NewServicePrincipalTokenWithSecret(
+		oauthConfig,
+		clientID,
+		resource,
+		&ServicePrincipalFederatedSecret{
+			jwt: jwt,
 		},
 		callbacks...,
 	)
@@ -1317,12 +1363,25 @@ func NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantCfg MultiTena
 
 // MSIAvailable returns true if the MSI endpoint is available for authentication.
 func MSIAvailable(ctx context.Context, s Sender) bool {
+	msiType, _, err := getMSIType()
+
+	if err != nil {
+		return false
+	}
+
+	if msiType != msiTypeIMDS {
+		return true
+	}
+
 	if s == nil {
 		s = sender()
 	}
+
 	resp, err := getMSIEndpoint(ctx, s)
+
 	if err == nil {
 		resp.Body.Close()
 	}
+
 	return err == nil
 }
