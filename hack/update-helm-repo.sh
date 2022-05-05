@@ -19,5 +19,8 @@ set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
-helm package ${REPO_ROOT}/helm/cloud-provider-azure -d ${REPO_ROOT}/helm/repo
-helm repo index ${REPO_ROOT}/helm/repo
+helm package ${REPO_ROOT}/helm/cloud-provider-azure -d ${REPO_ROOT}/helm/repo/new
+helm repo index ${REPO_ROOT}/helm/repo/new
+helm repo index --merge ${REPO_ROOT}/helm/repo/index.yaml ${REPO_ROOT}/helm/repo/new
+mv ${REPO_ROOT}/helm/repo/new/index.yaml ${REPO_ROOT}/helm/repo/index.yaml
+mv ${REPO_ROOT}/helm/repo/new/*.tgz ${REPO_ROOT}/helm/repo
