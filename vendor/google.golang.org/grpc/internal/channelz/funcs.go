@@ -630,7 +630,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64, maxResults int64)
 	if count == 0 {
 		end = true
 	}
-	s := make([]*SocketMetric, 0, len(sks))
+	var s []*SocketMetric
 	for _, ns := range sks {
 		sm := &SocketMetric{}
 		sm.SocketData = ns.s.ChannelzMetric()
