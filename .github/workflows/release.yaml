@@ -165,7 +165,7 @@ jobs:
             ./artifacts/cloud-controller-manager-*-*/*
 
       - name: Update site release note
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           branch: doc/release-note-${{github.ref_name}}
           delete-branch: true
