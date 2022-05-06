@@ -346,25 +346,11 @@ func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string
 }
 
 // PatchResource patches a resource by resource ID
-func (c *Client) PatchResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error) {
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
+func (c *Client) PatchResource(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error) {
+	future, rerr := c.PatchResourceAsync(ctx, resourceID, parameters, decorators...)
+	if rerr != nil {
+		return nil, rerr
 	}
-
-	request, err := c.PreparePatchRequest(ctx, decorators...)
-	if err != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "patch.prepare", resourceID, err)
-		return nil, retry.NewError(false, err)
-	}
-
-	future, resp, clientErr := c.SendAsync(ctx, request)
-	defer c.CloseResponse(ctx, resp)
-	if clientErr != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "patch.send", resourceID, clientErr.Error())
-		return nil, clientErr
-	}
-
 	response, err := c.WaitForAsyncOperationResult(ctx, future, "armclient.PatchResource")
 	if err != nil {
 		if response != nil {
@@ -386,11 +372,11 @@ func (c *Client) PatchResource(ctx context.Context, resourceID string, parameter
 }
 
 // PatchResourceAsync patches a resource by resource ID asynchronously
-func (c *Client) PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error) {
-	decorators := []autorest.PrepareDecorator{
+func (c *Client) PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error) {
+	decorators = append(decorators,
 		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
 		autorest.WithJSON(parameters),
-	}
+	)
 
 	request, err := c.PreparePatchRequest(ctx, decorators...)
 	if err != nil {
