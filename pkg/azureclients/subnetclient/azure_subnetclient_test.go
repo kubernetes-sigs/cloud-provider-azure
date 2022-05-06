@@ -580,7 +580,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
 	rerr := subnetClient.Delete(context.TODO(), "rg", "vnet", "subnet1")
@@ -633,7 +633,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	subnet := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(subnet.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(subnet.ID)).Return(throttleErr).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
 	rerr := subnetClient.Delete(context.TODO(), "rg", "vnet", "subnet1")

@@ -542,5 +542,5 @@ func (c *Client) deleteVM(ctx context.Context, resourceGroupName string, VMName 
 		VMName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

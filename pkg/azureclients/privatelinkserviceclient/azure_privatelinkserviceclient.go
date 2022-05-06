@@ -322,7 +322,7 @@ func (c *Client) deletePLS(ctx context.Context, resourceGroupName string, privat
 		privateLinkServiceName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) DeletePEConnection(ctx context.Context, resourceGroupName string, privateLinkServiceName string, privateEndpointConnectionName string) *retry.Error {
@@ -366,7 +366,7 @@ func (c *Client) deletePEConn(ctx context.Context, resourceGroupName string, pri
 		privateEndpointConnectionName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.PrivateLinkServiceListResult, err error) {

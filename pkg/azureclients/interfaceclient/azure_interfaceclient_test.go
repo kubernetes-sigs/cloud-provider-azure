@@ -226,7 +226,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestInterface("interface1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
 	rerr := nicClient.Delete(context.TODO(), "rg", "interface1")
@@ -238,7 +238,7 @@ func TestDelete(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(noContentErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(noContentErr).Times(1)
 
 	rerr = nicClient.Delete(context.TODO(), "rg", "interface1")
 	assert.Equal(t, noContentErr, rerr)

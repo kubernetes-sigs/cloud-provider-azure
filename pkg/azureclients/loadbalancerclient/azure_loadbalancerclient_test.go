@@ -320,7 +320,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(lb.ID), "").Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(lb.ID)).Return(test.armClientErr)
 
 		lbClient := getTestLoadBalancerClient(armClient)
 		rerr := lbClient.Delete(context.TODO(), "rg", "lb1")

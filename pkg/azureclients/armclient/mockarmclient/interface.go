@@ -69,32 +69,42 @@ func (mr *MockInterfaceMockRecorder) CloseResponse(ctx, response interface{}) *g
 }
 
 // DeleteResource mocks base method.
-func (m *MockInterface) DeleteResource(ctx context.Context, resourceID, ifMatch string) *retry.Error {
+func (m *MockInterface) DeleteResource(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteResource", ctx, resourceID, ifMatch)
+	varargs := []interface{}{ctx, resourceID}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteResource", varargs...)
 	ret0, _ := ret[0].(*retry.Error)
 	return ret0
 }
 
 // DeleteResource indicates an expected call of DeleteResource.
-func (mr *MockInterfaceMockRecorder) DeleteResource(ctx, resourceID, ifMatch interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteResource(ctx, resourceID interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteResource", reflect.TypeOf((*MockInterface)(nil).DeleteResource), ctx, resourceID, ifMatch)
+	varargs := append([]interface{}{ctx, resourceID}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteResource", reflect.TypeOf((*MockInterface)(nil).DeleteResource), varargs...)
 }
 
 // DeleteResourceAsync mocks base method.
-func (m *MockInterface) DeleteResourceAsync(ctx context.Context, resourceID, ifMatch string) (*azure.Future, *retry.Error) {
+func (m *MockInterface) DeleteResourceAsync(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteResourceAsync", ctx, resourceID, ifMatch)
+	varargs := []interface{}{ctx, resourceID}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteResourceAsync", varargs...)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // DeleteResourceAsync indicates an expected call of DeleteResourceAsync.
-func (mr *MockInterfaceMockRecorder) DeleteResourceAsync(ctx, resourceID, ifMatch interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteResourceAsync(ctx, resourceID interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteResourceAsync", reflect.TypeOf((*MockInterface)(nil).DeleteResourceAsync), ctx, resourceID, ifMatch)
+	varargs := append([]interface{}{ctx, resourceID}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteResourceAsync", reflect.TypeOf((*MockInterface)(nil).DeleteResourceAsync), varargs...)
 }
 
 // GetResource mocks base method.

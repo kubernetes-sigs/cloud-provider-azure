@@ -542,7 +542,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	rtClient := getTestSecurityGroupClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "rg", "nsg1")
@@ -597,7 +597,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	nsg := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(nsg.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(nsg.ID)).Return(throttleErr).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
 	rerr := nsgClient.Delete(context.TODO(), "rg", "nsg1")

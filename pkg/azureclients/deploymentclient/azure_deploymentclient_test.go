@@ -559,7 +559,7 @@ func TestDelete(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID)).Return(nil).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")
@@ -614,7 +614,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID)).Return(throttleErr).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")

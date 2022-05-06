@@ -383,7 +383,7 @@ func TestResourceAction(t *testing.T) {
 		{
 			description: "delete resource async",
 			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
-				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID, "")
+				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID)
 				return future, nil, rerr
 			},
 			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
@@ -409,7 +409,7 @@ func TestResourceAction(t *testing.T) {
 		{
 			description: "delete resource",
 			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
-				rerr := armClient.DeleteResource(ctx, resourceID, "")
+				rerr := armClient.DeleteResource(ctx, resourceID)
 				return nil, nil, rerr
 			},
 			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {

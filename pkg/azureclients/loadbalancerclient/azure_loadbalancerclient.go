@@ -328,7 +328,7 @@ func (c *Client) deleteLB(ctx context.Context, resourceGroupName string, loadBal
 		loadBalancerName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.LoadBalancerListResult, err error) {
@@ -525,7 +525,7 @@ func (c *Client) deleteLBBackendPool(ctx context.Context, resourceGroupName, loa
 		"backendAddressPools",
 		backendPoolName,
 	)
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) createOrUpdateBackendPoolResponder(resp *http.Response) (*network.BackendAddressPool, *retry.Error) {

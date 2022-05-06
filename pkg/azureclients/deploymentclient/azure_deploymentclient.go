@@ -410,7 +410,7 @@ func (c *Client) deleteDeployment(ctx context.Context, resourceGroupName string,
 		deploymentName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 // ExportTemplate exports the template used for specified deployment

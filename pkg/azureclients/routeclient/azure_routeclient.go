@@ -201,5 +201,5 @@ func (c *Client) deleteRoute(ctx context.Context, resourceGroupName string, rout
 		routeName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

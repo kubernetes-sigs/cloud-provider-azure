@@ -328,7 +328,7 @@ func (c *Client) deleteNSG(ctx context.Context, resourceGroupName string, networ
 		networkSecurityGroupName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.SecurityGroupListResult, err error) {
