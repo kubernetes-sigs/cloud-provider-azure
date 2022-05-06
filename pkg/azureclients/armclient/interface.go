@@ -72,10 +72,10 @@ type Interface interface {
 	PutResourcesInBatches(ctx context.Context, resources map[string]interface{}, batchSize int) map[string]*PutResourcesResponse
 
 	// PatchResource patches a resource by resource ID
-	PatchResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error)
+	PatchResource(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error)
 
 	// PatchResourceAsync patches a resource by resource ID asynchronously
-	PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error)
+	PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error)
 
 	// HeadResource heads a resource by resource ID
 	HeadResource(ctx context.Context, resourceID string) (*http.Response, *retry.Error)

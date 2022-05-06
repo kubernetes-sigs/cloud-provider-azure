@@ -148,33 +148,43 @@ func (mr *MockInterfaceMockRecorder) HeadResource(ctx, resourceID interface{}) *
 }
 
 // PatchResource mocks base method.
-func (m *MockInterface) PatchResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error) {
+func (m *MockInterface) PatchResource(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PatchResource", ctx, resourceID, parameters)
+	varargs := []interface{}{ctx, resourceID, parameters}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PatchResource", varargs...)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PatchResource indicates an expected call of PatchResource.
-func (mr *MockInterfaceMockRecorder) PatchResource(ctx, resourceID, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PatchResource(ctx, resourceID, parameters interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResource", reflect.TypeOf((*MockInterface)(nil).PatchResource), ctx, resourceID, parameters)
+	varargs := append([]interface{}{ctx, resourceID, parameters}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResource", reflect.TypeOf((*MockInterface)(nil).PatchResource), varargs...)
 }
 
 // PatchResourceAsync mocks base method.
-func (m *MockInterface) PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error) {
+func (m *MockInterface) PatchResourceAsync(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PatchResourceAsync", ctx, resourceID, parameters)
+	varargs := []interface{}{ctx, resourceID, parameters}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PatchResourceAsync", varargs...)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PatchResourceAsync indicates an expected call of PatchResourceAsync.
-func (mr *MockInterfaceMockRecorder) PatchResourceAsync(ctx, resourceID, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PatchResourceAsync(ctx, resourceID, parameters interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResourceAsync", reflect.TypeOf((*MockInterface)(nil).PatchResourceAsync), ctx, resourceID, parameters)
+	varargs := append([]interface{}{ctx, resourceID, parameters}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchResourceAsync", reflect.TypeOf((*MockInterface)(nil).PatchResourceAsync), varargs...)
 }
 
 // PostResource mocks base method.
