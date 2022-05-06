@@ -22,8 +22,6 @@ package envconfig
 import (
 	"os"
 	"strings"
-
-	xdsenv "google.golang.org/grpc/internal/xds/env"
 )
 
 const (
@@ -33,9 +31,8 @@ const (
 )
 
 var (
-	// Retry is enabled unless explicitly disabled via "GRPC_GO_RETRY=off" or
-	// if XDS retry support is explicitly disabled.
-	Retry = !strings.EqualFold(os.Getenv(retryStr), "off") && xdsenv.RetrySupport
+	// Retry is set if retry is explicitly enabled via "GRPC_GO_RETRY=on".
+	Retry = strings.EqualFold(os.Getenv(retryStr), "on")
 	// TXTErrIgnore is set if TXT errors should be ignored ("GRPC_GO_IGNORE_TXT_ERRORS" is not "false").
 	TXTErrIgnore = !strings.EqualFold(os.Getenv(txtErrIgnoreStr), "false")
 )
