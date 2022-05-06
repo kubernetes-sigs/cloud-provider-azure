@@ -1,8 +1,14 @@
 name: Test Docs
 
 on:
-    pull_request: {}
-    push: {}
+    pull_request: 
+      branches: [ master ]
+      paths:
+        - 'site/**'
+    push: 
+      branches: [ master ]
+      paths:
+        - 'site/**'
 
 jobs:
   deploy:
