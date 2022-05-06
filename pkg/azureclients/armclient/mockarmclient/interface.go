@@ -293,77 +293,43 @@ func (mr *MockInterfaceMockRecorder) PreparePutRequest(ctx interface{}, decorato
 }
 
 // PutResource mocks base method.
-func (m *MockInterface) PutResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error) {
+func (m *MockInterface) PutResource(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResource", ctx, resourceID, parameters)
+	varargs := []interface{}{ctx, resourceID, parameters}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PutResource", varargs...)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PutResource indicates an expected call of PutResource.
-func (mr *MockInterfaceMockRecorder) PutResource(ctx, resourceID, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PutResource(ctx, resourceID, parameters interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResource", reflect.TypeOf((*MockInterface)(nil).PutResource), ctx, resourceID, parameters)
+	varargs := append([]interface{}{ctx, resourceID, parameters}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResource", reflect.TypeOf((*MockInterface)(nil).PutResource), varargs...)
 }
 
 // PutResourceAsync mocks base method.
-func (m *MockInterface) PutResourceAsync(ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *retry.Error) {
+func (m *MockInterface) PutResourceAsync(ctx context.Context, resourceID string, parameters interface{}, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResourceAsync", ctx, resourceID, parameters)
+	varargs := []interface{}{ctx, resourceID, parameters}
+	for _, a := range decorators {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PutResourceAsync", varargs...)
 	ret0, _ := ret[0].(*azure.Future)
 	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // PutResourceAsync indicates an expected call of PutResourceAsync.
-func (mr *MockInterfaceMockRecorder) PutResourceAsync(ctx, resourceID, parameters interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) PutResourceAsync(ctx, resourceID, parameters interface{}, decorators ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceAsync", reflect.TypeOf((*MockInterface)(nil).PutResourceAsync), ctx, resourceID, parameters)
-}
-
-// PutResourceWithDecorators mocks base method.
-func (m *MockInterface) PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResourceWithDecorators", ctx, resourceID, parameters, decorators)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
-}
-
-// PutResourceWithDecorators indicates an expected call of PutResourceWithDecorators.
-func (mr *MockInterfaceMockRecorder) PutResourceWithDecorators(ctx, resourceID, parameters, decorators interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceWithDecorators", reflect.TypeOf((*MockInterface)(nil).PutResourceWithDecorators), ctx, resourceID, parameters, decorators)
-}
-
-// PutResourceWithDecoratorsAsync mocks base method.
-func (m *MockInterface) PutResourceWithDecoratorsAsync(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResourceWithDecoratorsAsync", ctx, resourceID, parameters, decorators)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
-}
-
-// PutResourceWithDecoratorsAsync indicates an expected call of PutResourceWithDecoratorsAsync.
-func (mr *MockInterfaceMockRecorder) PutResourceWithDecoratorsAsync(ctx, resourceID, parameters, decorators interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceWithDecoratorsAsync", reflect.TypeOf((*MockInterface)(nil).PutResourceWithDecoratorsAsync), ctx, resourceID, parameters, decorators)
-}
-
-// PutResources mocks base method.
-func (m *MockInterface) PutResources(ctx context.Context, resources map[string]interface{}) map[string]*armclient.PutResourcesResponse {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResources", ctx, resources)
-	ret0, _ := ret[0].(map[string]*armclient.PutResourcesResponse)
-	return ret0
-}
-
-// PutResources indicates an expected call of PutResources.
-func (mr *MockInterfaceMockRecorder) PutResources(ctx, resources interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResources", reflect.TypeOf((*MockInterface)(nil).PutResources), ctx, resources)
+	varargs := append([]interface{}{ctx, resourceID, parameters}, decorators...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceAsync", reflect.TypeOf((*MockInterface)(nil).PutResourceAsync), varargs...)
 }
 
 // PutResourcesInBatches mocks base method.

@@ -264,15 +264,12 @@ func (c *Client) createOrUpdateInterface(ctx context.Context, resourceGroupName 
 		netInterfaceResourceType,
 		networkInterfaceName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if to.String(parameters.Etag) != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(to.String(parameters.Etag))))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "nic.put.request", resourceID, rerr.Error())
