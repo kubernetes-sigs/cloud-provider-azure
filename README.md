@@ -27,6 +27,7 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
+| v1.24.x            | v1.24.0                | release-1.24          |
 | v1.23.x            | v1.23.11               | release-1.23          |
 | v1.22.x            | v1.1.14                | release-1.1           |
 | v1.21.x            | v1.0.18                | release-1.0           |
