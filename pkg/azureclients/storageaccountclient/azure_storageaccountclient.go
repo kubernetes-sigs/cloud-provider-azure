@@ -395,7 +395,7 @@ func (c *Client) deleteStorageAccount(ctx context.Context, subsID, resourceGroup
 		accountName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 // ListByResourceGroup get a list storage accounts by resourceGroup.

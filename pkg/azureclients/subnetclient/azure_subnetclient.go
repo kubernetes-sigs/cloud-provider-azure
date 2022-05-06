@@ -334,7 +334,7 @@ func (c *Client) deleteSubnet(ctx context.Context, resourceGroupName string, vir
 		"subnets",
 		subnetName)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.SubnetListResult, err error) {

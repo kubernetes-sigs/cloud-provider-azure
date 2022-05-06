@@ -338,7 +338,7 @@ func (c *Client) deleteDisk(ctx context.Context, subsID, resourceGroupName strin
 		diskName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 // ListByResourceGroup lists all the disks under a resource group.

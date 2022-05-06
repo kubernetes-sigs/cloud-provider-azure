@@ -441,8 +441,8 @@ func (c *Client) PostResource(ctx context.Context, resourceID, action string, pa
 }
 
 // DeleteResource deletes a resource by resource ID
-func (c *Client) DeleteResource(ctx context.Context, resourceID, ifMatch string) *retry.Error {
-	future, clientErr := c.DeleteResourceAsync(ctx, resourceID, ifMatch)
+func (c *Client) DeleteResource(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) *retry.Error {
+	future, clientErr := c.DeleteResourceAsync(ctx, resourceID)
 	if clientErr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "delete.request", resourceID, clientErr.Error())
 		return clientErr
@@ -474,13 +474,10 @@ func (c *Client) HeadResource(ctx context.Context, resourceID string) (*http.Res
 }
 
 // DeleteResourceAsync delete a resource by resource ID and returns a future representing the async result
-func (c *Client) DeleteResourceAsync(ctx context.Context, resourceID, ifMatch string) (*azure.Future, *retry.Error) {
-	decorators := []autorest.PrepareDecorator{
+func (c *Client) DeleteResourceAsync(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error) {
+	decorators = append(decorators,
 		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-	}
-	if len(ifMatch) > 0 {
-		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(ifMatch)))
-	}
+	)
 
 	deleteRequest, err := c.PrepareDeleteRequest(ctx, decorators...)
 	if err != nil {

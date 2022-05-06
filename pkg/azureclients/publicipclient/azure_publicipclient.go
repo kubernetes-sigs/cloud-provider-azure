@@ -404,7 +404,7 @@ func (c *Client) deletePublicIP(ctx context.Context, resourceGroupName string, p
 		publicIPAddressName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.PublicIPAddressListResult, err error) {

@@ -253,7 +253,7 @@ func TestAllThrottle(t *testing.T) {
 	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, throttleErr).Times(1)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(3)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -579,7 +579,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestStorageAccount("sa1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	rtClient := getTestStorageAccountClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "", "rg", "sa1")

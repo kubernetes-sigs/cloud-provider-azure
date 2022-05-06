@@ -752,7 +752,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestVM("vm1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	client := getTestVMClient(armClient)
 	rerr := client.Delete(context.TODO(), "rg", "vm1")
@@ -805,7 +805,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	testVM := getTestVM("vm1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(testVM.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(testVM.ID)).Return(throttleErr).Times(1)
 
 	vmClient := getTestVMClient(armClient)
 	rerr := vmClient.Delete(context.TODO(), "rg", "vm1")

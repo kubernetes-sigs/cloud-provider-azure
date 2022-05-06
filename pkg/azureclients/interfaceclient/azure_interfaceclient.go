@@ -337,5 +337,5 @@ func (c *Client) deleteInterface(ctx context.Context, resourceGroupName string, 
 		networkInterfaceName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

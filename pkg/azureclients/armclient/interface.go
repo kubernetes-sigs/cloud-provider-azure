@@ -90,10 +90,10 @@ type Interface interface {
 	PostResource(ctx context.Context, resourceID, action string, parameters interface{}, queryParameters map[string]interface{}) (*http.Response, *retry.Error)
 
 	// DeleteResource deletes a resource by resource ID
-	DeleteResource(ctx context.Context, resourceID, ifMatch string) *retry.Error
+	DeleteResource(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) *retry.Error
 
 	// DeleteResourceAsync delete a resource by resource ID and returns a future representing the async result
-	DeleteResourceAsync(ctx context.Context, resourceID, ifMatch string) (*azure.Future, *retry.Error)
+	DeleteResourceAsync(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) (*azure.Future, *retry.Error)
 
 	// CloseResponse closes a response
 	CloseResponse(ctx context.Context, response *http.Response)

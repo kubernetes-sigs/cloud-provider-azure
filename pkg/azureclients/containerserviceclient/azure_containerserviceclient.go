@@ -411,5 +411,5 @@ func (c *Client) deleteManagedCluster(ctx context.Context, resourceGroupName str
 		managedClusterName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
