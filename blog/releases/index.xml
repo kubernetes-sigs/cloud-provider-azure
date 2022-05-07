@@ -5,6 +5,9 @@
 &lt;li>Feat: add DiskEncryptionType in CreateDisk (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1646">#1646&lt;/a>, &lt;a href="https://github.com/andyzhangx">@andyzhangx&lt;/a>)&lt;/li>
 &lt;li>Update dependencies to 1.24 (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1655">#1655&lt;/a>, &lt;a href="https://github.com/MartinForReal">@MartinForReal&lt;/a>)&lt;/li>
 &lt;/ul>
+&lt;h2 id="actions-required">Actions Required&lt;/h2>
+&lt;p>From cloud provider Azure v1.24.0 version, the LoadBalancer typed services with appProtocol HTTP/HTTPS would switch to HTTP/HTTPS for health probe protocol (while TCP is used before v1.24.0). And &lt;code>/&lt;/code> would be used as the default health probe request path. If your service doesn&amp;rsquo;t respond 200 for &lt;code>/&lt;/code>, please ensure set service annotation &lt;code>service.beta.kubernetes.io/port_{port}_health-probe_request-path&lt;/code> or &lt;code>service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path&lt;/code> (applied to all ports) with correct request path to avoid service broken.&lt;/p>
+&lt;p>Please refer the documents &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/topics/loadbalancer/#custom-load-balancer-health-probe">here&lt;/a> for the details of Azure LoadBalancer health probe customization.&lt;/p>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
 &lt;ul>
