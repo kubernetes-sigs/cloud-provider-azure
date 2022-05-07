@@ -311,11 +311,49 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+func TestDeletePEConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		description  string
+		armClientErr *retry.Error
+		expectedErr  *retry.Error
+	}{
+		{
+			description:  "Delete should report the throttling error",
+			armClientErr: &retry.Error{HTTPStatusCode: http.StatusTooManyRequests},
+			expectedErr:  &retry.Error{HTTPStatusCode: http.StatusTooManyRequests},
+		},
+		{
+			description: "Delete should not report any error if there's no error from arm client",
+		},
+	}
+
+	peConn := getTestPrivateEndpointConnection("pls1", "peconn")
+
+	for _, test := range tests {
+		armClient := mockarmclient.NewMockInterface(ctrl)
+		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(peConn.ID), "").Return(test.armClientErr)
+
+		plsClient := getTestPrivateLinkServiceClient(armClient)
+		rerr := plsClient.DeletePEConnection(context.TODO(), "rg", "pls1", "peconn")
+		assert.Equal(t, test.expectedErr, rerr)
+	}
+}
+
 func getTestPrivateLinkService(name string) network.PrivateLinkService {
 	return network.PrivateLinkService{
-		ID:       to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/"+PLSResourceType+"/%s", name)),
+		ID:       to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s", PLSResourceType, name)),
 		Name:     to.StringPtr(name),
 		Location: to.StringPtr("eastus"),
+	}
+}
+
+func getTestPrivateEndpointConnection(PLSName string, PEConnName string) network.PrivateEndpointConnection {
+	return network.PrivateEndpointConnection{
+		ID:   to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s/%s/%s", PLSResourceType, PLSName, PEConnResourceType, PEConnName)),
+		Name: to.StringPtr(PEConnName),
 	}
 }
 

@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient"
@@ -221,6 +222,8 @@ type Config struct {
 	NsgCacheTTLInSeconds int `json:"nsgCacheTTLInSeconds,omitempty" yaml:"nsgCacheTTLInSeconds,omitempty"`
 	// RouteTableCacheTTLInSeconds sets the cache TTL for route table
 	RouteTableCacheTTLInSeconds int `json:"routeTableCacheTTLInSeconds,omitempty" yaml:"routeTableCacheTTLInSeconds,omitempty"`
+	// PlsCacheTTLInSeconds sets the cache TTL for private link service resource
+	PlsCacheTTLInSeconds int `json:"plsCacheTTLInSeconds,omitempty" yaml:"plsCacheTTLInSeconds,omitempty"`
 	// AvailabilitySetsCacheTTLInSeconds sets the cache TTL for VMAS
 	AvailabilitySetsCacheTTLInSeconds int `json:"availabilitySetsCacheTTLInSeconds,omitempty" yaml:"availabilitySetsCacheTTLInSeconds,omitempty"`
 	// PublicIPCacheTTLInSeconds sets the cache TTL for public ip
@@ -231,6 +234,8 @@ type Config struct {
 	// PutVMSSVMBatchSize defines how many requests the client send concurrently when putting the VMSS VMs.
 	// If it is smaller than or equal to zero, the request will be sent one by one in sequence (default).
 	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
+	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
+	PrivateLinkServiceResourceGroup string `json:"privateLinkServiceResourceGroup,omitempty" yaml:"privateLinkServiceResourceGroup,omitempty"`
 }
 
 type InitSecretConfig struct {
@@ -276,6 +281,7 @@ type Cloud struct {
 	VirtualMachineSizesClient       vmsizeclient.Interface
 	AvailabilitySetsClient          vmasclient.Interface
 	ZoneClient                      zoneclient.Interface
+	PrivateLinkServiceClient        privatelinkserviceclient.Interface
 
 	ResourceRequestBackoff wait.Backoff
 	metadata               *InstanceMetadataService
@@ -320,6 +326,8 @@ type Cloud struct {
 	nsgCache *azcache.TimedCache
 	rtCache  *azcache.TimedCache
 	pipCache *azcache.TimedCache
+	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
+	plsCache *azcache.TimedCache
 
 	*BlobDiskController
 	*ManagedDiskController
@@ -450,6 +458,10 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 
 	if config.SecurityGroupResourceGroup == "" {
 		config.SecurityGroupResourceGroup = config.ResourceGroup
+	}
+
+	if config.PrivateLinkServiceResourceGroup == "" {
+		config.PrivateLinkServiceResourceGroup = config.ResourceGroup
 	}
 
 	if config.VMType == "" {
@@ -608,6 +620,11 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
+	az.plsCache, err = az.newPLSCache()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -762,6 +779,7 @@ func (az *Cloud) configAzureClients(
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
+	az.PrivateLinkServiceClient = privatelinkserviceclient.New(azClientConfig)
 
 	if az.ZoneClient == nil {
 		az.ZoneClient = zoneclient.New(zoneClientConfig)
