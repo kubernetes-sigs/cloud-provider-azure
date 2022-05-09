@@ -1,6 +1,6 @@
 # cloud-provider-azure Helm Chart
 
-This helm chart enables installation and maintenance of Azure cloud provider components. The provided components are compatible with all releases of the Azure cloud provider since v1 (Kubernetes 1.21).
+This Helm chart enables installation and maintenance of Azure cloud provider components. The provided components are compatible with all releases of the Azure cloud provider since v1 (Kubernetes 1.21).
 
 # Defaults
 
@@ -24,7 +24,7 @@ Similarly, if you are running a development release of Kubernetes, or wish to te
 $ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set cloudControllerManager.imageRepository=docker.io/me/ccm --set cloudControllerManager.imageName=azure-cloud-controller-manager --set cloudControllerManager.imageTag=canary --set cloudNodeManager.imageRepository=docker.io/me/ccm --set cloudNodeManager.imageName=azure-cloud-node-manager --set cloudNodeManager.imageTag=canary
 ```
 
-The following error will be returned if you attempt to install the helm chart (relying upon default image values) onto a cluster running a version of Kubernetes that doesn't have a supported cloud-provider-azure release:
+The following error will be returned if you attempt to install the Helm chart (relying upon default image values) onto a cluster running a version of Kubernetes that doesn't have a supported cloud-provider-azure release:
 
 ```
 Error: INSTALLATION FAILED: DaemonSet.apps "cloud-node-manager" is invalid: spec.template.spec.containers[0].image: Required value
@@ -34,7 +34,7 @@ The matrix defining Azure cloud provider releases and their corresponding suppor
 
 ## Uninstallation
 
-Use the following commands to get the `cloud-provider-azure` helm chart release name and uninstall it.
+Use the following commands to get the `cloud-provider-azure` Helm chart release name and uninstall it.
 
 ```bash
 $ helm list
@@ -43,7 +43,7 @@ $ helm delete <cloud-provider-azure-chart-release-name>
 
 # Helm Repo
 
-A helm repo will be maintained at the following URI:
+A Helm repo will be maintained at the following URI:
 
 - https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo
 
@@ -92,7 +92,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | `cloudNodeManager.containerResourceManagement.limitsCPUWin` | `"2"` | CPU limits configuration for the azure-cloud-node-manager pod running on Windows nodes |
 | `cloudNodeManager.containerResourceManagement.limitsMemWin` | `"512Mi"` | Memory limits configuration for the azure-cloud-node-manager pod running on Windows nodes |
 
-The following configuration is made available for advanced users. There are no default values applied, and normally you wouldn't need to include these when deploying your helm release. See [the values.yaml file](values.yaml) for example values for each configuration.
+The following configuration is made available for advanced users. There are no default values applied, and normally you wouldn't need to include these when deploying your Helm release. See [the values.yaml file](values.yaml) for example values for each configuration.
 
 ## optional cloud-controller-manager configuration
 
@@ -139,13 +139,49 @@ The following configuration is made available for advanced users. There are no d
 
 # Maintaining the Repo
 
-Whenever changes have been made to the `cloud-provider-azure` helm chart, a new version of the chart should be released. First, pick an appropriate next, higher version and update the `version` property in `helm/cloud-provider-azure/Chart.yaml`. Then, package the entire set of changes to the chart into a new repo version:
+Whenever changes have been made to the `cloud-provider-azure` Helm chart, a new version of the chart should be released. First, pick an appropriate next, higher version and update the `version` property in `helm/cloud-provider-azure/Chart.yaml`. Then, package the entire set of changes to the chart into a new repo version:
 
 From the git root:
 
 ```bash
 $ make update-helm
-Successfully packaged chart and saved it to: helm/repo/cloud-provider-azure-1.23.8.tgz
+Successfully packaged chart and saved it to: helm/repo/cloud-provider-azure-1.23.11.tgz
 ```
 
-Changes to the chart should *always* include a new version, and then an update to the helm repo as described above.
+Changes to the chart should *always* include a new version, and then an update to the Helm repo as described above.
+
+If changes to the chart don't include an update to the Helm repo as described above, then the PR CI job will fail, preventing a merge to `master`.
+
+To check if your Helm chart changes will pass CI, you can manually run the verification script:
+
+```bash
+$ hack/verify-helm-repo.sh
+++ dirname hack/verify-helm-repo.sh
++ REPO_ROOT=hack/..
++ for chart in '"cloud-provider-azure"'
+++ ls hack/../helm/repo/cloud-provider-azure-1.23.10.tgz hack/../helm/repo/cloud-provider-azure-1.23.11.tgz hack/../helm/repo/cloud-provider-azure-1.23.8.tgz
+++ sort -rV
+++ head -n 1
++ LATEST_CHART=hack/../helm/repo/cloud-provider-azure-1.23.11.tgz
+++ echo hack/../helm/repo/cloud-provider-azure-1.23.11.tgz
+++ grep -Eoq '[0-9]+.[0-9]+.[0-9]+'
++ LATEST_VERSION=
++ MATCH_STRING='version: '
++ grep -q 'version: ' hack/../helm/cloud-provider-azure/Chart.yaml
++ rm -Rf hack/../chart_verify
++ mkdir hack/../chart_verify
++ tar -xf hack/../helm/repo/cloud-provider-azure-1.23.11.tgz -C chart_verify
++ diff -r hack/../chart_verify/cloud-provider-azure/ hack/../helm/cloud-provider-azure/ --exclude README.md
++ rm -Rf hack/../chart_verify
++ exit 0
+$ echo $?
+0
+```
+
+## How to pick an appropriate new version when updating the Helm chart
+
+By convention, we pin the Helm chart version to the most recent release of cloud-provider-azure supporting the most recent release of Kubernetes. For example, at the time of this writing, the most recent version of Kubernetes supported by cloud-provider-azure is 1.23, and the most recent release of cloud-provider-azure is `v1.23.11`. When the next version of cloud-provider-azure is released (either `v1.23.12`, or `v1.24.0` in the event that the next release includes support for a new minor release of Kubernetes) we would update the Helm chart to refer to the newly released, versioned image references of `cloud-controller-manager` and `cloud-node-manager`, and then update the Helm chart version to the same version of of the new release (e.g., either `v1.23.12` or `1.24.0`).
+
+If, however, changes to the chart are made independently of a new release of cloud-provider-azure, we can follow the semantic versioning convention of adding `suffix` data to the existing release. For example, if the current release of the Helm chart is `v1.23.11` and we want to add additional configuration capabilities to `values.yaml`, we may do so, and then update the version of the chart to `v1.23.11+20220505` following the formula `<existing release>+<current date in format YYYYMMDD>`.
+
+As described [above](#maintaining-the-repo), always run `make update-helm` after making changes to the Helm chart, and updating the version.
