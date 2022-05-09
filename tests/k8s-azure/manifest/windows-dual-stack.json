@@ -8,15 +8,6 @@
             "orchestratorType": "Kubernetes",
             "orchestratorRelease": "",
             "kubernetesConfig": {
-                "apiServerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
-                },
-                "kubeletConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
-                },
-                "controllerManagerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
-                },
                 "networkPlugin": "azure",
                 "networkMode": "bridge",
                 "networkPolicy": "",
