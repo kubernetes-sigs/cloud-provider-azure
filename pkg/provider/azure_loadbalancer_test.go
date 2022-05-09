@@ -1880,6 +1880,15 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
+			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with IPv6)",
+			service: getTestService("testIPv6", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/azure-load-balancer-internal": "true",
+			}, true, 80),
+			loadBalancerSku: "standard",
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+			expectedRules:   getDefaultInternalIPv6Rules(true),
+		},
+		{
 			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with HA enabled)",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports": "true",
@@ -2191,6 +2200,15 @@ func getDefaultTestRules(enableTCPReset bool) []network.LoadBalancingRule {
 	return []network.LoadBalancingRule{
 		getTestRule(enableTCPReset, 80),
 	}
+}
+
+func getDefaultInternalIPv6Rules(enableTCPReset bool) []network.LoadBalancingRule {
+	rules := getDefaultTestRules(true)
+	for _, rule := range rules {
+		rule.EnableFloatingIP = to.BoolPtr(false)
+		rule.BackendPort = to.Int32Ptr(getBackendPort(*rule.FrontendPort))
+	}
+	return rules
 }
 
 func getTestRule(enableTCPReset bool, port int32) network.LoadBalancingRule {
