@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mockvirtualnetworklinksclient implements the mock client for VirtualNetworkLinks.
-package mockvirtualnetworklinksclient // import "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient/mockvirtualnetworklinksclient"
+// Package virtualnetworklinksclient implements the client for Virtual Network Link.
+package virtualnetworklinksclient // import "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient"
