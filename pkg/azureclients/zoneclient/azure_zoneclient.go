@@ -33,6 +33,8 @@ import (
 
 var _ Interface = &Client{}
 
+const computeResourceProvider = "Microsoft.Compute"
+
 type resourceTypeMetadata struct {
 	ResourceType string         `json:"resourceType"`
 	ZoneMappings []zoneMappings `json:"zoneMappings"`
@@ -113,7 +115,7 @@ func (c *Client) getZones(ctx context.Context, subscriptionID string) (map[strin
 	regionZoneMap := make(map[string][]string)
 	expectedID := armclient.GetProviderResourceID(
 		subscriptionID,
-		"Microsoft.Compute",
+		computeResourceProvider,
 	)
 	if len(result.ProviderListDataProperties) != 0 {
 		for _, property := range result.ProviderListDataProperties {

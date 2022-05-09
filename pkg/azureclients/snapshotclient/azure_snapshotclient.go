@@ -38,6 +38,8 @@ import (
 
 var _ Interface = &Client{}
 
+const snapshotsResourceType = "Microsoft.Compute/snapshots"
+
 // Client implements Snapshot client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -123,7 +125,7 @@ func (c *Client) getSnapshot(ctx context.Context, subsID, resourceGroupName, sna
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Compute/snapshots",
+		snapshotsResourceType,
 		snapshotName,
 	)
 	result := compute.Snapshot{}
@@ -187,7 +189,7 @@ func (c *Client) deleteSnapshot(ctx context.Context, subsID, resourceGroupName, 
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Compute/snapshots",
+		snapshotsResourceType,
 		snapshotName,
 	)
 
@@ -233,7 +235,7 @@ func (c *Client) createOrUpdateSnapshot(ctx context.Context, subsID, resourceGro
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		"Microsoft.Compute/snapshots",
+		snapshotsResourceType,
 		snapshotName,
 	)
 
@@ -304,7 +306,7 @@ func (c *Client) listSnapshotsByResourceGroup(ctx context.Context, subsID, resou
 	if subsID == "" {
 		subsID = c.subscriptionID
 	}
-	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, "Microsoft.Compute/snapshots")
+	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, snapshotsResourceType)
 	result := make([]compute.Snapshot, 0)
 	page := &SnapshotListPage{}
 	page.fn = c.listNextResults
