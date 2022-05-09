@@ -2165,7 +2165,7 @@ func (az *Cloud) getExpectedLBRules(
 			if err != nil {
 				return expectedProbes, expectedRules, fmt.Errorf("failed to parse transport protocol: %w", err)
 			}
-			props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, to.Int32Ptr(port.Port), *transportProto)
+			props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, port, *transportProto)
 			if err != nil {
 				return expectedProbes, expectedRules, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 			}
@@ -2203,7 +2203,7 @@ func (az *Cloud) getExpectedLBRules(
 func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
-	lbBackendPoolID string, port *int32, transportProto network.TransportProtocol) (*network.LoadBalancingRulePropertiesFormat, error) {
+	lbBackendPoolID string, servicePort v1.ServicePort, transportProto network.TransportProtocol) (*network.LoadBalancingRulePropertiesFormat, error) {
 	var err error
 
 	loadDistribution := network.LoadDistributionDefault
@@ -2229,8 +2229,8 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 
 	props := &network.LoadBalancingRulePropertiesFormat{
 		Protocol:            transportProto,
-		FrontendPort:        port,
-		BackendPort:         port,
+		FrontendPort:        to.Int32Ptr(servicePort.Port),
+		BackendPort:         to.Int32Ptr(servicePort.Port),
 		DisableOutboundSnat: to.BoolPtr(az.disableLoadBalancerOutboundSNAT()),
 		EnableFloatingIP:    to.BoolPtr(true),
 		LoadDistribution:    loadDistribution,
@@ -2245,6 +2245,13 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	if strings.EqualFold(string(transportProto), string(network.TransportProtocolTCP)) && az.useStandardLoadBalancer() {
 		props.EnableTCPReset = to.BoolPtr(true)
 	}
+
+	// Azure ILB does not support secondary IPs as floating IPs on the LB. Therefore, floating IP needs to be turned
+	// off and the rule should point to the nodeIP:nodePort.
+	if consts.IsK8sServiceInternalIPv6(service) {
+		props.BackendPort = to.Int32Ptr(servicePort.NodePort)
+		props.EnableFloatingIP = to.BoolPtr(false)
+	}
 	return props, nil
 }
 
@@ -2253,7 +2260,7 @@ func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
 	lbBackendPoolID string) (*network.LoadBalancingRulePropertiesFormat, error) {
-	props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, to.Int32Ptr(0), network.TransportProtocolAll)
+	props, err := az.getExpectedLoadBalancingRulePropertiesForPort(service, lbFrontendIPConfigID, lbBackendPoolID, v1.ServicePort{}, network.TransportProtocolAll)
 	if err != nil {
 		return nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 	}
