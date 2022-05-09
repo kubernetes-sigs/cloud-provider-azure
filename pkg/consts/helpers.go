@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/net"
 )
 
 // IsK8sServiceHasHAModeEnabled return if HA Mode is enabled in kuberntes service annotations
@@ -36,7 +37,7 @@ func IsK8sServiceUsingInternalLoadBalancer(service *v1.Service) bool {
 }
 
 func IsK8sServiceInternalIPv6(service *v1.Service) bool {
-	return IsK8sServiceUsingInternalLoadBalancer(service) && len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
+	return IsK8sServiceUsingInternalLoadBalancer(service) && net.IsIPv6String(service.Spec.ClusterIP)
 }
 
 // GetHealthProbeConfigOfPortFromK8sSvcAnnotation get health probe configuration for port
