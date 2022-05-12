@@ -234,6 +234,15 @@ var _ = Describe("Ensure LoadBalancer", func() {
 			err = utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+
+		// Create host exec Pod
+		result, err := utils.CreateHostExecPod(cs, ns.Name, utils.ExecAgnhostPod)
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		By("Waiting for exposure of internal service with specific IP")
 		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, ip1)
 		Expect(err).NotTo(HaveOccurred())
@@ -281,6 +290,14 @@ var _ = Describe("Ensure LoadBalancer", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
+		// Create host exec Pod
+		result, err := utils.CreateHostExecPod(cs, ns.Name, utils.ExecAgnhostPod)
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		By("Waiting for exposure of the original service without assigned lb private IP")
 		ip1, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
 		Expect(err).NotTo(HaveOccurred())
@@ -303,6 +320,114 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, targetIP)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ip).To(Equal(targetIP))
+	})
+
+	// internal w/o IP -> public w/o IP
+	// This test is to replace an upstream k/k one because there's a bug:
+	// https://github.com/kubernetes/kubernetes/blob/373c08e0c7873a76cecde1d6d714cc2ff7af0c9a/test/e2e/network/loadbalancer.go#L574
+	// https://github.com/kubernetes/kubernetes/pull/109413
+	It("should support updating an internal Service to a public one", func() {
+		By("Creating an internal Service")
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
+		defer func() {
+			By("Cleaning up")
+			err = utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		// Create host exec Pod
+		result, err := utils.CreateHostExecPod(cs, ns.Name, utils.ExecAgnhostPod)
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		By("Waiting for exposure of the internal Service")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(errList).NotTo(HaveOccurred())
+		utils.Logf("Events list:")
+		for i, event := range list.Items {
+			utils.Logf("%d. %v", i, event)
+		}
+
+		By("Updating the Service to public")
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		service = updateServiceBalanceIP(service, false, "")
+
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Expect the Service IP to be a public one")
+		var targetIP string
+		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			targetIP = svc.Status.LoadBalancer.Ingress[0].IP
+			if utils.IsInternalEndpoint(targetIP) {
+				utils.Logf("expected IP is public, current IP is internal, retry in 10 seconds")
+				return false, nil
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, targetIP)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// public w/o IP -> internal w/ IP
+	// This test is to replace an upstream k/k one because there's a bug:
+	// https://github.com/kubernetes/kubernetes/blob/373c08e0c7873a76cecde1d6d714cc2ff7af0c9a/test/e2e/network/loadbalancer.go#L574
+	// https://github.com/kubernetes/kubernetes/pull/109413
+	It("should support updating a public Service to an internal one with specific IP", func() {
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalFalse, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
+		defer func() {
+			By("Cleaning up")
+			err = utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		// Create host exec Pod
+		result, err := utils.CreateHostExecPod(cs, ns.Name, utils.ExecAgnhostPod)
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		By("Waiting for exposure of a public Service")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(errList).NotTo(HaveOccurred())
+		utils.Logf("Events list:")
+		for i, event := range list.Items {
+			utils.Logf("%d. %v", i, event)
+		}
+
+		internalIP, err := utils.SelectAvailablePrivateIP(tc)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Updating the public service to an internal one with an IP")
+		utils.Logf("will update IP to %s", internalIP)
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		service = updateServiceBalanceIP(service, true, internalIP)
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, internalIP)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should have no operation since no change in service when update [Slow]", func() {
