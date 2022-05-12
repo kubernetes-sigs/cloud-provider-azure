@@ -132,7 +132,7 @@ docker-pull-prerequisites: ## Pull prerequisite images.
 	docker pull gcr.io/distroless/static:latest
 
 buildx-setup:
-	$(DOCKER_BUILDX) inspect img-builder > /dev/null || $(DOCKER_BUILDX) create --name img-builder --use
+	$(DOCKER_BUILDX) inspect img-builder > /dev/null 2>&1 || $(DOCKER_BUILDX) create --name img-builder --use
 	# enable qemu for arm64 build
 	# https://github.com/docker/buildx/issues/464#issuecomment-741507760
 	docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-aarch64
