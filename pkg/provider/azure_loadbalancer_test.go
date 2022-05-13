@@ -2030,7 +2030,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		},
 		{
 			desc:            "getExpectedLBRules should return correct rule when floating ip annotations are added",
-			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerFloatingIP: "false"}, false, 80),
+			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
 			loadBalancerSku: "basic",
 			expectedRules: []network.LoadBalancingRule{
 				getFloatingIPTestRule(false, false, 80),
@@ -3065,7 +3065,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 		},
 		{
 			desc:    "reconcileSecurityGroup shall create sgs with floating IP disabled",
-			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerFloatingIP: "false"}, false, 80),
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
 			existingSgs: map[string]network.SecurityGroup{"nsg": {
 				Name:                          to.StringPtr("nsg"),
 				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
