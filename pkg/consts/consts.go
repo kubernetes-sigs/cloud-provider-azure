@@ -20,8 +20,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
-
-	"k8s.io/component-base/featuregate"
 )
 
 const (
@@ -72,10 +70,6 @@ const (
 	DefaultDiskMBpsReadWrite = 100
 
 	DiskEncryptionSetIDFormat = "/subscriptions/{subs-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/diskEncryptionSets/{diskEncryptionSet-name}"
-
-	// IPv6DualStack is here to avoid having to import features pkg
-	// and violate import rules
-	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 
 	// MachineIDTemplate is the template of the virtual machine
 	MachineIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s"

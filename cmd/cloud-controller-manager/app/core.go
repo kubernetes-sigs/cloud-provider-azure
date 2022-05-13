@@ -22,7 +22,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -34,7 +33,6 @@ import (
 	nodelifecyclecontroller "k8s.io/cloud-provider/controllers/nodelifecycle"
 	routecontroller "k8s.io/cloud-provider/controllers/route"
 	servicecontroller "k8s.io/cloud-provider/controllers/service"
-	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
@@ -43,14 +41,6 @@ import (
 	nodeipamcontroller "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam"
 	nodeipamconfig "sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
-)
-
-const (
-	// IPv6DualStack enables ipv6 dual stack
-	//
-	// owner: @khenidak
-	// alpha: v1.15
-	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 )
 
 func startCloudNodeController(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
@@ -131,11 +121,6 @@ func startRouteController(ctx context.Context, completedConfig *cloudcontrollerc
 		return nil, false, err
 	}
 
-	// failure: more than one cidr and dual stack is not enabled
-	if len(clusterCIDRs) > 1 && !utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack) {
-		return nil, false, fmt.Errorf("len of ClusterCIDRs==%v and dualstack feature is not enabled", len(clusterCIDRs))
-	}
-
 	// failure: more than one cidr but they are not configured as dual stack
 	if len(clusterCIDRs) > 1 && !dualStack {
 		return nil, false, fmt.Errorf("len of ClusterCIDRs==%v and they are not configured as dual stack (at least one from each IPFamily", len(clusterCIDRs))
@@ -173,11 +158,6 @@ func startNodeIpamController(ctx context.Context, completedConfig *cloudcontroll
 		return nil, false, err
 	}
 
-	// failure: more than one cidr and dual stack is not enabled
-	if len(clusterCIDRs) > 1 && !utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack) {
-		return nil, false, fmt.Errorf("len of ClusterCIDRs==%v and dualstack feature is not enabled", len(clusterCIDRs))
-	}
-
 	// failure: more than one cidr but they are not configured as dual stack
 	if len(clusterCIDRs) > 1 && !dualStack {
 		return nil, false, fmt.Errorf("len of ClusterCIDRs==%v and they are not configured as dual stack (at least one from each IPFamily", len(clusterCIDRs))
@@ -205,11 +185,6 @@ func startNodeIpamController(ctx context.Context, completedConfig *cloudcontroll
 
 	// the following checks are triggered if both serviceCIDR and secondaryServiceCIDR are provided
 	if serviceCIDR != nil && secondaryServiceCIDR != nil {
-		// should have dual stack flag enabled
-		if !utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack) {
-			return nil, false, fmt.Errorf("secondary service cidr is provided and IPv6DualStack feature is not enabled")
-		}
-
 		// should be dual stack (from different IPFamilies)
 		dualstackServiceCIDR, err := netutils.IsDualStackCIDRs([]*net.IPNet{serviceCIDR, secondaryServiceCIDR})
 		if err != nil {
@@ -220,16 +195,7 @@ func startNodeIpamController(ctx context.Context, completedConfig *cloudcontroll
 		}
 	}
 
-	var nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6 int
-	if utilfeature.DefaultFeatureGate.Enabled(IPv6DualStack) {
-		// only --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 supported with dual stack clusters.
-		// --node-cidr-mask-size flag is incompatible with dual stack clusters.
-		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizesDualStack(completedConfig.NodeIPAMControllerConfig)
-	} else {
-		// only --node-cidr-mask-size supported with single stack clusters.
-		// --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 flags are incompatible with dual stack clusters.
-		nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err = setNodeCIDRMaskSizes(completedConfig.NodeIPAMControllerConfig)
-	}
+	nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err := setNodeCIDRMaskSizesDualStack(completedConfig.NodeIPAMControllerConfig)
 
 	if err != nil {
 		return nil, false, err
@@ -253,21 +219,6 @@ func startNodeIpamController(ctx context.Context, completedConfig *cloudcontroll
 	}
 	go nodeIpamController.Run(stopCh)
 	return nil, true, nil
-}
-
-// setNodeCIDRMaskSizes returns the IPv4 and IPv6 node cidr mask sizes.
-// If --node-cidr-mask-size not set, then it will return default IPv4 and IPv6 cidr mask sizes.
-func setNodeCIDRMaskSizes(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
-	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
-	// NodeCIDRMaskSizeIPv4 and NodeCIDRMaskSizeIPv6 can be used only for dual-stack clusters
-	if cfg.NodeCIDRMaskSizeIPv4 != 0 || cfg.NodeCIDRMaskSizeIPv6 != 0 {
-		return ipv4Mask, ipv6Mask, errors.New("usage of --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 are not allowed with non dual-stack clusters")
-	}
-	if cfg.NodeCIDRMaskSize != 0 {
-		ipv4Mask = int(cfg.NodeCIDRMaskSize)
-		ipv6Mask = int(cfg.NodeCIDRMaskSize)
-	}
-	return ipv4Mask, ipv6Mask, nil
 }
 
 // setNodeCIDRMaskSizesDualStack returns the IPv4 and IPv6 node cidr mask sizes to the value provided
