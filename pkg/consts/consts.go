@@ -274,7 +274,7 @@ const (
 
 	// ServiceAnnotationDisableLoadBalancerFloatingIP is the annotation used on the service to disable floating IP in load balancer rule.
 	// If omitted, the default value is false
-	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-load-balancer-floating-ip"
+	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
 
 	// ServiceAnnotationAzurePIPTags sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
