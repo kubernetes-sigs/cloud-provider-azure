@@ -138,10 +138,7 @@ func TestGetNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mcGetErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "read", "GetManagedCluster"),
-		Retriable: true,
-	}
+	mcGetErr := retry.GetRateLimitError(false, "GetManagedCluster")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 
@@ -156,11 +153,7 @@ func TestGetRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mcGetErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "GetManagedCluster", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	mcGetErr := retry.GetThrottlingError("GetManagedCluster", "client throttled", getFutureTime())
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 

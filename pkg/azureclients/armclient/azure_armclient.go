@@ -498,6 +498,15 @@ func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string
 
 // PutResourceWithDecorators puts a resource by resource ID
 func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
+	return c.putResourceWithDecorators(ctx, resourceID, parameters, decorators, true)
+}
+
+// PutResourceWithDecoratorsAsync puts a resource by resource ID in async mode.
+func (c *Client) PutResourceWithDecoratorsAsync(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
+	return c.putResourceWithDecorators(ctx, resourceID, parameters, decorators, false)
+}
+
+func (c *Client) putResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator, wait bool) (*http.Response, *retry.Error) {
 	request, err := c.PreparePutRequest(ctx, decorators...)
 	dumpRequest(request, 10)
 	if err != nil {
@@ -512,6 +521,9 @@ func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID strin
 		return nil, clientErr
 	}
 
+	if !wait {
+		return resp, nil
+	}
 	response, err := c.WaitForAsyncOperationResult(ctx, future, "armclient.PutResource")
 	if err != nil {
 		if response != nil {
@@ -766,6 +778,14 @@ func GetResourceID(subscriptionID, resourceGroupName, resourceType, resourceName
 		autorest.Encode("path", resourceGroupName),
 		resourceType,
 		autorest.Encode("path", resourceName))
+}
+
+// GetResourceListID gets Azure resource list ID
+func GetResourceListID(subscriptionID, resourceGroupName, resourceType string) string {
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s",
+		autorest.Encode("path", subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		resourceType)
 }
 
 // GetChildResourceID gets Azure child resource ID

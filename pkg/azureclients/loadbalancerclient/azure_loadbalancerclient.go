@@ -18,7 +18,6 @@ package loadbalancerclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -38,6 +37,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const lbResourceType = "Microsoft.Network/loadBalancers"
 
 // Client implements LoadBalancer client Interface.
 type Client struct {
@@ -121,7 +122,7 @@ func (c *Client) getLB(ctx context.Context, resourceGroupName string, loadBalanc
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/loadBalancers",
+		lbResourceType,
 		loadBalancerName,
 	)
 	result := network.LoadBalancer{}
@@ -179,9 +180,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listLB gets a list of LoadBalancers in the resource group.
 func (c *Client) listLB(ctx context.Context, resourceGroupName string) ([]network.LoadBalancer, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Network/loadBalancers")
 	result := make([]network.LoadBalancer, 0)
 	page := &LoadBalancerListResultPage{}
 	page.fn = c.listNextResults
@@ -253,7 +252,7 @@ func (c *Client) createOrUpdateLB(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/loadBalancers",
+		lbResourceType,
 		loadBalancerName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -328,7 +327,7 @@ func (c *Client) deleteLB(ctx context.Context, resourceGroupName string, loadBal
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/loadBalancers",
+		lbResourceType,
 		loadBalancerName,
 	)
 
@@ -461,7 +460,7 @@ func (c *Client) createOrUpdateLBBackendPool(ctx context.Context, resourceGroupN
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/loadBalancers",
+		lbResourceType,
 		loadBalancerName,
 		"backendAddressPools",
 		backendPoolName,
@@ -527,7 +526,7 @@ func (c *Client) deleteLBBackendPool(ctx context.Context, resourceGroupName, loa
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/loadBalancers",
+		lbResourceType,
 		loadBalancerName,
 		"backendAddressPools",
 		backendPoolName,
