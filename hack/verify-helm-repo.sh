@@ -21,7 +21,7 @@ set -x
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
 for chart in "cloud-provider-azure"; do
-  LATEST_CHART=$(ls ${REPO_ROOT}/helm/repo/${chart}*.tgz | sort -rV | head -n 1)
+  LATEST_CHART=$(ls -t ${REPO_ROOT}/helm/repo/${chart}*.tgz | head -n 1)
   LATEST_VERSION=$(echo $LATEST_CHART | grep -Eoq [0-9]+\.[0-9]+\.[0-9]+)
   MATCH_STRING="version: $LATEST_VERSION"
   # verify that the current version in Chart.yaml is the most recent, packaged chart in the repo
