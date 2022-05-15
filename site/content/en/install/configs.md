@@ -194,15 +194,6 @@ Since v1.18.0, the original global rate limiting has been switched to per-client
 - SnapshotRateLimit
 - VirtualMachineScaleSetRateLimit
 - VirtualMachineSizeRateLimit
-- AvailabilitySetRateLimit
-- AttachDetachDiskRateLimit
-- ContainerServiceRateLimit
-- DeploymentRateLimit
-- PrivateDNSRateLimit
-- PrivateDNSZoneGroupRateLimit
-- PrivateEndpointRateLimit
-- PrivateLinkServiceRateLimit
-- VirtualNetworkRateLimit
 
 The original rate limiting options ("cloudProviderRateLimitBucket", "cloudProviderRateLimitBucketWrite", "cloudProviderRateLimitQPS", "cloudProviderRateLimitQPSWrite") are still supported, and they would be the default values if per-client rate limiting is not configured.
 
