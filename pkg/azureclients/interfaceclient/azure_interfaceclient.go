@@ -39,8 +39,6 @@ import (
 
 var _ Interface = &Client{}
 
-const netInterfaceResourceType = "Microsoft.Network/networkInterfaces"
-
 // Client implements network interface client.
 type Client struct {
 	armClient              armclient.Interface
@@ -125,7 +123,7 @@ func (c *Client) getNetworkInterface(ctx context.Context, resourceGroupName stri
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		netInterfaceResourceType,
+		"Microsoft.Network/networkInterfaces",
 		networkInterfaceName,
 	)
 	result := network.Interface{}
@@ -261,7 +259,7 @@ func (c *Client) createOrUpdateInterface(ctx context.Context, resourceGroupName 
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		netInterfaceResourceType,
+		"Microsoft.Network/networkInterfaces",
 		networkInterfaceName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -336,7 +334,7 @@ func (c *Client) deleteInterface(ctx context.Context, resourceGroupName string, 
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		netInterfaceResourceType,
+		"Microsoft.Network/networkInterfaces",
 		networkInterfaceName,
 	)
 

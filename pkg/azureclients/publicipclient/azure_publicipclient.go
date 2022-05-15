@@ -39,8 +39,6 @@ import (
 
 var _ Interface = &Client{}
 
-const publicIPResourceType = "Microsoft.Network/publicIPAddresses"
-
 // Client implements PublicIPAddress client Interface.
 type Client struct {
 	armClient              armclient.Interface
@@ -125,7 +123,7 @@ func (c *Client) getPublicIPAddress(ctx context.Context, resourceGroupName strin
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		publicIPResourceType,
+		"Microsoft.Network/publicIPAddresses",
 		publicIPAddressName,
 	)
 	result := network.PublicIPAddress{}
@@ -260,7 +258,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listPublicIPAddress gets a list of PublicIPAddress in the resource group.
 func (c *Client) listPublicIPAddress(ctx context.Context, resourceGroupName string) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, publicIPResourceType)
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Network/publicIPAddresses")
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults
@@ -332,7 +330,7 @@ func (c *Client) createOrUpdatePublicIP(ctx context.Context, resourceGroupName s
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		publicIPResourceType,
+		"Microsoft.Network/publicIPAddresses",
 		publicIPAddressName,
 	)
 
@@ -400,7 +398,7 @@ func (c *Client) deletePublicIP(ctx context.Context, resourceGroupName string, p
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		publicIPResourceType,
+		"Microsoft.Network/publicIPAddresses",
 		publicIPAddressName,
 	)
 
@@ -525,7 +523,7 @@ func (c *Client) ListAll(ctx context.Context) ([]network.PublicIPAddress, *retry
 
 // listAllPublicIPAddress gets all of PublicIPAddress in the subscription.
 func (c *Client) listAllPublicIPAddress(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := armclient.GetProviderResourceID(c.subscriptionID, publicIPResourceType)
+	resourceID := armclient.GetProviderResourceID(c.subscriptionID, "Microsoft.Network/publicIPAddresses")
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults

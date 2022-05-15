@@ -37,8 +37,6 @@ import (
 
 var _ Interface = &Client{}
 
-const managedClusterResourceType = "Microsoft.ContainerService/managedClusters"
-
 // Client implements ContainerService client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -122,7 +120,7 @@ func (c *Client) getManagedCluster(ctx context.Context, resourceGroupName string
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		managedClusterResourceType,
+		"Microsoft.ContainerService/managedClusters",
 		managedClusterName,
 	)
 	result := containerservice.ManagedCluster{}
@@ -180,7 +178,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]containe
 
 // listManagedCluster gets a list of ManagedClusters in the resource group.
 func (c *Client) listManagedCluster(ctx context.Context, resourceGroupName string) ([]containerservice.ManagedCluster, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, managedClusterResourceType)
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.ContainerService/managedClusters")
 	result := make([]containerservice.ManagedCluster, 0)
 	page := &ManagedClusterResultPage{}
 	page.fn = c.listNextResults
@@ -342,7 +340,7 @@ func (c *Client) createOrUpdateManagedCluster(ctx context.Context, resourceGroup
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		managedClusterResourceType,
+		"Microsoft.ContainerService/managedClusters",
 		managedClusterName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -417,7 +415,7 @@ func (c *Client) deleteManagedCluster(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		managedClusterResourceType,
+		"Microsoft.ContainerService/managedClusters",
 		managedClusterName,
 	)
 

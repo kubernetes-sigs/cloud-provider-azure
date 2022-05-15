@@ -37,8 +37,6 @@ import (
 
 var _ Interface = &Client{}
 
-const routeTablesResourceType = "Microsoft.Network/routeTables"
-
 // Client implements Route client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -121,7 +119,7 @@ func (c *Client) createOrUpdateRoute(ctx context.Context, resourceGroupName stri
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		routeTablesResourceType,
+		"Microsoft.Network/routeTables",
 		routeTableName,
 		"routes",
 		routeName,
@@ -198,7 +196,7 @@ func (c *Client) deleteRoute(ctx context.Context, resourceGroupName string, rout
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		routeTablesResourceType,
+		"Microsoft.Network/routeTables",
 		routeTableName,
 		"routes",
 		routeName,
