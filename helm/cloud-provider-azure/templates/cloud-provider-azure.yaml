@@ -4,8 +4,6 @@
   {{- $_ := set . "cloudProviderAzureVersion" "v1.1.14" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "23" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.23.11" }}
-{{- else if eq .Capabilities.KubeVersion.Minor "24" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.24.0" }}
 {{- else -}}
   {{- $_ := set . "unsupportedKubernetesVersion" "true" }}
 {{- end -}}
