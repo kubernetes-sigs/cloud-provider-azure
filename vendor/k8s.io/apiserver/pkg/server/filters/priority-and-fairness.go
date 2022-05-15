@@ -122,18 +122,7 @@ func WithPriorityAndFairness(
 				return workEstimator(r, "", "")
 			}
 
-			workEstimate := workEstimator(r, classification.FlowSchemaName, classification.PriorityLevelName)
-
-			fcmetrics.ObserveWorkEstimatedSeats(classification.PriorityLevelName, classification.FlowSchemaName, workEstimate.MaxSeats())
-			// nolint:logcheck // Not using the result of klog.V
-			// inside the if branch is okay, we just use it to
-			// determine whether the additional information should
-			// be added.
-			if klog.V(4).Enabled() {
-				httplog.AddKeyValue(ctx, "apf_iseats", workEstimate.InitialSeats)
-				httplog.AddKeyValue(ctx, "apf_fseats", workEstimate.FinalSeats)
-			}
-			return workEstimate
+			return workEstimator(r, classification.FlowSchemaName, classification.PriorityLevelName)
 		}
 
 		var served bool
@@ -294,7 +283,11 @@ func WithPriorityAndFairness(
 		if !served {
 			setResponseHeaders(classification, w)
 
-			epmetrics.RecordDroppedRequest(r, requestInfo, epmetrics.APIServerComponent, isMutatingRequest)
+			if isMutatingRequest {
+				epmetrics.DroppedRequests.WithContext(ctx).WithLabelValues(epmetrics.MutatingKind).Inc()
+			} else {
+				epmetrics.DroppedRequests.WithContext(ctx).WithLabelValues(epmetrics.ReadOnlyKind).Inc()
+			}
 			epmetrics.RecordRequestTermination(r, requestInfo, epmetrics.APIServerComponent, http.StatusTooManyRequests)
 			tooManyRequests(r, w)
 		}

@@ -25,7 +25,6 @@ import (
 	util "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	internal "k8s.io/controller-manager/config"
-	"k8s.io/controller-manager/config/v1"
 	"k8s.io/controller-manager/config/v1alpha1"
 	"k8s.io/controller-manager/config/v1beta1"
 )
@@ -49,10 +48,6 @@ func init() {
 	// v1beta1
 	util.Must(v1beta1.AddToScheme(cfgScheme))
 	util.Must(cfgScheme.SetVersionPriority(v1beta1.SchemeGroupVersion))
-
-	// v1
-	util.Must(v1.AddToScheme(cfgScheme))
-	util.Must(cfgScheme.SetVersionPriority(v1.SchemeGroupVersion))
 }
 
 // ReadLeaderMigrationConfiguration reads LeaderMigrationConfiguration from a YAML file at the given path.

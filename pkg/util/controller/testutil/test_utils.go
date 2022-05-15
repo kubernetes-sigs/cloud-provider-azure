@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	v1apply "k8s.io/client-go/applyconfigurations/core/v1"
@@ -39,8 +40,6 @@ import (
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/klog/v2"
-	clocks "k8s.io/utils/clock"
-	testingclocks "k8s.io/utils/clock/testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
 )
@@ -346,7 +345,7 @@ type FakeRecorder struct {
 	sync.Mutex
 	source v1.EventSource
 	Events []*v1.Event
-	clock  clocks.WithTickerAndDelayedExecution
+	clock  clock.Clock
 }
 
 // Event emits a fake event to the fake recorder
@@ -416,7 +415,7 @@ func NewFakeRecorder() *FakeRecorder {
 	return &FakeRecorder{
 		source: v1.EventSource{Component: "nodeControllerTest"},
 		Events: []*v1.Event{},
-		clock:  testingclocks.NewFakeClock(time.Now()),
+		clock:  clock.NewFakeClock(time.Now()),
 	}
 }
 

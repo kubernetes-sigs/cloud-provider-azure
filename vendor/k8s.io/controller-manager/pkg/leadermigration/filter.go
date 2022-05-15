@@ -20,14 +20,14 @@ package leadermigration
 type FilterResult int32
 
 const (
-	// ControllerUnowned indicates that the controller is owned by another controller manager
+	// ControllerOwned indicates that the controller is owned by another controller manager
 	//  and thus should NOT be started by this controller manager.
 	ControllerUnowned = iota
 	// ControllerMigrated indicates that the controller manager should start this controller
-	//  with the migration lock.
+	//  with thte migration lock.
 	ControllerMigrated
 	// ControllerNonMigrated indicates that the controller manager should start this controller
-	//  with the main lock.
+	//  with thte main lock.
 	ControllerNonMigrated
 )
 
