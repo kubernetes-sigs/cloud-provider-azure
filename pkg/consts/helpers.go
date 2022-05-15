@@ -35,6 +35,7 @@ func IsK8sServiceUsingInternalLoadBalancer(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationLoadBalancerInternal, TrueAnnotationValue)
 }
 
+<<<<<<< HEAD
 func IsK8sServiceInternalIPv6(service *v1.Service) bool {
 	return IsK8sServiceUsingInternalLoadBalancer(service) && len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
 }
@@ -44,6 +45,8 @@ func IsK8sServiceDisableLoadBalancerFloatingIP(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationDisableLoadBalancerFloatingIP, TrueAnnotationValue)
 }
 
+=======
+>>>>>>> parent of dbf5be0df (use nodePort for backendPort and disable floating IP when using IPv6 services)
 // GetHealthProbeConfigOfPortFromK8sSvcAnnotation get health probe configuration for port
 func GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations map[string]string, port int32, key HealthProbeParams, validators ...BusinessValidator) (*string, error) {
 	return GetAttributeValueInSvcAnnotation(annotations, BuildHealthProbeAnnotationKeyForPort(port, key), validators...)
