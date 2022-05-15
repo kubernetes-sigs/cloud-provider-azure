@@ -105,8 +105,10 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	if lbStatus != nil && len(lbStatus.Ingress) > 0 {
 		serviceIP = &lbStatus.Ingress[0].IP
 	}
+
+	backendPrivateIPs := az.GetBackendPrivateIPs(clusterName, service, lb)
 	klog.V(2).Infof("reconcileService: reconciling security group for service %q with IP %q, wantLb = true", serviceName, logSafe(serviceIP))
-	if _, err := az.reconcileSecurityGroup(clusterName, service, serviceIP, true /* wantLb */); err != nil {
+	if _, err := az.reconcileSecurityGroup(clusterName, service, serviceIP, &backendPrivateIPs, true /* wantLb */); err != nil {
 		klog.Errorf("reconcileSecurityGroup(%s) failed: %#v", serviceName, err)
 		return nil, err
 	}
@@ -133,6 +135,43 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	}
 
 	return lbStatus, nil
+}
+
+func (az *Cloud) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) []string {
+	serviceName := getServiceName(service)
+	lbBackendPoolName := getBackendPoolName(clusterName, service)
+	if lb.LoadBalancerPropertiesFormat == nil || lb.LoadBalancerPropertiesFormat.BackendAddressPools == nil {
+		return nil
+	}
+
+	backendPrivateIPs := sets.NewString()
+	for _, bp := range *lb.BackendAddressPools {
+		if strings.EqualFold(to.String(bp.Name), lbBackendPoolName) {
+			klog.V(10).Infof("bc.GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, to.String(bp.Name))
+			if bp.BackendAddressPoolPropertiesFormat != nil && bp.BackendIPConfigurations != nil {
+				for _, backendIPConfig := range *bp.BackendIPConfigurations {
+					ipConfigID := to.String(backendIPConfig.ID)
+					nodeName, _, err := az.VMSet.GetNodeNameByIPConfigurationID(ipConfigID)
+					if err != nil {
+						klog.Errorf("bc.GetBackendPrivateIPs for service (%s): GetNodeNameByIPConfigurationID failed with error: %v", serviceName, err)
+						continue
+					}
+					privateIPs, err := az.VMSet.GetPrivateIPsByNodeName(nodeName)
+					if err != nil {
+						klog.Errorf("bc.GetBackendPrivateIPs for service (%s): GetPrivateIPsByNodeName(%s) failed with error: %v", serviceName, nodeName, err)
+						continue
+					}
+					if privateIPs != nil {
+						klog.V(2).Infof("bc.GetBackendPrivateIPs for service (%s): lb backendpool - found private IPs %v of node %s", serviceName, privateIPs, nodeName)
+						backendPrivateIPs.Insert(privateIPs...)
+					}
+				}
+			}
+		} else {
+			klog.V(10).Infof("bc.GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, to.String(bp.Name))
+		}
+	}
+	return backendPrivateIPs.List()
 }
 
 // EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
@@ -212,7 +251,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	}
 
 	klog.V(2).Infof("EnsureLoadBalancerDeleted: reconciling security group for service %q with IP %q, wantLb = false", serviceName, serviceIPToCleanup)
-	_, err = az.reconcileSecurityGroup(clusterName, service, &serviceIPToCleanup, false /* wantLb */)
+	_, err = az.reconcileSecurityGroup(clusterName, service, &serviceIPToCleanup, &[]string{}, false /* wantLb */)
 	if err != nil {
 		return err
 	}
@@ -2395,6 +2434,10 @@ func (az *Cloud) getExpectedLBRules(
 					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 				}
 			}
+			if consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
+				props.BackendPort = to.Int32Ptr(port.NodePort)
+				props.EnableFloatingIP = to.BoolPtr(false)
+			}
 			expectedRules = append(expectedRules, network.LoadBalancingRule{
 				Name:                              &lbRuleName,
 				LoadBalancingRulePropertiesFormat: props,
@@ -2477,7 +2520,7 @@ func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 
 // This reconciles the Network Security Group similar to how the LB is reconciled.
 // This entails adding required, missing SecurityRules and removing stale rules.
-func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service, lbIP *string, wantLb bool) (*network.SecurityGroup, error) {
+func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service, lbIP *string, backendIPAddresses *[]string, wantLb bool) (*network.SecurityGroup, error) {
 	serviceName := getServiceName(service)
 	klog.V(5).Infof("reconcileSecurityGroup(%s): START clusterName=%q", serviceName, clusterName)
 
@@ -2493,6 +2536,11 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 	sg, err := az.getSecurityGroup(azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
+	}
+
+	disableFloatingIP := false
+	if consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
+		disableFloatingIP = true
 	}
 
 	destinationIPAddress := ""
@@ -2538,7 +2586,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		sourceAddressPrefixes = append(sourceAddressPrefixes, serviceTags...)
 	}
 
-	expectedSecurityRules, err := az.getExpectedSecurityRules(wantLb, ports, sourceAddressPrefixes, service, destinationIPAddresses, sourceRanges)
+	expectedSecurityRules, err := az.getExpectedSecurityRules(wantLb, ports, sourceAddressPrefixes, service, destinationIPAddresses, sourceRanges, *backendIPAddresses, disableFloatingIP)
 	if err != nil {
 		return nil, err
 	}
@@ -2678,7 +2726,7 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup, service *v1.Se
 	return dirtySg, updatedRules, nil
 }
 
-func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, sourceAddressPrefixes []string, service *v1.Service, destinationIPAddresses []string, sourceRanges utilnet.IPNetSet) ([]network.SecurityRule, error) {
+func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, sourceAddressPrefixes []string, service *v1.Service, destinationIPAddresses []string, sourceRanges utilnet.IPNetSet, backendIPAddresses []string, disableFloatingIP bool) ([]network.SecurityRule, error) {
 	expectedSecurityRules := []network.SecurityRule{}
 
 	if wantLb {
@@ -2689,6 +2737,10 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 			if err != nil {
 				return nil, err
 			}
+			dstPort := port.Port
+			if disableFloatingIP {
+				dstPort = port.NodePort
+			}
 			for j := range sourceAddressPrefixes {
 				ix := i*len(sourceAddressPrefixes) + j
 				securityRuleName := az.getSecurityRuleName(service, port, sourceAddressPrefixes[j])
@@ -2697,13 +2749,16 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 						Protocol:             *securityProto,
 						SourcePortRange:      to.StringPtr("*"),
-						DestinationPortRange: to.StringPtr(strconv.Itoa(int(port.Port))),
+						DestinationPortRange: to.StringPtr(strconv.Itoa(int(dstPort))),
 						SourceAddressPrefix:  to.StringPtr(sourceAddressPrefixes[j]),
 						Access:               network.SecurityRuleAccessAllow,
 						Direction:            network.SecurityRuleDirectionInbound,
 					},
 				}
-				if len(destinationIPAddresses) == 1 {
+
+				if len(destinationIPAddresses) == 1 && disableFloatingIP {
+					nsgRule.DestinationAddressPrefixes = to.StringSlicePtr(backendIPAddresses)
+				} else if len(destinationIPAddresses) == 1 && !disableFloatingIP {
 					// continue to use DestinationAddressPrefix to avoid NSG updates for existing rules.
 					nsgRule.DestinationAddressPrefix = to.StringPtr(destinationIPAddresses[0])
 				} else {
