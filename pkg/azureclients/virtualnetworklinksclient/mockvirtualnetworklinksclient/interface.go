@@ -27,7 +27,6 @@ import (
 
 	privatedns "github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	gomock "github.com/golang/mock/gomock"
-	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface.
@@ -54,25 +53,25 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, privateZoneName, virtualNetworkLinkName string, parameters privatedns.VirtualNetworkLink, etag string, waitForCompletion bool) *retry.Error {
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, privateZoneName, virtualNetworkLinkName string, parameters privatedns.VirtualNetworkLink, waitForCompletion bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, etag, waitForCompletion)
-	ret0, _ := ret[0].(*retry.Error)
+	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, waitForCompletion)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateOrUpdate indicates an expected call of CreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, etag, waitForCompletion interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, waitForCompletion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, etag, waitForCompletion)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName, parameters, waitForCompletion)
 }
 
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateZoneName, virtualNetworkLinkName string) (privatedns.VirtualNetworkLink, *retry.Error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, privateZoneName, virtualNetworkLinkName string) (privatedns.VirtualNetworkLink, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, privateZoneName, virtualNetworkLinkName)
 	ret0, _ := ret[0].(privatedns.VirtualNetworkLink)
-	ret1, _ := ret[1].(*retry.Error)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
