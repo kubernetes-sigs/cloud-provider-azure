@@ -463,6 +463,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 4)
@@ -2091,6 +2092,15 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			probeProtocol:   "Tcp",
 			expectedErr:     true,
 		},
+		{
+			desc:            "getExpectedLBRules should return correct rule when floating ip annotations are added",
+			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
+			loadBalancerSku: "basic",
+			expectedRules: []network.LoadBalancingRule{
+				getFloatingIPTestRule(false, false, 80),
+			},
+			expectedProbes: getDefaultTestProbes("Tcp", ""),
+		},
 	}
 	rules := getDefaultTestRules(true)
 	rules[0].IdleTimeoutInMinutes = to.Int32Ptr(5)
@@ -2267,6 +2277,35 @@ func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol) []netwo
 			ID: to.StringPtr(fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/"+
 				"Microsoft.Network/loadBalancers/lbname/probes/atest1-%s-80", string(protocol))),
 		}
+	}
+	return expectedRules
+}
+
+func getFloatingIPTestRule(enableTCPReset, enableFloatingIP bool, port int32) network.LoadBalancingRule {
+	expectedRules := network.LoadBalancingRule{
+		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", port)),
+		LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+			Protocol: network.TransportProtocol("Tcp"),
+			FrontendIPConfiguration: &network.SubResource{
+				ID: to.StringPtr("frontendIPConfigID"),
+			},
+			BackendAddressPool: &network.SubResource{
+				ID: to.StringPtr("backendPoolID"),
+			},
+			LoadDistribution:     "Default",
+			FrontendPort:         to.Int32Ptr(port),
+			BackendPort:          to.Int32Ptr(getBackendPort(port)),
+			EnableFloatingIP:     to.BoolPtr(enableFloatingIP),
+			DisableOutboundSnat:  to.BoolPtr(false),
+			IdleTimeoutInMinutes: to.Int32Ptr(4),
+			Probe: &network.SubResource{
+				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/" +
+					fmt.Sprintf("Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-%d", port)),
+			},
+		},
+	}
+	if enableTCPReset {
+		expectedRules.EnableTCPReset = to.BoolPtr(true)
 	}
 	return expectedRules
 }
@@ -3100,6 +3139,36 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc:    "reconcileSecurityGroup shall create sgs with floating IP disabled",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIP:   to.StringPtr("1.2.3.4"),
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: to.StringPtr("atest1-TCP-80-Internet"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            to.StringPtr("*"),
+								DestinationPortRange:       to.StringPtr(strconv.Itoa(int(getBackendPort(80)))),
+								SourceAddressPrefix:        to.StringPtr("Internet"),
+								DestinationAddressPrefixes: to.StringSlicePtr([]string{}),
+								Access:                     network.SecurityRuleAccess("Allow"),
+								Priority:                   to.Int32Ptr(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for i, test := range testCases {
@@ -3116,7 +3185,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		sg, err := az.reconcileSecurityGroup("testCluster", &test.service, test.lbIP, test.wantLb)
+		sg, err := az.reconcileSecurityGroup("testCluster", &test.service, test.lbIP, &[]string{}, test.wantLb)
 		assert.Equal(t, test.expectedSg, sg, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
@@ -3172,7 +3241,7 @@ func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
 	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
 	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(existingSg, nil)
 	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIP, true)
+	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIP, &[]string{}, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSg, *sg)
 }

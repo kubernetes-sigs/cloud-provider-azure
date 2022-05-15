@@ -40,6 +40,11 @@ func IsK8sServiceInternalIPv6(service *v1.Service) bool {
 	return IsK8sServiceUsingInternalLoadBalancer(service) && net.IsIPv6String(service.Spec.ClusterIP)
 }
 
+// IsK8sServiceDisableLoadBalancerFloatingIP return if floating IP in load balancer is disabled in kubernetes service annotations
+func IsK8sServiceDisableLoadBalancerFloatingIP(service *v1.Service) bool {
+	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationDisableLoadBalancerFloatingIP, TrueAnnotationValue)
+}
+
 // GetHealthProbeConfigOfPortFromK8sSvcAnnotation get health probe configuration for port
 func GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations map[string]string, port int32, key HealthProbeParams, validators ...BusinessValidator) (*string, error) {
 	return GetAttributeValueInSvcAnnotation(annotations, BuildHealthProbeAnnotationKeyForPort(port, key), validators...)
