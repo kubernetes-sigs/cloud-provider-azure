@@ -301,7 +301,7 @@ func StartHTTPServer(c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan str
 // Run runs the ExternalCMServer.  This should never exit.
 func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *controllerhealthz.MutableHealthzHandler) error {
 	// To help debugging, immediately log version
-	klog.Infof("Version: %#v", version.Get())
+	klog.Infof("Version: %+v", version.Get())
 
 	var (
 		cloud cloudprovider.Interface
