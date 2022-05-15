@@ -46,8 +46,6 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient"
@@ -300,8 +298,6 @@ type Cloud struct {
 	privatednszonegroupclient       privatednszonegroupclient.Interface
 	virtualNetworkLinksClient       virtualnetworklinksclient.Interface
 	PrivateLinkServiceClient        privatelinkserviceclient.Interface
-	containerServiceClient          containerserviceclient.Interface
-	deploymentClient                deploymentclient.Interface
 
 	ResourceRequestBackoff  wait.Backoff
 	Metadata                *InstanceMetadataService
@@ -800,13 +796,6 @@ func (az *Cloud) configAzureClients(
 	loadBalancerClientConfig := azClientConfig.WithRateLimiter(az.Config.LoadBalancerRateLimit)
 	securityGroupClientConfig := azClientConfig.WithRateLimiter(az.Config.SecurityGroupRateLimit)
 	publicIPClientConfig := azClientConfig.WithRateLimiter(az.Config.PublicIPAddressRateLimit)
-	containerServiceConfig := azClientConfig.WithRateLimiter(az.Config.ContainerServiceRateLimit)
-	deploymentConfig := azClientConfig.WithRateLimiter(az.Config.DeploymentRateLimit)
-	privateDNSConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSRateLimit)
-	privateDNSZoenGroupConfig := azClientConfig.WithRateLimiter(az.Config.PrivateDNSZoneGroupRateLimit)
-	privateEndpointConfig := azClientConfig.WithRateLimiter(az.Config.PrivateEndpointRateLimit)
-	privateLinkServiceConfig := azClientConfig.WithRateLimiter(az.Config.PrivateLinkServiceRateLimit)
-	virtualNetworkConfig := azClientConfig.WithRateLimiter(az.Config.VirtualNetworkRateLimit)
 	// TODO(ZeroMagic): add azurefileRateLimit
 	fileClientConfig := azClientConfig.WithRateLimiter(nil)
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
@@ -856,13 +845,11 @@ func (az *Cloud) configAzureClients(
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
-	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
-	az.privatednsclient = privatednsclient.New(privateDNSConfig)
-	az.privatednszonegroupclient = privatednszonegroupclient.New(privateDNSZoenGroupConfig)
-	az.virtualNetworkLinksClient = virtualnetworklinksclient.New(virtualNetworkConfig)
-	az.PrivateLinkServiceClient = privatelinkserviceclient.New(privateLinkServiceConfig)
-	az.containerServiceClient = containerserviceclient.New(containerServiceConfig)
-	az.deploymentClient = deploymentclient.New(deploymentConfig)
+	az.privateendpointclient = privateendpointclient.New(azClientConfig)
+	az.privatednsclient = privatednsclient.New(azClientConfig)
+	az.privatednszonegroupclient = privatednszonegroupclient.New(azClientConfig)
+	az.virtualNetworkLinksClient = virtualnetworklinksclient.New(azClientConfig)
+	az.PrivateLinkServiceClient = privatelinkserviceclient.New(azClientConfig)
 
 	if az.ZoneClient == nil {
 		az.ZoneClient = zoneclient.New(zoneClientConfig)
