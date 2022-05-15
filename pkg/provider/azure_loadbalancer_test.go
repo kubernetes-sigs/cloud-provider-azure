@@ -2263,6 +2263,35 @@ func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol) []netwo
 	return expectedRules
 }
 
+func getFloatingIPTestRule(enableTCPReset, enableFloatingIP bool, port int32) network.LoadBalancingRule {
+	expectedRules := network.LoadBalancingRule{
+		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", port)),
+		LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+			Protocol: network.TransportProtocol("Tcp"),
+			FrontendIPConfiguration: &network.SubResource{
+				ID: to.StringPtr("frontendIPConfigID"),
+			},
+			BackendAddressPool: &network.SubResource{
+				ID: to.StringPtr("backendPoolID"),
+			},
+			LoadDistribution:     "Default",
+			FrontendPort:         to.Int32Ptr(port),
+			BackendPort:          to.Int32Ptr(getBackendPort(port)),
+			EnableFloatingIP:     to.BoolPtr(enableFloatingIP),
+			DisableOutboundSnat:  to.BoolPtr(false),
+			IdleTimeoutInMinutes: to.Int32Ptr(4),
+			Probe: &network.SubResource{
+				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/" +
+					fmt.Sprintf("Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-%d", port)),
+			},
+		},
+	}
+	if enableTCPReset {
+		expectedRules.EnableTCPReset = to.BoolPtr(true)
+	}
+	return expectedRules
+}
+
 func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service v1.Service, lbSku string) network.LoadBalancer {
 	caser := cases.Title(language.English)
 	lb := network.LoadBalancer{
@@ -3092,7 +3121,6 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				},
 			},
 		},
-<<<<<<< HEAD
 		{
 			desc:    "reconcileSecurityGroup shall create sgs with floating IP disabled",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
@@ -3123,8 +3151,6 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				},
 			},
 		},
-=======
->>>>>>> parent of d49b6770e (Config lb to disable floating ip)
 	}
 
 	for i, test := range testCases {
