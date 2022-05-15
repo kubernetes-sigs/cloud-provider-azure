@@ -38,8 +38,6 @@ import (
 
 var _ Interface = &Client{}
 
-const diskResourceType = "Microsoft.Compute/disks"
-
 // Client implements Disk client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -128,7 +126,7 @@ func (c *Client) getDisk(ctx context.Context, subsID, resourceGroupName, diskNam
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		diskResourceType,
+		"Microsoft.Compute/disks",
 		diskName,
 	)
 	result := compute.Disk{}
@@ -192,7 +190,7 @@ func (c *Client) createOrUpdateDisk(ctx context.Context, subsID, resourceGroupNa
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		diskResourceType,
+		"Microsoft.Compute/disks",
 		diskName,
 	)
 
@@ -263,7 +261,7 @@ func (c *Client) updateDisk(ctx context.Context, subsID, resourceGroupName, disk
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		diskResourceType,
+		"Microsoft.Compute/disks",
 		diskName,
 	)
 
@@ -334,7 +332,7 @@ func (c *Client) deleteDisk(ctx context.Context, subsID, resourceGroupName strin
 	resourceID := armclient.GetResourceID(
 		subsID,
 		resourceGroupName,
-		diskResourceType,
+		"Microsoft.Compute/disks",
 		diskName,
 	)
 
@@ -346,7 +344,7 @@ func (c *Client) ListByResourceGroup(ctx context.Context, subsID, resourceGroupN
 	if subsID == "" {
 		subsID = c.subscriptionID
 	}
-	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, diskResourceType)
+	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, "Microsoft.Compute/disks")
 
 	result := make([]compute.Disk, 0)
 	page := &DiskListPage{}

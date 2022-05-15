@@ -38,8 +38,6 @@ import (
 
 var _ Interface = &Client{}
 
-const lbResourceType = "Microsoft.Network/loadBalancers"
-
 // Client implements LoadBalancer client Interface.
 type Client struct {
 	armClient      armclient.Interface
@@ -122,7 +120,7 @@ func (c *Client) getLB(ctx context.Context, resourceGroupName string, loadBalanc
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		lbResourceType,
+		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 	)
 	result := network.LoadBalancer{}
@@ -252,7 +250,7 @@ func (c *Client) createOrUpdateLB(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		lbResourceType,
+		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -327,7 +325,7 @@ func (c *Client) deleteLB(ctx context.Context, resourceGroupName string, loadBal
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		lbResourceType,
+		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 	)
 
@@ -460,7 +458,7 @@ func (c *Client) createOrUpdateLBBackendPool(ctx context.Context, resourceGroupN
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		lbResourceType,
+		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 		"backendAddressPools",
 		backendPoolName,
@@ -526,7 +524,7 @@ func (c *Client) deleteLBBackendPool(ctx context.Context, resourceGroupName, loa
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		lbResourceType,
+		"Microsoft.Network/loadBalancers",
 		loadBalancerName,
 		"backendAddressPools",
 		backendPoolName,
