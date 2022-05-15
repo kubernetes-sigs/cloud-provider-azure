@@ -641,7 +641,10 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	pipCreateOrUpdateErr := retry.GetRateLimitError(true, "PublicIPCreateOrUpdate")
+	pipCreateOrUpdateErr := &retry.Error{
+		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "PublicIPCreateOrUpdate"),
+		Retriable: true,
+	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	pipClient := getTestPublicIPAddressClientWithNeverRateLimiter(armClient)
@@ -655,7 +658,11 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	pipCreateOrUpdateErr := retry.GetThrottlingError("PublicIPCreateOrUpdate", "client throttled", getFutureTime())
+	pipCreateOrUpdateErr := &retry.Error{
+		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "PublicIPCreateOrUpdate", "client throttled"),
+		Retriable:  true,
+		RetryAfter: getFutureTime(),
+	}
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)

@@ -517,7 +517,10 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	subnetCreateOrUpdateErr := retry.GetRateLimitError(true, "SubnetCreateOrUpdate")
+	subnetCreateOrUpdateErr := &retry.Error{
+		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "SubnetCreateOrUpdate"),
+		Retriable: true,
+	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	subnetClient := getTestSubnetClientWithNeverRateLimiter(armClient)
@@ -531,7 +534,11 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	subnetCreateOrUpdateErr := retry.GetThrottlingError("SubnetCreateOrUpdate", "client throttled", getFutureTime())
+	subnetCreateOrUpdateErr := &retry.Error{
+		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "SubnetCreateOrUpdate", "client throttled"),
+		Retriable:  true,
+		RetryAfter: getFutureTime(),
+	}
 
 	subnet := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)

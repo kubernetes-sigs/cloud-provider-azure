@@ -533,7 +533,10 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	vmssCreateOrUpdateErr := retry.GetRateLimitError(true, "VMSSCreateOrUpdate")
+	vmssCreateOrUpdateErr := &retry.Error{
+		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "VMSSCreateOrUpdate"),
+		Retriable: true,
+	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithNeverRateLimiter(armClient)
@@ -547,7 +550,11 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	vmssCreateOrUpdateErr := retry.GetThrottlingError("VMSSCreateOrUpdate", "client throttled", getFutureTime())
+	vmssCreateOrUpdateErr := &retry.Error{
+		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "VMSSCreateOrUpdate", "client throttled"),
+		Retriable:  true,
+		RetryAfter: getFutureTime(),
+	}
 
 	vmss := getTestVMSS("vmss1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
