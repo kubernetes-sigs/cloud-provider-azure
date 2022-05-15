@@ -2188,14 +2188,11 @@ func (az *Cloud) getExpectedLBRules(
 					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 				}
 			}
-<<<<<<< HEAD
 
 			if consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
 				props.BackendPort = to.Int32Ptr(port.NodePort)
 				props.EnableFloatingIP = to.BoolPtr(false)
 			}
-=======
->>>>>>> parent of d49b6770e (Config lb to disable floating ip)
 			expectedRules = append(expectedRules, network.LoadBalancingRule{
 				Name:                              &lbRuleName,
 				LoadBalancingRulePropertiesFormat: props,
