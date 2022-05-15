@@ -18,6 +18,7 @@ package securitygroupclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -178,7 +179,9 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listSecurityGroup gets a list of SecurityGroups in the resource group.
 func (c *Client) listSecurityGroup(ctx context.Context, resourceGroupName string) ([]network.SecurityGroup, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Network/networkSecurityGroups")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkSecurityGroups",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName))
 	result := make([]network.SecurityGroup, 0)
 	page := &SecurityGroupListResultPage{}
 	page.fn = c.listNextResults

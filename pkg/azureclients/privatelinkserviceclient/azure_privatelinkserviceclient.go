@@ -19,6 +19,7 @@ package privatelinkserviceclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -250,7 +251,10 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listPLS gets a list of PrivateLinkServices in the resource group.
 func (c *Client) listPLS(ctx context.Context, resourceGroupName string) ([]network.PrivateLinkService, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, PLSResourceType)
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		PLSResourceType)
 	result := make([]network.PrivateLinkService, 0)
 	page := &PrivateLinkServiceListResultPage{}
 	page.fn = c.listNextResults

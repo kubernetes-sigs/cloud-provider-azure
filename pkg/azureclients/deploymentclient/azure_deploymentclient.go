@@ -18,6 +18,7 @@ package deploymentclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -171,7 +172,9 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]resource
 
 // listDeployment gets a list of deployments in the resource group.
 func (c *Client) listDeployment(ctx context.Context, resourceGroupName string) ([]resources.DeploymentExtended, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Resources/deployments")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName))
 	result := make([]resources.DeploymentExtended, 0)
 	page := &DeploymentResultPage{}
 	page.fn = c.listNextResults
@@ -431,12 +434,10 @@ func (c *Client) ExportTemplate(ctx context.Context, resourceGroupName string, d
 		return resources.DeploymentExportResult{}, rerr
 	}
 
-	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
-		resourceGroupName,
-		"Microsoft.Resources/deployments",
-		deploymentName,
-	)
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments/%s/exportTemplate",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		autorest.Encode("path", deploymentName))
 	response, rerr := c.armClient.PostResource(ctx, resourceID, "exportTemplate", struct{}{}, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {

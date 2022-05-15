@@ -18,6 +18,7 @@ package vmssclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -178,11 +179,9 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 
 // listVMSS gets a list of VirtualMachineScaleSets in the resource group.
 func (c *Client) listVMSS(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachineScaleSet, *retry.Error) {
-	resourceID := armclient.GetResourceListID(
-		c.subscriptionID,
-		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
-	)
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName))
 	result := make([]compute.VirtualMachineScaleSet, 0)
 	page := &VirtualMachineScaleSetListResultPage{}
 	page.fn = c.listNextResults

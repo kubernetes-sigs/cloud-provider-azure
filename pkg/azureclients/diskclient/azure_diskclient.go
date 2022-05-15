@@ -18,6 +18,7 @@ package diskclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -344,7 +345,9 @@ func (c *Client) ListByResourceGroup(ctx context.Context, subsID, resourceGroupN
 	if subsID == "" {
 		subsID = c.subscriptionID
 	}
-	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, "Microsoft.Compute/disks")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks",
+		autorest.Encode("path", subsID),
+		autorest.Encode("path", resourceGroupName))
 
 	result := make([]compute.Disk, 0)
 	page := &DiskListPage{}

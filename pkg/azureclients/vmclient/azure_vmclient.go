@@ -18,6 +18,7 @@ package vmclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -178,7 +179,10 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 
 // listVM gets a list of VirtualMachines in the resourceGroupName.
 func (c *Client) listVM(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachine, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Compute/virtualMachines")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+	)
 
 	result := make([]compute.VirtualMachine, 0)
 	page := &VirtualMachineListResultPage{}

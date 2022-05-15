@@ -18,6 +18,7 @@ package storageaccountclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -433,7 +434,9 @@ func (c *Client) ListStorageAccountByResourceGroup(ctx context.Context, subsID, 
 	if subsID == "" {
 		subsID = c.subscriptionID
 	}
-	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, "Microsoft.Storage/storageAccounts")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts",
+		autorest.Encode("path", subsID),
+		autorest.Encode("path", resourceGroupName))
 	result := make([]storage.Account, 0)
 	page := &AccountListResultPage{}
 	page.fn = c.listNextResults

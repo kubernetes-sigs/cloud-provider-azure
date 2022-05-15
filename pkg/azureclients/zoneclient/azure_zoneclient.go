@@ -18,6 +18,7 @@ package zoneclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -111,10 +112,7 @@ func (c *Client) getZones(ctx context.Context, subscriptionID string) (map[strin
 	}
 
 	regionZoneMap := make(map[string][]string)
-	expectedID := armclient.GetProviderResourceID(
-		subscriptionID,
-		"Microsoft.Compute",
-	)
+	expectedID := fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Compute", subscriptionID)
 	if len(result.ProviderListDataProperties) != 0 {
 		for _, property := range result.ProviderListDataProperties {
 			if strings.EqualFold(property.ID, expectedID) {

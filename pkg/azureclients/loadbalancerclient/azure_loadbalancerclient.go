@@ -18,6 +18,7 @@ package loadbalancerclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -178,7 +179,9 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listLB gets a list of LoadBalancers in the resource group.
 func (c *Client) listLB(ctx context.Context, resourceGroupName string) ([]network.LoadBalancer, *retry.Error) {
-	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, "Microsoft.Network/loadBalancers")
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName))
 	result := make([]network.LoadBalancer, 0)
 	page := &LoadBalancerListResultPage{}
 	page.fn = c.listNextResults

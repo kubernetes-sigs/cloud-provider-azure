@@ -18,6 +18,7 @@ package vmssvmclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -181,12 +182,10 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMach
 
 // listVMSSVM gets a list of VirtualMachineScaleSetVMs in the virtualMachineScaleSet.
 func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error) {
-	resourceID := armclient.GetChildResourcesListID(
-		c.subscriptionID,
-		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
-		virtualMachineScaleSetName,
-		"virtualMachines",
+	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines",
+		autorest.Encode("path", c.subscriptionID),
+		autorest.Encode("path", resourceGroupName),
+		autorest.Encode("path", virtualMachineScaleSetName),
 	)
 
 	result := make([]compute.VirtualMachineScaleSetVM, 0)
