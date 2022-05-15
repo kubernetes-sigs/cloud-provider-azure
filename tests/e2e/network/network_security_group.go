@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/utils/strings/slices"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -217,6 +218,50 @@ var _ = Describe("Network security group", func() {
 		By("Checking if there is a deny_all rule")
 		found = validateDenyAllSecurityRuleExists(nsgs, internalIP)
 		Expect(found).To(BeTrue())
+	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`", func() {
+		By("Creating a public IP with tags")
+		ipName := basename + "-public-IP-disable-floating-ip"
+		pip := defaultPublicIPAddress(ipName)
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := to.String(pip.IPAddress)
+		utils.Logf("created pip with address %s", targetIP)
+
+		By("Creating a test load balancer service with floating IP disabled")
+		annotation := map[string]string{
+			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+		}
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		service = updateServiceBalanceIP(service, false, targetIP)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip).To(Equal(targetIP))
+
+		defer func() {
+			By("cleaning up")
+			err = utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		By("Checking if the LoadBalancer's public IP is included in the network security rule's DestinationAddressPrefixes")
+		nsgs, err := tc.GetClusterSecurityGroups()
+		Expect(err).NotTo(HaveOccurred())
+		for _, nsg := range nsgs {
+			if nsg.SecurityRules == nil {
+				continue
+			}
+
+			for _, securityRules := range *nsg.SecurityRules {
+				contains := slices.Contains(*securityRules.DestinationAddressPrefixes, targetIP)
+				Expect(contains).To(BeFalse())
+			}
+		}
 	})
 
 })
