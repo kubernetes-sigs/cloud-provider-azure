@@ -16,12 +16,16 @@
                 "kubeProxyMode": "ipvs",
                 "networkPlugin": "azure",
                 "containerRuntime": "containerd",
+                "apiServerConfig": {
+                    "--feature-gates": "IPv6DualStack=true"
+                },
                 "kubeletConfig": {
+                    "--feature-gates": "IPv6DualStack=true",
                     "--hairpin-mode": "hairpin-veth",
                     "--max-pods": "110"
                 },
                 "controllerManagerConfig": {
-                    "--feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
+                    "--feature-gates": "IPv6DualStack=true,LegacyServiceAccountTokenNoAutoGeneration=false"
                 },
                 "addons": [
                     {
