@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'site/**'
+
 jobs:
   deploy:
     runs-on: ubuntu-18.04

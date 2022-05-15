@@ -14,23 +14,9 @@ name: "CodeQL"
 on:
   push:
     branches: [ master, 'release-**' ]
-    paths:
-      - 'pkg/**.go'
-      - 'cmd/**.go'
-      - 'tests/**.go'
-      - 'go.*'
-      - 'hack/verify-updates.sh'
-      - '!vendor/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master, 'release-**' ]
-    paths:
-      - 'pkg/**.go'
-      - 'cmd/**.go'
-      - 'tests/**.go'
-      - 'go.*'
-      - 'hack/verify-updates.sh'
-      - '!vendor/**'
   schedule:
     - cron: '0 */24 * * *'
 
@@ -74,15 +60,8 @@ jobs:
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Autobuild
       run: |
+        make all
         hack/verify-updates.sh
-        go test -covermode=count -coverprofile=profile.cov ./pkg/...
 
-    - name: Send coverage
-      env:
-        COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        GO111MODULE=off go get github.com/mattn/goveralls
-        $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov -service=github
-    
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
