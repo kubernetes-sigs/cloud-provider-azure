@@ -76,9 +76,6 @@ type Interface interface {
 	// PutResourceWithDecorators puts a resource with decorators by resource ID
 	PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error)
 
-	// PutResourceWithDecoratorsAsync puts a resource with decorators by resource ID
-	PutResourceWithDecoratorsAsync(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error)
-
 	// PatchResource patches a resource by resource ID
 	PatchResource(ctx context.Context, resourceID string, parameters interface{}) (*http.Response, *retry.Error)
 

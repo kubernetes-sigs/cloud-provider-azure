@@ -337,21 +337,6 @@ func (mr *MockInterfaceMockRecorder) PutResourceWithDecorators(ctx, resourceID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceWithDecorators", reflect.TypeOf((*MockInterface)(nil).PutResourceWithDecorators), ctx, resourceID, parameters, decorators)
 }
 
-// PutResourceWithDecoratorsAsync mocks base method.
-func (m *MockInterface) PutResourceWithDecoratorsAsync(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutResourceWithDecoratorsAsync", ctx, resourceID, parameters, decorators)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(*retry.Error)
-	return ret0, ret1
-}
-
-// PutResourceWithDecoratorsAsync indicates an expected call of PutResourceWithDecoratorsAsync.
-func (mr *MockInterfaceMockRecorder) PutResourceWithDecoratorsAsync(ctx, resourceID, parameters, decorators interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutResourceWithDecoratorsAsync", reflect.TypeOf((*MockInterface)(nil).PutResourceWithDecoratorsAsync), ctx, resourceID, parameters, decorators)
-}
-
 // PutResources mocks base method.
 func (m *MockInterface) PutResources(ctx context.Context, resources map[string]interface{}) map[string]*armclient.PutResourcesResponse {
 	m.ctrl.T.Helper()
