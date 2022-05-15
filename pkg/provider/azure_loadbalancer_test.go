@@ -1881,18 +1881,6 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-<<<<<<< HEAD
-=======
-			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with IPv6)",
-			service: getTestService("testIPv6", v1.ProtocolTCP, map[string]string{
-				"service.beta.kubernetes.io/azure-load-balancer-internal": "true",
-			}, true, 80),
-			loadBalancerSku: "standard",
-			expectedProbes:  getDefaultTestProbes("Tcp", ""),
-			expectedRules:   getDefaultInternalIPv6Rules(true),
-		},
-		{
->>>>>>> parent of 30fa6af8b (fix expected test service name)
 			desc: "getExpectedLBRules shall return corresponding probe and lbRule (slb with HA enabled)",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports": "true",
