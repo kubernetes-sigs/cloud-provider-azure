@@ -16,11 +16,15 @@
                 "kubeProxyMode": "iptables",
                 "networkPlugin": "azure",
                 "containerRuntime": "containerd",
+                "apiServerConfig": {
+                    "--feature-gates": "IPv6DualStack=true"
+                },
                 "kubeletConfig": {
+                    "--feature-gates": "IPv6DualStack=true",
                     "--max-pods": "110"
                 },
                 "controllerManagerConfig": {
-                    "--feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
+                    "--feature-gates": "IPv6DualStack=true,LegacyServiceAccountTokenNoAutoGeneration=false"
                 },
                 "addons": [
                     {
