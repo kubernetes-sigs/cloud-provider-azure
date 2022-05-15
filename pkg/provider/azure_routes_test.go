@@ -309,6 +309,13 @@ func TestCreateRoute(t *testing.T) {
 			expectedRouteCIDRs: map[string]string{"node": "1.2.3.4/24"},
 		},
 		{
+			name:                 "CreateRoute should report error if node is unmanaged and cloud.ipv6DualStackEnabled is true",
+			hasUnmanagedNodes:    true,
+			ipv6DualStackEnabled: true,
+			unmanagedNodeName:    "node",
+			expectedErrMsg:       fmt.Errorf("unmanaged nodes are not supported in dual stack mode"),
+		},
+		{
 			name:           "CreateRoute should create route if cloud.ipv6DualStackEnabled is true and route doesn't exist",
 			routeTableName: "rt9",
 			updatedRoute: &[]network.Route{
