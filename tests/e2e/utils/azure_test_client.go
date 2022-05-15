@@ -143,14 +143,9 @@ func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAd
 	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
 }
 
-// createLoadBalancerClient generates loadbalancer client with the same baseclient as azure test client
-func (tc *AzureTestClient) createLoadBalancerClient() *aznetwork.LoadBalancersClient {
+// creteLoadBalancerClient generates loadbalancer client with the same baseclient as azure test client
+func (tc *AzureTestClient) creteLoadBalancerClient() *aznetwork.LoadBalancersClient {
 	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}
-}
-
-// createPrivateLinkServiceClient generates private link service client with the same baseclient as azure test client
-func (tc *AzureTestClient) createPrivateLinkServiceClient() *aznetwork.PrivateLinkServicesClient {
-	return &aznetwork.PrivateLinkServicesClient{BaseClient: tc.networkClient}
 }
 
 // createInterfacesClient generates network interface client with the same baseclient as azure test client

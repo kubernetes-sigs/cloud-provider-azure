@@ -22,7 +22,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -69,28 +68,14 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 }
 
 // CreateSubnet creates a new subnet in the specified virtual network.
-func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string, waitUntilComplete bool) (network.Subnet, error) {
+func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string) error {
 	Logf("creating a new subnet %s, %s", *subnetName, *prefix)
 	subnetParameter := (*vnet.Subnets)[0]
 	subnetParameter.Name = subnetName
 	subnetParameter.AddressPrefix = prefix
 	subnetsClient := azureTestClient.createSubnetsClient()
 	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
-	var subnet network.Subnet
-	if err != nil || !waitUntilComplete {
-		return subnet, err
-	}
-	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		subnet, err = subnetsClient.Get(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, "")
-		if err != nil {
-			if !IsRetryableAPIError(err) {
-				return false, err
-			}
-			return false, nil
-		}
-		return subnet.ID != nil, nil
-	})
-	return subnet, err
+	return err
 }
 
 // DeleteSubnet deletes a subnet with retry.
@@ -302,56 +287,8 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 	return result, nil
 }
 
-// ListLoadBalancers lists all the load balancers active
-func (azureTestClient *AzureTestClient) ListLoadBalancers(resourceGroupName string) ([]aznetwork.LoadBalancer, error) {
-	lbClient := azureTestClient.createLoadBalancerClient()
-
-	iterator, err := lbClient.ListComplete(context.Background(), resourceGroupName)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]aznetwork.LoadBalancer, 0)
-	for ; iterator.NotDone(); err = iterator.Next() {
-		if err != nil {
-			return nil, err
-		}
-
-		result = append(result, iterator.Value())
-	}
-
-	return result, nil
-}
-
 // GetLoadBalancer gets aznetwork.LoadBalancer by loadBalancer name.
 func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
-	lbClient := azureTestClient.createLoadBalancerClient()
+	lbClient := azureTestClient.creteLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
-}
-
-// GetPrivateLinkService gets aznetwork.PrivateLinkService by privateLinkService name.
-func (azureTestClient *AzureTestClient) GetPrivateLinkService(resourceGroupName, plsName string) (aznetwork.PrivateLinkService, error) {
-	plsClient := azureTestClient.createPrivateLinkServiceClient()
-	return plsClient.Get(context.Background(), resourceGroupName, plsName, "")
-}
-
-// ListPrivateLinkServices lists all the private link services active
-func (azureTestClient *AzureTestClient) ListPrivateLinkServices(resourceGroupName string) ([]aznetwork.PrivateLinkService, error) {
-	plsClient := azureTestClient.createPrivateLinkServiceClient()
-
-	iterator, err := plsClient.ListComplete(context.Background(), resourceGroupName)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]aznetwork.PrivateLinkService, 0)
-	for ; iterator.NotDone(); err = iterator.Next() {
-		if err != nil {
-			return nil, err
-		}
-
-		result = append(result, iterator.Value())
-	}
-
-	return result, nil
 }

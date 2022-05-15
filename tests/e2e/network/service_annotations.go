@@ -188,7 +188,7 @@ var _ = Describe("Service with annotation", func() {
 			By("Test subnet doesn't exist. Creating a new one...")
 			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR, false)
+			err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
