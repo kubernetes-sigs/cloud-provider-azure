@@ -14,7 +14,7 @@ cloudControllerManager:
   # http2MaxStreamsPerConnection: "47"
   imageRepository: "mcr.microsoft.com/oss/kubernetes"
   imageName: "azure-cloud-controller-manager"
-  #imageTag: "v1.23.11"
+  imageTag: "v1.23.11"
   imagePullPolicy: "IfNotPresent"
   # kubeAPIBurst: "100"
   # kubeAPIContentType: "application/vnd.kubernetes.protobuf"
@@ -42,7 +42,7 @@ cloudControllerManager:
 cloudNodeManager:
   imageRepository: "mcr.microsoft.com/oss/kubernetes"
   imageName: "azure-cloud-node-manager"
-  #imageTag: "v1.23.11"
+  imageTag: "v1.23.11"
   imagePullPolicy: "IfNotPresent"
   # cloudConfig: "/etc/kubernetes/azure.json"
   # kubeAPIBurst: "100"
