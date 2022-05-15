@@ -7,22 +7,18 @@
 
 ## Introduction
 
-This repository provides the Azure implementation of the Kubernetes cloud provider [interface](https://github.com/kubernetes/cloud-provider).
-
-This is the "external" or "out-of-tree" cloud provider for Azure. The "in-tree" cloud provider has been deprecated since v1.20 and only bug fixes are allowed in its [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/azure).
+This repository provides Azure implementation of Kubernetes cloud provider [interface](https://github.com/kubernetes/cloud-provider). The in-tree cloud provider has been deprecated since v1.20 and only the bug fixes were allowed in the [Kubernetes repository directory](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/azure).
 
 ## Current status
 
-`cloud-provider-azure` has been **GA** since v1.0.0. Releases are available from the Microsoft Container Registry (MCR).
+`cloud-provider-azure` has been **GA** since v1.0.0 and its releases are maintained on Microsoft Container Registry (MCR).
 
-The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
+The latest version of azure-cloud-controller-manager and azure-cloud-node-manager could be found at
 
 * `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.11`
 * `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.11`
 
-### Version matrix
-
-(Minor release versions match Kubernetes minor release versions since v1.23.0.)
+Version matrix (The minor release versions will match the k8s minor release versions since v1.23.0.):
 
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
@@ -39,23 +35,23 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 
 ## Build
 
-To build the binary for azure-cloud-controller-manager:
+Build binary for azure-cloud-controller-manager:
 
 ```sh
 make all
 ```
 
-To build the Docker image for azure-cloud-controller-manager:
+Build docker image for azure-cloud-controller-manager:
 
 ```sh
 IMAGE_REGISTRY=<registry> make image
 ```
 
-For detailed directions on image building, please read [here](http://kubernetes-sigs.github.io/cloud-provider-azure/development/image-building/).
+More detailed directions for image building, please read [here](http://kubernetes-sigs.github.io/cloud-provider-azure/development/image-building/).
 
 ## Run
 
-To run azure-cloud-controller-manager locally:
+Run azure-cloud-controller-manager locally:
 
 ```sh
 azure-cloud-controller-manager \
@@ -73,7 +69,7 @@ azure-cloud-controller-manager \
     --v=2
 ```
 
-To run azure-cloud-node-manager locally:
+Run azure-cloud-node-manager locally:
 
 ```sh
 azure-cloud-node-manager \
@@ -81,13 +77,13 @@ azure-cloud-node-manager \
     --wait-routes=true
 ```
 
-It is recommended to run azure-cloud-controller-manager as a Deployment with multiple replicas, or directly with kubelet as static Pods on each control plane Node. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for an example.
+It is recommended to run azure-cloud-controller-manager as Deployment with multiple replicas or Kubelet static Pods on each master Node. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for the example.
 
-Get more detail at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
+Please checkout more details at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
 
 ## E2E tests
 
-Please read the following documents for e2e test information:
+Please check the following documents for e2e tests:
 
 - [Upstream Kubernetes e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests/)
 - [Azure e2e tests](http://kubernetes-sigs.github.io/cloud-provider-azure/development/e2e/e2e-tests-azure/)
@@ -103,7 +99,7 @@ Please read the following documents for e2e test information:
 - [AzureDisk known issues](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azuredisk/)
 - [AzureFile known issues](http://kubernetes-sigs.github.io/cloud-provider-azure/faq/known-issues/azurefile/)
 
-See [kubernetes-sigs.github.io/cloud-provider-azure](https://kubernetes-sigs.github.io/cloud-provider-azure/) for more documentation.
+See [kubernetes-sigs.github.io/cloud-provider-azure](https://kubernetes-sigs.github.io/cloud-provider-azure/) for more documentations.
 
 ## Contributing
 
