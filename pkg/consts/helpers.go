@@ -35,10 +35,6 @@ func IsK8sServiceUsingInternalLoadBalancer(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationLoadBalancerInternal, TrueAnnotationValue)
 }
 
-func IsK8sServiceInternalIPv6(service *v1.Service) bool {
-	return IsK8sServiceUsingInternalLoadBalancer(service) && len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
-}
-
 // IsK8sServiceDisableLoadBalancerFloatingIP return if floating IP in load balancer is disabled in kubernetes service annotations
 func IsK8sServiceDisableLoadBalancerFloatingIP(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationDisableLoadBalancerFloatingIP, TrueAnnotationValue)
