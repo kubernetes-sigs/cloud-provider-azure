@@ -18,7 +18,6 @@ package deploymentclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -37,6 +36,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const deploymentResourceType = "Microsoft.Resources/deployments"
 
 // Client implements ContainerService client Interface.
 type Client struct {
@@ -114,7 +115,7 @@ func (c *Client) getDeployment(ctx context.Context, resourceGroupName string, de
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 	result := resources.DeploymentExtended{}
@@ -172,9 +173,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]resource
 
 // listDeployment gets a list of deployments in the resource group.
 func (c *Client) listDeployment(ctx context.Context, resourceGroupName string) ([]resources.DeploymentExtended, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, deploymentResourceType)
 	result := make([]resources.DeploymentExtended, 0)
 	page := &DeploymentResultPage{}
 	page.fn = c.listNextResults
@@ -335,7 +334,7 @@ func (c *Client) createOrUpdateDeployment(ctx context.Context, resourceGroupName
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -410,7 +409,7 @@ func (c *Client) deleteDeployment(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Resources/deployments",
+		deploymentResourceType,
 		deploymentName,
 	)
 
@@ -434,10 +433,12 @@ func (c *Client) ExportTemplate(ctx context.Context, resourceGroupName string, d
 		return resources.DeploymentExportResult{}, rerr
 	}
 
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments/%s/exportTemplate",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName),
-		autorest.Encode("path", deploymentName))
+	resourceID := armclient.GetResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		deploymentResourceType,
+		deploymentName,
+	)
 	response, rerr := c.armClient.PostResource(ctx, resourceID, "exportTemplate", struct{}{}, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {

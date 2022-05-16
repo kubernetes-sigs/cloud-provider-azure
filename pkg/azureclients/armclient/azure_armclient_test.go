@@ -607,6 +607,11 @@ func TestGetResourceID(t *testing.T) {
 			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type/name",
 		},
 		{
+			description:        "resource list ID",
+			resourceID:         GetResourceListID("sub", "rg", "type"),
+			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type",
+		},
+		{
 			description:        "child resource ID",
 			resourceID:         GetChildResourceID("sub", "rg", "type", "name-1", "childType", "name-3"),
 			expectedResourceID: "/subscriptions/sub/resourceGroups/rg/providers/type/name-1/childType/name-3",
