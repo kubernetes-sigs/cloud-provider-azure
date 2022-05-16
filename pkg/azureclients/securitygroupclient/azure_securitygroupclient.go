@@ -18,7 +18,6 @@ package securitygroupclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -38,6 +37,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const nsgResourceType = "Microsoft.Network/networkSecurityGroups"
 
 // Client implements SecurityGroup client Interface.
 type Client struct {
@@ -121,7 +122,7 @@ func (c *Client) getSecurityGroup(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkSecurityGroups",
+		nsgResourceType,
 		networkSecurityGroupName,
 	)
 	result := network.SecurityGroup{}
@@ -179,9 +180,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listSecurityGroup gets a list of SecurityGroups in the resource group.
 func (c *Client) listSecurityGroup(ctx context.Context, resourceGroupName string) ([]network.SecurityGroup, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkSecurityGroups",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, nsgResourceType)
 	result := make([]network.SecurityGroup, 0)
 	page := &SecurityGroupListResultPage{}
 	page.fn = c.listNextResults
@@ -253,7 +252,7 @@ func (c *Client) createOrUpdateNSG(ctx context.Context, resourceGroupName string
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkSecurityGroups",
+		nsgResourceType,
 		networkSecurityGroupName,
 	)
 	decorators := []autorest.PrepareDecorator{
@@ -328,7 +327,7 @@ func (c *Client) deleteNSG(ctx context.Context, resourceGroupName string, networ
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkSecurityGroups",
+		nsgResourceType,
 		networkSecurityGroupName,
 	)
 
