@@ -492,7 +492,7 @@ func (c *Client) PutResourcesInBatches(ctx context.Context, resources map[string
 	return responses
 }
 
-// PutResourceWithDecorators puts a resource by resource ID
+// PutResourceWithDecorators puts a resource by resource ID and waits for response
 func (c *Client) PutResourceWithDecorators(ctx context.Context, resourceID string, parameters interface{}, decorators []autorest.PrepareDecorator) (*http.Response, *retry.Error) {
 	return c.putResourceWithDecorators(ctx, resourceID, parameters, decorators, true)
 }
