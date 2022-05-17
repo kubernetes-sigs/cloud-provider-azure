@@ -29,6 +29,37 @@ Detailed design doc can be found here: &lt;a href="https://kubernetes-sigs.githu
 &lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.18...v0.9.19">v0.9.18 → v0.9.19&lt;/a>&lt;/li>
 &lt;/ul>
 &lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.23.12</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/05/17/v1.23.12/</link><pubDate>Tue, 17 May 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/05/17/v1.23.12/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="feature">Feature&lt;/h3>
+&lt;ul>
+&lt;li>Support ARM resource ID as &lt;code>userAssignedIdentityID&lt;/code> (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1616">#1616&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>User can deploy managed Azure private link service resources by annotating the service object.
+Detailed design doc can be found here: &lt;a href="https://kubernetes-sigs.github.io/cloud-provider-azure/development/design-docs/pls-integration/">https://kubernetes-sigs.github.io/cloud-provider-azure/development/design-docs/pls-integration/&lt;/a> (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1681">#1681&lt;/a>, &lt;a href="https://github.com/jwtty">@jwtty&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>Cloud provider will create route for unmanaged node if dual stack is enabled. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1727">#1727&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;li>Fixes bug when using dual-stack in AKS that prevents IPv6 services from using ILB. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1721">#1721&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/li>
+&lt;/ul>
+&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
+&lt;ul>
+&lt;li>Azure privateEndpointClient APIs are changed:
+&lt;ol>
+&lt;li>Get() and CreateOrUpdate() return *retry.Error instead of error&lt;/li>
+&lt;li>Add etag argument for CreateOrUpdate() function. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1731">#1731&lt;/a>, &lt;a href="https://github.com/jwtty">@jwtty&lt;/a>)&lt;/li>
+&lt;/ol>
+&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;ul>
+&lt;li>github.com/Azure/azure-sdk-for-go: &lt;a href="https://github.com/Azure/azure-sdk-for-go/compare/v63.4.0...v64.1.0">v63.4.0+incompatible → v64.1.0+incompatible&lt;/a>&lt;/li>
+&lt;li>github.com/Azure/go-autorest/autorest/adal: &lt;a href="https://github.com/Azure/go-autorest/autorest/adal/compare/v0.9.18...v0.9.19">v0.9.18 → v0.9.19&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="removed">Removed&lt;/h3>
 &lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.24.0</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/05/06/v1.24.0/</link><pubDate>Fri, 06 May 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/05/06/v1.24.0/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
@@ -1947,24 +1978,6 @@ ree/02e2102)&lt;/li>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
 &lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/865">#865&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h2 id="dependencies">Dependencies&lt;/h2>
-&lt;h3 id="added">Added&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="changed">Changed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="removed">Removed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.3</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.1.3/</link><pubDate>Tue, 23 Nov 2021 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2021/11/23/v1.1.3/</guid><description>
-&lt;h1 id="changelog-since-v112">Changelog since v1.1.2&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="feature">Feature&lt;/h3>
-&lt;ul>
-&lt;li>Feat: support json style tags (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/896">#896&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: do not delete the lb that does not exist (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/866">#866&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;li>Fix: remove outdated ipv4 route when the corresponding node is deleted (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/891">#891&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
