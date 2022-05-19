@@ -448,6 +448,9 @@ func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip, plsResourceGroup
 	err = wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
 		pls, err = tc.GetPrivateLinkService(plsResourceGroup, plsName)
 		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
 			return false, err
 		}
 		return *pls.Name == plsName, nil
