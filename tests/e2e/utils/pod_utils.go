@@ -116,13 +116,13 @@ func DeletePod(cs clientset.Interface, ns string, podName string) error {
 	err := cs.CoreV1().Pods(ns).Delete(context.TODO(), podName, metav1.DeleteOptions{})
 	Logf("Deleting pod %s in namespace %s", podName, ns)
 	if err != nil {
+		if apierrs.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
-		if _, err := cs.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{}); err != nil {
-			return apierrs.IsNotFound(err), nil
-		}
-		return false, nil
+		return !CheckPodExist(cs, ns, podName), nil
 	})
 }
 
@@ -134,6 +134,40 @@ func CreatePod(cs clientset.Interface, ns string, manifest *v1.Pod) error {
 		return err
 	}
 	return nil
+}
+
+// CreateHostExecPod creates an Agnhost Pod to exec. It returns if the Pod is running and error.
+func CreateHostExecPod(cs clientset.Interface, ns, name string) (bool, error) {
+	Logf("Creating a hostNetwork Pod %s in namespace %s to exec", name, ns)
+	immediate := int64(0)
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:            "agnhost",
+					Image:           "gcr.io/kubernetes-e2e-test-images/agnhost:2.6",
+					Args:            []string{"pause"},
+					ImagePullPolicy: v1.PullIfNotPresent,
+				},
+			},
+			HostNetwork:                   true,
+			TerminationGracePeriodSeconds: &immediate,
+		},
+	}
+	if _, err := cs.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+		return false, err
+	}
+	return WaitPodTo(v1.PodRunning, cs, pod, ns)
+}
+
+// CheckPodExist checks if a Pod exists in a namespace with its name.
+func CheckPodExist(cs clientset.Interface, ns, name string) bool {
+	_, err := cs.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	return !apierrs.IsNotFound(err)
 }
 
 // GetPodLogs gets the log of the given pods
