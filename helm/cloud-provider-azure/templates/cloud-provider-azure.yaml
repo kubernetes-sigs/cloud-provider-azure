@@ -164,9 +164,9 @@ spec:
       nodeSelector:
   {{- if ge .Capabilities.KubeVersion.Minor "24" }}
         node-role.kubernetes.io/control-plane: ""
-  {{ else }}
+  {{- else }}
         node-role.kubernetes.io/master: ""
-  {{ end -}}
+  {{- end }}
       serviceAccountName: cloud-controller-manager
       tolerations:
         - key: node-role.kubernetes.io/master
