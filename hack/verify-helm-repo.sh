@@ -36,4 +36,9 @@ for chart in "cloud-provider-azure"; do
   rm -Rf ${REPO_ROOT}/chart_verify
 done
 
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+helm template ./helm/cloud-provider-azure > /dev/null
+
 exit 0
