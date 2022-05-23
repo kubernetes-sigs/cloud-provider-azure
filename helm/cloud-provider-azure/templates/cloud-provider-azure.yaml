@@ -168,10 +168,11 @@ spec:
   {{- else }}
         node-role.kubernetes.io/master: ""
   {{- end }}
-        node-role.kubernetes.io/master: ""
       serviceAccountName: cloud-controller-manager
       tolerations:
         - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       containers:
         - name: cloud-controller-manager
@@ -358,6 +359,8 @@ spec:
           operator: Exists
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
         - operator: "Exists"
           effect: NoExecute
         - operator: "Exists"
@@ -438,10 +441,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - key: node-role.kubernetes.io/master
-        operator: Equal
-        value: "true"
-        effect: NoSchedule
       - operator: "Exists"
         effect: NoExecute
       - operator: "Exists"
