@@ -2,10 +2,10 @@ apiVersion: v1
 entries:
   cloud-provider-azure:
   - apiVersion: v1
-    created: "2022-05-23T08:58:32.805781125Z"
+    created: "2022-05-26T13:51:09.040471661+02:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
       components
-    digest: 333f935087f05bead79cb7c8d57285f324756599b86f4c1fc08aa19f006ae6d9
+    digest: 6ec891b138d3f5de97e4f82ee23d6fe03041ff3102c23e875446c7708e4095b8
     home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
     keywords:
     - cloud-provider-azure
@@ -20,29 +20,8 @@ entries:
     sources:
     - https://github.com/kubernetes-sigs/cloud-provider-azure
     urls:
-    - cloud-provider-azure-1.24.0+20220523.tgz
-    version: 1.24.0+20220523
-  - apiVersion: v1
-    created: "2022-05-06T10:10:12.501287-07:00"
-    description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
-      components
-    digest: c9aa0bf18ee1442f9ae57ae277a6a7b1c7b88f33836508a6a97fb593cd1e1750
-    home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
-    keywords:
-    - cloud-provider-azure
-    - kubernetes-sigs
-    - kubernetes
-    maintainers:
-    - email: jackfrancis@gmail.com
-      name: Jack Francis
-    - email: zhechengli1995@outlook.com
-      name: Zhecheng Li
-    name: cloud-provider-azure
-    sources:
-    - https://github.com/kubernetes-sigs/cloud-provider-azure
-    urls:
-    - cloud-provider-azure-1.24.0.tgz
-    version: 1.24.0
+    - cloud-provider-azure-1.24.0+20220526.tgz
+    version: 1.24.0+20220526
   - apiVersion: v1
     created: "2022-05-02T14:33:56.285027-07:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
@@ -106,4 +85,4 @@ entries:
     urls:
     - cloud-provider-azure-1.23.8.tgz
     version: 1.23.8
-generated: "2022-05-23T08:58:32.805017015Z"
+generated: "2022-05-26T13:51:09.039470153+02:00"

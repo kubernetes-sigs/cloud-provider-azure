@@ -9,6 +9,7 @@
 {{- else -}}
   {{- $_ := set . "unsupportedKubernetesVersion" "true" }}
 {{- end -}}
+{{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -152,7 +153,7 @@ spec:
     matchLabels:
       tier: control-plane
       component: cloud-controller-manager
-  replicas: 1
+  replicas: {{ .Values.cloudControllerManager.replicas }}
   template:
     metadata:
       labels:
@@ -167,11 +168,10 @@ spec:
   {{- else }}
         node-role.kubernetes.io/master: ""
   {{- end }}
+        node-role.kubernetes.io/master: ""
       serviceAccountName: cloud-controller-manager
       tolerations:
         - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       containers:
         - name: cloud-controller-manager
@@ -273,8 +273,8 @@ spec:
           volumeMounts:
             - name: etc-kubernetes
               mountPath: /etc/kubernetes
-            - name: etc-ssl
-              mountPath: /etc/ssl
+            - name: ssl-mount
+              mountPath: {{ .Values.cloudControllerManager.caCertDir }}
               readOnly: true
             - name: msi
               mountPath: /var/lib/waagent/ManagedIdentity-Settings
@@ -283,12 +283,14 @@ spec:
         - name: etc-kubernetes
           hostPath:
             path: /etc/kubernetes
-        - name: etc-ssl
+        - name: ssl-mount
           hostPath:
-            path: /etc/ssl
+            path: {{ .Values.cloudControllerManager.caCertDir }}
         - name: msi
           hostPath:
             path: /var/lib/waagent/ManagedIdentity-Settings
+{{- end }}
+{{- if .Values.cloudNodeManager.enabled }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -355,8 +357,6 @@ spec:
         - key: CriticalAddonsOnly
           operator: Exists
         - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
         - operator: "Exists"
           effect: NoExecute
@@ -438,6 +438,10 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
+      - key: node-role.kubernetes.io/master
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
       - operator: "Exists"
         effect: NoExecute
       - operator: "Exists"
@@ -491,3 +495,4 @@ spec:
           limits:
             cpu: {{ .Values.cloudNodeManager.containerResourceManagement.limitsCPUWin }}
             memory: {{ .Values.cloudNodeManager.containerResourceManagement.limitsMemWin }}
+{{- end }}
