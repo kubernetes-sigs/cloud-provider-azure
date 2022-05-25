@@ -724,7 +724,21 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 		tags := pip.Tags
 		delete(tags, "kubernetes-cluster-name")
 		delete(tags, "service")
-		utils.Logf("\ntags: %v\nexpectedTags: %v", tags, expectedTags)
+
+		delete(tags, consts.ClusterNameKey)
+		delete(tags, "k8s-azure-cluster-name")
+		delete(tags, consts.ServiceTagKey)
+		delete(tags, "k8s-azure-service")
+
+		printTags := func(name string, ts map[string]*string) {
+			msg := ""
+			for t := range ts {
+				msg += fmt.Sprintf("%s:%s ", t, *ts[t])
+			}
+			utils.Logf("%s: [%s]", name, msg)
+		}
+		printTags("tags", tags)
+		printTags("expectedTags", expectedTags)
 		return reflect.DeepEqual(tags, expectedTags), nil
 	})
 	return err
@@ -775,7 +789,7 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 	Expect(err).NotTo(HaveOccurred())
 	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
 
-	//wait and get service's public IP Address
+	//wait and get service's IP Address
 	utils.Logf("Waiting service to expose...")
 	publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, nsName, serviceName, "")
 	Expect(err).NotTo(HaveOccurred())
