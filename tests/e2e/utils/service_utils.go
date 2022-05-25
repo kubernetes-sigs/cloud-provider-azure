@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -32,15 +31,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 const (
 	serviceTimeout        = 5 * time.Minute
 	serviceTimeoutBasicLB = 10 * time.Minute
-	pullInterval          = 20 * time.Second
-	pullTimeout           = 2 * time.Minute
+	pullInterval          = 10 * time.Second
+	pullTimeout           = 3 * time.Minute
+
+	ExecAgnhostPod = "exec-agnhost-pod"
 )
 
 // DeleteService deletes a service
@@ -79,6 +78,25 @@ func GetServiceDomainName(prefix string) (ret string) {
 	return
 }
 
+// WaitServiceExposureAndGetIP returns IP of the Service.
+func WaitServiceExposureAndGetIP(cs clientset.Interface, namespace string, name string) (string, error) {
+	var service *v1.Service
+	var err error
+	var ip string
+
+	service, err = WaitServiceExposure(cs, namespace, name, "")
+	if err != nil {
+		return "", err
+	}
+	if service == nil {
+		return "", errors.New("the service is nil")
+	}
+
+	ip = service.Status.LoadBalancer.Ingress[0].IP
+
+	return ip, nil
+}
+
 // WaitServiceExposureAndValidateConnectivity returns ip of the service and check the connectivity if it is a public IP
 func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespace string, name string, targetIP string) (string, error) {
 	var service *v1.Service
@@ -95,12 +113,24 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespac
 
 	ip = service.Status.LoadBalancer.Ingress[0].IP
 
-	if !isInternalService(service) {
-		Logf("checking the connectivity of the public IP %s", ip)
-		for _, port := range service.Spec.Ports {
-			if err := ValidateExternalServiceConnectivity(ip, int(port.Port)); err != nil {
-				return ip, err
-			}
+	// Create host exec Pod
+	result, err := CreateHostExecPod(cs, namespace, ExecAgnhostPod)
+	defer func() {
+		err := DeletePod(cs, namespace, ExecAgnhostPod)
+		if err != nil {
+			Logf("failed to delete ExecAgnhostPod, error: %v", err)
+		}
+	}()
+	if !result || err != nil {
+		return "", fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %v", result, err)
+	}
+
+	// TODO: Check if other WaitServiceExposureAndValidateConnectivity() callers with internal Service
+	// should test connectivity as well.
+	for _, port := range service.Spec.Ports {
+		Logf("checking the connectivity of addr %s:%d with protocol %v", ip, int(port.Port), port.Protocol)
+		if err := ValidateServiceConnectivity(namespace, ExecAgnhostPod, ip, int(port.Port), port.Protocol); err != nil {
+			return ip, err
 		}
 	}
 
@@ -151,43 +181,27 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 	return service, nil
 }
 
-func isInternalService(service *v1.Service) bool {
-	var (
-		val string
-		ok  bool
-	)
-	if val, ok = service.Annotations[consts.ServiceAnnotationLoadBalancerInternal]; !ok {
-		return false
+// ValidateServiceConnectivity validates the connectivity of the internal Service IP
+func ValidateServiceConnectivity(ns, execPod, serviceIP string, port int, protocol v1.Protocol) error {
+	udpOption := ""
+	if protocol == v1.ProtocolUDP {
+		udpOption = "-u"
 	}
-
-	return strings.EqualFold(val, "true")
-}
-
-// ValidateExternalServiceConnectivity validates the connectivity of the service IP
-func ValidateExternalServiceConnectivity(serviceIP string, port int) error {
-	// the default nginx port is 80, skip other ports
-	if port != 80 {
-		return nil
-	}
-
-	err := wait.PollImmediate(pullInterval, pullTimeout, func() (done bool, err error) {
-		resp, err := http.Get(fmt.Sprintf("http://%s:%d", serviceIP, port))
+	cmd := fmt.Sprintf(`nc -vz -w 4 %s %s %d`, udpOption, serviceIP, port)
+	pollErr := wait.PollImmediate(pullInterval, 3*pullTimeout, func() (bool, error) {
+		stdout, err := RunKubectl(ns, "exec", execPod, "--", "/bin/sh", "-x", "-c", cmd)
 		if err != nil {
-			Logf("got error %v, will retry", err)
+			Logf("got error %v, will retry, output: %s", err, stdout)
 			return false, nil
 		}
-
-		if 200 <= resp.StatusCode && resp.StatusCode < 300 {
-			Logf("succeeded")
-			return true, nil
+		if !strings.Contains(stdout, "succeeded") {
+			Logf("Expected output to contain 'succeeded', got %q; retrying...", stdout)
+			return false, nil
 		}
-
-		Logf("got status code %d", resp.StatusCode)
-		return false, nil
+		Logf("Validation succeeded: Service addr %s:%d with protocol %v", serviceIP, port, protocol)
+		return true, nil
 	})
-
-	Logf("validation finished")
-	return err
+	return pollErr
 }
 
 // extractSuffix obtains the server domain name suffix

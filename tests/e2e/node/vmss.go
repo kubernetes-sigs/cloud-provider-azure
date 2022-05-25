@@ -95,7 +95,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", &vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
+			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
@@ -139,7 +139,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", &vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
+			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
