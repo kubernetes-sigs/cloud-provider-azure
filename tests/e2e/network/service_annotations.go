@@ -816,7 +816,7 @@ func createNginxDeploymentManifest(name string, labels map[string]string) *appsv
 					Containers: []v1.Container{
 						{
 							Name:            "test-app",
-							Image:           "nginx:1.15",
+							Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 							ImagePullPolicy: "Always",
 							Ports: []v1.ContainerPort{
 								{

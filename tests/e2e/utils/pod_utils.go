@@ -149,7 +149,7 @@ func CreateHostExecPod(cs clientset.Interface, ns, name string) (bool, error) {
 			Containers: []v1.Container{
 				{
 					Name:            "agnhost",
-					Image:           "gcr.io/kubernetes-e2e-test-images/agnhost:2.6",
+					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 					Args:            []string{"pause"},
 					ImagePullPolicy: v1.PullIfNotPresent,
 				},

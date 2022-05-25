@@ -404,7 +404,7 @@ func createPodSpec(requestCPU int64) (result v1.PodSpec) {
 		Containers: []v1.Container{
 			{
 				Name:  "container",
-				Image: "nginx:1.15",
+				Image: "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 			},
 		},
 	}
@@ -424,7 +424,7 @@ func createGPUPodSpec(requestGPU int64) (result v1.PodSpec) {
 		Containers: []v1.Container{
 			{
 				Name:  "container",
-				Image: "nginx:1.15",
+				Image: "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 			},
 		},
 	}
