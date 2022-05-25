@@ -53,9 +53,10 @@ var (
 )
 
 const (
-	nginxPort       = 80
+	serverPort  = 80
+	testingPort = 81
+
 	nginxStatusCode = 200
-	testingPort     = 81
 )
 
 var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnnotation), func() {
@@ -72,8 +73,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -84,8 +85,12 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		ns, err = utils.CreateTestingNamespace(basename, cs)
 		Expect(err).NotTo(HaveOccurred())
 
+		utils.Logf("Creating Azure clients")
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -459,8 +464,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe' and port specific configs", func() {
 		By("Creating a service with health probe annotations")
 		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                  "5",
-			consts.BuildHealthProbeAnnotationKeyForPort(nginxPort, consts.HealthProbeParamsNumOfProbe): "3",
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                   "5",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsNumOfProbe): "3",
 		}
 
 		// create service with given annotation and wait it to expose
@@ -564,8 +569,8 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -577,7 +582,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -650,13 +655,13 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 	}
 	ports := []v1.ServicePort{{
 		AppProtocol: to.StringPtr("Tcp"),
-		Port:        nginxPort,
+		Port:        serverPort,
 		Name:        "port1",
-		TargetPort:  intstr.FromInt(nginxPort),
+		TargetPort:  intstr.FromInt(serverPort),
 	}, {
-		Port:        nginxPort + 1,
+		Port:        serverPort + 1,
 		Name:        "port2",
-		TargetPort:  intstr.FromInt(nginxPort),
+		TargetPort:  intstr.FromInt(serverPort),
 		AppProtocol: to.StringPtr("Tcp"),
 	},
 	}
@@ -669,8 +674,12 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		ns, err = utils.CreateTestingNamespace(basename, cs)
 		Expect(err).NotTo(HaveOccurred())
 
+		utils.Logf("Creating Azure clients")
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -894,8 +903,29 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 
 // createNginxDeploymentManifest returns a default deployment
 // running nginx image which exposes port 80
-func createNginxDeploymentManifest(name string, labels map[string]string) *appsv1.Deployment {
+func createServerDeploymentManifest(name string, labels map[string]string) *appsv1.Deployment {
+	tcpPort := int32(serverPort)
+	return createDeploymentManifest(name, labels, &tcpPort, nil)
+}
+
+func createDeploymentManifest(name string, labels map[string]string, tcpPort, udpPort *int32) *appsv1.Deployment {
 	var replicas int32 = 5
+	args := []string{"netexec"}
+	ports := []v1.ContainerPort{}
+	if tcpPort != nil {
+		args = append(args, fmt.Sprintf("--http-port=%d", *tcpPort))
+		ports = append(ports, v1.ContainerPort{
+			Protocol:      v1.ProtocolTCP,
+			ContainerPort: *tcpPort,
+		})
+	}
+	if udpPort != nil {
+		args = append(args, fmt.Sprintf("--udp-port=%d", *udpPort))
+		ports = append(ports, v1.ContainerPort{
+			Protocol:      v1.ProtocolUDP,
+			ContainerPort: *udpPort,
+		})
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -914,13 +944,10 @@ func createNginxDeploymentManifest(name string, labels map[string]string) *appsv
 					Containers: []v1.Container{
 						{
 							Name:            "test-app",
-							Image:           "nginx:1.15",
+							Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 							ImagePullPolicy: "Always",
-							Ports: []v1.ContainerPort{
-								{
-									ContainerPort: nginxPort,
-								},
-							},
+							Args:            args,
+							Ports:           ports,
 						},
 					},
 				},
