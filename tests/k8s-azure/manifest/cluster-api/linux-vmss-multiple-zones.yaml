@@ -161,6 +161,9 @@ metadata:
   namespace: default
 spec:
   clusterName: ${CLUSTER_NAME}
+  failureDomains:
+    - "1"
+    - "2"
   replicas: ${WORKER_MACHINE_COUNT}
   template:
     spec:
@@ -227,6 +230,9 @@ metadata:
   namespace: default
 spec:
   clusterName: ${CLUSTER_NAME}
+  failureDomains:
+    - "1"
+    - "2"
   replicas: ${WORKER_MACHINE_COUNT}
   template:
     spec:
