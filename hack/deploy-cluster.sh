@@ -23,7 +23,6 @@ REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
 : "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
 : "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
-: "${AZURE_LOCATION:?Environment variable empty or not defined.}"
 : "${USE_CSI_DEFAULT_STORAGECLASS:?Environment variable empty or not defined.}"
 : "${K8S_RELEASE_VERSION:?Environment variable empty or not defined.}"
 : "${AZURE_LOCATION:?Environment variable empty or not defined.}"
@@ -61,25 +60,26 @@ fi
 
 # Configure the manifests for aks-engine
 cat ${base_manifest} | \
+  jq ".properties.orchestratorProfile.orchestratorRelease=\"${K8S_RELEASE_VERSION}\"" | \
   jq ".properties.orchestratorProfile.kubernetesConfig.customCcmImage=\"${CCM_IMAGE}\"" | \
   jq ".properties.orchestratorProfile.kubernetesConfig.addons[0].containers[0].image=\"${CNM_IMAGE}\"" | \
-  jq ".properties.servicePrincipalProfile.clientID=\"${CLIENT_ID}\"" | \
-  jq ".properties.servicePrincipalProfile.secret=\"${CLIENT_SECRET}\"" \
+  jq ".properties.servicePrincipalProfile.clientID=\"${AZURE_CLIENT_ID}\"" | \
+  jq ".properties.servicePrincipalProfile.secret=\"${AZURE_CLIENT_SECRET}\"" \
   > ${manifest_file}
 
 # Deploy the cluster
 echo "Deploying kubernetes cluster to resource group ${RESOURCE_GROUP_NAME}..."
-aks-engine deploy --subscription-id ${SUBSCRIPTION_ID} \
+aks-engine deploy --subscription-id ${AZURE_SUBSCRIPTION_ID} \
   --auth-method client_secret \
   --auto-suffix \
   --resource-group ${RESOURCE_GROUP_NAME} \
-  --location ${LOCATION} \
+  --location ${AZURE_LOCATION} \
   --api-model ${manifest_file} \
-  --client-id ${CLIENT_ID} \
-  --client-secret ${CLIENT_SECRET}
+  --client-id ${AZURE_CLIENT_ID} \
+  --client-secret ${AZURE_CLIENT_SECRET}
 echo "Kubernetes cluster deployed. Please find the kubeconfig for it in _output/"
 
-export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.${LOCATION}.json
+export KUBECONFIG=_output/$(ls -t _output | head -n 1)/kubeconfig/kubeconfig.${AZURE_LOCATION}.json
 echo "Kubernetes cluster deployed. Please find the kubeconfig at ${KUBECONFIG}"
 
 # Deploy AzureDisk CSI Plugin
