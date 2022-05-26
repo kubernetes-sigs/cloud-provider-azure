@@ -1,8 +1,10 @@
 infra:
   clusterName: "kubernetes"
 cloudControllerManager:
+  enabled: true
   allocateNodeCidrs: "true"
   # bindAddress: "0.0.0.0"
+  caCertDir: "/etc/ssl"
   # certDir: "/path/to/certs"
   cloudConfig: "/etc/kubernetes/azure.json"
   # cloudConfigSecretName: "azure-cloud-provider"
@@ -30,6 +32,7 @@ cloudControllerManager:
   # minResyncPeriod: "100m"
   # nodeStatusUpdateFrequency: "10m"
   port: 10267
+  replicas: 1
   # profiling: "false"
   routeReconciliationPeriod: "10s"
   # securePort: 10001
@@ -40,6 +43,7 @@ cloudControllerManager:
     limitsCPU: "4"
     limitsMem: "2Gi"
 cloudNodeManager:
+  enabled: true
   imageRepository: "mcr.microsoft.com/oss/kubernetes"
   imageName: "azure-cloud-node-manager"
   #imageTag: "v1.23.11"

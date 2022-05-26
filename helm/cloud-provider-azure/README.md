@@ -62,6 +62,8 @@ Below is the complete set of configuration that you may include when invoking `h
 | configuration value | default value | description |
 | --- | --- | --- |
 | `infra.clusterName` | `"kubernetes"` | Set the cluster name appropriate for your infra provider (e.g., capz, AKS). |
+| `cloudControllerManager.enabled` | `true` | Enable or disable the azure-cloud-controller-manager deployment. |
+| `cloudControllerManager.caCertDir` | `"/etc/ssl"` | Specify the CA cert directory to mount on the azure-cloud-controller-manager pod. |
 | `cloudControllerManager.cloudConfig` | `"/etc/kubernetes/azure.json"` | The path to the cloud provider configuration file. Empty string for no configuration file. |
 | `cloudControllerManager.clusterCIDR` | `"10.244.0.0/16"` | set to the network CIDR for pod IP addresses |
 | `cloudControllerManager.configureCloudRoutes` | `"true"` | if you're using Azure CNI set to `"false"` |
@@ -70,6 +72,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
 | `cloudControllerManager.logVerbosity` | `"2"` | set to a higher number when debugging the azure-cloud-controller-manager runtime |
 | `cloudControllerManager.port` | `"10267"` | TCP port on which azure-cloud-controller-manager pod responds to requests |
+| `cloudControllerManager.replicas` | `"1"` | Number of replicas for the azure-cloud-controller-manager deployment. It should be no more than the number of control plane Nodes |
 | `cloudControllerManager.routeReconciliationPeriod` | `"10s"` | how often to reconcile node routes |
 | `cloudControllerManager.containerResourceManagement.requestsCPU` | `"100m"` | CPU requests configuration for the azure-cloud-controller-manager pod |
 | `cloudControllerManager.containerResourceManagement.requestsMem` | `"128Mi"` | Memory requests configuration for the azure-cloud-controller-manager pod |
@@ -80,6 +83,7 @@ Below is the complete set of configuration that you may include when invoking `h
 
 | configuration value | default value | description |
 | --- | --- | --- |
+| `cloudNodeManager.enabled` | `true` | Enable or disable the azure-cloud-node-manager deployment. |
 | `cloudNodeManager.imageRepository` | `"mcr.microsoft.com/oss/kubernetes"` | container image repository (including any image project directories) location where the Azure `cloud-node-manager` container image is hosted |
 | `cloudNodeManager.imageName` | `"azure-cloud-node-manager"` | container image name for the Azure `cloud-node-manager` runtime |
 | `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
