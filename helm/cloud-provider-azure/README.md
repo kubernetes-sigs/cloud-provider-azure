@@ -72,7 +72,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
 | `cloudControllerManager.logVerbosity` | `"2"` | set to a higher number when debugging the azure-cloud-controller-manager runtime |
 | `cloudControllerManager.port` | `"10267"` | TCP port on which azure-cloud-controller-manager pod responds to requests |
-| `cloudControllerManager.replicas` | `1` | Number of replicas for the azure-cloud-controller-manager deployment. It should be no more than the number of control plane Nodes |
+| `cloudControllerManager.replicas` | `"1"` | Number of replicas for the azure-cloud-controller-manager deployment. It should be no more than the number of control plane Nodes |
 | `cloudControllerManager.routeReconciliationPeriod` | `"10s"` | how often to reconcile node routes |
 | `cloudControllerManager.containerResourceManagement.requestsCPU` | `"100m"` | CPU requests configuration for the azure-cloud-controller-manager pod |
 | `cloudControllerManager.containerResourceManagement.requestsMem` | `"128Mi"` | Memory requests configuration for the azure-cloud-controller-manager pod |
