@@ -17,6 +17,9 @@ limitations under the License.
 package node
 
 import (
+	"os"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -62,21 +65,37 @@ var _ = Describe("Lifecycle of VMSS", func() {
 			Skip("skip non-VMSS")
 		}
 		numInstance := *vmss.Sku.Capacity
+		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
+		expectedCap := map[string]int64{*vmss.Name: numInstance}
 
 		By("deallocate VMSS instance")
-		err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance-1)
+		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+			err = utils.ScaleMachinePool(*vmss.Name, numInstance-1)
+		} else {
+			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance-1)
+		}
 		Expect(err).NotTo(HaveOccurred())
+		expectedCap[*vmss.Name] = numInstance - 1
 
 		defer func() {
 			By("reset VMSS instance")
-			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
+			if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+				err = utils.ScaleMachinePool(*vmss.Name, numInstance)
+			} else {
+				err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
+			}
+			Expect(err).NotTo(HaveOccurred())
+			expectedCap[*vmss.Name] = numInstance
+
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
+			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
+			utils.Logf("VMSS %q sku capacity after the test: %d", &vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
-		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
+		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -88,21 +107,37 @@ var _ = Describe("Lifecycle of VMSS", func() {
 			Skip("skip non-VMSS")
 		}
 		numInstance := *vmss.Sku.Capacity
+		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
+		expectedCap := map[string]int64{*vmss.Name: numInstance}
 
 		By("allocate VMSS instance")
-		err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance+1)
+		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+			err = utils.ScaleMachinePool(*vmss.Name, numInstance+1)
+		} else {
+			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance+1)
+		}
 		Expect(err).NotTo(HaveOccurred())
+		expectedCap[*vmss.Name] = numInstance + 1
 
 		defer func() {
 			By("reset VMSS instance")
-			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
+			if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+				err = utils.ScaleMachinePool(*vmss.Name, numInstance)
+			} else {
+				err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
+			}
+			Expect(err).NotTo(HaveOccurred())
+			expectedCap[*vmss.Name] = numInstance
+
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
+			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
+			utils.Logf("VMSS %q sku capacity after the test: %d", &vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
-		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli)
+		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

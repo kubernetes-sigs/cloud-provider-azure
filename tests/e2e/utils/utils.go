@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -36,12 +35,11 @@ import (
 )
 
 const (
-	deletionTimeout             = 10 * time.Minute
-	poll                        = 2 * time.Second
-	singleCallTimeout           = 20 * time.Minute
-	vmssOperationInterval       = 30 * time.Second
-	vmssOperationTimeout        = 30 * time.Minute
-	recommendedConfigPathEnvVar = "KUBECONFIG"
+	deletionTimeout       = 10 * time.Minute
+	poll                  = 2 * time.Second
+	singleCallTimeout     = 20 * time.Minute
+	vmssOperationInterval = 30 * time.Second
+	vmssOperationTimeout  = 30 * time.Minute
 )
 
 func findExistingKubeConfig() string {
@@ -60,7 +58,7 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 		restConfig *rest.Config
 		err        error
 	)
-	if envVarFiles := os.Getenv(recommendedConfigPathEnvVar); len(envVarFiles) != 0 {
+	if envVarFiles := os.Getenv(clientcmd.RecommendedConfigPathEnvVar); len(envVarFiles) != 0 {
 		filename := findExistingKubeConfig()
 		Logf("Kubernetes configuration file name: %s", filename)
 		c := clientcmd.GetConfigFromFileOrDie(filename)
@@ -69,7 +67,7 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 			return nil, err
 		}
 	} else {
-		Logf("Cannot find %s env var, switch to use the in-cluster config", recommendedConfigPathEnvVar)
+		Logf("Cannot find %s env var, switch to use the in-cluster config", clientcmd.RecommendedConfigPathEnvVar)
 		restConfig, err = rest.InClusterConfig()
 		if err != nil {
 			return nil, err
@@ -194,10 +192,10 @@ func StringInSlice(s string, list []string) bool {
 
 // HandleVMNotFoundErr returns true if the input error is errVMNotFound or nil
 func HandleVMNotFoundErr(err error) bool {
-	return err == nil || reflect.DeepEqual(err, errVMNotFound)
+	return err == nil || err == errVMNotFound
 }
 
 // HandleVMSSNotFoundErr returns true if the input error is errVMSSNotFound or nil
 func HandleVMSSNotFoundErr(err error) bool {
-	return err == nil || reflect.DeepEqual(err, errVMSSNotFound)
+	return err == nil || err == errVMSSNotFound
 }

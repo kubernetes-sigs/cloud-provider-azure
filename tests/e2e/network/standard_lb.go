@@ -21,7 +21,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Azure/go-autorest/autorest/to"
+	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -95,37 +95,61 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Skip("only support cluster with multiple agent pools")
 		}
 
-		lbBackendAddressPoolsIDMap := make(map[string]bool)
+		ipcIDs := []string{}
 		for _, backendAddressPool := range *lb.BackendAddressPools {
-			backendAddressPoolID := strings.ToLower(to.String(backendAddressPool.ID))
-			lbBackendAddressPoolsIDMap[backendAddressPoolID] = true
-			utils.Logf("found backend pool %s", backendAddressPoolID)
-		}
-		utils.Logf("got lbBackendAddressPoolsIDMap: %v", lbBackendAddressPoolsIDMap)
-
-		NICList, err := utils.ListNICs(tc, rgName)
-		Expect(err).NotTo(HaveOccurred())
-		var found bool
-		for _, nic := range *NICList {
-			found = false
-			if strings.Split(*nic.Name, "-")[1] == "master" || strings.Contains(*nic.Name, "control-plane") {
-				continue
-			}
-			for _, ipConfig := range *nic.IPConfigurations {
-				if found {
-					break
+			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
+				if ipc.ID != nil {
+					ipcIDs = append(ipcIDs, *ipc.ID)
 				}
-				utils.Logf("found ip config %s", to.String(ipConfig.Name))
-				for _, backendAddressPool := range *ipConfig.LoadBalancerBackendAddressPools {
-					backendAddressPoolID := strings.ToLower(to.String(backendAddressPool.ID))
-					utils.Logf("found backend pool on nic %s", backendAddressPoolID)
-					if lbBackendAddressPoolsIDMap[backendAddressPoolID] {
+			}
+		}
+		utils.Logf("got BackendIPConfigurations IDs: %v", ipcIDs)
+
+		// Check if it is a cluster with VMSS
+		vmsses, err := utils.ListVMSSes(tc)
+		if !utils.IsVMSSNotFound(err) {
+			allVMs := []azcompute.VirtualMachineScaleSetVM{}
+			for _, vmss := range vmsses {
+				if strings.Contains(*vmss.ID, "control-plane") {
+					continue
+				}
+				vms, err := utils.ListVMSSVMs(tc, *vmss.Name)
+				Expect(err).NotTo(HaveOccurred())
+				allVMs = append(allVMs, vms...)
+			}
+			Expect(len(allVMs)).To(Equal(len(ipcIDs)))
+			for _, vm := range allVMs {
+				utils.Logf("Checking VM %q", *vm.ID)
+				found := false
+				for _, ipcID := range ipcIDs {
+					if strings.Contains(ipcID, *vm.ID) {
 						found = true
 						break
 					}
 				}
+				Expect(found).To(Equal(true))
 			}
-			Expect(found).To(BeTrue())
+			utils.Logf("Validation succeeded for a VMSS cluster")
+		} else {
+			vms, err := utils.ListVMs(tc)
+			Expect(err).NotTo(HaveOccurred())
+			for _, vm := range *vms {
+				if strings.Contains(*vm.ID, "control-plane") {
+					continue
+				}
+				found := false
+				vmID := *vm.ID
+				vmName := vmID[strings.LastIndex(vmID, "/")+1:]
+				utils.Logf("Checking VM %q", vmName)
+				for _, ipcID := range ipcIDs {
+					if strings.Contains(ipcID, vmName) {
+						found = true
+						break
+					}
+				}
+				Expect(found).To(Equal(true))
+			}
+			utils.Logf("Validation succeeded for a non-VMSS cluster")
 		}
 	})
 
