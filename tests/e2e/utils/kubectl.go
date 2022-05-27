@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -177,4 +179,26 @@ func isTimeout(err error) bool {
 		}
 	}
 	return false
+}
+
+// ScaleMachinePool switches to kind-capz context and scales MachinePool replicas
+// to scale up or down VMSS.
+// This functions is for CAPZ clusters. Since CAPZ controller will reconcile MachinePool
+// replicas automatically, add/delete VMSS instance through VMSS API doesn't work.
+func ScaleMachinePool(vmssName string, instanceCount int64) error {
+	kubeconfig := os.Getenv(clientcmd.RecommendedConfigPathEnvVar)
+
+	if err := os.Unsetenv(clientcmd.RecommendedConfigPathEnvVar); err != nil {
+		return fmt.Errorf("failed to unset %s: %w", clientcmd.RecommendedConfigPathEnvVar, err)
+	}
+	defer func() {
+		if err := os.Setenv(clientcmd.RecommendedConfigPathEnvVar, kubeconfig); err != nil {
+			Logf("failed to export %s after scaling: %w", clientcmd.RecommendedConfigPathEnvVar, err)
+		}
+	}()
+
+	if _, err := RunKubectl("default", "scale", "machinepool", "--replicas", strconv.Itoa(int(instanceCount)), vmssName); err != nil {
+		return fmt.Errorf("failed to scale MachinePool %q: %w", vmssName, err)
+	}
+	return nil
 }
