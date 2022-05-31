@@ -46,6 +46,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/diskclient"
@@ -290,6 +291,7 @@ type Cloud struct {
 	DisksClient                     diskclient.Interface
 	SnapshotsClient                 snapshotclient.Interface
 	FileClient                      fileclient.Interface
+	BlobClient                      blobclient.Interface
 	VirtualMachineScaleSetsClient   vmssclient.Interface
 	VirtualMachineScaleSetVMsClient vmssvmclient.Interface
 	VirtualMachineSizesClient       vmsizeclient.Interface
@@ -809,6 +811,7 @@ func (az *Cloud) configAzureClients(
 	virtualNetworkConfig := azClientConfig.WithRateLimiter(az.Config.VirtualNetworkRateLimit)
 	// TODO(ZeroMagic): add azurefileRateLimit
 	fileClientConfig := azClientConfig.WithRateLimiter(nil)
+	blobClientConfig := azClientConfig.WithRateLimiter(nil)
 	vmasClientConfig := azClientConfig.WithRateLimiter(az.Config.AvailabilitySetRateLimit)
 	zoneClientConfig := azClientConfig.WithRateLimiter(nil)
 
@@ -855,6 +858,7 @@ func (az *Cloud) configAzureClients(
 	az.SecurityGroupsClient = securitygroupclient.New(securityGroupClientConfig)
 	az.PublicIPAddressesClient = publicipclient.New(publicIPClientConfig)
 	az.FileClient = fileclient.New(fileClientConfig)
+	az.BlobClient = blobclient.New(blobClientConfig)
 	az.AvailabilitySetsClient = vmasclient.New(vmasClientConfig)
 	az.privateendpointclient = privateendpointclient.New(privateEndpointConfig)
 	az.privatednsclient = privatednsclient.New(privateDNSConfig)
