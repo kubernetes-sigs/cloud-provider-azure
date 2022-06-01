@@ -2,6 +2,27 @@ apiVersion: v1
 entries:
   cloud-provider-azure:
   - apiVersion: v1
+    created: "2022-06-01T00:37:05.622970767Z"
+    description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
+      components
+    digest: bdf7a959bdb4aa4452c11a58768d05b83864778e56f588c728e4e609311b59bd
+    home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
+    keywords:
+    - cloud-provider-azure
+    - kubernetes-sigs
+    - kubernetes
+    maintainers:
+    - email: jackfrancis@gmail.com
+      name: Jack Francis
+    - email: zhechengli1995@outlook.com
+      name: Zhecheng Li
+    name: cloud-provider-azure
+    sources:
+    - https://github.com/kubernetes-sigs/cloud-provider-azure
+    urls:
+    - cloud-provider-azure-1.24.0+20220601.tgz
+    version: 1.24.0+20220601
+  - apiVersion: v1
     created: "2022-05-26T13:57:34.35813407+02:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
       components
@@ -22,6 +43,27 @@ entries:
     urls:
     - cloud-provider-azure-1.24.0+20220526.tgz
     version: 1.24.0+20220526
+  - apiVersion: v1
+    created: "2022-05-06T10:10:12.501287-07:00"
+    description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
+      components
+    digest: c9aa0bf18ee1442f9ae57ae277a6a7b1c7b88f33836508a6a97fb593cd1e1750
+    home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
+    keywords:
+    - cloud-provider-azure
+    - kubernetes-sigs
+    - kubernetes
+    maintainers:
+    - email: jackfrancis@gmail.com
+      name: Jack Francis
+    - email: zhechengli1995@outlook.com
+      name: Zhecheng Li
+    name: cloud-provider-azure
+    sources:
+    - https://github.com/kubernetes-sigs/cloud-provider-azure
+    urls:
+    - cloud-provider-azure-1.24.0.tgz
+    version: 1.24.0
   - apiVersion: v1
     created: "2022-05-02T14:33:56.285027-07:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
@@ -85,4 +127,4 @@ entries:
     urls:
     - cloud-provider-azure-1.23.8.tgz
     version: 1.23.8
-generated: "2022-05-26T13:57:34.356920784+02:00"
+generated: "2022-06-01T00:37:05.622215257Z"
