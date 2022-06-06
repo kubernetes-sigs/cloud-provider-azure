@@ -140,14 +140,14 @@ func waitVMSSVMCountToEqual(tc *AzureTestClient, expected int, vmssName string) 
 			count++
 		}
 
-		Logf("Number of VMSS instance: current = %d, expected = %d (will retry)", count, expected)
+		Logf("Number of VMSS instance in %s: current = %d, expected = %d (will retry)", vmssName, count, expected)
 		return count == expected, nil
 	})
 
 	return err
 }
 
-func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
+func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map[string]int64) error {
 	k8sCli, err := CreateKubeClientSet()
 	if err != nil {
 		return err
@@ -160,6 +160,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
 			vmssVMs     []azcompute.VirtualMachineScaleSetVM
 			nodeSet     = sets.NewString()
 			instanceSet = sets.NewString()
+			actualCap   = map[string]int64{}
 		)
 
 		// log progress
@@ -171,6 +172,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
 			Logf("Matching cluster nodes[%s] with VMSS instances[%s]",
 				strings.Join(nodeSet.List(), ","),
 				strings.Join(instanceSet.List(), ","))
+			Logf("Expected capacity: %v, actual one: %v", expectedCap, actualCap)
 		}()
 
 		nodes, err = GetAgentNodes(k8sCli)
@@ -180,7 +182,16 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
 
 		// ignore error; check intersection of sets instead.
 		vmssList, _ := ListVMSSes(tc)
+		capMatch := true
 		for _, vmss := range vmssList {
+			cap, ok := expectedCap[*vmss.Name]
+			if ok {
+				actualCap[*vmss.Name] = *vmss.Sku.Capacity
+				if cap != *vmss.Sku.Capacity {
+					capMatch = false
+					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.Sku.Capacity)
+				}
+			}
 			vms, _ := ListVMSSVMs(tc, *vmss.Name)
 			vmssVMs = append(vmssVMs, vms...)
 		}
@@ -197,7 +208,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient) error {
 			instanceSet.Insert(strings.ToLower(nodeName))
 		}
 
-		return nodeSet.Equal(instanceSet), nil
+		return nodeSet.Equal(instanceSet) && capMatch, nil
 	})
 }
 
@@ -253,6 +264,12 @@ func ListVMSSVMs(tc *AzureTestClient, vmssName string) ([]azcompute.VirtualMachi
 	return res, nil
 }
 
+// GetVMSS gets VMSS object with vmssName.
+func GetVMSS(tc *AzureTestClient, vmssName string) (azcompute.VirtualMachineScaleSet, error) {
+	vmssClient := tc.createVMSSClient()
+	return vmssClient.Get(context.Background(), tc.GetResourceGroup(), vmssName, "")
+}
+
 // ListVMSSes returns the list of scale sets
 func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
@@ -268,6 +285,10 @@ func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error)
 	}
 
 	return res, nil
+}
+
+func IsVMSSNotFound(err error) bool {
+	return err == errVMSSNotFound
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
