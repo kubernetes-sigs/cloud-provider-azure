@@ -39,6 +39,8 @@ const (
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
+	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
+	CAPZTestCCM = "TEST_CCM"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
