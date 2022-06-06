@@ -333,8 +333,12 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 	if err != nil {
 		return err
 	}
-	// Disable the private endpoint network policies before creating private endpoint
-	subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+	if subnet.SubnetPropertiesFormat == nil {
+		klog.Errorf("SubnetPropertiesFormat of (%s, %s) is nil", vnetName, subnetName)
+	} else {
+		// Disable the private endpoint network policies before creating private endpoint
+		subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+	}
 	if rerr := az.SubnetsClient.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, subnet); rerr != nil {
 		return rerr.Error()
 	}
