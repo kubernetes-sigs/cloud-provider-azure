@@ -372,6 +372,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		name                      string
 		createAccount             bool
 		createPrivateEndpoint     bool
+		SubnetPropertiesFormatNil bool
 		mockStorageAccountsClient bool
 		setAccountOptions         bool
 		accountName               string
@@ -393,6 +394,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			name:                      "[Failed] EnsureStorageAccount with createPrivateEndpoint: get storage key failed",
 			createAccount:             true,
 			createPrivateEndpoint:     true,
+			SubnetPropertiesFormatNil: true,
 			mockStorageAccountsClient: true,
 			setAccountOptions:         true,
 			resourceGroup:             "rg",
@@ -437,7 +439,11 @@ func TestEnsureStorageAccount(t *testing.T) {
 				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
 			}
 
-			subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
+			subnetPropertiesFormat := &network.SubnetPropertiesFormat{}
+			if test.SubnetPropertiesFormatNil {
+				subnetPropertiesFormat = nil
+			}
+			subnet := network.Subnet{SubnetPropertiesFormat: subnetPropertiesFormat}
 
 			mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
 			mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
