@@ -3,14 +3,14 @@ title: "Azure Private Link Service Integration"
 linkTitle: "Azure Private Link Service Integration"
 type: docs
 description: >
-    Azure PLS Integration Design Document.
+    Connect Azure Private Link service to internal load balancer.
 ---
 
 Azure Private Link Service (PLS) is an infrastructure component that allows users to privately connect via a Private Endpoint (PE) in a VNET in Azure and a Frontend IP Configuration associated with an Azure Load Balancer (ALB). With Private Link, users as service providers can securely provide their services to consumers who can connect from within Azure or on-premises without data exfiltration risks. 
 
 Before Private Link Service integration, users who wanted private connectivity from on-premises or other VNETs to their services in the Azure Kubernetes cluster were required to create a Private Link Service (PLS) to reference the Azure Internal LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, a managed PLS to the LB would be created automatically, and the user would only be required to create PE connections to it for private connectivity. 
 
-Currently, managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../topics/loadbalancer)).
+Currently, managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../loadbalancer)).
 
 ## PrivateLinkService annotations
 
@@ -51,7 +51,7 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 ### Sharing managed PrivateLinkService
 
-Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../topics/shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
+Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
 
 Azure cloud provider tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
 
