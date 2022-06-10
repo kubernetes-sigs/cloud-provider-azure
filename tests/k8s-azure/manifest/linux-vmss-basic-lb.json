@@ -8,6 +8,7 @@
       "kubernetesConfig": {
         "useManagedIdentity": false,
         "networkPolicy": "none",
+        "containerRuntime": "containerd",
         "cloudProviderRateLimitQPS": 6,
         "cloudProviderRateLimitBucket": 20,
         "apiServerConfig": {
