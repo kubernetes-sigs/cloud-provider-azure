@@ -137,12 +137,14 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				if strings.Contains(*vm.ID, "control-plane") {
 					continue
 				}
-				found := false
 				vmID := *vm.ID
 				vmName := vmID[strings.LastIndex(vmID, "/")+1:]
 				utils.Logf("Checking VM %q", vmName)
+
+				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
+				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, vmName) {
+					if strings.Contains(ipcID, *nic) {
 						found = true
 						break
 					}
