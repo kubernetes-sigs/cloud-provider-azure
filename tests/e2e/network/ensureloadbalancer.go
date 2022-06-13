@@ -704,5 +704,8 @@ func defaultPublicIPPrefix(name string) aznetwork.PublicIPPrefix {
 		Sku: &aznetwork.PublicIPPrefixSku{
 			Name: aznetwork.PublicIPPrefixSkuNameStandard,
 		},
+		PublicIPPrefixPropertiesFormat: &aznetwork.PublicIPPrefixPropertiesFormat{
+			PrefixLength: to.Int32Ptr(28),
+		},
 	}
 }
