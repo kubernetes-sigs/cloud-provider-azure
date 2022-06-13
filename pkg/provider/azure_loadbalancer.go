@@ -896,7 +896,11 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
 	var shouldPIPExisted bool
 	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
-		shouldPIPExisted = true
+		if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixName]; ok && ipPrefix != "" {
+			shouldPIPExisted = false
+		} else {
+			shouldPIPExisted = true
+		}
 		return name, shouldPIPExisted, nil
 	}
 
@@ -1070,9 +1074,6 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			consts.ServiceTagKey:  to.StringPtr(""),
 			consts.ClusterNameKey: &clusterName,
 		}
-		if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixName]; ok && pipPrefixName != "" {
-			pip.PublicIPPrefix = &network.SubResource{ID: to.StringPtr(pipPrefixName)}
-		}
 		if _, err = bindServicesToPIP(&pip, []string{serviceName}, false); err != nil {
 			return nil, err
 		}
@@ -1080,6 +1081,9 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		if az.useStandardLoadBalancer() {
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
+			}
+			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixName]; ok && pipPrefixName != "" {
+				pip.PublicIPPrefix = &network.SubResource{ID: to.StringPtr(pipPrefixName)}
 			}
 
 			// skip adding zone info since edge zones doesn't support multiple availability zones.

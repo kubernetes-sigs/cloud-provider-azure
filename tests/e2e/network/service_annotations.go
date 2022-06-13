@@ -418,26 +418,34 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-name`", func() {
-		By("Creating two test pips")
-		prefix1, err := utils.WaitCreatePIPPrefix(tc, "pip1", tc.GetResourceGroup(), defaultPublicIPPrefix("prefix1"))
-		Expect(err).NotTo(HaveOccurred())
-		prefix2, err := utils.WaitCreatePIPPrefix(tc, "pip1", tc.GetResourceGroup(), defaultPublicIPPrefix("prefix2"))
-		Expect(err).NotTo(HaveOccurred())
+		const (
+			prefix1Name = "prefix1"
+			prefix2Name = "prefix2"
+			pip1Name    = "prefix-1-pip"
+			pip2Name    = "prefix-2-pip"
+		)
 
-		const pipName = "prefix-pip"
+		By("Creating two test PIPPrefix")
+		prefix1, err := utils.WaitCreatePIPPrefix(tc, prefix1Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix1Name))
+		Expect(err).NotTo(HaveOccurred())
+		prefix2, err := utils.WaitCreatePIPPrefix(tc, prefix2Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix2Name))
+		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
 			By("Cleaning up test service")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-			By("Cleaning up test PIPs")
+			{
+				err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// TODO: clean up PIPPrefix
 		}()
 
 		By("Creating a service referring to the prefix")
 		{
 			annotation := map[string]string{
-				consts.ServiceAnnotationPIPName:       pipName,
-				consts.ServiceAnnotationPIPPrefixName: to.String(prefix1.Name),
+				consts.ServiceAnnotationPIPName:       pip1Name,
+				consts.ServiceAnnotationPIPPrefixName: to.String(prefix1.ID),
 			}
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -449,7 +457,7 @@ var _ = Describe("Service with annotation", func() {
 			ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 			Expect(err).NotTo(HaveOccurred())
 
-			pip, err := utils.WaitGetPIP(tc, pipName)
+			pip, err := utils.WaitGetPIP(tc, pip1Name)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ip).To(Equal(to.String(pip.IPAddress)))
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix1.ID))
@@ -459,16 +467,31 @@ var _ = Describe("Service with annotation", func() {
 		{
 			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			service.Annotations[consts.ServiceAnnotationPIPName] = pipName
-			service.Annotations[consts.ServiceAnnotationPIPPrefixName] = to.String(prefix2.Name)
+			service.Annotations[consts.ServiceAnnotationPIPName] = pip2Name
+			service.Annotations[consts.ServiceAnnotationPIPPrefixName] = to.String(prefix2.ID)
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		By("Waiting for service IP to be updated")
 		{
-			pip, err := utils.WaitGetPIP(tc, pipName)
-			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
+			// wait until second PIP created
+			var (
+				pip network.PublicIPAddress
+				err error
+			)
+			for i := 0; i <= 30; i++ {
+				time.Sleep(10 * time.Second)
+
+				pip, err = utils.WaitGetPIP(tc, pip2Name)
+				if err != nil {
+					utils.Logf("Waiting PublicIP created, got err(will retry): %s", err)
+					continue
+				}
+				Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
+				break
+			}
+			Expect(err).NotTo(HaveOccurred())
 
 			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
 			Expect(err).NotTo(HaveOccurred())
@@ -765,8 +788,8 @@ var _ = Describe("Multi-ports service", func() {
 			err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 2 &&
-						*(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port != nodeHealthCheckPort &&
-						*(*lb.LoadBalancerPropertiesFormat.Probes)[1].Port != nodeHealthCheckPort, nil
+					*(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port != nodeHealthCheckPort &&
+					*(*lb.LoadBalancerPropertiesFormat.Probes)[1].Port != nodeHealthCheckPort, nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -808,10 +831,10 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGrou
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
 		if ip.PublicIPAddressPropertiesFormat != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
-				*ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
+			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
+			*ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
 			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
 			break
 		}
@@ -916,10 +939,10 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
 		if ip.PublicIPAddressPropertiesFormat != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
-				ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
-				*ip.PublicIPAddressPropertiesFormat.IPAddress == publicIP {
+			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
+			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
+			*ip.PublicIPAddressPropertiesFormat.IPAddress == publicIP {
 			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
 			break
 		}
@@ -949,8 +972,8 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	backendPoolID := ""
 	for _, rule := range *lb.LoadBalancingRules {
 		if rule.FrontendIPConfiguration != nil &&
-				rule.FrontendIPConfiguration.ID != nil &&
-				strings.EqualFold(*rule.FrontendIPConfiguration.ID, pipFrontendConfigurationID) {
+			rule.FrontendIPConfiguration.ID != nil &&
+			strings.EqualFold(*rule.FrontendIPConfiguration.ID, pipFrontendConfigurationID) {
 			Expect(rule.BackendAddressPool).NotTo(BeNil())
 			Expect(rule.BackendAddressPool.ID).NotTo(BeNil())
 			backendPoolID = *rule.BackendAddressPool.ID
