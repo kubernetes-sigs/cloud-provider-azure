@@ -696,3 +696,13 @@ func defaultPublicIPAddress(ipName string) aznetwork.PublicIPAddress {
 		},
 	}
 }
+
+func defaultPublicIPPrefix(name string) aznetwork.PublicIPPrefix {
+	return aznetwork.PublicIPPrefix{
+		Name:     to.StringPtr(name),
+		Location: to.StringPtr(os.Getenv(utils.ClusterLocationEnv)),
+		Sku: &aznetwork.PublicIPPrefixSku{
+			Name: aznetwork.PublicIPPrefixSkuNameStandard,
+		},
+	}
+}

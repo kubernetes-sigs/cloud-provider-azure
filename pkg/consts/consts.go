@@ -230,6 +230,9 @@ const (
 	// ServiceAnnotationPIPName specifies the pip that will be applied to load balancer
 	ServiceAnnotationPIPName = "service.beta.kubernetes.io/azure-pip-name"
 
+	// ServiceAnnotationPIPPrefixName specifies the pip prefix that will be applied to the load balancer.
+	ServiceAnnotationPIPPrefixName = "service.beta.kubernetes.io/azure-pip-prefix-name"
+
 	// ServiceAnnotationIPTagsForPublicIP specifies the iptags used when dynamically creating a public ip
 	ServiceAnnotationIPTagsForPublicIP = "service.beta.kubernetes.io/azure-pip-ip-tags"
 
