@@ -1263,7 +1263,7 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 			if !existsSubnet {
 				return false, fmt.Errorf("failed to get subnet")
 			}
-			if config.Subnet != nil && !strings.EqualFold(to.String(config.Subnet.Name), to.String(subnet.Name)) {
+			if config.Subnet != nil && !strings.EqualFold(to.String(config.Subnet.ID), to.String(subnet.ID)) {
 				return true, nil
 			}
 		}
