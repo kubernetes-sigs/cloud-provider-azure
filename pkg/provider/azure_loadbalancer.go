@@ -895,13 +895,12 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
 	var shouldPIPExisted bool
+
 	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
-		if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixName]; ok && ipPrefix != "" {
-			shouldPIPExisted = false
-		} else {
-			shouldPIPExisted = true
-		}
-		return name, shouldPIPExisted, nil
+		return name, true, nil
+	}
+	if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && ipPrefix != "" {
+		return az.getPublicIPName(clusterName, service), false, nil
 	}
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
@@ -1082,7 +1081,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
 			}
-			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixName]; ok && pipPrefixName != "" {
+			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && pipPrefixName != "" {
 				pip.PublicIPPrefix = &network.SubResource{ID: to.StringPtr(pipPrefixName)}
 			}
 
