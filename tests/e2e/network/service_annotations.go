@@ -417,12 +417,10 @@ var _ = Describe("Service with annotation", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-name`", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
 		const (
 			prefix1Name = "prefix1"
 			prefix2Name = "prefix2"
-			pip1Name    = "prefix-1-pip"
-			pip2Name    = "prefix-2-pip"
 		)
 
 		By("Creating two test PIPPrefix")
@@ -444,8 +442,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Creating a service referring to the prefix")
 		{
 			annotation := map[string]string{
-				consts.ServiceAnnotationPIPName:       pip1Name,
-				consts.ServiceAnnotationPIPPrefixName: to.String(prefix1.ID),
+				consts.ServiceAnnotationPIPPrefixID: to.String(prefix1.ID),
 			}
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -457,41 +454,59 @@ var _ = Describe("Service with annotation", func() {
 			ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 			Expect(err).NotTo(HaveOccurred())
 
-			pip, err := utils.WaitGetPIP(tc, pip1Name)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ip).To(Equal(to.String(pip.IPAddress)))
+			var pip network.PublicIPAddress
+			// wait until ip created by prefix
+			for i := 0; i < 30; i++ {
+				time.Sleep(10 * time.Second)
+				prefix, err := utils.WaitGetPIPPrefix(tc, prefix1Name)
+				if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
+					continue
+				}
+
+				pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+				parts := strings.Split(pipID, "/")
+				pipName := parts[len(parts)-1]
+				pip, err = utils.WaitGetPIP(tc, pipName)
+				Expect(err).NotTo(HaveOccurred())
+
+				break
+			}
+			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix1.ID))
+			Expect(ip).To(Equal(to.String(pip.IPAddress)))
 		}
 
 		By("Updating the service to refer to the second prefix")
 		{
 			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			service.Annotations[consts.ServiceAnnotationPIPName] = pip2Name
-			service.Annotations[consts.ServiceAnnotationPIPPrefixName] = to.String(prefix2.ID)
+			service.Annotations[consts.ServiceAnnotationPIPPrefixID] = to.String(prefix2.ID)
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		By("Waiting for service IP to be updated")
 		{
-			// wait until second PIP created
-			var (
-				pip network.PublicIPAddress
-				err error
-			)
-			for i := 0; i <= 30; i++ {
-				time.Sleep(10 * time.Second)
+			var pip network.PublicIPAddress
 
-				pip, err = utils.WaitGetPIP(tc, pip2Name)
-				if err != nil {
-					utils.Logf("Waiting PublicIP created, got err(will retry): %s", err)
+			// wait until ip created by prefix
+			for i := 0; i < 30; i++ {
+				time.Sleep(10 * time.Second)
+				prefix, err := utils.WaitGetPIPPrefix(tc, prefix2Name)
+				if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
 					continue
 				}
-				Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
+
+				pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+				parts := strings.Split(pipID, "/")
+				pipName := parts[len(parts)-1]
+				pip, err = utils.WaitGetPIP(tc, pipName)
+				Expect(err).NotTo(HaveOccurred())
+
 				break
 			}
-			Expect(err).NotTo(HaveOccurred())
+			Expect(pip.IPAddress).NotTo(BeNil())
+			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
 
 			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
 			Expect(err).NotTo(HaveOccurred())
