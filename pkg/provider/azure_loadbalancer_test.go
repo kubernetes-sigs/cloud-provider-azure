@@ -1595,17 +1595,17 @@ func TestIsFrontendIPChanged(t *testing.T) {
 		},
 		{
 			desc: "isFrontendIPChanged shall return true if the service is internal and " +
-				"config.Subnet.Name == subnet.Name",
+				"config.Subnet.ID != subnet.ID",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					Subnet: &network.Subnet{Name: to.StringPtr("testSubnet")},
+					Subnet: &network.Subnet{ID: to.StringPtr("testSubnet")},
 				},
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getInternalTestService("test1", 80),
 			annotations:            "testSubnet",
-			existingSubnet:         network.Subnet{Name: to.StringPtr("testSubnet1")},
+			existingSubnet:         network.Subnet{ID: to.StringPtr("testSubnet1")},
 			expectedFlag:           true,
 			expectedError:          false,
 		},
