@@ -126,10 +126,7 @@ func (c *Client) createOrUpdatePrivateDNSZone(ctx context.Context, resourceGroup
 		privateDNSZoneResourceType,
 		privateDNSZoneName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if etag != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
 	}
@@ -137,11 +134,11 @@ func (c *Client) createOrUpdatePrivateDNSZone(ctx context.Context, resourceGroup
 	var response *http.Response
 	var rerr *retry.Error
 	if waitForCompletion {
-		response, rerr = c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+		response, rerr = c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
+		defer c.armClient.CloseResponse(ctx, response)
 	} else {
-		response, rerr = c.armClient.PutResourceWithDecoratorsAsync(ctx, resourceID, parameters, decorators)
+		_, rerr = c.armClient.PutResourceAsync(ctx, resourceID, parameters, decorators...)
 	}
-	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "privatednszone.put.request", resourceID, rerr.Error())
 		return rerr

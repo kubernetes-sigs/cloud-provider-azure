@@ -701,7 +701,7 @@ func TestDelete(t *testing.T) {
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID)).Return(nil).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
 	rerr := pipClient.Delete(context.TODO(), "rg", "pip1")
@@ -754,7 +754,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID)).Return(throttleErr).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
 	rerr := pipClient.Delete(context.TODO(), "rg", "pip1")

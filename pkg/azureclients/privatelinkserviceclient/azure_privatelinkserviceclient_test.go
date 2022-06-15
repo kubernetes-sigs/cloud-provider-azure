@@ -272,7 +272,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(pls.ID), pls, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(pls.ID), pls, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	plsClient := getTestPrivateLinkServiceClient(armClient)
@@ -303,7 +303,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pls.ID), "").Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pls.ID)).Return(test.armClientErr)
 
 		plsClient := getTestPrivateLinkServiceClient(armClient)
 		rerr := plsClient.Delete(context.TODO(), "rg", "pls1")
@@ -334,7 +334,7 @@ func TestDeletePEConnection(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(peConn.ID), "").Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(peConn.ID)).Return(test.armClientErr)
 
 		plsClient := getTestPrivateLinkServiceClient(armClient)
 		rerr := plsClient.DeletePEConnection(context.TODO(), "rg", "pls1", "peconn")

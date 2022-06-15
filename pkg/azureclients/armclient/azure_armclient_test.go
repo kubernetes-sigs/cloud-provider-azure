@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sync"
 	"testing"
 	"time"
 
@@ -377,132 +376,6 @@ func TestPutResource(t *testing.T) {
 	assert.Equal(t, true, rerr.Retriable)
 }
 
-func TestPutResources(t *testing.T) {
-	total := 0
-	server := getTestServer(t, &total)
-
-	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
-	armClient := New(nil, azConfig, server.URL, "2019-01-01")
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	resources := map[string]interface{}{
-		"/id/1": nil,
-		"/id/2": nil,
-	}
-	responses := armClient.PutResources(ctx, nil)
-	assert.Nil(t, responses)
-	responses = armClient.PutResources(ctx, resources)
-	assert.NotNil(t, responses)
-	assert.Equal(t, 3, total)
-}
-
-func getTestServer(t *testing.T, counter *int) *httptest.Server {
-	serverFuncs := []func(rw http.ResponseWriter, req *http.Request){
-		func(rw http.ResponseWriter, req *http.Request) {
-			assert.Equal(t, "PUT", req.Method)
-
-			rw.Header().Set("Azure-AsyncOperation",
-				fmt.Sprintf("http://%s%s", req.Host, "/id/1?api-version=2019-01-01"))
-			rw.WriteHeader(http.StatusCreated)
-		},
-		func(rw http.ResponseWriter, req *http.Request) {
-			assert.Equal(t, "PUT", req.Method)
-
-			rw.Header().Set("Azure-AsyncOperation",
-				fmt.Sprintf("http://%s%s", req.Host, "/id/2?api-version=2019-01-01"))
-			rw.WriteHeader(http.StatusInternalServerError)
-		},
-		func(rw http.ResponseWriter, req *http.Request) {
-			assert.Equal(t, "GET", req.Method)
-
-			rw.WriteHeader(http.StatusOK)
-			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
-		},
-		func(rw http.ResponseWriter, req *http.Request) {
-			assert.Equal(t, "GET", req.Method)
-
-			rw.WriteHeader(http.StatusOK)
-			_, _ = rw.Write([]byte(`{"error":{"code":"InternalServerError"},"status":"Failed"}`))
-		},
-	}
-
-	i := 0
-	var l sync.Mutex
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		l.Lock()
-		serverFuncs[i](w, r)
-		i++
-		if i > 3 {
-			i = 3
-		}
-		*counter++
-		l.Unlock()
-	}))
-}
-
-func TestPutResourcesInBatches(t *testing.T) {
-	for _, testCase := range []struct {
-		description                  string
-		resources                    map[string]interface{}
-		batchSize, expectedCallTimes int
-	}{
-		{
-			description: "",
-			resources: map[string]interface{}{
-				"/id/1": nil,
-				"/id/2": nil,
-			},
-			batchSize:         2,
-			expectedCallTimes: 3,
-		},
-		{
-			description: "",
-			resources: map[string]interface{}{
-				"/id/1": nil,
-				"/id/2": nil,
-			},
-			batchSize:         1,
-			expectedCallTimes: 3,
-		},
-		{
-			description: "",
-			resources:   nil,
-		},
-		{
-			description: "PutResourcesInBatches should set the batch size to the length of the resources if the batch size is larger than it",
-			resources: map[string]interface{}{
-				"/id/1": nil,
-				"/id/2": nil,
-			},
-			batchSize:         10,
-			expectedCallTimes: 3,
-		},
-		{
-			description: "PutResourcesInBatches should call PutResources if the batch size is smaller than or equal to zero",
-			resources: map[string]interface{}{
-				"/id/1": nil,
-				"/id/2": nil,
-			},
-			expectedCallTimes: 3,
-		},
-	} {
-		t.Run(testCase.description, func(t *testing.T) {
-			total := 0
-			server := getTestServer(t, &total)
-
-			azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
-			armClient := New(nil, azConfig, server.URL, "2019-01-01")
-			armClient.client.RetryDuration = time.Millisecond * 1
-
-			ctx := context.Background()
-			responses := armClient.PutResourcesInBatches(ctx, testCase.resources, testCase.batchSize)
-			assert.Equal(t, testCase.resources == nil, responses == nil)
-			assert.Equal(t, testCase.expectedCallTimes, total)
-		})
-	}
-}
-
 func TestResourceAction(t *testing.T) {
 	for _, tc := range []struct {
 		description string
@@ -525,7 +398,7 @@ func TestResourceAction(t *testing.T) {
 		{
 			description: "delete resource async",
 			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
-				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID, "")
+				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID)
 				return future, nil, rerr
 			},
 			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
@@ -551,7 +424,7 @@ func TestResourceAction(t *testing.T) {
 		{
 			description: "delete resource",
 			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
-				rerr := armClient.DeleteResource(ctx, resourceID, "")
+				rerr := armClient.DeleteResource(ctx, resourceID)
 				return nil, nil, rerr
 			},
 			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {

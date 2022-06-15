@@ -193,7 +193,7 @@ func (c *Client) deleteSnapshot(ctx context.Context, subsID, resourceGroupName, 
 		snapshotName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 // CreateOrUpdate creates or updates a Snapshot.
