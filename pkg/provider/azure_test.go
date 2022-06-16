@@ -61,6 +61,7 @@ const (
 	testRuleName    = "shared-TCP-80-Internet"
 	testRuleName2   = "shared-TCP-4444-Internet"
 	testRuleName3   = "shared-TCP-8888-Internet"
+	testRuleName4   = "TCP-80-Internet"
 )
 
 // Test flipServiceInternalAnnotation
@@ -3486,15 +3487,16 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 func TestFindSecurityRule(t *testing.T) {
 	sg := network.SecurityRule{
-		Name: to.StringPtr(testRuleName),
+		Name: to.StringPtr(testRuleName4),
 		SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-			Protocol:                 network.SecurityRuleProtocolTCP,
-			SourcePortRange:          to.StringPtr("*"),
-			SourceAddressPrefix:      to.StringPtr("Internet"),
-			DestinationPortRange:     to.StringPtr("80"),
-			DestinationAddressPrefix: to.StringPtr(testIP1),
-			Access:                   network.SecurityRuleAccessAllow,
-			Direction:                network.SecurityRuleDirectionInbound,
+			Protocol:                   network.SecurityRuleProtocolTCP,
+			SourcePortRange:            to.StringPtr("*"),
+			SourceAddressPrefix:        to.StringPtr("Internet"),
+			DestinationPortRange:       to.StringPtr("80"),
+			DestinationAddressPrefix:   to.StringPtr(testIP1),
+			DestinationAddressPrefixes: to.StringSlicePtr([]string{}),
+			Access:                     network.SecurityRuleAccessAllow,
+			Direction:                  network.SecurityRuleDirectionInbound,
 		},
 	}
 	testCases := []struct {
@@ -3517,7 +3519,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when protocol doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol: network.SecurityRuleProtocolUDP,
 				},
@@ -3527,7 +3529,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when SourcePortRange doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:        network.SecurityRuleProtocolUDP,
 					SourcePortRange: to.StringPtr("1.2.3.4/32"),
@@ -3538,7 +3540,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when SourceAddressPrefix doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:            network.SecurityRuleProtocolUDP,
 					SourcePortRange:     to.StringPtr("*"),
@@ -3550,7 +3552,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when DestinationPortRange doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:             network.SecurityRuleProtocolUDP,
 					SourcePortRange:      to.StringPtr("*"),
@@ -3563,7 +3565,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when DestinationAddressPrefix doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:                 network.SecurityRuleProtocolUDP,
 					SourcePortRange:          to.StringPtr("*"),
@@ -3577,7 +3579,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when Access doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:                 network.SecurityRuleProtocolUDP,
 					SourcePortRange:          to.StringPtr("*"),
@@ -3593,7 +3595,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "false should be returned when Direction doesn't match",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:                 network.SecurityRuleProtocolUDP,
 					SourcePortRange:          to.StringPtr("*"),
@@ -3609,7 +3611,7 @@ func TestFindSecurityRule(t *testing.T) {
 		{
 			desc: "true should be returned when everything matches but protocol is in different case",
 			testRule: network.SecurityRule{
-				Name: to.StringPtr(testRuleName),
+				Name: to.StringPtr(testRuleName4),
 				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 					Protocol:                 network.SecurityRuleProtocol("TCP"),
 					SourcePortRange:          to.StringPtr("*"),
@@ -3618,6 +3620,23 @@ func TestFindSecurityRule(t *testing.T) {
 					DestinationAddressPrefix: to.StringPtr(testIP1),
 					Access:                   network.SecurityRuleAccessAllow,
 					Direction:                network.SecurityRuleDirectionInbound,
+				},
+			},
+			expected: true,
+		},
+		{
+			desc: "true should be returned when everything matches but DestinationAddressPrefixes is nil",
+			testRule: network.SecurityRule{
+				Name: to.StringPtr(testRuleName4),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolTCP,
+					SourcePortRange:            to.StringPtr("*"),
+					SourceAddressPrefix:        to.StringPtr("Internet"),
+					DestinationPortRange:       to.StringPtr("80"),
+					DestinationAddressPrefix:   to.StringPtr(testIP1),
+					DestinationAddressPrefixes: nil,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
 				},
 			},
 			expected: true,
