@@ -60,6 +60,7 @@ const (
 var _ = Describe("Service with annotation", func() {
 	basename := "service"
 	serviceName := "annotation-test"
+	initSuccess := false
 
 	var (
 		cs clientset.Interface
@@ -95,9 +96,29 @@ var _ = Describe("Service with annotation", func() {
 		utils.Logf("Creating Azure clients")
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
+
+		initSuccess = true
 	})
 
 	AfterEach(func() {
+		if !initSuccess {
+			// Get non-running Pods' describe info
+			pods := []v1.Pod{}
+			testPods, err := utils.GetPodList(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+			pods = append(pods, testPods.Items...)
+			ksPods, err := utils.GetPodList(cs, "kube-system")
+			Expect(err).NotTo(HaveOccurred())
+			pods = append(pods, ksPods.Items...)
+			for _, pod := range pods {
+				if pod.Status.Phase != v1.PodRunning {
+					output, err := utils.RunKubectl(ns.Name, "describe", "pod", pod.Name)
+					Expect(err).NotTo(HaveOccurred())
+					utils.Logf("Describe info of Pod %q:\n%s", pod.Name, output)
+				}
+			}
+		}
+
 		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -571,6 +592,7 @@ var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
 var _ = Describe("Multi-ports service", func() {
 	basename := "mpservice"
 	serviceName := "multiport-test"
+	initSuccess := false
 
 	var (
 		cs clientset.Interface
@@ -615,9 +637,28 @@ var _ = Describe("Multi-ports service", func() {
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
+		initSuccess = true
 	})
 
 	AfterEach(func() {
+		if !initSuccess {
+			// Get non-running Pods' describe info
+			pods := []v1.Pod{}
+			testPods, err := utils.GetPodList(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+			pods = append(pods, testPods.Items...)
+			ksPods, err := utils.GetPodList(cs, "kube-system")
+			Expect(err).NotTo(HaveOccurred())
+			pods = append(pods, ksPods.Items...)
+			for _, pod := range pods {
+				if pod.Status.Phase != v1.PodRunning {
+					output, err := utils.RunKubectl(ns.Name, "describe", "pod", pod.Name)
+					Expect(err).NotTo(HaveOccurred())
+					utils.Logf("Describe info of Pod %q:\n%s", pod.Name, output)
+				}
+			}
+		}
+
 		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
