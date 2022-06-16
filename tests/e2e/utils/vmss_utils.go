@@ -192,7 +192,10 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.Sku.Capacity)
 				}
 			}
-			vms, _ := ListVMSSVMs(tc, *vmss.Name)
+			vms, err := ListVMSSVMs(tc, *vmss.Name)
+			if err != nil {
+				return false, err
+			}
 			vmssVMs = append(vmssVMs, vms...)
 		}
 
@@ -257,10 +260,6 @@ func ListVMSSVMs(tc *AzureTestClient, vmssName string) ([]azcompute.VirtualMachi
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, fmt.Errorf("cannot find any VMSS VM in VMSS %s of resource group %s", vmssName, tc.GetResourceGroup())
-	}
-
 	return res, nil
 }
 
