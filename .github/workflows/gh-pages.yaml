@@ -28,7 +28,6 @@ jobs:
           npm install autoprefixer
           npm audit fix
           hugo --minify
-          cd ..
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
