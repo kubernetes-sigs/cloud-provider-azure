@@ -143,6 +143,11 @@ func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAd
 	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
 }
 
+// createPublicIPPrefixesClient generates virtual network client with the same baseclient as azure test client
+func (tc *AzureTestClient) createPublicIPPrefixesClient() *aznetwork.PublicIPPrefixesClient {
+	return &aznetwork.PublicIPPrefixesClient{BaseClient: tc.networkClient}
+}
+
 // createLoadBalancerClient generates loadbalancer client with the same baseclient as azure test client
 func (tc *AzureTestClient) createLoadBalancerClient() *aznetwork.LoadBalancersClient {
 	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}

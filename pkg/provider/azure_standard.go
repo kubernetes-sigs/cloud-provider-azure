@@ -322,7 +322,15 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 }
 
 func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service) string {
-	return fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
+	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
+	if prefixID, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && prefixID != "" {
+		prefixName, err := getLastSegment(prefixID, "/")
+		if err != nil {
+			return pipName
+		}
+		pipName = fmt.Sprintf("%s-%s", pipName, prefixName)
+	}
+	return pipName
 }
 
 func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
