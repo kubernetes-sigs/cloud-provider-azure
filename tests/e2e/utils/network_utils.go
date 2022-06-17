@@ -275,9 +275,9 @@ func WaitGetPIPByPrefix(
 			if prefix.PublicIPAddresses != nil {
 				numOfIPs = len(*prefix.PublicIPAddresses)
 			}
-			Logf("prefix[%s] not ready with error [%v] and ip [%s]", prefixName, err, numOfIPs)
+			Logf("prefix = [%s] not ready with error = [%v] and number of IP = [%s]", prefixName, err, numOfIPs)
 			if !untilPIPCreated {
-				return true, fmt.Errorf("get pip by prefix, err: [%v], num-ip: [%d]", err, numOfIPs)
+				return true, fmt.Errorf("get pip by prefix = [%s], err = [%v], number of IP = [%d]", prefixName, err, numOfIPs)
 			}
 			return false, nil
 		}
