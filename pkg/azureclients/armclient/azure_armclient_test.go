@@ -308,6 +308,15 @@ func TestGetResource(t *testing.T) {
 				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "data", apiVersion)
 			},
 		},
+		{
+			description:         "GetResourceWithExpandAPIVersionQuery-empty-expand",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01",
+			apiVersion:          "2018-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "", apiVersion)
+			},
+		},
 	}
 
 	for _, tc := range testcases {
