@@ -1075,16 +1075,6 @@ func TestReconcilePLSVisibility(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("reconcilePLSVisibility should return error if visibility is not * but auto-approval is not empty", func(t *testing.T) {
-		annotations := map[string]string{
-			consts.ServiceAnnotationPLSVisibility:   "sub1 sub2",
-			consts.ServiceAnnotationPLSAutoApproval: "sub1",
-		}
-		service.Annotations = annotations
-		_, err := reconcilePLSVisibility(&pls, &service)
-		assert.Error(t, err)
-	})
-
 	t.Run("reconcilePLSVisibility should return not changed if both Visibility and autoApproval are same", func(t *testing.T) {
 		annotations := map[string]string{
 			consts.ServiceAnnotationPLSVisibility: "sub1 sub2",
@@ -1098,7 +1088,7 @@ func TestReconcilePLSVisibility(t *testing.T) {
 		assert.False(t, changed)
 	})
 
-	t.Run("reconcilePLSVisibility should return not changed if both Visibility and autoApproval are same", func(t *testing.T) {
+	t.Run("reconcilePLSVisibility should return not changed if both Visibility and autoApproval are same with *", func(t *testing.T) {
 		annotations := map[string]string{
 			consts.ServiceAnnotationPLSVisibility:   "*",
 			consts.ServiceAnnotationPLSAutoApproval: "sub1 sub2",
