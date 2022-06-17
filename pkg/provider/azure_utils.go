@@ -300,3 +300,19 @@ func sameContentInSlices(s1 []string, s2 []string) bool {
 	}
 	return true
 }
+
+// SliceEqual reports whether two slices are equal: the same length and all
+// elements equal. If the lengths are different, Equal returns false.
+// Otherwise, the elements are compared in index order, and the
+// comparison stops at the first unequal pair.
+func SliceEqual(s1, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i, n := range s1 {
+		if n != s2[i] {
+			return false
+		}
+	}
+	return true
+}
