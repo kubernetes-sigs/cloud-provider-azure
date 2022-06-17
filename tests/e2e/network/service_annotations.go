@@ -474,8 +474,8 @@ var _ = Describe("Service with annotation", func() {
 			ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 			Expect(err).NotTo(HaveOccurred())
 
-			pip, err := utils.WaitGetPIPByPrefix(tc, prefix2Name, true)
-			Expect(err).NotTo(BeNil())
+			pip, err := utils.WaitGetPIPByPrefix(tc, prefix1Name, true)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix1.ID))
@@ -497,7 +497,7 @@ var _ = Describe("Service with annotation", func() {
 
 			// wait until ip created by prefix
 			pip, err := utils.WaitGetPIPByPrefix(tc, prefix2Name, true)
-			Expect(err).NotTo(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
