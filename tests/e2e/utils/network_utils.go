@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
@@ -255,6 +256,57 @@ func WaitGetPIPPrefix(
 		return prefix.IPPrefix != nil, nil
 	})
 	return prefix, err
+}
+
+// WaitGetPIPByPrefix retrieves the ONLY one PIP that created by specified prefix.
+// If untilPIPCreated is true, it will retry until 1 PIP is associated to the prefix.
+func WaitGetPIPByPrefix(
+	cli *AzureTestClient,
+	prefixName string,
+	untilPIPCreated bool,
+) (network.PublicIPAddress, error) {
+
+	var pip network.PublicIPAddress
+
+	err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		prefix, err := WaitGetPIPPrefix(cli, prefixName)
+		if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
+			numOfIPs := 0
+			if prefix.PublicIPAddresses != nil {
+				numOfIPs = len(*prefix.PublicIPAddresses)
+			}
+			Logf("prefix = [%s] not ready with error = [%v] and number of IP = [%s]", prefixName, err, numOfIPs)
+			if !untilPIPCreated {
+				return true, fmt.Errorf("get pip by prefix = [%s], err = [%v], number of IP = [%d]", prefixName, err, numOfIPs)
+			}
+			return false, nil
+		}
+
+		pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+		parts := strings.Split(pipID, "/")
+		pipName := parts[len(parts)-1]
+		pip, err = WaitGetPIP(cli, pipName)
+
+		return true, err
+	})
+
+	return pip, err
+}
+
+func DeletePIPPrefixWithRetry(cli *AzureTestClient, name string) error {
+	Logf("Deleting PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+
+	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		_, err := resourceClient.Delete(context.Background(), cli.GetResourceGroup(), name)
+		if err != nil {
+			Logf("error: %s, will retry soon", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
 }
 
 // DeletePIPWithRetry tries to delete a public ip resource
