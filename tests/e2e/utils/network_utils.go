@@ -209,9 +209,9 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipPa
 }
 
 func WaitCreatePIPPrefix(
-		cli *AzureTestClient,
-		name, rgName string,
-		parameter aznetwork.PublicIPPrefix,
+	cli *AzureTestClient,
+	name, rgName string,
+	parameter aznetwork.PublicIPPrefix,
 ) (aznetwork.PublicIPPrefix, error) {
 	Logf("Creating PublicIPPrefix named %s", name)
 
@@ -235,8 +235,8 @@ func WaitCreatePIPPrefix(
 }
 
 func WaitGetPIPPrefix(
-		cli *AzureTestClient,
-		name string,
+	cli *AzureTestClient,
+	name string,
 ) (aznetwork.PublicIPPrefix, error) {
 	Logf("Getting PublicIPPrefix named %s", name)
 
@@ -261,9 +261,9 @@ func WaitGetPIPPrefix(
 // WaitGetPIPByPrefix retrieves the ONLY one PIP that created by specified prefix.
 // If untilPIPCreated is true, it will retry until 1 PIP is associated to the prefix.
 func WaitGetPIPByPrefix(
-		cli *AzureTestClient,
-		prefixName string,
-		untilPIPCreated bool,
+	cli *AzureTestClient,
+	prefixName string,
+	untilPIPCreated bool,
 ) (network.PublicIPAddress, error) {
 
 	var pip network.PublicIPAddress
