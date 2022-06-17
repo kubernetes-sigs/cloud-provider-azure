@@ -17,8 +17,8 @@ This is the "external" or "out-of-tree" cloud provider for Azure. The "in-tree" 
 
 The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.11`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.11`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.24.1`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.24.1`
 
 ### Version matrix
 
@@ -27,16 +27,27 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
-| v1.24.x            | v1.24.0                | release-1.24          |
-| v1.23.x            | v1.23.11               | release-1.23          |
-| v1.22.x            | v1.1.14                | release-1.1           |
-| v1.21.x            | v1.0.18                | release-1.0           |
+| v1.24.x            | v1.24.1                | release-1.24          |
+| v1.23.x            | v1.23.13               | release-1.23          |
+| v1.22.x            | v1.1.16                | release-1.1           |
+| v1.21.x            | v1.0.20                | release-1.0           |
 | v1.20.x            | v0.7.21                | release-0.7           |
 | v1.19.x            | v0.6.0                 | release-0.6           |
 | v1.18.x            | v0.5.1                 | release-0.5           |
 | v1.17.x            | v0.4.1                 | N/A                   |
 | v1.16.x            | v0.3.0                 | N/A                   |
 | v1.15.x            | v0.2.0                 | N/A                   |
+
+### AKS version matrix
+
+Below table shows the cloud-controller-manager and cloud-node-manager versions supported in Azure Kubernetes Service(AKS).
+
+| AKS version        | cloud-controller-manager version | cloud-node-manager version |
+|--------------------|----------------------------------|----------------------------|
+| v1.24.x (preview)  | v1.24.1                          | v1.23.11                   |
+| v1.23.x            | v1.23.13              　　　　　　| v1.23.11                   |
+| v1.22.x            | v1.1.16                          | v1.1.14                    |
+| v1.21.x            | v1.0.20                          | v1.0.18                    |
 
 ## Build
 
