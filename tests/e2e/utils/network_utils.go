@@ -257,6 +257,22 @@ func WaitGetPIPPrefix(
 	return prefix, err
 }
 
+func DeletePIPPrefixWithRetry(cli *AzureTestClient, name string) error {
+	Logf("Deleting PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+
+	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		_, err := resourceClient.Delete(context.Background(), cli.GetResourceGroup(), name)
+		if err != nil {
+			Logf("error: %s, will retry soon", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
 // DeletePIPWithRetry tries to delete a public ip resource
 func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
 	if rgName == "" {

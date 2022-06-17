@@ -452,7 +452,10 @@ var _ = Describe("Service with annotation", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			// TODO: clean up PIPPrefix
+			{
+				Expect(utils.DeletePIPPrefixWithRetry(tc, prefix1Name)).NotTo(HaveOccurred())
+				Expect(utils.DeletePIPPrefixWithRetry(tc, prefix2Name)).NotTo(HaveOccurred())
+			}
 		}()
 
 		By("Creating a service referring to the prefix")
