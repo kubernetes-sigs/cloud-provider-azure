@@ -266,10 +266,12 @@ func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resou
 		autorest.AsGet(),
 		autorest.WithBaseURL(c.baseURI),
 		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithQueryParameters(map[string]interface{}{
-			"$expand": autorest.Encode("query", expand),
-		}),
 		withAPIVersion(apiVersion),
+	}
+	if expand != "" {
+		decorators = append(decorators, autorest.WithQueryParameters(map[string]interface{}{
+			"$expand": autorest.Encode("query", expand),
+		}))
 	}
 
 	preparer := autorest.CreatePreparer(decorators...)
