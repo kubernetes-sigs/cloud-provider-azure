@@ -451,11 +451,8 @@ func reconcilePLSVisibility(
 	service *v1.Service,
 ) (bool, error) {
 	changed := false
-	visibilitySubs, anyoneCanView := getPLSVisibility(service)
+	visibilitySubs, _ := getPLSVisibility(service)
 	autoApprovalSubs := getPLSAutoApproval(service)
-	if !anyoneCanView && len(autoApprovalSubs) > 0 {
-		return false, fmt.Errorf("reconcilePLSVisibility: autoApproval only takes effect when visibility is set to \"*\"")
-	}
 
 	if existingPLS.Visibility == nil || existingPLS.Visibility.Subscriptions == nil {
 		if len(visibilitySubs) != 0 {
