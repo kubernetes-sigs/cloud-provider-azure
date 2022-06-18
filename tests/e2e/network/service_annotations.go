@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -415,6 +416,108 @@ var _ = Describe("Service with annotation", func() {
 		By("Waiting for service IP to be updated")
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip2.IPAddress))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
+		if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
+			if !strings.EqualFold(skuEnv, string(network.PublicIPAddressSkuNameStandard)) {
+				Skip("pip-prefix-id only work with Standard Load Balancer")
+			}
+		}
+
+		const (
+			prefix1Name = "prefix1"
+			prefix2Name = "prefix2"
+		)
+
+		By("Creating two test PIPPrefix")
+		prefix1, err := utils.WaitCreatePIPPrefix(tc, prefix1Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix1Name))
+		Expect(err).NotTo(HaveOccurred())
+		prefix2, err := utils.WaitCreatePIPPrefix(tc, prefix2Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix2Name))
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			By("Cleaning up test service")
+			{
+				err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// TODO: clean up PIPPrefix
+		}()
+
+		By("Creating a service referring to the prefix")
+		{
+			annotation := map[string]string{
+				consts.ServiceAnnotationPIPPrefixID: to.String(prefix1.ID),
+			}
+			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("Waiting for the service to expose")
+		{
+			ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			var pip network.PublicIPAddress
+			// wait until ip created by prefix
+			for i := 0; i < 30; i++ {
+				time.Sleep(10 * time.Second)
+				prefix, err := utils.WaitGetPIPPrefix(tc, prefix1Name)
+				if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
+					continue
+				}
+
+				pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+				parts := strings.Split(pipID, "/")
+				pipName := parts[len(parts)-1]
+				pip, err = utils.WaitGetPIP(tc, pipName)
+				Expect(err).NotTo(HaveOccurred())
+
+				break
+			}
+			Expect(pip.IPAddress).NotTo(BeNil())
+			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix1.ID))
+			Expect(ip).To(Equal(to.String(pip.IPAddress)))
+		}
+
+		By("Updating the service to refer to the second prefix")
+		{
+			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			service.Annotations[consts.ServiceAnnotationPIPPrefixID] = to.String(prefix2.ID)
+			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("Waiting for service IP to be updated")
+		{
+			var pip network.PublicIPAddress
+
+			// wait until ip created by prefix
+			for i := 0; i < 30; i++ {
+				time.Sleep(10 * time.Second)
+				prefix, err := utils.WaitGetPIPPrefix(tc, prefix2Name)
+				if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
+					continue
+				}
+
+				pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+				parts := strings.Split(pipID, "/")
+				pipName := parts[len(parts)-1]
+				pip, err = utils.WaitGetPIP(tc, pipName)
+				Expect(err).NotTo(HaveOccurred())
+
+				break
+			}
+			Expect(pip.IPAddress).NotTo(BeNil())
+			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
+
+			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
+			Expect(err).NotTo(HaveOccurred())
+		}
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe' and port specific configs", func() {
