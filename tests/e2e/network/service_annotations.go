@@ -380,25 +380,34 @@ var _ = Describe("Service with annotation", func() {
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-name`", func() {
 		By("Creating two test pips")
-		pip1, err := utils.WaitCreatePIP(tc, "pip1", tc.GetResourceGroup(), defaultPublicIPAddress("pip1"))
+		pipName1 := "pip1"
+		pip1, err := utils.WaitCreatePIP(tc, pipName1, tc.GetResourceGroup(), defaultPublicIPAddress(pipName1))
+		defer func() {
+			By("Cleaning up test PIP")
+			err := utils.DeletePIPWithRetry(tc, pipName1, tc.GetResourceGroup())
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
-		pip2, err := utils.WaitCreatePIP(tc, "pip2", tc.GetResourceGroup(), defaultPublicIPAddress("pip2"))
+		pipName2 := "pip2"
+		pip2, err := utils.WaitCreatePIP(tc, pipName2, tc.GetResourceGroup(), defaultPublicIPAddress(pipName2))
+		defer func() {
+			By("Cleaning up test PIP")
+			err := utils.DeletePIPWithRetry(tc, pipName2, tc.GetResourceGroup())
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
+		By("Creating a service referring to the first pip")
+		annotation := map[string]string{
+			consts.ServiceAnnotationPIPName: pipName1,
+		}
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		defer func() {
 			By("Cleaning up test service")
 			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
-			By("Cleaning up test PIPs")
-
 		}()
-
-		By("Creating a service referring to the first pip")
-		annotation := map[string]string{
-			consts.ServiceAnnotationPIPName: "pip1",
-		}
-		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
@@ -409,7 +418,7 @@ var _ = Describe("Service with annotation", func() {
 		By("Updating the service to refer to the second service")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		service.Annotations[consts.ServiceAnnotationPIPName] = "pip2"
+		service.Annotations[consts.ServiceAnnotationPIPName] = pipName2
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
