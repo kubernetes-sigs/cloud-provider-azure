@@ -47,7 +47,7 @@ import (
 // if so, what its status is.
 func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	// Since public IP is not a part of the load balancer on Azure,
-	// there is a chance that we could orphan public IP resources while we delete the load blanacer (kubernetes/kubernetes#80571).
+	// there is a chance that we could orphan public IP resources while we delete the load balancer (kubernetes/kubernetes#80571).
 	// We need to make sure the existence of the load balancer depends on the load balancer resource and public IP resource on Azure.
 	existsPip := func() bool {
 		pipName, _, err := az.determinePublicIPName(clusterName, service, nil)
@@ -895,9 +895,12 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
 	var shouldPIPExisted bool
+
 	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
-		shouldPIPExisted = true
-		return name, shouldPIPExisted, nil
+		return name, true, nil
+	}
+	if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && ipPrefix != "" {
+		return az.getPublicIPName(clusterName, service), false, nil
 	}
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
@@ -1077,6 +1080,9 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		if az.useStandardLoadBalancer() {
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
+			}
+			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && pipPrefixName != "" {
+				pip.PublicIPPrefix = &network.SubResource{ID: to.StringPtr(pipPrefixName)}
 			}
 
 			// skip adding zone info since edge zones doesn't support multiple availability zones.
@@ -2915,7 +2921,8 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 		lb = &loadBalancer
 	}
 
-	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, serviceIPTagRequest, shouldPIPExisted)
+	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(
+		clusterName, service, pips, wantLb, isInternal, desiredPipName, serviceName, serviceIPTagRequest, shouldPIPExisted)
 	if err != nil {
 		return nil, err
 	}
@@ -2958,7 +2965,17 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 	return nil, nil
 }
 
-func (az *Cloud) getPublicIPUpdates(clusterName string, service *v1.Service, pips []network.PublicIPAddress, wantLb bool, isInternal bool, desiredPipName string, serviceName string, serviceIPTagRequest serviceIPTagRequest, serviceAnnotationRequestsNamedPublicIP bool) (bool, []*network.PublicIPAddress, bool, []*network.PublicIPAddress, error) {
+func (az *Cloud) getPublicIPUpdates(
+	clusterName string,
+	service *v1.Service,
+	pips []network.PublicIPAddress,
+	wantLb bool,
+	isInternal bool,
+	desiredPipName string,
+	serviceName string,
+	serviceIPTagRequest serviceIPTagRequest,
+	serviceAnnotationRequestsNamedPublicIP bool,
+) (bool, []*network.PublicIPAddress, bool, []*network.PublicIPAddress, error) {
 	var (
 		err                       error
 		discoveredDesiredPublicIP bool

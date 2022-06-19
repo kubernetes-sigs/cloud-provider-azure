@@ -207,6 +207,56 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipPa
 	return pip, err
 }
 
+func WaitCreatePIPPrefix(
+	cli *AzureTestClient,
+	name, rgName string,
+	parameter aznetwork.PublicIPPrefix,
+) (aznetwork.PublicIPPrefix, error) {
+	Logf("Creating PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+	_, err := resourceClient.CreateOrUpdate(context.Background(), rgName, name, parameter)
+	var prefix aznetwork.PublicIPPrefix
+	if err != nil {
+		return prefix, err
+	}
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		prefix, err = resourceClient.Get(context.Background(), rgName, name, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return prefix.IPPrefix != nil, nil
+	})
+	return prefix, err
+}
+
+func WaitGetPIPPrefix(
+	cli *AzureTestClient,
+	name string,
+) (aznetwork.PublicIPPrefix, error) {
+	Logf("Getting PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+	var (
+		prefix aznetwork.PublicIPPrefix
+		err    error
+	)
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		prefix, err = resourceClient.Get(context.Background(), cli.GetResourceGroup(), name, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return prefix.IPPrefix != nil, nil
+	})
+	return prefix, err
+}
+
 // DeletePIPWithRetry tries to delete a public ip resource
 func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
 	if rgName == "" {
