@@ -1,4 +1,29 @@
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.0.20</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/08/v1.0.20/</link><pubDate>Wed, 08 Jun 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/08/v1.0.20/</guid><description>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud Provider Azure – Release Notes</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/</link><description>Recent content in Release Notes on Cloud Provider Azure</description><generator>Hugo -- gohugo.io</generator><atom:link href="https://kubernetes-sigs.github.io/cloud-provider-azure/blog/index.xml" rel="self" type="application/rss+xml"/><item><title>Blog: v1.1.17</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/19/v1.1.17/</link><pubDate>Sun, 19 Jun 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/19/v1.1.17/</guid><description>
+&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
+&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
+&lt;ul>
+&lt;li>
+&lt;p>A new annotation is added in order to specify the PublicIP Prefix for creating IP of LB&lt;/p>
+&lt;p>service.beta.kubernetes.io/azure-pip-prefix-id: &amp;ldquo;/subscriptions/8ecadfc9-ffff-4ea4-ffff-0d9f87e4d7c8/resourceGroups/lodrem/providers/Microsoft.Network/publicIPPrefixes/bb&amp;rdquo; (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1857">#1857&lt;/a>, &lt;a href="https://github.com/lodrem">@lodrem&lt;/a>)&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Fix unexpected managed PLS deletion issue when ILB subnet is specified. (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1833">#1833&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Fix: avoid unnessary NSG updating on service reconciling (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1854">#1854&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>Remove redundant restriction on pls autoApproval and visibility.
+User can specify a list of subscriptions for visibility (e.g. &amp;ldquo;sub1 sub2&amp;rdquo;) and a subset of this list for autoApproval (e.g. &amp;ldquo;sub1&amp;rdquo;). (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1869">#1869&lt;/a>, &lt;a href="https://github.com/k8s-infra-cherrypick-robot">@k8s-infra-cherrypick-robot&lt;/a>)&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;h2 id="dependencies">Dependencies&lt;/h2>
+&lt;h3 id="added">Added&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="changed">Changed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
+&lt;h3 id="removed">Removed&lt;/h3>
+&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.0.20</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/08/v1.0.20/</link><pubDate>Wed, 08 Jun 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/06/08/v1.0.20/</guid><description>
 &lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
 &lt;h3 id="feature">Feature&lt;/h3>
 &lt;ul>
@@ -1798,27 +1823,6 @@ Cherry-pick #841 to solve &amp;ldquo;not equal 0&amp;rdquo; issue&lt;/p>
 &lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
 &lt;ul>
 &lt;li>Fix: return all LBs in the resource group in ListManagedLBs when deleting the LB, so the LB deleting will not be skipped (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/973">#973&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h2 id="dependencies">Dependencies&lt;/h2>
-&lt;h3 id="added">Added&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="changed">Changed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p>
-&lt;h3 id="removed">Removed&lt;/h3>
-&lt;p>&lt;em>Nothing has changed.&lt;/em>&lt;/p></description></item><item><title>Blog: v1.1.5</title><link>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.5/</link><pubDate>Mon, 10 Jan 2022 00:00:00 +0000</pubDate><guid>https://kubernetes-sigs.github.io/cloud-provider-azure/blog/2022/01/10/v1.1.5/</guid><description>
-&lt;h1 id="changelog-since-v114">Changelog since v1.1.4&lt;/h1>
-&lt;h2 id="changes-by-kind">Changes by Kind&lt;/h2>
-&lt;h3 id="bug-or-regression">Bug or Regression&lt;/h3>
-&lt;ul>
-&lt;li>Fix: do not update tags on load balancer, security group and route table if both tags and tagsMap are empty (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/1007">#1007&lt;/a>, &lt;a href="https://github.com/nilo19">@nilo19&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="other-cleanup-or-flake">Other (Cleanup or Flake)&lt;/h3>
-&lt;ul>
-&lt;li>Chore: reduce node LIST APIs in cloud-node-manager (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/998">#998&lt;/a>, &lt;a href="https://github.com/feiskyer">@feiskyer&lt;/a>)&lt;/li>
-&lt;/ul>
-&lt;h3 id="uncategorized">Uncategorized&lt;/h3>
-&lt;ul>
-&lt;li>Null (&lt;a href="https://github.com/kubernetes-sigs/cloud-provider-azure/pull/974">#974&lt;/a>, &lt;a href="https://github.com/mainred">@mainred&lt;/a>)&lt;/li>
 &lt;/ul>
 &lt;h2 id="dependencies">Dependencies&lt;/h2>
 &lt;h3 id="added">Added&lt;/h3>
