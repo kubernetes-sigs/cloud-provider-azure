@@ -448,7 +448,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -465,7 +465,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -527,7 +527,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	nsg := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(nsg.ID), nsg, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -542,7 +542,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	rtClient := getTestSecurityGroupClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "rg", "nsg1")
@@ -597,7 +597,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	nsg := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(nsg.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(nsg.ID)).Return(throttleErr).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
 	rerr := nsgClient.Delete(context.TODO(), "rg", "nsg1")

@@ -463,7 +463,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	mcClient := getTestManagedClusterClient(armClient)
@@ -480,7 +480,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	mcClient := getTestManagedClusterClient(armClient)
@@ -542,7 +542,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	mc := getTestManagedCluster("cluster")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(mc.ID), mc, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	mcClient := getTestManagedClusterClient(armClient)
@@ -557,7 +557,7 @@ func TestDelete(t *testing.T) {
 
 	mc := getTestManagedCluster("cluster")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(mc.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(mc.ID)).Return(nil).Times(1)
 
 	mcClient := getTestManagedClusterClient(armClient)
 	rerr := mcClient.Delete(context.TODO(), "rg", "cluster")
@@ -612,7 +612,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	mc := getTestManagedCluster("cluster")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(mc.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(mc.ID)).Return(throttleErr).Times(1)
 
 	mcClient := getTestManagedClusterClient(armClient)
 	rerr := mcClient.Delete(context.TODO(), "rg", "cluster")

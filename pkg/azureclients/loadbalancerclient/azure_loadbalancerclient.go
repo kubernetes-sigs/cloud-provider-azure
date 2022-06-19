@@ -255,15 +255,12 @@ func (c *Client) createOrUpdateLB(ctx context.Context, resourceGroupName string,
 		lbResourceType,
 		loadBalancerName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if etag != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.put.request", resourceID, rerr.Error())
@@ -331,7 +328,7 @@ func (c *Client) deleteLB(ctx context.Context, resourceGroupName string, loadBal
 		loadBalancerName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.LoadBalancerListResult, err error) {
@@ -465,15 +462,12 @@ func (c *Client) createOrUpdateLBBackendPool(ctx context.Context, resourceGroupN
 		"backendAddressPools",
 		backendPoolName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if etag != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.put.request", resourceID, rerr.Error())
@@ -531,7 +525,7 @@ func (c *Client) deleteLBBackendPool(ctx context.Context, resourceGroupName, loa
 		"backendAddressPools",
 		backendPoolName,
 	)
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) createOrUpdateBackendPoolResponder(resp *http.Response) (*network.BackendAddressPool, *retry.Error) {

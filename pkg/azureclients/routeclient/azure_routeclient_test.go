@@ -95,7 +95,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -156,7 +156,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -175,7 +175,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -189,7 +189,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")
@@ -242,7 +242,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")

@@ -222,7 +222,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	rtClient := getTestRouteTableClient(armClient)
@@ -283,7 +283,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	rt1 := getTestRouteTable("rt1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routetableClient := getTestRouteTableClient(armClient)
@@ -302,7 +302,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(rt1.ID), rt1, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routetableClient := getTestRouteTableClient(armClient)
