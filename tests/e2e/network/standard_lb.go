@@ -110,7 +110,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		if !utils.IsVMSSNotFound(err) {
 			allVMs := []azcompute.VirtualMachineScaleSetVM{}
 			for _, vmss := range vmsses {
-				if strings.Contains(*vmss.ID, "control-plane") {
+				if strings.Contains(*vmss.ID, "control-plane") || strings.Contains(*vmss.ID, "master") {
 					continue
 				}
 				vms, err := utils.ListVMSSVMs(tc, *vmss.Name)
@@ -134,15 +134,17 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			vms, err := utils.ListVMs(tc)
 			Expect(err).NotTo(HaveOccurred())
 			for _, vm := range *vms {
-				if strings.Contains(*vm.ID, "control-plane") {
+				if strings.Contains(*vm.ID, "control-plane") || strings.Contains(*vm.ID, "master") {
 					continue
 				}
-				found := false
 				vmID := *vm.ID
 				vmName := vmID[strings.LastIndex(vmID, "/")+1:]
 				utils.Logf("Checking VM %q", vmName)
+
+				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
+				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, vmName) {
+					if strings.Contains(ipcID, *nic) {
 						found = true
 						break
 					}

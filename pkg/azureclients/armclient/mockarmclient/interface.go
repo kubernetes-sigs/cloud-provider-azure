@@ -117,6 +117,21 @@ func (mr *MockInterfaceMockRecorder) GetResource(ctx, resourceID interface{}, de
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResource", reflect.TypeOf((*MockInterface)(nil).GetResource), varargs...)
 }
 
+// GetResourceWithExpandAPIVersionQuery mocks base method.
+func (m *MockInterface) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resourceID, expand, apiVersion string) (*http.Response, *retry.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResourceWithExpandAPIVersionQuery", ctx, resourceID, expand, apiVersion)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(*retry.Error)
+	return ret0, ret1
+}
+
+// GetResourceWithExpandAPIVersionQuery indicates an expected call of GetResourceWithExpandAPIVersionQuery.
+func (mr *MockInterfaceMockRecorder) GetResourceWithExpandAPIVersionQuery(ctx, resourceID, expand, apiVersion interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceWithExpandAPIVersionQuery", reflect.TypeOf((*MockInterface)(nil).GetResourceWithExpandAPIVersionQuery), ctx, resourceID, expand, apiVersion)
+}
+
 // GetResourceWithExpandQuery mocks base method.
 func (m *MockInterface) GetResourceWithExpandQuery(ctx context.Context, resourceID, expand string) (*http.Response, *retry.Error) {
 	m.ctrl.T.Helper()
