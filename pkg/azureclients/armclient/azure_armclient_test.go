@@ -263,61 +263,85 @@ func TestNormalizeAzureRegion(t *testing.T) {
 	}
 }
 
-func TestGetResourceWithExpandQuery(t *testing.T) {
-	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01"
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, expectedURIResource, r.URL.String())
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{data: testPIP}"))
-		count++
-	}))
-
-	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
-	armClient := New(nil, azConfig, server.URL, "2019-01-01")
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	ctx := context.Background()
-	response, rerr := armClient.GetResourceWithExpandQuery(ctx, testResourceID, "data")
-	byteResponseBody, _ := ioutil.ReadAll(response.Body)
-	stringResponseBody := string(byteResponseBody)
-	assert.Nil(t, rerr)
-	assert.Equal(t, "{data: testPIP}", stringResponseBody)
-	assert.Equal(t, 1, count)
-}
-
 func TestGetResource(t *testing.T) {
-	expectedURIResource := "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2"
-
-	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, expectedURIResource, r.URL.String())
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{data: testPIP}"))
-		count++
-	}))
-
-	azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
-	armClient := New(nil, azConfig, server.URL, "2019-01-01")
-	armClient.client.RetryDuration = time.Millisecond * 1
-
-	params := map[string]interface{}{
-		"param1": "value1",
-		"param2": "value2",
+	testcases := []struct {
+		description         string
+		expectedURIResource string
+		apiVersion          string
+		expectedAPIVersion  string
+		params              map[string]interface{}
+		getResource         func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error)
+	}{
+		{
+			description:         "TestGetResource",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2",
+			apiVersion:          "2019-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			params: map[string]interface{}{
+				"param1": "value1",
+				"param2": "value2",
+			},
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				decorators := []autorest.PrepareDecorator{
+					autorest.WithQueryParameters(params),
+				}
+				return armClient.GetResource(ctx, testResourceID, decorators...)
+			},
+		},
+		{
+			description:         "GetResourceWithExpandQuery",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01",
+			apiVersion:          "2019-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				return armClient.GetResourceWithExpandQuery(ctx, testResourceID, "data")
+			},
+		},
+		{
+			description:         "GetResourceWithExpandAPIVersionQuery",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01",
+			apiVersion:          "2018-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "data", apiVersion)
+			},
+		},
+		{
+			description:         "GetResourceWithExpandAPIVersionQuery-empty-expand",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01",
+			apiVersion:          "2018-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "", apiVersion)
+			},
+		},
 	}
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithQueryParameters(params),
-	}
 
-	ctx := context.Background()
-	response, rerr := armClient.GetResource(ctx, testResourceID, decorators...)
-	byteResponseBody, _ := ioutil.ReadAll(response.Body)
-	stringResponseBody := string(byteResponseBody)
-	assert.Nil(t, rerr)
-	assert.Equal(t, "{data: testPIP}", stringResponseBody)
-	assert.Equal(t, 1, count)
+	for _, tc := range testcases {
+		t.Run(tc.description, func(t *testing.T) {
+			count := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "GET", r.Method)
+				assert.Equal(t, tc.expectedURIResource, r.URL.String())
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("{data: testPIP}"))
+				count++
+			}))
+
+			azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 1}, UserAgent: "test", Location: "eastus"}
+			armClient := New(nil, azConfig, server.URL, tc.apiVersion)
+			armClient.client.RetryDuration = time.Millisecond * 1
+
+			ctx := context.Background()
+			response, rerr := tc.getResource(ctx, armClient, tc.expectedAPIVersion, tc.params)
+			assert.Nil(t, rerr)
+			assert.NotNil(t, response)
+			byteResponseBody, _ := ioutil.ReadAll(response.Body)
+			stringResponseBody := string(byteResponseBody)
+			assert.Equal(t, "{data: testPIP}", stringResponseBody)
+			assert.Equal(t, 1, count)
+		})
+	}
 }
 
 func TestPutResource(t *testing.T) {

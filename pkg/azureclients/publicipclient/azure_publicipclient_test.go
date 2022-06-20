@@ -225,10 +225,11 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testVMSSResourceID, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), testVMSSResourceID, "", AzureStackCloudAPIVersion).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
+	pipClient.computeAPIVersion = AzureStackCloudAPIVersion
 	expected := network.PublicIPAddress{
 		Response: autorest.Response{Response: response},
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
@@ -284,10 +285,11 @@ func TestGetVMSSPublicIPAddressNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testVMSSResourceID, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), testVMSSResourceID, "", AzureStackCloudAPIVersion).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
+	pipClient.computeAPIVersion = AzureStackCloudAPIVersion
 	expected := network.PublicIPAddress{Response: autorest.Response{}}
 	result, rerr := pipClient.GetVirtualMachineScaleSetPublicIPAddress(context.TODO(), "rg", "vmss", "0", "nic", "ipConfig", "pip1", "")
 	assert.Equal(t, expected, result)
@@ -304,10 +306,11 @@ func TestGetVMSSPublicIPAddressInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testVMSSResourceID, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), testVMSSResourceID, "", AzureStackCloudAPIVersion).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
+	pipClient.computeAPIVersion = AzureStackCloudAPIVersion
 	expected := network.PublicIPAddress{Response: autorest.Response{}}
 	result, rerr := pipClient.GetVirtualMachineScaleSetPublicIPAddress(context.TODO(), "rg", "vmss", "0", "nic", "ipConfig", "pip1", "")
 
@@ -331,10 +334,11 @@ func TestGetVMSSPublicIPAddressThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testVMSSResourceID, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), testVMSSResourceID, "", AzureStackCloudAPIVersion).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
+	pipClient.computeAPIVersion = AzureStackCloudAPIVersion
 	result, rerr := pipClient.GetVirtualMachineScaleSetPublicIPAddress(context.TODO(), "rg", "vmss", "0", "nic", "ipConfig", "pip1", "")
 	assert.Empty(t, result)
 	assert.Equal(t, throttleErr, rerr)
