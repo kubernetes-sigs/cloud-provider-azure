@@ -805,7 +805,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	}
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-	loadBalancerIP := service.Spec.LoadBalancerIP
+	loadBalancerIP := service.Annotations[consts.ServiceAnnotationLoadBalancerIP]
 
 	// Assume that the service without loadBalancerIP set is a primary service.
 	// If a secondary service doesn't set the loadBalancerIP, it is not allowed to share the IP.
@@ -863,14 +863,14 @@ func flipServiceInternalAnnotation(service *v1.Service) *v1.Service {
 func updateServiceLoadBalancerIP(service *v1.Service, serviceIP string) *v1.Service {
 	copyService := service.DeepCopy()
 	if len(serviceIP) > 0 && copyService != nil {
-		copyService.Spec.LoadBalancerIP = serviceIP
+		copyService.Annotations[consts.ServiceAnnotationLoadBalancerIP] = serviceIP
 	}
 	return copyService
 }
 
 func (az *Cloud) findServiceIPAddress(ctx context.Context, clusterName string, service *v1.Service, isInternalLb bool) (string, error) {
-	if len(service.Spec.LoadBalancerIP) > 0 {
-		return service.Spec.LoadBalancerIP, nil
+	if len(service.Annotations[consts.ServiceAnnotationLoadBalancerIP]) > 0 {
+		return service.Annotations[consts.ServiceAnnotationLoadBalancerIP], nil
 	}
 
 	if len(service.Status.LoadBalancer.Ingress) > 0 && len(service.Status.LoadBalancer.Ingress[0].IP) > 0 {
@@ -1257,7 +1257,7 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 	if !strings.EqualFold(to.String(config.Name), lbFrontendIPConfigName) {
 		return false, nil
 	}
-	loadBalancerIP := service.Spec.LoadBalancerIP
+	loadBalancerIP := service.Annotations[consts.ServiceAnnotationLoadBalancerIP]
 	isInternal := requiresInternalLoadBalancer(service)
 	if isInternal {
 		// Judge subnet
@@ -1779,7 +1779,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 					configProperties.PrivateIPAddressVersion = network.IPVersionIPv6
 				}
 
-				loadBalancerIP := service.Spec.LoadBalancerIP
+				loadBalancerIP := service.Annotations[consts.ServiceAnnotationLoadBalancerIP]
 				if loadBalancerIP != "" {
 					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = &loadBalancerIP
@@ -3202,7 +3202,7 @@ func getServiceTags(service *v1.Service) []string {
 // The pip is user-created if and only if there is no service tags.
 // The service owns the pip if:
 // 1. The serviceName is included in the service tags of a system-created pip.
-// 2. The service.Spec.LoadBalancerIP matches the IP address of a user-created pip.
+// 2. The service.Annotations[consts.ServiceAnnotationLoadBalancerIP] matches the IP address of a user-created pip.
 func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clusterName string) (bool, bool) {
 	if service == nil || pip == nil {
 		klog.Warningf("serviceOwnsPublicIP: nil service or public IP")
@@ -3222,7 +3222,7 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 
 		// if there is no service tag on the pip, it is user-created pip
 		if serviceTag == "" {
-			return strings.EqualFold(to.String(pip.IPAddress), service.Spec.LoadBalancerIP), true
+			return strings.EqualFold(to.String(pip.IPAddress), service.Annotations[consts.ServiceAnnotationLoadBalancerIP]), true
 		}
 
 		// if there is service tag on the pip, it is system-created pip
@@ -3240,7 +3240,7 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 		} else {
 			// if the service is not included in te tags of the system-created pip, check the ip address
 			// this could happen for secondary services
-			return strings.EqualFold(to.String(pip.IPAddress), service.Spec.LoadBalancerIP), false
+			return strings.EqualFold(to.String(pip.IPAddress), service.Annotations[consts.ServiceAnnotationLoadBalancerIP]), false
 		}
 	}
 

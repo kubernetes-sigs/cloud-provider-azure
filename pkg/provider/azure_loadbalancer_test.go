@@ -687,7 +687,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		t.Run(c.desc, func(t *testing.T) {
 			service := getTestService(c.serviceName, v1.ProtocolTCP, nil, false, 80)
 			if c.serviceLBIP != "" {
-				service.Spec.LoadBalancerIP = c.serviceLBIP
+				service.Annotations[consts.ServiceAnnotationLoadBalancerIP] = c.serviceLBIP
 			}
 			owns, isUserAssignedPIP := serviceOwnsPublicIP(&service, c.pip, c.clusterName)
 			assert.Equal(t, c.expectedOwns, owns, "TestCase[%d]: %s", i, c.desc)
@@ -1542,8 +1542,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 		config                 network.FrontendIPConfiguration
 		service                v1.Service
 		lbFrontendIPConfigName string
-		annotations            string
-		loadBalancerIP         string
+		annotations            map[string]string
 		existingSubnet         network.Subnet
 		existingPIPs           []network.PublicIPAddress
 		expectedFlag           bool
@@ -1568,7 +1567,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			expectedError:          false,
 		},
 		{
-			desc: "isFrontendIPChanged shall return false if the service is internal, no loadBalancerIP is given, " +
+			desc: "isFrontendIPChanged shall return false if the service is internal, no annotation service.beta.kubernetes.io/azure-load-balancer-ip is given, " +
 				"subnetName == nil and config.PrivateIPAllocationMethod == network.Static",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("atest1-name"),
@@ -1581,7 +1580,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			desc: "isFrontendIPChanged shall return false if the service is internal, no loadBalancerIP is given, " +
+			desc: "isFrontendIPChanged shall return false if the service is internal, no annotation service.beta.kubernetes.io/azure-load-balancer-ip is given, " +
 				"subnetName == nil and config.PrivateIPAllocationMethod != network.Static",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
@@ -1605,14 +1604,14 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getInternalTestService("test1", 80),
-			annotations:            "testSubnet",
+			annotations:            map[string]string{consts.ServiceAnnotationLoadBalancerInternalSubnet:"testSubnet"},
 			existingSubnet:         network.Subnet{ID: to.StringPtr("testSubnet1")},
 			expectedFlag:           true,
 			expectedError:          false,
 		},
 		{
 			desc: "isFrontendIPChanged shall return true if the service is internal, subnet == nil, " +
-				"loadBalancerIP != '' and config.PrivateIPAllocationMethod != 'static'",
+				"annotations[service.beta.kubernetes.io/azure-load-balancer-ip] != '' and config.PrivateIPAllocationMethod != 'static'",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
@@ -1621,13 +1620,13 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getInternalTestService("test1", 80),
-			loadBalancerIP:         "1.1.1.1",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.1.1.1"},
 			expectedFlag:           true,
 			expectedError:          false,
 		},
 		{
 			desc: "isFrontendIPChanged shall return true if the service is internal, subnet == nil and " +
-				"loadBalancerIP != config.PrivateIPAddress",
+				"annotations[service.beta.kubernetes.io/azure-load-balancer-ip] != config.PrivateIPAddress",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
@@ -1637,7 +1636,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getInternalTestService("test1", 80),
-			loadBalancerIP:         "1.1.1.1",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.1.1.1"},
 			expectedFlag:           true,
 			expectedError:          false,
 		},
@@ -1653,7 +1652,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getTestService("test1", v1.ProtocolTCP, nil, false, 80),
-			loadBalancerIP:         "1.1.1.1",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.1.1.1"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pipName"),
@@ -1677,7 +1676,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getTestService("test1", v1.ProtocolTCP, nil, false, 80),
-			loadBalancerIP:         "1.1.1.1",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.1.1.1"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pipName"),
@@ -1704,7 +1703,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getTestService("test1", v1.ProtocolTCP, nil, false, 80),
-			loadBalancerIP:         "1.1.1.1",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.1.1.1"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pipName"),
@@ -1739,8 +1738,8 @@ func TestIsFrontendIPChanged(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		test.service.Spec.LoadBalancerIP = test.loadBalancerIP
-		test.service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations
+		test.service.Annotations[consts.ServiceAnnotationLoadBalancerIP] = test.annotations[consts.ServiceAnnotationLoadBalancerIP]
+		test.service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]
 		flag, rerr := az.isFrontendIPChanged("testCluster", test.config,
 			&test.service, test.lbFrontendIPConfigName, &test.existingPIPs)
 		if rerr != nil {
@@ -1757,28 +1756,28 @@ func TestDeterminePublicIPName(t *testing.T) {
 
 	testCases := []struct {
 		desc           string
-		loadBalancerIP string
+		annotations map[string]string
 		existingPIPs   []network.PublicIPAddress
 		expectedIP     string
 		expectedError  bool
 	}{
 		{
 			desc: "determinePublicIpName shall get public IP from az.getPublicIPName if no specific " +
-				"loadBalancerIP is given",
+				"annotation service.beta.kubernetes.io/azure-load-balancer-ip is given",
 			expectedIP:    "testCluster-atest1",
 			expectedError: false,
 		},
 		{
-			desc:           "determinePublicIpName shall report error if loadBalancerIP is not in the resource group",
-			loadBalancerIP: "1.2.3.4",
+			desc:           "determinePublicIpName shall report error if annotation service.beta.kubernetes.io/azure-load-balancer-ip is not in the resource group",
+			annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.2.3.4"},
 			expectedIP:     "",
 			expectedError:  true,
 		},
 		{
-			desc: "determinePublicIpName shall return loadBalancerIP in service.Spec if it's in the " +
+			desc: "determinePublicIpName shall return annotation service.beta.kubernetes.io/azure-load-balancer-ip in service.Annotations if it's in the " +
 				"resource group",
-			loadBalancerIP: "1.2.3.4",
-			existingPIPs: []network.PublicIPAddress{
+				annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIP: "1.2.3.4"},
+				existingPIPs: []network.PublicIPAddress{
 				{
 					Name: to.StringPtr("pipName"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
@@ -1794,7 +1793,7 @@ func TestDeterminePublicIPName(t *testing.T) {
 	for i, test := range testCases {
 		az := GetTestCloud(ctrl)
 		service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
-		service.Spec.LoadBalancerIP = test.loadBalancerIP
+		service.Annotations[consts.ServiceAnnotationLoadBalancerIP] = test.annotations[consts.ServiceAnnotationLoadBalancerIP]
 
 		mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(1)
@@ -2716,7 +2715,7 @@ func TestReconcileLoadBalancer(t *testing.T) {
 		clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 3, 3)
 		setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 1)
 
-		test.service.Spec.LoadBalancerIP = "1.2.3.4"
+		test.service.Annotations[consts.ServiceAnnotationLoadBalancerIP] = "1.2.3.4"
 
 		err := az.PublicIPAddressesClient.CreateOrUpdate(context.TODO(), "rg", "pipName", network.PublicIPAddress{
 			Name: to.StringPtr("pipName"),
@@ -4173,7 +4172,7 @@ func TestUnbindServiceFromPIP(t *testing.T) {
 	}
 	serviceName := "ns2/svc2"
 	service := getTestService(serviceName, v1.ProtocolTCP, nil, false, 80)
-	service.Spec.LoadBalancerIP = "1.2.3.4"
+	service.Annotations[consts.ServiceAnnotationLoadBalancerIP] = "1.2.3.4"
 	expectedTags := []map[string]*string{
 		nil,
 		{consts.ServiceTagKey: to.StringPtr("")},

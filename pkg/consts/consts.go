@@ -197,6 +197,10 @@ const (
 	// to specify what subnet it is exposed on
 	ServiceAnnotationLoadBalancerInternalSubnet = "service.beta.kubernetes.io/azure-load-balancer-internal-subnet"
 
+	// ServiceAnnotationLoadBalancerIP is the annotation used on the service
+	// to specify the IP of Azure load balancer
+	ServiceAnnotationLoadBalancerIP = "service.beta.kubernetes.io/azure-load-balancer-ip"
+
 	// ServiceAnnotationLoadBalancerMode is the annotation used on the service to specify
 	// which load balancer should be associated with the service. This is valid when using the basic
 	// load balancer or turn on the multiple standard load balancers mode, or it would be ignored.
