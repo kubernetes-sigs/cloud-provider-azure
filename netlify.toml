@@ -1,6 +1,6 @@
 # Netlify build instructions
 [build]
-    command = "hugo --minify"
+    command = "npm install postcss-cli && npm install autoprefixer && npm audit fix && hugo --minify"
     base = "site/"
     publish = "public/"
 
