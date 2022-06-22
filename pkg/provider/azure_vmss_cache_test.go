@@ -17,6 +17,9 @@ limitations under the License.
 package provider
 
 import (
+	"fmt"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -30,6 +33,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func TestExtractVmssVMName(t *testing.T) {
@@ -162,4 +166,48 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 		assert.Equal(t, instanceID, ssName)
 		assert.Equal(t, cloudprovider.InstanceNotFound, err)
 	}
+}
+
+func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+
+	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
+	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
+	ss.cloud.VirtualMachineScaleSetsClient = mockVMSSClient
+	ss.cloud.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
+
+	expectedScaleSet := buildTestVMSS(testVMSSName, "vmssee6c2")
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).Times(1)
+
+	expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, vmList, "", false)
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+
+	// validate getting VMSS VM via cache.
+	vm := expectedVMs[0]
+	vmName := to.String(vm.OsProfile.ComputerName)
+	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, "vmss", realVM.VMSSName)
+	assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
+	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
+
+	// verify cache has test vmss.
+	cacheKey := strings.ToLower(fmt.Sprintf("%s/%s", "rg", testVMSSName))
+	_, ok := ss.vmssVMCache.Load(cacheKey)
+	assert.Equal(t, true, ok)
+
+	// refresh the cache with error.
+	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(2)
+	realVM, err = ss.getVmssVM(vmName, azcache.CacheReadTypeForceRefresh)
+	assert.Nil(t, realVM)
+	assert.Equal(t, cloudprovider.InstanceNotFound, err)
+
+	// verify cache is cleared.
+	_, ok = ss.vmssVMCache.Load(cacheKey)
+	assert.Equal(t, false, ok)
 }
