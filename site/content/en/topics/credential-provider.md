@@ -9,7 +9,7 @@ description: >
 
 > Note: The Kubelet credential provider feature is still in alpha and shouldn't be used in production environments. Please use `--azure-container-registry-config=/etc/kubernetes/cloud-config/azure.json` if you need pulling images from ACR in production.
 
-As part of [Out-of-Tree Credential Providers]([enhancements/keps/sig-cloud-provider/2133-out-of-tree-credential-provider at master · kubernetes/enhancements (github.com)](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider)), the kubelet builtin image pulling from ACR (which could be enabled by setting `kubelet --azure-container-registry-config=<config-file>`) would be moved out-of-tree credential plugin `acr-credential-provider`. Please refer the original [KEP](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider) for details.
+As part of [Out-of-Tree Credential Providers](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider), the kubelet builtin image pulling from ACR (which could be enabled by setting `kubelet --azure-container-registry-config=<config-file>`) would be moved out-of-tree credential plugin `acr-credential-provider`. Please refer the original [KEP](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider) for details.
 
 In order to switch the kubelet credential provider to out-of-tree, you'll have to
 
