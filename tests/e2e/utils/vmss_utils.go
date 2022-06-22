@@ -30,8 +30,7 @@ import (
 )
 
 var (
-	vmssVMRE        = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
-	errVMSSNotFound = fmt.Errorf("cannot find any VMSS")
+	vmssVMRE = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
 )
 
 // FindTestVMSS returns the first VMSS in the resource group,
@@ -279,15 +278,7 @@ func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error)
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, errVMSSNotFound
-	}
-
 	return res, nil
-}
-
-func IsVMSSNotFound(err error) bool {
-	return err == errVMSSNotFound
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
