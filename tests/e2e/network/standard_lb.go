@@ -107,7 +107,8 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		// Check if it is a cluster with VMSS
 		vmsses, err := utils.ListVMSSes(tc)
-		if !utils.IsVMSSNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+		if len(vmsses) != 0 {
 			allVMs := []azcompute.VirtualMachineScaleSetVM{}
 			for _, vmss := range vmsses {
 				if strings.Contains(*vmss.ID, "control-plane") || strings.Contains(*vmss.ID, "master") {

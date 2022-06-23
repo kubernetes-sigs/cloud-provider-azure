@@ -36,10 +36,6 @@ func ListRouteTables(tc *AzureTestClient) (*[]aznetwork.RouteTable, error) {
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, fmt.Errorf("no route table found")
-	}
-
 	return &res, nil
 }
 
