@@ -348,6 +348,78 @@ func TestFindRule(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			msg: "rule and FrontendIPConfiguration names match should return true",
+			existingRule: []network.LoadBalancingRule{
+				{
+					Name: to.StringPtr("matchName"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						FrontendIPConfiguration: &network.SubResource{ID: to.StringPtr("FrontendIPConfiguration")},
+					},
+				},
+			},
+			curRule: network.LoadBalancingRule{
+				Name: to.StringPtr("matchName"),
+				LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+					FrontendIPConfiguration: &network.SubResource{ID: to.StringPtr("frontendipconfiguration")},
+				},
+			},
+			expected: true,
+		},
+		{
+			msg: "rule names match while FrontendIPConfiguration don't should return false",
+			existingRule: []network.LoadBalancingRule{
+				{
+					Name: to.StringPtr("matchName"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						FrontendIPConfiguration: &network.SubResource{ID: to.StringPtr("FrontendIPConfiguration")},
+					},
+				},
+			},
+			curRule: network.LoadBalancingRule{
+				Name: to.StringPtr("matchName"),
+				LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+					FrontendIPConfiguration: &network.SubResource{ID: to.StringPtr("frontendipconifguration")},
+				},
+			},
+			expected: false,
+		},
+		{
+			msg: "rule and BackendAddressPool names match should return true",
+			existingRule: []network.LoadBalancingRule{
+				{
+					Name: to.StringPtr("matchName"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						BackendAddressPool: &network.SubResource{ID: to.StringPtr("BackendAddressPool")},
+					},
+				},
+			},
+			curRule: network.LoadBalancingRule{
+				Name: to.StringPtr("matchName"),
+				LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+					BackendAddressPool: &network.SubResource{ID: to.StringPtr("backendaddresspool")},
+				},
+			},
+			expected: true,
+		},
+		{
+			msg: "rule and Probe names match should return true",
+			existingRule: []network.LoadBalancingRule{
+				{
+					Name: to.StringPtr("matchName"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						Probe: &network.SubResource{ID: to.StringPtr("Probe")},
+					},
+				},
+			},
+			curRule: network.LoadBalancingRule{
+				Name: to.StringPtr("matchName"),
+				LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+					Probe: &network.SubResource{ID: to.StringPtr("probe")},
+				},
+			},
+			expected: true,
+		},
 	}
 
 	for i, test := range tests {
