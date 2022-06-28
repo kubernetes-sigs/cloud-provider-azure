@@ -806,7 +806,7 @@ var _ = Describe("Multi-ports service", func() {
 
 			var lb *network.LoadBalancer
 			//wait for backend update
-			err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1 && *(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port == service.Spec.HealthCheckNodePort, nil
 			})
@@ -828,7 +828,7 @@ var _ = Describe("Multi-ports service", func() {
 			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
 			//wait for backend update
-			err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 2 &&
 					*(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port != nodeHealthCheckPort &&
