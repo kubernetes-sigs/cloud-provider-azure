@@ -13,7 +13,7 @@
   "vnetResourceGroup": "${AZURE_RESOURCE_GROUP}",
   "subnetName": "node-subnet",
   "routeTableName": "${CLUSTER_NAME}-node-routetable",
-  "loadBalancerSku": "${LB_SKU}",
+  "loadBalancerSku": "${AZURE_LOADBALANCER_SKU}",
   "maximumLoadBalancerRuleCount": 250,
   "useManagedIdentityExtension": false,
   "useInstanceMetadata": true,
