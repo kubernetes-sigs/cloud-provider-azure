@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -149,19 +150,52 @@ func CreateHostExecPod(cs clientset.Interface, ns, name string) (bool, error) {
 			Containers: []v1.Container{
 				{
 					Name:            "agnhost",
-					Image:           "gcr.io/kubernetes-e2e-test-images/agnhost:2.6",
+					Image:           "registry.k8s.io/e2e-test-images/agnhost:2.36",
 					Args:            []string{"pause"},
 					ImagePullPolicy: v1.PullIfNotPresent,
 				},
 			},
 			HostNetwork:                   true,
 			TerminationGracePeriodSeconds: &immediate,
+			// Set the Pod to control plane Node because it is a Linux one
+			Tolerations: []v1.Toleration{
+				{
+					Key:      controlPlaneNodeRoleLabel,
+					Operator: v1.TolerationOpExists,
+					Effect:   v1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      masterNodeRoleLabel,
+					Operator: v1.TolerationOpExists,
+					Effect:   v1.TaintEffectNoSchedule,
+				},
+			},
+			NodeSelector: map[string]string{
+				controlPlaneNodeRoleLabel: "",
+			},
 		},
 	}
 	if _, err := cs.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 		return false, err
 	}
 	return WaitPodTo(v1.PodRunning, cs, pod, ns)
+}
+
+// GetPod returns a Pod with namespace and name.
+func GetPod(cs clientset.Interface, ns, name string) (pod *v1.Pod, err error) {
+	if pollErr := wait.PollImmediate(pollInterval, pollTimeout, func() (bool, error) {
+		pod, err = cs.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			if apierrs.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}); pollErr == wait.ErrWaitTimeout {
+		return nil, fmt.Errorf("failed to get Pod %q in namespace %q", name, ns)
+	}
+	return pod, err
 }
 
 // CheckPodExist checks if a Pod exists in a namespace with its name.

@@ -49,8 +49,8 @@ var _ = Describe("Private link service", func() {
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -68,13 +68,13 @@ var _ = Describe("Private link service", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+		err := utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
@@ -373,35 +373,51 @@ var _ = Describe("Private link service", func() {
 			consts.ServiceAnnotationPLSCreation:                      "true",
 			consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: strconv.Itoa(ipAddrCount),
 		}
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, "service1", ns.Name, labels, annotation, ports)
-		utils.Logf("Successfully created service1 in namespace %s with IP %s", ns.Name, ip)
+		svc1 := "service1"
+		ip := createAndExposeDefaultServiceWithAnnotation(cs, svc1, ns.Name, labels, annotation, ports)
+		defer func() {
+			err := utils.DeleteService(cs, ns.Name, svc1)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		utils.Logf("Successfully created %s in namespace %s with IP %s", svc1, ns.Name, ip)
+
+		deployName0 := "pls-deploy0"
+		utils.Logf("Creating deployment %s", deployName0)
+		label0 := map[string]string{
+			"app": deployName0,
+		}
+		tcpTestingPort := int32(testingPort)
+		deploy0 := createDeploymentManifest(deployName0, label0, &tcpTestingPort, nil)
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deploy0, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployName0, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
 
 		ports2 := []v1.ServicePort{{
 			Port:       testingPort,
 			TargetPort: intstr.FromInt(testingPort),
 		}}
 		delete(annotation, consts.ServiceAnnotationPLSIpConfigurationIPAddressCount)
-		service2 := utils.CreateLoadBalancerServiceManifest("service2", annotation, labels, ns.Name, ports2)
+		svc2 := "service2"
+		service2 := utils.CreateLoadBalancerServiceManifest(svc2, annotation, label0, ns.Name, ports2)
+		defer func() {
+			err = utils.DeleteService(cs, ns.Name, svc2)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		service2.Spec.LoadBalancerIP = ip
-		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, "service2", ip)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, svc2, ip)
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created service2 in namespace %s with IP %s", ns.Name, ip)
+		utils.Logf("Successfully created %s in namespace %s with IP %s", svc2, ns.Name, ip)
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
 		Expect(pls.IPConfigurations).NotTo(BeNil())
 		// Verify it's still the configuration from service1
 		Expect(len(*pls.IPConfigurations)).To(Equal(ipAddrCount))
-
-		defer func() {
-			By("Cleaning up")
-			err = utils.DeleteService(cs, ns.Name, "service1")
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeleteService(cs, ns.Name, "service2")
-			Expect(err).NotTo(HaveOccurred())
-		}()
 	})
 })
 
