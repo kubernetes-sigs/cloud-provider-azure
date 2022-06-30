@@ -126,7 +126,7 @@ func NormalizeAzureRegion(name string) string {
 	return strings.ToLower(region)
 }
 
-// DoExponentialBackoffRetry returns an autorest.SendDecorator which performs retry with customizable backoff policy.
+// DoHackRegionalRetryDecorator returns an autorest.SendDecorator which performs retry with customizable backoff policy.
 func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(request *http.Request) (*http.Response, error) {
@@ -135,28 +135,35 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 				klog.V(2).Infof("response is empty")
 				return response, rerr
 			}
-			if rerr == nil || response.StatusCode == http.StatusNotFound || c.regionalEndpoint == "" {
-				return response, rerr
-			}
-			// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
+
 			bodyBytes, _ := ioutil.ReadAll(response.Body)
 			defer func() {
 				response.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 			}()
 
 			bodyString := string(bodyBytes)
-			var body map[string]interface{}
-			if e := json.Unmarshal(bodyBytes, &body); e != nil {
-				klog.Errorf("Send.sendRequest: error in parsing response body string: %s, Skip retrying regional host", e.Error())
-				return response, rerr
-			}
-			klog.V(5).Infof("Send.sendRequest original response: %s", bodyString)
+			trimmed := strings.TrimSpace(bodyString)
+			// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
+			// Empty content and 2xx http status code are returned in this case.
+			// Issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1296
+			emptyResp := (response.ContentLength == 0 || trimmed == "" || trimmed == "{}") && response.StatusCode >= 200 && response.StatusCode < 300
+			if !emptyResp {
+				if rerr == nil || response.StatusCode == http.StatusNotFound || c.regionalEndpoint == "" {
+					return response, rerr
+				}
 
-			if err, ok := body["error"].(map[string]interface{}); !ok ||
-				err["code"] == nil ||
-				!strings.EqualFold(err["code"].(string), "ResourceGroupNotFound") {
-				klog.V(5).Infof("Send.sendRequest: response body does not contain ResourceGroupNotFound error code. Skip retrying regional host")
-				return response, rerr
+				var body map[string]interface{}
+				if e := json.Unmarshal(bodyBytes, &body); e != nil {
+					klog.Errorf("Send.sendRequest: error in parsing response body string: %s, Skip retrying regional host", e.Error())
+					return response, rerr
+				}
+				klog.V(5).Infof("Send.sendRequest original response: %s", bodyString)
+
+				err, ok := body["error"].(map[string]interface{})
+				if !ok || err["code"] == nil || !strings.EqualFold(err["code"].(string), "ResourceGroupNotFound") {
+					klog.V(5).Infof("Send.sendRequest: response body does not contain ResourceGroupNotFound error code. Skip retrying regional host")
+					return response, rerr
+				}
 			}
 
 			currentHost := request.URL.Host
