@@ -275,6 +275,10 @@ const (
 	// is `a=b,c=d,...`. After updated, the old user-assigned tags would not be replaced by the new ones.
 	ServiceAnnotationAzurePIPTags = "service.beta.kubernetes.io/azure-pip-tags"
 
+	// ServiceAnnotationDisableLoadBalancerFloatingIP is the annotation used on the service to disable floating IP in load balancer rule.
+	// If omitted, the default value is false
+	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
+
 	// ServiceAnnotationAzurePIPTags sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
 	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).
