@@ -110,6 +110,11 @@ func (c *Client) Get(ctx context.Context, subsID, resourceGroupName, diskName st
 	}
 
 	result, rerr := c.getDisk(ctx, subsID, resourceGroupName, diskName)
+	needToRecrateClient := armclient.RecreateClientDueToArmLimits(&result.Response)
+	if needToRecrateClient {
+		klog.V(5).Infof("Recreating the diskclient due to ARM limits reached")
+		New(&azclients.ClientConfig{})
+	}
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {

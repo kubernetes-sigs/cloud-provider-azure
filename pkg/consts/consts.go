@@ -107,6 +107,11 @@ const (
 	// RetryAfterHeaderKey is the retry-after header key in ARM responses.
 	RetryAfterHeaderKey = "Retry-After"
 
+	// RemainingSubscriptionReadsHeaderKey ARM read count left as defined in https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/request-limits-and-throttling
+	RemainingSubscriptionReadsHeaderKey = "x-ms-ratelimit-remaining-subscription-reads"
+	// RemainingSubscriptionWritesHeaderKey ARM write count left as defined in https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/request-limits-and-throttling
+	RemainingSubscriptionWritesHeaderKey = "x-ms-ratelimit-remaining-subscription-writes"
+
 	// StrRawVersion is the raw version string
 	StrRawVersion string = "raw"
 
