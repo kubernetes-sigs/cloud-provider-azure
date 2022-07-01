@@ -62,9 +62,15 @@ func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 			return nil, err
 		}
 
+		resourceGroupNotFound := false
 		for _, resourceGroup := range allResourceGroups.List() {
 			allScaleSets, rerr := ss.VirtualMachineScaleSetsClient.List(context.Background(), resourceGroup)
 			if rerr != nil {
+				if rerr.IsNotFound() {
+					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())
+					resourceGroupNotFound = true
+					continue
+				}
 				klog.Errorf("VirtualMachineScaleSetsClient.List failed: %v", rerr)
 				return nil, rerr.Error()
 			}
@@ -83,6 +89,23 @@ func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 			}
 		}
 
+		if resourceGroupNotFound {
+			// gc vmss vm cache when there is resource group not found
+			removed := map[string]bool{}
+			ss.vmssVMCache.Range(func(key, value interface{}) bool {
+				cacheKey := key.(string)
+				vlistIdx := cacheKey[strings.LastIndex(cacheKey, "/")+1:]
+				if _, ok := localCache.Load(vlistIdx); !ok {
+					klog.V(2).Infof("remove vmss %s from cache due to rg not found", cacheKey)
+					removed[cacheKey] = true
+				}
+				return true
+			})
+
+			for key := range removed {
+				ss.vmssVMCache.Delete(key)
+			}
+		}
 		return localCache, nil
 	}
 
