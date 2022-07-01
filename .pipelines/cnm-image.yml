@@ -1,0 +1,12 @@
+steps:
+  - template: ./docker-login.yml
+  - bash: |
+      git show --stat
+      export IMAGE_REGISTRY=$(registry.url)
+      IMAGE_NAME="azure-cloud-node-manager"
+      IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+      if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
+        make build-node-image-linux-amd64
+        make push-node-image-linux-amd64
+      fi
+    displayName: make and push cnm image

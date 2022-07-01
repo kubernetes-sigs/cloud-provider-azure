@@ -1,0 +1,12 @@
+steps:
+  - template: ./docker-login.yml
+  - bash: |
+      git show --stat
+      export IMAGE_REGISTRY=$(registry.url)
+      IMAGE_NAME="azure-cloud-controller-manager"
+      IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+      if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
+        make build-ccm-image-amd64
+        make push-ccm-image-amd64
+      fi
+    displayName: make and push ccm image
