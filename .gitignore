@@ -28,3 +28,6 @@ public/
 
 # helm chart verification
 chart_verify/
+
+# kubeconfig
+*.kubeconfig

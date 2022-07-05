@@ -40,7 +40,7 @@ const (
 	serviceTimeout        = 5 * time.Minute
 	serviceTimeoutBasicLB = 10 * time.Minute
 	pullInterval          = 20 * time.Second
-	pullTimeout           = 1 * time.Minute
+	pullTimeout           = 2 * time.Minute
 )
 
 // DeleteService deletes a service
@@ -200,4 +200,8 @@ func extractSuffix() string {
 		suffix = suffix[:strings.Index(suffix, ":")]
 	}
 	return suffix
+}
+
+func IsInternalEndpoint(ip string) bool {
+	return strings.HasPrefix(ip, "10.")
 }

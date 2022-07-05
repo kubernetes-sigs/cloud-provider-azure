@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -570,7 +570,7 @@ var _ = Describe("Service with annotation", func() {
 	})
 })
 
-var _ = Describe("[[Multi-Nodepool]][VMSS]", func() {
+var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, utils.TestSuiteLabelVMSS), func() {
 	basename := "vmssservice"
 	serviceName := "vmss-test"
 
