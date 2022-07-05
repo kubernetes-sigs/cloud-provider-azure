@@ -31,3 +31,4 @@ az group list --tag usage=aks-cluster-e2e | jq -r '.[].name' | awk '{print $1}' 
     az group delete --resource-group "${RESOURCE_GROUP}" -y --no-wait
   fi
 done
+
