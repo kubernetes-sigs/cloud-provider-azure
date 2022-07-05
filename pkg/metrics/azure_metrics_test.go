@@ -17,10 +17,57 @@ limitations under the License.
 package metrics
 
 import (
+	"bytes"
+	"flag"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+
+	"k8s.io/klog/v2"
 )
+
+type FakeLogger struct {
+	logr.Logger
+	infoBuffer  bytes.Buffer
+	errorBuffer bytes.Buffer
+}
+
+func (logger *FakeLogger) Init(info logr.RuntimeInfo) {}
+func (logger *FakeLogger) Enabled(lvl int) bool {
+	return true
+}
+func (logger *FakeLogger) Info(lvl int, msg string, keysAndValues ...interface{}) {
+	// test result_code
+	for i := 0; i < len(keysAndValues); i += 2 {
+		var v interface{}
+		k := keysAndValues[i]
+		if i+1 < len(keysAndValues) {
+			v = keysAndValues[i+1]
+		} else {
+			v = ""
+		}
+		if sK, ok := k.(string); ok && sK == "result_code" {
+			logger.infoBuffer.WriteString(v.(string))
+			break
+		}
+	}
+}
+func (logger *FakeLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+	logger.errorBuffer.WriteString(msg)
+}
+func (logger *FakeLogger) WithValues(keysAndValues ...interface{}) logr.LogSink {
+	return logger
+}
+func (logger *FakeLogger) WithName(name string) logr.LogSink {
+	return logger
+}
+
+var _ logr.LogSink = &FakeLogger{}
+
+func init() {
+	klog.InitFlags(nil)
+}
 
 func TestAzureMetricLabelCardinality(t *testing.T) {
 	mc := NewMetricContext("test", "create", "resource_group", "subscription_id", "source")
@@ -36,4 +83,32 @@ func TestAzureMetricLabelPrefix(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "request label must be prefixed")
+}
+
+func TestAzureMetricResultCode(t *testing.T) {
+	err := flag.Set("v", "3")
+	if err != nil {
+		t.Fatalf("Failed to set verbosity in TestAzureMetricResultCode")
+	}
+	mc := NewMetricContext("prefix", "create_route", "resource_group", "subscription_id", "source")
+	cases := []struct {
+		isOperationSucceeded bool
+		expectedResutCode    string
+	}{
+		{
+			isOperationSucceeded: true,
+			expectedResutCode:    "succeeded",
+		},
+		{
+			isOperationSucceeded: false,
+			expectedResutCode:    "failed_create_route",
+		},
+	}
+	defer klog.ClearLogger()
+	for _, tc := range cases {
+		fakeLogger := &FakeLogger{}
+		klog.SetLogger(logr.New(fakeLogger))
+		mc.ObserveOperationWithResult(tc.isOperationSucceeded)
+		assert.Equal(t, tc.expectedResutCode, fakeLogger.infoBuffer.String())
+	}
 }
