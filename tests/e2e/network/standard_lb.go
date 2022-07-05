@@ -23,7 +23,7 @@ import (
 
 	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -84,7 +84,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		tc = nil
 	})
 
-	It("should add all nodes in different agent pools to backends [MultipleAgentPools]", func() {
+	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), func() {
 		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
 			Skip("only test standard load balancer")
 		}
@@ -160,7 +160,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		}
 	})
 
-	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
+	It("should make outbound IP of pod same as in SLB's outbound rules", Label(utils.TestSuiteLabelSLBOutbound), func() {
 		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
 			Skip("only test standard load balancer")
 		}
