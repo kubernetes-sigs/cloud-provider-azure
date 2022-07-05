@@ -20,15 +20,16 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Lifecycle of VMSS", func() {
+var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 	var (
 		ns     *v1.Namespace
 		k8sCli kubernetes.Interface

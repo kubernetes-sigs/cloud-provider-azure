@@ -25,9 +25,6 @@ TEST_RESULTS_DIR=testResults
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
 K8S_BRANCH ?=
-# Only run conformance tests by default (non-serial and non-slow)
-# Note autoscaling tests would be skipped as well.
-CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 #The test args for Kubernetes e2e tests
 TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
@@ -337,7 +334,7 @@ test-e2e-capz: ## Run k8s e2e tests with capz
 	hack/test_k8s_e2e_capz.sh $(TEST_E2E_ARGS)
 
 test-ccm-e2e: ## Run cloud provider e2e tests.
-	go test ./tests/e2e/ -timeout 0 -v -ginkgo.v $(CCM_E2E_ARGS)
+	hack/test-ccm-e2e.sh
 
 .PHONY: clean
 clean: ## Cleanup local builds.
