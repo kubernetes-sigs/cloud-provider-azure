@@ -1571,14 +1571,15 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			desc: "isFrontendIPChanged shall return false if the service is internal, no loadBalancerIP is given, " +
 				"subnetName == nil and config.PrivateIPAllocationMethod == network.Static",
 			config: network.FrontendIPConfiguration{
-				Name: to.StringPtr("atest1-name"),
+				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: network.IPAllocationMethod("static"),
 				},
 			},
-			service:       getInternalTestService("test1", 80),
-			expectedFlag:  true,
-			expectedError: false,
+			lbFrontendIPConfigName: "btest1-name",
+			service:                getInternalTestService("test1", 80),
+			expectedFlag:           false,
+			expectedError:          false,
 		},
 		{
 			desc: "isFrontendIPChanged shall return false if the service is internal, no loadBalancerIP is given, " +
@@ -1611,18 +1612,35 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			expectedError:          false,
 		},
 		{
-			desc: "isFrontendIPChanged shall return true if the service is internal, subnet == nil, " +
-				"loadBalancerIP != '' and config.PrivateIPAllocationMethod != 'static'",
+			desc: "isFrontendIPChanged shall return false if the service is internal, subnet == nil, " +
+				"loadBalancerIP == config.PrivateIPAddress and config.PrivateIPAllocationMethod != 'static'",
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PrivateIPAllocationMethod: network.IPAllocationMethod("dynamic"),
+					PrivateIPAddress:          to.StringPtr("1.1.1.1"),
 				},
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getInternalTestService("test1", 80),
 			loadBalancerIP:         "1.1.1.1",
-			expectedFlag:           true,
+			expectedFlag:           false,
+			expectedError:          false,
+		},
+		{
+			desc: "isFrontendIPChanged shall return false if the service is internal, subnet == nil, " +
+				"loadBalancerIP == config.PrivateIPAddress and config.PrivateIPAllocationMethod == 'static'",
+			config: network.FrontendIPConfiguration{
+				Name: to.StringPtr("btest1-name"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAllocationMethod: network.IPAllocationMethod("static"),
+					PrivateIPAddress:          to.StringPtr("1.1.1.1"),
+				},
+			},
+			lbFrontendIPConfigName: "btest1-name",
+			service:                getInternalTestService("test1", 80),
+			loadBalancerIP:         "1.1.1.1",
+			expectedFlag:           false,
 			expectedError:          false,
 		},
 		{
@@ -1644,12 +1662,8 @@ func TestIsFrontendIPChanged(t *testing.T) {
 		{
 			desc: "isFrontendIPChanged shall return false if config.PublicIPAddress == nil",
 			config: network.FrontendIPConfiguration{
-				Name: to.StringPtr("btest1-name"),
-				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{
-						ID: to.StringPtr("pip"),
-					},
-				},
+				Name:                                    to.StringPtr("btest1-name"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{},
 			},
 			lbFrontendIPConfigName: "btest1-name",
 			service:                getTestService("test1", v1.ProtocolTCP, nil, false, 80),
