@@ -179,55 +179,62 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 
 // getRemainingSubscriptionReads checking header for ARM level read count remaining
 // this is used to be able to handle client reset if we've hit our limit
-func getRemainingSubscriptionReads(resp *autorest.Response) int {
-	if resp == nil {
+func getRemainingSubscriptionReads(resp *http.Response) int {
+	if resp == nil || resp.Header == nil || resp.Header.Get(consts.RemainingSubscriptionReadsHeaderKey) == "" {
 		// 12000 because this is the default upper limit for subscription reads in ARM
 		return 12000
 	}
 
-	remainingReads := resp.Header.Get(consts.RemainingSubscriptionReadsHeaderKey)
-	if remainingReads == "" {
-		// 12000 because this is the default upper limit for subscription reads in ARM
-		return 12000
-	}
-	remainingReadsInt, _ := strconv.Atoi(remainingReads)
+	remainingReads, _ := strconv.Atoi(resp.Header.Get(consts.RemainingSubscriptionReadsHeaderKey))
 
-	return remainingReadsInt
+	return remainingReads
 }
 
 // getRemainingSubscriptionWrites checking header for ARM level write count remaining
 // this is used to be able to handle client reset if we've hit our limit
-func getRemainingSubscriptionWrites(resp *autorest.Response) int {
-	if resp == nil {
+func getRemainingSubscriptionWrites(resp *http.Response) int {
+	if resp == nil || resp.Header == nil || resp.Header.Get(consts.RemainingSubscriptionWritesHeaderKey) == "" {
 		// 1200 because this is the default upper limit for subscription writes in ARM
 		return 1200
 	}
 
-	remainingReads := resp.Header.Get(consts.RemainingSubscriptionReadsHeaderKey)
-	if remainingReads == "" {
-		// 1200 because this is the default upper limit for subscription writes in ARM
-		return 1200
-	}
-	remainingReadsInt, _ := strconv.Atoi(remainingReads)
+	remainingWrites, _ := strconv.Atoi(resp.Header.Get(consts.RemainingSubscriptionWritesHeaderKey))
 
-	return remainingReadsInt
+	return remainingWrites
+}
+
+// getRemainingSubscriptionDeletes checking header for ARM level delete count remaining
+// this is used to be able to handle client reset if we've hit our limit
+func getRemainingSubscriptionDeletes(resp *http.Response) int {
+	if resp == nil || resp.Header == nil || resp.Header.Get(consts.RemainingSubscriptionDeletesHeaderKey) == "" {
+		// 15000 because this is the default upper limit for subscription deletes in ARM
+		return 15000
+	}
+
+	remainingDeletes, _ := strconv.Atoi(resp.Header.Get(consts.RemainingSubscriptionDeletesHeaderKey))
+
+	return remainingDeletes
 }
 
 // RecreateClientDueToArmLimits bool if we should reset the client to avoid ARM throttling
-// ARM retruns a remaining limit we don't need read/write specific checks
-func RecreateClientDueToArmLimits(resp *autorest.Response) bool {
+// ARM retruns a remaining limit we don't need read/write specific checks and limits are subscription wide
+// regardless of what the intent of the call is
+func RecreateClientDueToArmLimits(resp *http.Response) bool {
 	// default to a limit that won't indicate we should reset the client
 	remainingLimit := 2
-	if resp.Request.Method == "GET" {
+
+	switch resp.Request.Method {
+	case http.MethodGet:
 		remainingLimit = getRemainingSubscriptionReads(resp)
-	}
-	if resp.Request.Method == "PUT" {
+	case http.MethodPut:
 		remainingLimit = getRemainingSubscriptionWrites(resp)
-	}
-	// true just before we've hit the request limits of ARM
-	if remainingLimit <= 1 {
-		return true
+	case http.MethodPatch:
+		remainingLimit = getRemainingSubscriptionWrites(resp)
+	case http.MethodDelete:
+		remainingLimit = getRemainingSubscriptionDeletes(resp)
 	}
 
-	return false
+	// true just before we've hit the request limits of ARM
+	return remainingLimit <= 1
+
 }

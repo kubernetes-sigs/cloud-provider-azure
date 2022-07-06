@@ -110,11 +110,6 @@ func (c *Client) Get(ctx context.Context, subsID, resourceGroupName, diskName st
 	}
 
 	result, rerr := c.getDisk(ctx, subsID, resourceGroupName, diskName)
-	needToRecrateClient := armclient.RecreateClientDueToArmLimits(&result.Response)
-	if needToRecrateClient {
-		klog.V(5).Infof("Recreating the diskclient due to ARM limits reached")
-		New(&azclients.ClientConfig{})
-	}
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -144,6 +139,8 @@ func (c *Client) getDisk(ctx context.Context, subsID, resourceGroupName, diskNam
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "disk.get.request", resourceID, rerr.Error())
 		return result, rerr
 	}
+
+	recreateClientChecker(response)
 
 	err := autorest.Respond(
 		response,
@@ -207,6 +204,8 @@ func (c *Client) createOrUpdateDisk(ctx context.Context, subsID, resourceGroupNa
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "disk.put.request", resourceID, rerr.Error())
 		return rerr
 	}
+
+	recreateClientChecker(response)
 
 	if response != nil && response.StatusCode != http.StatusNoContent {
 		_, rerr = c.createOrUpdateResponder(response)
@@ -278,6 +277,8 @@ func (c *Client) updateDisk(ctx context.Context, subsID, resourceGroupName, disk
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "disk.put.request", resourceID, rerr.Error())
 		return rerr
 	}
+
+	recreateClientChecker(response)
 
 	if response != nil && response.StatusCode != http.StatusNoContent {
 		_, rerr = c.updateResponder(response)
@@ -474,4 +475,12 @@ func (page DiskListPage) Values() []compute.Disk {
 		return nil
 	}
 	return *page.dl.Value
+}
+
+func recreateClientChecker(response *http.Response) {
+	needToRecrateClient := armclient.RecreateClientDueToArmLimits(response)
+	if needToRecrateClient {
+		klog.V(5).Infof("Recreating the diskclient due to ARM %s limits reached", response.Request.Method)
+		New(&azclients.ClientConfig{})
+	}
 }
