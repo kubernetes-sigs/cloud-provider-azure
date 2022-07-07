@@ -270,6 +270,8 @@ func WaitPodTo(phase v1.PodPhase, cs clientset.Interface, podTemplate *v1.Pod, n
 		}
 		return true, nil
 	}); err != nil {
+		output, _ := RunKubectl(nsName, "describe", "pod", podTemplate.Name)
+		Logf("Describe info of Pod %q:\n%s", podTemplate.Name, output)
 		return false, err
 	}
 	return true, err
