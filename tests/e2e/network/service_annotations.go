@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -447,6 +448,11 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
+		if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
+			if !strings.EqualFold(skuEnv, string(network.PublicIPAddressSkuNameStandard)) {
+				Skip("pip-prefix-id only work with Standard Load Balancer")
+			}
+		}
 		const (
 			prefix1Name = "prefix1"
 			prefix2Name = "prefix2"

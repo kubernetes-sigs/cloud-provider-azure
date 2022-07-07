@@ -35,6 +35,7 @@ const (
 	masterNodeRoleLabel       = "node-role.kubernetes.io/master"
 	controlPlaneNodeRoleLabel = "node-role.kubernetes.io/control-plane"
 	nodeLabelRole             = "kubernetes.io/role"
+	nodeOSLabel               = "kubernetes.io/os"
 	typeLabel                 = "type"
 	agentpoolLabelKey         = "agentpool"
 
