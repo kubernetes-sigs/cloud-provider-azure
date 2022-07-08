@@ -300,3 +300,15 @@ func sameContentInSlices(s1 []string, s2 []string) bool {
 	}
 	return true
 }
+
+func removeDuplicatedSecurityRules(rules []network.SecurityRule) []network.SecurityRule {
+	ruleNames := make(map[string]bool)
+	for i := len(rules) - 1; i >= 0; i-- {
+		if _, ok := ruleNames[to.String(rules[i].Name)]; ok {
+			klog.Warningf("Found duplicated rule %s, will be removed.", to.String(rules[i].Name))
+			rules = append(rules[:i], rules[i+1:]...)
+		}
+		ruleNames[to.String(rules[i].Name)] = true
+	}
+	return rules
+}
