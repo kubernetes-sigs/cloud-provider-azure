@@ -59,7 +59,7 @@ const (
 	nginxStatusCode = 200
 )
 
-var _ = Describe("Service with annotation", func() {
+var _ = Describe("Service with annotation", FlakeAttempts(3), func() {
 	basename := "service"
 	serviceName := "annotation-test"
 	initSuccess := false

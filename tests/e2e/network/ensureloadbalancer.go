@@ -58,7 +58,7 @@ var (
 	}
 )
 
-var _ = Describe("Ensure LoadBalancer", func() {
+var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), func() {
 	basename := "service-lb"
 
 	var cs clientset.Interface
