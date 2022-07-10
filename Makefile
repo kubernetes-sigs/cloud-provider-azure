@@ -359,7 +359,7 @@ test-e2e-capz: ## Run k8s e2e tests with capz
 	hack/test_k8s_e2e_capz.sh $(TEST_E2E_ARGS)
 
 test-ccm-e2e: ## Run cloud provider e2e tests.
-	go test ./tests/e2e/ -timeout 0 -v -ginkgo.v $(CCM_E2E_ARGS)
+	hack/test-ccm-e2e.sh
 
 .PHONY: clean
 clean: ## Cleanup local builds.

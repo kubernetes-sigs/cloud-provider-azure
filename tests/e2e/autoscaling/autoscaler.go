@@ -31,7 +31,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -49,7 +49,7 @@ const (
 
 // Cluster autoscaling cannot run in parallel, since multiple threads will infect the count of nodes
 // It is slow, where at most 30 minutes are required to complete a single up or down scale
-var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", func() {
+var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAutoscaling, utils.TestSuiteLabelSerial, utils.TestSuiteLabelSlow), func() {
 	var (
 		basename            = "autoscaler"
 		cs                  clientset.Interface
@@ -205,7 +205,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		}
 	})
 
-	It("should balance the sizes of multiple node group if the `--balance-node-groups` is set to true [Multi-Nodepool]", func() {
+	It("should balance the sizes of multiple node group if the `--balance-node-groups` is set to true", Label(utils.TestSuiteLabelMultiNodePools), func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) < 2 {
 			Skip("multiple node pools are needed in this scenario")
@@ -244,7 +244,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
 	})
 
-	It("should support one node pool with slow scaling [Single Nodepool]", func() {
+	It("should support one node pool with slow scaling", Label(utils.TestSuiteLabelSingleNodePool), func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) != 1 {
 			Skip("single node pool is needed in this scenario")
@@ -282,7 +282,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
 	})
 
-	It("should support multiple node pools with quick scaling [Multi-Nodepool]", func() {
+	It("should support multiple node pools with quick scaling", Label(utils.TestSuiteLabelMultiNodePools), func() {
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) < 2 {
 			Skip("multiple node pools are needed in this scenario")
@@ -321,7 +321,7 @@ var _ = Describe("Cluster size autoscaler [Feature:Autoscaling][Serial][Slow]", 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
 	})
 
-	It("should support scaling up or down Azure Spot VM [VMSS][Spot VM]", func() {
+	It("should support scaling up or down Azure Spot VM", Label(utils.TestSuiteLabelVMSS, utils.TestSuiteLabelSpotVM), func() {
 		By("Checking the spot vms")
 		scaleSets, err := utils.ListVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())

@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -58,7 +58,7 @@ var (
 	}
 )
 
-var _ = Describe("Ensure LoadBalancer", func() {
+var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), func() {
 	basename := "service-lb"
 
 	var cs clientset.Interface
@@ -411,7 +411,7 @@ var _ = Describe("Ensure LoadBalancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should have no operation since no change in service when update [Slow]", func() {
+	It("should have no operation since no change in service when update", Label(utils.TestSuiteLabelSlow), func() {
 		suffix := string(uuid.NewUUID())[0:4]
 		ipName := basename + "-public-remain" + suffix
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))

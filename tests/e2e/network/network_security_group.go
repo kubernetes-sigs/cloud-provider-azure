@@ -35,11 +35,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Network security group", func() {
+var _ = Describe("Network security group", FlakeAttempts(3), func() {
 	basename := "nsg"
 	serviceName := "nsg-test"
 
