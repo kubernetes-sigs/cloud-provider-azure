@@ -30,4 +30,10 @@ const (
 	TestSuiteLabelAvailabilitySet    = "AvailabilitySet"
 	TestSuiteLabelPrivateLinkService = "PLS"
 	TestSuiteLabelSLBOutbound        = "SLBOutbound"
+	TestSuiteLabelServiceAnnotation  = "ServiceAnnotation"
+	TestSuiteLabelCredential         = "Credential"
+	TestSuiteLabelNode               = "Node"
+	TestSuiteLabelLB                 = "LB"
+	TestSuiteLabelMultiPorts         = "Multi-Ports"
+	TestSuiteLabelNSG                = "NSG"
 )
