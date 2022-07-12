@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Azure Credential Provider", func() {
+var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredential), func() {
 	var err error
 	var tc *utils.AzureTestClient
 	var cs clientset.Interface

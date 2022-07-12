@@ -137,12 +137,34 @@ jobs:
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
           if-no-files-found: error
 
+  build-kubetest2-aks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Get Go version
+        run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build binary
+        run: |
+          cd kubetest2-aks
+          make deployer
+          sudo make install
+      - uses: actions/upload-artifact@v3
+        with:
+          name: kubetest2-aks
+          path: $(go env GOPATH)/bin/kubetest2-aks
+
   publish:
     runs-on: ubuntu-latest
     needs:
       - build-cloud-controller-manager
       - build-cloud-node-manager
       - build-acr-credential-provider
+      - build-kubetest2-aks
     permissions:
       contents: write
       pull-requests: write
@@ -214,6 +236,7 @@ jobs:
             ./artifacts/cloud-node-manager-*-*/*
             ./artifacts/cloud-controller-manager-*-*/*
             ./artifacts/acr-credential-provider-*-*/*
+            ./artifacts/kubetest2-aks/*
       - name: Update site release note
         uses: peter-evans/create-pull-request@v4
         with:
