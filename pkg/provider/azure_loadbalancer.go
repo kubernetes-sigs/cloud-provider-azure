@@ -1276,10 +1276,7 @@ func (az *Cloud) isFrontendIPChanged(clusterName string, config network.Frontend
 				return true, nil
 			}
 		}
-		if loadBalancerIP == "" {
-			return config.PrivateIPAllocationMethod == network.IPAllocationMethodStatic, nil
-		}
-		return config.PrivateIPAllocationMethod != network.IPAllocationMethodStatic || !strings.EqualFold(loadBalancerIP, to.String(config.PrivateIPAddress)), nil
+		return loadBalancerIP != "" && !strings.EqualFold(loadBalancerIP, to.String(config.PrivateIPAddress)), nil
 	}
 	pipName, _, err := az.determinePublicIPName(clusterName, service, pips)
 	if err != nil {
