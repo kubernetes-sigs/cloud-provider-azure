@@ -163,7 +163,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		}()
 
 		By("Validate shared security rule exists")
-		port := fmt.Sprintf("%d", nginxPort)
+		port := fmt.Sprintf("%d", serverPort)
 		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 
