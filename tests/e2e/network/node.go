@@ -46,7 +46,7 @@ var (
 	vmNameRE           = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
 )
 
-var _ = Describe("Azure node resources", func() {
+var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func() {
 	basename := "node-resources"
 
 	var cs clientset.Interface

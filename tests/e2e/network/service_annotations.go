@@ -59,7 +59,7 @@ const (
 	nginxStatusCode = 200
 )
 
-var _ = Describe("Service with annotation", FlakeAttempts(3), func() {
+var _ = Describe("Service with annotation", FlakeAttempts(3), Label(utils.TestSuiteLabelServiceAnnotation), func() {
 	basename := "service"
 	serviceName := "annotation-test"
 	initSuccess := false
@@ -677,7 +677,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 })
 
-var _ = Describe("Multi-ports service", func() {
+var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), func() {
 	basename := "mpservice"
 	serviceName := "multiport-test"
 	initSuccess := false
