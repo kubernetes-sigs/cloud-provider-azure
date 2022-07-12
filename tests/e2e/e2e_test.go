@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,9 +35,11 @@ import (
 )
 
 const (
-	reportDirEnv     = "CCM_JUNIT_REPORT_DIR"
-	artifactsDirEnv  = "ARTIFACTS"
-	defaultReportDir = "_report/"
+	reportDirEnv                = "CCM_JUNIT_REPORT_DIR"
+	artifactsDirEnv             = "ARTIFACTS"
+	defaultReportDir            = "_report/"
+	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
+	clusterProvisioningToolCAPZ = "capz"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -58,6 +61,16 @@ func TestAzureTest(t *testing.T) {
 
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 	suiteConfig.Timeout = 0
+
+	if strings.EqualFold(os.Getenv(clusterProvisioningToolKey), clusterProvisioningToolCAPZ) {
+		additionalFilter := "!SLBOutbound"
+		if suiteConfig.LabelFilter == "" {
+			suiteConfig.LabelFilter = additionalFilter
+		} else {
+			suiteConfig.LabelFilter = suiteConfig.LabelFilter + " && " + additionalFilter
+		}
+	}
+
 	reporterConfig.Verbose = true
 	reporterConfig.JUnitReport = path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", GinkgoParallelProcess()))
 	RunSpecs(t, "Cloud provider Azure e2e suite", suiteConfig, reporterConfig)
