@@ -54,7 +54,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	}}
 
 	BeforeEach(func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
 			Skip("private link service only works with standard load balancer")
 		}
 		var err error

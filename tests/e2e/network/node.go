@@ -19,6 +19,7 @@ package network
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -46,7 +47,7 @@ var (
 	vmNameRE           = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
 )
 
-var _ = Describe("Azure node resources", func() {
+var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func() {
 	basename := "node-resources"
 
 	var cs clientset.Interface
@@ -333,6 +334,9 @@ var _ = Describe("Azure nodes", func() {
 	})
 
 	It("should support crossing resource groups", Label(utils.TestSuiteLabelMultiGroup, utils.TestSuiteLabelAvailabilitySet), func() {
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			Skip("aks cluster cannot obtain master node, skip the case")
+		}
 		master, err := utils.GetMaster(cs)
 		Expect(err).NotTo(HaveOccurred())
 
