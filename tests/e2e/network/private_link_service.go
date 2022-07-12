@@ -74,7 +74,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	})
 
 	AfterEach(func() {
-		err := utils.DeletePod(cs, ns.Name, utils.ExecAgnhostPod)
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = utils.DeleteNamespace(cs, ns.Name)
