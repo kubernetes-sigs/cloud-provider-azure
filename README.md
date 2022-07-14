@@ -27,10 +27,10 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
-| v1.24.x            | v1.24.1                | release-1.24          |
-| v1.23.x            | v1.23.13               | release-1.23          |
-| v1.22.x            | v1.1.16                | release-1.1           |
-| v1.21.x            | v1.0.20                | release-1.0           |
+| v1.24.x            | v1.24.3                | release-1.24          |
+| v1.23.x            | v1.23.15               | release-1.23          |
+| v1.22.x            | v1.1.18                | release-1.1           |
+| v1.21.x            | v1.0.22                | release-1.0           |
 | v1.20.x            | v0.7.21                | release-0.7           |
 | v1.19.x            | v0.6.0                 | release-0.6           |
 | v1.18.x            | v0.5.1                 | release-0.5           |
@@ -44,10 +44,10 @@ Below table shows the cloud-controller-manager and cloud-node-manager versions s
 
 | AKS version        | cloud-controller-manager version | cloud-node-manager version |
 |--------------------|----------------------------------|----------------------------|
-| v1.24.x (preview)  | v1.24.1                          | v1.23.11                   |
-| v1.23.x            | v1.23.13              　　　　　　| v1.23.11                   |
-| v1.22.x            | v1.1.16                          | v1.1.14                    |
-| v1.21.x            | v1.0.20                          | v1.0.18                    |
+| v1.24.x (preview)  | v1.24.3                          | v1.23.11                   |
+| v1.23.x            | v1.23.15              　　　　　　 | v1.23.11                   |
+| v1.22.x            | v1.1.18                          | v1.1.14                    |
+| v1.21.x            | v1.0.22                          | v1.0.18                    |
 
 ## Build
 
