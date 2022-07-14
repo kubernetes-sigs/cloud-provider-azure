@@ -73,7 +73,7 @@ function create_management_cluster() {
     echo "Creating kind cluster"
     kind create cluster --name="${MANAGEMENT_CLUSTER_NAME}"
     echo "Waiting for the node to be Ready"
-    kubectl wait node "${MANAGEMENT_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=90s --context=kind-"${MANAGEMENT_CLUSTER_NAME}"
+    kubectl wait node "${MANAGEMENT_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=900s --context=kind-"${MANAGEMENT_CLUSTER_NAME}"
     kubectl cluster-info --context=kind-"${MANAGEMENT_CLUSTER_NAME}"
     init_and_wait_capz
   else
