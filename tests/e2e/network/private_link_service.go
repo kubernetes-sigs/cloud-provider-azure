@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -135,32 +136,18 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-ip-configuration-subnet'", func() {
 		subnetName := "pls-subnet"
-
-		vNet, err := tc.GetClusterVirtualNetwork()
-		Expect(err).NotTo(HaveOccurred())
-
-		var newSubnetID string
-		for _, existingSubnet := range *vNet.Subnets {
-			if *existingSubnet.Name == subnetName {
-				By("Test subnet have existed, skip creating")
-				newSubnetID = *existingSubnet.ID
-				break
-			}
-		}
-
-		if newSubnetID == "" {
-			By("Test subnet doesn't exist. Creating a new one...")
-			newSubnetCIDR, err := utils.GetNextSubnetCIDR(vNet)
-			Expect(err).NotTo(HaveOccurred())
-			newSubnet, err := tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR, true)
-			newSubnetID = *newSubnet.ID
-			Expect(err).NotTo(HaveOccurred())
+		subnet, isNew := createNewSubnet(tc, subnetName)
+		Expect(to.String(subnet.Name)).To(Equal(subnetName))
+		if isNew {
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
-				err = tc.DeleteSubnet(*vNet.Name, subnetName)
+				vNet, err := tc.GetClusterVirtualNetwork()
+				Expect(err).NotTo(HaveOccurred())
+				err = tc.DeleteSubnet(to.String(vNet.Name), subnetName)
 				Expect(err).NotTo(HaveOccurred())
 			}()
 		}
+		newSubnetID := *subnet.ID
 
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerInternal:     "true",
