@@ -1187,6 +1187,9 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		}
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - creating", serviceName, *pip.Name)
 	}
+	if az.ensurePIPTagged(service, &pip) {
+		changed = true
+	}
 
 	if foundDNSLabelAnnotation {
 		updatedDNSSettings, err := reconcileDNSSettings(&pip, domainNameLabel, serviceName, pipName)
