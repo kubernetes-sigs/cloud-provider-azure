@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -33,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -42,6 +45,7 @@ import (
 )
 
 const (
+	testBaseName       = "service-lb"
 	testServiceName    = "service-lb-test"
 	testDeploymentName = "deployment-lb-test"
 )
@@ -59,7 +63,7 @@ var (
 )
 
 var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
-	basename := "service-lb"
+	basename := testBaseName
 
 	var cs clientset.Interface
 	var ns *v1.Namespace
@@ -659,6 +663,303 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(found).To(Equal(true))
 	})
 })
+
+var _ = Describe("EnsureLoadBalancer should not update any resources when service config is not changed", Label(utils.TestSuiteLabelLB), func() {
+	basename := testBaseName
+
+	var cs clientset.Interface
+	var ns *v1.Namespace
+	var tc *utils.AzureTestClient
+	var deployment *appsv1.Deployment
+
+	labels := map[string]string{
+		"app": testServiceName,
+	}
+	ports := []v1.ServicePort{{
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
+	}}
+
+	BeforeEach(func() {
+		var err error
+		cs, err = utils.CreateKubeClientSet()
+		Expect(err).NotTo(HaveOccurred())
+
+		ns, err = utils.CreateTestingNamespace(basename, cs)
+		Expect(err).NotTo(HaveOccurred())
+
+		tc, err = utils.CreateAzureTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Creating deployment %s", testDeploymentName)
+		deployment = createServerDeploymentManifest(testDeploymentName, labels)
+		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), testDeploymentName, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = utils.DeleteNamespace(cs, ns.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		cs = nil
+		ns = nil
+		tc = nil
+	})
+
+	It("should respect service with various configurations", func() {
+		By("Creating a service and expose it")
+		serviceDomainNamePrefix := testServiceName + string(uuid.NewUUID())
+		annotation := map[string]string{
+			consts.ServiceAnnotationDNSLabelName:                       serviceDomainNamePrefix,
+			consts.ServiceAnnotationAzurePIPTags:                       "Tag_1=t1, Tag_2=t2",
+			consts.ServiceAnnotationLoadBalancerIdleTimeout:            "20",
+			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:    "HTTP",
+			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/healthtz",
+			consts.ServiceAnnotationLoadBalancerHealthProbeInterval:    "10",
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:  "8",
+		}
+
+		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			// Routing preference is only supported in standard public IPs
+			annotation[consts.ServiceAnnotationIPTagsForPublicIP] = "RoutingPreference=Internet"
+		}
+
+		ip := createAndExposeDefaultServiceWithAnnotation(cs, testServiceName, ns.Name, labels, annotation, ports)
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Update the service and without significant changes and compare etags")
+		updateServiceAndCompareEtags(tc, cs, ns, service, ip, false)
+	})
+
+	It("should respect service with BYO public IP with various configurations", func() {
+		By("Creating a BYO public IP")
+		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
+		defer func() {
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := to.String(pip.IPAddress)
+
+		customHealthProbeConfigPrefix := "service.beta.kubernetes.io/port_" + strconv.Itoa(int(ports[0].Port)) + "_health-probe_"
+		By("Creating a service and expose it")
+		annotation := map[string]string{
+			consts.ServiceAnnotationPIPName:                               ipName,
+			consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+			customHealthProbeConfigPrefix + "interval":                    "10",
+			customHealthProbeConfigPrefix + "num-of-probe":                "6",
+			customHealthProbeConfigPrefix + "request-path":                "/healthtz",
+		}
+
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
+		service.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0"}
+		service.Spec.SessionAffinity = "ClientIP"
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip).To(Equal(targetIP))
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Update the service and without significant changes and compare etags")
+		updateServiceAndCompareEtags(tc, cs, ns, service, ip, false)
+	})
+
+	It("should respect service with BYO public IP prefix with various configurations", func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("pip-prefix-id only work with Standard Load Balancer")
+		}
+
+		By("Creating a BYO public IP prefix")
+		prefixName := "prefix"
+		prefix, err := utils.WaitCreatePIPPrefix(tc, prefixName, tc.GetResourceGroup(), defaultPublicIPPrefix(prefixName))
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			Expect(utils.DeletePIPPrefixWithRetry(tc, prefixName)).NotTo(HaveOccurred())
+		}()
+
+		By("Creating a service and expose it")
+		annotation := map[string]string{
+			consts.ServiceAnnotationPIPPrefixID:                   to.String(prefix.ID),
+			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+			consts.ServiceAnnotationSharedSecurityRule:            "true",
+		}
+
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
+		service.Spec.ExternalTrafficPolicy = "Local"
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Update the service and without significant changes and compare etags")
+		updateServiceAndCompareEtags(tc, cs, ns, service, ip, false)
+	})
+
+	It("should respect internal service with various configurations", func() {
+		By("Creating a subnet for ilb frontend ip")
+		subnetName := "testSubnet"
+		subnet, isNew := createNewSubnet(tc, subnetName)
+		Expect(to.String(subnet.Name)).To(Equal(subnetName))
+		if isNew {
+			defer func() {
+				utils.Logf("cleaning up test subnet %s", subnetName)
+				vNet, err := tc.GetClusterVirtualNetwork()
+				Expect(err).NotTo(HaveOccurred())
+				err = tc.DeleteSubnet(to.String(vNet.Name), subnetName)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+		}
+
+		By("Creating a service and expose it")
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerInternal:                    "true",
+			consts.ServiceAnnotationLoadBalancerInternalSubnet:              subnetName,
+			consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts: "true",
+		}
+		ip := createAndExposeDefaultServiceWithAnnotation(cs, testServiceName, ns.Name, labels, annotation, ports)
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Update the service and without significant changes and compare etags")
+		updateServiceAndCompareEtags(tc, cs, ns, service, ip, true)
+	})
+})
+
+func updateServiceAndCompareEtags(tc *utils.AzureTestClient, cs clientset.Interface, ns *v1.Namespace, service *v1.Service, ip string, isInternal bool) {
+	utils.Logf("Retrieving etags from resources")
+	lbEtag, nsgEtag, pipEtag := getResourceEtags(tc, ip, cloudprovider.DefaultLoadBalancerName(service), isInternal)
+
+	utils.Logf("Adding a dummy annotation to trigger a second service reconciliation")
+	Expect(service).NotTo(BeNil())
+	annotation := service.GetAnnotations()
+	annotation["dummy-annotation"] = "dummy"
+	service = updateServiceAnnotation(service, annotation)
+	utils.Logf("service's annotations: %v", annotation)
+	_, err := cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	ip, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+	Expect(err).NotTo(HaveOccurred())
+
+	utils.Logf("Checking etags are not changed")
+	newLbEtag, newNsgEtag, newPipEtag := getResourceEtags(tc, ip, cloudprovider.DefaultLoadBalancerName(service), isInternal)
+	Expect(lbEtag).To(Equal(newLbEtag))
+	Expect(nsgEtag).To(Equal(newNsgEtag))
+	Expect(pipEtag).To(Equal(newPipEtag))
+}
+
+func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*network.Subnet, bool) {
+	vNet, err := tc.GetClusterVirtualNetwork()
+	Expect(err).NotTo(HaveOccurred())
+
+	var subnetToReturn *network.Subnet
+	isNew := false
+	for i := range *vNet.Subnets {
+		existingSubnet := (*vNet.Subnets)[i]
+		if *existingSubnet.Name == subnetName {
+			By("Test subnet exists, skip creating")
+			subnetToReturn = &existingSubnet
+			break
+		}
+	}
+
+	if subnetToReturn == nil {
+		By("Test subnet doesn't exist. Creating a new one...")
+		isNew = true
+		newSubnetCIDR, err := utils.GetNextSubnetCIDR(vNet)
+		Expect(err).NotTo(HaveOccurred())
+		newSubnet, err := tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR, true)
+		Expect(err).NotTo(HaveOccurred())
+		subnetToReturn = &newSubnet
+	}
+
+	return subnetToReturn, isNew
+}
+
+func getResourceEtags(tc *utils.AzureTestClient, ip, nsgRulePrefix string, internal bool) (lbEtag, nsgEtag, pipEtag string) {
+	if internal {
+		lbEtag = to.String(getAzureInternalLoadBalancerFromPrivateIP(tc, ip, "").Etag)
+	} else {
+		lbEtag = to.String(getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "").Etag)
+	}
+
+	nsgs, err := tc.GetClusterSecurityGroups()
+	Expect(err).NotTo(HaveOccurred())
+	for _, nsg := range nsgs {
+		if nsg.SecurityRules == nil {
+			continue
+		}
+		for _, securityRule := range *nsg.SecurityRules {
+			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
+			if strings.HasPrefix(to.String(securityRule.Name), nsgRulePrefix) {
+				nsgEtag = to.String(nsg.Etag)
+				break
+			}
+		}
+	}
+
+	if !internal {
+		pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), ip)
+		Expect(err).NotTo(HaveOccurred())
+		pipEtag = to.String(pip.Etag)
+	}
+	utils.Logf("Got resource etags: lbEtag: %s; nsgEtag: %s, pipEtag: %s", lbEtag, nsgEtag, pipEtag)
+	return
+}
+
+func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lbResourceGroup string) *network.LoadBalancer {
+	if lbResourceGroup == "" {
+		lbResourceGroup = tc.GetResourceGroup()
+	}
+	utils.Logf("Listing all LBs in the resourceGroup " + lbResourceGroup)
+	lbList, err := tc.ListLoadBalancers(lbResourceGroup)
+	Expect(err).NotTo(HaveOccurred())
+
+	var ilb *network.LoadBalancer
+	utils.Logf("Looking for internal load balancer frontend config ID with private ip as frontend")
+	for i := range lbList {
+		lb := lbList[i]
+		for _, fipconfig := range *lb.FrontendIPConfigurations {
+			if fipconfig.PrivateIPAddress != nil &&
+				*fipconfig.PrivateIPAddress == ip {
+				ilb = &lb
+				break
+			}
+		}
+	}
+	Expect(ilb).NotTo(BeNil())
+	return ilb
+}
 
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
