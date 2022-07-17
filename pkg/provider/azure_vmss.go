@@ -1552,6 +1552,15 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 		}
 	}
 
+	// 1. Ensure the backendPoolID is deleted from the VMSS.
+	if deleteFromVMSet {
+		err := ss.ensureBackendPoolDeletedFromVMSS(service, backendPoolID, vmSetName, ipConfigurationIDs)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 2. Ensure the backendPoolID is deleted from the VMSS VMs.
 	hostUpdates := make([]func() error, 0, len(ipConfigurationIDs))
 	nodeUpdates := make(map[vmssMetaInfo]map[string]compute.VirtualMachineScaleSetVM)
 	allErrs := make([]error, 0)
@@ -1639,14 +1648,6 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 	// Fail if there are other errors.
 	if len(allErrs) > 0 {
 		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
-	}
-
-	// Ensure the backendPoolID is also deleted on VMSS itself.
-	if deleteFromVMSet {
-		err := ss.ensureBackendPoolDeletedFromVMSS(service, backendPoolID, vmSetName, ipConfigurationIDs)
-		if err != nil {
-			return err
-		}
 	}
 
 	isOperationSucceeded = true
