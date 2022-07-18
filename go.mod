@@ -26,7 +26,7 @@ require (
 	k8s.io/client-go v0.24.3
 	k8s.io/cloud-provider v0.24.2
 	k8s.io/component-base v0.24.3
-	k8s.io/component-helpers v0.24.2
+	k8s.io/component-helpers v0.24.3
 	k8s.io/controller-manager v0.24.2
 	k8s.io/klog/v2 v2.70.1
 	k8s.io/kubelet v0.24.2
