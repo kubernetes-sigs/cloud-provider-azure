@@ -287,13 +287,17 @@ func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resou
 
 // GetResourceWithQueries get a resource by resource ID with queries.
 func (c *Client) GetResourceWithQueries(ctx context.Context, resourceID string, queries map[string]interface{}) (*http.Response, *retry.Error) {
+
 	queryParameters := make(map[string]interface{})
-	for queryKey, queryValue := range queryParameters {
+	for queryKey, queryValue := range queries {
 		queryParameters[queryKey] = autorest.Encode("query", queryValue)
 	}
 
-	decorators := autorest.WithQueryParameters(queryParameters)
-	return c.GetResource(ctx, resourceID, decorators)
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithQueryParameters(queryParameters),
+	}
+
+	return c.GetResource(ctx, resourceID, decorators...)
 }
 
 // GetResourceWithDecorators get a resource with decorators by resource ID
