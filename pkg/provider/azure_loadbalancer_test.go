@@ -3793,7 +3793,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 		expectedError           bool
 	}{
 		{
-			desc:         "ensurePublicIPExists shall return existed PIP if there is any",
+			desc:         "shall return existed PIP if there is any",
 			existingPIPs: []network.PublicIPAddress{{Name: to.StringPtr("pip1")}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: to.StringPtr("pip1"),
@@ -3803,13 +3803,13 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc: "ensurePublicIPExists shall create a new pip if there is no existed pip",
+			desc: "shall create a new pip if there is no existed pip",
 			expectedID: "/subscriptions/subscription/resourceGroups/rg/providers/" +
 				"Microsoft.Network/publicIPAddresses/pip1",
 			shouldPutPIP: true,
 		},
 		{
-			desc:                    "ensurePublicIPExists shall update existed PIP's dns label",
+			desc:                    "shall update existed PIP's dns label",
 			inputDNSLabel:           "newdns",
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
@@ -3834,7 +3834,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:                    "ensurePublicIPExists shall delete DNS from PIP if DNS label is set empty",
+			desc:                    "shall delete DNS from PIP if DNS label is set empty",
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: to.StringPtr("pip1"),
@@ -3856,7 +3856,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:                    "ensurePublicIPExists shall not delete DNS from PIP if DNS label annotation is not set",
+			desc:                    "shall not delete DNS from PIP if DNS label annotation is not set",
 			foundDNSLabelAnnotation: false,
 			existingPIPs: []network.PublicIPAddress{{
 				Name: to.StringPtr("pip1"),
@@ -3880,7 +3880,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:                    "ensurePublicIPExists shall update existed PIP's dns label for IPv6",
+			desc:                    "shall update existed PIP's dns label for IPv6",
 			inputDNSLabel:           "newdns",
 			foundDNSLabelAnnotation: true,
 			isIPv6:                  true,
@@ -3907,7 +3907,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:                    "ensurePublicIPExists shall report an conflict error if the DNS label is conflicted",
+			desc:                    "shall report an conflict error if the DNS label is conflicted",
 			inputDNSLabel:           "test",
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
@@ -3922,7 +3922,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			expectedError: true,
 		},
 		{
-			desc:          "ensurePublicIPExists shall return the pip without calling PUT API if the tags are good",
+			desc:          "shall return the pip without calling PUT API if the tags are good",
 			inputDNSLabel: "test",
 			existingPIPs: []network.PublicIPAddress{
 				{
@@ -3960,7 +3960,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			},
 		},
 		{
-			desc: "ensurePublicIPExists shall tag the service name to the pip correctly",
+			desc: "shall tag the service name to the pip correctly",
 			existingPIPs: []network.PublicIPAddress{
 				{Name: to.StringPtr("pip1")},
 			},
@@ -3972,7 +3972,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
-			desc:   "ensurePublicIPExists shall not call the PUT API for IPV6 pip if it is not necessary",
+			desc:   "shall not call the PUT API for IPV6 pip if it is not necessary",
 			isIPv6: true,
 			useSLB: true,
 			existingPIPs: []network.PublicIPAddress{
@@ -3995,9 +3995,22 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			},
 			shouldPutPIP: true,
 		},
+		{
+			desc:         "shall update pip tags if there is any change",
+			existingPIPs: []network.PublicIPAddress{{Name: to.StringPtr("pip1"), Tags: map[string]*string{"a": to.StringPtr("b")}}},
+			expectedPIP: &network.PublicIPAddress{
+				Name: to.StringPtr("pip1"), Tags: map[string]*string{"a": to.StringPtr("c")},
+				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
+					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+			},
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationAzurePIPTags: "a=c",
+			},
+			shouldPutPIP: true,
+		},
 	}
 
-	for i, test := range testCases {
+	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			if test.useSLB {
@@ -4046,11 +4059,11 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			}).AnyTimes()
 
 			pip, err := az.ensurePublicIPExists(&service, "pip1", test.inputDNSLabel, "", false, test.foundDNSLabelAnnotation)
-			assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s, encountered unexpected error: %v", i, test.desc, err)
+			assert.Equal(t, test.expectedError, err != nil, "unexpectedly encountered (or not) error: %v", err)
 			if test.expectedID != "" {
-				assert.Equal(t, test.expectedID, to.String(pip.ID), "TestCase[%d]: %s", i, test.desc)
+				assert.Equal(t, test.expectedID, to.String(pip.ID))
 			} else {
-				assert.Equal(t, test.expectedPIP, pip, "TestCase[%d]: %s", i, test.desc)
+				assert.Equal(t, test.expectedPIP, pip)
 			}
 		})
 	}
