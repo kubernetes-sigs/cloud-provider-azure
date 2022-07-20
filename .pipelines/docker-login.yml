@@ -1,4 +1,4 @@
 steps:
   - bash: |
-      docker login $(registry.url) -u $(registry.username) -p $(registry.password)
+      docker login $(REGISTRY_URL) -u $(REGISTRY_USERNAME) -p $(REGISTRY_PASSWORD)
     displayName: docker login
