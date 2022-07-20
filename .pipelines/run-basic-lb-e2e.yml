@@ -1,0 +1,39 @@
+pr:
+  branches:
+    include:
+    - master
+    - release-*
+  paths:
+    exclude:
+    - docs
+    - site
+    - helm
+    - .github
+
+pool:
+  vmImage: ubuntu-18.04
+
+variables:
+  DisableDockerDetector: true
+
+stages:
+  - stage: run_basic_lb_e2e
+    dependsOn: []
+    jobs:
+    - job: build_push_ccm_image_job
+      timeoutInMinutes: 30
+      steps:
+        - template: ./ccm-image.yml
+    - job: build_push_cnm_image_job
+      timeoutInMinutes: 30
+      steps:
+        - template: ./cnm-image.yml
+    - job: create_aks_cluster_and_run_tests_job
+      dependsOn: [build_push_ccm_image_job, build_push_cnm_image_job]
+      timeoutInMinutes: 100
+      steps:
+        - bash: |
+            CLUSTER_TYPE="basic-lb"
+            echo "##vso[task.setvariable variable=CLUSTER_TYPE]${CLUSTER_TYPE}"
+          displayName: set cluster type
+        - template: ./run-e2e.yml
