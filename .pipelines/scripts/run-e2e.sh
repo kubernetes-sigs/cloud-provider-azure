@@ -53,8 +53,10 @@ export TOKEN=$(az account get-access-token -o json | jq -r '.accessToken')
 CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
 if [[ "${CLUSTER_TYPE}" == "autoscaling" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
+  export AZURE_LOADBALANCER_SKU=standard
 elif [[ "${CLUSTER_TYPE}" == "autoscaling-multipool" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling-multipool.json"
+  export AZURE_LOADBALANCER_SKU=standard
 fi
 
 CLUSTER_CONFIG_KEYS=("AKS_CLUSTER_ID" "CLUSTER_NAME" "AZURE_LOCATION" "KUBERNETES_VERSION" "AZURE_CLIENT_ID" "AZURE_CLIENT_SECRET" "CUSTOM_CONFIG")
