@@ -1,0 +1,34 @@
+{
+  "id": "AKS_CLUSTER_ID",
+  "name": "CLUSTER_NAME",
+  "location": "AZURE_LOCATION",
+  "type": "Microsoft.ContainerService/ManagedClusters",
+  "properties": {
+    "kubernetesVersion": "KUBERNETES_VERSION",
+    "dnsPrefix": "aks",
+    "masterProfile": {
+      "count": 3,
+      "dnsPrefix": "{dnsPrefix}",
+      "vmSize": "Standard_DS2_v2"
+    },
+    "agentPoolProfiles": [
+      {
+        "name": "agentpool1",
+        "count": 2,
+        "mode" : "System",
+        "vmSize": "Standard_DS2_v2",
+        "osType": "Linux",
+        "availabilityProfile": "VirtualMachineScaleSets",
+        "storageProfile": "ManagedDisks"
+      }
+    ],
+    "servicePrincipalProfile": {
+        "clientId": "AZURE_CLIENT_ID",
+        "secret": "AZURE_CLIENT_SECRET"
+    },
+    "encodedCustomConfiguration": "CUSTOM_CONFIG",
+    "networkProfile": {
+      "loadBalancerSku": "Basic"
+    }
+  }
+}
