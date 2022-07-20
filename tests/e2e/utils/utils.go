@@ -39,7 +39,7 @@ const (
 	poll                  = 2 * time.Second
 	singleCallTimeout     = 20 * time.Minute
 	vmssOperationInterval = 30 * time.Second
-	vmssOperationTimeout  = 30 * time.Minute
+	vmssOperationTimeout  = 40 * time.Minute
 )
 
 func findExistingKubeConfig() string {

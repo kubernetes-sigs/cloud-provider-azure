@@ -33,6 +33,7 @@ get_random_location() {
 
 cleanup() {
   kubectl get node -owide
+  kubectl get pod -A -owide
   echo "gc the aks cluster"
   az group delete --resource-group "${RESOURCE_GROUP}" -y --no-wait
 }

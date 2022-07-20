@@ -4,3 +4,4 @@ variables:
   value: true
 - name: k8sVersion
   value: "1.24.0"
+
