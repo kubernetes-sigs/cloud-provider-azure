@@ -14,7 +14,9 @@ pool:
   vmImage: ubuntu-18.04
 
 variables:
-  DisableDockerDetector: true
+- group: aks-ci
+- name: DisableDockerDetector
+  value: true
 
 stages:
   - stage: run_basic_lb_e2e
