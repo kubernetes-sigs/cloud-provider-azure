@@ -19,11 +19,14 @@ package armclient
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httputil"
 	"net/url"
 	"strings"
@@ -35,11 +38,26 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/go-autorest/tracing"
 
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	"sigs.k8s.io/cloud-provider-azure/pkg/version"
 )
+
+// there is one sender per TLS renegotiation type, i.e. count of tls.RenegotiationSupport enums
+
+type defaultSender struct {
+	sender autorest.Sender
+	init   *sync.Once
+}
+
+// each type of sender will be created on demand in sender()
+var defaultSenders defaultSender
+
+func init() {
+	defaultSenders.init = &sync.Once{}
+}
 
 var _ Interface = &Client{}
 
@@ -51,10 +69,43 @@ type Client struct {
 	regionalEndpoint string
 }
 
+func sender() autorest.Sender {
+	// note that we can't init defaultSenders in init() since it will
+	// execute before calling code has had a chance to enable tracing
+	defaultSenders.init.Do(func() {
+		// copied from http.DefaultTransport with a TLS minimum version.
+		transport := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second, // the same as default transport
+				KeepAlive: 30 * time.Second, // the same as default transport
+			}).DialContext,
+			ForceAttemptHTTP2:     true,             // always attempt HTTP/2 even though custom dialer is provided
+			MaxIdleConns:          100,              // Zero means no limit, the same as default transport
+			MaxIdleConnsPerHost:   100,              // Default is 2, ref:https://cs.opensource.google/go/go/+/go1.18.4:src/net/http/transport.go;l=58
+			IdleConnTimeout:       90 * time.Second, // the same as default transport
+			TLSHandshakeTimeout:   10 * time.Second, // the same as default transport
+			ExpectContinueTimeout: 1 * time.Second,  // the same as default transport
+			TLSClientConfig: &tls.Config{
+				MinVersion:    tls.VersionTLS12,     //force to use TLS 1.2
+				Renegotiation: tls.RenegotiateNever, // the same as default transport https://pkg.go.dev/crypto/tls#RenegotiationSupport
+			},
+		}
+		var roundTripper http.RoundTripper = transport
+		if tracing.IsEnabled() {
+			roundTripper = tracing.NewTransport(transport)
+		}
+		j, _ := cookiejar.New(nil)
+		defaultSenders.sender = &http.Client{Jar: j, Transport: roundTripper}
+	})
+	return defaultSenders.sender
+}
+
 // New creates a ARM client
 func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig, baseURI, apiVersion string, sendDecoraters ...autorest.SendDecorator) *Client {
 	restClient := autorest.NewClientWithUserAgent(clientConfig.UserAgent)
 	restClient.Authorizer = authorizer
+	restClient.Sender = sender()
 
 	if clientConfig.UserAgent == "" {
 		restClient.UserAgent = GetUserAgent(restClient)
