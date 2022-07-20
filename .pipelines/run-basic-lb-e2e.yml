@@ -17,6 +17,12 @@ variables:
 - group: aks-ci
 - name: DisableDockerDetector
   value: true
+- name: REGISTRY_URL
+  value: $(REGISTRY_URL)
+- name: REGISTRY_USERNAME
+  value: $(REGISTRY_USERNAME)
+- name: REGISTRY_PASSWORD
+  value: $(REGISTRY_PASSWORD)
 
 stages:
   - stage: run_basic_lb_e2e
