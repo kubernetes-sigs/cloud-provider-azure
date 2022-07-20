@@ -428,10 +428,8 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
-		if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
-			if !strings.EqualFold(skuEnv, string(network.PublicIPAddressSkuNameStandard)) {
-				Skip("pip-prefix-id only work with Standard Load Balancer")
-			}
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
 		const (
