@@ -1,0 +1,67 @@
+pr:
+  branches:
+    include:
+    - master
+    - release-*
+  paths:
+    exclude:
+    - docs
+    - site
+    - helm
+    - .github
+
+pool:
+  vmImage: ubuntu-18.04
+
+variables:
+- template: var-e2e.yml
+
+stages:
+  - stage: run_basic_lb_e2e
+    dependsOn: []
+    jobs:
+    - job: build_push_ccm_image_job
+      timeoutInMinutes: 30
+      steps:
+        - bash: |
+            git show --stat
+            echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
+            export IMAGE_REGISTRY=$REGISTRY_URL
+            IMAGE_NAME="azure-cloud-controller-manager"
+            IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+            if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
+              make build-ccm-image-amd64
+              make push-ccm-image-amd64
+            fi
+          displayName: make and push ccm image
+          env:
+            REGISTRY_URL: $(registry.url)
+            REGISTRY_USERNAME: $(registry.username)
+            REGISTRY_PASSWORD: $(registry.password)
+    - job: build_push_cnm_image_job
+      timeoutInMinutes: 30
+      steps:
+        - bash: |
+            git show --stat
+            echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
+            export IMAGE_REGISTRY=$REGISTRY_URL
+            IMAGE_NAME="azure-cloud-node-manager"
+            IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+            if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
+              make build-node-image-linux-amd64
+              make push-node-image-linux-amd64
+            fi
+          displayName: make and push cnm image
+          env:
+            REGISTRY_URL: $(registry.url)
+            REGISTRY_USERNAME: $(registry.username)
+            REGISTRY_PASSWORD: $(registry.password)
+    - job: create_aks_cluster_and_run_tests_job
+      dependsOn: [build_push_ccm_image_job, build_push_cnm_image_job]
+      timeoutInMinutes: 300
+      steps:
+        - bash: |
+            CLUSTER_TYPE="basic-lb"
+            echo "##vso[task.setvariable variable=CLUSTER_TYPE]${CLUSTER_TYPE}"
+          displayName: set cluster type
+        - template: run-e2e.yml
