@@ -1,7 +1,16 @@
 schedules:
 - cron: "0 0 * * *"
   displayName: Daily GC
-  always: true
+  branches:
+    include:
+    - main
+
+pr: none
+
+variables:
+- group: aks-ci
+- name: DisableDockerDetector
+  value: true
 
 stages:
   - stage: gc_stage
@@ -11,10 +20,10 @@ stages:
       timeoutInMinutes: 30
       steps:
         - bash: |
-            export AZURE_SUBSCRIPTION_ID=$(AZ_SUBSCRIPTION_ID)
-            export AZURE_TENANT_ID=$(AZ_TENANT_ID)
-            export AZURE_CLIENT_ID=$(SP_CLIENT_ID)
-            export AZURE_CLIENT_SECRET=$(SP_CLIENT_SECRET)
+            export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+            export AZURE_TENANT_ID=$AZ_TENANT_ID
+            export AZURE_CLIENT_ID=$SP_CLIENT_ID
+            export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
 
             .pipelines/scripts/daily-gc.sh
           displayName: gc aks and resource groups
