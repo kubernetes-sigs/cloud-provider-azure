@@ -67,7 +67,7 @@ done
 
 echo "Creating an AKS cluster in resource group ${RESOURCE_GROUP}"
 CREATION_DATE="$(date +%s)"
-az group create --name "${RESOURCE_GROUP}" -l "${AZURE_LOCATION}" --tags "creation_date=${CREATION_DATE} usage=aks-cluster-e2e"
+az group create --name "${RESOURCE_GROUP}" -l "${AZURE_LOCATION}" --tags "creation_date=${CREATION_DATE}" "usage=aks-cluster-e2e"
 curl -i -X PUT -k -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
     -H "AKSHTTPCustomFeatures: Microsoft.ContainerService/EnableCloudControllerManager" \
