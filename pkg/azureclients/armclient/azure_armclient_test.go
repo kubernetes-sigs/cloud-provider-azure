@@ -338,6 +338,19 @@ func TestGetResource(t *testing.T) {
 				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "", apiVersion)
 			},
 		},
+		{
+			description:         "GetResourceWithQueries",
+			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01&param1=value1&param2=value2",
+			apiVersion:          "2019-01-01",
+			expectedAPIVersion:  "2019-01-01",
+			params: map[string]interface{}{
+				"param1": "value1",
+				"param2": "value2",
+			},
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+				return armClient.GetResourceWithQueries(ctx, testResourceID, params)
+			},
+		},
 	}
 
 	for _, tc := range testcases {
