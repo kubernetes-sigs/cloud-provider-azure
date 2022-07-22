@@ -217,6 +217,112 @@ func (c *Client) listVM(ctx context.Context, resourceGroupName string) ([]comput
 	return result, nil
 }
 
+// ListVmssFlexVMsWithoutInstanceView gets a list of VirtualMachine in the VMSS Flex without InstanceView.
+func (c *Client) ListVmssFlexVMsWithoutInstanceView(ctx context.Context, vmssFlexID string) ([]compute.VirtualMachine, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "list", "", c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(false, "VMList")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMList", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listVmssFlexVMs(ctx, vmssFlexID, false)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// ListVmssFlexVMsWithOnlyInstanceView gets a list of VirtualMachine in the VMSS Flex with only InstanceView.
+func (c *Client) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, vmssFlexID string) ([]compute.VirtualMachine, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "list", "", c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(false, "VMList")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMList", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listVmssFlexVMs(ctx, vmssFlexID, true)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// listVmssFlexVMs gets a list of VirtualMachines in the VMSS Flex.
+func (c *Client) listVmssFlexVMs(ctx context.Context, vmssFlexID string, statusOnly bool) ([]compute.VirtualMachine, *retry.Error) {
+	resourceID := armclient.GetProviderResourceID(c.subscriptionID, vmResourceType)
+
+	result := make([]compute.VirtualMachine, 0)
+	page := &VirtualMachineListResultPage{}
+	page.fn = c.listNextResults
+
+	queries := make(map[string]interface{})
+	queries["$filter"] = "'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"
+	if statusOnly {
+		queries["statusOnly"] = true
+	}
+	resp, rerr := c.armClient.GetResourceWithQueries(ctx, resourceID, queries)
+	defer c.armClient.CloseResponse(ctx, resp)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.request", resourceID, rerr.Error())
+		return result, rerr
+	}
+
+	var err error
+	page.vmlr, err = c.listResponder(resp)
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.respond", resourceID, err)
+		return result, retry.GetError(resp, err)
+	}
+
+	for {
+		result = append(result, page.Values()...)
+
+		// Abort the loop when there's no nextLink in the response.
+		if to.String(page.Response().NextLink) == "" {
+			break
+		}
+
+		if err = page.NextWithContext(ctx); err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.next", resourceID, err)
+			return result, retry.GetError(page.Response().Response.Response, err)
+		}
+	}
+
+	return result, nil
+}
+
 // Update updates a VirtualMachine.
 func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error {
 	mc := metrics.NewMetricContext("vm", "update", resourceGroupName, c.subscriptionID, source)
