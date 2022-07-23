@@ -3,14 +3,14 @@ title: "Azure Private Link Service Integration"
 linkTitle: "Azure Private Link Service Integration"
 type: docs
 description: >
-    Connect Azure Private Link service to internal load balancer.
+    Connect Azure Private Link service to Azure Standard Load Balancer.
 ---
 
 Azure Private Link Service (PLS) is an infrastructure component that allows users to privately connect via a Private Endpoint (PE) in a VNET in Azure and a Frontend IP Configuration associated with an Azure Load Balancer (ALB). With Private Link, users as service providers can securely provide their services to consumers who can connect from within Azure or on-premises without data exfiltration risks.
 
-Before Private Link Service integration, users who wanted private connectivity from on-premises or other VNETs to their services in the Azure Kubernetes cluster were required to create a Private Link Service (PLS) to reference the Azure Internal LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, a managed PLS to the LB would be created automatically, and the user would only be required to create PE connections to it for private connectivity.
+Before Private Link Service integration, users who wanted private connectivity from on-premises or other VNETs to their services in the Azure Kubernetes cluster were required to create a Private Link Service (PLS) to reference the Azure LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, a managed PLS to the LB would be created automatically, and the user would only be required to create PE connections to it for private connectivity.
 
-Currently, managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../loadbalancer)).
+Currently, private link service connectivity is broken with Azure external Standard Load Balancer and floating ip enabled (default). To use managed private link service, users can either create an internal service by setting annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to `true` or disable floating ip by setting annotation `service.beta.kubernetes.io/service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` to `true` ([more details here](../loadbalancer)).
 
 ## PrivateLinkService annotations
 
@@ -20,7 +20,7 @@ Below is a list of annotations supported for Kubernetes services with Azure PLS 
 | ------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------ |------|------|
 | `service.beta.kubernetes.io/azure-pls-create`                            | `"true"`                           | Boolean indicating whether a PLS needs to be created. | Required | |
 | `service.beta.kubernetes.io/azure-pls-name`                              | `<PLS name>`                       | String specifying the name of the PLS resource to be created. | Optional | `"pls-<LB frontend config name>"` |
-| `service.beta.kubernetes.io/azure-pls-ip-configuration-subnet`           |`<Subnet name>`                     | String indicating the subnet to which the PLS will be deployed. This subnet must exist in the same VNET as the backend pool. PLS NAT IPs are allocated within this subnet. | Optional | If `service.beta.kubernetes.io/azure-load-balancer-internal-subnet`, this LB subnet is used. Otherwise, the default subnet from config file is used. |
+| `service.beta.kubernetes.io/azure-pls-ip-configuration-subnet`           |`<Subnet name>`                     | String indicating the subnet to which the PLS will be deployed. This subnet must exist in the same VNET as the backend pool. PLS NAT IPs are allocated within this subnet. | Optional | If `service.beta.kubernetes.io/azure-load-balancer-internal-subnet`, this ILB subnet is used. Otherwise, the default subnet from config file is used. |
 | `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count` | `[1-8]`                            | Total number of private NAT IPs to allocate. | Optional | 1 |
 | `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address`       | `"10.0.0.7 ... 10.0.0.10"`         | A space separated list of static **IPv4** IPs to be allocated. (IPv6 is not supported right now.) Total number of IPs should not be greater than the ip count specifed in `service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count`. If there are fewer IPs specified, the rest are dynamically allocated. The first IP in the list is set as `Primary`. |  Optional | All IPs are dynamically allocated. |
 | `service.beta.kubernetes.io/azure-pls-fqdns`                             | `"fqdn1 fqdn2"`                    | A space separated list of fqdns associated with the PLS. | Optional | `[]` |
@@ -67,7 +67,7 @@ kind: Service
 metadata:
   name: myService
   annotations:
-    service.beta.kubernetes.io/azure-load-balancer-internal: "true" # Right now PLS must be used with internal LB
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true" # Use an internal LB with PLS
     service.beta.kubernetes.io/azure-pls-create: "true"
     service.beta.kubernetes.io/azure-pls-name: myServicePLS
     service.beta.kubernetes.io/azure-pls-ip-configuration-subnet: pls-subnet
@@ -89,5 +89,7 @@ spec:
 ```
 ## Restrictions
 
+* PLS does not support basic Load Balancer or IP-based Load Balancer.
+* PLS connectivity is broken with Azure external Standard Load Balancer and floating ip enabled (default). Users can either use an internal Load Balancer or disable floating ip on loadbalancing rules (described above).
 * At this moment, PLS connectivity is broken if [AzureCNI V2](https://docs.microsoft.com/en-us/azure/aks/configure-azure-cni#dynamic-allocation-of-ips-and-enhanced-subnet-support) is used in cluster. Azure networking team is working on supporting the feature.
 * Due to limitation of [kubernetes#95555](https://github.com/kubernetes/kubernetes/issues/95555), when the service's externalTrafficPolicy set to Local, PLS need to use a different subnet from Pod's subnet. If the same subnet is required, then the service should use Cluster externalTrafficPolicy.
