@@ -56,12 +56,32 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			wantPLS: true,
 		},
 		{
-			desc: "reconcilePrivateLinkService should return error if service requires PLS but needs external LB",
+			desc: "reconcilePrivateLinkService should return error if service requires PLS but needs external LB and floating ip enabled",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSCreation: "true",
 			},
 			wantPLS:       true,
 			expectedError: true,
+		},
+		{
+			desc: "reconcilePrivateLinkService should create a new PLS for external service with floating ip disabled",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:                   "true",
+				consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
+			},
+			wantPLS:           true,
+			expectedSubnetGet: true,
+			existingSubnet: &network.Subnet{
+				Name: to.StringPtr("subnet"),
+				ID:   to.StringPtr("subnetID"),
+				SubnetPropertiesFormat: &network.SubnetPropertiesFormat{
+					PrivateLinkServiceNetworkPolicies: network.VirtualNetworkPrivateLinkServiceNetworkPoliciesDisabled,
+				},
+			},
+			expectedPLSList:   true,
+			existingPLSList:   []network.PrivateLinkService{},
+			expectedPLSCreate: true,
+			expectedPLS:       &network.PrivateLinkService{Name: to.StringPtr("pls-fipConfig")},
 		},
 		{
 			desc: "reconcilePrivateLinkService should create a new PLS if no existing PLS attached to the LB frontend",
@@ -300,7 +320,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 	for i, test := range testCases {
 		az := GetTestCloud(ctrl)
 		service := getTestServiceWithAnnotation("test", test.annotations, 80)
-		fipConfig := &network.FrontendIPConfiguration{ID: to.StringPtr("fipConfigID")}
+		fipConfig := &network.FrontendIPConfiguration{
+			Name: to.StringPtr("fipConfig"),
+			ID:   to.StringPtr("fipConfigID"),
+		}
 		clusterName := testClusterName
 
 		mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
@@ -1329,6 +1352,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 		{
 			desc: "Service with empty private link subnet specified but LB subnet specified should return LB subnet",
 			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
 			},
@@ -1337,6 +1361,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 		{
 			desc: "Service with LB subnet specified should return it",
 			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "lb-subnet",
 			},
 			expectedSubnet: to.StringPtr("lb-subnet"),
@@ -1344,6 +1369,7 @@ func TestGetPLSSubnetName(t *testing.T) {
 		{
 			desc: "Service with both empty subnets specified should return nil",
 			annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:   "",
 				consts.ServiceAnnotationLoadBalancerInternalSubnet: "",
 			},
