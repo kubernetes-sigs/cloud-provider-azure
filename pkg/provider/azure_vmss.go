@@ -976,7 +976,9 @@ func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeNam
 		}
 
 		klog.Errorf("EnsureHostInPool: failed to get VMSS VM %s: %v", vmName, err)
-		return "", "", "", nil, err
+		if !errors.Is(err, ErrorNotVmssInstance) {
+			return "", "", "", nil, err
+		}
 	}
 
 	klog.V(2).Infof("ensuring node %q of scaleset %q in LB backendpool %q", nodeName, ssName, backendPoolID)
