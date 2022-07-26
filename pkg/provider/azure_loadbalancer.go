@@ -98,7 +98,9 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	lbStatus, fipConfig, err := az.getServiceLoadBalancerStatus(service, lb, nil)
 	if err != nil {
 		klog.Errorf("getServiceLoadBalancerStatus(%s) failed: %v", serviceName, err)
-		return nil, err
+		if !errors.Is(err, ErrorNotVmssInstance) {
+			return nil, err
+		}
 	}
 
 	var serviceIP *string
