@@ -6,9 +6,9 @@ description: >
     Connect Azure Private Link service to internal load balancer.
 ---
 
-Azure Private Link Service (PLS) is an infrastructure component that allows users to privately connect via a Private Endpoint (PE) in a VNET in Azure and a Frontend IP Configuration associated with an Azure Load Balancer (ALB). With Private Link, users as service providers can securely provide their services to consumers who can connect from within Azure or on-premises without data exfiltration risks. 
+Azure Private Link Service (PLS) is an infrastructure component that allows users to privately connect via a Private Endpoint (PE) in a VNET in Azure and a Frontend IP Configuration associated with an Azure Load Balancer (ALB). With Private Link, users as service providers can securely provide their services to consumers who can connect from within Azure or on-premises without data exfiltration risks.
 
-Before Private Link Service integration, users who wanted private connectivity from on-premises or other VNETs to their services in the Azure Kubernetes cluster were required to create a Private Link Service (PLS) to reference the Azure Internal LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, a managed PLS to the LB would be created automatically, and the user would only be required to create PE connections to it for private connectivity. 
+Before Private Link Service integration, users who wanted private connectivity from on-premises or other VNETs to their services in the Azure Kubernetes cluster were required to create a Private Link Service (PLS) to reference the Azure Internal LoadBalancer. The user would then create a Private Endpoint (PE) to connect to the PLS to enable private connectivity. With this feature, a managed PLS to the LB would be created automatically, and the user would only be required to create PE connections to it for private connectivity.
 
 Currently, managed private link service only works with Azure Internal Standard Load Balancer. Users who want to use private link service for their Kubernetes services must set annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to be `true` ([Doc](../loadbalancer)).
 
@@ -35,13 +35,13 @@ For more details about each configuration, please refer to [Azure Private Link S
 
 ### Creating managed PrivateLinkService
 
-When a `LoadBalancer` typed service is created without the `loadBalancerIP` field specified, an LB frontend IP configuration is created with a dynamically generated IP. If the service has `loadBalancerIP` in its spec, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the default resource group or the resource group user set in config file with key `PrivateLinkServiceResourceGroup`. 
+When a `LoadBalancer` typed service is created without the `loadBalancerIP` field specified, an LB frontend IP configuration is created with a dynamically generated IP. If the service has `loadBalancerIP` in its spec, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the default resource group or the resource group user set in config file with key `PrivateLinkServiceResourceGroup`.
 
 The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with cluster name and service name `kubernetes-owner-service: <namespace>/<service name>`. Only the owner service can later update the properties of the PLS resource.
 
-If there's a managed PLS already created for the LB frontend, the same PLS is reused automatically since each LB frontend can be referenced by only one PLS. If the LB frontend is attached to a user defined PLS, service creation should fail with proper error logged. 
+If there's a managed PLS already created for the LB frontend, the same PLS is reused automatically since each LB frontend can be referenced by only one PLS. If the LB frontend is attached to a user defined PLS, service creation should fail with proper error logged.
 
-For now, Azure cloud provider does not manage any [Private Link Endpoint](https://docs.microsoft.com/en-us/azure/private-link/private-endpoint-overview) resources. Once a PLS is created, users can create their own PEs to connect to the PLS. 
+For now, Azure cloud provider does not manage any [Private Link Endpoint](https://docs.microsoft.com/en-us/azure/private-link/private-endpoint-overview) resources. Once a PLS is created, users can create their own PEs to connect to the PLS.
 
 ### Deleting managed PrivateLinkService
 
@@ -51,11 +51,11 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 ### Sharing managed PrivateLinkService
 
-Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports. 
+Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports.
 
 Azure cloud provider tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
 
-PLS is only automatically deleted when the LB frontend IP configuration is deleted. One can delete a service while preserving the PLS by creating a temporary service referring to the same LB frontend. 
+PLS is only automatically deleted when the LB frontend IP configuration is deleted. One can delete a service while preserving the PLS by creating a temporary service referring to the same LB frontend.
 
 ### Managed PrivateLinkService Creation example
 
@@ -88,4 +88,6 @@ spec:
       targetPort: 80
 ```
 ## Restrictions
-At this moment, PLS connectivity is broken if [AzureCNI V2](https://docs.microsoft.com/en-us/azure/aks/configure-azure-cni#dynamic-allocation-of-ips-and-enhanced-subnet-support) is used in cluster. Azure networking team is working on supporting the feature.
+
+* At this moment, PLS connectivity is broken if [AzureCNI V2](https://docs.microsoft.com/en-us/azure/aks/configure-azure-cni#dynamic-allocation-of-ips-and-enhanced-subnet-support) is used in cluster. Azure networking team is working on supporting the feature.
+* Due to limitation of [kubernetes#95555](https://github.com/kubernetes/kubernetes/issues/95555), when the service's externalTrafficPolicy set to Local, PLS need to use a different subnet from Pod's subnet. If the same subnet is required, then the service should use Cluster externalTrafficPolicy.
