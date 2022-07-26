@@ -301,9 +301,10 @@ manifest-node-manager-image-windows-%:
 .PHONY: manifest-node-manager-image-windows
 manifest-node-manager-image-windows:
 	set -x
-	docker manifest create $(NODE_MANAGER_IMAGE) --amend $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) --amend $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	docker manifest create --amend $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
 	docker manifest annotate --os linux --arch $(ARCH) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH)
-	docker manifest annotate --os windows --arch $(ARCH) --os-version $(WINDOWS_OSVERSION) $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
+	full_version=`docker manifest inspect ${BASE.windows}:$(WINDOWS_OSVERSION) | jq -r '.manifests[0].platform["os.version"]'`; \
+	docker manifest annotate --os windows --arch $(ARCH) --os-version $${full_version} $(NODE_MANAGER_IMAGE) $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH)
 	docker manifest push --purge $(NODE_MANAGER_IMAGE)
 
 ## --------------------------------------
