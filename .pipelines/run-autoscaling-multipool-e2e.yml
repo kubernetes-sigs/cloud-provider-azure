@@ -1,14 +1,11 @@
-pr:
+schedules:
+- cron: "0 5 * * *"
+  displayName: Daily AKS Autoscaling Multipool E2E Test
   branches:
     include:
     - master
-    - release-*
-  paths:
-    exclude:
-    - docs
-    - site
-    - helm
-    - .github
+
+pr: none
 
 pool:
   vmImage: ubuntu-18.04
@@ -60,7 +57,7 @@ stages:
             REGISTRY_PASSWORD: $(registry.password)
     - job: create_aks_cluster_and_run_tests_job
       dependsOn: [build_push_ccm_image_job, build_push_cnm_image_job]
-      timeoutInMinutes: 100
+      timeoutInMinutes: 300
       steps:
         - bash: |
             CLUSTER_TYPE="autoscaling-multipool"
