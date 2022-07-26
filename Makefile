@@ -25,9 +25,6 @@ TEST_RESULTS_DIR=testResults
 TEST_MANIFEST ?= linux
 # build hyperkube image when specified
 K8S_BRANCH ?=
-# Only run conformance tests by default (non-serial and non-slow)
-# Note autoscaling tests would be skipped as well.
-CCM_E2E_ARGS ?= -ginkgo.skip=\\[Serial\\]\\[Slow\\]
 #The test args for Kubernetes e2e tests
 TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
