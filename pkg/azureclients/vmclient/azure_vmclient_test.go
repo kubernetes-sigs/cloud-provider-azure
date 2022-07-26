@@ -43,8 +43,9 @@ import (
 )
 
 const (
-	testResourceID     = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"
-	testResourcePrefix = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines"
+	testResourceID                      = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"
+	testResourcePrefix                  = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines"
+	testSubscriptionLevelResourcePrefix = "/subscriptions/subscriptionID/providers/Microsoft.Compute/virtualMachines"
 )
 
 func TestNew(t *testing.T) {
@@ -492,6 +493,342 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	}
+}
+
+func TestListVmssFlexVMsWithoutInstanceView(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm1"), getTestVM("vm1")}
+	responseBody, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Nil(t, rerr)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	expected := []compute.VirtualMachine{}
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewNInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	expected := []compute.VirtualMachine{}
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewThrottle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	throttleErr := &retry.Error{
+		HTTPStatusCode: http.StatusTooManyRequests,
+		RawError:       fmt.Errorf("error"),
+		Retriable:      true,
+		RetryAfter:     time.Unix(100, 0),
+	}
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Empty(t, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, throttleErr, rerr)
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewWithListResponderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm2"), getTestVM("vm3")}
+	responseBody, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 0, len(result))
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewWithNextPage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm2"), getTestVM("vm3")}
+	partialResponse, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList, NextLink: to.StringPtr("nextLink")})
+	assert.NoError(t, err)
+	pagedResponse, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().PrepareGetRequest(gomock.Any(), gomock.Any()).Return(&http.Request{}, nil)
+	armClient.EXPECT().Send(gomock.Any(), gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
+		}, nil)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Nil(t, rerr)
+	assert.Equal(t, 6, len(result))
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewNeverRateLimiter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmListErr := &retry.Error{
+		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "read", "VMList"),
+		Retriable: true,
+	}
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmClient := getTestVMClientWithNeverRateLimiter(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, 0, len(result))
+	assert.NotNil(t, rerr)
+	assert.Equal(t, vmListErr, rerr)
+}
+
+func TestListVmssFlexVMsWithoutInstanceViewRetryAfterReader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmListErr := &retry.Error{
+		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "VMList", "client throttled"),
+		Retriable:  true,
+		RetryAfter: getFutureTime(),
+	}
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmClient := getTestVMClientWithRetryAfterReader(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithoutInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, 0, len(result))
+	assert.NotNil(t, rerr)
+	assert.Equal(t, vmListErr, rerr)
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceView(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm1"), getTestVM("vm1")}
+	responseBody, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Nil(t, rerr)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	expected := []compute.VirtualMachine{}
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewNInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	expected := []compute.VirtualMachine{}
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewThrottle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	throttleErr := &retry.Error{
+		HTTPStatusCode: http.StatusTooManyRequests,
+		RawError:       fmt.Errorf("error"),
+		Retriable:      true,
+		RetryAfter:     time.Unix(100, 0),
+	}
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Empty(t, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, throttleErr, rerr)
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewWithListResponderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm2"), getTestVM("vm3")}
+	responseBody, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 0, len(result))
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewWithNextPage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVM("vm1"), getTestVM("vm2"), getTestVM("vm3")}
+	partialResponse, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList, NextLink: to.StringPtr("nextLink")})
+	assert.NoError(t, err)
+	pagedResponse, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+	armClient.EXPECT().PrepareGetRequest(gomock.Any(), gomock.Any()).Return(&http.Request{}, nil)
+	armClient.EXPECT().Send(gomock.Any(), gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
+		}, nil)
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testSubscriptionLevelResourcePrefix, gomock.Any()).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Nil(t, rerr)
+	assert.Equal(t, 6, len(result))
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewNeverRateLimiter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmListErr := &retry.Error{
+		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "read", "VMList"),
+		Retriable: true,
+	}
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmClient := getTestVMClientWithNeverRateLimiter(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, 0, len(result))
+	assert.NotNil(t, rerr)
+	assert.Equal(t, vmListErr, rerr)
+}
+
+func TestListVmssFlexVMsWithOnlyInstanceViewRetryAfterReader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmListErr := &retry.Error{
+		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "VMList", "client throttled"),
+		Retriable:  true,
+		RetryAfter: getFutureTime(),
+	}
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmClient := getTestVMClientWithRetryAfterReader(armClient)
+	result, rerr := vmClient.ListVmssFlexVMsWithOnlyInstanceView(context.TODO(), "vmssFlexID")
+	assert.Equal(t, 0, len(result))
+	assert.NotNil(t, rerr)
+	assert.Equal(t, vmListErr, rerr)
 }
 
 func TestUpdate(t *testing.T) {
