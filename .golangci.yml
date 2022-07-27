@@ -1,32 +1,14 @@
 run:
-  deadline: 10m
+  deadline: 30m
+  concurrency: 2
+  go: '1.18'
+  allow-serial-runners: true
 skip-dirs:
     - vendor
 linters:
   disable-all: true
   enable:
-    - deadcode
-    - errcheck
-#    - errorlint
-    - goconst
-#    - gocyclo
-    - gofmt
-    - goimports
-    - revive
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-#    - interfacer
-    - misspell
-    - nakedret
-#    - prealloc
-    - staticcheck
-    - structcheck
-    - typecheck
-    - unconvert
-    - unused
-    - varcheck
+    - LINTER_TO_RUN
   # Run with --fast=false for more extensive checks
   fast: false
   govet:

@@ -218,7 +218,7 @@ func delayForBackOff(backoff *Backoff, cancel <-chan struct{}) bool {
 	}
 }
 
-//DoFilterOutNonRetriableError decorator works with autorest.DoRetryForAttempts
+// DoFilterOutNonRetriableError decorator works with autorest.DoRetryForAttempts
 func DoFilterOutNonRetriableError(shouldRetry func(rerr *Error) bool) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(r *http.Request) (*http.Response, error) {

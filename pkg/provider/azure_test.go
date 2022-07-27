@@ -3233,12 +3233,12 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 		t.Fatalf("Expected security rule %q but it was not present", testRuleName23)
 	}
 
-	_, securityRule2, rule2Found = findSecurityRuleByName(*sg.SecurityRules, testRuleName3)
+	_, _, rule2Found = findSecurityRuleByName(*sg.SecurityRules, testRuleName3)
 	if !rule2Found {
 		t.Fatalf("Expected security rule %q but it was not present", testRuleName3)
 	}
 
-	_, securityRule4, rule4Found = findSecurityRuleByName(*sg.SecurityRules, expectedRuleName4)
+	_, _, rule4Found = findSecurityRuleByName(*sg.SecurityRules, expectedRuleName4)
 	if !rule4Found {
 		t.Fatalf("Expected security rule %q but it was not present", expectedRuleName4)
 	}
