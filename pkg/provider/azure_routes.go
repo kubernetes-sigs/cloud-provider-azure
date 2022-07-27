@@ -70,8 +70,8 @@ func (op *delayedRouteOperation) wait() error {
 // delayedRouteUpdater defines a delayed route updater, which batches all the
 // route updating operations within "interval" period.
 // Example usage:
-//   op, err := updater.addRouteOperation(routeOperationAdd, route)
-//   err = op.wait()
+// op, err := updater.addRouteOperation(routeOperationAdd, route)
+// err = op.wait()
 type delayedRouteUpdater struct {
 	az       *Cloud
 	interval time.Duration
@@ -552,7 +552,7 @@ func findFirstIPByFamily(ips []string, v6 bool) (string, error) {
 	return "", fmt.Errorf("no match found matching the ipfamily requested")
 }
 
-//strips : . /
+// strips : . /
 func cidrtoRfc1035(cidr string) string {
 	cidr = strings.ReplaceAll(cidr, ":", "")
 	cidr = strings.ReplaceAll(cidr, ".", "")
