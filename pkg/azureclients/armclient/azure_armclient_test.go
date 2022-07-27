@@ -19,7 +19,7 @@ package armclient
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -372,7 +372,7 @@ func TestGetResource(t *testing.T) {
 			response, rerr := tc.getResource(ctx, armClient, tc.expectedAPIVersion, tc.params)
 			assert.Nil(t, rerr)
 			assert.NotNil(t, response)
-			byteResponseBody, _ := ioutil.ReadAll(response.Body)
+			byteResponseBody, _ := io.ReadAll(response.Body)
 			stringResponseBody := string(byteResponseBody)
 			assert.Equal(t, "{data: testPIP}", stringResponseBody)
 			assert.Equal(t, 1, count)

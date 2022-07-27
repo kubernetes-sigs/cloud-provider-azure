@@ -188,7 +188,7 @@ func DeleteNodes(cs clientset.Interface, names []string) error {
 	return nil
 }
 
-//deleteNodes deletes nodes according to names
+// deleteNodes deletes nodes according to names
 func deleteNode(cs clientset.Interface, name string) error {
 	Logf("Deleting node: %s", name)
 	if err := cs.CoreV1().Nodes().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
