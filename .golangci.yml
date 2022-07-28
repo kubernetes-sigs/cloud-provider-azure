@@ -1,5 +1,7 @@
 run:
   deadline: 10m
+  concurrrency: 1
+  allow-serial-runners: true
 skip-dirs:
     - vendor
 linters:
@@ -7,9 +9,7 @@ linters:
   enable:
     - deadcode
     - errcheck
-#    - errorlint
     - goconst
-#    - gocyclo
     - gofmt
     - goimports
     - revive
@@ -17,10 +17,8 @@ linters:
     - gosimple
     - govet
     - ineffassign
-#    - interfacer
     - misspell
     - nakedret
-#    - prealloc
     - staticcheck
     - structcheck
     - typecheck
