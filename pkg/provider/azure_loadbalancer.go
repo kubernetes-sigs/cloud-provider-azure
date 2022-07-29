@@ -2316,7 +2316,7 @@ func (az *Cloud) getExpectedLBRules(
 	return expectedProbes, expectedRules, nil
 }
 
-//getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port
+// getDefaultLoadBalancingRulePropertiesFormat returns the loadbalancing rule for one port
 func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
@@ -2372,7 +2372,7 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	return props, nil
 }
 
-//getExpectedHAModeLoadBalancingRuleProperties build load balancing rule for lb in HA mode
+// getExpectedHAModeLoadBalancingRuleProperties build load balancing rule for lb in HA mode
 func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 	service *v1.Service,
 	lbFrontendIPConfigID string,
