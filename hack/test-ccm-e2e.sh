@@ -23,7 +23,7 @@ LABEL_FILTER="${LABEL_FILTER:-${DEFAULT_LABEL_FILTER}}"
 
 if [[ -n "${E2E_ON_AKS_CLUSTER}" ]]; then
   AKS_CLUSTER_E2E_LABEL_FILTER="!Autoscaling && !Multi-Nodepool && !Single-Nodepool && !VMSS && !Spot-VM && !Kubenet && !Multi-Group && !AvailabilitySet && !PLS && !SLBOutbound && !ServiceAnnotation && !Credential && !Node && !LB && !Multi-Ports && !NSG"
-  LABEL_FILTER="${LABEL_FILTER} && ${AKS_CLUSTER_E2E_LABEL_FILTER}"
+  LABEL_FILTER="${AKS_CLUSTER_E2E_LABEL_FILTER}"
 fi
 
 source "${REPO_ROOT}/hack/ensure-ginkgo-v2.sh"
