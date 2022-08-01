@@ -205,13 +205,13 @@ func deleteNode(cs clientset.Interface, name string) error {
 	return err
 }
 
-// WaitAutoScaleNodes returns nodes count after autoscaling in 30 minutes
+// WaitAutoScaleNodes returns nodes count after autoscaling in 60 minutes
 func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown bool) error {
 	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
 	var nodes []v1.Node
 	var err error
 	poll := 60 * time.Second
-	autoScaleTimeOut := 50 * time.Minute
+	autoScaleTimeOut := 60 * time.Minute
 	if err = wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {

@@ -101,6 +101,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		ipcIDs := []string{}
 		for _, backendAddressPool := range *lb.BackendAddressPools {
+			if os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool" {
+				continue
+			}
 			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
 				if ipc.ID != nil {
 					ipcIDs = append(ipcIDs, *ipc.ID)
@@ -127,7 +130,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				utils.Logf("Checking VM %q", *vm.ID)
 				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, *vm.ID) {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*vm.ID)) {
 						found = true
 						break
 					}
@@ -149,7 +152,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
 				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, *nic) {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*nic)) {
 						found = true
 						break
 					}
@@ -220,7 +223,7 @@ func createPodGetIP() *v1.Pod {
 					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
-						`curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me`,
+						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
 					},
 				},
 			},
