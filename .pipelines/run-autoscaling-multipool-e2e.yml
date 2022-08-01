@@ -1,13 +1,14 @@
-schedules:
-- cron: "0 22 * * *"
-  displayName: Daily AKS Autoscaling Multipool E2E Test
+pr:
   branches:
     include:
     - master
-
-trigger: none
-
-pr: none
+    - release-*
+  paths:
+    exclude:
+    - docs
+    - site
+    - helm
+    - .github
 
 pool:
   vmImage: ubuntu-18.04

@@ -27,7 +27,7 @@ az extension add -n aks-preview
 az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
 
 get_random_location() {
-  local LOCATIONS=("eastus" "eastus2" "southcentralus" "westus3")
+  local LOCATIONS=("eastus" "eastus2" "southcentralus")
   echo "${LOCATIONS[${RANDOM} % ${#LOCATIONS[@]}]}"
 }
 
@@ -39,8 +39,10 @@ cleanup() {
 trap cleanup EXIT
 
 export AZURE_LOCATION="$(get_random_location)"
-if [[ "${CLUSTER_TYPE}" =~ "autoscaling" ]]; then
+if [[ "${CLUSTER_TYPE}" == "autoscaling" ]]; then
   export AZURE_LOCATION="australiaeast"
+elif [[ "${CLUSTER_TYPE}" == "autoscaling-multipool" ]]; then
+  export AZURE_LOCATION="westus3"
 fi
 
 echo "Setting up customconfiguration.json"
@@ -94,6 +96,6 @@ fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE}" =~ "autoscaling" ]]; then
-  export LABEL_FILTER="Feature:Autoscaling"
+  export LABEL_FILTER="Feature:Autoscaling || !Serial && !Slow"
 fi
 make test-ccm-e2e
