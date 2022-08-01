@@ -1,9 +1,11 @@
 schedules:
-- cron: "0 0 * * *"
+- cron: "0 16 * * *"
   displayName: Daily GC
   branches:
     include:
-    - main
+    - master
+
+trigger: none
 
 pr: none
 
