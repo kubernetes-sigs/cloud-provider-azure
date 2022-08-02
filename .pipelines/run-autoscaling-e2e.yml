@@ -1,9 +1,11 @@
 schedules:
-- cron: "0 1 * * *"
+- cron: "0 17 * * *"
   displayName: Daily AKS Autoscaling E2E Test
   branches:
     include:
     - master
+
+trigger: none
 
 pr: none
 

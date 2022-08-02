@@ -1,9 +1,11 @@
 schedules:
-- cron: "0 5 * * *"
+- cron: "0 22 * * *"
   displayName: Daily AKS Autoscaling Multipool E2E Test
   branches:
     include:
     - master
+
+trigger: none
 
 pr: none
 
