@@ -4,15 +4,14 @@ schedules:
   branches:
     include:
     - master
+  always: true
 
 trigger: none
 
 pr: none
 
 variables:
-- group: aks-ci
-- name: DisableDockerDetector
-  value: true
+- template: var-e2e.yml
 
 stages:
   - stage: gc_stage

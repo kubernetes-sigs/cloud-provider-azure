@@ -1,0 +1,8 @@
+# Cloud provider for Azure Aks Testing Pipelines
+
+| pipeline name                  | branch master status                            | trigger events        |
+|--------------------------------|-------------------------------------------------|-----------------------|
+| aks-basic-lb-e2e               | [![Build Status](https://msazure.visualstudio.com/CloudNativeCompute/_apis/build/status/AKS/cloud-provider-azure/kubernetes-sigs.cloud-provider-azure.basic_lb?branchName=master)](https://msazure.visualstudio.com/CloudNativeCompute/_build?definitionId=282180&branchName=master)                   | PR pushed and merged  |
+| aks-autoscaling-e2e            | [![Build Status](https://msazure.visualstudio.com/CloudNativeCompute/_apis/build/status/AKS/cloud-provider-azure/kubernetes-sigs.cloud-provider-azure.autoscaling?branchName=master)](https://msazure.visualstudio.com/CloudNativeCompute/_build?definitionId=282187&branchName=master)                   | once per day          |
+| aks-autoscaling-multipool-e2e  |  [![Build Status](https://msazure.visualstudio.com/CloudNativeCompute/_apis/build/status/AKS/cloud-provider-azure/kubernetes-sigs.cloud-provider-azure.autoscaling-multipool?branchName=master)](https://msazure.visualstudio.com/CloudNativeCompute/_build?definitionId=282222&branchName=master)  | once per day          |
+| daily-gc                       | [![Build Status](https://msazure.visualstudio.com/CloudNativeCompute/_apis/build/status/AKS/cloud-provider-azure/kubernetes-sigs.cloud-provider-azure.gc?branchName=master)](https://msazure.visualstudio.com/CloudNativeCompute/_build?definitionId=282223&branchName=master)                   | once per day          |

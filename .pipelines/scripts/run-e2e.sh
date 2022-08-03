@@ -94,6 +94,6 @@ fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE}" =~ "autoscaling" ]]; then
-  export LABEL_FILTER="Feature:Autoscaling"
+  export LABEL_FILTER="Feature:Autoscaling || !Serial && !Slow"
 fi
 make test-ccm-e2e
