@@ -14,9 +14,7 @@ pool:
   vmImage: ubuntu-18.04
 
 variables:
-- group: aks-ci
-- name: DisableDockerDetector
-  value: true
+- template: var-e2e.yml
 
 stages:
   - stage: run_basic_lb_e2e
@@ -66,30 +64,4 @@ stages:
             CLUSTER_TYPE="basic-lb"
             echo "##vso[task.setvariable variable=CLUSTER_TYPE]${CLUSTER_TYPE}"
           displayName: set cluster type
-        - bash: |
-            RESOURCE_GROUP="aks-ci-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
-            CLUSTER_NAME="aks-cluster"
-            echo "##vso[task.setvariable variable=RESOURCE_GROUP]${RESOURCE_GROUP}"
-            echo "##vso[task.setvariable variable=CLUSTER_NAME]${CLUSTER_NAME}"
-          displayName: set resource group and cluster
-        - bash: |
-            export IMAGE_REGISTRY=$REGISTRY_URL
-            export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
-            export AZURE_TENANT_ID=$AZ_TENANT_ID
-            export AZURE_CLIENT_ID=$SP_CLIENT_ID
-            export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
-            export KUBERNETES_VERSION=$AZ_K8S_VERSION
-
-            export RESOURCE_GROUP=$(RESOURCE_GROUP)
-            export CLUSTER_NAME=$(CLUSTER_NAME)
-            export CLUSTER_TYPE=$(CLUSTER_TYPE)
-
-            .pipelines/scripts/run-e2e.sh
-          displayName: create an aks cluster and run e2e
-          env:
-            REGISTRY_URL: $(registry.url)
-            AZ_SUBSCRIPTION_ID: $(az.subscription_id)
-            AZ_TENANT_ID: $(az.tenant_id)
-            SP_CLIENT_ID: $(sp.client_id)
-            SP_CLIENT_SECRET: $(sp.client_secret)
-            AZ_K8S_VERSION: $(az.k8s_version)
+        - template: run-e2e.yml
