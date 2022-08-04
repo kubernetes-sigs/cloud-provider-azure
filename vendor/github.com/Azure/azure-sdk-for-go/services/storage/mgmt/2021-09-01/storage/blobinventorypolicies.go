@@ -64,7 +64,6 @@ func (client BlobInventoryPoliciesClient) CreateOrUpdate(ctx context.Context, re
 			Constraints: []validation.Constraint{{Target: "properties.BlobInventoryPolicyProperties", Name: validation.Null, Rule: false,
 				Chain: []validation.Constraint{{Target: "properties.BlobInventoryPolicyProperties.Policy", Name: validation.Null, Rule: true,
 					Chain: []validation.Constraint{{Target: "properties.BlobInventoryPolicyProperties.Policy.Enabled", Name: validation.Null, Rule: true, Chain: nil},
-						{Target: "properties.BlobInventoryPolicyProperties.Policy.Destination", Name: validation.Null, Rule: true, Chain: nil},
 						{Target: "properties.BlobInventoryPolicyProperties.Policy.Type", Name: validation.Null, Rule: true, Chain: nil},
 						{Target: "properties.BlobInventoryPolicyProperties.Policy.Rules", Name: validation.Null, Rule: true, Chain: nil},
 					}},
@@ -103,7 +102,7 @@ func (client BlobInventoryPoliciesClient) CreateOrUpdatePreparer(ctx context.Con
 		"subscriptionId":          autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2021-02-01"
+	const APIVersion = "2021-09-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -197,7 +196,7 @@ func (client BlobInventoryPoliciesClient) DeletePreparer(ctx context.Context, re
 		"subscriptionId":          autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2021-02-01"
+	const APIVersion = "2021-09-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -288,7 +287,7 @@ func (client BlobInventoryPoliciesClient) GetPreparer(ctx context.Context, resou
 		"subscriptionId":          autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2021-02-01"
+	const APIVersion = "2021-09-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -379,7 +378,7 @@ func (client BlobInventoryPoliciesClient) ListPreparer(ctx context.Context, reso
 		"subscriptionId":    autorest.Encode("path", client.SubscriptionID),
 	}
 
-	const APIVersion = "2021-02-01"
+	const APIVersion = "2021-09-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
