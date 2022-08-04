@@ -107,7 +107,7 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 func (c *Client) DeleteFileShare(resourceGroupName, accountName, name string) error {
 	mc := metrics.NewMetricContext("file_shares", "delete", resourceGroupName, c.subscriptionID, "")
 
-	_, err := c.fileSharesClient.Delete(context.Background(), resourceGroupName, accountName, name, "")
+	_, err := c.fileSharesClient.Delete(context.Background(), resourceGroupName, accountName, name, "", "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -126,7 +126,7 @@ func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, si
 
 	quota := int32(sizeGiB)
 
-	share, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, storage.GetShareExpandStats, "")
+	share, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, "stats", "")
 	if err != nil {
 		rerr = &retry.Error{
 			RawError: err,
@@ -160,7 +160,7 @@ func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, si
 func (c *Client) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
 	mc := metrics.NewMetricContext("file_shares", "get", resourceGroupName, c.subscriptionID, "")
 
-	result, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, storage.GetShareExpandStats, "")
+	result, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, "stats", "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
