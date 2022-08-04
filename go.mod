@@ -20,16 +20,16 @@ require (
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	golang.org/x/text v0.3.7
-	k8s.io/api v0.23.5
-	k8s.io/apimachinery v0.23.5
-	k8s.io/apiserver v0.23.5
-	k8s.io/client-go v0.23.5
-	k8s.io/cloud-provider v0.23.5
-	k8s.io/component-base v0.23.5
-	k8s.io/component-helpers v0.23.5
-	k8s.io/controller-manager v0.23.5
+	k8s.io/api v0.23.9
+	k8s.io/apimachinery v0.23.9
+	k8s.io/apiserver v0.23.9
+	k8s.io/client-go v0.23.9
+	k8s.io/cloud-provider v0.23.9
+	k8s.io/component-base v0.23.9
+	k8s.io/component-helpers v0.23.9
+	k8s.io/controller-manager v0.23.9
 	k8s.io/klog/v2 v2.30.0
-	k8s.io/kubelet v0.23.5
+	k8s.io/kubelet v0.23.9
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/yaml v1.3.0
 )
@@ -120,13 +120,13 @@ require (
 )
 
 replace (
-	k8s.io/api => k8s.io/api v0.23.5
-	k8s.io/apimachinery => k8s.io/apimachinery v0.23.5
-	k8s.io/apiserver => k8s.io/apiserver v0.23.5
-	k8s.io/client-go => k8s.io/client-go v0.23.5
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.23.5
-	k8s.io/component-base => k8s.io/component-base v0.23.5
-	k8s.io/component-helpers => k8s.io/component-helpers v0.23.5
-	k8s.io/controller-manager => k8s.io/controller-manager v0.23.5
-	k8s.io/kubelet => k8s.io/kubelet v0.23.5
+	k8s.io/api => k8s.io/api v0.23.9
+	k8s.io/apimachinery => k8s.io/apimachinery v0.23.9
+	k8s.io/apiserver => k8s.io/apiserver v0.23.9
+	k8s.io/client-go => k8s.io/client-go v0.23.9
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.23.9
+	k8s.io/component-base => k8s.io/component-base v0.23.9
+	k8s.io/component-helpers => k8s.io/component-helpers v0.23.9
+	k8s.io/controller-manager => k8s.io/controller-manager v0.23.9
+	k8s.io/kubelet => k8s.io/kubelet v0.23.9
 )
