@@ -20,12 +20,22 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+)
+
+const (
+	// APIVersion is the API version for storage.
+	APIVersion = "2021-09-01"
+	// AzureStackCloudAPIVersion is the API version for Azure Stack
+	AzureStackCloudAPIVersion = "2019-06-01"
+	// AzureStackCloudName is the cloud name of Azure Stack
+	AzureStackCloudName = "AZURESTACKCLOUD"
 )
 
 // Interface is the client interface for creating file shares, interface for test injection.
 // Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
-	CreateContainer(ctx context.Context, resourceGroupName, accountName, containerName string, blobContainer storage.BlobContainer) error
-	DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) error
-	GetContainer(ctx context.Context, resourceGroupName, accountName, containerName string) (storage.BlobContainer, error)
+	CreateContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string, parameters storage.BlobContainer) *retry.Error
+	DeleteContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) *retry.Error
+	GetContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) (storage.BlobContainer, *retry.Error)
 }

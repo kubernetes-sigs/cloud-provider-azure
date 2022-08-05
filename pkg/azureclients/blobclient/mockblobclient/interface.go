@@ -27,6 +27,7 @@ import (
 
 	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	gomock "github.com/golang/mock/gomock"
+	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 // MockInterface is a mock of Interface interface.
@@ -53,44 +54,44 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateContainer mocks base method.
-func (m *MockInterface) CreateContainer(ctx context.Context, resourceGroupName, accountName, containerName string, blobContainer storage.BlobContainer) error {
+func (m *MockInterface) CreateContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string, parameters storage.BlobContainer) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateContainer", ctx, resourceGroupName, accountName, containerName, blobContainer)
-	ret0, _ := ret[0].(error)
+	ret := m.ctrl.Call(m, "CreateContainer", ctx, subsID, resourceGroupName, accountName, containerName, parameters)
+	ret0, _ := ret[0].(*retry.Error)
 	return ret0
 }
 
 // CreateContainer indicates an expected call of CreateContainer.
-func (mr *MockInterfaceMockRecorder) CreateContainer(ctx, resourceGroupName, accountName, containerName, blobContainer interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateContainer(ctx, subsID, resourceGroupName, accountName, containerName, parameters interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContainer", reflect.TypeOf((*MockInterface)(nil).CreateContainer), ctx, resourceGroupName, accountName, containerName, blobContainer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContainer", reflect.TypeOf((*MockInterface)(nil).CreateContainer), ctx, subsID, resourceGroupName, accountName, containerName, parameters)
 }
 
 // DeleteContainer mocks base method.
-func (m *MockInterface) DeleteContainer(ctx context.Context, resourceGroupName, accountName, containerName string) error {
+func (m *MockInterface) DeleteContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) *retry.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteContainer", ctx, resourceGroupName, accountName, containerName)
-	ret0, _ := ret[0].(error)
+	ret := m.ctrl.Call(m, "DeleteContainer", ctx, subsID, resourceGroupName, accountName, containerName)
+	ret0, _ := ret[0].(*retry.Error)
 	return ret0
 }
 
 // DeleteContainer indicates an expected call of DeleteContainer.
-func (mr *MockInterfaceMockRecorder) DeleteContainer(ctx, resourceGroupName, accountName, containerName interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteContainer(ctx, subsID, resourceGroupName, accountName, containerName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteContainer", reflect.TypeOf((*MockInterface)(nil).DeleteContainer), ctx, resourceGroupName, accountName, containerName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteContainer", reflect.TypeOf((*MockInterface)(nil).DeleteContainer), ctx, subsID, resourceGroupName, accountName, containerName)
 }
 
 // GetContainer mocks base method.
-func (m *MockInterface) GetContainer(ctx context.Context, resourceGroupName, accountName, containerName string) (storage.BlobContainer, error) {
+func (m *MockInterface) GetContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) (storage.BlobContainer, *retry.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetContainer", ctx, resourceGroupName, accountName, containerName)
+	ret := m.ctrl.Call(m, "GetContainer", ctx, subsID, resourceGroupName, accountName, containerName)
 	ret0, _ := ret[0].(storage.BlobContainer)
-	ret1, _ := ret[1].(error)
+	ret1, _ := ret[1].(*retry.Error)
 	return ret0, ret1
 }
 
 // GetContainer indicates an expected call of GetContainer.
-func (mr *MockInterfaceMockRecorder) GetContainer(ctx, resourceGroupName, accountName, containerName interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetContainer(ctx, subsID, resourceGroupName, accountName, containerName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainer", reflect.TypeOf((*MockInterface)(nil).GetContainer), ctx, resourceGroupName, accountName, containerName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainer", reflect.TypeOf((*MockInterface)(nil).GetContainer), ctx, subsID, resourceGroupName, accountName, containerName)
 }
