@@ -17,7 +17,7 @@ limitations under the License.
 package provider
 
 import (
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 )
