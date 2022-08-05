@@ -19,13 +19,13 @@ require (
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
 	golang.org/x/text v0.3.7
-	k8s.io/api v0.22.8
-	k8s.io/apimachinery v0.22.8
-	k8s.io/apiserver v0.22.8
-	k8s.io/client-go v0.22.8
-	k8s.io/cloud-provider v0.22.8
-	k8s.io/component-base v0.22.8
-	k8s.io/controller-manager v0.22.8
+	k8s.io/api v0.22.12
+	k8s.io/apimachinery v0.22.12
+	k8s.io/apiserver v0.22.12
+	k8s.io/client-go v0.22.12
+	k8s.io/cloud-provider v0.22.12
+	k8s.io/component-base v0.22.12
+	k8s.io/controller-manager v0.22.12
 	k8s.io/klog/v2 v2.10.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/yaml v1.3.0
@@ -120,13 +120,13 @@ require (
 )
 
 replace (
-	k8s.io/api => k8s.io/api v0.22.8
-	k8s.io/apimachinery => k8s.io/apimachinery v0.22.8
-	k8s.io/apiserver => k8s.io/apiserver v0.22.8
-	k8s.io/client-go => k8s.io/client-go v0.22.8
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.22.8
-	k8s.io/component-base => k8s.io/component-base v0.22.8
-	k8s.io/component-helpers => k8s.io/component-helpers v0.22.8
-	k8s.io/controller-manager => k8s.io/controller-manager v0.22.8
-	k8s.io/kubelet => k8s.io/kubelet v0.22.8
+	k8s.io/api => k8s.io/api v0.22.12
+	k8s.io/apimachinery => k8s.io/apimachinery v0.22.12
+	k8s.io/apiserver => k8s.io/apiserver v0.22.12
+	k8s.io/client-go => k8s.io/client-go v0.22.12
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.22.12
+	k8s.io/component-base => k8s.io/component-base v0.22.12
+	k8s.io/component-helpers => k8s.io/component-helpers v0.22.12
+	k8s.io/controller-manager => k8s.io/controller-manager v0.22.12
+	k8s.io/kubelet => k8s.io/kubelet v0.22.12
 )
