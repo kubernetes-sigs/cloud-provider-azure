@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,11 +69,13 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		cs, err = utils.CreateKubeClientSet()
 		Expect(err).NotTo(HaveOccurred())
 
-		ready, err := isCAEnabled(cs)
-		if err != nil {
-			Skip(fmt.Sprintf("unexpected error %v occurs when getting cluster autoscaler deployment", err))
+		if os.Getenv(utils.AKSTestCCM) == "" || !strings.Contains(os.Getenv(utils.AKSClusterType), "autoscaling") {
+			ready, err := isCAEnabled(cs)
+			if err != nil {
+				Skip(fmt.Sprintf("unexpected error %v occurs when getting cluster autoscaler deployment", err))
+			}
+			Expect(ready).To(BeTrue())
 		}
-		Expect(ready).To(BeTrue())
 
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
@@ -212,16 +216,18 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		By("Checking the `--balance-node-groups flag`")
-		caDeployment, err := cs.AppsV1().Deployments(kubeSystemNamespace).Get(context.TODO(), caDeploymentName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		commands := caDeployment.Spec.Template.Spec.Containers[0].Command
-		if !utils.StringInSlice(balanceNodeGroupsFlag, commands) {
-			Skip("`--balance-similar-node-groups=true` needs to be set in this scenario")
+		if os.Getenv(utils.AKSTestCCM) == "" || !strings.EqualFold(os.Getenv(utils.AKSClusterType), "autoscaling-multipool") {
+			caDeployment, err := cs.AppsV1().Deployments(kubeSystemNamespace).Get(context.TODO(), caDeploymentName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			commands := caDeployment.Spec.Template.Spec.Containers[0].Command
+			if !utils.StringInSlice(balanceNodeGroupsFlag, commands) {
+				Skip("`--balance-similar-node-groups=true` needs to be set in this scenario")
+			}
 		}
 
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
-		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -257,7 +263,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Scaling up, 5 nodes at a time until reaches 50 nodes")
+		By("Scaling up, 5 nodes at a time until reaches 50 nodes (40 nodes for aks cluster)")
 		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
@@ -265,6 +271,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(err).NotTo(HaveOccurred())
 
 		targetNodeCount := initNodeCount
+		expectedNode := 50
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			expectedNode = 40
+		}
 		for {
 			*scaleUpDeployment.Spec.Replicas += 5
 			targetNodeCount += 5
@@ -274,7 +284,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 			nodes, err := utils.GetAgentNodes(cs)
 			Expect(err).NotTo(HaveOccurred())
-			if len(nodes) > 50 {
+			if len(nodes) > expectedNode {
 				break
 			}
 		}
@@ -295,7 +305,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Scaling up, 25 nodes at a time until reaches 50 nodes")
+		By("Scaling up, 25 nodes at a time until reaches 50 nodes (38 nodes for aks cluster)")
 		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
@@ -303,9 +313,13 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(err).NotTo(HaveOccurred())
 
 		targetNodeCount := initNodeCount
+		expectedNode := 50
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			expectedNode = 38
+		}
 		for {
-			*scaleUpDeployment.Spec.Replicas += 25
-			targetNodeCount += 25
+			*scaleUpDeployment.Spec.Replicas += int32(expectedNode / 2)
+			targetNodeCount += expectedNode / 2
 			_, err = cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), scaleUpDeployment, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -313,7 +327,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 			nodes, err := utils.GetAgentNodes(cs)
 			Expect(err).NotTo(HaveOccurred())
-			if len(nodes) > 50 {
+			if len(nodes) > expectedNode {
 				break
 			}
 		}
@@ -539,7 +553,7 @@ func waitForStatefulSetComplete(cs clientset.Interface, ns *v1.Namespace, ss *ap
 }
 
 func calculateNewPodCountOnNode(cs clientset.Interface, node *v1.Node) int32 {
-	quantity := node.Status.Capacity[v1.ResourceCPU]
+	quantity := node.Status.Allocatable[v1.ResourceCPU]
 	runningQuantityOnNode, err := utils.GetNodeRunningQuantity(cs, node.Name)
 	Expect(err).NotTo(HaveOccurred())
 	emptyQuantity := quantity.DeepCopy()

@@ -684,7 +684,7 @@ var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), Label(utils.TestSuiteL
 
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
+		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
 		nodes, err = utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(*lbBackendPoolIPConfigs)).To(Equal(len(nodes)))
@@ -743,17 +743,32 @@ var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), Label(utils.TestSuiteL
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
-		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[0].BackendIPConfigurations
-		if len(*lbBackendPoolIPConfigs) == expectedNum {
+		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
+		ipConfigNum := 0
+		if lbBackendPoolIPConfigs != nil {
+			ipConfigNum = len(*lbBackendPoolIPConfigs)
+		}
+		if expectedNum == ipConfigNum {
 			return true, nil
 		}
-		utils.Logf("Number of IP configs: %d in the LB backend pool, will retry soon", len(*lbBackendPoolIPConfigs))
+		utils.Logf("Number of IP configs: %d in the LB backend pool, will retry soon", ipConfigNum)
 		return false, nil
 	})
 }
 
 func judgeInternal(service v1.Service) bool {
 	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true"
+}
+
+func getLBBackendPoolIndex(lb *aznetwork.LoadBalancer) int {
+	if os.Getenv(utils.AKSTestCCM) != "" {
+		for index, backendPool := range *lb.BackendAddressPools {
+			if *backendPool.Name != "aksOutboundBackendPool" {
+				return index
+			}
+		}
+	}
+	return 0
 }
 
 func updateServiceBalanceIP(service *v1.Service, isInternal bool, ip string) (result *v1.Service) {

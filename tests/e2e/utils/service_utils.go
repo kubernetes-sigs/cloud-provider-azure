@@ -70,6 +70,9 @@ func DeleteServiceIfExists(cs clientset.Interface, ns string, serviceName string
 // GetServiceDomainName cat prefix and azure suffix
 func GetServiceDomainName(prefix string) (ret string) {
 	suffix := extractSuffix()
+	if os.Getenv(AKSTestCCM) != "" {
+		suffix = "." + os.Getenv(ClusterLocationEnv) + ".cloudapp.azure.com"
+	}
 	ret = prefix + suffix
 	Logf("Get domain name: %s", ret)
 	return

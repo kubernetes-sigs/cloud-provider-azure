@@ -21,11 +21,6 @@ REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 DEFAULT_LABEL_FILTER="!Serial && !Slow"
 LABEL_FILTER="${LABEL_FILTER:-${DEFAULT_LABEL_FILTER}}"
 
-if [[ -n "${E2E_ON_AKS_CLUSTER}" ]]; then
-  AKS_CLUSTER_E2E_LABEL_FILTER="!Autoscaling && !Multi-Nodepool && !Single-Nodepool && !VMSS && !Spot-VM && !Kubenet && !Multi-Group && !AvailabilitySet && !PLS && !SLBOutbound && !ServiceAnnotation && !Credential && !Node && !LB && !Multi-Ports && !NSG"
-  LABEL_FILTER="${AKS_CLUSTER_E2E_LABEL_FILTER}"
-fi
-
 source "${REPO_ROOT}/hack/ensure-ginkgo-v2.sh"
 
 ginkgo -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/
