@@ -1070,7 +1070,7 @@ func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.S
 	} else {
 		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
 
-		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv6)) {
+		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv4)) {
 			pip.PublicIPAddressVersion = network.IPVersionIPv4
 			changed = true
 		}
