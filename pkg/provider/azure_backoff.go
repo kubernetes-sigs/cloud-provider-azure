@@ -98,7 +98,7 @@ func (az *Cloud) ListVirtualMachines(resourceGroup string) ([]compute.VirtualMac
 		klog.Errorf("VirtualMachinesClient.List(%v) failure with err=%v", resourceGroup, rerr)
 		return nil, rerr.Error()
 	}
-	klog.V(2).Infof("VirtualMachinesClient.List(%v) success", resourceGroup)
+	klog.V(6).Infof("VirtualMachinesClient.List(%v) success", resourceGroup)
 	return allNodes, nil
 }
 
