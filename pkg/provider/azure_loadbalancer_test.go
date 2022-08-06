@@ -3705,7 +3705,7 @@ func TestReconcilePublicIP(t *testing.T) {
 					IPAddress: to.StringPtr("1.2.3.4"),
 				},
 			},
-			expectedCreateOrUpdateCount: 1,
+			expectedCreateOrUpdateCount: 0,
 			expectedDeleteCount:         0,
 		},
 		{
@@ -3889,12 +3889,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			inputDNSLabel:           "newdns",
 			foundDNSLabelAnnotation: true,
 			existingPIPs: []network.PublicIPAddress{{
-				Name: to.StringPtr("pip1"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					DNSSettings: &network.PublicIPAddressDNSSettings{
-						DomainNameLabel: to.StringPtr("previousdns"),
-					},
-				},
+				Name:                            to.StringPtr("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: to.StringPtr("pip1"),
@@ -3953,7 +3949,6 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					PublicIPAddressVersion: "IPv4",
 				},
 			},
-			shouldPutPIP: true,
 		},
 		{
 			desc:                    "shall update existed PIP's dns label for IPv6",
@@ -3961,12 +3956,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			foundDNSLabelAnnotation: true,
 			isIPv6:                  true,
 			existingPIPs: []network.PublicIPAddress{{
-				Name: to.StringPtr("pip1"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					DNSSettings: &network.PublicIPAddressDNSSettings{
-						DomainNameLabel: to.StringPtr("previousdns"),
-					},
-				},
+				Name:                            to.StringPtr("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{},
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: to.StringPtr("pip1"),
@@ -4114,14 +4105,6 @@ func TestEnsurePublicIPExists(t *testing.T) {
 
 				if basicPIP.PublicIPAddressPropertiesFormat == nil {
 					return basicPIP, nil
-				}
-
-				if test.foundDNSLabelAnnotation {
-					if test.inputDNSLabel != "" {
-						basicPIP.DNSSettings.DomainNameLabel = &test.inputDNSLabel
-					} else {
-						basicPIP.DNSSettings = nil
-					}
 				}
 
 				if test.isIPv6 {
