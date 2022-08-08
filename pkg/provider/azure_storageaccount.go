@@ -52,6 +52,10 @@ type AccountOptions struct {
 	IsHnsEnabled                            *bool
 	EnableNfsV3                             *bool
 	AllowBlobPublicAccess                   *bool
+	RequireInfrastructureEncryption         *bool
+	KeyName                                 *string
+	KeyVersion                              *string
+	KeyVaultURI                             *string
 	Tags                                    map[string]string
 	VirtualNetworkResourceIDs               []string
 	VNetResourceGroup                       string
@@ -272,6 +276,23 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		if accountOptions.AllowBlobPublicAccess != nil {
 			klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
 			cp.AccountPropertiesCreateParameters.AllowBlobPublicAccess = accountOptions.AllowBlobPublicAccess
+		}
+		if accountOptions.RequireInfrastructureEncryption != nil {
+			klog.V(2).Infof("set RequireInfrastructureEncryption(%v) for storage account(%s)", *accountOptions.RequireInfrastructureEncryption, accountName)
+			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
+				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
+			}
+		}
+		if accountOptions.KeyVaultURI != nil {
+			klog.V(2).Infof("set KeyVault(%v) for storage account(%s)", accountOptions.KeyVaultURI, accountName)
+			if cp.AccountPropertiesCreateParameters.Encryption == nil {
+				cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{}
+			}
+			cp.AccountPropertiesCreateParameters.Encryption.KeyVaultProperties = &storage.KeyVaultProperties{
+				KeyName:     accountOptions.KeyName,
+				KeyVersion:  accountOptions.KeyVersion,
+				KeyVaultURI: accountOptions.KeyVaultURI,
+			}
 		}
 		if az.StorageAccountClient == nil {
 			return "", "", fmt.Errorf("StorageAccountClient is nil")

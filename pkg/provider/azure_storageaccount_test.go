@@ -369,26 +369,30 @@ func TestEnsureStorageAccount(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                      string
-		createAccount             bool
-		createPrivateEndpoint     bool
-		SubnetPropertiesFormatNil bool
-		mockStorageAccountsClient bool
-		setAccountOptions         bool
-		accountName               string
-		subscriptionID            string
-		resourceGroup             string
-		expectedErr               string
+		name                            string
+		createAccount                   bool
+		createPrivateEndpoint           bool
+		SubnetPropertiesFormatNil       bool
+		mockStorageAccountsClient       bool
+		setAccountOptions               bool
+		requireInfrastructureEncryption *bool
+		keyVaultURL                     *string
+		accountName                     string
+		subscriptionID                  string
+		resourceGroup                   string
+		expectedErr                     string
 	}{
 		{
-			name:                      "[Success] EnsureStorageAccount with createPrivateEndpoint",
-			createAccount:             true,
-			createPrivateEndpoint:     true,
-			mockStorageAccountsClient: true,
-			setAccountOptions:         true,
-			resourceGroup:             "rg",
-			accountName:               "",
-			expectedErr:               "",
+			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
+			createAccount:                   true,
+			createPrivateEndpoint:           true,
+			mockStorageAccountsClient:       true,
+			setAccountOptions:               true,
+			requireInfrastructureEncryption: to.BoolPtr(true),
+			keyVaultURL:                     to.StringPtr("keyVaultURL"),
+			resourceGroup:                   "rg",
+			accountName:                     "",
+			expectedErr:                     "",
 		},
 		{
 			name:                      "[Failed] EnsureStorageAccount with createPrivateEndpoint: get storage key failed",
