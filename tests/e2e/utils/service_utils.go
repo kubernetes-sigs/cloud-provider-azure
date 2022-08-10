@@ -198,3 +198,7 @@ func extractSuffix() string {
 	}
 	return suffix
 }
+
+func IsInternalEndpoint(ip string) bool {
+	return strings.HasPrefix(ip, "10.")
+}
