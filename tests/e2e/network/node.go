@@ -25,7 +25,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -228,7 +228,7 @@ var _ = Describe("Azure node resources", func() {
 		}
 	})
 
-	It("should set route table correctly when the cluster is enabled by kubenet [Kubenet]", func() {
+	It("should set route table correctly when the cluster is enabled by kubenet", Label(utils.TestSuiteLabelKubenet), func() {
 		utils.Logf("getting route table")
 		routeTables, err := utils.ListRouteTables(tc)
 		Expect(err).NotTo(HaveOccurred())
@@ -309,7 +309,7 @@ var _ = Describe("Azure nodes", func() {
 		tc = nil
 	})
 
-	It("should expose zones correctly after created [VMSS][Serial][Slow]", func() {
+	It("should expose zones correctly after created", Label(utils.TestSuiteLabelVMSS, utils.TestSuiteLabelSerial, utils.TestSuiteLabelSlow), func() {
 		utils.Logf("getting test VMSS")
 		vmss, err := utils.FindTestVMSS(tc, tc.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
@@ -332,7 +332,7 @@ var _ = Describe("Azure nodes", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should support crossing resource groups [Multi-Group][AvailabilitySet]", func() {
+	It("should support crossing resource groups", Label(utils.TestSuiteLabelMultiGroup, utils.TestSuiteLabelAvailabilitySet), func() {
 		master, err := utils.GetMaster(cs)
 		Expect(err).NotTo(HaveOccurred())
 
