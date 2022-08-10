@@ -20,7 +20,8 @@ set -o pipefail
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 DEFAULT_LABEL_FILTER="!Serial && !Slow"
 LABEL_FILTER="${LABEL_FILTER:-${DEFAULT_LABEL_FILTER}}"
+CCM_E2E_ARGS="${CCM_E2E_ARGS:-}"
 
 source "${REPO_ROOT}/hack/ensure-ginkgo-v2.sh"
 
-ginkgo -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/
+ginkgo -label-filter "${LABEL_FILTER}" ${CCM_E2E_ARGS} "${REPO_ROOT}"/tests/e2e/
