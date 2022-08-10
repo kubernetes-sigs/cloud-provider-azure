@@ -983,7 +983,7 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			virtualMachines = cached.(*sync.Map)
 			for _, vm := range test.goneVMList {
 				_, ok := virtualMachines.Load(vm)
-				assert.False(t, ok)
+				assert.True(t, ok)
 			}
 		})
 	}
