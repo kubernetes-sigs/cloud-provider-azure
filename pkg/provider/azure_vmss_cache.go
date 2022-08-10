@@ -223,9 +223,11 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache(resourceGroupName, vmssName, cac
 				virtualMachine: &vm,
 				lastUpdate:     time.Now().UTC(),
 			}
+			// set cache entry to nil when the VM is under deleting.
 			if vm.VirtualMachineScaleSetVMProperties != nil &&
 				strings.EqualFold(to.String(vm.VirtualMachineScaleSetVMProperties.ProvisioningState), string(compute.ProvisioningStateDeleting)) {
-				klog.V(4).Infof("VMSS virtualMachine %q is under deleting", computerName)
+				klog.V(4).Infof("VMSS virtualMachine %q is under deleting, setting its cache to nil", computerName)
+				vmssVMCacheEntry.virtualMachine = nil
 			}
 			localCache.Store(computerName, vmssVMCacheEntry)
 
