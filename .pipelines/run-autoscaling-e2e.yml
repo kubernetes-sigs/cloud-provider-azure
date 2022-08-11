@@ -10,7 +10,7 @@ trigger: none
 pr: none
 
 pool:
-  vmImage: ubuntu-18.04
+  vmImage: ubuntu-latest
 
 variables:
 - template: var-e2e.yml
@@ -22,43 +22,18 @@ stages:
     - job: build_push_ccm_image_job
       timeoutInMinutes: 30
       steps:
-        - bash: |
-            git show --stat
-            echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
-            export IMAGE_REGISTRY=$REGISTRY_URL
-            IMAGE_NAME="azure-cloud-controller-manager"
-            IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
-            if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
-              make build-ccm-image-amd64
-              make push-ccm-image-amd64
-            fi
-          displayName: make and push ccm image
-          env:
-            REGISTRY_URL: $(registry.url)
-            REGISTRY_USERNAME: $(registry.username)
-            REGISTRY_PASSWORD: $(registry.password)
+        - template: ./ccm-image.yml
     - job: build_push_cnm_image_job
       timeoutInMinutes: 30
       steps:
-        - bash: |
-            git show --stat
-            echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
-            export IMAGE_REGISTRY=$REGISTRY_URL
-            IMAGE_NAME="azure-cloud-node-manager"
-            IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
-            if ! docker pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"; then
-              make build-node-image-linux-amd64
-              make push-node-image-linux-amd64
-            fi
-          displayName: make and push cnm image
-          env:
-            REGISTRY_URL: $(registry.url)
-            REGISTRY_USERNAME: $(registry.username)
-            REGISTRY_PASSWORD: $(registry.password)
+        - template: ./cnm-image.yml
     - job: create_aks_cluster_and_run_tests_job
       dependsOn: [build_push_ccm_image_job, build_push_cnm_image_job]
       timeoutInMinutes: 300
       steps:
+        - task: GoTool@0
+          inputs:
+            version: '1.18'
         - bash: |
             CLUSTER_TYPE="autoscaling"
             echo "##vso[task.setvariable variable=CLUSTER_TYPE]${CLUSTER_TYPE}"

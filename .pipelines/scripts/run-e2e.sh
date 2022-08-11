@@ -34,7 +34,7 @@ get_random_location() {
 cleanup() {
   kubectl get node -owide
   echo "gc the aks cluster"
-  az group delete --resource-group "${RESOURCE_GROUP}" -y --no-wait
+  kubetest2 aks --down --rgName "${RESOURCE_GROUP}" --clusterName "${CLUSTER_NAME}"
 }
 trap cleanup EXIT
 
@@ -43,16 +43,7 @@ if [[ "${CLUSTER_TYPE}" =~ "autoscaling" ]]; then
   export AZURE_LOCATION="australiaeast"
 fi
 
-echo "Setting up customconfiguration.json"
 IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
-CUSTOM_CONFIG_PATH=".pipelines/templates/customconfiguration.json"
-CCM_NAME="${IMAGE_REGISTRY}/azure-cloud-controller-manager:${IMAGE_TAG}"
-CNM_NAME="${IMAGE_REGISTRY}/azure-cloud-node-manager:${IMAGE_TAG}-linux-amd64"
-sed -i "s|CUSTOM_CCM_IMAGE|${CCM_NAME}|g" "${CUSTOM_CONFIG_PATH}"
-sed -i "s|CUSTOM_CNM_IMAGE|${CNM_NAME}|g" "${CUSTOM_CONFIG_PATH}"
-export CUSTOM_CONFIG="$(base64 -w 0 ${CUSTOM_CONFIG_PATH})"
-export TOKEN=$(az account get-access-token -o json | jq -r '.accessToken')
-
 CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
 if [[ "${CLUSTER_TYPE}" == "autoscaling" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
@@ -62,26 +53,32 @@ elif [[ "${CLUSTER_TYPE}" == "autoscaling-multipool" ]]; then
   export AZURE_LOADBALANCER_SKU=standard
 fi
 
-CLUSTER_CONFIG_KEYS=("AKS_CLUSTER_ID" "CLUSTER_NAME" "AZURE_LOCATION" "KUBERNETES_VERSION" "AZURE_CLIENT_ID" "AZURE_CLIENT_SECRET" "CUSTOM_CONFIG")
-CLUSTER_CONFIG_VALS=("${AKS_CLUSTER_ID}" "${CLUSTER_NAME}" "${AZURE_LOCATION}" "${KUBERNETES_VERSION}" "${AZURE_CLIENT_ID}" "${AZURE_CLIENT_SECRET}" "${CUSTOM_CONFIG}")
-for i in "${!CLUSTER_CONFIG_KEYS[@]}";do
-  sed -i "s|${CLUSTER_CONFIG_KEYS[$i]}|${CLUSTER_CONFIG_VALS[$i]}|g" "${CLUSTER_CONFIG_PATH}"
+pushd kubetest2-aks
+go get -d sigs.k8s.io/kubetest2@latest
+go install sigs.k8s.io/kubetest2@latest
+make deployer
+sudo GOPATH="/home/vsts/go" make install
+popd
+kubetest2 aks --up --rgName "${RESOURCE_GROUP}" \
+--location "${AZURE_LOCATION}" \
+--config "${CLUSTER_CONFIG_PATH}" \
+--customConfig "${REPO_ROOT}/.pipelines/templates/customconfiguration.json" \
+--clusterName "${CLUSTER_NAME}" \
+--ccmImageTag "${IMAGE_TAG}" \
+--k8sVersion "${KUBERNETES_VERSION}"
+
+export KUBECONFIG="${REPO_ROOT}/_kubeconfig/${RESOURCE_GROUP}_${CLUSTER_NAME}.kubeconfig"
+if [[ ! -f "${KUBECONFIG}" ]]; then
+  echo "kubeconfig not exists"
+  exit 1
+fi
+
+# Ensure the provisioned cluster can be accessed with the kubeconfig
+for i in `seq 1 6`; do
+  kubectl get pod -A && break
+  sleep 10
 done
 
-echo "Creating an AKS cluster in resource group ${RESOURCE_GROUP}"
-CREATION_DATE="$(date +%s)"
-az group create --name "${RESOURCE_GROUP}" -l "${AZURE_LOCATION}" --tags "creation_date=${CREATION_DATE}" "usage=aks-cluster-e2e"
-curl -i -X PUT -k -H "Authorization: Bearer ${TOKEN}" \
-    -H "Content-Type: application/json" \
-    -H "AKSHTTPCustomFeatures: Microsoft.ContainerService/EnableCloudControllerManager" \
-    "https://management.azure.com${AKS_CLUSTER_ID}?api-version=2022-04-02-preview" \
-    -d "$(cat ${CLUSTER_CONFIG_PATH})"
-
-echo ""
-echo "Waiting until cluster creation finishes"
-az aks wait -g "${RESOURCE_GROUP}" -n "${CLUSTER_NAME}" --created --interval 60 --timeout 1800
-az aks get-credentials --resource-group "${RESOURCE_GROUP}" --name "${CLUSTER_NAME}" -f "${REPO_ROOT}/aks-cluster.kubeconfig" --overwrite-existing
-export KUBECONFIG="${REPO_ROOT}/aks-cluster.kubeconfig"
 kubectl wait --for=condition=Ready node --all --timeout=5m
 kubectl get node -owide
 
