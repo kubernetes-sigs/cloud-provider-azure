@@ -22,12 +22,11 @@ import (
 	"path"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/klog/v2"
+
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/auth"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/network"
@@ -51,13 +50,15 @@ func TestAzureTest(t *testing.T) {
 			reportDir = defaultReportDir
 		}
 	}
-	var r []Reporter
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
 			klog.Fatalf("Failed creating report directory: %v", err)
-		} else {
-			r = append(r, reporters.NewJUnitReporter(path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", config.GinkgoConfig.ParallelNode))))
 		}
 	}
-	RunSpecsWithDefaultAndCustomReporters(t, "Cloud provider Azure e2e suite", r)
+
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	suiteConfig.Timeout = 0
+	reporterConfig.Verbose = true
+	reporterConfig.JUnitReport = path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", GinkgoParallelProcess()))
+	RunSpecs(t, "Cloud provider Azure e2e suite", suiteConfig, reporterConfig)
 }

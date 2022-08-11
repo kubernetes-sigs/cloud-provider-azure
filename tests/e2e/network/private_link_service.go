@@ -33,11 +33,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Private link service", func() {
+var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkService), func() {
 	basename := "pls"
 	serviceName := "pls-test"
 
