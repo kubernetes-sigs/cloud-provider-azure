@@ -62,7 +62,7 @@ var (
 	}
 )
 
-var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), Label(utils.TestSuiteLabelLB), func() {
+var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	basename := testBaseName
 
 	var cs clientset.Interface
@@ -744,7 +744,7 @@ var _ = Describe("Ensure LoadBalancer", FlakeAttempts(3), Label(utils.TestSuiteL
 	})
 })
 
-var _ = Describe("EnsureLoadBalancer should not update any resources when service config is not changed", FlakeAttempts(3), Label(utils.TestSuiteLabelLB), func() {
+var _ = Describe("EnsureLoadBalancer should not update any resources when service config is not changed", Label(utils.TestSuiteLabelLB), func() {
 	basename := testBaseName
 
 	var cs clientset.Interface
