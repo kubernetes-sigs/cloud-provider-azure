@@ -388,6 +388,20 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	return "", fmt.Errorf("Find no availabePrivateIP in subnet CIDR %s", subnet)
 }
 
+// GetPublicIPFromAddress finds public ip according to ip address
+func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName, ipAddr string) (pip aznetwork.PublicIPAddress, err error) {
+	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	if err != nil {
+		return pip, err
+	}
+	for _, pip := range pipList {
+		if strings.EqualFold(to.String(pip.IPAddress), ipAddr) {
+			return pip, err
+		}
+	}
+	return
+}
+
 // ListPublicIPs lists all the publicIP addresses active
 func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) ([]aznetwork.PublicIPAddress, error) {
 	pipClient := azureTestClient.createPublicIPAddressesClient()
