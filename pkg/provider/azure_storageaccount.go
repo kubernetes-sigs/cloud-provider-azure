@@ -53,6 +53,7 @@ type AccountOptions struct {
 	EnableNfsV3                             *bool
 	AllowBlobPublicAccess                   *bool
 	RequireInfrastructureEncryption         *bool
+	AllowSharedKeyAccess                    *bool
 	KeyName                                 *string
 	KeyVersion                              *string
 	KeyVaultURI                             *string
@@ -282,6 +283,10 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
 			}
+		}
+		if accountOptions.AllowSharedKeyAccess != nil {
+			klog.V(2).Infof("set Allow SharedKeyAccess (%v) for storage account (%s)", *accountOptions.AllowSharedKeyAccess, accountName)
+			cp.AccountPropertiesCreateParameters.AllowSharedKeyAccess = accountOptions.AllowSharedKeyAccess
 		}
 		if accountOptions.KeyVaultURI != nil {
 			klog.V(2).Infof("set KeyVault(%v) for storage account(%s)", accountOptions.KeyVaultURI, accountName)
