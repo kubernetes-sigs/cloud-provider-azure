@@ -369,9 +369,9 @@ func (ss *ScaleSet) GetInstanceIDByNodeName(name string) (string, error) {
 	}
 
 	resourceID := vm.ID
-	convertedResourceID, err := convertResourceGroupNameToLower(resourceID)
+	convertedResourceID, err := ConvertResourceGroupNameToLower(resourceID)
 	if err != nil {
-		klog.Errorf("convertResourceGroupNameToLower failed with error: %v", err)
+		klog.Errorf("ConvertResourceGroupNameToLower failed with error: %v", err)
 		return "", err
 	}
 	return convertedResourceID, nil

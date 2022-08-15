@@ -534,9 +534,9 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 	}
 
 	resourceID := *machine.ID
-	convertedResourceID, err := convertResourceGroupNameToLower(resourceID)
+	convertedResourceID, err := ConvertResourceGroupNameToLower(resourceID)
 	if err != nil {
-		klog.Errorf("convertResourceGroupNameToLower failed with error: %v", err)
+		klog.Errorf("ConvertResourceGroupNameToLower failed with error: %v", err)
 		return "", err
 	}
 	return convertedResourceID, nil
