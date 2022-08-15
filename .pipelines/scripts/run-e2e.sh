@@ -93,7 +93,6 @@ if [[ "${CLUSTER_TYPE}" == "autoscaling-multipool" ]]; then
 fi
 
 export E2E_ON_AKS_CLUSTER=true
-export CCM_E2E_ARGS="-flake-attempts 2"
 if [[ "${CLUSTER_TYPE}" =~ "autoscaling" ]]; then
   export LABEL_FILTER="Feature:Autoscaling || !Serial && !Slow"
 fi
