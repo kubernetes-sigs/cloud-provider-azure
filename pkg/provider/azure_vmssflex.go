@@ -18,6 +18,8 @@ package provider
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
@@ -25,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/klog/v2"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 )
 
@@ -80,15 +83,38 @@ func (fs *FlexScaleSet) GetPrimaryVMSetName() string {
 	return fs.Config.PrimaryScaleSetName
 }
 
+// getNodeVMSetName returns the vmss flex name by the node name.
+func (fs *FlexScaleSet) getNodeVmssFlexName(nodeName string) (string, error) {
+	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+	if err != nil {
+		return "", err
+	}
+	vmssFlexName, err := getLastSegment(vmssFlexID, "/")
+	if err != nil {
+		return "", err
+	}
+	return vmssFlexName, nil
+
+}
+
 // GetNodeVMSetName returns the availability set or vmss name by the node name.
 // It will return empty string when using standalone vms.
 func (fs *FlexScaleSet) GetNodeVMSetName(node *v1.Node) (string, error) {
-	return "", nil
+	return fs.getNodeVmssFlexName(node.Name)
 }
 
 // GetAgentPoolVMSetNames returns all vmSet names according to the nodes
 func (fs *FlexScaleSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) {
-	return nil, nil
+	vmSetNames := make([]string, 0)
+	for _, node := range nodes {
+		vmSetName, err := fs.GetNodeVMSetName(node)
+		if err != nil {
+			klog.Errorf("Unable to get the vmss flex name by node name %s: %v", node.Name, err)
+			continue
+		}
+		vmSetNames = append(vmSetNames, vmSetName)
+	}
+	return &vmSetNames, nil
 }
 
 // GetVMSetNames selects all possible availability sets or scale sets
@@ -97,7 +123,37 @@ func (fs *FlexScaleSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, err
 // for loadbalancer exists then returns the eligible VMSet. The mode selection
 // annotation would be ignored when using one SLB per cluster.
 func (fs *FlexScaleSet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (*[]string, error) {
-	return nil, nil
+	hasMode, isAuto, serviceVMSetName := fs.getServiceLoadBalancerMode(service)
+	useSingleSLB := fs.useStandardLoadBalancer() && !fs.EnableMultipleStandardLoadBalancers
+	if !hasMode || useSingleSLB {
+		// no mode specified in service annotation or use single SLB mode
+		// default to PrimaryScaleSetName
+		vmssFlexNames := &[]string{fs.Config.PrimaryScaleSetName}
+		return vmssFlexNames, nil
+	}
+
+	vmssFlexNames, err := fs.GetAgentPoolVMSetNames(nodes)
+	if err != nil {
+		klog.Errorf("fs.GetVMSetNames - GetAgentPoolVMSetNames failed err=(%v)", err)
+		return nil, err
+	}
+
+	if !isAuto {
+		found := false
+		for asx := range *vmssFlexNames {
+			if strings.EqualFold((*vmssFlexNames)[asx], serviceVMSetName) {
+				found = true
+				serviceVMSetName = (*vmssFlexNames)[asx]
+				break
+			}
+		}
+		if !found {
+			klog.Errorf("fs.GetVMSetNames - scale set (%s) in service annotation not found", serviceVMSetName)
+			return nil, fmt.Errorf("scale set (%s) - not found", serviceVMSetName)
+		}
+		return &[]string{serviceVMSetName}, nil
+	}
+	return vmssFlexNames, nil
 }
 
 // GetInstanceIDByNodeName gets the cloud provider ID by node name.
