@@ -32,7 +32,11 @@ get_random_location() {
 }
 
 cleanup() {
-  kubectl get node -owide
+  if [[ -n ${KUBECONFIG:-} ]]; then
+      kubectl get node -owide || echo "Unable to get nodes"
+      kubectl get pod -A -owide || echo "Unable to get pods"
+      ${REPO_ROOT}/.pipelines/scripts/collect-log.sh
+  fi
   echo "gc the aks cluster"
   az group delete --resource-group "${RESOURCE_GROUP}" -y --no-wait
 }

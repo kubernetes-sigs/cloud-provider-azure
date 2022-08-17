@@ -12,6 +12,7 @@ steps:
       export AZURE_CLIENT_ID=$SP_CLIENT_ID
       export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
       export KUBERNETES_VERSION=$K8S_VERSION
+      export ARTIFACT_DIR=$BUILD_ARTIFACT_STAGING_DIRECTORY
 
       export RESOURCE_GROUP=$(RESOURCE_GROUP)
       export CLUSTER_NAME=$(CLUSTER_NAME)
@@ -26,3 +27,9 @@ steps:
       SP_CLIENT_ID: $(sp.client_id)
       SP_CLIENT_SECRET: $(sp.client_secret)
       K8S_VERSION: $(k8sVersion)
+      BUILD_ARTIFACT_STAGING_DIRECTORY: $(Build.ArtifactStagingDirectory)
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: Logs
+    condition: succeededOrFailed()
