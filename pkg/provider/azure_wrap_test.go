@@ -197,7 +197,7 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		real, err := convertResourceGroupNameToLower(test.resourceID)
+		real, err := ConvertResourceGroupNameToLower(test.resourceID)
 		if test.expectError {
 			assert.NotNil(t, err, test.desc)
 			continue
