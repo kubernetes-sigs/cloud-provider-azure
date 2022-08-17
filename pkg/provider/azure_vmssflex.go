@@ -71,12 +71,6 @@ func newFlexScaleSet(az *Cloud) (VMSet, error) {
 	return fs, nil
 }
 
-// GetNodeNameByProviderID gets the node name by provider ID.
-func (fs *FlexScaleSet) GetNodeNameByProviderID(providerID string) (types.NodeName, error) {
-
-	return types.NodeName(""), nil
-}
-
 // GetPrimaryVMSetName returns the VM set name depending on the configured vmType.
 // It returns config.PrimaryScaleSetName for vmss and config.PrimaryAvailabilitySetName for standard vmType.
 func (fs *FlexScaleSet) GetPrimaryVMSetName() string {
@@ -156,17 +150,58 @@ func (fs *FlexScaleSet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (*[
 	return vmssFlexNames, nil
 }
 
+// GetNodeNameByProviderID gets the node name by provider ID.
+// providerID example:
+// azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/flexprofile-mp-0_df53ee36
+// Different from vmas where vm name is always equal to nodeName, we need to further map vmName to actual nodeName in vmssflex.
+// Note: nodeName is always equal to strings.ToLower(*vm.OsProfile.ComputerName)
+func (fs *FlexScaleSet) GetNodeNameByProviderID(providerID string) (types.NodeName, error) {
+	// NodeName is part of providerID for standard instances.
+	matches := providerIDRE.FindStringSubmatch(providerID)
+	if len(matches) != 2 {
+		return "", errors.New("error splitting providerID")
+	}
+
+	nodeName, err := fs.getNodeNameByVMName(matches[1])
+	if err != nil {
+		return "", err
+	}
+	return types.NodeName(nodeName), nil
+}
+
 // GetInstanceIDByNodeName gets the cloud provider ID by node name.
 // It must return ("", cloudprovider.InstanceNotFound) if the instance does
 // not exist or is no longer running.
 func (fs *FlexScaleSet) GetInstanceIDByNodeName(name string) (string, error) {
-	return "", nil
+	machine, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return "", err
+	}
+	if machine.ID == nil {
+		return "", fmt.Errorf("ProviderID of node(%s) is nil", name)
+	}
+	resourceID := *machine.ID
+	convertedResourceID, err := ConvertResourceGroupNameToLower(resourceID)
+	if err != nil {
+		klog.Errorf("ConvertResourceGroupNameToLower failed with error: %v", err)
+		return "", err
+	}
+	return convertedResourceID, nil
 
 }
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
 func (fs *FlexScaleSet) GetInstanceTypeByNodeName(name string) (string, error) {
-	return "", nil
+	machine, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		klog.Errorf("fs.GetInstanceTypeByNodeName(%s) failed: fs.getVmssFlexVMWithoutInstanceView(%s) err=%v", name, name, err)
+		return "", err
+	}
+
+	if machine.HardwareProfile == nil {
+		return "", fmt.Errorf("HardwareProfile of node(%s) is nil", name)
+	}
+	return string(machine.HardwareProfile.VMSize), nil
 }
 
 // GetZoneByNodeName gets availability zone for the specified node. If the node is not running

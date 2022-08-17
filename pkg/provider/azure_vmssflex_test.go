@@ -20,11 +20,16 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	cloudprovider "k8s.io/cloud-provider"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -173,12 +178,155 @@ func TestGetVMSetNamesVmssFlex(t *testing.T) {
 	}
 }
 
-func TestGetInstanceIDByNodeNameVmssFlex(t *testing.T) {
+func TestGetNodeNameByProviderIDVmssFlex(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		description                    string
+		providerID                     string
+		testVMListWithoutInstanceView  []compute.VirtualMachine
+		testVMListWithOnlyInstanceView []compute.VirtualMachine
+		vmListErr                      error
+		expectedNodeName               types.NodeName
+		expectedErr                    error
+	}{
+		{
+			description:                    "GetNodeNameByProviderID should return the correct nodeName by VMSS Flex VM ID",
+			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedNodeName:               types.NodeName("vmssflex1000001"),
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "GetNodeNameByProviderID should throw error of instance not found if the vm is deleted",
+			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm3",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedNodeName:               "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		fs, err := NewTestFlexScaleSet(ctrl)
+		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+
+		nodeName, err := fs.GetNodeNameByProviderID(tc.providerID)
+		assert.Equal(t, tc.expectedNodeName, nodeName)
+		assert.Equal(t, tc.expectedErr, err)
+	}
 
 }
 
-func TestGetInstanceTypeByNodeNameVmssFlex(t *testing.T) {
+func TestGetInstanceIDByNodeNameVmssFlex(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	testCases := []struct {
+		description                    string
+		nodeName                       string
+		testVMListWithoutInstanceView  []compute.VirtualMachine
+		testVMListWithOnlyInstanceView []compute.VirtualMachine
+		vmListErr                      error
+		expectedInstanceID             string
+		expectedErr                    error
+	}{
+		{
+			description:                    "GetInstanceIDByNodeName should return the correct InstanceID by nodeName",
+			nodeName:                       testNodeName1,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedInstanceID:             "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "GetNodeNameByProviderID should throw error of instance not found if the vm is deleted",
+			nodeName:                       "nonExistingNodeName",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedInstanceID:             "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		fs, err := NewTestFlexScaleSet(ctrl)
+		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+
+		instanceID, err := fs.GetInstanceIDByNodeName(tc.nodeName)
+		assert.Equal(t, tc.expectedInstanceID, instanceID)
+		assert.Equal(t, tc.expectedErr, err)
+	}
+}
+
+func TestGetInstanceTypeByNodeNameVmssFlex(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		description                    string
+		nodeName                       string
+		testVMListWithoutInstanceView  []compute.VirtualMachine
+		testVMListWithOnlyInstanceView []compute.VirtualMachine
+		vmListErr                      error
+		expectedInstanceType           string
+		expectedErr                    error
+	}{
+		{
+			description:                    "GetInstanceIDByNodeName should return the correct InstanceID by nodeName",
+			nodeName:                       testNodeName1,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedInstanceType:           "Standard_D2s_v3",
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "GetNodeNameByProviderID should throw error of instance not found if the vm is deleted",
+			nodeName:                       "nonExistingNodeName",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedInstanceType:           "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		fs, err := NewTestFlexScaleSet(ctrl)
+		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+
+		instanceType, err := fs.GetInstanceTypeByNodeName(tc.nodeName)
+		assert.Equal(t, tc.expectedInstanceType, instanceType)
+		assert.Equal(t, tc.expectedErr, err)
+	}
 }
 
 func TestGetZoneByNodeNameVmssFlex(t *testing.T) {
