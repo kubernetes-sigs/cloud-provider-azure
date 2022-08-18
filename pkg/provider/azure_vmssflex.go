@@ -19,11 +19,13 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
@@ -208,17 +210,72 @@ func (fs *FlexScaleSet) GetInstanceTypeByNodeName(name string) (string, error) {
 // with availability zone, then it returns fault domain.
 // for details, refer to https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
 func (fs *FlexScaleSet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
-	return cloudprovider.Zone{}, nil
+	vm, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		klog.Errorf("fs.GetZoneByNodeName(%s) failed: fs.getVmssFlexVMWithoutInstanceView(%s) err=%v", name, name, err)
+		return cloudprovider.Zone{}, err
+	}
+
+	var failureDomain string
+	if vm.Zones != nil && len(*vm.Zones) > 0 {
+		// Get availability zone for the node.
+		zones := *vm.Zones
+		zoneID, err := strconv.Atoi(zones[0])
+		if err != nil {
+			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone %q: %w", zones, err)
+		}
+
+		failureDomain = fs.makeZone(to.String(vm.Location), zoneID)
+	} else if vm.VirtualMachineProperties.InstanceView != nil && vm.VirtualMachineProperties.InstanceView.PlatformFaultDomain != nil {
+		// Availability zone is not used for the node, falling back to fault domain.
+		failureDomain = strconv.Itoa(int(to.Int32(vm.VirtualMachineProperties.InstanceView.PlatformFaultDomain)))
+	} else {
+		err = fmt.Errorf("failed to get zone info")
+		klog.Errorf("GetZoneByNodeName: got unexpected error %v", err)
+		return cloudprovider.Zone{}, err
+	}
+
+	zone := cloudprovider.Zone{
+		FailureDomain: strings.ToLower(failureDomain),
+		Region:        strings.ToLower(to.String(vm.Location)),
+	}
+	return zone, nil
 }
 
 // GetProvisioningStateByNodeName returns the provisioningState for the specified node.
 func (fs *FlexScaleSet) GetProvisioningStateByNodeName(name string) (provisioningState string, err error) {
-	return "", nil
+	vm, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return provisioningState, err
+	}
+
+	if vm.VirtualMachineProperties == nil || vm.VirtualMachineProperties.ProvisioningState == nil {
+		return provisioningState, nil
+	}
+
+	return to.String(vm.VirtualMachineProperties.ProvisioningState), nil
 }
 
 // GetPowerStatusByNodeName returns the powerState for the specified node.
 func (fs *FlexScaleSet) GetPowerStatusByNodeName(name string) (powerState string, err error) {
-	return "", nil
+	vm, err := fs.getVmssFlexVM(name, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return powerState, err
+	}
+
+	if vm.InstanceView != nil && vm.InstanceView.Statuses != nil {
+		statuses := *vm.InstanceView.Statuses
+		for _, status := range statuses {
+			state := to.String(status.Code)
+			if strings.HasPrefix(state, vmPowerStatePrefix) {
+				return strings.TrimPrefix(state, vmPowerStatePrefix), nil
+			}
+		}
+	}
+
+	// vm.InstanceView or vm.InstanceView.Statuses are nil when the VM is under deleting.
+	klog.V(3).Infof("InstanceView for node %q is nil, assuming it's stopped", name)
+	return vmPowerStateStopped, nil
 }
 
 // GetPrimaryInterface gets machine primary network interface by node name.

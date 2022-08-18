@@ -59,7 +59,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		},
 		{
 			description:                    "AttachDisk should should throw InstanceNotFound error if the VM cannot be found",
-			nodeName:                       "testvm3",
+			nodeName:                       types.NodeName(nonExistingNodeName),
 			testVMListWithoutInstanceView:  []compute.VirtualMachine{},
 			testVMListWithOnlyInstanceView: []compute.VirtualMachine{},
 			vmListErr:                      nil,
@@ -133,17 +133,17 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          nil,
-			diskMap:                        map[string]string{"diskUri1": "dataDisk1"},
+			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
 			expectedErr:                    nil,
 		},
 		{
 			description:                    "AttachDisk should should do nothing if the VM cannot be found",
-			nodeName:                       "testvm3",
+			nodeName:                       types.NodeName(nonExistingNodeName),
 			testVMListWithoutInstanceView:  []compute.VirtualMachine{},
 			testVMListWithOnlyInstanceView: []compute.VirtualMachine{},
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          nil,
-			diskMap:                        map[string]string{"diskUri1": "dataDisk1"},
+			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
 			expectedErr:                    nil,
 		},
 		{
@@ -153,7 +153,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          nil,
-			diskMap:                        map[string]string{"diskUri1": "dataDisk3"},
+			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm3"},
 			expectedErr:                    nil,
 		},
 		{
@@ -163,7 +163,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound},
-			diskMap:                        map[string]string{"diskUri1": "dataDisk1"},
+			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
 			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
 		},
 	}
@@ -272,14 +272,14 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 			expectedDataDisks: []compute.DataDisk{
 				{
 					Lun:  to.Int32Ptr(1),
-					Name: to.StringPtr("dataDisk1"),
+					Name: to.StringPtr("dataDisktestvm1"),
 				},
 			},
 			expectedErr: nil,
 		},
 		{
 			description:                    "GetDataDisks should should throw InstanceNotFound error if the VM cannot be found",
-			nodeName:                       "testvm3",
+			nodeName:                       types.NodeName(nonExistingNodeName),
 			testVMListWithoutInstanceView:  []compute.VirtualMachine{},
 			testVMListWithOnlyInstanceView: []compute.VirtualMachine{},
 			vmListErr:                      nil,
