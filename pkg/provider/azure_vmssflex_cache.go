@@ -266,3 +266,22 @@ func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.Virtual
 	}
 	return nil, cloudprovider.InstanceNotFound
 }
+
+func (fs *FlexScaleSet) deleteCacheForNode(nodeName string) error {
+	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
+	if err != nil {
+		return err
+	}
+
+	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return err
+	}
+
+	vmMap := cached.(*sync.Map)
+	vmMap.Delete(nodeName)
+
+	fs.vmssFlexVMNameToVmssID.Delete(nodeName)
+
+	return nil
+}

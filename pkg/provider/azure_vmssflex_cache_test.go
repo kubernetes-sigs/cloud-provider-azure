@@ -47,6 +47,23 @@ var (
 			VirtualMachineScaleSet: &compute.SubResource{
 				ID: to.StringPtr(testVmssFlex1ID),
 			},
+			StorageProfile: &compute.StorageProfile{
+				OsDisk: &compute.OSDisk{
+					Name: to.StringPtr("osdisk1"),
+					ManagedDisk: &compute.ManagedDiskParameters{
+						ID: to.StringPtr("ManagedID1"),
+						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+							ID: to.StringPtr("DiskEncryptionSetID1"),
+						},
+					},
+				},
+				DataDisks: &[]compute.DataDisk{
+					{
+						Lun:  to.Int32Ptr(1),
+						Name: to.StringPtr("dataDisk1"),
+					},
+				},
+			},
 		},
 	}
 
@@ -59,6 +76,23 @@ var (
 			ProvisioningState: nil,
 			VirtualMachineScaleSet: &compute.SubResource{
 				ID: to.StringPtr(testVmssFlex1ID),
+			},
+			StorageProfile: &compute.StorageProfile{
+				OsDisk: &compute.OSDisk{
+					Name: to.StringPtr("osdisk2"),
+					ManagedDisk: &compute.ManagedDiskParameters{
+						ID: to.StringPtr("ManagedID2"),
+						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+							ID: to.StringPtr("DiskEncryptionSetID2"),
+						},
+					},
+				},
+				DataDisks: &[]compute.DataDisk{
+					{
+						Lun:  to.Int32Ptr(2),
+						Name: to.StringPtr("dataDisk2"),
+					},
+				},
 			},
 		},
 	}
@@ -111,6 +145,23 @@ var (
 				Statuses: &[]compute.InstanceViewStatus{
 					{
 						Code: to.StringPtr("PowerState/running"),
+					},
+				},
+			},
+			StorageProfile: &compute.StorageProfile{
+				OsDisk: &compute.OSDisk{
+					Name: to.StringPtr("osdisk1"),
+					ManagedDisk: &compute.ManagedDiskParameters{
+						ID: to.StringPtr("ManagedID1"),
+						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
+							ID: to.StringPtr("DiskEncryptionSetID1"),
+						},
+					},
+				},
+				DataDisks: &[]compute.DataDisk{
+					{
+						Lun:  to.Int32Ptr(1),
+						Name: to.StringPtr("dataDisk1"),
 					},
 				},
 			},
