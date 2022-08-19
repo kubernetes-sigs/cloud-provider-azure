@@ -25,8 +25,8 @@ az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}"
 az group list --tag usage=aks-cluster-e2e | jq -r '.[].name' | awk '{print $1}' | while read -r RESOURCE_GROUP; do
   RG_DATE="$(az group show --resource-group ${RESOURCE_GROUP} | jq -r '.tags.creation_date')"
   DATE_DIFF="$(expr ${CURRENT_DATE} - ${RG_DATE})"
-  # GC clusters older than 2 days
-  if (( "${DATE_DIFF}" > 172800 )); then
+  # GC clusters older than 1 day
+  if (( "${DATE_DIFF}" > 86400 )); then
     echo "Deleting resource group: ${RESOURCE_GROUP}"
     az group delete --resource-group "${RESOURCE_GROUP}" -y --no-wait
   fi
