@@ -53,9 +53,8 @@ var (
 		},
 		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic",
 	}
-	testVMWithoutInstanceView1  = generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
-	testVMWithOnlyInstanceView1 = generateVmssFlexTestVMWithOnlyInstanceView(testVM1Spec)
-	testVM1                     = generateVmssFlexTestVM(testVM1Spec)
+	testVMWithoutInstanceView1 = generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
+	testVM1                    = generateVmssFlexTestVM(testVM1Spec)
 
 	testVM2Spec = VmssFlexTestVMSpec{
 		VMName:              "testvm2",
@@ -86,20 +85,55 @@ var (
 		Status:              &[]compute.InstanceViewStatus{},
 		NicID:               "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-nic",
 	}
-	testVMWithoutInstanceView3  = generateVmssFlexTestVMWithoutInstanceView(testVM3Spec)
-	testVMWithOnlyInstanceView3 = generateVmssFlexTestVMWithOnlyInstanceView(testVM3Spec)
 
-	testVMListWithoutInstanceView = []compute.VirtualMachine{testVMWithoutInstanceView1, testVMWithoutInstanceView2, testVMWithoutInstanceView3}
+	testVMListWithoutInstanceView = generateTestVMListWithoutInstanceView()
 
-	testVMListWithOnlyInstanceView = []compute.VirtualMachine{testVMWithOnlyInstanceView1, testVMWithOnlyInstanceView2, testVMWithOnlyInstanceView3}
+	testVMListWithOnlyInstanceView = generateTestVMListWithOnlyInstanceView()
 
-	testVmssFlex1 = compute.VirtualMachineScaleSet{
+	testVmssFlex1 = genreteTestVmssFlex()
+
+	testVmssFlexList = genreateTestVmssFlexList()
+)
+
+func generateTestVMListWithoutInstanceView() []compute.VirtualMachine {
+	return []compute.VirtualMachine{generateVmssFlexTestVMWithoutInstanceView(testVM1Spec), generateVmssFlexTestVMWithoutInstanceView(testVM2Spec), generateVmssFlexTestVMWithoutInstanceView(testVM3Spec)}
+}
+
+func generateTestVMListWithOnlyInstanceView() []compute.VirtualMachine {
+	return []compute.VirtualMachine{generateVmssFlexTestVMWithOnlyInstanceView(testVM1Spec), generateVmssFlexTestVMWithOnlyInstanceView(testVM2Spec), generateVmssFlexTestVMWithOnlyInstanceView(testVM3Spec)}
+}
+
+func genreateTestVmssFlexList() []compute.VirtualMachineScaleSet {
+	return []compute.VirtualMachineScaleSet{genreteTestVmssFlex()}
+}
+
+func genreteTestVmssFlex() compute.VirtualMachineScaleSet {
+	return compute.VirtualMachineScaleSet{
 		ID:   to.StringPtr(testVmssFlex1ID),
 		Name: to.StringPtr("vmssflex1"),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
 					ComputerNamePrefix: to.StringPtr("vmssflex1"),
+				},
+				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
+						{
+							VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+								IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+									{
+										VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+											LoadBalancerBackendAddressPools: &[]compute.SubResource{
+												{
+													ID: to.StringPtr(testBackendPoolID0),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			OrchestrationMode: compute.OrchestrationModeFlexible,
@@ -109,9 +143,7 @@ var (
 			consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
 		},
 	}
-
-	testVmssFlexList = []compute.VirtualMachineScaleSet{testVmssFlex1}
-)
+}
 
 type VmssFlexTestVMSpec struct {
 	VMName              string

@@ -1719,13 +1719,10 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err, "unexpected error when creating test VMSS")
-
 	networkConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{Name: to.StringPtr("config-0")},
 	}
-	config, err := ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
+	config, err := getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
 	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
 	assert.Equal(t, &networkConfigs[0], config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
 
@@ -1743,7 +1740,7 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 			},
 		},
 	}
-	config, err = ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
+	config, err = getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
 	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
 	assert.Equal(t, &networkConfigs[1], config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
 
@@ -1761,7 +1758,7 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 			},
 		},
 	}
-	config, err = ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
+	config, err = getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
 	assert.Equal(t, fmt.Errorf("failed to find a primary network configuration for the scale set \"vmss\""), err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should report an error if there is no primary nic")
 	assert.Nil(t, config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should report an error if there is no primary nic")
 }
@@ -1832,9 +1829,6 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err, "unexpected error when creating test VMSS")
-
 	config := &compute.VirtualMachineScaleSetNetworkConfiguration{
 		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
@@ -1854,11 +1848,11 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 		},
 	}
 
-	ipConfig, err := ss.getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", true)
+	ipConfig, err := getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", true)
 	assert.Nil(t, err, "getConfigForScaleSetByIPFamily should find the IPV6 config")
 	assert.Equal(t, (*config.IPConfigurations)[1], *ipConfig, "getConfigForScaleSetByIPFamily should find the IPV6 config")
 
-	ipConfig, err = ss.getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", false)
+	ipConfig, err = getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", false)
 	assert.Nil(t, err, "getConfigForScaleSetByIPFamily should find the IPV4 config")
 	assert.Equal(t, (*config.IPConfigurations)[0], *ipConfig, "getConfigForScaleSetByIPFamily should find the IPV4 config")
 }
