@@ -155,7 +155,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 
 			request.Host = c.regionalEndpoint
 			request.URL.Host = c.regionalEndpoint
-			klog.V(5).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
+			klog.V(6).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
 
 			regionalResponse, regionalError := s.Do(request)
 			// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
@@ -167,7 +167,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 					regionalErrStr = regionalError.Error()
 				}
 
-				klog.V(5).Infof("Send.sendRegionalRequest failed to get response from regional host, error: '%s'. Ignoring the result.", regionalErrStr)
+				klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: '%s'. Ignoring the result.", regionalErrStr)
 				return response, rerr
 			}
 			return regionalResponse, regionalError
