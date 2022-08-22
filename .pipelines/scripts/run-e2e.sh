@@ -35,7 +35,7 @@ cleanup() {
   if [[ -n ${KUBECONFIG:-} ]]; then
       kubectl get node -owide || echo "Unable to get nodes"
       kubectl get pod -A -owide || echo "Unable to get pods"
-      ${REPO_ROOT}/.pipelines/scripts/collect-log.sh
+      ${REPO_ROOT}/.pipelines/scripts/collect-log.sh || echo "Unable to collect logs"
   fi
   echo "gc the aks cluster"
   kubetest2 aks --down --rgName "${RESOURCE_GROUP}" --clusterName "${CLUSTER_NAME}"

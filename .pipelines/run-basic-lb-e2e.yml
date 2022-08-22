@@ -1,4 +1,4 @@
-pr:
+trigger:
   branches:
     include:
     - master
@@ -9,6 +9,8 @@ pr:
     - site
     - helm
     - .github
+
+pr: none
 
 pool:
   vmImage: ubuntu-latest
