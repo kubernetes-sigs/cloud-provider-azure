@@ -20,14 +20,12 @@ set -o pipefail
 
 echo "collecting logs of all pods in kube-system"
 mkdir "${ARTIFACT_DIR}/kube-system"
-ALL_PODS=($(kubectl get pod -A -owide | grep "kube-system" | awk '{printf("%s ",$2)}'))
-for POD in "${ALL_PODS[@]}"; do
-    kubectl logs ${POD} -n kube-system > "${ARTIFACT_DIR}/kube-system/${POD}.log"
+kubectl get pod -A | grep "kube-system" | awk '{printf("%s\n",$2)}' | while read -r POD; do
+    kubectl logs ${POD} -n kube-system > "${ARTIFACT_DIR}/kube-system/${POD}.log" || echo "Cannot collect log from pod ${POD}"
 done
 
 echo "collecting logs of all nodes"
 mkdir "${ARTIFACT_DIR}/node-log"
-ALL_NODES=($(kubectl get node | grep "aks-" | awk '{printf("%s ",$1)}'))
 LOG_IMAGE="mcr.microsoft.com/dotnet/runtime-deps:6.0"
 NODE_CMDS=("journalctl --no-pager --output=short-precise" \
            "journalctl --no-pager --output=short-precise -k" \
@@ -37,10 +35,10 @@ NODE_CMDS=("journalctl --no-pager --output=short-precise" \
            "cat /var/log/cloud-init-output.log" \
            "ls /run/cluster-api/")
 NODE_LOG_FILE_NAMES=("journal.log" "kern.log" "kubelet-version.txt" "kubelet.log" "containerd.log" "cloud-init.log" "cloud-init-output.log" "sentinel-file-dir.txt")
-for NODE in "${ALL_NODES[@]}"; do
+kubectl get node | grep "aks-" | awk '{printf("%s\n",$1)}' | while read -r NODE; do
     NODE_LOG_DIR="${ARTIFACT_DIR}/node-log/${NODE}"
     mkdir "${NODE_LOG_DIR}"
     for i in "${!NODE_CMDS[@]}"; do
-        kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- /bin/sh -c "chroot /host ${NODE_CMDS[$i]}" > "${NODE_LOG_DIR}/${NODE_LOG_FILE_NAMES[$i]}"
-    done  
+        kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- /bin/sh -c "chroot /host ${NODE_CMDS[$i]}" > "${NODE_LOG_DIR}/${NODE_LOG_FILE_NAMES[$i]}" || echo "Cannot collect ${NODE_LOG_FILE_NAMES[$i]} log from node ${NODE}"
+    done
 done
