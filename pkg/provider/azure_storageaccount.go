@@ -282,6 +282,11 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			klog.V(2).Infof("set RequireInfrastructureEncryption(%v) for storage account(%s)", *accountOptions.RequireInfrastructureEncryption, accountName)
 			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
+				KeySource:                       storage.KeySourceMicrosoftStorage,
+				Services: &storage.EncryptionServices{
+					File: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+					Blob: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+				},
 			}
 		}
 		if accountOptions.AllowSharedKeyAccess != nil {
@@ -290,13 +295,17 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 		if accountOptions.KeyVaultURI != nil {
 			klog.V(2).Infof("set KeyVault(%v) for storage account(%s)", accountOptions.KeyVaultURI, accountName)
-			if cp.AccountPropertiesCreateParameters.Encryption == nil {
-				cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{}
-			}
-			cp.AccountPropertiesCreateParameters.Encryption.KeyVaultProperties = &storage.KeyVaultProperties{
-				KeyName:     accountOptions.KeyName,
-				KeyVersion:  accountOptions.KeyVersion,
-				KeyVaultURI: accountOptions.KeyVaultURI,
+			cp.AccountPropertiesCreateParameters.Encryption = &storage.Encryption{
+				KeyVaultProperties: &storage.KeyVaultProperties{
+					KeyName:     accountOptions.KeyName,
+					KeyVersion:  accountOptions.KeyVersion,
+					KeyVaultURI: accountOptions.KeyVaultURI,
+				},
+				KeySource: storage.KeySourceMicrosoftKeyvault,
+				Services: &storage.EncryptionServices{
+					File: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+					Blob: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+				},
 			}
 		}
 		if az.StorageAccountClient == nil {
