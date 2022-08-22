@@ -41,6 +41,9 @@ const (
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
 	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
 	CAPZTestCCM = "TEST_CCM"
+	// If "E2E_ON_AKS_CLUSTER" is true, the test is running on a AKS cluster.
+	AKSTestCCM     = "E2E_ON_AKS_CLUSTER"
+	AKSClusterType = "CLUSTER_TYPE"
 )
 
 // AzureAuthConfig holds auth related part of cloud config

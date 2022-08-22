@@ -58,7 +58,7 @@ const (
 	testingPort     = 81
 )
 
-var _ = Describe("Service with annotation", func() {
+var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnnotation), func() {
 	basename := "service"
 	serviceName := "annotation-test"
 
@@ -428,10 +428,8 @@ var _ = Describe("Service with annotation", func() {
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
-		if skuEnv := os.Getenv(utils.LoadBalancerSkuEnv); skuEnv != "" {
-			if !strings.EqualFold(skuEnv, string(network.PublicIPAddressSkuNameStandard)) {
-				Skip("pip-prefix-id only work with Standard Load Balancer")
-			}
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
 		const (
@@ -658,7 +656,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 })
 
-var _ = Describe("Multi-ports service", func() {
+var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), func() {
 	basename := "mpservice"
 	serviceName := "multiport-test"
 
