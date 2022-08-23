@@ -15,6 +15,8 @@ Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/co
 
 ## Deployment
 
+There is a [helm chart available](https://github.com/kubernetes-sigs/cloud-provider-azure/tree/master/helm/cloud-provider-azure) which can be used to deploy the Azure cloud controller manager.
+
 To deploy Azure cloud controller manager, the following components need to be configured.
 
 ### kubelet
