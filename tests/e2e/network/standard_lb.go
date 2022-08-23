@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -81,7 +82,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 
@@ -97,6 +98,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 
 		ipcIDs := []string{}
 		for _, backendAddressPool := range *lb.BackendAddressPools {
+			if os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool" {
+				continue
+			}
 			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
 				if ipc.ID != nil {
 					ipcIDs = append(ipcIDs, *ipc.ID)
@@ -123,7 +127,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				utils.Logf("Checking VM %q", *vm.ID)
 				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, *vm.ID) {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*vm.ID)) {
 						found = true
 						break
 					}
@@ -145,7 +149,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
 				found := false
 				for _, ipcID := range ipcIDs {
-					if strings.Contains(ipcID, *nic) {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*nic)) {
 						found = true
 						break
 					}
@@ -157,7 +161,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", Label(utils.TestSuiteLabelSLBOutbound), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), "standard") {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 
@@ -216,9 +220,7 @@ func createPodGetIP() *v1.Pod {
 					Image:           "appropriate/curl",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
-						"/bin/sh",
-						"-c",
-						`curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me`,
+						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
 					},
 				},
 			},
