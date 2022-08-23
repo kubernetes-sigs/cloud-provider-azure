@@ -1,0 +1,28 @@
+{
+  "kubernetesConfigurations": {
+    "kube-apiserver": {
+      "image": "mcr.microsoft.com/oss/kubernetes/kube-apiserver:v1.23.8",
+      "config": {
+          "--feature-gates": "MixedProtocolLBService=true",
+          "--profiling": "false",
+          "--v": "5"
+      }
+    },
+    "kube-cloud-controller-manager": {
+      "image": "{CUSTOM_CCM_IMAGE}",
+      "config": {
+          "--min-resync-period": "10h0m0s",
+          "--profiling": "false",
+          "--v": "6"
+      }
+    },
+    "kube-cloud-node-manager": {
+      "image": "{CUSTOM_CNM_IMAGE}",
+      "config": {
+          "--node-name": "$(NODE_NAME)",
+          "kube-api-burst": "50",
+          "kube-api-qps": "50"
+      }
+    }
+  }
+}
