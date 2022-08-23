@@ -39,6 +39,7 @@ var (
 
 	testVMWithoutInstanceView1 = compute.VirtualMachine{
 		Name: to.StringPtr("testvm1"),
+		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			OsProfile: &compute.OSProfile{
 				ComputerName: to.StringPtr("vmssflex1000001"),
@@ -64,11 +65,15 @@ var (
 					},
 				},
 			},
+			HardwareProfile: &compute.HardwareProfile{
+				VMSize: compute.VirtualMachineSizeTypesStandardD2sV3,
+			},
 		},
 	}
 
 	testVMWithoutInstanceView2 = compute.VirtualMachine{
 		Name: to.StringPtr("testvm2"),
+		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm2"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			OsProfile: &compute.OSProfile{
 				ComputerName: to.StringPtr("vmssflex1000002"),
@@ -94,16 +99,17 @@ var (
 					},
 				},
 			},
+			HardwareProfile: &compute.HardwareProfile{
+				VMSize: compute.VirtualMachineSizeTypesStandardD2sV3,
+			},
 		},
 	}
 	testVMListWithoutInstanceView = []compute.VirtualMachine{testVMWithoutInstanceView1, testVMWithoutInstanceView2}
 
 	testVMWithOnlyInstanceView1 = compute.VirtualMachine{
 		Name: to.StringPtr("testvm1"),
+		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			OsProfile: &compute.OSProfile{
-				ComputerName: to.StringPtr("vmssflex1000001"),
-			},
 			InstanceView: &compute.VirtualMachineInstanceView{
 				Statuses: &[]compute.InstanceViewStatus{
 					{
@@ -116,10 +122,8 @@ var (
 
 	testVMWithOnlyInstanceView2 = compute.VirtualMachine{
 		Name: to.StringPtr("testvm2"),
+		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm2"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			OsProfile: &compute.OSProfile{
-				ComputerName: to.StringPtr("vmssflex1000002"),
-			},
 			InstanceView: &compute.VirtualMachineInstanceView{
 				Statuses: &[]compute.InstanceViewStatus{
 					{
@@ -133,6 +137,7 @@ var (
 
 	testVM1 = compute.VirtualMachine{
 		Name: to.StringPtr("testvm1"),
+		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			OsProfile: &compute.OSProfile{
 				ComputerName: to.StringPtr("vmssflex1000001"),
@@ -164,6 +169,9 @@ var (
 						Name: to.StringPtr("dataDisk1"),
 					},
 				},
+			},
+			HardwareProfile: &compute.HardwareProfile{
+				VMSize: compute.VirtualMachineSizeTypesStandardD2sV3,
 			},
 		},
 	}
