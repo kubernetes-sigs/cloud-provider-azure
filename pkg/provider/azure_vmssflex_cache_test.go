@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -50,6 +51,7 @@ var (
 				Code: to.StringPtr("PowerState/running"),
 			},
 		},
+		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic",
 	}
 	testVMWithoutInstanceView1  = generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
 	testVMWithOnlyInstanceView1 = generateVmssFlexTestVMWithOnlyInstanceView(testVM1Spec)
@@ -68,6 +70,7 @@ var (
 				Code: to.StringPtr("PowerState/running"),
 			},
 		},
+		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-nic",
 	}
 	testVMWithoutInstanceView2  = generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
 	testVMWithOnlyInstanceView2 = generateVmssFlexTestVMWithOnlyInstanceView(testVM2Spec)
@@ -81,6 +84,7 @@ var (
 		Zones:               nil,
 		PlatformFaultDomain: nil,
 		Status:              &[]compute.InstanceViewStatus{},
+		NicID:               "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-nic",
 	}
 	testVMWithoutInstanceView3  = generateVmssFlexTestVMWithoutInstanceView(testVM3Spec)
 	testVMWithOnlyInstanceView3 = generateVmssFlexTestVMWithOnlyInstanceView(testVM3Spec)
@@ -100,6 +104,10 @@ var (
 			},
 			OrchestrationMode: compute.OrchestrationModeFlexible,
 		},
+		Tags: map[string]*string{
+			consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+			consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+		},
 	}
 
 	testVmssFlexList = []compute.VirtualMachineScaleSet{testVmssFlex1}
@@ -114,6 +122,7 @@ type VmssFlexTestVMSpec struct {
 	Zones               *[]string
 	PlatformFaultDomain *int32
 	Status              *[]compute.InstanceViewStatus
+	NicID               string
 }
 
 func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMWithoutInstanceView compute.VirtualMachine) {
@@ -148,6 +157,13 @@ func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMW
 			HardwareProfile: &compute.HardwareProfile{
 				VMSize: compute.VirtualMachineSizeTypesStandardD2sV3,
 			},
+			NetworkProfile: &compute.NetworkProfile{
+				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
+					{
+						ID: to.StringPtr(spec.NicID),
+					},
+				},
+			},
 		},
 		Zones:    spec.Zones,
 		Location: to.StringPtr("EastUS"),
@@ -171,6 +187,56 @@ func generateVmssFlexTestVM(spec VmssFlexTestVMSpec) compute.VirtualMachine {
 	testVM := generateVmssFlexTestVMWithoutInstanceView(spec)
 	testVM.InstanceView = generateVmssFlexTestVMWithOnlyInstanceView(spec).InstanceView
 	return testVM
+}
+
+func TestGetNodeNameByVMName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		description                    string
+		vmName                         string
+		testVMListWithoutInstanceView  []compute.VirtualMachine
+		testVMListWithOnlyInstanceView []compute.VirtualMachine
+		vmListErr                      error
+		expectedNodeName               string
+		expectedErr                    error
+	}{
+		{
+			description:                    "getNodeNameByVMName should return the nodeName of the corresponding vm by the vm name",
+			vmName:                         "testvm1",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedNodeName:               "vmssflex1000001",
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "getNodeVmssFlexID should throw InstanceNotFound error if the VM cannot be found",
+			vmName:                         nonExistingNodeName,
+			testVMListWithoutInstanceView:  []compute.VirtualMachine{},
+			testVMListWithOnlyInstanceView: []compute.VirtualMachine{},
+			vmListErr:                      nil,
+			expectedNodeName:               "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		fs, err := NewTestFlexScaleSet(ctrl)
+		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+
+		nodeName, err := fs.getNodeNameByVMName(tc.vmName)
+		assert.Equal(t, tc.expectedErr, err, tc.description)
+		assert.Equal(t, tc.expectedNodeName, nodeName, tc.description)
+	}
 }
 
 func TestGetNodeVmssFlexID(t *testing.T) {
