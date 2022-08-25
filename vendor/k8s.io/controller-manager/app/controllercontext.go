@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/restmapper"
-	controllersmetrics "k8s.io/component-base/metrics/prometheus/controllers"
 	"k8s.io/controller-manager/pkg/clientbuilder"
 	"k8s.io/controller-manager/pkg/informerfactory"
 )
@@ -60,7 +59,4 @@ type ControllerContext struct {
 	// multiple controllers don't get into lock-step and all hammer the apiserver
 	// with list requests simultaneously.
 	ResyncPeriod func() time.Duration
-
-	// ControllerManagerMetrics provides a proxy to set controller manager specific metrics.
-	ControllerManagerMetrics *controllersmetrics.ControllerManagerMetrics
 }

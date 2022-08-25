@@ -26,6 +26,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	grpcprom "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -39,7 +40,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/server/egressselector"
@@ -50,7 +50,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/metrics/legacyregistry"
-	tracing "k8s.io/component-base/tracing"
+	"k8s.io/component-base/traces"
 	"k8s.io/klog/v2"
 )
 
@@ -84,7 +84,9 @@ func init() {
 	legacyregistry.RawMustRegister(grpcprom.DefaultClientMetrics)
 	dbMetricsMonitors = make(map[string]struct{})
 
-	l, err := logutil.CreateDefaultZapLogger(etcdClientDebugLevel())
+	c := logutil.DefaultZapLoggerConfig
+	c.Level = zap.NewAtomicLevelAt(etcdClientDebugLevel())
+	l, err := c.Build()
 	if err != nil {
 		l = zap.NewNop()
 	}
@@ -107,91 +109,47 @@ func etcdClientDebugLevel() zapcore.Level {
 	return l
 }
 
-func newETCD3HealthCheck(c storagebackend.Config, stopCh <-chan struct{}) (func() error, error) {
-	timeout := storagebackend.DefaultHealthcheckTimeout
-	if c.HealthcheckTimeout != time.Duration(0) {
-		timeout = c.HealthcheckTimeout
-	}
-	return newETCD3Check(c, timeout, stopCh)
-}
-
-func newETCD3ReadyCheck(c storagebackend.Config, stopCh <-chan struct{}) (func() error, error) {
-	timeout := storagebackend.DefaultReadinessTimeout
-	if c.ReadycheckTimeout != time.Duration(0) {
-		timeout = c.ReadycheckTimeout
-	}
-	return newETCD3Check(c, timeout, stopCh)
-}
-
-func newETCD3Check(c storagebackend.Config, timeout time.Duration, stopCh <-chan struct{}) (func() error, error) {
+func newETCD3HealthCheck(c storagebackend.Config) (func() error, error) {
 	// constructing the etcd v3 client blocks and times out if etcd is not available.
 	// retry in a loop in the background until we successfully create the client, storing the client or error encountered
 
-	lock := sync.Mutex{}
-	var client *clientv3.Client
-	clientErr := fmt.Errorf("etcd client connection not yet established")
+	clientValue := &atomic.Value{}
+
+	clientErrMsg := &atomic.Value{}
+	clientErrMsg.Store("etcd client connection not yet established")
 
 	go wait.PollUntil(time.Second, func() (bool, error) {
-		newClient, err := newETCD3Client(c.Transport)
-
-		lock.Lock()
-		defer lock.Unlock()
-
-		// Ensure that server is already not shutting down.
-		select {
-		case <-stopCh:
-			if err == nil {
-				newClient.Close()
-			}
-			return true, nil
-		default:
-		}
-
+		client, err := newETCD3Client(c.Transport)
 		if err != nil {
-			clientErr = err
+			clientErrMsg.Store(err.Error())
 			return false, nil
 		}
-		client = newClient
-		clientErr = nil
+		clientValue.Store(client)
+		clientErrMsg.Store("")
 		return true, nil
-	}, stopCh)
-
-	// Close the client on shutdown.
-	go func() {
-		defer utilruntime.HandleCrash()
-		<-stopCh
-
-		lock.Lock()
-		defer lock.Unlock()
-		if client != nil {
-			client.Close()
-			clientErr = fmt.Errorf("server is shutting down")
-		}
-	}()
+	}, wait.NeverStop)
 
 	return func() error {
-		// Given that client is closed on shutdown we hold the lock for
-		// the entire period of healthcheck call to ensure that client will
-		// not be closed during healthcheck.
-		// Given that healthchecks has a 2s timeout, worst case of blocking
-		// shutdown for additional 2s seems acceptable.
-		lock.Lock()
-		defer lock.Unlock()
-		if clientErr != nil {
-			return clientErr
+		if errMsg := clientErrMsg.Load().(string); len(errMsg) > 0 {
+			return fmt.Errorf(errMsg)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		client := clientValue.Load().(*clientv3.Client)
+		healthcheckTimeout := storagebackend.DefaultHealthcheckTimeout
+		if c.HealthcheckTimeout != time.Duration(0) {
+			healthcheckTimeout = c.HealthcheckTimeout
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), healthcheckTimeout)
 		defer cancel()
 		// See https://github.com/etcd-io/etcd/blob/c57f8b3af865d1b531b979889c602ba14377420e/etcdctl/ctlv3/command/ep_command.go#L118
 		_, err := client.Get(ctx, path.Join("/", c.Prefix, "health"))
 		if err == nil {
 			return nil
 		}
-		return fmt.Errorf("error getting data from etcd: %w", err)
+		return fmt.Errorf("error getting data from etcd: %v", err)
 	}, nil
 }
 
-var newETCD3Client = func(c storagebackend.TransportConfig) (*clientv3.Client, error) {
+func newETCD3Client(c storagebackend.TransportConfig) (*clientv3.Client, error) {
 	tlsInfo := transport.TLSInfo{
 		CertFile:      c.CertFile,
 		KeyFile:       c.KeyFile,
@@ -226,10 +184,12 @@ var newETCD3Client = func(c storagebackend.TransportConfig) (*clientv3.Client, e
 	}
 	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {
 		tracingOpts := []otelgrpc.Option{
-			otelgrpc.WithPropagators(tracing.Propagators()),
-			otelgrpc.WithTracerProvider(c.TracerProvider),
+			otelgrpc.WithPropagators(traces.Propagators()),
 		}
-		// Even with Noop  TracerProvider, the otelgrpc still handles context propagation.
+		if c.TracerProvider != nil {
+			tracingOpts = append(tracingOpts, otelgrpc.WithTracerProvider(*c.TracerProvider))
+		}
+		// Even if there is no TracerProvider, the otelgrpc still handles context propagation.
 		// See https://github.com/open-telemetry/opentelemetry-go/tree/main/example/passthrough
 		dialOptions = append(dialOptions,
 			grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor(tracingOpts...)),
