@@ -18,30 +18,42 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
+	cacheddiscovery "k8s.io/client-go/discovery/cached"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/metadata"
+	"k8s.io/client-go/metadata/metadatainformer"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cloudprovider "k8s.io/cloud-provider"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/configz"
+	controllersmetrics "k8s.io/component-base/metrics/prometheus/controllers"
 	"k8s.io/component-base/term"
 	genericcontrollermanager "k8s.io/controller-manager/app"
 	"k8s.io/controller-manager/controller"
+	"k8s.io/controller-manager/pkg/clientbuilder"
 	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
+	"k8s.io/controller-manager/pkg/informerfactory"
 	"k8s.io/klog/v2"
 
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
@@ -338,8 +350,15 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 	} else {
 		klog.Errorf("unable to register configz: %v", err)
 	}
+	clientBuilder := clientbuilder.SimpleControllerClientBuilder{
+		ClientConfig: c.Kubeconfig,
+	}
+	controllerContext, err := CreateControllerContext(c, clientBuilder, ctx.Done())
+	if err != nil {
+		klog.Fatalf("error building controller context: %v", err)
+	}
 
-	if err := startControllers(ctx, c, ctx.Done(), cloud, newControllerInitializers(), h); err != nil {
+	if err := startControllers(ctx, controllerContext, c, ctx.Done(), cloud, newControllerInitializers(), h); err != nil {
 		klog.Fatalf("error running controllers: %v", err)
 	}
 
@@ -347,7 +366,7 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{},
+func startControllers(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{},
 	cloud cloudprovider.Interface, controllers map[string]initFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(completedConfig.ClientBuilder, stopCh)
@@ -364,7 +383,7 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 		}
 
 		klog.V(1).Infof("Starting %q", controllerName)
-		ctrl, started, err := initFn(ctx, completedConfig, cloud, stopCh)
+		ctrl, started, err := initFn(ctx, controllerContext, completedConfig, cloud, stopCh)
 		if err != nil {
 			klog.Errorf("Error starting %q: %s", controllerName, err.Error())
 			return err
@@ -398,6 +417,7 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 
 	klog.V(2).Infof("startControllers: starting shared informers")
 	completedConfig.SharedInformers.Start(stopCh)
+	controllerContext.InformerFactory.Start(stopCh)
 
 	<-stopCh
 	klog.V(1).Infof("startControllers: received stopping signal, exiting")
@@ -408,7 +428,7 @@ func startControllers(ctx context.Context, completedConfig *cloudcontrollerconfi
 // initFunc is used to launch a particular controller.  It may run additional "should I activate checks".
 // Any error returned will cause the controller process to `Fatal`
 // The bool indicates whether the controller was enabled.
-type initFunc func(ctx context.Context, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stop <-chan struct{}) (debuggingHandler http.Handler, enabled bool, err error)
+type initFunc func(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stop <-chan struct{}) (debuggingHandler http.Handler, enabled bool, err error)
 
 // KnownControllers indicate the default controller we are known.
 func KnownControllers() []string {
@@ -429,4 +449,87 @@ func newControllerInitializers() map[string]initFunc {
 	controllers["route"] = startRouteController
 	controllers["node-ipam"] = startNodeIpamController
 	return controllers
+}
+
+// CreateControllerContext creates a context struct containing references to resources needed by the
+// controllers such as the cloud provider and clientBuilder. rootClientBuilder is only used for
+// the shared-informers client and token controller.
+func CreateControllerContext(s *cloudcontrollerconfig.CompletedConfig, clientBuilder clientbuilder.ControllerClientBuilder, stop <-chan struct{}) (genericcontrollermanager.ControllerContext, error) {
+	versionedClient := clientBuilder.ClientOrDie("shared-informers")
+	sharedInformers := informers.NewSharedInformerFactory(versionedClient, ResyncPeriod(s)())
+
+	metadataClient := metadata.NewForConfigOrDie(clientBuilder.ConfigOrDie("metadata-informers"))
+	metadataInformers := metadatainformer.NewSharedInformerFactory(metadataClient, ResyncPeriod(s)())
+
+	// If apiserver is not running we should wait for some time and fail only then. This is particularly
+	// important when we start apiserver and controller manager at the same time.
+	if err := genericcontrollermanager.WaitForAPIServer(versionedClient, 10*time.Second); err != nil {
+		return genericcontrollermanager.ControllerContext{}, fmt.Errorf("failed to wait for apiserver being healthy: %v", err)
+	}
+
+	// Use a discovery client capable of being refreshed.
+	discoveryClient := clientBuilder.ClientOrDie("controller-discovery")
+	cachedClient := cacheddiscovery.NewMemCacheClient(discoveryClient.Discovery())
+	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedClient)
+	go wait.Until(func() {
+		restMapper.Reset()
+	}, 30*time.Second, stop)
+
+	availableResources, err := GetAvailableResources(clientBuilder)
+	if err != nil {
+		return genericcontrollermanager.ControllerContext{}, err
+	}
+
+	ctx := genericcontrollermanager.ControllerContext{
+		ClientBuilder:                   clientBuilder,
+		InformerFactory:                 sharedInformers,
+		ObjectOrMetadataInformerFactory: informerfactory.NewInformerFactory(sharedInformers, metadataInformers),
+		RESTMapper:                      restMapper,
+		AvailableResources:              availableResources,
+		Stop:                            stop,
+		InformersStarted:                make(chan struct{}),
+		ResyncPeriod:                    ResyncPeriod(s),
+		ControllerManagerMetrics:        controllersmetrics.NewControllerManagerMetrics("cloud-controller-manager"),
+	}
+	return ctx, nil
+}
+
+// ResyncPeriod returns a function which generates a duration each time it is
+// invoked; this is so that multiple controllers don't get into lock-step and all
+// hammer the apiserver with list requests simultaneously.
+func ResyncPeriod(c *cloudcontrollerconfig.CompletedConfig) func() time.Duration {
+	return func() time.Duration {
+		n, _ := rand.Int(rand.Reader, big.NewInt(1000))
+		factor := float64(n.Int64())/1000.0 + 1.0
+		return time.Duration(float64(c.ComponentConfig.Generic.MinResyncPeriod.Nanoseconds()) * factor)
+	}
+}
+
+// GetAvailableResources gets the map which contains all available resources of the apiserver
+// TODO: In general, any controller checking this needs to be dynamic so
+// users don't have to restart their controller manager if they change the apiserver.
+// Until we get there, the structure here needs to be exposed for the construction of a proper ControllerContext.
+func GetAvailableResources(clientBuilder clientbuilder.ControllerClientBuilder) (map[schema.GroupVersionResource]bool, error) {
+	client := clientBuilder.ClientOrDie("controller-discovery")
+	discoveryClient := client.Discovery()
+	_, resourceMap, err := discoveryClient.ServerGroupsAndResources()
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to get all supported resources from server: %v", err))
+	}
+	if len(resourceMap) == 0 {
+		return nil, fmt.Errorf("unable to get any supported resources from server")
+	}
+
+	allResources := map[schema.GroupVersionResource]bool{}
+	for _, apiResourceList := range resourceMap {
+		version, err := schema.ParseGroupVersion(apiResourceList.GroupVersion)
+		if err != nil {
+			return nil, err
+		}
+		for _, apiResource := range apiResourceList.APIResources {
+			allResources[version.WithResource(apiResource.Name)] = true
+		}
+	}
+
+	return allResources, nil
 }
