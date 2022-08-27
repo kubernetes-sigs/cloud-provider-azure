@@ -594,7 +594,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 4)
@@ -3092,6 +3092,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		lbIP          *string
+		lbName        *string
 		service       v1.Service
 		existingSgs   map[string]network.SecurityGroup
 		expectedSg    *network.SecurityGroup
@@ -3309,6 +3310,7 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
 			}},
 			lbIP:   to.StringPtr("1.2.3.4"),
+			lbName: to.StringPtr("lb"),
 			wantLb: true,
 			expectedSg: &network.SecurityGroup{
 				Name: to.StringPtr("nsg"),
@@ -3321,7 +3323,38 @@ func TestReconcileSecurityGroup(t *testing.T) {
 								SourcePortRange:            to.StringPtr("*"),
 								DestinationPortRange:       to.StringPtr(strconv.Itoa(int(getBackendPort(80)))),
 								SourceAddressPrefix:        to.StringPtr("Internet"),
-								DestinationAddressPrefixes: to.StringSlicePtr([]string{}),
+								DestinationAddressPrefixes: to.StringSlicePtr([]string{"1.2.3.4", "5.6.7.8"}),
+								Access:                     network.SecurityRuleAccess("Allow"),
+								Priority:                   to.Int32Ptr(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc:    "reconcileSecurityGroup shall create sgs with only IPv6 destination addresses for IPv6 services with floating IP disabled",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIP:   to.StringPtr("1234::5"),
+			lbName: to.StringPtr("lb"),
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: to.StringPtr("atest1-TCP-80-Internet"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            to.StringPtr("*"),
+								DestinationPortRange:       to.StringPtr(strconv.Itoa(int(getBackendPort(80)))),
+								SourceAddressPrefix:        to.StringPtr("Internet"),
+								DestinationAddressPrefixes: to.StringSlicePtr([]string{"fc00::1", "fc00::2"}),
 								Access:                     network.SecurityRuleAccess("Allow"),
 								Priority:                   to.Int32Ptr(500),
 								Direction:                  network.SecurityRuleDirection("Inbound"),
@@ -3347,7 +3380,13 @@ func TestReconcileSecurityGroup(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		sg, err := az.reconcileSecurityGroup("testCluster", &test.service, test.lbIP, &[]string{}, test.wantLb)
+		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+		if test.lbName != nil {
+			mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return([]string{"1.2.3.4", "5.6.7.8"}, []string{"fc00::1", "fc00::2"}).AnyTimes()
+			mockLBClient.EXPECT().Get(gomock.Any(), "rg", *test.lbName, gomock.Any()).Return(network.LoadBalancer{}, nil)
+		}
+		sg, err := az.reconcileSecurityGroup("testCluster", &test.service, test.lbIP, test.lbName, test.wantLb)
 		assert.Equal(t, test.expectedSg, sg, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
@@ -3403,7 +3442,7 @@ func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
 	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
 	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(existingSg, nil)
 	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIP, &[]string{}, true)
+	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIP, nil, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSg, *sg)
 }
