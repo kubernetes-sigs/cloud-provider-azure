@@ -374,3 +374,21 @@ func TestAzureStackOverrides(t *testing.T) {
 	assert.Equal(t, env.ResourceManagerVMDNSSuffix, "cloudapp.test.com")
 	assert.Equal(t, env.ActiveDirectoryEndpoint, "https://login.microsoftonline.com")
 }
+
+func TestUsesNetworkResourceInDifferentTenant(t *testing.T) {
+	config := &AzureAuthConfig{
+		TenantID:                      "TenantID",
+		AADClientID:                   "AADClientID",
+		AADClientSecret:               "AADClientSecret",
+		NetworkResourceTenantID:       "NetworkTenantID",
+		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+	}
+
+	assert.Equal(t, config.UsesNetworkResourceInDifferentTenant(), true)
+	assert.Equal(t, config.UsesNetworkResourceInDifferentSubscription(), true)
+
+	config.NetworkResourceTenantID = ""
+	config.NetworkResourceSubscriptionID = ""
+	assert.Equal(t, config.UsesNetworkResourceInDifferentTenant(), false)
+	assert.Equal(t, config.UsesNetworkResourceInDifferentSubscription(), false)
+}
