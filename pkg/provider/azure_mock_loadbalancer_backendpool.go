@@ -94,11 +94,12 @@ func (mr *MockBackendPoolMockRecorder) ReconcileBackendPools(clusterName, servic
 }
 
 // GetBackendPrivateIPs mocks base method
-func (m *MockBackendPool) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) []string {
+func (m *MockBackendPool) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) ([]string, []string) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBackendPrivateIPs", clusterName, service, lb)
 	ret0, _ := ret[0].([]string)
-	return ret0
+	ret1, _ := ret[1].([]string)
+	return ret0, ret1
 }
 
 // GetBackendPrivateIPs indicates an expected call of GetBackendPrivateIPs

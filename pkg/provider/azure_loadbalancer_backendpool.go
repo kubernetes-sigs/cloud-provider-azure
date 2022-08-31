@@ -53,7 +53,7 @@ type BackendPool interface {
 	ReconcileBackendPools(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, error)
 
 	// GetBackendPrivateIPs returns the private IPs of LoadBalancer's backend pool
-	GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) []string
+	GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) ([]string, []string)
 }
 
 type backendPoolTypeNodeIPConfig struct {
@@ -232,14 +232,14 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	return isBackendPoolPreConfigured, changed, err
 }
 
-func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) []string {
+func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) ([]string, []string) {
 	serviceName := getServiceName(service)
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	if lb.LoadBalancerPropertiesFormat == nil || lb.LoadBalancerPropertiesFormat.BackendAddressPools == nil {
-		return nil
+		return nil, nil
 	}
 
-	backendPrivateIPs := sets.NewString()
+	backendPrivateIPv4s, backendPrivateIPv6s := sets.NewString(), sets.NewString()
 	for _, bp := range *lb.BackendAddressPools {
 		if strings.EqualFold(to.String(bp.Name), lbBackendPoolName) {
 			klog.V(10).Infof("bc.GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, to.String(bp.Name))
@@ -258,7 +258,13 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, 
 					}
 					if privateIPs != nil {
 						klog.V(2).Infof("bc.GetBackendPrivateIPs for service (%s): lb backendpool - found private IPs %v of node %s", serviceName, privateIPs, nodeName)
-						backendPrivateIPs.Insert(privateIPs...)
+						for _, ip := range privateIPs {
+							if utilnet.IsIPv4String(ip) {
+								backendPrivateIPv4s.Insert(ip)
+							} else {
+								backendPrivateIPv6s.Insert(ip)
+							}
+						}
 					}
 				}
 			}
@@ -266,7 +272,7 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, 
 			klog.V(10).Infof("bc.GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, to.String(bp.Name))
 		}
 	}
-	return backendPrivateIPs.List()
+	return backendPrivateIPv4s.List(), backendPrivateIPv6s.List()
 }
 
 type backendPoolTypeNodeIP struct {
@@ -495,14 +501,14 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 	return isBackendPoolPreConfigured, changed, nil
 }
 
-func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) []string {
+func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) ([]string, []string) {
 	serviceName := getServiceName(service)
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	if lb.LoadBalancerPropertiesFormat == nil || lb.LoadBalancerPropertiesFormat.BackendAddressPools == nil {
-		return nil
+		return nil, nil
 	}
 
-	backendPrivateIPs := sets.NewString()
+	backendPrivateIPv4s, backendPrivateIPv6s := sets.NewString(), sets.NewString()
 	for _, bp := range *lb.BackendAddressPools {
 		if strings.EqualFold(to.String(bp.Name), lbBackendPoolName) {
 			klog.V(10).Infof("bi.GetBackendPrivateIPs for service (%s): found wanted backendpool %s", serviceName, to.String(bp.Name))
@@ -511,7 +517,11 @@ func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, servic
 					ipAddress := backendAddress.IPAddress
 					if ipAddress != nil {
 						klog.V(2).Infof("bi.GetBackendPrivateIPs for service (%s): lb backendpool - found private IP %q", serviceName, *ipAddress)
-						backendPrivateIPs.Insert(*ipAddress)
+						if utilnet.IsIPv4String(*ipAddress) {
+							backendPrivateIPv4s.Insert(*ipAddress)
+						} else {
+							backendPrivateIPv6s.Insert(*ipAddress)
+						}
 					} else {
 						klog.V(4).Infof("bi.GetBackendPrivateIPs for service (%s): lb backendpool - found null private IP")
 					}
@@ -521,7 +531,7 @@ func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, servic
 			klog.V(10).Infof("bi.GetBackendPrivateIPs for service (%s): found unmanaged backendpool %s", serviceName, to.String(bp.Name))
 		}
 	}
-	return backendPrivateIPs.List()
+	return backendPrivateIPv4s.List(), backendPrivateIPv6s.List()
 }
 
 func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, preConfiguredBackendPoolLoadBalancerTypes, serviceName, lbBackendPoolName string) bool {
