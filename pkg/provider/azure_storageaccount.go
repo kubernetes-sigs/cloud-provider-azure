@@ -317,16 +317,16 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if accountOptions.DisableFileServiceDeleteRetentionPolicy {
-			klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), resource group(%s)", accountName, resourceGroup)
-			prop, err := az.FileClient.GetServiceProperties(resourceGroup, accountName)
+			klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), subscroption(%s), resource group(%s)", accountName, subsID, resourceGroup)
+			prop, err := az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(resourceGroup, accountName)
 			if err != nil {
 				return "", "", err
 			}
 			if prop.FileServicePropertiesProperties == nil {
-				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), resource group(%s) is nil", accountName, resourceGroup)
+				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscroption(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
 			}
 			prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
-			if _, err := az.FileClient.SetServiceProperties(resourceGroup, accountName, prop); err != nil {
+			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(resourceGroup, accountName, prop); err != nil {
 				return "", "", err
 			}
 		}

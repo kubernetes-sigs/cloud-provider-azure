@@ -23,18 +23,18 @@ import (
 )
 
 // create file share
-func (az *Cloud) createFileShare(resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
-	return az.FileClient.CreateFileShare(resourceGroupName, accountName, shareOptions)
+func (az *Cloud) createFileShare(subsID, resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
+	return az.FileClient.WithSubscriptionID(subsID).CreateFileShare(resourceGroupName, accountName, shareOptions)
 }
 
-func (az *Cloud) deleteFileShare(resourceGroupName, accountName, name string) error {
-	return az.FileClient.DeleteFileShare(resourceGroupName, accountName, name)
+func (az *Cloud) deleteFileShare(subsID, resourceGroupName, accountName, name string) error {
+	return az.FileClient.WithSubscriptionID(subsID).DeleteFileShare(resourceGroupName, accountName, name)
 }
 
-func (az *Cloud) resizeFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
-	return az.FileClient.ResizeFileShare(resourceGroupName, accountName, name, sizeGiB)
+func (az *Cloud) resizeFileShare(subsID, resourceGroupName, accountName, name string, sizeGiB int) error {
+	return az.FileClient.WithSubscriptionID(subsID).ResizeFileShare(resourceGroupName, accountName, name, sizeGiB)
 }
 
-func (az *Cloud) getFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
-	return az.FileClient.GetFileShare(resourceGroupName, accountName, name)
+func (az *Cloud) getFileShare(subsID, resourceGroupName, accountName, name string) (storage.FileShare, error) {
+	return az.FileClient.WithSubscriptionID(subsID).GetFileShare(resourceGroupName, accountName, name)
 }
