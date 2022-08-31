@@ -238,26 +238,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(*idleTimeout).To(Equal(int32(5)))
 	})
 
-	// It("should support service annotation 'ServiceAnnotationLoadBalancerMixedProtocols'", func() {
-	// 	annotation := map[string]string{
-	// 		azureprovider.ServiceAnnotationLoadBalancerMixedProtocols: "true",
-	// 	}
-
-	// 	// create service with given annotation and wait it to expose
-	// 	publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
-
-	// 	// get lb from azure client
-	// 	lb := getAzureLoadBalancer(publicIP)
-
-	// 	existingProtocols := make(map[network.TransportProtocol]int)
-	// 	for _, rule := range *lb.LoadBalancingRules {
-	// 		if _, ok := existingProtocols[rule.Protocol]; !ok {
-	// 			existingProtocols[rule.Protocol]++
-	// 		}
-	// 	}
-	// 	Expect(len(existingProtocols)).To(Equal(2))
-	// })
-
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-resource-group'", func() {
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
@@ -521,18 +501,33 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 
 		var lb *network.LoadBalancer
+		var targetProbes []*network.Probe
 		//wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-			return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1, nil
+			targetProbes = []*network.Probe{}
+			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				utils.Logf("One probe of LB is %q", *probe.Name)
+				probeSplit := strings.Split(*probe.Name, "-")
+				Expect(len(probeSplit)).NotTo(Equal(0))
+				if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == probeSplit[0] {
+					targetProbes = append(targetProbes, &probe)
+				}
+			}
+
+			return len(targetProbes) == 1, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating health probe configs")
 		var numberOfProbes *int32
-		for _, probe := range *lb.Probes {
+		for _, probe := range targetProbes {
 			if probe.NumberOfProbes != nil {
 				numberOfProbes = probe.NumberOfProbes
 			}
@@ -555,19 +550,32 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 
 		var lb *network.LoadBalancer
+		var targetProbes []*network.Probe
 		//wait for backend update
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-			return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1, nil
+			targetProbes = []*network.Probe{}
+			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				utils.Logf("One probe of LB is %q", *probe.Name)
+				probeSplit := strings.Split(*probe.Name, "-")
+				Expect(len(probeSplit)).NotTo(Equal(0))
+				if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == probeSplit[0] {
+					targetProbes = append(targetProbes, &probe)
+				}
+			}
+			return len(targetProbes) == 1, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 		// get lb from azure client
 		By("Validating health probe configs")
-		probes := *lb.Probes
-		Expect((len(probes))).To(Equal(1))
-		Expect(probes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
+		Expect((len(targetProbes))).To(Equal(1))
+		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
 	})
 })
 
@@ -791,12 +799,27 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			Expect(retryErr).NotTo(HaveOccurred())
 			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
+
 			//wait for backend update
+			var targetProbes []*network.Probe
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 2 &&
-					*(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port != nodeHealthCheckPort &&
-					*(*lb.LoadBalancerPropertiesFormat.Probes)[1].Port != nodeHealthCheckPort, nil
+				targetProbes = []*network.Probe{}
+				for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+					probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+					utils.Logf("One probe of LB is %q", *probe.Name)
+					probeSplit := strings.Split(*probe.Name, "-")
+					Expect(len(probeSplit)).NotTo(Equal(0))
+					if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == probeSplit[0] {
+						targetProbes = append(targetProbes, &probe)
+					}
+				}
+				return len(targetProbes) == 2 &&
+					*(targetProbes)[0].Port != nodeHealthCheckPort &&
+					*(targetProbes)[1].Port != nodeHealthCheckPort, nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -832,7 +855,7 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 	return err
 }
 
-func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
+func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) string {
 	utils.Logf("Getting public IPs in the resourceGroup " + pipResourceGroup)
 	pipList, err := tc.ListPublicIPs(pipResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
@@ -849,8 +872,13 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGrou
 			break
 		}
 	}
-	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 	utils.Logf("Successfully obtained PIP front config id: %v", pipFrontendConfigurationID)
+	return pipFrontendConfigurationID
+}
+
+func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
+	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, pip, pipResourceGroup, lbResourceGroup)
+	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
 	utils.Logf("Getting loadBalancer name from pipFrontendConfigurationID")
 	match := lbNameRE.FindStringSubmatch(pipFrontendConfigurationID)
