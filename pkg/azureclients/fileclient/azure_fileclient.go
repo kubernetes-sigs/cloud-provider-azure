@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
+	"github.com/Azure/go-autorest/autorest"
 
 	"k8s.io/klog/v2"
 
@@ -35,6 +36,8 @@ type Client struct {
 	fileServicesClient storage.FileServicesClient
 
 	subscriptionID string
+	baseURI        string
+	authorizer     autorest.Authorizer
 }
 
 // ShareOptions contains the fields which are used to create file share.
@@ -51,17 +54,33 @@ type ShareOptions struct {
 }
 
 // New creates a azure file client
-func New(config *azclients.ClientConfig) *Client {
-	fileSharesClient := storage.NewFileSharesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
-	fileSharesClient.Authorizer = config.Authorizer
+func New(config *azclients.ClientConfig) Interface {
+	baseURI := config.ResourceManagerEndpoint
+	authorizer := config.Authorizer
+	fileSharesClient := storage.NewFileSharesClientWithBaseURI(baseURI, config.SubscriptionID)
+	fileSharesClient.Authorizer = authorizer
 
-	fileServicesClient := storage.NewFileServicesClientWithBaseURI(config.ResourceManagerEndpoint, config.SubscriptionID)
-	fileServicesClient.Authorizer = config.Authorizer
+	fileServicesClient := storage.NewFileServicesClientWithBaseURI(baseURI, config.SubscriptionID)
+	fileServicesClient.Authorizer = authorizer
 	return &Client{
 		fileSharesClient:   fileSharesClient,
 		fileServicesClient: fileServicesClient,
 		subscriptionID:     config.SubscriptionID,
+		baseURI:            baseURI,
+		authorizer:         authorizer,
 	}
+}
+
+func (c *Client) WithSubscriptionID(subscriptionID string) Interface {
+	if subscriptionID == "" || subscriptionID == c.subscriptionID {
+		return c
+	}
+
+	return New(&azclients.ClientConfig{
+		SubscriptionID:          subscriptionID,
+		ResourceManagerEndpoint: c.baseURI,
+		Authorizer:              c.authorizer,
+	})
 }
 
 // CreateFileShare creates a file share

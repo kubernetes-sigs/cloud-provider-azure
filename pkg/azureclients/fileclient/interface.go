@@ -29,4 +29,5 @@ type Interface interface {
 	GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error)
 	GetServiceProperties(resourceGroupName, accountName string) (storage.FileServiceProperties, error)
 	SetServiceProperties(resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error)
+	WithSubscriptionID(subscriptionID string) Interface
 }
