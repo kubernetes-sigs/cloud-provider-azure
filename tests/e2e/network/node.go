@@ -197,7 +197,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 		utils.Logf("getting all NICs of VMSS VMs")
 		for _, vmssVM := range vmssVMs {
-			utils.Logf("Checking %d VMSS VM %q", vmssVM.Name)
+			utils.Logf("Checking VMSS VM %q", *vmssVM.Name)
 			nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 			Expect(err).NotTo(HaveOccurred())
 

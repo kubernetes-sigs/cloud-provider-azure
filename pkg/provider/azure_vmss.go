@@ -1878,6 +1878,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 
 	// Update VMs with best effort that have already been added to nodeUpdates.
 	var updatedVM bool
+	updatedVMLock := "updatedVMLock"
 	for meta, update := range nodeUpdates {
 		// create new instance of meta and update for passing to anonymous function
 		meta := meta
@@ -1906,6 +1907,8 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 				return rerr.Error()
 			}
 
+			ss.lockMap.LockEntry(updatedVMLock)
+			defer ss.lockMap.UnlockEntry(updatedVMLock)
 			updatedVM = true
 			return nil
 		})

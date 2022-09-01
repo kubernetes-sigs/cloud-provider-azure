@@ -945,8 +945,8 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoo
 		}
 	}
 
-	klog.V(2).Infof("Ensure backendPoolIDs deleted from the VMSS VMs.", backendPoolIDs)
-	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %s", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
+	klog.V(2).Infof("Ensure backendPoolIDs %q deleted from the VMSS VMs.", backendPoolIDs)
+	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %d", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
 	nicUpdated, err := fs.ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap, backendPoolIDs)
 	klog.V(2).Infof("exit from fs.ensureBackendPoolDeletedFromNode")
 	if err != nil {
@@ -989,7 +989,9 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 			nics[nicName] = nic
 		}
 	}
+	nicUpdaterLock := "nicUpdaterLock"
 	for _, nic := range nics {
+		nic := nic
 		newIPConfigs := *nic.IPConfigurations
 		for j, ipConf := range newIPConfigs {
 			if !pointer.BoolDeref(ipConf.Primary, false) {
@@ -1020,12 +1022,14 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.ResourceGroup, pointer.StringDeref(nic.Name, ""), rerr.Error())
 				return rerr.Error()
 			}
+			fs.lockMap.LockEntry(nicUpdaterLock)
+			defer fs.lockMap.UnlockEntry(nicUpdaterLock)
 			nicUpdated = true
 			klog.V(2).Infof("EnsureBackendPoolDeleted done")
 			return nil
 		})
 	}
-	klog.V(2).Infof("nicUpdaters size: %s", len(nicUpdaters))
+	klog.V(2).Infof("nicUpdaters size: %d", len(nicUpdaters))
 	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
 	if errs != nil {
 		allErrs = append(allErrs, utilerrors.Flatten(errs))

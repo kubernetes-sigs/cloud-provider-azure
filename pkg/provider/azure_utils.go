@@ -397,6 +397,9 @@ func getServiceLoadBalancerIPs(service *v1.Service) []string {
 
 // setServiceLoadBalancerIP sets LB IP to a Service
 func setServiceLoadBalancerIP(service *v1.Service, ip string) {
+	if len(ip) == 0 {
+		return
+	}
 	if service.Annotations == nil {
 		service.Annotations = map[string]string{}
 	}

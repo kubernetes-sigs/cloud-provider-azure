@@ -103,8 +103,8 @@ func (az *Cloud) getBackendPoolIDWithRG(lbName, rgName, backendPoolName string) 
 
 func (az *Cloud) getBackendPoolIDs(clusterName, lbName string) map[bool]string {
 	return map[bool]string{
-		IsIPv4: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, false)),
-		IsIPv6: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, true)),
+		IsIPv4: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, IsIPv4)),
+		IsIPv6: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, IsIPv6)),
 	}
 }
 
@@ -334,15 +334,17 @@ func (az *Cloud) getloadbalancerHAmodeRuleName(service *v1.Service, isIPv6 bool)
 }
 
 func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
+	isDualStack := isServiceDualStack(service)
 	safePrefix := strings.Replace(sourceAddrPrefix, "/", "_", -1)
 	safePrefix = strings.Replace(safePrefix, ":", ".", -1) // Consider IPv6 address
+	var name string
 	if useSharedSecurityRule(service) {
-		return fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
+		name = fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
+	} else {
+		rulePrefix := az.getRulePrefix(service)
+		name = fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
 	}
-	rulePrefix := az.getRulePrefix(service)
-	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	// TODO: Use getResourceByIPFamily
-	return name
+	return getResourceByIPFamily(name, isDualStack, isIPv6)
 }
 
 // This returns a human-readable version of the Service used to tag some resources.
@@ -1176,6 +1178,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			ipconfigPrefixToNicMap[ipConfigIDPrefix] = nic
 		}
 	}
+	nicUpdaterLock := "nicUpdaterLock"
 	for k := range ipconfigPrefixToNicMap {
 		nic := ipconfigPrefixToNicMap[k]
 		newIPConfigs := *nic.IPConfigurations
@@ -1208,6 +1211,8 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, pointer.StringDeref(nic.Name, ""), rerr.Error())
 				return rerr.Error()
 			}
+			as.lockMap.LockEntry(nicUpdaterLock)
+			defer as.lockMap.UnlockEntry(nicUpdaterLock)
 			nicUpdated = true
 			return nil
 		})
