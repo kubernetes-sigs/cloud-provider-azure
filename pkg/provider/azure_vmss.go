@@ -33,7 +33,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -1143,7 +1142,7 @@ func (ss *ScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.NodeNam
 	}
 
 	var primaryIPConfiguration *compute.VirtualMachineScaleSetIPConfiguration
-	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
+	ipv6 := ifBackendPoolIPv6(backendPoolID)
 	// Find primary network interface configuration.
 	if !ss.Cloud.ipv6DualStackEnabled && !ipv6 {
 		// Find primary IP configuration.
@@ -1317,7 +1316,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 			return err
 		}
 		var primaryIPConfig *compute.VirtualMachineScaleSetIPConfiguration
-		ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
+		ipv6 := ifBackendPoolIPv6(backendPoolID)
 		// Find primary network interface configuration.
 		if !ss.Cloud.ipv6DualStackEnabled && !ipv6 {
 			// Find primary IP configuration.

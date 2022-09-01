@@ -59,7 +59,7 @@ func TestSetNodeCIDRMaskSizesDualStack(t *testing.T) {
 				NodeCIDRMaskSizeIPv6: testCase.ipv6Mask,
 			}
 
-			ipv4Mask, ipv6Mask, err := setNodeCIDRMaskSizesDualStack(cfg)
+			ipv4Mask, ipv6Mask, err := setNodeCIDRMaskSizesDualStack(cfg, false)
 			assert.NoError(t, err)
 			assert.Equal(t, testCase.expectedIPV4Mask, ipv4Mask)
 			assert.Equal(t, testCase.expectedIPV6Mask, ipv6Mask)

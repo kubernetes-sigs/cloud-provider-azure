@@ -47,7 +47,7 @@ func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNod
 		}
 		defer configFile.Close()
 
-		az, err = azureprovider.NewCloud(ctx, configFile, false)
+		az, err = azureprovider.NewCloud(ctx, configFile, false, azureprovider.Unknown)
 
 		if err != nil {
 			klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)

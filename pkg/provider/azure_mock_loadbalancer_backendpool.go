@@ -49,7 +49,7 @@ func (m *MockBackendPool) EXPECT() *MockBackendPoolMockRecorder {
 }
 
 // EnsureHostsInPool mocks base method
-func (m *MockBackendPool) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, clusterName, lbName string, backendPool network.BackendAddressPool) error {
+func (m *MockBackendPool) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID, vmSetName, clusterName, lbName string, backendPool network.BackendAddressPool, isIPv6 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnsureHostsInPool", service, nodes, backendPoolID, vmSetName, clusterName, lbName, backendPool)
 	ret0, _ := ret[0].(error)

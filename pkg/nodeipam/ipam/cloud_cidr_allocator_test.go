@@ -114,15 +114,16 @@ func TestNewCloudCIDRAllocator(t *testing.T) {
 	allocatorParams := CIDRAllocatorParams{
 		ClusterCIDRs: func() []*net.IPNet {
 			_, clusterCIDRv4, _ := net.ParseCIDR("10.10.0.0/24")
-			return []*net.IPNet{clusterCIDRv4}
+			_, clusterCIDRv6, _ := net.ParseCIDR("fd12:3456:789a:1::/108")
+			return []*net.IPNet{clusterCIDRv4, clusterCIDRv6}
 		}(),
 		ServiceCIDR: func() *net.IPNet {
 			_, clusterCIDRv4, _ := net.ParseCIDR("10.10.0.0/25")
 			return clusterCIDRv4
 		}(),
 		SecondaryServiceCIDR: func() *net.IPNet {
-			_, clusterCIDRv4, _ := net.ParseCIDR("10.10.1.0/25")
-			return clusterCIDRv4
+			_, clusterCIDRv6, _ := net.ParseCIDR("fd12:3456:789a:2::/108")
+			return clusterCIDRv6
 		}(),
 	}
 

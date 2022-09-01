@@ -86,7 +86,8 @@ type CIDRAllocatorParams struct {
 	ClusterCIDRs []*net.IPNet
 	// ServiceCIDR is primary service cidr for cluster
 	ServiceCIDR *net.IPNet
-	// SecondaryServiceCIDR is secondary service cidr for cluster
+	// SecondaryServiceCIDR is secondary service cidr for cluster.
+	// It is used in dual-stack clusters and must be of different IP family with ServiceCIDR.
 	SecondaryServiceCIDR *net.IPNet
 	// NodeCIDRMaskSizes is list of node cidr mask sizes
 	NodeCIDRMaskSizes []int

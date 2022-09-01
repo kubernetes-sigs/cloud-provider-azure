@@ -27,6 +27,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -187,4 +188,10 @@ func StringInSlice(s string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func CompareStrings(s0, s1 []string) bool {
+	ss0 := sets.NewString(s0...)
+	ss1 := sets.NewString(s1...)
+	return ss0.Equal(ss1)
 }

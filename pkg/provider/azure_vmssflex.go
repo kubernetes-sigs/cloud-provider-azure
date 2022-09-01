@@ -31,7 +31,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -511,7 +510,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.Nod
 	}
 
 	var primaryIPConfig *network.InterfaceIPConfiguration
-	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
+	ipv6 := ifBackendPoolIPv6(backendPoolID)
 	if !fs.Cloud.ipv6DualStackEnabled && !ipv6 {
 		primaryIPConfig, err = getPrimaryIPConfig(nic)
 		if err != nil {
@@ -662,7 +661,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.No
 			return err
 		}
 		var primaryIPConfig *compute.VirtualMachineScaleSetIPConfiguration
-		ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
+		ipv6 := ifBackendPoolIPv6(backendPoolID)
 		// Find primary network interface configuration.
 		if !fs.Cloud.ipv6DualStackEnabled && !ipv6 {
 			// Find primary IP configuration.

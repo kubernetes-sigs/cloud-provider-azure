@@ -157,6 +157,7 @@ func startNodeIpamController(ctx context.Context, controllerContext genericcontr
 	if err != nil {
 		return nil, false, err
 	}
+	klog.V(4).Infof("cluster CIDRs: %v; is dualstack: %v", clusterCIDRs, dualStack)
 
 	// failure: more than one cidr but they are not configured as dual stack
 	if len(clusterCIDRs) > 1 && !dualStack {
@@ -183,7 +184,7 @@ func startNodeIpamController(ctx context.Context, controllerContext genericcontr
 		}
 	}
 
-	// the following checks are triggered if both serviceCIDR and secondaryServiceCIDR are provided
+	// Dual-stack: The following checks are triggered if both serviceCIDR and secondaryServiceCIDR are provided
 	if serviceCIDR != nil && secondaryServiceCIDR != nil {
 		// should be dual stack (from different IPFamilies)
 		dualstackServiceCIDR, err := netutils.IsDualStackCIDRs([]*net.IPNet{serviceCIDR, secondaryServiceCIDR})
@@ -195,8 +196,7 @@ func startNodeIpamController(ctx context.Context, controllerContext genericcontr
 		}
 	}
 
-	nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err := setNodeCIDRMaskSizesDualStack(completedConfig.NodeIPAMControllerConfig)
-
+	nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6, err := setNodeCIDRMaskSizesDualStack(completedConfig.NodeIPAMControllerConfig, dualStack)
 	if err != nil {
 		return nil, false, err
 	}
@@ -224,10 +224,11 @@ func startNodeIpamController(ctx context.Context, controllerContext genericcontr
 // setNodeCIDRMaskSizesDualStack returns the IPv4 and IPv6 node cidr mask sizes to the value provided
 // for --node-cidr-mask-size-ipv4 and --node-cidr-mask-size-ipv6 respectively. If value not provided,
 // then it will return default IPv4 and IPv6 cidr mask sizes.
-func setNodeCIDRMaskSizesDualStack(cfg nodeipamconfig.NodeIPAMControllerConfiguration) (int, int, error) {
+func setNodeCIDRMaskSizesDualStack(cfg nodeipamconfig.NodeIPAMControllerConfiguration, dualstack bool) (int, int, error) {
 	ipv4Mask, ipv6Mask := consts.DefaultNodeMaskCIDRIPv4, consts.DefaultNodeMaskCIDRIPv6
 
-	if cfg.NodeCIDRMaskSize != 0 {
+	// Assume that dual-stack is enabled
+	if dualstack && cfg.NodeCIDRMaskSize != 0 {
 		klog.Warningf("setNodeCIDRMaskSizesDualStack: --node-cidr-mask-size is set to %d, but it would be ignored because the dualstack is enabled", cfg.NodeCIDRMaskSize)
 	}
 

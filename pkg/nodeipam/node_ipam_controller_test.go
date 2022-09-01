@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
 )
 
-func newTestNodeIpamController(clusterCIDR []*net.IPNet, serviceCIDR *net.IPNet, secondaryServiceCIDR *net.IPNet, nodeCIDRMaskSizes []int, allocatorType ipam.CIDRAllocatorType) (*Controller, error) {
+func newTestNodeIpamController(clusterCIDRs []*net.IPNet, serviceCIDR *net.IPNet, secondaryServiceCIDR *net.IPNet, nodeCIDRMaskSizes []int, allocatorType ipam.CIDRAllocatorType) (*Controller, error) {
 	clientSet := fake.NewSimpleClientset()
 	fakeNodeHandler := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
@@ -55,7 +55,7 @@ func newTestNodeIpamController(clusterCIDR []*net.IPNet, serviceCIDR *net.IPNet,
 	fakeAZ := &providerazure.Cloud{}
 	return NewNodeIpamController(
 		fakeNodeInformer, fakeAZ, clientSet,
-		clusterCIDR, serviceCIDR, secondaryServiceCIDR, nodeCIDRMaskSizes, allocatorType,
+		clusterCIDRs, serviceCIDR, secondaryServiceCIDR, nodeCIDRMaskSizes, allocatorType,
 	)
 }
 

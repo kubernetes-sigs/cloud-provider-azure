@@ -381,7 +381,7 @@ func (az *Cloud) ListLB(service *v1.Service) ([]network.LoadBalancer, error) {
 		klog.Errorf("LoadBalancerClient.List(%v) failure with err=%v", rgName, rerr)
 		return nil, rerr.Error()
 	}
-	klog.V(2).Infof("LoadBalancerClient.List(%v) success", rgName)
+	klog.Infof("LoadBalancerClient.List(%v) success", rgName)
 	return allLBs, nil
 }
 

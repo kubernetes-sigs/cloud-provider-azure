@@ -163,6 +163,7 @@ type Config struct {
 	SystemTags string `json:"systemTags,omitempty" yaml:"systemTags,omitempty"`
 	// Sku of Load Balancer and Public IP. Candidate values are: basic and standard.
 	// If not set, it will be default to basic.
+	// TODO: string to a type
 	LoadBalancerSku string `json:"loadBalancerSku,omitempty" yaml:"loadBalancerSku,omitempty"`
 	// LoadBalancerName determines the specific name of the load balancer user want to use, working with
 	// LoadBalancerResourceGroup
@@ -287,6 +288,15 @@ var (
 	_ cloudprovider.PVLabeler    = (*Cloud)(nil)
 )
 
+type IPFamily string
+
+var (
+	IPv4      IPFamily = "IPv4"
+	IPv6      IPFamily = "IPv6"
+	DualStack IPFamily = "DualStack"
+	Unknown   IPFamily = "Unknown"
+)
+
 // Cloud holds the config and clients
 type Cloud struct {
 	Config
@@ -326,6 +336,7 @@ type Cloud struct {
 
 	// ipv6DualStack allows overriding for unit testing.  It's normally initialized from featuregates
 	ipv6DualStackEnabled bool
+	IPFamily             IPFamily
 	// isSHaredLoadBalancerSynced indicates if the reconcileSharedLoadBalancer has been run
 	isSharedLoadBalancerSynced bool
 	// Lock for access to node caches, includes nodeZones, nodeResourceGroups, and unmanagedNodes.
@@ -380,17 +391,18 @@ type Cloud struct {
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(ctx context.Context, configReader io.Reader, callFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloud(ctx context.Context, configReader io.Reader, callFromCCM bool, ipFamily IPFamily) (cloudprovider.Interface, error) {
 	az, err := NewCloudWithoutFeatureGates(ctx, configReader, callFromCCM)
 	if err != nil {
 		return nil, err
 	}
 	az.ipv6DualStackEnabled = true
+	az.IPFamily = ipFamily
 
 	return az, nil
 }
 
-func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromCCM bool) (cloudprovider.Interface, error) {
+func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromCCM bool, ipFamily IPFamily) (cloudprovider.Interface, error) {
 	var (
 		cloud cloudprovider.Interface
 		err   error
@@ -405,11 +417,11 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 		}
 
 		defer config.Close()
-		cloud, err = NewCloud(ctx, config, calFromCCM)
+		cloud, err = NewCloud(ctx, config, calFromCCM, ipFamily)
 	} else {
 		// Pass explicit nil so plugins can actually check for nil. See
 		// "Why is my nil error value not equal to nil?" in golang.org/doc/faq.
-		cloud, err = NewCloud(ctx, nil, false)
+		cloud, err = NewCloud(ctx, nil, false, ipFamily)
 	}
 
 	if err != nil {

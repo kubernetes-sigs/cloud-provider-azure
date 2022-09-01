@@ -98,7 +98,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -126,7 +128,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -161,7 +165,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -185,7 +191,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -206,7 +214,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -214,7 +224,8 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}()
 		utils.Logf("Get Internal IP: %s", ip)
 
-		selectedip, err := utils.SelectAvailablePrivateIP(tc)
+		ips, err := utils.SelectAvailablePrivateIPs(tc, tc.IPFamily)
+		selectedip := ips[0]
 		Expect(err).NotTo(HaveOccurred())
 		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = selectedip
 		utils.Logf("Now update private link service's static ip to %s", selectedip)
@@ -226,7 +237,8 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		ip, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		ips, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+		ip = ips[0]
 		Expect(err).NotTo(HaveOccurred())
 
 		// wait and check pls is updated also
@@ -253,7 +265,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -279,7 +293,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -306,7 +322,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -339,7 +357,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -366,7 +386,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: strconv.Itoa(ipAddrCount),
 		}
 		svc1 := "service1"
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, svc1, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, svc1, ns.Name, labels, annotation, ports)
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		defer func() {
 			err := utils.DeleteService(cs, ns.Name, svc1)
 			Expect(err).NotTo(HaveOccurred())
@@ -398,10 +420,10 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			err = utils.DeleteService(cs, ns.Name, svc2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		service2 = updateServiceLBIP(service2, true, ip)
+		service2 = updateServiceLBIPs(service2, true, []string{ip})
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, svc2, ip)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svc2, []string{ip})
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created %s in namespace %s with IP %s", svc2, ns.Name, ip)
 

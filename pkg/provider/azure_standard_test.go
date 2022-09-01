@@ -422,7 +422,7 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
-		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port)
+		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port, false)
 		assert.Equal(t, c.expected, loadbalancerRuleName, c.description)
 	}
 }
@@ -902,22 +902,25 @@ func TestGetBackendPoolName(t *testing.T) {
 		service          v1.Service
 		clusterName      string
 		expectedPoolName string
+		isIPv6           bool
 	}{
 		{
 			name:             "GetBackendPoolName should return <clusterName>-IPv6",
 			service:          getTestService("test1", v1.ProtocolTCP, nil, true, 80),
 			clusterName:      "azure",
 			expectedPoolName: "azure-IPv6",
+			isIPv6:           true,
 		},
 		{
 			name:             "GetBackendPoolName should return <clusterName>",
 			service:          getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			clusterName:      "azure",
 			expectedPoolName: "azure",
+			isIPv6:           false,
 		},
 	}
 	for _, test := range testcases {
-		backPoolName := getBackendPoolName(test.clusterName, &test.service)
+		backPoolName := getBackendPoolName(test.clusterName, test.isIPv6)
 		assert.Equal(t, test.expectedPoolName, backPoolName, test.name)
 	}
 }
@@ -1628,13 +1631,13 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 func TestServiceOwnsFrontendIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	cloud := GetTestCloud(ctrl)
 
 	testCases := []struct {
 		desc         string
 		existingPIPs []network.PublicIPAddress
 		fip          network.FrontendIPConfiguration
 		service      *v1.Service
+		ipFamily     IPFamily
 		isOwned      bool
 		isPrimary    bool
 		expectedErr  error
@@ -1760,11 +1763,56 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID:         types.UID("secondary"),
-					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
 				},
 			},
 			isOwned: true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary external service dual-stack",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("4.3.2.1"),
+					},
+				},
+				{
+					ID: pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("fd00::eef0"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+							PublicIPAddressVersion: network.IPv6,
+						},
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			ipFamily:  DualStack,
+			isOwned:   true,
+			isPrimary: false,
 		},
 		{
 			desc: "serviceOwnsFrontendIP should detect the secondary internal service",
@@ -1788,10 +1836,16 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
-		assert.Equal(t, test.expectedErr, err, test.desc)
-		assert.Equal(t, test.isOwned, isOwned, test.desc)
-		assert.Equal(t, test.isPrimary, isPrimary, test.desc)
+		t.Run(test.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			if test.ipFamily != "" {
+				cloud.IPFamily = test.ipFamily
+			}
+			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
+			assert.Equal(t, test.expectedErr, err)
+			assert.Equal(t, test.isOwned, isOwned)
+			assert.Equal(t, test.isPrimary, isPrimary)
+		})
 	}
 }
 

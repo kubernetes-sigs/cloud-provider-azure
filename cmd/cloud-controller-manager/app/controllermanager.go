@@ -309,8 +309,23 @@ func Run(ctx context.Context, c *cloudcontrollerconfig.CompletedConfig, h *contr
 		err   error
 	)
 
+	var ipFamily provider.IPFamily
+	cidrs, isDualStack, err := processCIDRs(c.ComponentConfig.KubeCloudShared.ClusterCIDR)
+	if err != nil || len(cidrs) == 0 {
+		klog.Fatalf("failed to check if it is a dual-stack cluster, cidrs: %v, err: %v", cidrs, err)
+	}
+	if isDualStack {
+		ipFamily = provider.DualStack
+	} else {
+		if cidrs[0].IP.To4() != nil {
+			ipFamily = provider.IPv4
+		} else {
+			ipFamily = provider.IPv6
+		}
+	}
+
 	if c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile != "" {
-		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true)
+		cloud, err = provider.NewCloudFromConfigFile(ctx, c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile, true, ipFamily)
 		if err != nil {
 			klog.Fatalf("Cloud provider azure could not be initialized: %v", err)
 		}
