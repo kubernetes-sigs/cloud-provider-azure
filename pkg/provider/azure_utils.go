@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	IsIPv6 bool = true
-	IsIPv4 bool = false
+	IPVersionIPv6 bool = true
+	IPVersionIPv4 bool = false
 )
 
 var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
@@ -397,10 +397,20 @@ func getServiceLoadBalancerIPs(service *v1.Service) []string {
 
 // setServiceLoadBalancerIP sets LB IP to a Service
 func setServiceLoadBalancerIP(service *v1.Service, ip string) {
+	if service == nil {
+		klog.Warning("setServiceLoadBalancerIP: Service is nil")
+		return
+	}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		klog.Warning("setServiceLoadBalancerIP: IP %q is not valid for Service", ip, service.Name)
+		return
+	}
+
+	isIPv6 := parsedIP.To4() == nil
 	if service.Annotations == nil {
 		service.Annotations = map[string]string{}
 	}
-	isIPv6 := net.ParseIP(ip).To4() == nil
 	service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]] = ip
 }
 

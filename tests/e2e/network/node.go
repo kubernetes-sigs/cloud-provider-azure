@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
@@ -197,7 +198,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 		utils.Logf("getting all NICs of VMSS VMs")
 		for _, vmssVM := range vmssVMs {
-			utils.Logf("Checking %d VMSS VM %q", vmssVM.Name)
+			utils.Logf("Checking VMSS VM %q", pointer.StringDeref(vmssVM.Name, ""))
 			nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 			Expect(err).NotTo(HaveOccurred())
 

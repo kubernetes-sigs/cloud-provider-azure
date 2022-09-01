@@ -104,8 +104,8 @@ func (az *Cloud) getBackendPoolIDWithRG(lbName, rgName, backendPoolName string) 
 
 func (az *Cloud) getBackendPoolIDs(clusterName, lbName string) map[bool]string {
 	return map[bool]string{
-		IsIPv4: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, false)),
-		IsIPv6: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, true)),
+		consts.IPVersionIPv4: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, consts.IPVersionIPv4)),
+		consts.IPVersionIPv6: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, consts.IPVersionIPv6)),
 	}
 }
 
@@ -282,8 +282,8 @@ func getBackendPoolName(clusterName string, isIPv6 bool) string {
 // getBackendPoolNames returns the IPv4 and IPv6 backend pool names.
 func getBackendPoolNames(clusterName string) map[bool]string {
 	return map[bool]string{
-		IsIPv4: getBackendPoolName(clusterName, IsIPv4),
-		IsIPv6: getBackendPoolName(clusterName, IsIPv6),
+		consts.IPVersionIPv4: getBackendPoolName(clusterName, consts.IPVersionIPv4),
+		consts.IPVersionIPv6: getBackendPoolName(clusterName, consts.IPVersionIPv6),
 	}
 }
 
@@ -320,15 +320,17 @@ func (az *Cloud) getloadbalancerHAmodeRuleName(service *v1.Service, isIPv6 bool)
 }
 
 func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string, isIPv6 bool) string {
+	isDualStack := isServiceDualStack(service)
 	safePrefix := strings.Replace(sourceAddrPrefix, "/", "_", -1)
 	safePrefix = strings.Replace(safePrefix, ":", ".", -1) // Consider IPv6 address
+	var name string
 	if useSharedSecurityRule(service) {
-		return fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
+		name = fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
+	} else {
+		rulePrefix := az.getRulePrefix(service)
+		name = fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
 	}
-	rulePrefix := az.getRulePrefix(service)
-	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	// TODO: Use getResourceByIPFamily
-	return name
+	return getResourceByIPFamily(name, isDualStack, isIPv6)
 }
 
 // This returns a human-readable version of the Service used to tag some resources.
@@ -432,8 +434,8 @@ func (az *Cloud) getFrontendIPConfigNames(service *v1.Service) map[bool]string {
 	isDualStack := isServiceDualStack(service)
 	defaultLBFrontendIPConfigName := az.getDefaultFrontendIPConfigName(service)
 	return map[bool]string{
-		IsIPv4: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, IsIPv4),
-		IsIPv6: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, IsIPv6),
+		consts.IPVersionIPv4: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, consts.IPVersionIPv4),
+		consts.IPVersionIPv6: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, consts.IPVersionIPv6),
 	}
 }
 

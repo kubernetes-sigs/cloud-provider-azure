@@ -890,7 +890,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[false])
 			annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[true])
 		} else {
-			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = ipNameBase
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[tc.IPFamily == utils.IPv6])
 		}
 
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)

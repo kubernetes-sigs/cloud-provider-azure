@@ -194,6 +194,12 @@ const (
 	BackoffJitterDefault = 1.0
 )
 
+// IP family variables
+const (
+	IPVersionIPv6 bool = true
+	IPVersionIPv4 bool = false
+)
+
 // LB variables for dual-stack
 var (
 	// Service.Spec.LoadBalancerIP has been deprecated and may be removed in a future release. Those two annotations are introduced as alternatives to set IPv4/IPv6 LoadBalancer IPs.

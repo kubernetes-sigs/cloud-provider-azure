@@ -1052,7 +1052,7 @@ func TestGetBackendPoolNames(t *testing.T) {
 			name:              "GetBackendPoolNames should return 2 backend pool names",
 			service:           getTestService("test1", v1.ProtocolTCP, nil, true, 80),
 			clusterName:       "azure",
-			expectedPoolNames: map[bool]string{IsIPv4: "azure", IsIPv6: "azure-IPv6"},
+			expectedPoolNames: map[bool]string{consts.IPVersionIPv4: "azure", consts.IPVersionIPv6: "azure-IPv6"},
 		},
 	}
 	for _, test := range testcases {

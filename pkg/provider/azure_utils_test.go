@@ -675,16 +675,50 @@ func TestSetServiceLoadBalancerIP(t *testing.T) {
 		expectedSvc *v1.Service
 	}{
 		{
+			"IPv4",
+			"10.0.0.1",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv4]: "10.0.0.1",
+					},
+				},
+			},
+		},
+		{
 			"IPv6",
 			"2001::1",
 			&v1.Service{},
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001::1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv6]: "2001::1",
 					},
 				},
 			},
+		},
+		{
+			"empty IP",
+			"",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{},
+			},
+		},
+		{
+			"invalid IP",
+			"invalid-ip",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{},
+			},
+		},
+		{
+			"empty Service",
+			"10.0.0.1",
+			nil,
+			nil,
 		},
 	}
 	for _, tc := range testcases {
