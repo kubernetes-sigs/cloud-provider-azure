@@ -767,6 +767,7 @@ func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, p
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{},
 	})
 
+	// Always returns false
 	return isBackendPoolPreConfigured
 }
 

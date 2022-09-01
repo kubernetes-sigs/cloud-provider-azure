@@ -44,24 +44,27 @@ func (az *Cloud) reconcilePrivateLinkService(
 	isinternal := requiresInternalLoadBalancer(service)
 	pipRG := az.getPublicIPAddressResourceGroup(service)
 	_, _, fipIPVersion := az.serviceOwnsFrontendIP(*fipConfig, service)
+	serviceName := getServiceName(service)
 	var isIPv6 bool
 	var err error
 	if fipIPVersion != "" {
 		isIPv6 = fipIPVersion == network.IPv6
 	} else {
 		if isIPv6, err = az.isFIPIPv6(service, pipRG, fipConfig); err != nil {
-			klog.Errorf("reconcilePrivateLinkService for service(%s): failed to get FIP IP family: %v", service, err)
+			klog.Errorf("reconcilePrivateLinkService for service(%s): failed to get FIP IP family: %v", serviceName, err)
 			return err
 		}
 	}
-
+	createPLS := wantPLS && serviceRequiresPLS(service)
+	isDualStack := isServiceDualStack(service)
 	if isIPv6 {
-		klog.V(2).Infof("IPv6 is not supported for private link service, skip reconcilePrivateLinkService for service(%s)", service)
-		return nil
+		if isDualStack || !createPLS {
+			klog.V(2).Infof("IPv6 is not supported for private link service, skip reconcilePrivateLinkService for service(%s)", serviceName)
+			return nil
+		}
+		return fmt.Errorf("IPv6 is not supported for private link service")
 	}
 
-	createPLS := wantPLS && serviceRequiresPLS(service)
-	serviceName := getServiceName(service)
 	fipConfigID := fipConfig.ID
 	klog.V(2).Infof("reconcilePrivateLinkService for service(%s) - LB fipConfigID(%s) - wantPLS(%t) - createPLS(%t)", serviceName, pointer.StringDeref(fipConfig.Name, ""), wantPLS, createPLS)
 

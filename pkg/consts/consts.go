@@ -193,6 +193,7 @@ const (
 	BackoffJitterDefault = 1.0
 )
 
+// IP family variables
 const (
 	IPVersionIPv6 bool = true
 	IPVersionIPv4 bool = false

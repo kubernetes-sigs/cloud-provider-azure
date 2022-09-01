@@ -109,11 +109,18 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		isVMSS := len(vmsses) != 0
 
 		ipcIDs := []string{}
-		for _, backendAddressPool := range *lb.BackendAddressPools {
-			if os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool" {
+		for i := range *lb.BackendAddressPools {
+			backendAddressPool := (*lb.BackendAddressPools)[i]
+			if (os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool") ||
+				strings.Contains(*backendAddressPool.Name, "outboundBackendPool") {
 				continue
 			}
-			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
+			if backendAddressPool.BackendIPConfigurations == nil {
+				utils.Logf("BackendIPConfigurations is nil for backendAddressPool %q", *backendAddressPool.Name)
+				continue
+			}
+			for j := range *backendAddressPool.BackendIPConfigurations {
+				ipc := (*backendAddressPool.BackendIPConfigurations)[j]
 				if ipc.ID != nil {
 					if utils.IsAutoscalingAKSCluster() && strings.Contains(*ipc.ID, utils.SystemPool) {
 						continue
@@ -141,7 +148,11 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				Expect(err).NotTo(HaveOccurred())
 				allVMs = append(allVMs, vms...)
 			}
-			Expect(len(allVMs)).To(Equal(len(ipcIDs)))
+			if tc.IPFamily == utils.DualStack {
+				Expect(len(allVMs) * 2).To(Equal(len(ipcIDs)))
+			} else {
+				Expect(len(allVMs)).To(Equal(len(ipcIDs)))
+			}
 			for _, vm := range allVMs {
 				utils.Logf("Checking VM %q", *vm.ID)
 				found := false

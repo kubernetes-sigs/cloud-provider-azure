@@ -500,7 +500,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 					pipNames = append(pipNames, utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[consts.IPVersionIPv6]))
 				}
 				utils.Logf("update pip names %s", strings.Join(pipNames, ","))
-				service = updateServicePIPNames(service, pipNames)
+				service = updateServicePIPNames(tc.IPFamily, service, pipNames)
 			}
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			defer func() {
@@ -553,11 +553,14 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 					service = updateServiceLBIPs(service, false, sharedIPs)
 				}
 			} else {
-				pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), sharedIPs[0])
-				Expect(err).NotTo(HaveOccurred())
-				pipNames := []string{pointer.StringDeref(pip.Name, "")}
+				var pipNames []string
+				for _, sharedIP := range sharedIPs {
+					pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), sharedIP)
+					Expect(err).NotTo(HaveOccurred())
+					pipNames = append(pipNames, pointer.StringDeref(pip.Name, ""))
+				}
 				utils.Logf("update pip names %s", strings.Join(pipNames, ","))
-				service = updateServicePIPNames(service, pipNames)
+				service = updateServicePIPNames(tc.IPFamily, service, pipNames)
 			}
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -943,7 +946,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[false])
 			annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[true])
 		} else {
-			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = ipNameBase
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[tc.IPFamily == utils.IPv6])
 		}
 
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
@@ -1305,16 +1308,17 @@ func updateServiceLBIPs(service *v1.Service, isInternal bool, ips []string) (res
 	return
 }
 
-func updateServicePIPNames(service *v1.Service, pipNames []string) *v1.Service {
+func updateServicePIPNames(ipFamily utils.IPFamily, service *v1.Service, pipNames []string) *v1.Service {
 	if service.Annotations == nil {
 		service.Annotations = map[string]string{}
 	}
 
+	isDualStack := ipFamily == utils.DualStack
 	for _, pipName := range pipNames {
-		if strings.HasSuffix(pipName, "-IPv6") {
-			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[consts.IPVersionIPv6]] = pipName
-		} else {
+		if !isDualStack || !strings.HasSuffix(pipName, "-IPv6") {
 			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[consts.IPVersionIPv4]] = pipName
+		} else {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[consts.IPVersionIPv6]] = pipName
 		}
 	}
 

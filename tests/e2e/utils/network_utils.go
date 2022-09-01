@@ -46,9 +46,6 @@ var (
 		false: "",
 		true:  "-IPv6",
 	}
-
-	// TODO: After dual-stack implementation finished, update here.
-	DualstackSupported = false
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -660,6 +657,7 @@ func retrieveCIDRs(cmd string, reg string) ([]string, error) {
 func GetClusterServiceIPFamily() (IPFamily, error) {
 	// Only test IPv4 in AKS pipeline
 	if os.Getenv(AKSTestCCM) != "" {
+		Logf("Cluster IP family for AKS pipeline: IPv4")
 		return IPv4, nil
 	}
 
@@ -667,13 +665,15 @@ func GetClusterServiceIPFamily() (IPFamily, error) {
 	if err != nil {
 		return "", err
 	}
+	ipFamily := DualStack
 	if svcCIDRs[0] != "" && svcCIDRs[1] == "" {
-		return IPv4, nil
+		ipFamily = IPv4
 	}
 	if svcCIDRs[0] == "" && svcCIDRs[1] != "" {
-		return IPv6, nil
+		ipFamily = IPv6
 	}
-	return DualStack, nil
+	Logf("Cluster IP family: %s", ipFamily)
+	return ipFamily, nil
 }
 
 func IfIPFamiliesEnabled(ipFamily IPFamily) (v4Enabled bool, v6Enabled bool) {
@@ -687,10 +687,6 @@ func IfIPFamiliesEnabled(ipFamily IPFamily) (v4Enabled bool, v6Enabled bool) {
 }
 
 // GetNameWithSuffix returns resource name with IP family suffix.
-// After dual-stack implementation is finished, this function returns name + suffix for all IP families.
 func GetNameWithSuffix(name, suffix string) string {
-	if DualstackSupported {
-		return name + suffix
-	}
-	return name
+	return name + suffix
 }

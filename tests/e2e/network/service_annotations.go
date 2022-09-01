@@ -610,14 +610,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Creating a service referring to the first pip")
 		annotation := map[string]string{}
-		// TODO: dual-stack
-		if utils.DualstackSupported {
-			if v4Enabled {
-				annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames1[false]
-			}
-			if v6Enabled {
-				annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames1[true]
-			}
+		if tc.IPFamily == utils.DualStack {
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames1[false]
+			annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames1[true]
 		} else {
 			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames1[tc.IPFamily == utils.IPv6]
 		}
@@ -638,13 +633,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Updating the service to refer to the second service")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		if utils.DualstackSupported {
-			if v4Enabled {
-				service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames2[false]
-			}
-			if v6Enabled {
-				service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames2[true]
-			}
+		if tc.IPFamily == utils.DualStack {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames2[false]
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames2[true]
 		} else {
 			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames2[tc.IPFamily == utils.IPv6]
 		}
@@ -707,8 +698,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		{
 			annotation := map[string]string{}
 			for isIPv6, id := range prefixIDs1 {
-				// TODO: Update after dual-stack implementation finishes
-				if utils.DualstackSupported {
+				if tc.IPFamily == utils.DualStack {
 					annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = id
 				} else {
 					annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = id
@@ -745,7 +735,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(err).NotTo(HaveOccurred())
 			for isIPv6, id := range prefixIDs2 {
 				// TODO: Update after dual-stack implementation finishes
-				if utils.DualstackSupported {
+				if tc.IPFamily == utils.DualStack {
 					service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = id
 				} else {
 					service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = id
@@ -961,6 +951,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		var lb *network.LoadBalancer
 		var targetProbes []*network.Probe
+		// There should be no other Services besides the one in this test or the check below will fail.
 		expectedTargetProbesCount := 1
 		if tc.IPFamily == utils.DualStack {
 			expectedTargetProbesCount = 2

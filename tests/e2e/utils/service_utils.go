@@ -52,14 +52,21 @@ func DeleteService(cs clientset.Interface, ns string, serviceName string) error 
 			Logf("Service %q does not exist, no need to delete", serviceName)
 			return nil
 		}
+		output, _ := RunKubectl(ns, "describe", "service", serviceName)
+		Logf("Service describe info: %s", output)
 		return err
 	}
-	return wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
+	err := wait.PollImmediate(poll, deletionTimeout, func() (bool, error) {
 		if _, err := cs.CoreV1().Services(ns).Get(context.TODO(), serviceName, metav1.GetOptions{}); err != nil {
 			return apierrs.IsNotFound(err), nil
 		}
 		return false, nil
 	})
+	if err != nil {
+		output, _ := RunKubectl(ns, "describe", "service", serviceName)
+		Logf("Service describe info: %s", output)
+	}
+	return err
 }
 
 // GetServiceDomainName cat prefix and azure suffix
