@@ -308,98 +308,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(ip).To(Equal(targetIP))
 	})
 
-	// internal w/o IP -> public w/o IP
-	// This test is to replace an upstream k/k one because there's a bug:
-	// https://github.com/kubernetes/kubernetes/blob/373c08e0c7873a76cecde1d6d714cc2ff7af0c9a/test/e2e/network/loadbalancer.go#L574
-	// https://github.com/kubernetes/kubernetes/pull/109413
-	It("should support updating an internal Service to a public one", func() {
-		By("Creating an internal Service")
-		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
-		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-		defer func() {
-			By("Cleaning up")
-			err = utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
-
-		By("Waiting for exposure of the internal Service")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
-		Expect(err).NotTo(HaveOccurred())
-		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
-		Expect(errList).NotTo(HaveOccurred())
-		utils.Logf("Events list:")
-		for i, event := range list.Items {
-			utils.Logf("%d. %v", i, event)
-		}
-
-		By("Updating the Service to public")
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		service = updateServiceBalanceIP(service, false, "")
-
-		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Expect the Service IP to be a public one")
-		var targetIP string
-		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
-			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-			if err != nil {
-				return false, err
-			}
-			targetIP = svc.Status.LoadBalancer.Ingress[0].IP
-			if utils.IsInternalEndpoint(targetIP) {
-				utils.Logf("expected IP is public, current IP is internal, retry in 10 seconds")
-				return false, nil
-			}
-			return true, nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, targetIP)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	// public w/o IP -> internal w/ IP
-	// This test is to replace an upstream k/k one because there's a bug:
-	// https://github.com/kubernetes/kubernetes/blob/373c08e0c7873a76cecde1d6d714cc2ff7af0c9a/test/e2e/network/loadbalancer.go#L574
-	// https://github.com/kubernetes/kubernetes/pull/109413
-	It("should support updating a public Service to an internal one with specific IP", func() {
-		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalFalse, labels, ns.Name, ports)
-		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-		defer func() {
-			By("Cleaning up")
-			err = utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
-
-		By("Waiting for exposure of a public Service")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
-		Expect(err).NotTo(HaveOccurred())
-		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
-		Expect(errList).NotTo(HaveOccurred())
-		utils.Logf("Events list:")
-		for i, event := range list.Items {
-			utils.Logf("%d. %v", i, event)
-		}
-
-		internalIP, err := utils.SelectAvailablePrivateIP(tc)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Updating the public service to an internal one with an IP")
-		utils.Logf("will update IP to %s", internalIP)
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		service = updateServiceBalanceIP(service, true, internalIP)
-		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, internalIP)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 	It("should have no operation since no change in service when update", Label(utils.TestSuiteLabelSlow), func() {
 		suffix := string(uuid.NewUUID())[0:4]
 		ipName := basename + "-public-remain" + suffix
@@ -640,12 +548,24 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		}()
 
 		By("testing if floating IP disabled in load balancer rule")
+		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, ip, tc.GetResourceGroup(), "")
+		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
+
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
 		lbRules := lb.LoadBalancingRules
-		Expect(len(*lbRules)).To(Equal(len(ports)))
+		found := false
 		for _, lbRule := range *lbRules {
-			Expect(to.Bool(lbRule.EnableFloatingIP)).To(BeFalse())
+			utils.Logf("Checking LB rule %q, may not be the corresponding rule of the Service", *lbRule.Name)
+			lbRuleSplit := strings.Split(*lbRule.Name, "-")
+			Expect(len(lbRuleSplit)).NotTo(Equal(0))
+			if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == lbRuleSplit[0] {
+				Expect(to.Bool(lbRule.EnableFloatingIP)).To(BeFalse())
+				found = true
+				break
+			}
 		}
+		Expect(found).To(Equal(true))
 	})
 })
 
