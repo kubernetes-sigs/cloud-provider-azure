@@ -7,18 +7,19 @@ description: >
     Deploy a cluster with Out-of-tree Cloud Provider Azure.
 ---
 
-The AKS-engine supports deploying clusters with customized `Cloud Controller Manager` (CCM) and `Cloud Node Manager` (CNM) images. The API model is defined [here](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/aks-engine.json). Follow [this guide](../../development/custom-images) to build your CCM and CNM images and fill them into the AKS-engine API model.
+[cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) can be used to
+provision a Kubernetes cluster with out-of-tree cloud-provider-azure, including specific cloud-controller-manager
+and cloud-node-manager images.
 
-To manually deploy an out-of-tree cluster, we need to deploy the following manifests. Note that there are some restrictions when setting config flags. To get more infomation, checkout [this doc](../../install/azure-ccm).
+```sh
+export AZURE_SUBSCRIPTION_ID=<subscription-id>
+export AZURE_TENANT_ID=<tenant-id>
+export AZURE_CLIENT_ID=<client-id>
+export AZURE_CLIENT_SECRET=<client-secret>
+export CLUSTER_NAME=<cluster-name>
+export AZURE_RESOURCE_GROUP=<resource-group>
+export AZURE_CLOUD_CONTROLLER_MANAGER_IMG=<cloud-controller-manager-image>
+export AZURE_CLOUD_NODE_MANAGER_IMG=<cloud-node-manager-image>
 
-[`cloud-controller-manager`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/cloud-controller-manager.yaml)
-
-[`cloud-node-manager`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/cloud-node-manager.yaml)
-
-[`kube-apiserver`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/kube-apiserver.yaml)
-
-[`kube-controller-manager`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/kube-controller-manager.yaml)
-
-[`kube-shedular`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/kube-scheduler.yaml)
-
-[`kubelet` command](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/out-of-tree/kubelet.manifest)
+make deploy-cluster
+```

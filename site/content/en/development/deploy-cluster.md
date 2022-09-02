@@ -7,10 +7,6 @@ description: >
   Deploy Kubernetes clusters
 ---
 
-## AKS-Engine
-
-Please refer to step 1-3 in [e2e-tests](../e2e/e2e-tests/#how-to-run-kubernetes-e2e-tests-locally) for how to deploy a cluster by [AKS-Engine](https://github.com/Azure/aks-engine).
-
 ## Cluster API Provider Azure (CAPZ)
 
 Please run the following command in the root directory of the repo.

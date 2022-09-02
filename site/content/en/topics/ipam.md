@@ -67,7 +67,7 @@ The following configurations from cloud-controller-manager would be used as defa
 
 ## Limitations
 
-1. We plan to integrate out-of-tree node ipam controller with aks-engine to provider a better experience. Before that, 
+1. We plan to integrate out-of-tree node ipam controller with [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) to provider a better experience. Before that, 
 the manual configuration is required.
 1. It is not supported to change the custom mask size value on the tag once it is set.
 1. For now, there is no e2e test covering this feature, so there can be potential bugs. It is not recommended enabling

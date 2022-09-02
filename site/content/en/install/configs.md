@@ -58,7 +58,7 @@ Note: Cloud provider currently supports three authentication methods, you can ch
 - [Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview):
   - For system-assigned managed identity: set `useManagedIdentityExtension` to true
   - For user-assigned managed identity: set `useManagedIdentityExtension` to true and also set `userAssignedIdentityID`
-- [Service Principal](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md): set `aadClientID` and `aadClientSecret`
+- [Service Principal](https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/docs/book/src/topics/getting-started.md#setting-up-your-azure-environment): set `aadClientID` and `aadClientSecret`
 - [Client Certificate](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-protocols-oauth-service-to-service): set `aadClientCertPath` and `aadClientCertPassword`
 
 If more than one value is set, the order is `Managed Identity` > `Service Principal` > `Client Certificate`.
@@ -311,7 +311,7 @@ For authentication methods, only Service Principal supports this feature, and `a
 
 ## Current default rate-limiting values
 
-The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [AKS-Engine](https://github.com/Azure/aks-engine) clusters prior to Kubernetes version v1.18.0.
+The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) clusters prior to Kubernetes version v1.18.0.
 
 ```json
     "cloudProviderBackoff": true,
