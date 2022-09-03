@@ -815,11 +815,27 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			})
 			Expect(retryErr).NotTo(HaveOccurred())
 
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
+
 			var lb *network.LoadBalancer
+			var targetProbes []*network.Probe
 			//wait for backend update
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-				return len(*lb.LoadBalancerPropertiesFormat.Probes) == 1 && *(*lb.LoadBalancerPropertiesFormat.Probes)[0].Port == service.Spec.HealthCheckNodePort, nil
+				targetProbes = []*network.Probe{}
+				for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+					probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+					utils.Logf("One probe of LB is %q", *probe.Name)
+					probeSplit := strings.Split(*probe.Name, "-")
+					Expect(len(probeSplit)).NotTo(Equal(0))
+					if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == probeSplit[0] {
+						targetProbes = append(targetProbes, &probe)
+					}
+				}
+				return len(targetProbes) == 1 &&
+					*(targetProbes)[0].Port == service.Spec.HealthCheckNodePort, nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -838,12 +854,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			Expect(retryErr).NotTo(HaveOccurred())
 			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
-			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
-			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
-
 			//wait for backend update
-			var targetProbes []*network.Probe
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 				targetProbes = []*network.Probe{}
