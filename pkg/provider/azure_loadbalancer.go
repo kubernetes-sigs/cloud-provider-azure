@@ -146,7 +146,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// Here we'll firstly ensure service do not lie in the opposite LB.
 	var err error
 	serviceName := getServiceName(service)
-	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
+	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
 	klog.V(5).InfoS("EnsureLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
 
 	isOperationSucceeded := false
@@ -168,7 +168,7 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	var err error
 	serviceName := getServiceName(service)
-	mc := metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.SubscriptionID, serviceName)
+	mc := metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
 	klog.V(5).InfoS("UpdateLoadBalancer Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
 	isOperationSucceeded := false
 	defer func() {
@@ -206,7 +206,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	var err error
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
-	mc := metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.SubscriptionID, serviceName)
+	mc := metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
 	klog.V(5).InfoS("EnsureLoadBalancerDeleted Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
 	isOperationSucceeded := false
 	defer func() {
@@ -1815,7 +1815,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 
 			newConfig := network.FrontendIPConfiguration{
 				Name:                                    to.StringPtr(defaultLBFrontendIPConfigName),
-				ID:                                      to.StringPtr(fmt.Sprintf(consts.FrontendIPConfigIDTemplate, az.SubscriptionID, az.ResourceGroup, *lb.Name, defaultLBFrontendIPConfigName)),
+				ID:                                      to.StringPtr(fmt.Sprintf(consts.FrontendIPConfigIDTemplate, az.getNetworkResourceSubscriptionID(), az.ResourceGroup, *lb.Name, defaultLBFrontendIPConfigName)),
 				FrontendIPConfigurationPropertiesFormat: fipConfigurationProperties,
 			}
 
