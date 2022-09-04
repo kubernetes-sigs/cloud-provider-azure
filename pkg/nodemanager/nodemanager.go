@@ -656,7 +656,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionFalse,
 				Reason:             "NodeInitialization",
-				Message:            "Should wait for cloud routes",
+				Message:            "Don't need to wait for cloud routes",
 				LastTransitionTime: currentTime,
 			})
 		} else {
@@ -664,7 +664,7 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionTrue,
 				Reason:             "NodeInitialization",
-				Message:            "Don't need to wait for cloud routes",
+				Message:            "Waiting for cloud routes",
 				LastTransitionTime: currentTime,
 			})
 		}
