@@ -776,11 +776,245 @@ func (fs *FlexScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node,
 
 // EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMSS Flex
 func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]bool, backendPoolID string) error {
+	vmssUpdaters := make([]func() error, 0, len(vmssNamesMap))
+	errors := make([]error, 0, len(vmssNamesMap))
+	for vmssName := range vmssNamesMap {
+		vmssName := vmssName
+		vmss, err := fs.getVmssFlexByName(vmssName)
+		if err != nil {
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get VMSS %s: %v", vmssName, err)
+			errors = append(errors, err)
+			continue
+		}
+
+		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
+		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
+		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.VirtualMachineScaleSetsDeallocating) {
+			klog.V(3).Infof("EnsureBackendPoolDeletedFromVMSets: found vmss %s being deleted, skipping", vmssName)
+			continue
+		}
+		if vmss.VirtualMachineProfile == nil || vmss.VirtualMachineProfile.NetworkProfile == nil || vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
+			klog.V(4).Infof("EnsureBackendPoolDeletedFromVMSets: cannot obtain the primary network interface configurations, of vmss %s", vmssName)
+			continue
+		}
+		vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+		primaryNIC, err := getPrimaryNetworkInterfaceConfigurationForScaleSet(vmssNIC, vmssName)
+		if err != nil {
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get the primary network interface config of the VMSS %s: %v", vmssName, err)
+			errors = append(errors, err)
+			continue
+		}
+		primaryIPConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(primaryNIC)
+		if err != nil {
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to the primary IP config from the VMSS %s's network config : %v", vmssName, err)
+			errors = append(errors, err)
+			continue
+		}
+		loadBalancerBackendAddressPools := []compute.SubResource{}
+		if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
+			loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
+		}
+
+		var found bool
+		var newBackendPools []compute.SubResource
+		for i := len(loadBalancerBackendAddressPools) - 1; i >= 0; i-- {
+			curPool := loadBalancerBackendAddressPools[i]
+			if strings.EqualFold(backendPoolID, *curPool.ID) {
+				klog.V(10).Infof("EnsureBackendPoolDeletedFromVMSets gets unwanted backend pool %q for VMSS %s", backendPoolID, vmssName)
+				found = true
+				newBackendPools = append(loadBalancerBackendAddressPools[:i], loadBalancerBackendAddressPools[i+1:]...)
+			}
+		}
+		if !found {
+			continue
+		}
+
+		vmssUpdaters = append(vmssUpdaters, func() error {
+			// Compose a new vmss with added backendPoolID.
+			primaryIPConfig.LoadBalancerBackendAddressPools = &newBackendPools
+			newVMSS := compute.VirtualMachineScaleSet{
+				Location: vmss.Location,
+				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
+							NetworkInterfaceConfigurations: &vmssNIC,
+						},
+					},
+				},
+			}
+
+			klog.V(2).Infof("ensureBackendPoolDeletedFromVMSS begins to update vmss(%s) with backendPoolID %s", vmssName, backendPoolID)
+			rerr := fs.CreateOrUpdateVMSS(fs.ResourceGroup, vmssName, newVMSS)
+			if rerr != nil {
+				klog.Errorf("ensureBackendPoolDeletedFromVMSS CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr)
+				return rerr.Error()
+			}
+
+			return nil
+		})
+	}
+
+	errs := utilerrors.AggregateGoroutines(vmssUpdaters...)
+	if errs != nil {
+		return utilerrors.Flatten(errs)
+	}
+	// Fail if there are other errors.
+	if len(errors) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(errors))
+	}
+
 	return nil
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) error {
+	// Returns nil if backend address pools already deleted.
+	if backendAddressPools == nil {
+		return nil
+	}
+
+	mc := metrics.NewMetricContext("services", "vmssflex_ensure_backend_pool_deleted", fs.ResourceGroup, fs.SubscriptionID, getServiceName(service))
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
+
+	ipConfigurationIDs := []string{}
+	for _, backendPool := range *backendAddressPools {
+		if strings.EqualFold(to.String(backendPool.ID), backendPoolID) && backendPool.BackendAddressPoolPropertiesFormat != nil && backendPool.BackendIPConfigurations != nil {
+			for _, ipConf := range *backendPool.BackendIPConfigurations {
+				if ipConf.ID == nil {
+					continue
+				}
+
+				ipConfigurationIDs = append(ipConfigurationIDs, *ipConf.ID)
+			}
+		}
+	}
+
+	vmssFlexNamesMap := make(map[string]bool)
+	vmssFlexVMNameMap := make(map[string]string)
+	allErrs := make([]error, 0)
+	for i := range ipConfigurationIDs {
+		ipConfigurationID := ipConfigurationIDs[i]
+		nodeName, vmssFlexName, nicName, err := fs.getNodeInformationByIPConfigurationID(ipConfigurationID)
+		if err != nil {
+			continue
+		}
+		if nodeName == "" {
+			continue
+		}
+		resourceGroupName, err := fs.GetNodeResourceGroup(nodeName)
+		if err != nil {
+			continue
+		}
+		// only vmsses in the resource group same as it's in azure config are included
+		if strings.EqualFold(resourceGroupName, fs.ResourceGroup) {
+			if fs.useStandardLoadBalancer() && !fs.EnableMultipleStandardLoadBalancers {
+				vmssFlexNamesMap[vmssFlexName] = true
+				vmssFlexVMNameMap[nodeName] = nicName
+			} else {
+				if strings.EqualFold(vmssFlexName, vmSetName) {
+					vmssFlexNamesMap[vmSetName] = true
+					vmssFlexVMNameMap[nodeName] = nicName
+				} else {
+					// Only remove nodes belonging to specified vmSet.
+					continue
+				}
+			}
+
+		}
+	}
+
+	// 1. Ensure the backendPoolID is deleted from the VMSS.
+	klog.V(2).Infof("1. Ensure the backendPoolID is deleted from the VMSS.")
+	if deleteFromVMSet {
+		err := fs.EnsureBackendPoolDeletedFromVMSets(vmssFlexNamesMap, backendPoolID)
+		if err != nil {
+			allErrs = append(allErrs, err)
+		}
+	}
+
+	klog.V(2).Infof("2. Ensure the backendPoolID is deleted from the VMSS VMs.")
+	// 2. Ensure the backendPoolID is deleted from the VMSS VMs.
+	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %s", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
+	err := fs.ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap, backendPoolID)
+	klog.V(2).Infof("exit from fs.ensureBackendPoolDeletedFromNode")
+	if err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	if len(allErrs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+	}
+
+	isOperationSucceeded = true
 	return nil
 
+}
+
+func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[string]string, backendPoolID string) error {
+	nicUpdaters := make([]func() error, 0)
+	allErrs := make([]error, 0)
+	i := 0
+	for nodeName, nicName := range vmssFlexVMNameMap {
+		i++
+		klog.V(2).Infof("i = %s", i)
+
+		ctx, cancel := getContextWithCancel()
+		defer cancel()
+		nic, rerr := fs.InterfacesClient.Get(ctx, fs.ResourceGroup, nicName, "")
+		if rerr != nil {
+			return fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name %s: %w", nicName, rerr.Error())
+		}
+
+		if nic.ProvisioningState == consts.NicFailedState {
+			klog.Warningf("EnsureBackendPoolDeleted skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
+			continue
+		}
+
+		if nic.InterfacePropertiesFormat != nil && nic.InterfacePropertiesFormat.IPConfigurations != nil {
+			newIPConfigs := *nic.IPConfigurations
+			for j, ipConf := range newIPConfigs {
+				if !to.Bool(ipConf.Primary) {
+					continue
+				}
+				// found primary ip configuration
+				if ipConf.LoadBalancerBackendAddressPools != nil {
+					newLBAddressPools := *ipConf.LoadBalancerBackendAddressPools
+					for k := len(newLBAddressPools) - 1; k >= 0; k-- {
+						pool := newLBAddressPools[k]
+						if strings.EqualFold(to.String(pool.ID), backendPoolID) {
+							newLBAddressPools = append(newLBAddressPools[:k], newLBAddressPools[k+1:]...)
+							break
+						}
+					}
+					newIPConfigs[j].LoadBalancerBackendAddressPools = &newLBAddressPools
+				}
+			}
+			nic.IPConfigurations = &newIPConfigs
+
+			nicUpdaters = append(nicUpdaters, func() error {
+				ctx, cancel := getContextWithCancel()
+				defer cancel()
+				klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolID %s", fs.resourceGroup, to.String(nic.Name), backendPoolID)
+				rerr := fs.InterfacesClient.CreateOrUpdate(ctx, fs.ResourceGroup, to.String(nic.Name), nic)
+				if rerr != nil {
+					klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.resourceGroup, to.String(nic.Name), rerr.Error())
+					return rerr.Error()
+				}
+				klog.V(2).Infof("EnsureBackendPoolDeleted done")
+				return nil
+			})
+		}
+	}
+	klog.V(2).Infof("nicUpdaters size: %s", len(nicUpdaters))
+	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
+	if errs != nil {
+		allErrs = append(allErrs, utilerrors.Flatten(errs))
+	}
+	if len(allErrs) > 0 {
+		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+	}
+	return nil
 }
