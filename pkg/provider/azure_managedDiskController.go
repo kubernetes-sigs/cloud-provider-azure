@@ -84,6 +84,8 @@ type ManagedDiskOptions struct {
 	BurstingEnabled *bool
 	// SubscriptionID - specify a different SubscriptionID
 	SubscriptionID string
+	// Location - specify a different location
+	Location string
 }
 
 // CreateManagedDisk: create managed disk
@@ -211,8 +213,12 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		diskProperties.MaxShares = &options.MaxShares
 	}
 
+	location := c.common.location
+	if options.Location != "" {
+		location = options.Location
+	}
 	model := compute.Disk{
-		Location: &c.common.location,
+		Location: &location,
 		Tags:     newTags,
 		Sku: &compute.DiskSku{
 			Name: diskSku,
