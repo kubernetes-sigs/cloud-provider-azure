@@ -127,8 +127,8 @@ func (b KubectlBuilder) ExecOrDie(namespace string) string {
 
 // Exec runs the kubectl executable.
 func (b KubectlBuilder) Exec() (string, error) {
-	stdout, _, err := b.ExecWithFullOutput()
-	return stdout, err
+	stdout, stderr, err := b.ExecWithFullOutput()
+	return fmt.Sprintf("stdout:%s\nstderr:%s", stdout, stderr), err
 }
 
 // ExecWithFullOutput runs the kubectl executable, and returns the stdout and stderr.

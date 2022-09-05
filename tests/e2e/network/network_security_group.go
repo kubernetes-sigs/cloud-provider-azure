@@ -39,7 +39,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Network security group", func() {
+var _ = Describe("Network security group", FlakeAttempts(3), Label(utils.TestSuiteLabelNSG), func() {
 	basename := "nsg"
 	serviceName := "nsg-test"
 
@@ -51,8 +51,8 @@ var _ = Describe("Network security group", func() {
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -67,8 +67,12 @@ var _ = Describe("Network security group", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Waiting for backend pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -94,14 +98,14 @@ var _ = Describe("Network security group", func() {
 		}()
 
 		By("Validating ip exists in Security Group")
-		port := fmt.Sprintf("%v", nginxPort)
+		port := fmt.Sprintf("%d", serverPort)
 		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(validateUnsharedSecurityRuleExists(nsgs, ip, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 
 		By("Validating network security group working")
 		var code int
-		url := fmt.Sprintf("http://%s:%v", ip, ports[0].Port)
+		url := fmt.Sprintf("http://%s:%d", ip, ports[0].Port)
 		for i := 1; i <= 30; i++ {
 			utils.Logf("round %d, GET %s", i, url)
 			/* #nosec G107: Potential HTTP request made with variable url */
@@ -194,14 +198,28 @@ var _ = Describe("Network security group", func() {
 		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 		found := validateDenyAllSecurityRuleExists(nsgs, internalIP)
-		Expect(found).ToNot(BeTrue())
+		Expect(found).To(BeFalse())
 
 		By("Deleting the service")
 		err = utils.DeleteService(cs, ns.Name, serviceName)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating a test service with the deny rule annotation and `service.Spec.LoadBalancerSourceRanges`")
-		service.Spec.LoadBalancerSourceRanges = []string{"1.2.3.4/32"}
+		// Create a host exec Pod which lives a bit longer
+		agnhostPod := fmt.Sprintf("%s-%s", utils.ExecAgnhostPod, "deny-all-except-lb-range")
+		result, err := utils.CreateHostExecPod(cs, ns.Name, agnhostPod)
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, agnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		hostExecPod, err := utils.GetPod(cs, ns.Name, agnhostPod)
+		Expect(err).NotTo(HaveOccurred())
+		hostExecPodIP := hostExecPod.Status.PodIP
+
+		allowCIDR := fmt.Sprintf("%s/32", hostExecPodIP)
+		service.Spec.LoadBalancerSourceRanges = []string{allowCIDR}
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -212,7 +230,7 @@ var _ = Describe("Network security group", func() {
 		By("Checking if there is a LoadBalancerSourceRanges rule")
 		nsgs, err = tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, "1.2.3.4/32", "1.2.3.4_32")
+		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, allowCIDR, fmt.Sprintf("%s_32", hostExecPodIP))
 		Expect(found).To(BeTrue())
 
 		By("Checking if there is a deny_all rule")
@@ -272,6 +290,7 @@ func validateUnsharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip strin
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
+			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
 			if strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) && strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
 				utils.Logf("Found target security rule")
 				return true
@@ -287,6 +306,7 @@ func validateSharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []stri
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
+			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
 			if strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
 				found := true
 				for _, ip := range ips {
@@ -311,6 +331,7 @@ func validateLoadBalancerSourceRangesRuleExists(nsgs []aznetwork.SecurityGroup, 
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
+			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
 			if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
 				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
 				strings.HasSuffix(to.String(securityRule.Name), ipRangesSuffix) &&
@@ -329,6 +350,7 @@ func validateDenyAllSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip string
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
+			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
 			if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
 				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
 				strings.HasSuffix(to.String(securityRule.Name), "deny_all") &&

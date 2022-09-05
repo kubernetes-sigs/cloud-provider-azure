@@ -142,7 +142,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
-			Logf("error when listing sgs: %w", err)
+			Logf("error when listing security groups: %w", err)
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
