@@ -157,7 +157,6 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
-
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -170,6 +169,7 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -179,19 +179,20 @@ updates:
     labels:
       - "area/dependency"
       - "release-note-none"
-      - "ok-to-test" 
+      - "ok-to-test"
       - "kind/cleanup"
-    target-branch: "release-1.0"
+    target-branch: "release-1.25"
     ignore:
       - dependency-name: "k8s.io/*"
-        versions: [">=0.22.0"]
+        versions: [">=0.26.0"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: daily
       time: "01:00"
       timezone: "Asia/Shanghai"
-    target-branch: "release-1.0"
+    target-branch: "release-1.25"
     labels:
       - "area/dependency"
       - "release-note-none"
@@ -204,7 +205,7 @@ updates:
       interval: "daily"
       time: "01:00"
       timezone: "Asia/Shanghai"
-    target-branch: "release-1.0"
+    target-branch: "release-1.25"
     labels:
       - "area/dependency"
       - "release-note-none"
