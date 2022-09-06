@@ -152,11 +152,11 @@ jobs:
         run: |
           cd kubetest2-aks
           make deployer
-          sudo make install
       - uses: actions/upload-artifact@v3
         with:
           name: kubetest2-aks
-          path: $(go env GOPATH)/bin/kubetest2-aks
+          path: kubetest2-aks/bin/kubetest2-aks
+          if-no-files-found: error
 
   publish:
     runs-on: ubuntu-latest
