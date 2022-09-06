@@ -94,21 +94,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Get Go version
-        run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: ^1.18
       - name: Build binary
         run: |
           cd kubetest2-aks
           make deployer
-          sudo make install
       - uses: actions/upload-artifact@v3
         with:
           name: kubetest2-aks
-          path: $(go env GOPATH)/bin/kubetest2-aks
+          path: kubetest2-aks/bin/kubetest2-aks
+          if-no-files-found: error
 
   publish:
     runs-on: ubuntu-latest
