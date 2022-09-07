@@ -1359,10 +1359,24 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 		hostUpdates = append(hostUpdates, func() error {
 			ctx, cancel := getContextWithCancel()
 			defer cancel()
-			klog.V(2).Infof("EnsureHostInPool begins to UpdateVMs for VMSS(%s, %s) with new backendPoolID %s", meta.resourceGroup, meta.vmssName, backendPoolID)
-			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", ss.getPutVMSSVMBatchSize())
+
+			logFields := []interface{}{
+				"operation", "EnsureHostsInPool UpdateVMSSVMs",
+				"vmssName", meta.vmssName,
+				"resourceGroup", meta.resourceGroup,
+				"backendPoolID", backendPoolID,
+			}
+
+			batchSize, err := ss.VMSSBatchSize(meta.vmssName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
+				return err
+			}
+
+			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
 			if rerr != nil {
-				klog.Errorf("EnsureHostInPool UpdateVMs for VMSS(%s, %s) failed with error %v", meta.resourceGroup, meta.vmssName, rerr.Error())
+				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
 				return rerr.Error()
 			}
 
@@ -1632,10 +1646,24 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 		hostUpdates = append(hostUpdates, func() error {
 			ctx, cancel := getContextWithCancel()
 			defer cancel()
-			klog.V(2).Infof("EnsureBackendPoolDeleted begins to UpdateVMs for VMSS(%s, %s) with backendPoolID %s", meta.resourceGroup, meta.vmssName, backendPoolID)
-			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", ss.getPutVMSSVMBatchSize())
+
+			logFields := []interface{}{
+				"operation", "EnsureBackendPoolDeleted UpdateVMSSVMs",
+				"vmssName", meta.vmssName,
+				"resourceGroup", meta.resourceGroup,
+				"backendPoolID", backendPoolID,
+			}
+
+			batchSize, err := ss.VMSSBatchSize(meta.vmssName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get vmss batch size", logFields...)
+				return err
+			}
+
+			klog.V(2).InfoS("Begin to update VMs for VMSS with new backendPoolID", logFields...)
+			rerr := ss.VirtualMachineScaleSetVMsClient.UpdateVMs(ctx, meta.resourceGroup, meta.vmssName, update, "network_update", batchSize)
 			if rerr != nil {
-				klog.Errorf("EnsureBackendPoolDeleted UpdateVMs for VMSS(%s, %s) failed with error %v", meta.resourceGroup, meta.vmssName, rerr.Error())
+				klog.ErrorS(err, "Failed to update VMs for VMSS", logFields...)
 				return rerr.Error()
 			}
 
@@ -1824,4 +1852,18 @@ func (ss *ScaleSet) GetNodeVMSetName(node *v1.Node) (string, error) {
 
 	klog.V(4).Infof("ss.GetNodeVMSetName: found vmss name %s from node name %s", vmssName, node.Name)
 	return vmssName, nil
+}
+
+// VMSSBatchSize returns the batch size for VMSS operations.
+func (ss *ScaleSet) VMSSBatchSize(vmssName string) (int, error) {
+	batchSize := 0
+	vmss, err := ss.getVMSS(vmssName, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return 0, fmt.Errorf("get vmss batch size: %w", err)
+	}
+	if _, ok := vmss.Tags[consts.VMSSTagForBatchOperation]; ok {
+		batchSize = ss.getPutVMSSVMBatchSize()
+	}
+	klog.V(2).InfoS("Fetch VMSS batch size", "vmss", vmssName, "size", batchSize)
+	return batchSize, nil
 }
