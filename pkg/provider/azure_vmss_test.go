@@ -2719,3 +2719,69 @@ func TestGetNodeVMSetNameVMSS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", vmSetName)
 }
+
+func TestScaleSet_VMSSBatchSize(t *testing.T) {
+
+	const (
+		BatchSize = 500
+	)
+
+	t.Run("failed to get vmss", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+
+		var (
+			vmssName   = "foo"
+			getVMSSErr = &retry.Error{RawError: fmt.Errorf("list vmss error")}
+		)
+		mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
+			Return(nil, getVMSSErr)
+
+		_, err = ss.VMSSBatchSize(vmssName)
+		assert.Error(t, err)
+	})
+
+	t.Run("vmss contains batch operation tag", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+		ss.Cloud.PutVMSSVMBatchSize = BatchSize
+
+		scaleSet := compute.VirtualMachineScaleSet{
+			Name: to.StringPtr("foo"),
+			Tags: map[string]*string{
+				consts.VMSSTagForBatchOperation: to.StringPtr(""),
+			},
+		}
+		mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
+			Return([]compute.VirtualMachineScaleSet{scaleSet}, nil)
+
+		batchSize, err := ss.VMSSBatchSize(to.String(scaleSet.Name))
+		assert.NoError(t, err)
+		assert.Equal(t, BatchSize, batchSize)
+	})
+
+	t.Run("vmss doesn't contain batch operation tag", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+		ss.Cloud.PutVMSSVMBatchSize = BatchSize
+
+		scaleSet := compute.VirtualMachineScaleSet{
+			Name: to.StringPtr("bar"),
+		}
+		mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
+			Return([]compute.VirtualMachineScaleSet{scaleSet}, nil)
+
+		batchSize, err := ss.VMSSBatchSize(to.String(scaleSet.Name))
+		assert.NoError(t, err)
+		assert.Equal(t, 0, batchSize)
+	})
+}
