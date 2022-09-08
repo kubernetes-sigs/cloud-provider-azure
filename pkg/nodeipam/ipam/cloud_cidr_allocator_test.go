@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
@@ -233,10 +234,15 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			expectedVMSS := compute.VirtualMachineScaleSet{
 				Name: to.StringPtr("vmss"),
 				Tags: tc.tags,
+				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
+					OrchestrationMode: compute.OrchestrationModeUniform,
+				},
 			}
 			mockVMSSClient := ss.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 			mockVMSSClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).MaxTimes(1)
 			cloud.VMSet = ss
+			mockVMsClient := ss.VirtualMachinesClient.(*mockvmclient.MockInterface)
+			mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
 			clusterCIDRs := func() []*net.IPNet {
 				_, cidrIPV4, _ := net.ParseCIDR("10.240.0.0/16")

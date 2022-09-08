@@ -135,6 +135,8 @@ const (
 	VMSSKey = "k8svmssKey"
 	// VMASKey is the key when querying vmss cache
 	VMASKey = "k8svmasKey"
+	// NonVmssUniformNodesKey is the key when querying nonVmssUniformNodes cache
+	NonVmssUniformNodesKey = "k8sNonVmssUniformNodesKey"
 	// AvailabilitySetNodesKey is the availability set nodes key
 	AvailabilitySetNodesKey = "k8sAvailabilitySetNodesKey"
 
@@ -143,7 +145,11 @@ const (
 
 	// GetNodeVmssFlexIDLockKey is the key for getting the lock for getNodeVmssFlexID function
 	GetNodeVmssFlexIDLockKey = "k8sGetNodeVmssFlexIDLockKey"
+	// VMManagementTypeLockKey is the key for getting the lock for getVMManagementType function
+	VMManagementTypeLockKey = "VMManagementType"
 
+	// NonVmssUniformNodesCacheTTLDefaultInSeconds is the TTL of the non vmss uniform node cache
+	NonVmssUniformNodesCacheTTLDefaultInSeconds = 900
 	// AvailabilitySetNodesCacheTTLDefaultInSeconds is the TTL of the availabilitySet node cache
 	AvailabilitySetNodesCacheTTLDefaultInSeconds = 900
 	// VMSSCacheTTLDefaultInSeconds is the TTL of the vmss cache
@@ -155,10 +161,8 @@ const (
 
 	// VmssFlexCacheTTLDefaultInSeconds is the TTL of the vmss flex cache
 	VmssFlexCacheTTLDefaultInSeconds = 600
-	// VmssFlexVMCacheTTLInSeconds is the TTL of the vmss flex vm cache
-	VmssFlexVMCacheTTLInSeconds = 600
-	// VmssFlexVMStatusCacheTTLInSeconds is the TTL of the vmss flex vm status cache
-	VmssFlexVMStatusCacheTTLInSeconds = 600
+	// VmssFlexVMCacheTTLDefaultInSeconds is the TTL of the vmss flex vm cache
+	VmssFlexVMCacheTTLDefaultInSeconds = 600
 
 	// ZoneFetchingInterval defines the interval of performing zoneClient.GetZones
 	ZoneFetchingInterval = 30 * time.Minute
