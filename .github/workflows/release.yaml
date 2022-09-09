@@ -23,7 +23,7 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get Go version
         run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
@@ -56,7 +56,7 @@ jobs:
             arch: amd64
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get Go version
         run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
@@ -119,7 +119,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: master
           fetch-depth: 0
