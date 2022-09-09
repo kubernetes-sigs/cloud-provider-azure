@@ -461,3 +461,7 @@ const (
 	// Default number of IP configs for PLS
 	PLSDefaultNumOfIPConfig = 1
 )
+
+const (
+	VMSSTagForBatchOperation = "aks-managed-coordination"
+)
