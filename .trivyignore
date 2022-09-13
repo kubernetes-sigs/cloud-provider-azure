@@ -1,0 +1,4 @@
+# lib: github.com/emicklei/go-restful
+# Imported by k8s.io/apiserver v0.24 and others. These lib cannot be updated.
+CVE-2022-1996
+GHSA-r48q-9g5r-8q2h
