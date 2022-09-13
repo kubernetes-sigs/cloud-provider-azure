@@ -123,6 +123,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 			// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
 			// Empty content and 2xx http status code are returned in this case.
 			// Issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1296
+			// Such situation also needs retrying that ContentLength is -1, StatusCode is 200 and an empty body is returned.
 			emptyResp := (response.ContentLength == 0 || trimmed == "" || trimmed == "{}") && response.StatusCode >= 200 && response.StatusCode < 300
 			if !emptyResp {
 				if rerr == nil || response.StatusCode == http.StatusNotFound || c.regionalEndpoint == "" {
@@ -131,7 +132,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 
 				var body map[string]interface{}
 				if e := json.Unmarshal(bodyBytes, &body); e != nil {
-					klog.Errorf("Send.sendRequest: error in parsing response body string: %s, Skip retrying regional host", e.Error())
+					klog.Errorf("Send.sendRequest: error in parsing response body string %q: %s, Skip retrying regional host", bodyBytes, e.Error())
 					return response, rerr
 				}
 				klog.V(5).Infof("Send.sendRequest original response: %s", bodyString)
@@ -143,6 +144,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 				}
 			}
 
+			// Do regional request
 			currentHost := request.URL.Host
 			if request.Host != "" {
 				currentHost = request.Host
@@ -158,6 +160,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 			klog.V(6).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
 
 			regionalResponse, regionalError := s.Do(request)
+
 			// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
 			// 1. the retry on regional ARM host approach is a hack.
 			// 2. the concatenated regional uri could be wrong as the rule is not officially declared by ARM.
@@ -167,9 +170,24 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 					regionalErrStr = regionalError.Error()
 				}
 
-				klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: '%s'. Ignoring the result.", regionalErrStr)
+				klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
 				return response, rerr
 			}
+
+			// Do the same check on regional response just like the global one
+			bodyBytes, _ = ioutil.ReadAll(regionalResponse.Body)
+			defer func() {
+				regionalResponse.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+			}()
+			bodyString = string(bodyBytes)
+			trimmed = strings.TrimSpace(bodyString)
+			emptyResp = (regionalResponse.ContentLength == 0 || trimmed == "" || trimmed == "{}") && regionalResponse.StatusCode >= 200 && regionalResponse.StatusCode < 300
+			if emptyResp {
+				contentLengthErrStr := fmt.Sprintf("empty response with trimmed body %q, ContentLength %d and StatusCode %d", trimmed, regionalResponse.ContentLength, regionalResponse.StatusCode)
+				klog.Errorf(contentLengthErrStr)
+				return response, fmt.Errorf(contentLengthErrStr)
+			}
+
 			return regionalResponse, regionalError
 		})
 	}
