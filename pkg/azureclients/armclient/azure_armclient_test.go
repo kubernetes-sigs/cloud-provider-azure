@@ -31,6 +31,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -76,19 +77,28 @@ func TestSend(t *testing.T) {
 }
 func TestSendFailureRegionalRetry(t *testing.T) {
 	testcases := []struct {
-		description        string
-		globalServerErrMsg string
-		globalServerCode   int
+		description               string
+		globalServerErrMsg        string
+		globalServerCode          int
+		globalServerContentLength *string
 	}{
 		{
 			"RegionalRetry",
 			"{\"error\":{\"code\":\"ResourceGroupNotFound\"}}",
 			http.StatusInternalServerError,
+			to.StringPtr("100"),
 		},
 		{
-			"ReplicationLatency",
+			"ReplicationLatency-Content-Length-0",
 			"{}",
 			http.StatusOK,
+			to.StringPtr("0"),
+		},
+		{
+			"ReplicationLatency-Content-Length-minus-1",
+			"{}",
+			http.StatusOK,
+			to.StringPtr("-1"),
 		},
 	}
 
@@ -97,11 +107,14 @@ func TestSendFailureRegionalRetry(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "GET", r.Method)
 				w.WriteHeader(http.StatusOK)
-				_, err := w.Write([]byte("{}"))
+				_, err := w.Write([]byte("{\"a\": \"b\"}"))
 				assert.NoError(t, err)
 			}))
 
 			globalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.globalServerContentLength != nil {
+					w.Header().Set("Content-Length", *tc.globalServerContentLength)
+				}
 				http.Error(w, tc.globalServerErrMsg, tc.globalServerCode)
 			}))
 			azConfig := azureclients.ClientConfig{Backoff: &retry.Backoff{Steps: 3}, UserAgent: "test", Location: "eastus"}
@@ -125,7 +138,7 @@ func TestSendFailureRegionalRetry(t *testing.T) {
 			assert.NoError(t, err)
 
 			response, rerr := armClient.Send(ctx, request)
-			assert.Nil(t, rerr)
+			assert.Nil(t, rerr, rerr.Error())
 			assert.Equal(t, http.StatusOK, response.StatusCode)
 			assert.Equal(t, targetURL.Host, response.Request.URL.Host)
 		})
