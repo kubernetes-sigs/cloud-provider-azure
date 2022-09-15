@@ -272,9 +272,6 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 		targetNodeCount := initNodeCount
 		expectedNode := 50
-		if os.Getenv(utils.AKSTestCCM) != "" {
-			expectedNode = 40
-		}
 		for {
 			*scaleUpDeployment.Spec.Replicas += 5
 			targetNodeCount += 5
@@ -314,9 +311,6 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 		targetNodeCount := initNodeCount
 		expectedNode := 50
-		if os.Getenv(utils.AKSTestCCM) != "" {
-			expectedNode = 38
-		}
 		for {
 			*scaleUpDeployment.Spec.Replicas += int32(expectedNode / 2)
 			targetNodeCount += expectedNode / 2
