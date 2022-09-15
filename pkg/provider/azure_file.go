@@ -17,24 +17,26 @@ limitations under the License.
 package provider
 
 import (
+	"context"
+
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 )
 
 // create file share
-func (az *Cloud) createFileShare(subsID, resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
-	return az.FileClient.WithSubscriptionID(subsID).CreateFileShare(resourceGroupName, accountName, shareOptions)
+func (az *Cloud) createFileShare(ctx context.Context, subsID, resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
+	return az.FileClient.WithSubscriptionID(subsID).CreateFileShare(ctx, resourceGroupName, accountName, shareOptions)
 }
 
-func (az *Cloud) deleteFileShare(subsID, resourceGroupName, accountName, name string) error {
-	return az.FileClient.WithSubscriptionID(subsID).DeleteFileShare(resourceGroupName, accountName, name)
+func (az *Cloud) deleteFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string) error {
+	return az.FileClient.WithSubscriptionID(subsID).DeleteFileShare(ctx, resourceGroupName, accountName, name)
 }
 
-func (az *Cloud) resizeFileShare(subsID, resourceGroupName, accountName, name string, sizeGiB int) error {
-	return az.FileClient.WithSubscriptionID(subsID).ResizeFileShare(resourceGroupName, accountName, name, sizeGiB)
+func (az *Cloud) resizeFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string, sizeGiB int) error {
+	return az.FileClient.WithSubscriptionID(subsID).ResizeFileShare(ctx, resourceGroupName, accountName, name, sizeGiB)
 }
 
-func (az *Cloud) getFileShare(subsID, resourceGroupName, accountName, name string) (storage.FileShare, error) {
-	return az.FileClient.WithSubscriptionID(subsID).GetFileShare(resourceGroupName, accountName, name)
+func (az *Cloud) getFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string) (storage.FileShare, error) {
+	return az.FileClient.WithSubscriptionID(subsID).GetFileShare(ctx, resourceGroupName, accountName, name)
 }

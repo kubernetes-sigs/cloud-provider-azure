@@ -84,7 +84,7 @@ func (c *Client) WithSubscriptionID(subscriptionID string) Interface {
 }
 
 // CreateFileShare creates a file share
-func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOptions *ShareOptions) error {
+func (c *Client) CreateFileShare(ctx context.Context, resourceGroupName, accountName string, shareOptions *ShareOptions) error {
 	mc := metrics.NewMetricContext("file_shares", "create", resourceGroupName, c.subscriptionID, "")
 
 	if shareOptions == nil {
@@ -110,7 +110,7 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 		Name:                &shareOptions.Name,
 		FileShareProperties: fileShareProperties,
 	}
-	_, err := c.fileSharesClient.Create(context.Background(), resourceGroupName, accountName, shareOptions.Name, fileShare, "")
+	_, err := c.fileSharesClient.Create(ctx, resourceGroupName, accountName, shareOptions.Name, fileShare, "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -123,10 +123,10 @@ func (c *Client) CreateFileShare(resourceGroupName, accountName string, shareOpt
 }
 
 // DeleteFileShare deletes a file share
-func (c *Client) DeleteFileShare(resourceGroupName, accountName, name string) error {
+func (c *Client) DeleteFileShare(ctx context.Context, resourceGroupName, accountName, name string) error {
 	mc := metrics.NewMetricContext("file_shares", "delete", resourceGroupName, c.subscriptionID, "")
 
-	_, err := c.fileSharesClient.Delete(context.Background(), resourceGroupName, accountName, name, "", "")
+	_, err := c.fileSharesClient.Delete(ctx, resourceGroupName, accountName, name, "", "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -139,13 +139,13 @@ func (c *Client) DeleteFileShare(resourceGroupName, accountName, name string) er
 }
 
 // ResizeFileShare resizes a file share
-func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
+func (c *Client) ResizeFileShare(ctx context.Context, resourceGroupName, accountName, name string, sizeGiB int) error {
 	mc := metrics.NewMetricContext("file_shares", "resize", resourceGroupName, c.subscriptionID, "")
 	var rerr *retry.Error
 
 	quota := int32(sizeGiB)
 
-	share, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, "stats", "")
+	share, err := c.fileSharesClient.Get(ctx, resourceGroupName, accountName, name, "stats", "")
 	if err != nil {
 		rerr = &retry.Error{
 			RawError: err,
@@ -160,7 +160,7 @@ func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, si
 	}
 
 	share.FileShareProperties.ShareQuota = &quota
-	_, err = c.fileSharesClient.Update(context.Background(), resourceGroupName, accountName, name, share)
+	_, err = c.fileSharesClient.Update(ctx, resourceGroupName, accountName, name, share)
 	if err != nil {
 		rerr = &retry.Error{
 			RawError: err,
@@ -176,10 +176,10 @@ func (c *Client) ResizeFileShare(resourceGroupName, accountName, name string, si
 }
 
 // GetFileShare gets a file share
-func (c *Client) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
+func (c *Client) GetFileShare(ctx context.Context, resourceGroupName, accountName, name string) (storage.FileShare, error) {
 	mc := metrics.NewMetricContext("file_shares", "get", resourceGroupName, c.subscriptionID, "")
 
-	result, err := c.fileSharesClient.Get(context.Background(), resourceGroupName, accountName, name, "stats", "")
+	result, err := c.fileSharesClient.Get(ctx, resourceGroupName, accountName, name, "stats", "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -192,11 +192,11 @@ func (c *Client) GetFileShare(resourceGroupName, accountName, name string) (stor
 }
 
 // GetServiceProperties get service properties
-func (c *Client) GetServiceProperties(resourceGroupName, accountName string) (storage.FileServiceProperties, error) {
-	return c.fileServicesClient.GetServiceProperties(context.Background(), resourceGroupName, accountName)
+func (c *Client) GetServiceProperties(ctx context.Context, resourceGroupName, accountName string) (storage.FileServiceProperties, error) {
+	return c.fileServicesClient.GetServiceProperties(ctx, resourceGroupName, accountName)
 }
 
 // SetServiceProperties set service properties
-func (c *Client) SetServiceProperties(resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error) {
-	return c.fileServicesClient.SetServiceProperties(context.Background(), resourceGroupName, accountName, parameters)
+func (c *Client) SetServiceProperties(ctx context.Context, resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error) {
+	return c.fileServicesClient.SetServiceProperties(ctx, resourceGroupName, accountName, parameters)
 }
