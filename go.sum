@@ -1010,8 +1010,9 @@ k8s.io/cloud-provider v0.24.4/go.mod h1:HTfeUcH+pPmmtMxA3qnFB1ZrrEff86BEakmIQCU/
 k8s.io/component-base v0.24.4/go.mod h1:sWxkgcMfbYHadw0OJ0N+vIscd14/nqSIM2veCdg843o=
 k8s.io/component-base v0.24.5 h1:PoGX+D5FQiGYuZNktuL2iRkLoX4g2gEq8fQp/j5ru2g=
 k8s.io/component-base v0.24.5/go.mod h1:ys3MybmrUao2SRdx2HcI3RELSnogOa3Rh4S8WQfqnoU=
-k8s.io/component-helpers v0.24.4 h1:gjginN6YYh/s3xg3PQ0gTFqBRGo27/wdLn0vRmJdHu8=
 k8s.io/component-helpers v0.24.4/go.mod h1:xAHlOKU8rAjLgXWJEsueWLR1LDMThbaPf2YvgKpSyQ8=
+k8s.io/component-helpers v0.24.5 h1:maNcKBzwkZigD25iYH0gIi8Eowe+0lryNRCj605Cq18=
+k8s.io/component-helpers v0.24.5/go.mod h1:VzOZ3+1ZELnJPxiWBoePoYMZPlSqQSWY/5UNA0UG7rY=
 k8s.io/controller-manager v0.24.4 h1:d8P0n6DVh3HRQXP9LxaMtp2e/mIi6Xe7WQP7zkAb/ok=
 k8s.io/controller-manager v0.24.4/go.mod h1:1Tkmq5m8POXAv0JQr2BDSp95psbaXP2iYLvNftpn1Ds=
 k8s.io/gengo v0.0.0-20210813121822-485abfe95c7c/go.mod h1:FiNAH4ZV3gBg2Kwh89tzAEV2be7d5xI0vBa/VySYy3E=
