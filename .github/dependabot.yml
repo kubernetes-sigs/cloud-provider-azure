@@ -11,6 +11,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -23,7 +25,9 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
-
+      - "lgtm"
+      - "approved"
+      
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -35,7 +39,9 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
-
+      - "lgtm"
+      - "approved"
+      
   - package-ecosystem: "npm"
     directory: "/site/"
     schedule:
@@ -47,7 +53,9 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/documentation"
-
+      - "lgtm"
+      - "approved"
+      
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -59,6 +67,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
     target-branch: "release-1.24"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -76,7 +86,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
-
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -89,7 +100,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
-
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -101,6 +113,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
     target-branch: "release-1.23"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -117,7 +131,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
-
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -130,6 +145,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -141,6 +158,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
     target-branch: "release-1.1"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -157,6 +176,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -169,7 +190,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
-
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -181,6 +203,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
     target-branch: "release-1.25"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -198,7 +222,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
-
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -211,3 +236,6 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+
