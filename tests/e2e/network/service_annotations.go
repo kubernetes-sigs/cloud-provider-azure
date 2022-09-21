@@ -294,35 +294,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(lb).NotTo(BeNil())
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
-		By("Exposing two services with shared security rule")
-		annotation := map[string]string{
-			consts.ServiceAnnotationSharedSecurityRule: "true",
-		}
-		ip1 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
-
-		defer func() {
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-
-		serviceName2 := serviceName + "-share"
-		ip2 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName2, ns.Name, labels, annotation, ports)
-		defer func() {
-			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-
-		By("Validate shared security rule exists")
-		port := fmt.Sprintf("%d", serverPort)
-		nsgs, err := tc.GetClusterSecurityGroups()
-		Expect(err).NotTo(HaveOccurred())
-
-		ipList := []string{ip1, ip2}
-		Expect(validateSharedSecurityRuleExists(nsgs, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
-	})
-
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
 		By("Creating a service with custom tags")
 		annotation := map[string]string{
