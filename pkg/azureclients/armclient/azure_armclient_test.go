@@ -73,7 +73,7 @@ func TestSend(t *testing.T) {
 	assert.Equal(t, 2, count)
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 }
-func TestSendFailureRegionalRetry(t *testing.T) {
+func TestDoHackRegionalRetryForGET(t *testing.T) {
 	testcases := []struct {
 		description               string
 		globalServerErrMsg        string
@@ -119,24 +119,13 @@ func TestSendFailureRegionalRetry(t *testing.T) {
 			armClient := New(nil, azConfig, server.URL, "2019-01-01")
 			targetURL, _ := url.Parse(server.URL)
 			armClient.regionalEndpoint = targetURL.Host
-			pathParameters := map[string]interface{}{
-				"resourceGroupName": autorest.Encode("path", "testgroup"),
-				"subscriptionId":    autorest.Encode("path", "testid"),
-				"resourceName":      autorest.Encode("path", "testname"),
-			}
+			armClient.baseURI = globalServer.URL
 
-			decorators := []autorest.PrepareDecorator{
-				autorest.WithPathParameters(
-					"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/vNets/{resourceName}", pathParameters),
-				autorest.WithBaseURL(globalServer.URL),
-			}
-
+			resourceID := "/subscriptions/testid/resourceGroups/restgroup/providers/Microsoft.Network/vNets/testname"
 			ctx := context.Background()
-			request, err := armClient.PrepareGetRequest(ctx, decorators...)
-			assert.NoError(t, err)
-
-			response, rerr := armClient.Send(ctx, request)
-			assert.Nil(t, rerr, rerr.Error())
+			response, rerr := armClient.GetResource(ctx, resourceID)
+			assert.Nil(t, rerr)
+			assert.NotNil(t, response)
 			assert.Equal(t, http.StatusOK, response.StatusCode)
 			assert.Equal(t, targetURL.Host, response.Request.URL.Host)
 		})
