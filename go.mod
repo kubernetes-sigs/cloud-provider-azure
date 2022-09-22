@@ -21,14 +21,14 @@ require (
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
 	golang.org/x/text v0.3.7
-	k8s.io/api v0.25.1
-	k8s.io/apimachinery v0.25.1
-	k8s.io/apiserver v0.25.1
-	k8s.io/client-go v0.25.1
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
+	k8s.io/apiserver v0.25.2
+	k8s.io/client-go v0.25.2
 	k8s.io/cloud-provider v0.25.1
-	k8s.io/component-base v0.25.1
+	k8s.io/component-base v0.25.2
 	k8s.io/component-helpers v0.25.1
-	k8s.io/controller-manager v0.25.1
+	k8s.io/controller-manager v0.25.2
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kubelet v0.25.1
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
