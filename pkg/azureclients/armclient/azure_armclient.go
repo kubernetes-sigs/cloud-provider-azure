@@ -145,7 +145,6 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 	client.client.Sender = autorest.DecorateSender(client.client,
 		autorest.DoCloseIfError(),
 		retry.DoExponentialBackoffRetry(backoff),
-		DoHackRegionalRetryDecorator(client),
 		DoDumpRequest(10),
 	)
 
@@ -314,9 +313,6 @@ func (c *Client) GetResourceWithExpandQuery(ctx context.Context, resourceID, exp
 // GetResourceWithExpandAPIVersionQuery get a resource by resource ID with expand and API version.
 func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resourceID, expand, apiVersion string) (*http.Response, *retry.Error) {
 	decorators := []autorest.PrepareDecorator{
-		autorest.AsGet(),
-		autorest.WithBaseURL(c.baseURI),
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
 		withAPIVersion(apiVersion),
 	}
 	if expand != "" {
@@ -325,15 +321,7 @@ func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resou
 		}))
 	}
 
-	preparer := autorest.CreatePreparer(decorators...)
-	request, err := preparer.Prepare((&http.Request{}).WithContext(ctx))
-
-	if err != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "get.prepare", resourceID, err)
-		return nil, retry.NewError(false, err)
-	}
-
-	return c.Send(ctx, request)
+	return c.GetResource(ctx, resourceID, decorators...)
 }
 
 // GetResourceWithQueries get a resource by resource ID with queries.
@@ -362,7 +350,7 @@ func (c *Client) GetResource(ctx context.Context, resourceID string, decorators 
 		return nil, retry.NewError(false, err)
 	}
 
-	return c.Send(ctx, request)
+	return c.Send(ctx, request, DoHackRegionalRetryForGET(c))
 }
 
 // PutResource puts a resource by resource ID
