@@ -103,8 +103,8 @@ func WithMetricsSendDecoratorWrapper(prefix, request, resourceGroup, subscriptio
 	return nil
 }
 
-// DoHackRegionalRetryDecorator returns an autorest.SendDecorator which performs retry with customizable backoff policy.
-func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
+// DoHackRegionalRetryForGET checks if GET request returns empty response and retries regional server or returns error.
+func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(request *http.Request) (*http.Response, error) {
 			response, rerr := s.Do(request)
