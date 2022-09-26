@@ -98,7 +98,6 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 	client.client.Sender = autorest.DecorateSender(client.client,
 		autorest.DoCloseIfError(),
 		retry.DoExponentialBackoffRetry(backoff),
-		DoHackRegionalRetryDecorator(client),
 	)
 
 	client.client.Sender = autorest.DecorateSender(client.client.Sender, sendDecoraters...)
@@ -126,8 +125,8 @@ func NormalizeAzureRegion(name string) string {
 	return strings.ToLower(region)
 }
 
-// DoHackRegionalRetryDecorator returns an autorest.SendDecorator which performs retry with customizable backoff policy.
-func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
+// DoHackRegionalRetryForGET checks if GET request returns empty response and retries regional server or returns error.
+func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(request *http.Request) (*http.Response, error) {
 			response, rerr := s.Do(request)
@@ -155,7 +154,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 
 				var body map[string]interface{}
 				if e := json.Unmarshal(bodyBytes, &body); e != nil {
-					klog.Errorf("Send.sendRequest: error in parsing response body string: %q, Skip retrying regional host", bodyBytes, e.Error())
+					klog.Errorf("Send.sendRequest: error in parsing response body string %q: %s, Skip retrying regional host", bodyBytes, e.Error())
 					return response, rerr
 				}
 				klog.V(5).Infof("Send.sendRequest original response: %s", bodyString)
@@ -180,9 +179,10 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 
 			request.Host = c.regionalEndpoint
 			request.URL.Host = c.regionalEndpoint
-			klog.V(5).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
+			klog.V(6).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
 
 			regionalResponse, regionalError := s.Do(request)
+
 			// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
 			// 1. the retry on regional ARM host approach is a hack.
 			// 2. the concatenated regional uri could be wrong as the rule is not officially declared by ARM.
@@ -192,7 +192,7 @@ func DoHackRegionalRetryDecorator(c *Client) autorest.SendDecorator {
 					regionalErrStr = regionalError.Error()
 				}
 
-				klog.V(5).Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
+				klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
 				return response, rerr
 			}
 
@@ -365,9 +365,6 @@ func (c *Client) GetResourceWithExpandQuery(ctx context.Context, resourceID, exp
 // GetResourceWithExpandAPIVersionQuery get a resource by resource ID with expand and API version.
 func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resourceID, expand, apiVersion string) (*http.Response, *retry.Error) {
 	decorators := []autorest.PrepareDecorator{
-		autorest.AsGet(),
-		autorest.WithBaseURL(c.baseURI),
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
 		withAPIVersion(apiVersion),
 	}
 	if expand != "" {
@@ -376,15 +373,7 @@ func (c *Client) GetResourceWithExpandAPIVersionQuery(ctx context.Context, resou
 		}))
 	}
 
-	preparer := autorest.CreatePreparer(decorators...)
-	request, err := preparer.Prepare((&http.Request{}).WithContext(ctx))
-
-	if err != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "get.prepare", resourceID, err)
-		return nil, retry.NewError(false, err)
-	}
-
-	return c.Send(ctx, request)
+	return c.GetResource(ctx, resourceID, decorators...)
 }
 
 // GetResourceWithDecorators get a resource with decorators by resource ID
@@ -398,7 +387,7 @@ func (c *Client) GetResource(ctx context.Context, resourceID string, decorators 
 		return nil, retry.NewError(false, err)
 	}
 
-	return c.Send(ctx, request)
+	return c.Send(ctx, request, DoHackRegionalRetryForGET(c))
 }
 
 // PutResource puts a resource by resource ID
