@@ -100,4 +100,7 @@ type VMSet interface {
 
 	// GetAgentPoolVMSetNames returns all vmSet names according to the nodes
 	GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error)
+
+	// DeleteCacheForNode removes the node entry from cache.
+	DeleteCacheForNode(nodeName string) error
 }
