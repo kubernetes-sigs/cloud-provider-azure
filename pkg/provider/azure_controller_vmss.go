@@ -103,7 +103,7 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = ss.deleteCacheForNode(vmName)
+		_ = ss.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%s)", nodeResourceGroup, nodeName, diskMap)
@@ -191,7 +191,7 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 	}
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = ss.deleteCacheForNode(vmName)
+		_ = ss.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s)", nodeResourceGroup, nodeName, diskMap)
@@ -229,7 +229,7 @@ func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error
 
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = ss.deleteCacheForNode(vmName)
+		_ = ss.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, nodeName)

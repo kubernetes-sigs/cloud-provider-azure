@@ -94,7 +94,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 	}
 
 	defer func() {
-		_ = fs.deleteCacheForNode(vmName)
+		_ = fs.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%s)", nodeResourceGroup, vmName, diskMap)
@@ -174,7 +174,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 	}
 
 	defer func() {
-		_ = fs.deleteCacheForNode(vmName)
+		_ = fs.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
@@ -214,7 +214,7 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 	}
 
 	defer func() {
-		_ = fs.deleteCacheForNode(vmName)
+		_ = fs.DeleteCacheForNode(vmName)
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, vmName)
