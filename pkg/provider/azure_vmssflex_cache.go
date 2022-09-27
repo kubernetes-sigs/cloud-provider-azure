@@ -321,7 +321,7 @@ func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.Virtual
 	return nil, cloudprovider.InstanceNotFound
 }
 
-func (fs *FlexScaleSet) deleteCacheForNode(nodeName string) error {
+func (fs *FlexScaleSet) DeleteCacheForNode(nodeName string) error {
 	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
 	if err != nil {
 		return err
