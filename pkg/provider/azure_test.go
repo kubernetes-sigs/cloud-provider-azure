@@ -716,7 +716,7 @@ func TestReconcileSecurityGroupFromAnyDestinationAddressPrefixToLoadBalancerIP(t
 
 	az := GetTestCloud(ctrl)
 	svc1 := getTestService("serviceea", v1.ProtocolTCP, nil, false, 80)
-	svc1.Spec.LoadBalancerIP = "192.168.0.0"
+	setServiceLoadBalancerIP(&svc1, "192.168.0.0")
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
@@ -726,7 +726,7 @@ func TestReconcileSecurityGroupFromAnyDestinationAddressPrefixToLoadBalancerIP(t
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -739,7 +739,7 @@ func TestReconcileSecurityGroupDynamicLoadBalancerIP(t *testing.T) {
 
 	az := GetTestCloud(ctrl)
 	svc1 := getTestService("servicea", v1.ProtocolTCP, nil, false, 80)
-	svc1.Spec.LoadBalancerIP = ""
+	setServiceLoadBalancerIP(&svc1, "")
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
@@ -1707,7 +1707,7 @@ func getTestServiceWithAnnotation(identifier string, annotations map[string]stri
 
 func getResourceGroupTestService(identifier, resourceGroup, loadBalancerIP string, requestedPorts ...int32) v1.Service {
 	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
-	svc.Spec.LoadBalancerIP = loadBalancerIP
+	setServiceLoadBalancerIP(&svc, loadBalancerIP)
 	svc.Annotations[consts.ServiceAnnotationLoadBalancerResourceGroup] = resourceGroup
 	return svc
 }
@@ -1930,7 +1930,7 @@ func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *
 		t.Errorf("Expected publicIP resource has matching tags[%s]", consts.ClusterNameKey)
 	}
 
-	// We cannot use service.Spec.LoadBalancerIP to compare with
+	// We cannot use Service LoadBalancerIP to compare with
 	// Public IP's IPAddress
 	// Because service properties are updated outside of cloudprovider code
 }
@@ -1994,6 +1994,7 @@ func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, s
 	az := GetTestCloud(ctrl)
 	seenRules := make(map[string]string)
 	for i, svc := range services {
+		svc := svc
 		for _, wantedRule := range svc.Spec.Ports {
 			sources := getServiceSourceRanges(&services[i])
 			for _, source := range sources {
@@ -2002,7 +2003,7 @@ func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, s
 				foundRule := false
 				for _, actualRule := range *securityGroup.SecurityRules {
 					if strings.EqualFold(*actualRule.Name, wantedRuleName) {
-						err := securityRuleMatches(source, wantedRule, svc.Spec.LoadBalancerIP, actualRule)
+						err := securityRuleMatches(source, wantedRule, getServiceLoadBalancerIP(&svc), actualRule)
 						if err != nil {
 							t.Errorf("Found matching security rule %q but properties were incorrect: %v", wantedRuleName, err)
 						}
@@ -2437,13 +2438,13 @@ func TestIfServiceSpecifiesSharedRuleAndRuleDoesNotExistItIsCreated(t *testing.T
 
 	az := GetTestCloud(ctrl)
 	svc := getTestService("servicea", v1.ProtocolTCP, nil, false, 80)
-	svc.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc, testIP1)
 	svc.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(svc.Spec.LoadBalancerIP), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(getServiceLoadBalancerIP(&svc)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -2480,7 +2481,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 
 	az := GetTestCloud(ctrl)
 	svc := getTestService("servicesr", v1.ProtocolTCP, nil, false, 80)
-	svc.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc, testIP1)
 	svc.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	expectedRuleName := testRuleName
@@ -2502,7 +2503,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 	}
 	setMockSecurityGroup(az, ctrl, sg)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(svc.Spec.LoadBalancerIP), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, to.StringPtr(getServiceLoadBalancerIP(&svc)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -2536,22 +2537,22 @@ func TestIfServicesSpecifySharedRuleButDifferentPortsThenSeparateRulesAreCreated
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2605,11 +2606,12 @@ func TestIfServicesSpecifySharedRuleButDifferentProtocolsThenSeparateRulesAreCre
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolUDP, nil, false, 4444)
-	svc2.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc2, testIP1)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName3 := "shared-UDP-4444-Internet"
@@ -2617,12 +2619,12 @@ func TestIfServicesSpecifySharedRuleButDifferentProtocolsThenSeparateRulesAreCre
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2674,12 +2676,12 @@ func TestIfServicesSpecifySharedRuleButDifferentSourceAddressesThenSeparateRules
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 80)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Spec.LoadBalancerSourceRanges = []string{"192.168.12.0/24"}
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 80)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Spec.LoadBalancerSourceRanges = []string{"192.168.34.0/24"}
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
@@ -2689,12 +2691,12 @@ func TestIfServicesSpecifySharedRuleButDifferentSourceAddressesThenSeparateRules
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2748,32 +2750,32 @@ func TestIfServicesSpecifySharedRuleButSomeAreOnDifferentPortsThenRulesAreSepara
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
-	svc3.Spec.LoadBalancerIP = testIP3
+	setServiceLoadBalancerIP(&svc3, testIP3)
 	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(svc3.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(getServiceLoadBalancerIP(&svc3)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
@@ -2849,11 +2851,11 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 80)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 80)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	expectedRuleName := testRuleName
@@ -2861,19 +2863,19 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	validateSecurityGroup(t, sg, svc1, svc2)
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
@@ -2907,39 +2909,39 @@ func TestIfSomeServicesShareARuleAndOneIsDeletedItIsRemovedFromTheRightRule(t *t
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
-	svc3.Spec.LoadBalancerIP = testIP3
+	setServiceLoadBalancerIP(&svc3, testIP3)
 	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(svc3.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(getServiceLoadBalancerIP(&svc3)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
 
 	validateSecurityGroup(t, sg, svc1, svc2, svc3)
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
@@ -3015,44 +3017,44 @@ func TestIfServiceSpecifiesSharedRuleAndLastServiceIsDeletedThenRuleIsDeleted(t 
 	az := GetTestCloud(ctrl)
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
-	svc3.Spec.LoadBalancerIP = testIP3
+	setServiceLoadBalancerIP(&svc3, testIP3)
 	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	testRuleName23 := testRuleName2
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(svc2.Spec.LoadBalancerIP), nil, true)
+	_, err = az.reconcileSecurityGroup(testClusterName, &svc2, to.StringPtr(getServiceLoadBalancerIP(&svc2)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(svc3.Spec.LoadBalancerIP), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(getServiceLoadBalancerIP(&svc3)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
 
 	validateSecurityGroup(t, sg, svc1, svc2, svc3)
 
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, false)
+	_, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(svc3.Spec.LoadBalancerIP), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, to.StringPtr(getServiceLoadBalancerIP(&svc3)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc3: %q", err)
 	}
@@ -3097,23 +3099,23 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	var err error
 
 	svc1 := getTestService("servicesr1", v1.ProtocolTCP, nil, false, 4444)
-	svc1.Spec.LoadBalancerIP = testIP1
+	setServiceLoadBalancerIP(&svc1, testIP1)
 	svc1.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc2 := getTestService("servicesr2", v1.ProtocolTCP, nil, false, 8888)
-	svc2.Spec.LoadBalancerIP = testIP2
+	setServiceLoadBalancerIP(&svc2, testIP2)
 	svc2.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc3 := getTestService("servicesr3", v1.ProtocolTCP, nil, false, 4444)
-	svc3.Spec.LoadBalancerIP = testIP3
+	setServiceLoadBalancerIP(&svc3, testIP3)
 	svc3.Annotations[consts.ServiceAnnotationSharedSecurityRule] = consts.TrueAnnotationValue
 
 	svc4 := getTestService("servicesr4", v1.ProtocolTCP, nil, false, 4444)
-	svc4.Spec.LoadBalancerIP = "192.168.22.33"
+	setServiceLoadBalancerIP(&svc4, "192.168.22.33")
 	svc4.Annotations[consts.ServiceAnnotationSharedSecurityRule] = "false"
 
 	svc5 := getTestService("servicesr5", v1.ProtocolTCP, nil, false, 8888)
-	svc5.Spec.LoadBalancerIP = "192.168.22.33"
+	setServiceLoadBalancerIP(&svc5, "192.168.22.33")
 	svc5.Annotations[consts.ServiceAnnotationSharedSecurityRule] = "false"
 
 	testServices := []v1.Service{svc1, svc2, svc3, svc4, svc5}
@@ -3126,7 +3128,8 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	setMockSecurityGroup(az, ctrl, sg)
 
 	for i, svc := range testServices {
-		_, err := az.reconcileSecurityGroup(testClusterName, &testServices[i], to.StringPtr(svc.Spec.LoadBalancerIP), nil, true)
+		svc := svc
+		_, err := az.reconcileSecurityGroup(testClusterName, &testServices[i], to.StringPtr(getServiceLoadBalancerIP(&svc)), nil, true)
 		if err != nil {
 			t.Errorf("Unexpected error adding svc%d: %q", i+1, err)
 		}
@@ -3201,8 +3204,8 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	if securityRule4.DestinationAddressPrefix == nil {
 		t.Errorf("Expected unshared rule %s to have a destination IP address", expectedRuleName4)
 	} else {
-		if !strings.EqualFold(*securityRule4.DestinationAddressPrefix, svc4.Spec.LoadBalancerIP) {
-			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName4, svc4.Spec.LoadBalancerIP, *securityRule4.DestinationAddressPrefix)
+		if !strings.EqualFold(*securityRule4.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc4)) {
+			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName4, getServiceLoadBalancerIP(&svc4), *securityRule4.DestinationAddressPrefix)
 		}
 	}
 
@@ -3213,17 +3216,17 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	if securityRule5.DestinationAddressPrefix == nil {
 		t.Errorf("Expected unshared rule %s to have a destination IP address", expectedRuleName5)
 	} else {
-		if !strings.EqualFold(*securityRule5.DestinationAddressPrefix, svc5.Spec.LoadBalancerIP) {
-			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName5, svc5.Spec.LoadBalancerIP, *securityRule5.DestinationAddressPrefix)
+		if !strings.EqualFold(*securityRule5.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc5)) {
+			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName5, getServiceLoadBalancerIP(&svc5), *securityRule5.DestinationAddressPrefix)
 		}
 	}
 
-	_, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(svc1.Spec.LoadBalancerIP), nil, false)
+	_, err = az.reconcileSecurityGroup(testClusterName, &svc1, to.StringPtr(getServiceLoadBalancerIP(&svc1)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, to.StringPtr(svc5.Spec.LoadBalancerIP), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, to.StringPtr(getServiceLoadBalancerIP(&svc5)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc5: %q", err)
 	}
