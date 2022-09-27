@@ -35,7 +35,7 @@ For more details about each configuration, please refer to [Azure Private Link S
 
 ### Creating managed PrivateLinkService
 
-When a `LoadBalancer` typed service is created without the `loadBalancerIP` field specified, an LB frontend IP configuration is created with a dynamically generated IP. If the service has `loadBalancerIP` in its spec, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the default resource group or the resource group user set in config file with key `PrivateLinkServiceResourceGroup`.
+When a `LoadBalancer` typed service is created without the annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6` or field `Service.Spec.LoadBalancerIP` set, an LB frontend IP configuration is created with a dynamically generated IP. If the service has the annotation `service.beta.kubernetes.io/azure-load-balancer-ipv4` or `service.beta.kubernetes.io/azure-load-balancer-ipv6` set, an existing LB frontend IP configuration may be reused if one exists; otherwise a static configuration is created with the specified IP. When a service is created with annotation `service.beta.kubernetes.io/azure-pls-create` set to `true` or updated later with the annotation added, a PLS resource attached to the LB frontend is created in the default resource group or the resource group user set in config file with key `PrivateLinkServiceResourceGroup`.
 
 The Kubernetes service creating the PLS is assigned as the owner of the resource. Azure cloud provider tags the PLS with cluster name and service name `kubernetes-owner-service: <namespace>/<service name>`. Only the owner service can later update the properties of the PLS resource.
 
@@ -51,7 +51,7 @@ If there are active PE connections to the PLS, all connections are removed and t
 
 ### Sharing managed PrivateLinkService
 
-Multiple Kubernetes services can share the same LB frontend by specifying the same `loadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports.
+Multiple Kubernetes services can share the same LB frontend by specifying the same annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6` or field `Service.Spec.LoadBalancerIP` (for more details, please refer to [Multiple Services Sharing One IP Address](../shared-ip)). Once a PLS is attached to the LB frontend, these services automatically share the PLS. Users can access these services via the same PE but different ports.
 
 Azure cloud provider tags the service creating the PLS as the owner (`kubernetes-owner-service: <namespace>/<service name>`) and only allows that service to update the configurations of the PLS. If the owner service is deleted or if user wants some other service to take control, user can modify the tag value to a new service in `<namespace>/<service name>` pattern.
 

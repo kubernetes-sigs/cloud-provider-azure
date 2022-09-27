@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +31,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+)
+
+type IPFamily string
+
+var (
+	IPv4      IPFamily = "ipv4"
+	IPv6      IPFamily = "ipv6"
+	DualStack IPFamily = "dualstack"
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -475,4 +484,59 @@ func (azureTestClient *AzureTestClient) ListPrivateLinkServices(resourceGroupNam
 	}
 
 	return result, nil
+}
+
+func retrieveCIDRs(cmd string, reg string) ([]string, error) {
+	res := make([]string, 2)
+	stdout, err := RunKubectl("", strings.Split(cmd, " ")...)
+	if err != nil {
+		return res, fmt.Errorf("error when running the following kubectl command %q: %v, %s", cmd, err, stdout)
+	}
+	re := regexp.MustCompile(reg)
+	matches := re.FindStringSubmatch(stdout)
+	if len(matches) == 0 {
+		return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
+	}
+	cidrs := strings.Split(matches[1], ",")
+	if len(cidrs) == 1 {
+		_, cidr, err := net.ParseCIDR(cidrs[0])
+		if err != nil {
+			return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+		}
+		if cidr.IP.To4() != nil {
+			res[0] = cidrs[0]
+		} else {
+			res[1] = cidrs[0]
+		}
+	} else if len(cidrs) == 2 {
+		_, cidr, err := net.ParseCIDR(cidrs[0])
+		if err != nil {
+			return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+		}
+		if cidr.IP.To4() != nil {
+			res[0] = cidrs[0]
+			res[1] = cidrs[1]
+		} else {
+			res[0] = cidrs[1]
+			res[1] = cidrs[0]
+		}
+	} else {
+		return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+	}
+	return res, nil
+}
+
+// GetClusterServiceIPFamily gets cluster's Service IPFamily according to Service CIDRs.
+func GetClusterServiceIPFamily() (IPFamily, error) {
+	svcCIDRs, err := retrieveCIDRs("cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
+	if err != nil {
+		return "", err
+	}
+	if svcCIDRs[0] != "" && svcCIDRs[1] == "" {
+		return IPv4, nil
+	}
+	if svcCIDRs[0] == "" && svcCIDRs[1] != "" {
+		return IPv6, nil
+	}
+	return DualStack, nil
 }
