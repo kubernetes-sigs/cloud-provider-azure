@@ -385,22 +385,16 @@ func (az *Cloud) getLocalInstanceProviderID(metadata *InstanceMetadata, nodeName
 	resourceGroup := strings.ToLower(metadata.Compute.ResourceGroup)
 	subscriptionID := strings.ToLower(metadata.Compute.SubscriptionID)
 
-	// Compose instanceID based on nodeName for standard instance.
-	if metadata.Compute.VMScaleSetName == "" {
-		return az.getStandardMachineID(subscriptionID, resourceGroup, nodeName), nil
+	if metadata.Compute.ResourceID == "" {
+		// No ResourceID is got from instance metadata service, clean up cache and report errors.
+		_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+		return "", fmt.Errorf("get empty ResoureceID from instance metadata service")
 	}
 
-	// Get scale set name and instanceID from vmName for vmss.
-	ssName, instanceID, err := extractVmssVMName(metadata.Compute.Name)
-	if err != nil {
-		if errors.Is(err, ErrorNotVmssInstance) {
-			// Compose machineID for standard Node.
-			return az.getStandardMachineID(subscriptionID, resourceGroup, nodeName), nil
-		}
-		return "", err
-	}
-	// Compose instanceID based on ssName and instanceID for vmss instance.
-	return az.getVmssMachineID(subscriptionID, resourceGroup, ssName, instanceID), nil
+	providerID := strings.Replace(metadata.Compute.ResourceID, metadata.Compute.SubscriptionID, subscriptionID, -1)
+	providerID = strings.Replace(providerID, metadata.Compute.ResourceGroup, resourceGroup, -1)
+
+	return providerID, nil
 }
 
 // InstanceTypeByProviderID returns the cloudprovider instance type of the node with the specified unique providerID
