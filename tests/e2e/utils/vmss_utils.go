@@ -27,10 +27,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	clientset "k8s.io/client-go/kubernetes"
 )
 
 var (
-	vmssVMRE = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
+	scalesetRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	vmssVMRE   = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
 )
 
 // FindTestVMSS returns the first VMSS in the resource group,
@@ -305,4 +307,34 @@ func GetVMSSVMComputerName(vm azcompute.VirtualMachineScaleSetVM) (string, error
 // IsSpotVMSS checks whether the vmss support azure spot vm instance
 func IsSpotVMSS(vmss azcompute.VirtualMachineScaleSet) bool {
 	return vmss.VirtualMachineProfile.Priority == azcompute.VirtualMachinePriorityTypesSpot
+}
+
+// GetAllVMSSNames gets all the vmss names and reource group from all node's providerIDs
+func GetAllVMSSNamesAndResourceGroup(cs clientset.Interface) (sets.String, string, error) {
+	//get nodelist and providerID specific to an agentnodes
+	nodes, err := GetAgentNodes(cs)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Get all the vmss names from all node's providerIDs
+	vmssNames := sets.NewString()
+	var resourceGroupName string
+	for i, node := range nodes {
+		if IsControlPlaneNode(&nodes[i]) {
+			continue
+		}
+		providerID := node.Spec.ProviderID
+		matches := scalesetRE.FindStringSubmatch(providerID)
+		if len(matches) != 3 {
+			continue
+		}
+		resourceGroupName = matches[1]
+		vmssNames.Insert(matches[2])
+	}
+	if len(vmssNames) > 0 && resourceGroupName == "" {
+		return nil, "", fmt.Errorf("resource group name should not be empty")
+	}
+	Logf("Got vmss names %v", vmssNames.List())
+	return vmssNames, resourceGroupName, nil
 }

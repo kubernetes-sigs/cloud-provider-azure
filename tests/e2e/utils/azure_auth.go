@@ -44,6 +44,10 @@ const (
 	// If "E2E_ON_AKS_CLUSTER" is true, the test is running on a AKS cluster.
 	AKSTestCCM     = "E2E_ON_AKS_CLUSTER"
 	AKSClusterType = "CLUSTER_TYPE"
+	// If "LOAD_CLOUD_CONFIG_FROM_SECRET" is true, ccm will read cloud-config from secret
+	// Otherwise, ccm will read cloud-config from azure.json
+	// This is a prerequisite for testing features in cloud config
+	LoadCloudConfigFromSecret = "LOAD_CLOUD_CONFIG_FROM_SECRET" // #nosec G101
 )
 
 // AzureAuthConfig holds auth related part of cloud config

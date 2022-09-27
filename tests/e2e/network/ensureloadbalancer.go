@@ -201,7 +201,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalFalse, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
 
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())
@@ -244,7 +244,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service = updateServiceBalanceIP(service, true, ip1)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
 
 		defer func() {
 			By("Cleaning up")
@@ -285,7 +285,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
 
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName))
 		Expect(err).NotTo(HaveOccurred())

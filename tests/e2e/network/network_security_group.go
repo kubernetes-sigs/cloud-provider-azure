@@ -151,7 +151,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", serviceName, ns.Name)
 
 		By("Waiting for the service to be exposed")
 		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, "")
