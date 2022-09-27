@@ -27,7 +27,7 @@ spec:
   type: LoadBalancer
 ```
 
-Note that the `loadBalancerIP` is not set, or Azure would find a pre-allocated public IP with the address. After obtaining the IP address of the service, you could create other services using this address.
+Note that the annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6`, field `Service.Spec.LoadBalancerIP` are not set, or Azure would find a pre-allocated public IP with the address. After obtaining the IP address of the service, you could create other services using this address.
 
 ```yaml
 apiVersion: v1
@@ -35,8 +35,8 @@ kind: Service
 metadata:
   name: https
   namespace: default
+  service.beta.kubernetes.io/azure-load-balancer-ipv4: 1.2.3.4 # the IP address could be the same as it is of `nginx` service
 spec:
-  loadBalancerIP: 1.2.3.4 # the IP address could be the same as it is of `nginx` service
   ports:
     - port: 443
       protocol: TCP
@@ -46,7 +46,7 @@ spec:
   type: LoadBalancer
 ```
 
-Note that if you specify the `loadBalancerIP` but there is no corresponding public IP pre-allocated, an error would be reported.
+Note that if you specify the annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4`, `service.beta.kubernetes.io/azure-load-balancer-ipv6` or field `Service.Spec.LoadBalancerIP` but there is no corresponding public IP pre-allocated, an error would be reported.
 
 ## DNS
 
