@@ -100,7 +100,7 @@ func (as *availabilitySet) AttachDisk(nodeName types.NodeName, diskMap map[strin
 
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = as.cloud.vmCache.Delete(vmName)
+		_ = as.DeleteCacheForNode(vmName)
 	}()
 
 	future, rerr := as.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, vmName, newVM, "attach_disk")
@@ -119,6 +119,11 @@ func (as *availabilitySet) AttachDisk(nodeName types.NodeName, diskMap map[strin
 		return future, rerr.Error()
 	}
 	return future, nil
+}
+
+func (as *availabilitySet) DeleteCacheForNode(nodeName string) error {
+	_ = as.cloud.vmCache.Delete(nodeName)
+	return nil
 }
 
 // WaitForUpdateResult waits for the response of the update request
@@ -190,7 +195,7 @@ func (as *availabilitySet) DetachDisk(nodeName types.NodeName, diskMap map[strin
 
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = as.cloud.vmCache.Delete(vmName)
+		_ = as.DeleteCacheForNode(vmName)
 	}()
 
 	rerr := as.VirtualMachinesClient.Update(ctx, nodeResourceGroup, vmName, newVM, "detach_disk")
@@ -224,7 +229,7 @@ func (as *availabilitySet) UpdateVM(nodeName types.NodeName) error {
 
 	// Invalidate the cache right after updating
 	defer func() {
-		_ = as.cloud.vmCache.Delete(vmName)
+		_ = as.DeleteCacheForNode(vmName)
 	}()
 
 	rerr := as.VirtualMachinesClient.Update(ctx, nodeResourceGroup, vmName, compute.VirtualMachineUpdate{}, "update_vm")
