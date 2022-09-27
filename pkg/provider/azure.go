@@ -39,6 +39,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -347,6 +348,11 @@ type Cloud struct {
 	pipCache *azcache.TimedCache
 	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
 	plsCache *azcache.TimedCache
+
+	// Add service lister to always get latest service
+	serviceLister corelisters.ServiceLister
+	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
+	serviceReconcileLock sync.Mutex
 
 	*ManagedDiskController
 	*controllerCommon
@@ -1039,6 +1045,8 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 		},
 	})
 	az.nodeInformerSynced = nodeInformer.HasSynced
+
+	az.serviceLister = informerFactory.Core().V1().Services().Lister()
 }
 
 // updateNodeCaches updates local cache for node's zones and external resource groups.
