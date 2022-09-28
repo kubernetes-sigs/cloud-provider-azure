@@ -4221,30 +4221,42 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 	testCases := []struct {
 		desc                   string
 		lbHasDeletionTimestamp bool
+		serviceType            v1.ServiceType
 		existsLb               bool
 		expectedOutput         bool
 	}{
 		{
 			desc:                   "should update a load balancer that does not have a deletion timestamp and exists in Azure",
 			lbHasDeletionTimestamp: false,
+			serviceType:            v1.ServiceTypeLoadBalancer,
 			existsLb:               true,
 			expectedOutput:         true,
 		},
 		{
 			desc:                   "should not update a load balancer that is being deleted / already deleted in K8s",
 			lbHasDeletionTimestamp: true,
+			serviceType:            v1.ServiceTypeLoadBalancer,
+			existsLb:               true,
+			expectedOutput:         false,
+		},
+		{
+			desc:                   "should not update a load balancer that is no longer LoadBalancer type in K8s",
+			lbHasDeletionTimestamp: false,
+			serviceType:            v1.ServiceTypeClusterIP,
 			existsLb:               true,
 			expectedOutput:         false,
 		},
 		{
 			desc:                   "should not update a load balancer that does not exist in Azure",
 			lbHasDeletionTimestamp: false,
+			serviceType:            v1.ServiceTypeLoadBalancer,
 			existsLb:               false,
 			expectedOutput:         false,
 		},
 		{
 			desc:                   "should not update a load balancer that has a deletion timestamp and does not exist in Azure",
 			lbHasDeletionTimestamp: true,
+			serviceType:            v1.ServiceTypeLoadBalancer,
 			existsLb:               false,
 			expectedOutput:         false,
 		},
@@ -4253,6 +4265,7 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 	for i, test := range testCases {
 		az := GetTestCloud(ctrl)
 		service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+		service.Spec.Type = test.serviceType
 		setMockPublicIPs(az, ctrl, 1)
 		mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
 		az.LoadBalancerClient = mockLBsClient
