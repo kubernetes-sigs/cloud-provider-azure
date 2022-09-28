@@ -617,7 +617,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	})
 
 	It("should support disabling floating IP in load balancer rule with kubernetes service annotations", func() {
-		By("creating a public IP with tags")
+		By("creating a public IP")
 		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
 		pip := defaultPublicIPAddress(ipName)
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
