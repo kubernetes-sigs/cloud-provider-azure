@@ -1058,6 +1058,9 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 				}
 			}
 			az.updateNodeCaches(node, nil)
+
+			klog.V(4).Infof("Removing node %s from VMSet cache.", node.Name)
+			_ = az.VMSet.DeleteCacheForNode(node.Name)
 		},
 	})
 	az.nodeInformerSynced = nodeInformer.HasSynced
