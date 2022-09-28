@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
@@ -144,6 +145,11 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// When a client updates the internal load balancer annotation,
 	// the service may be switched from an internal LB to a public one, or vise versa.
 	// Here we'll firstly ensure service do not lie in the opposite LB.
+
+	// Serialize service reconcile process
+	az.serviceReconcileLock.Lock()
+	defer az.serviceReconcileLock.Unlock()
+
 	var err error
 	serviceName := getServiceName(service)
 	mc := metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
@@ -164,8 +170,25 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	return lbStatus, nil
 }
 
+func (az *Cloud) getLatestService(service *v1.Service) (*v1.Service, bool, error) {
+	latestService, err := az.serviceLister.Services(service.Namespace).Get(service.Name)
+	switch {
+	case apierrors.IsNotFound(err):
+		// service absence in store means the service deletion is caught by watcher
+		return nil, false, nil
+	case err != nil:
+		return nil, false, err
+	default:
+		return latestService.DeepCopy(), true, nil
+	}
+}
+
 // UpdateLoadBalancer updates hosts under the specified load balancer.
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	// Serialize service reconcile process
+	az.serviceReconcileLock.Lock()
+	defer az.serviceReconcileLock.Unlock()
+
 	var err error
 	serviceName := getServiceName(service)
 	mc := metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
@@ -175,6 +198,17 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 		klog.V(5).InfoS("UpdateLoadBalancer Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
 	}()
+
+	// In case UpdateLoadBalancer gets stale service spec, retrieve the latest from lister
+	service, serviceExists, err := az.getLatestService(service)
+	if err != nil {
+		return fmt.Errorf("UpdateLoadBalancer: failed to get latest service %s: %w", service.Name, err)
+	}
+	if !serviceExists {
+		isOperationSucceeded = true
+		klog.V(2).Infof("UpdateLoadBalancer: skipping service %s because service is going to be deleted", service.Name)
+		return nil
+	}
 
 	shouldUpdateLB, err := az.shouldUpdateLoadBalancer(clusterName, service, nodes)
 	if err != nil {
@@ -203,6 +237,10 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // have multiple underlying components, meaning a Get could say that the LB
 // doesn't exist even if some part of it is still laying around.
 func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	// Serialize service reconcile process
+	az.serviceReconcileLock.Lock()
+	defer az.serviceReconcileLock.Unlock()
+
 	var err error
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
@@ -2599,7 +2637,7 @@ func (az *Cloud) shouldUpdateLoadBalancer(clusterName string, service *v1.Servic
 	}
 
 	_, _, existsLb, _ := az.getServiceLoadBalancer(service, clusterName, nodes, false, existingManagedLBs)
-	return existsLb && service.ObjectMeta.DeletionTimestamp == nil, nil
+	return existsLb && service.ObjectMeta.DeletionTimestamp == nil && service.Spec.Type == v1.ServiceTypeLoadBalancer, nil
 }
 
 func logSafe(s *string) string {
