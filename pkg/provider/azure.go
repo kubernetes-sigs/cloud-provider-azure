@@ -143,8 +143,8 @@ type Config struct {
 	// The name of the scale set that should be used as the load balancer backend.
 	// If this is set, the Azure cloudprovider will only add nodes from that scale set to the load
 	// balancer backend pool. If this is not set, and multiple agent pools (scale sets) are used, then
-	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
-	// In other words, if you use multiple agent pools (scale sets), you MUST set this field.
+	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden in the basic sku.
+	// In other words, if you use multiple agent pools (scale sets), and loadBalancerSku is set to basic, you MUST set this field.
 	PrimaryScaleSetName string `json:"primaryScaleSetName,omitempty" yaml:"primaryScaleSetName,omitempty"`
 	// Tags determines what tags shall be applied to the shared resources managed by controller manager, which
 	// includes load balancer, security group and route table. The supported format is `a=b,c=d,...`. After updated
