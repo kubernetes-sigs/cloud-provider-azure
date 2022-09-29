@@ -2591,6 +2591,9 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 		mockVMSSVMClient.EXPECT().UpdateVMs(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
 
+		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+
 		err = ss.EnsureBackendPoolDeleted(&v1.Service{}, test.backendpoolID, testVMSSName, test.backendAddressPools, true)
 		assert.Equal(t, test.expectedErr, err != nil, test.description+", but an error occurs")
 	}
@@ -2650,6 +2653,9 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		lbBackendpools := (*vmssVMIPConfigs)[0].LoadBalancerBackendAddressPools
 		*lbBackendpools = append(*lbBackendpools, compute.SubResource{ID: to.StringPtr(testLBBackendpoolID1)})
 	}
+
+	mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+	mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
 	mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 	mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{vmss0, vmss1}, nil).AnyTimes()

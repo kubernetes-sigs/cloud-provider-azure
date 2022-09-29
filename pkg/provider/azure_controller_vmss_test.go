@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -90,6 +91,8 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
 		for _, vmssvm := range expectedVMSSVMs {
@@ -247,6 +250,9 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+
 		diskMap := map[string]string{}
 		for _, diskName := range test.disks {
 			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
@@ -358,6 +364,9 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		} else {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
+
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
 		err = ss.UpdateVM(ctx, test.vmssvmName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
