@@ -461,7 +461,7 @@ func (ss *ScaleSet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
 	} else {
 		err = fmt.Errorf("failed to get zone info")
 		klog.Errorf("GetZoneByNodeName: got unexpected error %v", err)
-		_ = ss.deleteCacheForNode(name)
+		_ = ss.DeleteCacheForNode(name)
 		return cloudprovider.Zone{}, err
 	}
 
@@ -1307,7 +1307,7 @@ func (ss *ScaleSet) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, bac
 
 		// Invalidate the cache since the VMSS VM would be updated.
 		defer func() {
-			_ = ss.deleteCacheForNode(localNodeName)
+			_ = ss.DeleteCacheForNode(localNodeName)
 		}()
 	}
 
@@ -1592,7 +1592,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 
 		// Invalidate the cache since the VMSS VM would be updated.
 		defer func() {
-			_ = ss.deleteCacheForNode(nodeName)
+			_ = ss.DeleteCacheForNode(nodeName)
 		}()
 	}
 
@@ -1781,7 +1781,7 @@ func (ss *ScaleSet) GetAgentPoolVMSetNames(nodes []*v1.Node) (*[]string, error) 
 			if err != nil {
 				return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to get availabilitySetNodesCache")
 			}
-			vms := cached.(availabilitySetNodeEntry).vms
+			vms := cached.(*availabilitySetNodeEntry).vms
 			names, err = as.getAgentPoolAvailabilitySets(vms, []*v1.Node{node})
 			if err != nil {
 				return nil, fmt.Errorf("GetAgentPoolVMSetNames: failed to execute getAgentPoolAvailabilitySets: %w", err)
