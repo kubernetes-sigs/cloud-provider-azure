@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -79,6 +79,30 @@ func TestCreateManagedDisk(t *testing.T) {
 			storageAccountType:  compute.DiskStorageAccountTypesUltraSSDLRS,
 			diskIOPSReadWrite:   "100",
 			diskMBPSReadWrite:   "100",
+			diskEncryptionSetID: goodDiskEncryptionSetID,
+			expectedDiskID:      disk1ID,
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			expectedErr:         false,
+		},
+		{
+			desc:                "disk Id and no error shall be returned if everything is good with PremiumV2LRS storage account",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
+			storageAccountType:  consts.PremiumV2LRS,
+			diskIOPSReadWrite:   "100",
+			diskMBPSReadWrite:   "100",
+			diskEncryptionSetID: goodDiskEncryptionSetID,
+			expectedDiskID:      disk1ID,
+			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},
+			expectedErr:         false,
+		},
+		{
+			desc:                "disk Id and no error shall be returned if everything is good with PremiumV2LRS storage account",
+			diskID:              disk1ID,
+			diskName:            disk1Name,
+			storageAccountType:  consts.PremiumV2LRS,
+			diskIOPSReadWrite:   "",
+			diskMBPSReadWrite:   "",
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			expectedDiskID:      disk1ID,
 			existedDisk:         compute.Disk{ID: to.StringPtr(disk1ID), Name: to.StringPtr(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: to.StringPtr("Succeeded")}, Tags: testTags},

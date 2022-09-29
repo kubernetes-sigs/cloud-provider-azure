@@ -19,6 +19,7 @@ package consts
 import (
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 )
 
@@ -125,6 +126,8 @@ const (
 	TagKeyValueDelimiter = "="
 	// VMSetNamesSharingPrimarySLBDelimiter is the delimiter of vmSet names sharing the primary SLB
 	VMSetNamesSharingPrimarySLBDelimiter = ","
+	// PremiumV2_LRS type for Azure Disk
+	PremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
 )
 
 // cache
