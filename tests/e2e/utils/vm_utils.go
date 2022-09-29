@@ -27,7 +27,7 @@ import (
 func ListVMs(tc *AzureTestClient) (*[]compute.VirtualMachine, error) {
 	vmClient := tc.createVMClient()
 
-	list, err := vmClient.List(context.Background(), tc.GetResourceGroup())
+	list, err := vmClient.List(context.Background(), tc.GetResourceGroup(), "")
 	if err != nil {
 		return nil, err
 	}
