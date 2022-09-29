@@ -464,7 +464,6 @@ func TestReconcileBackendPoolsNodeIPConfigToIP(t *testing.T) {
 
 	az := GetTestCloud(ctrl)
 	az.VMSet = mockVMSet
-	//az.LoadBalancerClient = mockLBClient
 	bi := newBackendPoolTypeNodeIP(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 	_, _, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
@@ -525,4 +524,25 @@ func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
 
 	removeNodeIPAddressesFromBackendPool(backendPool, nodeIPAddresses, false)
 	assert.Equal(t, expectedBackendPool, backendPool)
+}
+
+func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	lb := buildDefaultTestLB(testClusterName, []string{"ipconfig1", "ipconfig2"})
+	mockVMSet := NewMockVMSet(ctrl)
+	mockVMSet.EXPECT().GetNodeNameByIPConfigurationID("ipconfig1").Return("node1", "", nil)
+	mockVMSet.EXPECT().GetNodeNameByIPConfigurationID("ipconfig2").Return("node2", "", nil)
+
+	az := GetTestCloud(ctrl)
+	az.nodePrivateIPs = map[string]sets.String{
+		"node1": sets.NewString("1.2.3.4", "fe80::1"),
+	}
+	az.VMSet = mockVMSet
+	bc := newBackendPoolTypeNodeIPConfig(az)
+	svc := getTestService("svc1", "TCP", nil, false)
+	ipv4, ipv6 := bc.GetBackendPrivateIPs(testClusterName, &svc, &lb)
+	assert.Equal(t, []string{"1.2.3.4"}, ipv4)
+	assert.Equal(t, []string{"fe80::1"}, ipv6)
 }

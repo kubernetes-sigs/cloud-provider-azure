@@ -251,19 +251,18 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, 
 						klog.Errorf("bc.GetBackendPrivateIPs for service (%s): GetNodeNameByIPConfigurationID failed with error: %v", serviceName, err)
 						continue
 					}
-					privateIPs, err := bc.VMSet.GetPrivateIPsByNodeName(nodeName)
-					if err != nil {
-						klog.Errorf("bc.GetBackendPrivateIPs for service (%s): GetPrivateIPsByNodeName(%s) failed with error: %v", serviceName, nodeName, err)
+					privateIPsSet, ok := bc.nodePrivateIPs[nodeName]
+					if !ok {
+						klog.Warningf("bc.GetBackendPrivateIPs for service (%s): failed to get private IPs of node %s", serviceName, nodeName)
 						continue
 					}
-					if privateIPs != nil {
-						klog.V(2).Infof("bc.GetBackendPrivateIPs for service (%s): lb backendpool - found private IPs %v of node %s", serviceName, privateIPs, nodeName)
-						for _, ip := range privateIPs {
-							if utilnet.IsIPv4String(ip) {
-								backendPrivateIPv4s.Insert(ip)
-							} else {
-								backendPrivateIPv6s.Insert(ip)
-							}
+					privateIPs := privateIPsSet.List()
+					for _, ip := range privateIPs {
+						klog.V(2).Infof("bc.GetBackendPrivateIPs for service (%s): lb backendpool - found private IPs %s of node %s", serviceName, ip, nodeName)
+						if utilnet.IsIPv4String(ip) {
+							backendPrivateIPv4s.Insert(ip)
+						} else {
+							backendPrivateIPv6s.Insert(ip)
 						}
 					}
 				}
