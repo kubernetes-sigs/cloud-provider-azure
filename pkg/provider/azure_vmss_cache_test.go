@@ -28,11 +28,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -85,8 +88,11 @@ func TestVMSSVMCache(t *testing.T) {
 	defer ctrl.Finish()
 
 	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
-	ss, err := NewTestScaleSet(ctrl)
+	c := GetTestCloud(ctrl)
+	c.DisableAvailabilitySetNodes = true
+	vmSet, err := newScaleSet(c)
 	assert.NoError(t, err)
+	ss := vmSet.(*ScaleSet)
 
 	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
 	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
@@ -110,13 +116,13 @@ func TestVMSSVMCache(t *testing.T) {
 		assert.Equal(t, &vm, realVM)
 	}
 
-	// validate deleteCacheForNode().
+	// validate DeleteCacheForNode().
 	vm := expectedVMs[0]
 	vmName := to.String(vm.OsProfile.ComputerName)
-	err = ss.deleteCacheForNode(vmName)
+	err = ss.DeleteCacheForNode(vmName)
 	assert.NoError(t, err)
 
-	// the VM should be removed from cache after deleteCacheForNode().
+	// the VM should be removed from cache after DeleteCacheForNode().
 	cacheKey, cache, err := ss.getVMSSVMCache("rg", testVMSSName)
 	assert.NoError(t, err)
 	cached, err := cache.Get(cacheKey, azcache.CacheReadTypeDefault)
@@ -131,6 +137,32 @@ func TestVMSSVMCache(t *testing.T) {
 	assert.Equal(t, "vmss", ssName)
 	assert.Equal(t, to.String(vm.InstanceID), instanceID)
 	assert.Equal(t, &vm, realVM)
+}
+
+func TestDeleteCacheForAvailabilitySetNodeInVMSS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+
+	mockVMClient := mockvmclient.NewMockInterface(ctrl)
+	ss.cloud.VirtualMachinesClient = mockVMClient
+
+	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{
+		{Name: to.StringPtr("vm1")},
+	}, nil).AnyTimes()
+	ss.cloud.nodeNames = sets.NewString("vm1")
+
+	err = ss.DeleteCacheForNode("vm1")
+	assert.NoError(t, err)
+
+	cached, err := ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, azcache.CacheReadTypeUnsafe)
+	assert.NoError(t, err)
+	entry := cached.(*availabilitySetNodeEntry)
+	assert.Equal(t, 0, len(entry.nodeNames))
+	assert.Equal(t, 0, len(entry.vmNames))
+	assert.Equal(t, 0, len(entry.vms))
 }
 
 func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
