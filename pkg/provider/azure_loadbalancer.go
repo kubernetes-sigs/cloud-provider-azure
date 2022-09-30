@@ -65,9 +65,20 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 		return existsPip
 	}()
 
-	_, status, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false, []network.LoadBalancer{})
+	existingLBs, err := az.ListLB(service)
 	if err != nil {
 		return nil, existsPip, err
+	}
+
+	_, status, existsLb, err := az.getServiceLoadBalancer(service, clusterName, nil, false, existingLBs)
+	if err != nil || existsLb {
+		return status, existsLb || existsPip, err
+	}
+
+	flippedService := flipServiceInternalAnnotation(service)
+	_, status, existsLb, err = az.getServiceLoadBalancer(flippedService, clusterName, nil, false, existingLBs)
+	if err != nil || existsLb {
+		return status, existsLb || existsPip, err
 	}
 
 	// Return exists = false only if the load balancer and the public IP are not found on Azure
@@ -77,8 +88,8 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 		return nil, false, nil
 	}
 
-	// Return exists = true if either the load balancer or the public IP (or both) exists
-	return status, true, nil
+	// Return exists = true if only the public IP exists
+	return nil, true, nil
 }
 
 func getPublicIPDomainNameLabel(service *v1.Service) (string, bool) {
@@ -242,7 +253,6 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	defer az.serviceReconcileLock.Unlock()
 
 	var err error
-	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	mc := metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
 	klog.V(5).InfoS("EnsureLoadBalancerDeleted Start", "service", serviceName, "cluster", clusterName, "service_spec", service)
@@ -252,7 +262,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 		klog.V(5).InfoS("EnsureLoadBalancerDeleted Finish", "service", serviceName, "cluster", clusterName, "service_spec", service, "error", err)
 	}()
 
-	serviceIPToCleanup, err := az.findServiceIPAddress(ctx, clusterName, service, isInternal)
+	serviceIPToCleanup, err := az.findServiceIPAddress(ctx, clusterName, service)
 	if err != nil && !retry.HasStatusForbiddenOrIgnoredError(err) {
 		return err
 	}
@@ -265,6 +275,12 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 	_, err = az.reconcileLoadBalancer(clusterName, service, nil, false /* wantLb */)
 	if err != nil && !retry.HasStatusForbiddenOrIgnoredError(err) {
+		return err
+	}
+
+	// check flipped service also
+	flippedService := flipServiceInternalAnnotation(service)
+	if _, err := az.reconcileLoadBalancer(clusterName, flippedService, nil, false /* wantLb */); err != nil {
 		return err
 	}
 
@@ -910,7 +926,7 @@ func updateServiceLoadBalancerIP(service *v1.Service, serviceIP string) *v1.Serv
 	return copyService
 }
 
-func (az *Cloud) findServiceIPAddress(ctx context.Context, clusterName string, service *v1.Service, isInternalLb bool) (string, error) {
+func (az *Cloud) findServiceIPAddress(ctx context.Context, clusterName string, service *v1.Service) (string, error) {
 	if len(service.Spec.LoadBalancerIP) > 0 {
 		return service.Spec.LoadBalancerIP, nil
 	}
@@ -2341,13 +2357,25 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		return nil, err
 	}
 
+	destinationIPAddress := ""
+	if wantLb && lbIP == nil {
+		return nil, fmt.Errorf("no load balancer IP for setting up security rules for service %s", service.Name)
+	}
+	if lbIP != nil {
+		destinationIPAddress = *lbIP
+	}
+
+	if destinationIPAddress == "" {
+		destinationIPAddress = "*"
+	}
+
 	disableFloatingIP := false
 	if consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
 		disableFloatingIP = true
 	}
 
 	backendIPAddresses := make([]string, 0)
-	if disableFloatingIP {
+	if wantLb && disableFloatingIP {
 		lb, exist, err := az.getAzureLoadBalancer(to.String(lbName), azcache.CacheReadTypeDefault)
 		if err != nil {
 			return nil, err
@@ -2360,18 +2388,6 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		if utilnet.IsIPv6String(*lbIP) {
 			backendIPAddresses = backendPrivateIPv6s
 		}
-	}
-
-	destinationIPAddress := ""
-	if wantLb && lbIP == nil {
-		return nil, fmt.Errorf("no load balancer IP for setting up security rules for service %s", service.Name)
-	}
-	if lbIP != nil {
-		destinationIPAddress = *lbIP
-	}
-
-	if destinationIPAddress == "" {
-		destinationIPAddress = "*"
 	}
 
 	additionalIPs, err := getServiceAdditionalPublicIPs(service)
