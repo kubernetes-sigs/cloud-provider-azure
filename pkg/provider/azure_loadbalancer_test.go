@@ -62,6 +62,132 @@ const LBInUseRawError = `{
   	}
 }`
 
+func TestGetLoadBalancer(t *testing.T) {
+	lb1 := network.LoadBalancer{
+		Name:                         to.StringPtr("testCluster"),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+	}
+	lb2 := network.LoadBalancer{
+		Name: to.StringPtr("testCluster"),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+				{
+					Name: to.StringPtr("aservice"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{ID: to.StringPtr("testCluster-aservice")},
+					},
+				},
+			},
+		},
+	}
+	lb3 := network.LoadBalancer{
+		Name: to.StringPtr("testCluster-internal"),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+				{
+					Name: to.StringPtr("aservice"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PrivateIPAddress: to.StringPtr("10.0.0.6"),
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		desc           string
+		service        v1.Service
+		existingLBs    []network.LoadBalancer
+		pipExists      bool
+		expectedGotLB  bool
+		expectedStatus *v1.LoadBalancerStatus
+	}{
+		{
+			desc:           "GetLoadBalancer should return true when only public IP exists",
+			service:        getTestService("service", v1.ProtocolTCP, nil, false, 80),
+			existingLBs:    []network.LoadBalancer{lb1},
+			pipExists:      true,
+			expectedGotLB:  true,
+			expectedStatus: nil,
+		},
+		{
+			desc:           "GetLoadBalancer should return false when neither public IP nor LB exists",
+			service:        getTestService("service", v1.ProtocolTCP, nil, false, 80),
+			existingLBs:    []network.LoadBalancer{lb1},
+			pipExists:      false,
+			expectedGotLB:  false,
+			expectedStatus: nil,
+		},
+		{
+			desc:          "GetLoadBalancer should return true when external service finds external LB",
+			service:       getTestService("service", v1.ProtocolTCP, nil, false, 80),
+			existingLBs:   []network.LoadBalancer{lb2},
+			pipExists:     true,
+			expectedGotLB: true,
+			expectedStatus: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "1.2.3.4"},
+				},
+			},
+		},
+		{
+			desc:          "GetLoadBalancer should return true when internal service finds internal LB",
+			service:       getInternalTestService("service", 80),
+			existingLBs:   []network.LoadBalancer{lb3},
+			expectedGotLB: true,
+			expectedStatus: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "10.0.0.6"},
+				},
+			},
+		},
+		{
+			desc:          "GetLoadBalancer should return true when external service finds previous internal LB",
+			service:       getTestService("service", v1.ProtocolTCP, nil, false, 80),
+			existingLBs:   []network.LoadBalancer{lb3},
+			expectedGotLB: true,
+			expectedStatus: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "10.0.0.6"},
+				},
+			},
+		},
+		{
+			desc:          "GetLoadBalancer should return true when external service finds external LB",
+			service:       getInternalTestService("service", 80),
+			existingLBs:   []network.LoadBalancer{lb2},
+			pipExists:     true,
+			expectedGotLB: true,
+			expectedStatus: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "1.2.3.4"},
+				},
+			},
+		},
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for i, c := range tests {
+		az := GetTestCloud(ctrl)
+		mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		if c.pipExists {
+			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(network.PublicIPAddress{
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: to.StringPtr("1.2.3.4"),
+				}}, nil)
+		} else {
+			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound})
+		}
+		mockLBsClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLBsClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(c.existingLBs, nil)
+
+		status, existsLB, err := az.GetLoadBalancer(context.TODO(), testClusterName, &c.service)
+		assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
+		assert.Equal(t, c.expectedGotLB, existsLB, "TestCase[%d]: %s", i, c.desc)
+		assert.Equal(t, c.expectedStatus, status, "TestCase[%d]: %s", i, c.desc)
+	}
+}
+
 func TestFindProbe(t *testing.T) {
 	tests := []struct {
 		msg           string
@@ -564,28 +690,40 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		isInternalSvc     bool
 		expectCreateError bool
 		wrongRGAtDelete   bool
+		flipService       bool
 	}{
 		{
+			desc:        "exteral service then flipped to internal should be created and deleted successfully",
+			service:     getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+			flipService: true,
+		},
+		{
+			desc:          "interal service then flipped to external should be created and deleted successfully",
+			service:       getInternalTestService("service2", 80),
+			isInternalSvc: true,
+			flipService:   true,
+		},
+		{
 			desc:    "external service should be created and deleted successfully",
-			service: getTestService("service1", v1.ProtocolTCP, nil, false, 80),
+			service: getTestService("service3", v1.ProtocolTCP, nil, false, 80),
 		},
 		{
 			desc:          "internal service should be created and deleted successfully",
-			service:       getInternalTestService("service2", 80),
+			service:       getInternalTestService("service4", 80),
 			isInternalSvc: true,
 		},
 		{
 			desc:    "annotated service with same resourceGroup should be created and deleted successfully",
-			service: getResourceGroupTestService("service3", "rg", "", 80),
+			service: getResourceGroupTestService("service5", "rg", "", 80),
 		},
 		{
 			desc:              "annotated service with different resourceGroup shouldn't be created but should be deleted successfully",
-			service:           getResourceGroupTestService("service4", "random-rg", "1.2.3.4", 80),
+			service:           getResourceGroupTestService("service6", "random-rg", "1.2.3.4", 80),
 			expectCreateError: true,
 		},
 		{
 			desc:              "annotated service with different resourceGroup shouldn't be created but should be deleted successfully",
-			service:           getResourceGroupTestService("service5", "random-rg", "", 80),
+			service:           getResourceGroupTestService("service7", "random-rg", "", 80),
 			expectCreateError: true,
 			wrongRGAtDelete:   true,
 		},
@@ -596,7 +734,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	az := GetTestCloud(ctrl)
 
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, vmCount, availabilitySetCount)
-	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 4)
+	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 5)
 
 	for i, c := range tests {
 
@@ -616,16 +754,21 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 			assert.NotNil(t, lbStatus, "TestCase[%d]: %s", i, c.desc)
 			result, rerr := az.LoadBalancerClient.List(context.TODO(), az.Config.ResourceGroup)
 			assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
-			assert.Equal(t, len(result), 1, "TestCase[%d]: %s", i, c.desc)
-			assert.Equal(t, len(*result[0].LoadBalancingRules), 1, "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(result), "TestCase[%d]: %s", i, c.desc)
+			assert.Equal(t, 1, len(*result[0].LoadBalancingRules), "TestCase[%d]: %s", i, c.desc)
 		}
 
-		expectedLBs = make([]network.LoadBalancer, 0)
-		setMockLBs(az, ctrl, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
 		// finally, delete it.
 		if c.wrongRGAtDelete {
 			az.LoadBalancerResourceGroup = "nil"
 		}
+		if c.flipService {
+			flippedService := flipServiceInternalAnnotation(&c.service)
+			c.service = *flippedService
+			c.isInternalSvc = !c.isInternalSvc
+		}
+		expectedLBs = make([]network.LoadBalancer, 0)
+		setMockLBs(az, ctrl, &expectedLBs, "service", 1, i+1, c.isInternalSvc)
 
 		expectedPLS := make([]network.PrivateLinkService, 0)
 		mockPLSClient := mockprivatelinkserviceclient.NewMockInterface(ctrl)
@@ -3122,6 +3265,33 @@ func TestReconcileSecurityGroup(t *testing.T) {
 			service:     getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			existingSgs: map[string]network.SecurityGroup{"nsg": {}},
 			expectedSg:  &network.SecurityGroup{},
+		},
+		{
+			desc:    "reconcileSecurityGroup shall delete unwanted sg if wantLb is false and lbIP is nil",
+			service: getTestService("test1", v1.ProtocolTCP, nil, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name: to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: to.StringPtr("atest1-toBeDeleted"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								SourceAddressPrefix:      to.StringPtr("prefix"),
+								SourcePortRange:          to.StringPtr("range"),
+								DestinationAddressPrefix: to.StringPtr("desPrefix"),
+								DestinationPortRange:     to.StringPtr("desRange"),
+							},
+						},
+					},
+				},
+			}},
+			wantLb: false,
+			expectedSg: &network.SecurityGroup{
+				Name: to.StringPtr("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{},
+				},
+			},
 		},
 		{
 			desc:    "reconcileSecurityGroup shall delete unwanted sgs and create needed ones",
