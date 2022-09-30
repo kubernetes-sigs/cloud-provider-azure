@@ -28,14 +28,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -139,32 +137,6 @@ func TestVMSSVMCache(t *testing.T) {
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 }
 
-func TestDeleteCacheForAvailabilitySetNodeInVMSS(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err)
-
-	mockVMClient := mockvmclient.NewMockInterface(ctrl)
-	ss.cloud.VirtualMachinesClient = mockVMClient
-
-	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{
-		{Name: to.StringPtr("vm1")},
-	}, nil).AnyTimes()
-	ss.cloud.nodeNames = sets.NewString("vm1")
-
-	err = ss.DeleteCacheForNode("vm1")
-	assert.NoError(t, err)
-
-	cached, err := ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, azcache.CacheReadTypeUnsafe)
-	assert.NoError(t, err)
-	entry := cached.(*availabilitySetNodeEntry)
-	assert.Equal(t, 0, len(entry.nodeNames))
-	assert.Equal(t, 0, len(entry.vmNames))
-	assert.Equal(t, 0, len(entry.vms))
-}
-
 func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -240,4 +212,245 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	// verify cache is cleared.
 	_, ok = ss.vmssVMCache.Load(cacheKey)
 	assert.Equal(t, false, ok)
+}
+
+func TestGetVMManagementTypeByNodeName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
+	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
+	testVM2.VirtualMachineScaleSet = nil
+
+	testVMList := []compute.VirtualMachine{
+		testVM1,
+		testVM2,
+	}
+
+	testCases := []struct {
+		description                 string
+		nodeName                    string
+		DisableAvailabilitySetNodes bool
+		EnableVmssFlexNodes         bool
+		vmListErr                   *retry.Error
+		expectedVMManagementType    VMManagementType
+		expectedErr                 error
+	}{
+		{
+			description:              "getVMManagementTypeByNodeName should return ManagedByVmssFlex for vmss flex node",
+			nodeName:                 "vmssflex1000001",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssFlex,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByNodeName should return ManagedByAvSet for availabilityset node",
+			nodeName:                 "vmssflex1000002",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByAvSet,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByNodeName should return ManagedByVmssUniform for vmss uniform node",
+			nodeName:                 "vmssflex1000003",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssUniform,
+			expectedErr:              nil,
+		},
+		{
+			description:                 "getVMManagementTypeByNodeName should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
+			nodeName:                    "anyName",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByVmssUniform,
+			expectedErr:                 nil,
+		},
+		{
+			description:              "getVMManagementTypeByNodeName should return ManagedByUnknownVMSet if error happens",
+			nodeName:                 "fakeName",
+			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+		},
+	}
+
+	for _, tc := range testCases {
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err, tc.description)
+
+		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+
+		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+
+		vmManagementType, err := ss.getVMManagementTypeByNodeName(tc.nodeName, azcache.CacheReadTypeDefault)
+		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+		if tc.expectedErr != nil {
+			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
+		}
+
+	}
+}
+
+func TestGetVMManagementTypeByProviderID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
+	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
+	testVM2.VirtualMachineScaleSet = nil
+
+	testVMList := []compute.VirtualMachine{
+		testVM1,
+		testVM2,
+	}
+
+	testCases := []struct {
+		description                 string
+		providerID                  string
+		DisableAvailabilitySetNodes bool
+		EnableVmssFlexNodes         bool
+		vmListErr                   *retry.Error
+		expectedVMManagementType    VMManagementType
+		expectedErr                 error
+	}{
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByVmssFlex for vmss flex node",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssFlex,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByAvSet for availabilityset node",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm2",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByAvSet,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByVmssUniform for vmss uniform node",
+			providerID:               "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssUniform,
+			expectedErr:              nil,
+		},
+		{
+			description:                 "getVMManagementTypeByProviderID should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
+			providerID:                  "anyName",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByVmssUniform,
+			expectedErr:                 nil,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByUnknownVMSet if error happens",
+			providerID:               "fakeName",
+			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+		},
+	}
+
+	for _, tc := range testCases {
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err, tc.description)
+
+		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+
+		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+
+		vmManagementType, err := ss.getVMManagementTypeByProviderID(tc.providerID, azcache.CacheReadTypeDefault)
+		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+		if tc.expectedErr != nil {
+			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
+		}
+
+	}
+}
+
+func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testVM1 := generateVmssFlexTestVMWithoutInstanceView(testVM1Spec)
+	testVM2 := generateVmssFlexTestVMWithoutInstanceView(testVM2Spec)
+	testVM2.VirtualMachineScaleSet = nil
+	testVM2.VirtualMachineProperties.OsProfile.ComputerName = to.StringPtr("testvm2")
+
+	testVMList := []compute.VirtualMachine{
+		testVM1,
+		testVM2,
+	}
+
+	testCases := []struct {
+		description                 string
+		ipConfigurationID           string
+		DisableAvailabilitySetNodes bool
+		EnableVmssFlexNodes         bool
+		vmListErr                   *retry.Error
+		expectedVMManagementType    VMManagementType
+		expectedErr                 error
+	}{
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssFlex for vmss flex node",
+			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssFlex,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByAvSet for availabilityset node",
+			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-nic/ipConfigurations/pipConfig",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByAvSet,
+			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for vmss uniform node",
+			ipConfigurationID:        "/subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1/networkInterfaces/nic1",
+			vmListErr:                nil,
+			expectedVMManagementType: ManagedByVmssUniform,
+			expectedErr:              nil,
+		},
+		{
+			description:                 "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
+			ipConfigurationID:           "anyID",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByVmssUniform,
+			expectedErr:                 nil,
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByUnknownVMSet if error happens",
+			ipConfigurationID:        "fakeID",
+			vmListErr:                &retry.Error{RawError: fmt.Errorf("failed to list VMs")},
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("getter function of nonVmssUniformNodesCache: failed to list vms in the resource group rg: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to list VMs"),
+		},
+	}
+
+	for _, tc := range testCases {
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err, tc.description)
+
+		ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
+		ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+
+		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+
+		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(tc.ipConfigurationID, azcache.CacheReadTypeDefault)
+		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
+		if tc.expectedErr != nil {
+			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
+		}
+
+	}
 }
