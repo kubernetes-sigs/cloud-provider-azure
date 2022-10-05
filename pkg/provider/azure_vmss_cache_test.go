@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -109,6 +108,7 @@ func TestVMSSVMCache(t *testing.T) {
 		vmName := to.String(vm.OsProfile.ComputerName)
 		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
+		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
 		assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
 		assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
@@ -120,16 +120,7 @@ func TestVMSSVMCache(t *testing.T) {
 	err = ss.DeleteCacheForNode(vmName)
 	assert.NoError(t, err)
 
-	// the VM should be removed from cache after DeleteCacheForNode().
-	cacheKey, cache, err := ss.getVMSSVMCache("rg", testVMSSName)
-	assert.NoError(t, err)
-	cached, err := cache.Get(cacheKey, azcache.CacheReadTypeDefault)
-	assert.NoError(t, err)
-	cachedVirtualMachines := cached.(*sync.Map)
-	_, ok := cachedVirtualMachines.Load(vmName)
-	assert.Equal(t, false, ok)
-
-	// the VM should be back after another cache refresh.
+	// the VM should be in cache after refresh.
 	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
