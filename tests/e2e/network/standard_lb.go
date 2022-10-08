@@ -48,8 +48,8 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -64,8 +64,12 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Waiting for backend pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -217,10 +221,10 @@ func createPodGetIP() *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:            "test-app",
-					Image:           "appropriate/curl",
+					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
-						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
+						`curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me`,
 					},
 				},
 			},
