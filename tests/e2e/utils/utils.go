@@ -84,8 +84,6 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 
 // CreateTestingNamespace builds namespace for each test baseName and labels determine name of the space
 func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namespace, error) {
-	Logf("Creating a test namespace")
-
 	namespaceObj := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("e2e-tests-%v-", baseName),
@@ -108,6 +106,7 @@ func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namesp
 	}); err != nil {
 		return nil, err
 	}
+	Logf("Created a test namespace %q", got.Name)
 	return got, nil
 }
 
