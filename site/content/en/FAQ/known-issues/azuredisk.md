@@ -594,7 +594,7 @@ We added retry logic for detach azure disk:
  
 **Issue details**:
 
-In some error condition when detach azure disk failed, azure cloud provider will retry 6 times at most with exponential backoff, it will hold the data disk list for about 3 minutes with a node level lock, and in that time period, if customer update data disk list manually (e.g. need manual operationto attach/detach another disk since there is attach/detach error, ) , the data disk list will be obselete(dirty data), then weird VM status happens, e.g. attach a non-existing disk, we should split those retry operations, every retry should get a fresh data disk list in the beginning.
+In some error condition when detach azure disk failed, azure cloud provider will retry 6 times at most with exponential backoff, it will hold the data disk list for about 3 minutes with a node level lock, and in that time period, if customer update data disk list manually (e.g. need manual operationto attach/detach another disk since there is attach/detach error, ) , the data disk list will be obsolete(dirty data), then weird VM status happens, e.g. attach a non-existing disk, we should split those retry operations, every retry should get a fresh data disk list in the beginning.
 
 **Fix**
 
@@ -805,7 +805,7 @@ Detach disk in problem manually
 
 **Issue details**:
 
-PR [Fix aggressive VM calls for Azure VMSS](https://github.com/kubernetes/kubernetes/pull/83102) change getVMSS cache TTL from 1min to 10min, getVMAS cache TTL from 5min to 10min, that will cause error `WaitForAttach ... Cannot find Lun for disk`, and it would make attach disk opeation costs 10min on VMSS and 15min on VMAS, detailed error would be like following:
+PR [Fix aggressive VM calls for Azure VMSS](https://github.com/kubernetes/kubernetes/pull/83102) change getVMSS cache TTL from 1min to 10min, getVMAS cache TTL from 5min to 10min, that will cause error `WaitForAttach ... Cannot find Lun for disk`, and it would make attach disk operation costs 10min on VMSS and 15min on VMAS, detailed error would be like following:
 ```
 Events:
   Type     Reason                  Age                 From                                        Message

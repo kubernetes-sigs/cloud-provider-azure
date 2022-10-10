@@ -30,7 +30,7 @@ type DynamicReloadingOptions struct {
 	CloudConfigKey             string
 }
 
-// AddFlags adds flags releated to dynamic reloading for controller manager to the specified FlagSet
+// AddFlags adds flags related to dynamic reloading for controller manager to the specified FlagSet
 func (o *DynamicReloadingOptions) AddFlags(fs *pflag.FlagSet) {
 	if o == nil {
 		return

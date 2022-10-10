@@ -601,7 +601,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.No
 			}
 			resourceGroupName, err := fs.GetNodeResourceGroup(node.Name)
 			if err != nil {
-				klog.Error("ensureVMSSInPool: failed to get resoure group of node: %s, will skip checking and continue", node.Name)
+				klog.Error("ensureVMSSInPool: failed to get resource group of node: %s, will skip checking and continue", node.Name)
 				continue
 			}
 

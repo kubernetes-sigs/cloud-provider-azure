@@ -8,7 +8,7 @@
 # 25 tokens each. There is 1:1 mapping between deployments and service
 # accounts, so 80 deployments is generated, each with one pod.
 #
-# For smaller cluster, we scale down lineary QPS per token to
+# For smaller cluster, we scale down linearyly QPS per token to
 # 2.5 * (Number of nodes)/(5 000). This results in 1 QPS per node, if there is
 # 2 000 tokens.
 #

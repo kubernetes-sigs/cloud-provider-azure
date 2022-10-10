@@ -75,7 +75,7 @@ Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-d
 
 ### Change default storage class
 
-Follow the steps bellow if you want change the current default storage class to AzureDisk CSI driver.
+Follow the steps below if you want change the current default storage class to AzureDisk CSI driver.
 
 First, delete the default storage class:
 
