@@ -320,13 +320,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if accountOptions.DisableFileServiceDeleteRetentionPolicy {
-			klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), subscroption(%s), resource group(%s)", accountName, subsID, resourceGroup)
+			klog.V(2).Infof("disable DisableFileServiceDeleteRetentionPolicy on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
 			prop, err := az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, accountName)
 			if err != nil {
 				return "", "", err
 			}
 			if prop.FileServicePropertiesProperties == nil {
-				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscroption(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
+				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscription(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
 			}
 			prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
 			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(ctx, resourceGroup, accountName, prop); err != nil {
@@ -335,13 +335,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if to.Bool(accountOptions.IsMultichannelEnabled) {
-			klog.V(2).Infof("enable SMB Multichannel setting on account(%s), subscroption(%s), resource group(%s)", accountName, subsID, resourceGroup)
+			klog.V(2).Infof("enable SMB Multichannel setting on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
 			prop, err := az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, accountName)
 			if err != nil {
 				return "", "", err
 			}
 			if prop.FileServicePropertiesProperties == nil {
-				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscroption(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
+				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), subscription(%s), resource group(%s) is nil", accountName, subsID, resourceGroup)
 			}
 			prop.FileServicePropertiesProperties.ProtocolSettings = &storage.ProtocolSettings{Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: to.BoolPtr(true)}}}
 			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(ctx, resourceGroup, accountName, prop); err != nil {
