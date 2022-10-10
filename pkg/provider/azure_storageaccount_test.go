@@ -375,6 +375,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		SubnetPropertiesFormatNil       bool
 		mockStorageAccountsClient       bool
 		setAccountOptions               bool
+		accessTier                      string
 		requireInfrastructureEncryption *bool
 		keyVaultURL                     *string
 		accountName                     string
@@ -391,6 +392,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			requireInfrastructureEncryption: to.BoolPtr(true),
 			keyVaultURL:                     to.StringPtr("keyVaultURL"),
 			resourceGroup:                   "rg",
+			accessTier:                      "AccessTierHot",
 			accountName:                     "",
 			expectedErr:                     "",
 		},
@@ -479,6 +481,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 				Name:                  test.accountName,
 				CreateAccount:         test.createAccount,
 				SubscriptionID:        test.subscriptionID,
+				AccessTier:            test.accessTier,
 			}
 		}
 
