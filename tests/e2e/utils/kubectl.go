@@ -100,7 +100,9 @@ func KubectlCmd(namespace string, args ...string) *exec.Cmd {
 	Logf("Kubernetes configuration file name: %s", filename)
 
 	defaultArgs = append(defaultArgs, "--"+clientcmd.RecommendedConfigPathFlag+"="+filename)
-	defaultArgs = append(defaultArgs, fmt.Sprintf("--namespace=%s", namespace))
+	if namespace != "" {
+		defaultArgs = append(defaultArgs, fmt.Sprintf("--namespace=%s", namespace))
+	}
 	kubectlArgs := append(defaultArgs, args...)
 
 	cmd := exec.Command("kubectl", kubectlArgs...)
