@@ -393,7 +393,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			err = utils.DeleteService(cs, ns.Name, svc2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		service2.Spec.LoadBalancerIP = ip
+		service2 = updateServiceLBIP(service2, true, ip)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, svc2, ip)

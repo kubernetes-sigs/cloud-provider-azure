@@ -294,7 +294,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 	It("should support service annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`", func() {
 		By("Creating a public IP with tags")
 		ipName := basename + "-public-IP-disable-floating-ip"
-		pip := defaultPublicIPAddress(ipName)
+		pip := defaultPublicIPAddress(ipName, false)
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
@@ -305,7 +305,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		service = updateServiceBalanceIP(service, false, targetIP)
+		service = updateServiceLBIP(service, false, targetIP)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
