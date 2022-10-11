@@ -1684,10 +1684,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "1.2.3.4",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4"},
 				},
 			},
 		},
@@ -1712,10 +1710,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 		},
@@ -1739,10 +1735,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 		},
@@ -1766,10 +1760,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 			isOwned: true,
@@ -1784,11 +1776,11 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID:         types.UID("secondary"),
-					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "true"},
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerInternal:           "true",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+					},
 				},
 			},
 			isOwned: true,
