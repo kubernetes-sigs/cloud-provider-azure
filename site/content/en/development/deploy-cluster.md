@@ -38,7 +38,7 @@ Customizations are supported by environment variables:
 | AZURE_LOCATION                          | false    | region of the cluster resources                                                    | westus2                                                                 |
 | AZURE_CLOUD_CONTROLLER_MANAGER_IMG      | false    | image of the cloud-controller-manager                                              | mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.1 |
 | AZURE_CLOUD_NODE_MANAGER_IMG            | false    | image of the cloud-node-manager                                                    | mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.1       |
-| KUBERNETES_VERSION                      | false    | Kubernetes components version                                                      | v1.23.0                                                                 |
+| KUBERNETES_VERSION                      | false    | Kubernetes components version                                                      | v1.25.0                                                                 |
 | AZURE_LOADBALANCER_SKU                  | false    | LoadBalancer SKU, Standard or Basic                                                | Standard                                                                |
 | ENABLE_MULTI_SLB                        | false    | Enable multiple standard LoadBalancers per cluster                                 | false                                                                   |
 | LB_BACKEND_POOL_CONFIG_TYPE             | false    | LoadBalancer backend pool configuration type, nodeIPConfiguration, nodeIP or podIP | nodeIPConfiguration                                                     |
