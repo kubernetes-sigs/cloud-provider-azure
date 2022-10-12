@@ -26,6 +26,7 @@ import (
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	authenticationv1alpha1 "k8s.io/api/authentication/v1alpha1"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	authorizationv1beta1 "k8s.io/api/authorization/v1beta1"
@@ -48,6 +49,7 @@ import (
 	flowcontrolv1alpha1 "k8s.io/api/flowcontrol/v1alpha1"
 	flowcontrolv1beta1 "k8s.io/api/flowcontrol/v1beta1"
 	flowcontrolv1beta2 "k8s.io/api/flowcontrol/v1beta2"
+	flowcontrolv1beta3 "k8s.io/api/flowcontrol/v1beta3"
 	networkingv1 "k8s.io/api/networking/v1"
 	networkingv1alpha1 "k8s.io/api/networking/v1alpha1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
@@ -83,6 +85,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	appsv1beta1.AddToScheme,
 	appsv1beta2.AddToScheme,
 	authenticationv1.AddToScheme,
+	authenticationv1alpha1.AddToScheme,
 	authenticationv1beta1.AddToScheme,
 	authorizationv1.AddToScheme,
 	authorizationv1beta1.AddToScheme,
@@ -105,6 +108,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	flowcontrolv1alpha1.AddToScheme,
 	flowcontrolv1beta1.AddToScheme,
 	flowcontrolv1beta2.AddToScheme,
+	flowcontrolv1beta3.AddToScheme,
 	networkingv1.AddToScheme,
 	networkingv1alpha1.AddToScheme,
 	networkingv1beta1.AddToScheme,

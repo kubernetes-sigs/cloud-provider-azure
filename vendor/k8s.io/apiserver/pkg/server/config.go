@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilwaitgroup "k8s.io/apimachinery/pkg/util/waitgroup"
 	"k8s.io/apimachinery/pkg/version"
@@ -67,6 +68,8 @@ import (
 	"k8s.io/client-go/informers"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
+	"k8s.io/component-base/metrics/features"
+	"k8s.io/component-base/metrics/prometheus/slis"
 	"k8s.io/klog/v2"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -317,6 +320,10 @@ type AuthorizationInfo struct {
 	Authorizer authorizer.Authorizer
 }
 
+func init() {
+	utilruntime.Must(features.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+}
+
 // NewConfig returns a Config struct with the default values
 func NewConfig(codecs serializer.CodecFactory) *Config {
 	defaultHealthChecks := []healthz.HealthChecker{healthz.PingHealthz, healthz.LogHealthz}
@@ -359,7 +366,7 @@ func NewConfig(codecs serializer.CodecFactory) *Config {
 		// A request body might be encoded in json, and is converted to
 		// proto when persisted in etcd, so we allow 2x as the largest request
 		// body size to be accepted and decoded in a write request.
-		// If this constant is changed, maxRequestSizeBytes in apiextensions-apiserver/third_party/forked/celopenapi/model/schemas.go
+		// If this constant is changed, maxRequestSizeBytes in apiextensions-apiserver/pkg/apiserver/schema/cel/model/schemas.go
 		// should be changed to reflect the new value, if the two haven't
 		// been wired together already somehow.
 		MaxRequestBodyBytes: int64(3 * 1024 * 1024),
@@ -881,11 +888,18 @@ func installAPI(s *GenericAPIServer, c *Config) {
 		// so far, only logging related endpoints are considered valid to add for these debug flags.
 		routes.DebugFlags{}.Install(s.Handler.NonGoRestfulMux, "v", routes.StringFlagPutHandler(logs.GlogSetter))
 	}
+
 	if c.EnableMetrics {
 		if c.EnableProfiling {
 			routes.MetricsWithReset{}.Install(s.Handler.NonGoRestfulMux)
+			if utilfeature.DefaultFeatureGate.Enabled(features.ComponentSLIs) {
+				slis.SLIMetricsWithReset{}.Install(s.Handler.NonGoRestfulMux)
+			}
 		} else {
 			routes.DefaultMetrics{}.Install(s.Handler.NonGoRestfulMux)
+			if utilfeature.DefaultFeatureGate.Enabled(features.ComponentSLIs) {
+				slis.SLIMetrics{}.Install(s.Handler.NonGoRestfulMux)
+			}
 		}
 	}
 
