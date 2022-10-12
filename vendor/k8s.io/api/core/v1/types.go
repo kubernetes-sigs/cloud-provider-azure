@@ -2665,6 +2665,10 @@ const (
 	// PodReasonUnschedulable reason in PodScheduled PodCondition means that the scheduler
 	// can't schedule the pod right now, for example due to insufficient resources in the cluster.
 	PodReasonUnschedulable = "Unschedulable"
+
+	// PodReasonSchedulerError reason in PodScheduled PodCondition means that some internal error happens
+	// during scheduling, for example due to nodeAffinity parsing errors.
+	PodReasonSchedulerError = "SchedulerError"
 )
 
 // PodCondition contains details for the current condition of this pod.
@@ -4079,7 +4083,7 @@ type ReplicationControllerSpec struct {
 // ReplicationControllerStatus represents the current status of a replication
 // controller.
 type ReplicationControllerStatus struct {
-	// Replicas is the most recently oberved number of replicas.
+	// Replicas is the most recently observed number of replicas.
 	// More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller
 	Replicas int32 `json:"replicas" protobuf:"varint,1,opt,name=replicas"`
 
@@ -4578,7 +4582,6 @@ type ServiceSpec struct {
 	// implementation (e.g. cloud providers) should ignore Services that set this field.
 	// This field can only be set when creating or updating a Service to type 'LoadBalancer'.
 	// Once set, it can not be changed. This field will be wiped when a service is updated to a non 'LoadBalancer' type.
-	// +featureGate=LoadBalancerClass
 	// +optional
 	LoadBalancerClass *string `json:"loadBalancerClass,omitempty" protobuf:"bytes,21,opt,name=loadBalancerClass"`
 
@@ -5069,7 +5072,7 @@ type NodeStatus struct {
 	// More info: https://kubernetes.io/docs/concepts/nodes/node/#addresses
 	// Note: This field is declared as mergeable, but the merge key is not sufficiently
 	// unique, which can cause data corruption when it is merged. Callers should instead
-	// use a full-replacement patch. See http://pr.k8s.io/79391 for an example.
+	// use a full-replacement patch. See https://pr.k8s.io/79391 for an example.
 	// +optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge

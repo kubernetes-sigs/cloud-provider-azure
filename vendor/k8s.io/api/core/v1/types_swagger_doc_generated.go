@@ -1203,7 +1203,7 @@ var map_NodeStatus = map[string]string{
 	"allocatable":     "Allocatable represents the resources of a node that are available for scheduling. Defaults to Capacity.",
 	"phase":           "NodePhase is the recently observed lifecycle phase of the node. More info: https://kubernetes.io/docs/concepts/nodes/node/#phase The field is never populated, and now is deprecated.",
 	"conditions":      "Conditions is an array of current observed node conditions. More info: https://kubernetes.io/docs/concepts/nodes/node/#condition",
-	"addresses":       "List of addresses reachable to the node. Queried from cloud provider, if available. More info: https://kubernetes.io/docs/concepts/nodes/node/#addresses Note: This field is declared as mergeable, but the merge key is not sufficiently unique, which can cause data corruption when it is merged. Callers should instead use a full-replacement patch. See http://pr.k8s.io/79391 for an example.",
+	"addresses":       "List of addresses reachable to the node. Queried from cloud provider, if available. More info: https://kubernetes.io/docs/concepts/nodes/node/#addresses Note: This field is declared as mergeable, but the merge key is not sufficiently unique, which can cause data corruption when it is merged. Callers should instead use a full-replacement patch. See https://pr.k8s.io/79391 for an example.",
 	"daemonEndpoints": "Endpoints of daemons running on the Node.",
 	"nodeInfo":        "Set of ids/uuids to uniquely identify the node. More info: https://kubernetes.io/docs/concepts/nodes/node/#info",
 	"images":          "List of container images on this node",
@@ -1932,7 +1932,7 @@ func (ReplicationControllerSpec) SwaggerDoc() map[string]string {
 
 var map_ReplicationControllerStatus = map[string]string{
 	"":                     "ReplicationControllerStatus represents the current status of a replication controller.",
-	"replicas":             "Replicas is the most recently oberved number of replicas. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller",
+	"replicas":             "Replicas is the most recently observed number of replicas. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller",
 	"fullyLabeledReplicas": "The number of pods that have labels matching the labels of the pod template of the replication controller.",
 	"readyReplicas":        "The number of ready replicas for this replication controller.",
 	"availableReplicas":    "The number of available replicas (ready for at least minReadySeconds) for this replication controller.",
