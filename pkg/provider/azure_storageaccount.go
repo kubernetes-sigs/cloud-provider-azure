@@ -268,7 +268,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				IsHnsEnabled:           accountOptions.IsHnsEnabled,
 				EnableNfsV3:            accountOptions.EnableNfsV3,
 				MinimumTLSVersion:      storage.MinimumTLSVersionTLS12,
-				AccessTier:             storage.AccessTier(accountOptions.AccessTier),
 			},
 			Tags:     tags,
 			Location: &location}
@@ -347,6 +346,11 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(ctx, resourceGroup, accountName, prop); err != nil {
 				return "", "", err
 			}
+		}
+
+		if accountOptions.AccessTier != "" {
+			klog.V(2).Infof("set AccessTier(%s) on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup, accountOptions.AccessTier)
+			cp.AccountPropertiesCreateParameters.AccessTier = storage.AccessTier(accountOptions.AccessTier)
 		}
 
 		if accountOptions.CreatePrivateEndpoint {
