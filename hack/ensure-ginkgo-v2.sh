@@ -19,7 +19,7 @@ set -o pipefail
 
 function install_ginkgo_v2() {
   echo "Installing latest ginkgo cli"
-  go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
+  go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.2.0
 }
 
 if ! [ -x "$(command -v ginkgo)" ]; then
