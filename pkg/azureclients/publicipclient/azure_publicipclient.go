@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -39,6 +39,8 @@ import (
 
 var _ Interface = &Client{}
 
+const publicIPResourceType = "Microsoft.Network/publicIPAddresses"
+
 // Client implements PublicIPAddress client Interface.
 type Client struct {
 	armClient              armclient.Interface
@@ -53,6 +55,8 @@ type Client struct {
 	// ARM throttling configures.
 	RetryAfterReader time.Time
 	RetryAfterWriter time.Time
+
+	computeAPIVersion string
 }
 
 // New creates a new PublicIPAddress client with ratelimiting.
@@ -63,7 +67,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -75,6 +79,11 @@ func New(config *azclients.ClientConfig) *Client {
 			config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
 	}
 
+	computeAPIVersion := ComputeAPIVersion
+	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
+		computeAPIVersion = AzureStackComputeAPIVersion
+	}
+
 	client := &Client{
 		armClient:              armClient,
 		rateLimiterReader:      rateLimiterReader,
@@ -82,6 +91,7 @@ func New(config *azclients.ClientConfig) *Client {
 		subscriptionID:         config.SubscriptionID,
 		cloudName:              config.CloudName,
 		disableAzureStackCloud: config.DisableAzureStackCloud,
+		computeAPIVersion:      computeAPIVersion,
 	}
 
 	return client
@@ -105,7 +115,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, publicIPAddr
 	}
 
 	result, rerr := c.getPublicIPAddress(ctx, resourceGroupName, publicIPAddressName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -123,12 +133,12 @@ func (c *Client) getPublicIPAddress(ctx context.Context, resourceGroupName strin
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/publicIPAddresses",
+		publicIPResourceType,
 		publicIPAddressName,
 	)
 	result := network.PublicIPAddress{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, expand)
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.get.request", resourceID, rerr.Error())
@@ -166,7 +176,7 @@ func (c *Client) GetVirtualMachineScaleSetPublicIPAddress(ctx context.Context, r
 	}
 
 	result, rerr := c.getVMSSPublicIPAddress(ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, IPConfigurationName, publicIPAddressName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -192,20 +202,7 @@ func (c *Client) getVMSSPublicIPAddress(ctx context.Context, resourceGroupName s
 	)
 
 	result := network.PublicIPAddress{}
-	computeAPIVersion := ComputeAPIVersion
-	if strings.EqualFold(c.cloudName, AzureStackCloudName) && !c.disableAzureStackCloud {
-		computeAPIVersion = AzureStackComputeAPIVersion
-	}
-	queryParameters := map[string]interface{}{
-		"api-version": computeAPIVersion,
-	}
-	if len(expand) > 0 {
-		queryParameters["$expand"] = autorest.Encode("query", expand)
-	}
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithQueryParameters(queryParameters),
-	}
-	response, rerr := c.armClient.GetResourceWithDecorators(ctx, resourceID, decorators)
+	response, rerr := c.armClient.GetResourceWithExpandAPIVersionQuery(ctx, resourceID, expand, c.computeAPIVersion)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmsspublicip.get.request", resourceID, rerr.Error())
@@ -243,7 +240,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 	}
 
 	result, rerr := c.listPublicIPAddress(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -258,14 +255,12 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]network.
 
 // listPublicIPAddress gets a list of PublicIPAddress in the resource group.
 func (c *Client) listPublicIPAddress(ctx context.Context, resourceGroupName string) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, publicIPResourceType)
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.list.request", resourceID, rerr.Error())
@@ -314,7 +309,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, p
 	}
 
 	rerr := c.createOrUpdatePublicIP(ctx, resourceGroupName, publicIPAddressName, parameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -332,7 +327,7 @@ func (c *Client) createOrUpdatePublicIP(ctx context.Context, resourceGroupName s
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/publicIPAddresses",
+		publicIPResourceType,
 		publicIPAddressName,
 	)
 
@@ -382,7 +377,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, publicIPA
 	}
 
 	rerr := c.deletePublicIP(ctx, resourceGroupName, publicIPAddressName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -400,11 +395,11 @@ func (c *Client) deletePublicIP(ctx context.Context, resourceGroupName string, p
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/publicIPAddresses",
+		publicIPResourceType,
 		publicIPAddressName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.PublicIPAddressListResult, err error) {
@@ -525,13 +520,12 @@ func (c *Client) ListAll(ctx context.Context) ([]network.PublicIPAddress, *retry
 
 // listAllPublicIPAddress gets all of PublicIPAddress in the subscription.
 func (c *Client) listAllPublicIPAddress(ctx context.Context) ([]network.PublicIPAddress, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Network/publicIPAddresses",
-		autorest.Encode("path", c.subscriptionID))
+	resourceID := armclient.GetProviderResourceID(c.subscriptionID, publicIPResourceType)
 	result := make([]network.PublicIPAddress, 0)
 	page := &PublicIPAddressListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "publicip.listall.request", resourceID, rerr.Error())

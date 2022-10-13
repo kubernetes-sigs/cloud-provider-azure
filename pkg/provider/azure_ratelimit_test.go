@@ -56,12 +56,15 @@ var (
 		"networkResourceTenantId": "networkResourceTenantId",
 		"networkResourceSubscriptionId": "networkResourceSubscriptionId",
 		"availabilitySetNodesCacheTTLInSeconds": 100,
+		"nonVmssUniformNodesCacheTTLInSeconds": 100,
 		"vmssCacheTTLInSeconds": 100,
 		"vmssVirtualMachinesCacheTTLInSeconds": 100,
 		"vmCacheTTLInSeconds": 100,
 		"loadBalancerCacheTTLInSeconds": 100,
 		"nsgCacheTTLInSeconds": 100,
 		"routeTableCacheTTLInSeconds": 100,
+		"publicIPCacheTTLInSeconds": 100,
+		"plsCacheTTLInSeconds": 100,
 		"location": "location",
 		"maximumLoadBalancerRuleCount": 1,
 		"primaryAvailabilitySetName": "primaryAvailabilitySetName",
@@ -71,6 +74,7 @@ var (
 		"routeTableResourceGroup": "routeTableResourceGroup",
 		"securityGroupName": "securityGroupName",
 		"securityGroupResourceGroup": "securityGroupResourceGroup",
+		"privateLinkServiceResourceGroup": "privateLinkServiceResourceGroup",
 		"subnetName": "subnetName",
 		"subscriptionId": "subscriptionId",
 		"tenantId": "tenantId",
@@ -87,6 +91,14 @@ var (
 		CloudProviderRateLimitBucketWrite: 1,
 		CloudProviderRateLimitQPS:         1,
 		CloudProviderRateLimitQPSWrite:    1,
+	}
+
+	testAttachDetachDiskDefaultRateLimitConfig = azclients.RateLimitConfig{
+		CloudProviderRateLimit:            true,
+		CloudProviderRateLimitQPS:         0,
+		CloudProviderRateLimitBucket:      0,
+		CloudProviderRateLimitQPSWrite:    defaultAtachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: defaultAtachDetachDiskBucket,
 	}
 )
 
@@ -121,12 +133,15 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		AvailabilitySetNodesCacheTTLInSeconds: 100,
+		NonVmssUniformNodesCacheTTLInSeconds:  100,
 		VmssCacheTTLInSeconds:                 100,
 		VmssVirtualMachinesCacheTTLInSeconds:  100,
 		VMCacheTTLInSeconds:                   100,
 		LoadBalancerCacheTTLInSeconds:         100,
 		NsgCacheTTLInSeconds:                  100,
 		RouteTableCacheTTLInSeconds:           100,
+		PublicIPCacheTTLInSeconds:             100,
+		PlsCacheTTLInSeconds:                  100,
 		Location:                              "location",
 		MaximumLoadBalancerRuleCount:          1,
 		PrimaryAvailabilitySetName:            "primaryAvailabilitySetName",
@@ -136,6 +151,7 @@ func TestParseConfig(t *testing.T) {
 		RouteTableResourceGroup:               "routeTableResourceGroup",
 		SecurityGroupName:                     "securityGroupName",
 		SecurityGroupResourceGroup:            "securityGroupResourceGroup",
+		PrivateLinkServiceResourceGroup:       "privateLinkServiceResourceGroup",
 		SubnetName:                            "subnetName",
 		UseInstanceMetadata:                   true,
 		VMType:                                "standard",
@@ -144,14 +160,14 @@ func TestParseConfig(t *testing.T) {
 	}
 
 	buffer := bytes.NewBufferString(testAzureConfig)
-	config, err := parseConfig(buffer)
+	config, err := ParseConfig(buffer)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, config)
 }
 
 func TestInitializeCloudProviderRateLimitConfig(t *testing.T) {
 	buffer := bytes.NewBufferString(testAzureConfig)
-	config, err := parseConfig(buffer)
+	config, err := ParseConfig(buffer)
 	assert.NoError(t, err)
 
 	InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
@@ -175,4 +191,5 @@ func TestInitializeCloudProviderRateLimitConfig(t *testing.T) {
 	assert.Equal(t, config.StorageAccountRateLimit, &testDefaultRateLimitConfig)
 	assert.Equal(t, config.DiskRateLimit, &testDefaultRateLimitConfig)
 	assert.Equal(t, config.SnapshotRateLimit, &testDefaultRateLimitConfig)
+	assert.Equal(t, config.AttachDetachDiskRateLimit, &testAttachDetachDiskDefaultRateLimitConfig)
 }

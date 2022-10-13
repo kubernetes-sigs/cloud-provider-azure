@@ -14,17 +14,14 @@
                 "serviceCidr": "10.0.0.0/16,fd00::/108",
                 "dnsServiceIP": "10.0.0.10",
                 "kubeProxyMode": "ipvs",
-                "networkPlugin": "kubenet",
-                "apiServerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
-                },
+                "networkPlugin": "azure",
+                "containerRuntime": "containerd",
                 "kubeletConfig": {
-                    "--feature-gates": "IPv6DualStack=true",
                     "--hairpin-mode": "hairpin-veth",
                     "--max-pods": "110"
                 },
                 "controllerManagerConfig": {
-                    "--feature-gates": "IPv6DualStack=true"
+                    "--feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
                 },
                 "addons": [
                     {

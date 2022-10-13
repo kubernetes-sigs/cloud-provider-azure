@@ -21,10 +21,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/stretchr/testify/assert"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -252,6 +255,62 @@ func TestGetServiceAdditionalPublicIPs(t *testing.T) {
 			ips, err := getServiceAdditionalPublicIPs(testCase.service)
 			assert.Equal(t, testCase.expectedIPs, ips)
 			assert.Equal(t, testCase.expectedError, err)
+		})
+	}
+}
+
+func TestRemoveDuplicatedSecurityRules(t *testing.T) {
+	for _, testCase := range []struct {
+		description string
+		rules       []network.SecurityRule
+		expected    []network.SecurityRule
+	}{
+		{
+			description: "no duplicated rules",
+			rules: []network.SecurityRule{
+				{
+					Name: to.StringPtr("rule1"),
+				},
+				{
+					Name: to.StringPtr("rule2"),
+				},
+			},
+			expected: []network.SecurityRule{
+				{
+					Name: to.StringPtr("rule1"),
+				},
+				{
+					Name: to.StringPtr("rule2"),
+				},
+			},
+		},
+		{
+			description: "duplicated rules",
+			rules: []network.SecurityRule{
+				{
+					Name: to.StringPtr("rule1"),
+				},
+				{
+					Name: to.StringPtr("rule2"),
+				},
+				{
+					Name: to.StringPtr("rule1"),
+				},
+			},
+			expected: []network.SecurityRule{
+				{
+					Name: to.StringPtr("rule2"),
+				},
+				{
+					Name: to.StringPtr("rule1"),
+				},
+			},
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			rules := testCase.rules
+			rules = removeDuplicatedSecurityRules(rules)
+			assert.Equal(t, testCase.expected, rules)
 		})
 	}
 }

@@ -18,11 +18,10 @@ package containerserviceclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-04-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-10-01/containerservice"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -37,6 +36,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const managedClusterResourceType = "Microsoft.ContainerService/managedClusters"
 
 // Client implements ContainerService client Interface.
 type Client struct {
@@ -56,7 +57,7 @@ type Client struct {
 func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
 	authorizer := config.Authorizer
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, APIVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, APIVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -96,7 +97,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, managedClust
 	}
 
 	result, rerr := c.getManagedCluster(ctx, resourceGroupName, managedClusterName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -114,12 +115,12 @@ func (c *Client) getManagedCluster(ctx context.Context, resourceGroupName string
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.ContainerService/managedClusters",
+		managedClusterResourceType,
 		managedClusterName,
 	)
 	result := containerservice.ManagedCluster{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "managedcluster.get.request", resourceID, rerr.Error())
@@ -157,7 +158,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]containe
 	}
 
 	result, rerr := c.listManagedCluster(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -172,14 +173,12 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]containe
 
 // listManagedCluster gets a list of ManagedClusters in the resource group.
 func (c *Client) listManagedCluster(ctx context.Context, resourceGroupName string) ([]containerservice.ManagedCluster, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerService/managedClusters",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, managedClusterResourceType)
 	result := make([]containerservice.ManagedCluster, 0)
 	page := &ManagedClusterResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "managedcluster.list.request", resourceID, rerr.Error())
@@ -318,7 +317,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, m
 	}
 
 	rerr := c.createOrUpdateManagedCluster(ctx, resourceGroupName, managedClusterName, parameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -336,18 +335,15 @@ func (c *Client) createOrUpdateManagedCluster(ctx context.Context, resourceGroup
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.ContainerService/managedClusters",
+		managedClusterResourceType,
 		managedClusterName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if etag != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "managedCluster.put.request", resourceID, rerr.Error())
@@ -393,7 +389,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, managedCl
 	}
 
 	rerr := c.deleteManagedCluster(ctx, resourceGroupName, managedClusterName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -411,9 +407,9 @@ func (c *Client) deleteManagedCluster(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.ContainerService/managedClusters",
+		managedClusterResourceType,
 		managedClusterName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

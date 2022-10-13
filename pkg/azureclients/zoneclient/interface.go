@@ -32,8 +32,7 @@ const (
 )
 
 // Interface is the client interface for ARM.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/interface.go -package=mockzoneclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	GetZones(ctx context.Context, subscriptionID string) (map[string][]string, *retry.Error)
 }

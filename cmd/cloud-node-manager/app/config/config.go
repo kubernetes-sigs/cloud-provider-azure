@@ -79,4 +79,8 @@ type Config struct {
 
 	// Specifies if node information is retrieved via IMDS or ARM.
 	UseInstanceMetadata bool
+
+	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
+	// Its corresponding flag only gets registered in Windows builds
+	WindowsService bool
 }

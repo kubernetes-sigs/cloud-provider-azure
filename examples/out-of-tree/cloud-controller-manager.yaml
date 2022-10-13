@@ -129,68 +129,128 @@ subjects:
     kind: User
     name: cloud-controller-manager
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: cloud-controller-manager
   namespace: kube-system
   labels:
-    tier: control-plane
     component: cloud-controller-manager
 spec:
-  priorityClassName: system-node-critical
-  hostNetwork: true
-  serviceAccountName: cloud-controller-manager
-  tolerations:
-    - key: node-role.kubernetes.io/master
-      effect: NoSchedule
-  containers:
-    - name: cloud-controller-manager
-      image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.0.1
-      imagePullPolicy: IfNotPresent
-      command: ["cloud-controller-manager"]
-      args:
-        - "--allocate-node-cidrs=true"
-        - "--cloud-config=/etc/kubernetes/azure.json"
-        - "--cloud-provider=azure"
-        - "--cluster-cidr=10.244.0.0/16"
-        - "--cluster-name=k8s"
-        - "--controllers=*,-cloud-node" # disable cloud-node controller
-        - "--configure-cloud-routes=true" # "false" for Azure CNI and "true" for other network plugins
-        - "--leader-elect=true"
-        - "--route-reconciliation-period=10s"
-        - "--v=2"
-        - "--port=10267"
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: "4"
-          memory: 2Gi
-      livenessProbe:
-        httpGet:
-          path: /healthz
-          port: 10267
-        initialDelaySeconds: 20
-        periodSeconds: 10
-        timeoutSeconds: 5
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: control-plane
+      component: cloud-controller-manager
+  template:
+    metadata:
+      labels:
+        tier: control-plane
+        component: cloud-controller-manager
+    spec:
+      priorityClassName: system-node-critical
+      hostNetwork: true
+      serviceAccountName: cloud-controller-manager
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      containers:
+        - name: cloud-controller-manager
+          image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.25.0
+          imagePullPolicy: IfNotPresent
+          command: ["cloud-controller-manager"]
+          args:
+            - "--allocate-node-cidrs=true" # "false" for Azure CNI and "true" for other network plugins
+            - "--cloud-config=/etc/kubernetes/cloud-config/azure.json"
+            - "--cloud-provider=azure"
+            - "--cluster-cidr=10.244.0.0/16"
+            - "--cluster-name=k8s"
+            - "--controllers=*,-cloud-node" # disable cloud-node controller
+            - "--configure-cloud-routes=true" # "false" for Azure CNI and "true" for other network plugins
+            - "--leader-elect=true"
+            - "--route-reconciliation-period=10s"
+            - "--v=4"
+            - "--port=10267"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "4"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 10267
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: etc-kubernetes
+              mountPath: /etc/kubernetes
+            - name: cloud-config
+              mountPath: /etc/kubernetes/cloud-config
+              readOnly: true
+            - name: etc-ssl
+              mountPath: /etc/ssl
+              readOnly: true
+            - name: msi
+              mountPath: /var/lib/waagent/ManagedIdentity-Settings
+              readOnly: true
+      volumes:
         - name: etc-kubernetes
-          mountPath: /etc/kubernetes
+          hostPath:
+            path: /etc/kubernetes
+        - name: cloud-config
+          secret:
+            secretName: azure-cloud-config
         - name: etc-ssl
-          mountPath: /etc/ssl
-          readOnly: true
+          hostPath:
+            path: /etc/ssl
         - name: msi
-          mountPath: /var/lib/waagent/ManagedIdentity-Settings
-          readOnly: true
-  volumes:
-    - name: etc-kubernetes
-      hostPath:
-        path: /etc/kubernetes
-    - name: etc-ssl
-      hostPath:
-        path: /etc/ssl
-    - name: msi
-      hostPath:
-        path: /var/lib/waagent/ManagedIdentity-Settings
+          hostPath:
+            path: /var/lib/waagent/ManagedIdentity-Settings
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-cloud-config
+  namespace: kube-system
+type: Opaque
+stringData:
+  azure.json: |-
+    {
+      "cloud": "AzurePublicCloud",
+      "tenantId": "<tenant-id>",
+      "subscriptionId": "<subscription-id>",
+      "aadClientId": "<client-id>",
+      "aadClientSecret": "<client-secret>",
+      "resourceGroup": "<resource-group-name>",
+      "location": "<location>",
+      "vmType": "<vm-type>",
+      "subnetName": "<subnet-name>",
+      "securityGroupName": "<security-group-name>",
+      "vnetName": "<vnet-name>",
+      "vnetResourceGroup": "<vnet-resource-group>",
+      "routeTableName": "<route-table-name>",
+      "primaryAvailabilitySetName": "<primary-as-name>",
+      "primaryScaleSetName": "<primary-ss-name>",
+      "cloudProviderBackoff": true,
+      "cloudProviderBackoffRetries": 6,
+      "cloudProviderBackoffExponent": 1.5,
+      "cloudProviderBackoffDuration": 5,
+      "cloudProviderBackoffJitter": 1,
+      "cloudProviderRatelimit": true,
+      "cloudProviderRateLimitQPS": 6,
+      "cloudProviderRateLimitBucket": 20,
+      "useManagedIdentityExtension": false,
+      "userAssignedIdentityID": "",
+      "useInstanceMetadata": true,
+      "loadBalancerSku": "<loadbalancer-sku>",
+      "excludeMasterFromStandardLB": false,
+      "maximumLoadBalancerRuleCount": 250,
+      "enableMultipleStandardLoadBalancers": false,
+      "tags": "a=b,c=d"
+    }

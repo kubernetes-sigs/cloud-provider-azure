@@ -22,8 +22,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 )
 
 var (
@@ -41,10 +41,7 @@ func ListNICs(tc *AzureTestClient, rgName string) (*[]network.Interface, error) 
 	if err != nil {
 		return nil, err
 	}
-	if len(list.Values()) == 0 {
-		Logf("cannot find the corresponding NIC in resource group %s", rgName)
-		return nil, nil
-	}
+
 	value := list.Values()
 	return &value, err
 }
@@ -59,10 +56,6 @@ func ListVMSSNICs(tc *AzureTestClient, vmssName string) (*[]network.Interface, e
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, fmt.Errorf("cannot find NIC in the VMSS")
-	}
-
 	return &res, nil
 }
 

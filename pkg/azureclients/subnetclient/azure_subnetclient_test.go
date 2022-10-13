@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -102,7 +102,7 @@ func TestGet(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	expected := network.Subnet{
@@ -124,7 +124,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -144,7 +144,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -206,7 +206,7 @@ func TestGetThrottle(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -223,7 +223,7 @@ func TestList(t *testing.T) {
 	subnetList := []network.Subnet{getTestSubnet("subnet1"), getTestSubnet("subnet2"), getTestSubnet("subnet3")}
 	responseBody, err := json.Marshal(network.SubnetListResult{Value: &subnetList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -245,7 +245,7 @@ func TestListNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -265,7 +265,7 @@ func TestListInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -291,7 +291,7 @@ func TestListThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
@@ -309,7 +309,7 @@ func TestListWithListResponderError(t *testing.T) {
 	subnetList := []network.Subnet{getTestSubnet("subnet1"), getTestSubnet("subnet2"), getTestSubnet("subnet3")}
 	responseBody, err := json.Marshal(network.SubnetListResult{Value: &subnetList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -337,7 +337,7 @@ func TestListWithNextPage(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
 		}, nil)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
@@ -517,10 +517,7 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	subnetCreateOrUpdateErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "SubnetCreateOrUpdate"),
-		Retriable: true,
-	}
+	subnetCreateOrUpdateErr := retry.GetRateLimitError(true, "SubnetCreateOrUpdate")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	subnetClient := getTestSubnetClientWithNeverRateLimiter(armClient)
@@ -534,11 +531,7 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	subnetCreateOrUpdateErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "SubnetCreateOrUpdate", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	subnetCreateOrUpdateErr := retry.GetThrottlingError("SubnetCreateOrUpdate", "client throttled", getFutureTime())
 
 	subnet := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -580,7 +573,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
 	rerr := subnetClient.Delete(context.TODO(), "rg", "vnet", "subnet1")
@@ -633,7 +626,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	subnet := getTestSubnet("subnet1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(subnet.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(subnet.ID)).Return(throttleErr).Times(1)
 
 	subnetClient := getTestSubnetClient(armClient)
 	rerr := subnetClient.Delete(context.TODO(), "rg", "vnet", "subnet1")

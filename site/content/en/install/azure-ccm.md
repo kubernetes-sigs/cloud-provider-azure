@@ -15,6 +15,8 @@ Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/co
 
 ## Deployment
 
+There is a [helm chart available](https://github.com/kubernetes-sigs/cloud-provider-azure/tree/master/helm/cloud-provider-azure) which can be used to deploy the Azure cloud controller manager.
+
 To deploy Azure cloud controller manager, the following components need to be configured.
 
 ### kubelet
@@ -22,7 +24,7 @@ To deploy Azure cloud controller manager, the following components need to be co
 |Flag|Value|Remark|
 |----|-----|------|
 |`--cloud-provider`|external|cloud-provider should be set external|
-|`--azure-container-registry-config`|/etc/kubernetes/azure.json|Used for Azure credential provider|
+|`--azure-container-registry-config`|/etc/kubernetes/cloud-config/azure.json|Used for Azure credential provider|
 
 ### kube-controller-manager
 
@@ -39,16 +41,18 @@ Do not set flag `--cloud-provider`.
 
 ### azure-cloud-controller-manager
 
+azure-cloud-controller-manager should be run as Deployment with multiple replicas or Kubelet static Pods on each master Node.
+
 |Flag|Value|Remark|
 |---|---|---|
 |`--cloud-provider`|azure|cloud-provider should be set azure|
-|`--cloud-config`|/etc/kubernetes/azure.json|Path for [cloud provider config](../configs)|
+|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json|Path for [cloud provider config](../configs.md)|
 |`--controllers`|*,-cloud-node | cloud node controller should be disabled|
 |`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters |
 
 For other flags such as `--allocate-node-cidrs`, `--cluster-cidr` and `--cluster-name`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
-For details of those flags, please refer to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/).
+For details of those flags, please refer to this [doc](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/).
 
 ### azure-cloud-node-manager
 
@@ -61,13 +65,13 @@ azure-cloud-node-manager should be run as daemonsets on both Windows and Linux n
 
 Please refer examples [here](../example/out-of-tree.md) for sample deployment manifests for above components.
 
-Alternatively, you can use [aks-engine](https://github.com/Azure/aks-engine) to deploy a Kubernetes cluster running with cloud-controller-manager. It supports deploying `Kubernetes azure-cloud-controller-manager` for Kubernetes v1.16+.
+Alternatively, you can use [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) to deploy a Kubernetes cluster running with cloud-controller-manager.
 
 ## AzureDisk and AzureFile
 
 AzureDisk and AzureFile volume plugins are not supported with in-tree cloud provider (See [kubernetes/kubernetes#71018](https://github.com/kubernetes/kubernetes/issues/71018) for explanations).
 
-Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) and [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) should be used for persistent volumes. Please refer the installation guides [here](https://github.com/kubernetes-sigs/azuredisk-csi-driver/blob/master/docs/install-azuredisk-csi-driver.md) and [here](https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/install-azurefile-csi-driver.md) for their deployments.
+Hence, [azuredisk-csi-driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver) and [azurefile-csi-driver](https://github.com/kubernetes-sigs/azurefile-csi-driver) should be used for persistent volumes. Please refer the installation guides [here](https://github.com/kubernetes-sigs/azuredisk-csi-driver/tree/master/charts) and [here](https://github.com/kubernetes-sigs/azurefile-csi-driver/tree/master/charts) for their deployments.
 
 ### Change default storage class
 

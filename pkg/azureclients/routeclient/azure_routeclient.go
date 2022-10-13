@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 
@@ -36,6 +36,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const routeTablesResourceType = "Microsoft.Network/routeTables"
 
 // Client implements Route client Interface.
 type Client struct {
@@ -60,7 +62,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -101,7 +103,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, r
 	}
 
 	rerr := c.createOrUpdateRoute(ctx, resourceGroupName, routeTableName, routeName, routeParameters, etag)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -119,20 +121,17 @@ func (c *Client) createOrUpdateRoute(ctx context.Context, resourceGroupName stri
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/routeTables",
+		routeTablesResourceType,
 		routeTableName,
 		"routes",
 		routeName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(routeParameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if etag != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(etag)))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, routeParameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, routeParameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "route.put.request", resourceID, rerr.Error())
@@ -178,7 +177,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, routeTabl
 	}
 
 	rerr := c.deleteRoute(ctx, resourceGroupName, routeTableName, routeName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -196,11 +195,11 @@ func (c *Client) deleteRoute(ctx context.Context, resourceGroupName string, rout
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/routeTables",
+		routeTablesResourceType,
 		routeTableName,
 		"routes",
 		routeName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

@@ -1,13 +1,13 @@
 # See https://cloud.google.com/cloud-build/docs/build-config
 
 # this must be specified in seconds. If omitted, defaults to 600s (10 mins)
-timeout: 1200s
+timeout: 9000s
 # this prevents errors if you don't use both _GIT_TAG and _PULL_BASE_REF,
 # or any new substitutions added in the future.
 options:
   substitution_option: ALLOW_LOOSE
 steps:
-  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20200713-e9b3d9d"
+  - name: "gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:v20220830-45cbff55bc"
     entrypoint: make
     env:
       - TAG=${_GIT_TAG}
@@ -16,6 +16,9 @@ steps:
       - ENABLE_GIT_COMMAND=false
       - DOCKER_CLI_EXPERIMENTAL=enabled
       - DOCKER_BUILDKIT=1
+      - IMAGE_REGISTRY=gcr.io/k8s-staging-provider-azure
+      - DOCKER_BUILDX=/root/.docker/cli-plugins/docker-buildx
+      - CLOUD_BUILD_IMAGE=${_CLOUD_BUILD_IMAGE}
     args:
       - release-staging
 substitutions:
@@ -28,3 +31,5 @@ substitutions:
   # The default gcr.io staging project for Cloud Provider Azure artifacts
   # (=> https://console.cloud.google.com/gcr/images/k8s-staging-provider-azure/GLOBAL).
   _STAGING_PROJECT: "k8s-staging-provider-azure"
+  # CLOUD_BUILD_IMAGE decides to build ccm or cnm images.
+  _CLOUD_BUILD_IMAGE: "ccm"

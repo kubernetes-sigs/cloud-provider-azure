@@ -1,0 +1,23 @@
+steps:
+  - task: GoTool@0
+    inputs:
+      version: '1.18.5'
+  - bash: |
+      git show --stat
+      echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
+      export IMAGE_REGISTRY=$REGISTRY_URL
+      export GOPATH="/home/vsts/go"
+      export PATH="${PATH}:${GOPATH}/bin"
+
+      pushd kubetest2-aks
+      go get -d sigs.k8s.io/kubetest2@latest
+      go install sigs.k8s.io/kubetest2@latest
+      make deployer
+      sudo GOPATH="/home/vsts/go" make install
+      popd
+      kubetest2 aks --build --target ccm --targetPath `pwd`
+    displayName: make and push ccm image
+    env:
+      REGISTRY_URL: $(registry.url)
+      REGISTRY_USERNAME: $(registry.username)
+      REGISTRY_PASSWORD: $(registry.password)

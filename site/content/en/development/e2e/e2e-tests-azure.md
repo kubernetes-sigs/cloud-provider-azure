@@ -19,13 +19,13 @@ Refer step 1-3 in [e2e-tests](../e2e-tests) for deploying the Kubernetes cluster
 ### Setup Azure credentials
 
 ```sh
-export AZURE_TENANT_ID=<tenant-id>               # the tenant ID
-export AZURE_SUBSCRIPTION_ID=<subscription-id>           # the subscription ID
-export AZURE_CLIENT_ID=<service-principal-id>        # the service principal ID
-export AZURE_CLIENT_SECRET=<service-principal-secret>   # the service principal secret
-export AZURE_ENVIRONMENT=<AzurePublicCloud>     # the cloud environment (optional, default is AzurePublicCloud)
-export AZURE_LOCATION=<location>                # the location
-export AZURE_LOADBALANCER_SKU=<loadbalancer-sku> # the sku of load balancer (optional, default is basic)
+export AZURE_TENANT_ID=<tenant-id>                    # the tenant ID
+export AZURE_SUBSCRIPTION_ID=<subscription-id>        # the subscription ID
+export AZURE_CLIENT_ID=<service-principal-id>         # the service principal ID
+export AZURE_CLIENT_SECRET=<service-principal-secret> # the service principal secret
+export AZURE_ENVIRONMENT=<AzurePublicCloud>           # the cloud environment (optional, default is AzurePublicCloud)
+export AZURE_LOCATION=<location>                      # the location
+export AZURE_LOADBALANCER_SKU=<loadbalancer-sku>      # the sku of load balancer (optional, default is basic)
 ```
 
 ### Setup KUBECONFIG
@@ -37,14 +37,16 @@ export AZURE_LOADBALANCER_SKU=<loadbalancer-sku> # the sku of load balancer (opt
 
 - Test it via  ```kubectl version```
 
-## Run Test
+## Run tests
 
-### Have installed ginkgo
-- Run ```ginkgo ./tests/e2e/ ```
+- Run default tests
 
-    For more usage of ginkgo, please follow [ginkgo](https://github.com/onsi/ginkgo/blob/master/README.md)
+  The following command ensures [gingko](https://github.com/onsi/ginkgo) v2 is installed and then runs default tests.
 
-### Without ginkgo
-- Run ```go test ./tests/e2e/ -timeout 0```
+  ``` make test-ccm-e2e ```
+
+- Run specific tests
+
+  ``` go test -v ./tests/e2e/ -timeout 0 -ginkgo.focus <focus-keyword> --ginkgo.skip <skip-keyword> ```
 
 After a long time test, a JUnit report will be generated in a directory named by the cluster name

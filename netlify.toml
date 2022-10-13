@@ -1,0 +1,29 @@
+# Netlify build instructions
+[build]
+    command = "npm install postcss-cli && npm install autoprefixer && npm audit fix && hugo --minify"
+    base = "site/"
+    publish = "public/"
+
+[build.environment]
+    GO_VERSION = "1.18"
+    HUGO_VERSION = "0.96.0"
+
+# Standard Netlify redirects
+[[redirects]]
+    from = "https://kubernetes-sigs-cloud-provide-azure.netlify.app/*"
+    to = "https://cloud-provider-azure.sigs.k8s.io/:splat"
+    status = 301
+    force = true
+
+# HTTP-to-HTTPS rules
+[[redirects]]
+    from = "http://kubernetes-sigs-cloud-provide-azure.netlify.app/*"
+    to = "https://cloud-provider-azure.sigs.k8s.io/:splat"
+    status = 301
+    force = true
+
+[[redirects]]
+    from = "http://kubernetes-sigs-cloud-provide-azure.netlify.app/*"
+    to = "http://cloud-provider-azure.sigs.k8s.io/:splat"
+    status = 301
+    force = true

@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 func (az *Cloud) refreshZones(refreshFunc func() error) {
@@ -43,15 +45,14 @@ func (az *Cloud) refreshZones(refreshFunc func() error) {
 }
 
 func (az *Cloud) syncRegionZonesMap() error {
-	klog.V(2).Infof("refreshZones: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
+	klog.V(2).Infof("syncRegionZonesMap: starting to fetch all available zones for the subscription %s", az.SubscriptionID)
 	zones, rerr := az.ZoneClient.GetZones(context.Background(), az.SubscriptionID)
 	if rerr != nil {
-		klog.Warningf("refreshZones: error when get zones: %s, will retry after %s", rerr.Error().Error(), consts.ZoneFetchingInterval.String())
+		klog.Warningf("syncRegionZonesMap: error when get zones: %s, will retry after %s", rerr.Error().Error(), consts.ZoneFetchingInterval.String())
 		return rerr.Error()
 	}
 	if len(zones) == 0 {
-		klog.Warningf("refreshZones: empty zone list, will retry after %s", consts.ZoneFetchingInterval.String())
-		return fmt.Errorf("empty zone list")
+		klog.Warning("syncRegionZonesMap: empty zone list")
 	}
 
 	az.updateRegionZonesMap(zones)
@@ -73,6 +74,13 @@ func (az *Cloud) updateRegionZonesMap(zones map[string][]string) {
 }
 
 func (az *Cloud) getRegionZonesBackoff(region string) ([]string, error) {
+	if az.isStackCloud() {
+		// Azure Stack does not support zone at the moment
+		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
+		klog.V(3).Infof("getRegionZonesMapWrapper: Azure Stack does not support Zones at the moment, skipping")
+		return az.regionZonesMap[region], nil
+	}
+
 	if len(az.regionZonesMap) != 0 {
 		az.refreshZonesLock.RLock()
 		defer az.refreshZonesLock.RUnlock()
@@ -82,25 +90,34 @@ func (az *Cloud) getRegionZonesBackoff(region string) ([]string, error) {
 
 	klog.V(2).Infof("getRegionZonesMapWrapper: the region-zones map is not initialized successfully, retrying immediately")
 
+	var (
+		zones map[string][]string
+		rerr  *retry.Error
+	)
 	err := wait.ExponentialBackoff(az.RequestBackoff(), func() (done bool, err error) {
-		zones, rerr := az.ZoneClient.GetZones(context.Background(), az.SubscriptionID)
-		if len(zones) == 0 || rerr != nil {
-			klog.Warningf("getRegionZonesMapWrapper: failed to fetch zones information: %v", rerr.Error())
+		zones, rerr = az.ZoneClient.GetZones(context.Background(), az.SubscriptionID)
+		if rerr != nil {
+			klog.Errorf("getRegionZonesMapWrapper: failed to fetch zones information: %v", rerr.Error())
 			return false, nil
 		}
 
-		az.updateRegionZonesMap(zones)
 		return true, nil
 	})
 
-	if err != nil {
-		return []string{}, fmt.Errorf("cannot get zones information of %s after %d time retry", region, az.RequestBackoff().Steps)
+	if errors.Is(err, wait.ErrWaitTimeout) {
+		return []string{}, rerr.Error()
 	}
 
-	az.refreshZonesLock.RLock()
-	defer az.refreshZonesLock.RUnlock()
+	az.updateRegionZonesMap(zones)
 
-	return az.regionZonesMap[region], nil
+	if len(az.regionZonesMap) != 0 {
+		az.refreshZonesLock.RLock()
+		defer az.refreshZonesLock.RUnlock()
+
+		return az.regionZonesMap[region], nil
+	}
+
+	return []string{}, nil
 }
 
 // makeZone returns the zone value in format of <region>-<zone-id>.
@@ -126,13 +143,13 @@ func (az *Cloud) GetZoneID(zoneLabel string) string {
 // If the node is not running with availability zones, then it will fall back to fault domain.
 func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 	if az.UseInstanceMetadata {
-		metadata, err := az.metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
 		if err != nil {
 			return cloudprovider.Zone{}, err
 		}
 
 		if metadata.Compute == nil {
-			_ = az.metadata.imsCache.Delete(consts.MetadataCacheKey)
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
 			return cloudprovider.Zone{}, fmt.Errorf("failure of getting compute information from instance metadata")
 		}
 
@@ -199,4 +216,21 @@ func (az *Cloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName)
 	}
 
 	return az.VMSet.GetZoneByNodeName(string(nodeName))
+}
+
+// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+func (az *Cloud) GetPlatformSubFaultDomain() (string, error) {
+	if az.UseInstanceMetadata {
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
+		if err != nil {
+			klog.Errorf("GetPlatformSubFaultDomain: failed to GetMetadata: %s", err.Error())
+			return "", err
+		}
+		if metadata.Compute == nil {
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+			return "", errors.New("failure of getting compute information from instance metadata")
+		}
+		return metadata.Compute.PlatformSubFaultDomain, nil
+	}
+	return "", nil
 }

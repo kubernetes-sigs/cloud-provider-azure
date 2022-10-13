@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -70,8 +70,8 @@ func (op *delayedRouteOperation) wait() error {
 // delayedRouteUpdater defines a delayed route updater, which batches all the
 // route updating operations within "interval" period.
 // Example usage:
-//   op, err := updater.addRouteOperation(routeOperationAdd, route)
-//   err = op.wait()
+// op, err := updater.addRouteOperation(routeOperationAdd, route)
+// err = op.wait()
 type delayedRouteUpdater struct {
 	az       *Cloud
 	interval time.Duration
@@ -107,6 +107,7 @@ func (d *delayedRouteUpdater) updateRoutes() {
 
 	// No need to do any updating.
 	if len(d.routesToUpdate) == 0 {
+		klog.V(4).Info("updateRoutes: nothing to update, returning")
 		return
 	}
 
@@ -182,6 +183,9 @@ func (d *delayedRouteUpdater) updateRoutes() {
 				break
 			}
 		}
+		if rt.operation == routeOperationDelete && !dirty {
+			klog.Warningf("updateRoutes: route to be deleted %s does not match any of the existing route", to.String(rt.route.Name))
+		}
 
 		// Add missing routes if the operation is add.
 		if rt.operation == routeOperationAdd {
@@ -215,6 +219,8 @@ func (d *delayedRouteUpdater) cleanupOutdatedRoutes(existingRoutes []network.Rou
 	for i := len(existingRoutes) - 1; i >= 0; i-- {
 		existingRouteName := to.String(existingRoutes[i].Name)
 		split := strings.Split(existingRouteName, consts.RouteNameSeparator)
+
+		klog.V(4).Infof("cleanupOutdatedRoutes: checking route %s", existingRouteName)
 
 		// filter out unmanaged routes
 		deleteRoute := false
@@ -363,7 +369,7 @@ func (az *Cloud) createRouteTable() error {
 // route.Name will be ignored, although the cloud-provider may use nameHint
 // to create a more user-meaningful name.
 func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint string, kubeRoute *cloudprovider.Route) error {
-	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.SubscriptionID, "")
+	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
@@ -377,10 +383,6 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 		return err
 	}
 	if unmanaged {
-		if az.ipv6DualStackEnabled {
-			//TODO (khenidak) add support for unmanaged nodes when the feature reaches beta
-			return fmt.Errorf("unmanaged nodes are not supported in dual stack mode")
-		}
 		klog.V(2).Infof("CreateRoute: omitting unmanaged node %q", kubeRoute.TargetNode)
 		az.routeCIDRsLock.Lock()
 		defer az.routeCIDRsLock.Unlock()
@@ -446,7 +448,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
 func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
-	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.SubscriptionID, "")
+	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
 		mc.ObserveOperationWithResult(isOperationSucceeded)
@@ -466,9 +468,8 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 		return nil
 	}
 
-	klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
-
 	routeName := mapNodeNameToRouteName(az.ipv6DualStackEnabled, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
+	klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q routeName=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR, routeName)
 	route := network.Route{
 		Name:                  to.StringPtr(routeName),
 		RoutePropertiesFormat: &network.RoutePropertiesFormat{},
@@ -484,6 +485,28 @@ func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute 
 	if err != nil {
 		klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
 		return err
+	}
+
+	// Remove outdated ipv4 routes as well
+	if az.ipv6DualStackEnabled {
+		routeNameWithoutIPV6Suffix := strings.Split(routeName, consts.RouteNameSeparator)[0]
+		klog.V(2).Infof("DeleteRoute: deleting route. clusterName=%q instance=%q cidr=%q routeName=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR, routeNameWithoutIPV6Suffix)
+		route := network.Route{
+			Name:                  to.StringPtr(routeNameWithoutIPV6Suffix),
+			RoutePropertiesFormat: &network.RoutePropertiesFormat{},
+		}
+		op, err := az.routeUpdater.addRouteOperation(routeOperationDelete, route)
+		if err != nil {
+			klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+			return err
+		}
+
+		// Wait for operation complete.
+		err = op.wait()
+		if err != nil {
+			klog.Errorf("DeleteRoute failed for node %q with error: %v", kubeRoute.TargetNode, err)
+			return err
+		}
 	}
 
 	klog.V(2).Infof("DeleteRoute: route deleted. clusterName=%q instance=%q cidr=%q", clusterName, kubeRoute.TargetNode, kubeRoute.DestinationCIDR)
@@ -529,7 +552,7 @@ func findFirstIPByFamily(ips []string, v6 bool) (string, error) {
 	return "", fmt.Errorf("no match found matching the ipfamily requested")
 }
 
-//strips : . /
+// strips : . /
 func cidrtoRfc1035(cidr string) string {
 	cidr = strings.ReplaceAll(cidr, ":", "")
 	cidr = strings.ReplaceAll(cidr, ".", "")
@@ -539,10 +562,10 @@ func cidrtoRfc1035(cidr string) string {
 
 // ensureRouteTableTagged ensures the route table is tagged as configured
 func (az *Cloud) ensureRouteTableTagged(rt *network.RouteTable) (map[string]*string, bool) {
-	if az.Tags == "" {
+	if az.Tags == "" && (az.TagsMap == nil || len(az.TagsMap) == 0) {
 		return nil, false
 	}
-	tags := parseTags(az.Tags)
+	tags := parseTags(az.Tags, az.TagsMap)
 	if rt.Tags == nil {
 		rt.Tags = make(map[string]*string)
 	}

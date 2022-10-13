@@ -9,11 +9,14 @@ description: >
 
 Azure cloud provider requires a set of permissions to manage the Azure resources. Here is a list of all permissions and reasons of why they're required.
 
-```
+```c
 // Required to create, delete or update LoadBalancer for LoadBalancer service
 Microsoft.Network/loadBalancers/delete
 Microsoft.Network/loadBalancers/read
 Microsoft.Network/loadBalancers/write
+Microsoft.Network/loadBalancers/backendAddressPools/read
+Microsoft.Network/loadBalancers/backendAddressPools/write
+Microsoft.Network/loadBalancers/backendAddressPools/delete
 
 // Required to allow query, create or delete public IPs for LoadBalancer service
 Microsoft.Network/publicIPAddresses/delete
@@ -88,4 +91,11 @@ Microsoft.Compute/snapshots/write
 // Required to get vm sizes for getting AzureDisk volume limit
 Microsoft.Compute/locations/vmSizes/read
 Microsoft.Compute/locations/operations/read
+
+// Required to create, update or delete PrivateLinkService for Service
+Microsoft.Network/privatelinkservices/delete
+Microsoft.Network/privatelinkservices/privateEndpointConnections/delete
+Microsoft.Network/privatelinkservices/read
+Microsoft.Network/privatelinkservices/write
+Microsoft.Network/virtualNetworks/subnets/write
 ```

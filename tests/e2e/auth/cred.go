@@ -19,17 +19,18 @@ package auth
 import (
 	"fmt"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Azure Credential Provider", func() {
+var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredential), func() {
 	var err error
 	var tc *utils.AzureTestClient
 	var cs clientset.Interface
@@ -97,6 +98,21 @@ func createPodPullingFromACR(registryName, image, tag string) (result *v1.Pod) {
 				{
 					Name:  "test-app",
 					Image: registryName + ".azurecr.io/" + image + ":" + tag,
+				},
+			},
+			NodeSelector: map[string]string{
+				v1.LabelOSStable: "linux",
+			},
+			Tolerations: []v1.Toleration{
+				{
+					Key:      consts.ControlPlaneNodeRoleLabel,
+					Operator: v1.TolerationOpExists,
+					Effect:   v1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      consts.MasterNodeRoleLabel,
+					Operator: v1.TolerationOpExists,
+					Effect:   v1.TaintEffectNoSchedule,
 				},
 			},
 		},

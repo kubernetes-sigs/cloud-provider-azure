@@ -1,0 +1,59 @@
+name: Trivy scanner
+
+on:
+  push:
+    branches: [ master, 'release-**' ]
+    paths:
+      - '.github/workflows/trivy.yaml'
+      - 'pkg/**.go'
+      - 'cmd/**.go'
+      - 'go.*'
+      - '!vendor/**'
+  pull_request:
+    branches: [ master, 'release-**' ]
+    paths:
+      - '.github/workflows/trivy.yaml'
+      - 'pkg/**.go'
+      - 'cmd/**.go'
+      - 'go.*'
+      - '!vendor/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.18
+        id: go
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Build images
+        run: |
+          export TAG=trivy
+          make build-ccm-image
+          make build-node-image-linux-amd64
+      
+      - name: Run Trivy scanner CCM
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'local/azure-cloud-controller-manager:trivy'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+
+      - name: Run Trivy scanner CNM
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'local/azure-cloud-node-manager:trivy-linux-amd64'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'

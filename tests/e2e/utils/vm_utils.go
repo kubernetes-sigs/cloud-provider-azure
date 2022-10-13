@@ -20,25 +20,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 )
-
-var errVMNotFound = fmt.Errorf("cannot find any VM managed by availabilitySet")
 
 // ListVMs returns all VMs in the resource group
 func ListVMs(tc *AzureTestClient) (*[]compute.VirtualMachine, error) {
 	vmClient := tc.createVMClient()
 
-	list, err := vmClient.List(context.Background(), tc.GetResourceGroup())
+	list, err := vmClient.List(context.Background(), tc.GetResourceGroup(), "")
 	if err != nil {
 		return nil, err
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, errVMNotFound
-	}
-
 	return &res, nil
 }
 

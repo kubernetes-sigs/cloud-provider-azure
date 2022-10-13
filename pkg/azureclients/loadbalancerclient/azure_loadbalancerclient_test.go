@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -94,7 +94,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -114,7 +114,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -140,7 +140,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -157,7 +157,7 @@ func TestList(t *testing.T) {
 	lbList := []network.LoadBalancer{getTestLoadBalancer("lb1"), getTestLoadBalancer("lb2"), getTestLoadBalancer("lb3")}
 	responseBody, err := json.Marshal(network.LoadBalancerListResult{Value: &lbList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -179,7 +179,7 @@ func TestList(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	_, rerr = lbClient.List(context.TODO(), "rg")
 	assert.Equal(t, throttleErr, rerr)
@@ -195,7 +195,7 @@ func TestListWithNextPage(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = json.Marshal(network.LoadBalancerListResult{Value: &lbList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
@@ -271,7 +271,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(lb.ID), lb, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(lb.ID), lb, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -289,7 +289,7 @@ func TestCreateOrUpdateBackendPools(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(backendAddressPool.ID), backendAddressPool, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(backendAddressPool.ID), backendAddressPool, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -320,7 +320,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(lb.ID), "").Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(lb.ID)).Return(test.armClientErr)
 
 		lbClient := getTestLoadBalancerClient(armClient)
 		rerr := lbClient.Delete(context.TODO(), "rg", "lb1")

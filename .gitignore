@@ -9,6 +9,7 @@ _output/
 translations/
 node_modules/
 public/
+site/public/
 
 # bazel
 /bazel-bin
@@ -25,3 +26,6 @@ public/
 
 # goland
 .idea
+
+# helm chart verification
+chart_verify/

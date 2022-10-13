@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -32,10 +32,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -458,6 +458,13 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 			expected:      "a257b965551374ad2b091ef3f07043ad-shortsubnet",
 		},
 		{
+			description:   "internal lb should have subnet name on the frontend ip configuration name but truncated to 80 characters, also not end with char like '-'",
+			subnetName:    "a--------------------------------------------------z",
+			isInternal:    true,
+			useStandardLB: true,
+			expected:      "a257b965551374ad2b091ef3f07043ad-a---------------------------------------------_",
+		},
+		{
 			description:   "internal standard lb should have subnet name on the frontend ip configuration name but truncated to 80 characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
@@ -488,16 +495,18 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if c.useStandardLB {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		} else {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
-		}
-		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
-		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
-		ipconfigName := az.getDefaultFrontendIPConfigName(svc)
-		assert.Equal(t, c.expected, ipconfigName, c.description)
+			ipconfigName := az.getDefaultFrontendIPConfigName(svc)
+			assert.Equal(t, c.expected, ipconfigName, c)
+		})
 	}
 }
 
@@ -536,14 +545,24 @@ func testGetLoadBalancerSubResourceID(
 		resourceGroupName                   string
 		subResourceName                     string
 		useNetworkResourceInDifferentTenant bool
+		useNetworkResourceInDifferentSub    bool
 		expected                            string
 	}{
+		{
+			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different tenant and subscription",
+			loadBalancerName:                    "lbName",
+			resourceGroupName:                   "rgName",
+			subResourceName:                     "subResourceName",
+			useNetworkResourceInDifferentTenant: true,
+			useNetworkResourceInDifferentSub:    true,
+		},
 		{
 			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different subscription",
 			loadBalancerName:                    "lbName",
 			resourceGroupName:                   "rgName",
 			subResourceName:                     "subResourceName",
-			useNetworkResourceInDifferentTenant: true,
+			useNetworkResourceInDifferentTenant: false,
+			useNetworkResourceInDifferentSub:    true,
 		},
 		{
 			description:                         "resource id should contain SubscriptionID when not using network resources in different subscription",
@@ -551,29 +570,29 @@ func testGetLoadBalancerSubResourceID(
 			resourceGroupName:                   "rgName",
 			subResourceName:                     "subResourceName",
 			useNetworkResourceInDifferentTenant: false,
+			useNetworkResourceInDifferentSub:    false,
 		},
 	}
 
 	for _, c := range cases {
+		subscriptionID := az.SubscriptionID
 		if c.useNetworkResourceInDifferentTenant {
 			az.NetworkResourceTenantID = networkResourceTenantID
-			az.NetworkResourceSubscriptionID = networkResourceSubscriptionID
-			c.expected = fmt.Sprintf(
-				expectedResourceIDTemplate,
-				az.NetworkResourceSubscriptionID,
-				c.resourceGroupName,
-				c.loadBalancerName,
-				c.subResourceName)
 		} else {
 			az.NetworkResourceTenantID = ""
-			az.NetworkResourceSubscriptionID = ""
-			c.expected = fmt.Sprintf(
-				expectedResourceIDTemplate,
-				az.SubscriptionID,
-				c.resourceGroupName,
-				c.loadBalancerName,
-				c.subResourceName)
 		}
+		if c.useNetworkResourceInDifferentSub {
+			az.NetworkResourceSubscriptionID = networkResourceSubscriptionID
+			subscriptionID = networkResourceSubscriptionID
+		} else {
+			az.NetworkResourceSubscriptionID = ""
+		}
+		c.expected = fmt.Sprintf(
+			expectedResourceIDTemplate,
+			subscriptionID,
+			c.resourceGroupName,
+			c.loadBalancerName,
+			c.subResourceName)
 		subResourceID := getLoadBalancerSubResourceID(c.loadBalancerName, c.resourceGroupName, c.subResourceName)
 		assert.Equal(t, c.expected, subResourceID, c.description)
 	}
@@ -990,6 +1009,7 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			vm: compute.VirtualMachine{
 				Name: to.StringPtr("vm2"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
 					InstanceView: &compute.VirtualMachineInstanceView{
 						Statuses: &[]compute.InstanceViewStatus{
 							{
@@ -1005,8 +1025,10 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			name:     "GetPowerStatusByNodeName should get vmPowerStateStopped if vm.InstanceView is nil",
 			nodeName: "vm3",
 			vm: compute.VirtualMachine{
-				Name:                     to.StringPtr("vm3"),
-				VirtualMachineProperties: &compute.VirtualMachineProperties{},
+				Name: to.StringPtr("vm3"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
+				},
 			},
 			expectedStatus: vmPowerStateStopped,
 		},
@@ -1016,7 +1038,8 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			vm: compute.VirtualMachine{
 				Name: to.StringPtr("vm4"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					InstanceView: &compute.VirtualMachineInstanceView{},
+					ProvisioningState: to.StringPtr("Succeeded"),
+					InstanceView:      &compute.VirtualMachineInstanceView{},
 				},
 			},
 			expectedStatus: vmPowerStateStopped,
@@ -1029,6 +1052,69 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 		powerState, err := cloud.VMSet.GetPowerStatusByNodeName(test.nodeName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedStatus, powerState, test.name)
+	}
+}
+
+func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cloud := GetTestCloud(ctrl)
+
+	testcases := []struct {
+		name                      string
+		nodeName                  string
+		vm                        compute.VirtualMachine
+		expectedProvisioningState string
+		getErr                    *retry.Error
+		expectedErrMsg            error
+	}{
+		{
+			name:     "GetProvisioningStateByNodeName should report error if node don't exist",
+			nodeName: "vm1",
+			vm:       compute.VirtualMachine{},
+			getErr: &retry.Error{
+				HTTPStatusCode: http.StatusNotFound,
+				RawError:       cloudprovider.InstanceNotFound,
+			},
+			expectedErrMsg: fmt.Errorf("instance not found"),
+		},
+		{
+			name:     "GetProvisioningStateByNodeName should return Succeeded for running VM",
+			nodeName: "vm2",
+			vm: compute.VirtualMachine{
+				Name: to.StringPtr("vm2"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: to.StringPtr("Succeeded"),
+					InstanceView: &compute.VirtualMachineInstanceView{
+						Statuses: &[]compute.InstanceViewStatus{
+							{
+								Code: to.StringPtr("PowerState/Running"),
+							},
+						},
+					},
+				},
+			},
+			expectedProvisioningState: "Succeeded",
+		},
+		{
+			name:     "GetProvisioningStateByNodeName should return empty string when vm.ProvisioningState is nil",
+			nodeName: "vm3",
+			vm: compute.VirtualMachine{
+				Name: to.StringPtr("vm3"),
+				VirtualMachineProperties: &compute.VirtualMachineProperties{
+					ProvisioningState: nil,
+				},
+			},
+			expectedProvisioningState: "",
+		},
+	}
+	for _, test := range testcases {
+		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(test.vm, test.getErr).AnyTimes()
+
+		provisioningState, err := cloud.VMSet.GetProvisioningStateByNodeName(test.nodeName)
+		assert.Equal(t, test.expectedErrMsg, err, test.name)
+		assert.Equal(t, test.expectedProvisioningState, provisioningState, test.name)
 	}
 }
 
@@ -1390,7 +1476,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName, false)
+		_, _, _, vm, err := cloud.VMSet.EnsureHostInPool(test.service, test.nodeName, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Nil(t, vm, test.name)
 	}
@@ -1408,6 +1494,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		name           string
 		service        *v1.Service
 		nodes          []*v1.Node
+		excludeLBNodes []string
 		nodeName       string
 		backendPoolID  string
 		nicName        string
@@ -1433,9 +1520,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName:     "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is master node",
-			service:  &v1.Service{},
-			nodeName: "vm2",
+			name:           "EnsureHostsInPool should skip if node is master node",
+			service:        &v1.Service{},
+			nodeName:       "vm2",
+			excludeLBNodes: []string{"vm2"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1449,9 +1537,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName: "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is in external resource group",
-			service:  &v1.Service{},
-			nodeName: "vm3",
+			name:           "EnsureHostsInPool should skip if node is in external resource group",
+			service:        &v1.Service{},
+			nodeName:       "vm3",
+			excludeLBNodes: []string{"vm3"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1465,9 +1554,10 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			vmSetName: "availabilityset-1",
 		},
 		{
-			name:     "EnsureHostsInPool should skip if node is unmanaged",
-			service:  &v1.Service{},
-			nodeName: "vm4",
+			name:           "EnsureHostsInPool should skip if node is unmanaged",
+			service:        &v1.Service{},
+			nodeName:       "vm4",
+			excludeLBNodes: []string{"vm4"},
 			nodes: []*v1.Node{
 				{
 					ObjectMeta: meta.ObjectMeta{
@@ -1512,6 +1602,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	for _, test := range testCases {
 		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		cloud.Config.ExcludeMasterFromStandardLB = to.BoolPtr(true)
+		cloud.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
@@ -1525,7 +1616,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
 		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName, false)
+		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
 		} else {
@@ -1593,10 +1684,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "1.2.3.4",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4"},
 				},
 			},
 		},
@@ -1621,10 +1710,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 		},
@@ -1648,10 +1735,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 		},
@@ -1675,10 +1760,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID: types.UID("secondary"),
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
 				},
 			},
 			isOwned: true,
@@ -1693,11 +1776,11 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID:         types.UID("secondary"),
-					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "true"},
-				},
-				Spec: v1.ServiceSpec{
-					LoadBalancerIP: "4.3.2.1",
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerInternal:           "true",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+					},
 				},
 			},
 			isOwned: true,
@@ -1705,11 +1788,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		mockPIPClient := mockpublicipclient.NewMockInterface(ctrl)
-		cloud.PublicIPAddressesClient = mockPIPClient
-		mockPIPClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(test.existingPIPs, nil).MaxTimes(1)
-
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service)
+		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
 		assert.Equal(t, test.expectedErr, err, test.desc)
 		assert.Equal(t, test.isOwned, isOwned, test.desc)
 		assert.Equal(t, test.isPrimary, isPrimary, test.desc)
@@ -1765,7 +1844,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		cloud.InterfacesClient = mockNICClient
 
-		err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools)
+		err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
 	}
 }
@@ -2000,4 +2079,103 @@ func TestGetAvailabilitySetNameByID(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, "as", vmasName)
 	})
+}
+
+func TestGetNodeVMSetName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description       string
+		node              *v1.Node
+		listTimes         int
+		expectedVMs       []compute.VirtualMachine
+		listErr           *retry.Error
+		expectedVMSetName string
+		expectedErr       error
+	}{
+		{
+			description: "GetNodeVMSetName should return early if there is no host name in the node",
+			node:        &v1.Node{},
+		},
+		{
+			description: "GetNodeVMSetName should report an error if failed to list vms",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			listTimes:   1,
+			listErr:     retry.NewError(false, errors.New("error")),
+			expectedErr: retry.NewError(false, errors.New("error")).Error(),
+		},
+		{
+			description: "GetNodeVMSetName should report an error if the availability set ID of the vm is not legal",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			expectedVMs: []compute.VirtualMachine{
+				{
+					Name: to.StringPtr("vm"),
+					VirtualMachineProperties: &compute.VirtualMachineProperties{
+						AvailabilitySet: &compute.SubResource{
+							ID: to.StringPtr("/"),
+						},
+					},
+				},
+			},
+			listTimes:   1,
+			expectedErr: errors.New("resource name was missing from identifier"),
+		},
+		{
+			description: "GetNodeVMSetName should return the availability set name in the vm",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeHostName,
+							Address: "vm",
+						},
+					},
+				},
+			},
+			expectedVMs: []compute.VirtualMachine{
+				{
+					Name: to.StringPtr("vm"),
+					VirtualMachineProperties: &compute.VirtualMachineProperties{
+						AvailabilitySet: &compute.SubResource{
+							ID: to.StringPtr("as"),
+						},
+					},
+				},
+			},
+			listTimes:         1,
+			expectedVMSetName: "as",
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		vmClient := mockvmclient.NewMockInterface(ctrl)
+		vmClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.expectedVMs, tc.listErr).Times(tc.listTimes)
+		az.VirtualMachinesClient = vmClient
+
+		vmSet, err := newAvailabilitySet(az)
+		assert.NoError(t, err)
+		as := vmSet.(*availabilitySet)
+
+		vmSetName, err := as.GetNodeVMSetName(tc.node)
+		assert.Equal(t, tc.expectedErr, err, tc.description)
+		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
+	}
 }

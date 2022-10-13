@@ -18,12 +18,11 @@ package vmclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -38,6 +37,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const vmResourceType = "Microsoft.Compute/virtualMachines"
 
 // Client implements VirtualMachine client Interface.
 type Client struct {
@@ -62,7 +63,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -103,7 +104,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, VMName strin
 	}
 
 	result, rerr := c.getVM(ctx, resourceGroupName, VMName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -121,12 +122,12 @@ func (c *Client) getVM(ctx context.Context, resourceGroupName string, VMName str
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachines",
+		vmResourceType,
 		VMName,
 	)
 	result := compute.VirtualMachine{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, string(expand))
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, string(expand))
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.get.request", resourceID, rerr.Error())
@@ -164,7 +165,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 	}
 
 	result, rerr := c.listVM(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -179,16 +180,119 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 
 // listVM gets a list of VirtualMachines in the resourceGroupName.
 func (c *Client) listVM(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachine, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName),
-	)
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, vmResourceType)
 
 	result := make([]compute.VirtualMachine, 0)
 	page := &VirtualMachineListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
+	defer c.armClient.CloseResponse(ctx, resp)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.request", resourceID, rerr.Error())
+		return result, rerr
+	}
+
+	var err error
+	page.vmlr, err = c.listResponder(resp)
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.respond", resourceID, err)
+		return result, retry.GetError(resp, err)
+	}
+
+	for {
+		result = append(result, page.Values()...)
+
+		// Abort the loop when there's no nextLink in the response.
+		if to.String(page.Response().NextLink) == "" {
+			break
+		}
+
+		if err = page.NextWithContext(ctx); err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.next", resourceID, err)
+			return result, retry.GetError(page.Response().Response.Response, err)
+		}
+	}
+
+	return result, nil
+}
+
+// ListVmssFlexVMsWithoutInstanceView gets a list of VirtualMachine in the VMSS Flex without InstanceView.
+func (c *Client) ListVmssFlexVMsWithoutInstanceView(ctx context.Context, vmssFlexID string) ([]compute.VirtualMachine, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "list", "", c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(false, "VMList")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMList", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listVmssFlexVMs(ctx, vmssFlexID, false)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// ListVmssFlexVMsWithOnlyInstanceView gets a list of VirtualMachine in the VMSS Flex with only InstanceView.
+func (c *Client) ListVmssFlexVMsWithOnlyInstanceView(ctx context.Context, vmssFlexID string) ([]compute.VirtualMachine, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "list", "", c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(false, "VMList")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMList", "client throttled", c.RetryAfterReader)
+		return nil, rerr
+	}
+
+	result, rerr := c.listVmssFlexVMs(ctx, vmssFlexID, true)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// listVmssFlexVMs gets a list of VirtualMachines in the VMSS Flex.
+func (c *Client) listVmssFlexVMs(ctx context.Context, vmssFlexID string, statusOnly bool) ([]compute.VirtualMachine, *retry.Error) {
+	resourceID := armclient.GetProviderResourceID(c.subscriptionID, vmResourceType)
+
+	result := make([]compute.VirtualMachine, 0)
+	page := &VirtualMachineListResultPage{}
+	page.fn = c.listNextResults
+
+	queries := make(map[string]interface{})
+	queries["$filter"] = "'virtualMachineScaleSet/id' eq '" + vmssFlexID + "'"
+	if statusOnly {
+		queries["statusOnly"] = true
+	}
+	resp, rerr := c.armClient.GetResourceWithQueries(ctx, resourceID, queries)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.request", resourceID, rerr.Error())
@@ -237,7 +341,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName st
 	}
 
 	rerr := c.updateVM(ctx, resourceGroupName, VMName, parameters, source)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -250,12 +354,67 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName st
 	return nil
 }
 
+// UpdateAsync updates a VirtualMachine asynchronously
+func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) (*azure.Future, *retry.Error) {
+	mc := metrics.NewMetricContext("vm", "updateasync", resourceGroupName, c.subscriptionID, source)
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(true, "VMUpdateAsync")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMUpdateAsync", "client throttled", c.RetryAfterWriter)
+		return nil, rerr
+	}
+
+	resourceID := armclient.GetResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		vmResourceType,
+		VMName,
+	)
+
+	future, rerr := c.armClient.PatchResourceAsync(ctx, resourceID, parameters)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return nil, rerr
+	}
+
+	return future, nil
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
+	mc := metrics.NewMetricContext("vm", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
+	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMWaitForUpdateResult")
+	mc.Observe(retry.NewErrorOrNil(false, err))
+
+	if err != nil {
+		if response != nil {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', response code %d", err.Error(), response.StatusCode)
+		} else {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', no response", err.Error())
+		}
+		return retry.GetError(response, err)
+	}
+	return nil
+}
+
 // updateVM updates a VirtualMachine.
 func (c *Client) updateVM(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error {
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachines",
+		vmResourceType,
 		VMName,
 	)
 
@@ -398,7 +557,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, V
 	}
 
 	rerr := c.createOrUpdateVM(ctx, resourceGroupName, VMName, parameters, source)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -416,7 +575,7 @@ func (c *Client) createOrUpdateVM(ctx context.Context, resourceGroupName string,
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachines",
+		vmResourceType,
 		VMName,
 	)
 
@@ -467,7 +626,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, VMName st
 	}
 
 	rerr := c.deleteVM(ctx, resourceGroupName, VMName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -485,9 +644,9 @@ func (c *Client) deleteVM(ctx context.Context, resourceGroupName string, VMName 
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachines",
+		vmResourceType,
 		VMName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

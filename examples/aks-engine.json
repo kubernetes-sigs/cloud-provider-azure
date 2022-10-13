@@ -7,13 +7,11 @@
             "orchestratorRelease": "",
             "kubernetesConfig": {
                 "networkPolicy": "none",
+                "containerRuntime": "containerd",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
-                },
-                "controllerManagerConfig": {
-                    "--feature-gates": "CSIInlineVolume=true,LocalStorageCapacityIsolation=true,ServiceNodeExclusion=true"
                 },
                 "useCloudControllerManager": true,
                 "customCcmImage": "",

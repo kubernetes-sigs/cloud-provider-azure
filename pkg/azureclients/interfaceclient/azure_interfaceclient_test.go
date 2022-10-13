@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -90,7 +90,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -110,7 +110,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -136,7 +136,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -158,13 +158,15 @@ func TestGetVirtualMachineScaleSetNetworkInterface(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader(networkInterface)),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResourceWithDecorators(gomock.Any(), resourceID, gomock.Any()).Return(response, nil).Times(1)
+	expand := ""
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), resourceID, expand, AzureStackCloudAPIVersion).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
+	nicClient.computeAPIVersion = AzureStackCloudAPIVersion
 	expected := getTestVMSSInterface("nic1")
 	expected.Response = autorest.Response{Response: response}
-	result, rerr := nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", "")
+	result, rerr := nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", expand)
 	assert.Equal(t, expected, result)
 	assert.Nil(t, rerr)
 
@@ -179,9 +181,10 @@ func TestGetVirtualMachineScaleSetNetworkInterface(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().GetResourceWithDecorators(gomock.Any(), resourceID, gomock.Any()).Return(response, throttleErr).Times(1)
+	expand = "test"
+	armClient.EXPECT().GetResourceWithExpandAPIVersionQuery(gomock.Any(), resourceID, expand, AzureStackCloudAPIVersion).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	result, rerr = nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", "test")
+	result, rerr = nicClient.GetVirtualMachineScaleSetNetworkInterface(context.TODO(), "rg", "vmss", "0", "nic1", expand)
 	assert.Empty(t, result)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -196,7 +199,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -214,7 +217,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, noContentErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, noContentErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = nicClient.CreateOrUpdate(context.TODO(), "rg", "nic1", testInterface)
 	assert.Equal(t, noContentErr, rerr)
@@ -226,7 +229,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestInterface("interface1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
 	rerr := nicClient.Delete(context.TODO(), "rg", "interface1")
@@ -238,7 +241,7 @@ func TestDelete(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(noContentErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(noContentErr).Times(1)
 
 	rerr = nicClient.Delete(context.TODO(), "rg", "interface1")
 	assert.Equal(t, noContentErr, rerr)

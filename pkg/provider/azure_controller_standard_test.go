@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -43,37 +43,35 @@ func TestStandardAttachDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	testCases := []struct {
-		desc          string
-		nodeName      types.NodeName
-		isManagedDisk bool
-		isAttachFail  bool
-		expectedErr   bool
+		desc         string
+		nodeName     types.NodeName
+		isAttachFail bool
+		expectedErr  bool
 	}{
 		{
-			desc:          "an error shall be returned if there's no corresponding vms",
-			nodeName:      "vm2",
-			isManagedDisk: true,
-			expectedErr:   true,
+			desc:        "an error shall be returned if there's no corresponding vms",
+			nodeName:    "vm2",
+			expectedErr: true,
 		},
 		{
-			desc:          "no error shall be returned if everything's good",
-			nodeName:      "vm1",
-			isManagedDisk: true,
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything's good",
+			nodeName:    "vm1",
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything's good with non managed disk",
-			nodeName:      "vm1",
-			isManagedDisk: false,
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything's good with non managed disk",
+			nodeName:    "vm1",
+			expectedErr: false,
 		},
 		{
-			desc:          "an error shall be returned if update attach disk failed",
-			nodeName:      "vm1",
-			isManagedDisk: true,
-			isAttachFail:  true,
-			expectedErr:   true,
+			desc:         "an error shall be returned if update attach disk failed",
+			nodeName:     "vm1",
+			isAttachFail: true,
+			expectedErr:  true,
 		},
 	}
 
@@ -99,14 +97,13 @@ func TestStandardAttachDisk(t *testing.T) {
 		}
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		if test.isAttachFail {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		options := AttachDiskOptions{
 			lun:                     0,
-			isManagedDisk:           test.isManagedDisk,
 			diskName:                "",
 			cachingMode:             compute.CachingTypesReadOnly,
 			diskEncryptionSetID:     "",
@@ -115,7 +112,7 @@ func TestStandardAttachDisk(t *testing.T) {
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
 		}
-		err := vmSet.AttachDisk(test.nodeName, diskMap)
+		_, err := vmSet.AttachDisk(ctx, test.nodeName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 	}
 }
@@ -123,6 +120,9 @@ func TestStandardAttachDisk(t *testing.T) {
 func TestStandardDetachDisk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	testCases := []struct {
 		desc          string
@@ -183,7 +183,7 @@ func TestStandardDetachDisk(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err := vmSet.DetachDisk(test.nodeName, diskMap)
+		err := vmSet.DetachDisk(ctx, test.nodeName, diskMap)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && len(test.disks) > 0 {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
@@ -195,6 +195,9 @@ func TestStandardDetachDisk(t *testing.T) {
 func TestStandardUpdateVM(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	testCases := []struct {
 		desc          string
@@ -243,7 +246,7 @@ func TestStandardUpdateVM(t *testing.T) {
 			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		err := vmSet.UpdateVM(test.nodeName)
+		err := vmSet.UpdateVM(ctx, test.nodeName)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && test.diskName != "" {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)

@@ -20,23 +20,26 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/klog/v2"
+
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/auth"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/network"
+	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/node"
 )
 
 const (
-	reportDirEnv     = "CCM_JUNIT_REPORT_DIR"
-	artifactsDirEnv  = "ARTIFACTS"
-	defaultReportDir = "_report/"
+	reportDirEnv                = "CCM_JUNIT_REPORT_DIR"
+	artifactsDirEnv             = "ARTIFACTS"
+	defaultReportDir            = "_report/"
+	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
+	clusterProvisioningToolCAPZ = "capz"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -50,13 +53,25 @@ func TestAzureTest(t *testing.T) {
 			reportDir = defaultReportDir
 		}
 	}
-	var r []Reporter
 	if reportDir != "" {
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
 			klog.Fatalf("Failed creating report directory: %v", err)
-		} else {
-			r = append(r, reporters.NewJUnitReporter(path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", config.GinkgoConfig.ParallelNode))))
 		}
 	}
-	RunSpecsWithDefaultAndCustomReporters(t, "Cloud provider Azure e2e suite", r)
+
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	suiteConfig.Timeout = 0
+
+	if strings.EqualFold(os.Getenv(clusterProvisioningToolKey), clusterProvisioningToolCAPZ) {
+		additionalFilter := "!SLBOutbound"
+		if suiteConfig.LabelFilter == "" {
+			suiteConfig.LabelFilter = additionalFilter
+		} else {
+			suiteConfig.LabelFilter = suiteConfig.LabelFilter + " && " + additionalFilter
+		}
+	}
+
+	reporterConfig.Verbose = true
+	reporterConfig.JUnitReport = path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", GinkgoParallelProcess()))
+	RunSpecs(t, "Cloud provider Azure e2e suite", suiteConfig, reporterConfig)
 }

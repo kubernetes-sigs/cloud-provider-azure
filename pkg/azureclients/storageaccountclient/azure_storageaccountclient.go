@@ -18,12 +18,11 @@ package storageaccountclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -38,6 +37,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const saResourceType = "Microsoft.Storage/storageAccounts"
 
 // Client implements StorageAccount client Interface.
 type Client struct {
@@ -62,7 +63,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -86,8 +87,11 @@ func New(config *azclients.ClientConfig) *Client {
 }
 
 // GetProperties gets properties of the StorageAccount.
-func (c *Client) GetProperties(ctx context.Context, resourceGroupName string, accountName string) (storage.Account, *retry.Error) {
-	mc := metrics.NewMetricContext("storage_account", "get", resourceGroupName, c.subscriptionID, "")
+func (c *Client) GetProperties(ctx context.Context, subsID, resourceGroupName, accountName string) (storage.Account, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "get", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
@@ -102,8 +106,8 @@ func (c *Client) GetProperties(ctx context.Context, resourceGroupName string, ac
 		return storage.Account{}, rerr
 	}
 
-	result, rerr := c.getStorageAccount(ctx, resourceGroupName, accountName)
-	_ = mc.Observe(rerr.Error())
+	result, rerr := c.getStorageAccount(ctx, subsID, resourceGroupName, accountName)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -117,16 +121,16 @@ func (c *Client) GetProperties(ctx context.Context, resourceGroupName string, ac
 }
 
 // getStorageAccount gets properties of the StorageAccount.
-func (c *Client) getStorageAccount(ctx context.Context, resourceGroupName string, accountName string) (storage.Account, *retry.Error) {
+func (c *Client) getStorageAccount(ctx context.Context, subsID, resourceGroupName string, accountName string) (storage.Account, *retry.Error) {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 	result := storage.Account{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "storageaccount.get.request", resourceID, rerr.Error())
@@ -147,8 +151,11 @@ func (c *Client) getStorageAccount(ctx context.Context, resourceGroupName string
 }
 
 // ListKeys get a list of storage account keys.
-func (c *Client) ListKeys(ctx context.Context, resourceGroupName string, accountName string) (storage.AccountListKeysResult, *retry.Error) {
-	mc := metrics.NewMetricContext("storage_account", "list_keys", resourceGroupName, c.subscriptionID, "")
+func (c *Client) ListKeys(ctx context.Context, subsID, resourceGroupName, accountName string) (storage.AccountListKeysResult, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "list_keys", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
@@ -163,8 +170,8 @@ func (c *Client) ListKeys(ctx context.Context, resourceGroupName string, account
 		return storage.AccountListKeysResult{}, rerr
 	}
 
-	result, rerr := c.listStorageAccountKeys(ctx, resourceGroupName, accountName)
-	_ = mc.Observe(rerr.Error())
+	result, rerr := c.listStorageAccountKeys(ctx, subsID, resourceGroupName, accountName)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -178,16 +185,16 @@ func (c *Client) ListKeys(ctx context.Context, resourceGroupName string, account
 }
 
 // listStorageAccountKeys get a list of storage account keys.
-func (c *Client) listStorageAccountKeys(ctx context.Context, resourceGroupName string, accountName string) (storage.AccountListKeysResult, *retry.Error) {
+func (c *Client) listStorageAccountKeys(ctx context.Context, subsID, resourceGroupName, accountName string) (storage.AccountListKeysResult, *retry.Error) {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
 	result := storage.AccountListKeysResult{}
-	response, rerr := c.armClient.PostResource(ctx, resourceID, "listKeys", struct{}{})
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "listKeys", struct{}{}, map[string]interface{}{})
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "storageaccount.listkeys.request", resourceID, rerr.Error())
@@ -208,8 +215,11 @@ func (c *Client) listStorageAccountKeys(ctx context.Context, resourceGroupName s
 }
 
 // Create creates a StorageAccount.
-func (c *Client) Create(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountCreateParameters) *retry.Error {
-	mc := metrics.NewMetricContext("storage_account", "create", resourceGroupName, c.subscriptionID, "")
+func (c *Client) Create(ctx context.Context, subsID, resourceGroupName, accountName string, parameters storage.AccountCreateParameters) *retry.Error {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "create", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
@@ -224,26 +234,24 @@ func (c *Client) Create(ctx context.Context, resourceGroupName string, accountNa
 		return rerr
 	}
 
-	rerr := c.createStorageAccount(ctx, resourceGroupName, accountName, parameters)
-	_ = mc.Observe(rerr.Error())
+	rerr := c.createStorageAccount(ctx, subsID, resourceGroupName, accountName, parameters)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
 			c.RetryAfterWriter = rerr.RetryAfter
 		}
-
 		return rerr
 	}
-
 	return nil
 }
 
 // createStorageAccount creates or updates a StorageAccount.
-func (c *Client) createStorageAccount(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountCreateParameters) *retry.Error {
+func (c *Client) createStorageAccount(ctx context.Context, subsID, resourceGroupName, accountName string, parameters storage.AccountCreateParameters) *retry.Error {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -276,8 +284,11 @@ func (c *Client) createResponder(resp *http.Response) (*storage.Account, *retry.
 }
 
 // Update updates a storage account.
-func (c *Client) Update(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
-	mc := metrics.NewMetricContext("storage_account", "update", resourceGroupName, c.subscriptionID, "")
+func (c *Client) Update(ctx context.Context, subsID, resourceGroupName, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "update", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
@@ -292,8 +303,8 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, accountNa
 		return rerr
 	}
 
-	rerr := c.updateStorageAccount(ctx, resourceGroupName, accountName, parameters)
-	_ = mc.Observe(rerr.Error())
+	rerr := c.updateStorageAccount(ctx, subsID, resourceGroupName, accountName, parameters)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -305,11 +316,11 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, accountNa
 }
 
 // updateStorageAccount updates a StorageAccount.
-func (c *Client) updateStorageAccount(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
+func (c *Client) updateStorageAccount(ctx context.Context, subsID, resourceGroupName, accountName string, parameters storage.AccountUpdateParameters) *retry.Error {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
@@ -342,8 +353,11 @@ func (c *Client) updateResponder(resp *http.Response) (*storage.Account, *retry.
 }
 
 // Delete deletes a StorageAccount by name.
-func (c *Client) Delete(ctx context.Context, resourceGroupName string, accountName string) *retry.Error {
-	mc := metrics.NewMetricContext("storage_account", "delete", resourceGroupName, c.subscriptionID, "")
+func (c *Client) Delete(ctx context.Context, subsID, resourceGroupName, accountName string) *retry.Error {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "delete", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
@@ -358,8 +372,8 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, accountNa
 		return rerr
 	}
 
-	rerr := c.deleteStorageAccount(ctx, resourceGroupName, accountName)
-	_ = mc.Observe(rerr.Error())
+	rerr := c.deleteStorageAccount(ctx, subsID, resourceGroupName, accountName)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -373,20 +387,23 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, accountNa
 }
 
 // deleteStorageAccount deletes a PublicIPAddress by name.
-func (c *Client) deleteStorageAccount(ctx context.Context, resourceGroupName string, accountName string) *retry.Error {
+func (c *Client) deleteStorageAccount(ctx context.Context, subsID, resourceGroupName, accountName string) *retry.Error {
 	resourceID := armclient.GetResourceID(
-		c.subscriptionID,
+		subsID,
 		resourceGroupName,
-		"Microsoft.Storage/storageAccounts",
+		saResourceType,
 		accountName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 // ListByResourceGroup get a list storage accounts by resourceGroup.
-func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName string) ([]storage.Account, *retry.Error) {
-	mc := metrics.NewMetricContext("storage_account", "list_by_resource_group", resourceGroupName, c.subscriptionID, "")
+func (c *Client) ListByResourceGroup(ctx context.Context, subsID, resourceGroupName string) ([]storage.Account, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	mc := metrics.NewMetricContext("storage_account", "list_by_resource_group", resourceGroupName, subsID, "")
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterReader.TryAccept() {
@@ -401,30 +418,29 @@ func (c *Client) ListByResourceGroup(ctx context.Context, resourceGroupName stri
 		return nil, rerr
 	}
 
-	result, rerr := c.ListStorageAccountByResourceGroup(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	result, rerr := c.ListStorageAccountByResourceGroup(ctx, subsID, resourceGroupName)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
 			c.RetryAfterReader = rerr.RetryAfter
 		}
-
 		return result, rerr
 	}
-
 	return result, nil
 }
 
 // ListStorageAccountByResourceGroup get a list storage accounts by resourceGroup.
-func (c *Client) ListStorageAccountByResourceGroup(ctx context.Context, resourceGroupName string) ([]storage.Account, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+func (c *Client) ListStorageAccountByResourceGroup(ctx context.Context, subsID, resourceGroupName string) ([]storage.Account, *retry.Error) {
+	if subsID == "" {
+		subsID = c.subscriptionID
+	}
+	resourceID := armclient.GetResourceListID(subsID, resourceGroupName, saResourceType)
 	result := make([]storage.Account, 0)
 	page := &AccountListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "storageAccount.list.request", resourceID, rerr.Error())

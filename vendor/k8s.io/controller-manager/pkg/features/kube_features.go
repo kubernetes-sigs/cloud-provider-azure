@@ -25,24 +25,21 @@ const (
 	//
 	// // owner: @username
 	// // alpha: v1.4
-	// MyFeature() bool
-
-	// owner @smarterclayton
-	// alpha: v1.16
-	// beta:  v1.19
+	// MyFeature featuregate.Feature = "MyFeature"
 	//
-	// Enable legacy behavior to vary cluster functionality on the node-role.kubernetes.io labels. On by default (legacy), will be turned off in 1.18.
-	// Original copy from k8s.io/kubernetes/pkg/features/kube_features.go
-	LegacyNodeRoleBehavior featuregate.Feature = "LegacyNodeRoleBehavior"
+	// Feature gates should be listed in alphabetical, case-sensitive
+	// (upper before any lower case character) order. This reduces the risk
+	// of code conflicts because changes are more likely to be scattered
+	// across the file.
 
-	// owner @brendandburns
-	// alpha: v1.9
-	// beta:  v1.19
-	// ga:  v1.21
+	// owner: @jiahuif
+	// alpha: v1.21
+	// beta:  v1.22
+	// GA:    v1.24
 	//
-	// Enable nodes to exclude themselves from service load balancers
-	// Original copy from k8s.io/kubernetes/pkg/features/kube_features.go
-	ServiceNodeExclusion featuregate.Feature = "ServiceNodeExclusion"
+	// Enables Leader Migration for kube-controller-manager and cloud-controller-manager
+	// copied and sync'ed from k8s.io/kubernetes/pkg/features/kube_features.go
+	ControllerManagerLeaderMigration featuregate.Feature = "ControllerManagerLeaderMigration"
 
 	// owner: @khenidak
 	// alpha: v1.15
@@ -50,12 +47,6 @@ const (
 	// Enables ipv6 dual stack
 	// Original copy from k8s.io/kubernetes/pkg/features/kube_features.go
 	IPv6DualStack featuregate.Feature = "IPv6DualStack"
-
-	// owner: @jiahuif
-	// alpha: v1.21
-	//
-	// Enables Leader Migration for kube-controller-manager and cloud-controller-manager
-	ControllerManagerLeaderMigration featuregate.Feature = "ControllerManagerLeaderMigration"
 )
 
 func SetupCurrentKubernetesSpecificFeatureGates(featuregates featuregate.MutableFeatureGate) error {
@@ -65,8 +56,7 @@ func SetupCurrentKubernetesSpecificFeatureGates(featuregates featuregate.Mutable
 // cloudPublicFeatureGates consists of cloud-specific feature keys.
 // To add a new feature, define a key for it at k8s.io/api/pkg/features and add it here.
 var cloudPublicFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	LegacyNodeRoleBehavior:           {Default: false, PreRelease: featuregate.GA, LockToDefault: true},
-	ServiceNodeExclusion:             {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	IPv6DualStack:                    {Default: true, PreRelease: featuregate.Beta},
-	ControllerManagerLeaderMigration: {Default: false, PreRelease: featuregate.Alpha},
+	ControllerManagerLeaderMigration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
+
+	IPv6DualStack: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 }

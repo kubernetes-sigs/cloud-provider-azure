@@ -89,7 +89,7 @@ def file_passes(filename, refs, regexs):
     extension = file_extension(filename)
     if generated:
         if extension == "go":
-            extension = "generatego"
+            extension = "gomock"
         elif extension == "bzl":
             extension = "generatebzl"
 
@@ -99,7 +99,7 @@ def file_passes(filename, refs, regexs):
         ref = refs[basename]
 
     # remove extra content from the top of files
-    if extension == "go" or extension == "generatego":
+    if extension == "go" or extension == "gomock":
         p = regexs["go_build_constraints"]
         (data, found) = p.subn("", data, 1)
     elif extension in ["sh", "py"]:
@@ -216,9 +216,11 @@ def get_regexs():
     # get_dates return 2014, 2015, 2016, 2017, or 2018 until the current year as a regex like: "(2014|2015|2016|2017|2018)";
     # company holder names can be anything
     regexs["date"] = re.compile(get_dates())
-    # strip // +build \n\n build constraints
+    # strip the following build constraints/tags:
+    # //go:build
+    # // +build \n\n
     regexs["go_build_constraints"] = re.compile(
-        r"^(// \+build.*\n)+\n", re.MULTILINE)
+        r"^(//(go:build| \+build).*\n)+\n", re.MULTILINE)
     # strip #!.* from scripts
     regexs["shebang"] = re.compile(r"^(#!.*\n)\n*", re.MULTILINE)
     # Search for generated files

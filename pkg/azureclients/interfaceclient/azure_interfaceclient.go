@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -39,6 +39,8 @@ import (
 
 var _ Interface = &Client{}
 
+const netInterfaceResourceType = "Microsoft.Network/networkInterfaces"
+
 // Client implements network interface client.
 type Client struct {
 	armClient              armclient.Interface
@@ -53,6 +55,8 @@ type Client struct {
 	// ARM throttling configures.
 	RetryAfterReader time.Time
 	RetryAfterWriter time.Time
+
+	computeAPIVersion string
 }
 
 // New creates a new network interface client with ratelimiting.
@@ -63,7 +67,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -75,6 +79,11 @@ func New(config *azclients.ClientConfig) *Client {
 			config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
 	}
 
+	computeAPIVersion := ComputeAPIVersion
+	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
+		computeAPIVersion = AzureStackComputeAPIVersion
+	}
+
 	client := &Client{
 		armClient:              armClient,
 		rateLimiterReader:      rateLimiterReader,
@@ -82,6 +91,7 @@ func New(config *azclients.ClientConfig) *Client {
 		subscriptionID:         config.SubscriptionID,
 		cloudName:              config.CloudName,
 		disableAzureStackCloud: config.DisableAzureStackCloud,
+		computeAPIVersion:      computeAPIVersion,
 	}
 
 	return client
@@ -105,7 +115,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, networkInter
 	}
 
 	result, rerr := c.getNetworkInterface(ctx, resourceGroupName, networkInterfaceName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -123,12 +133,12 @@ func (c *Client) getNetworkInterface(ctx context.Context, resourceGroupName stri
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkInterfaces",
+		netInterfaceResourceType,
 		networkInterfaceName,
 	)
 	result := network.Interface{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "nic.get.request", resourceID, rerr.Error())
@@ -166,7 +176,7 @@ func (c *Client) GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, 
 	}
 
 	result, rerr := c.getVMSSNetworkInterface(ctx, resourceGroupName, virtualMachineScaleSetName, virtualmachineIndex, networkInterfaceName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -190,20 +200,8 @@ func (c *Client) getVMSSNetworkInterface(ctx context.Context, resourceGroupName 
 	)
 
 	result := network.Interface{}
-	computeAPIVersion := ComputeAPIVersion
-	if strings.EqualFold(c.cloudName, AzureStackCloudName) && !c.disableAzureStackCloud {
-		computeAPIVersion = AzureStackComputeAPIVersion
-	}
-	queryParameters := map[string]interface{}{
-		"api-version": computeAPIVersion,
-	}
-	if len(expand) > 0 {
-		queryParameters["$expand"] = autorest.Encode("query", expand)
-	}
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithQueryParameters(queryParameters),
-	}
-	response, rerr := c.armClient.GetResourceWithDecorators(ctx, resourceID, decorators)
+
+	response, rerr := c.armClient.GetResourceWithExpandAPIVersionQuery(ctx, resourceID, expand, c.computeAPIVersion)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssnic.get.request", resourceID, rerr.Error())
@@ -241,7 +239,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, n
 	}
 
 	rerr := c.createOrUpdateInterface(ctx, resourceGroupName, networkInterfaceName, parameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -259,18 +257,15 @@ func (c *Client) createOrUpdateInterface(ctx context.Context, resourceGroupName 
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkInterfaces",
+		netInterfaceResourceType,
 		networkInterfaceName,
 	)
-	decorators := []autorest.PrepareDecorator{
-		autorest.WithPathParameters("{resourceID}", map[string]interface{}{"resourceID": resourceID}),
-		autorest.WithJSON(parameters),
-	}
+	decorators := []autorest.PrepareDecorator{}
 	if to.String(parameters.Etag) != "" {
 		decorators = append(decorators, autorest.WithHeader("If-Match", autorest.String(to.String(parameters.Etag))))
 	}
 
-	response, rerr := c.armClient.PutResourceWithDecorators(ctx, resourceID, parameters, decorators)
+	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "nic.put.request", resourceID, rerr.Error())
@@ -316,7 +311,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, networkIn
 	}
 
 	rerr := c.deleteInterface(ctx, resourceGroupName, networkInterfaceName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -334,9 +329,9 @@ func (c *Client) deleteInterface(ctx context.Context, resourceGroupName string, 
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/networkInterfaces",
+		netInterfaceResourceType,
 		networkInterfaceName,
 	)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }

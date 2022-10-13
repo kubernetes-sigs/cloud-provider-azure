@@ -1,16 +1,13 @@
 module.exports = {
   presets: [
     [
-      '@babel/env',
+      '@babel/preset-env',
       {
         loose: true,
-        modules: false,
-        exclude: ['transform-typeof-symbol']
+        bugfixes: true,
+        modules: false
       }
     ]
-  ],
-  plugins: [
-    '@babel/proposal-object-rest-spread'
   ],
   env: {
     test: {

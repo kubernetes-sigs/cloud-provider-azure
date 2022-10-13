@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -43,7 +42,10 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
+	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -56,14 +58,16 @@ type NodeProvider interface {
 	InstanceType(ctx context.Context, name types.NodeName) (string, error)
 	// GetZone returns the Zone containing the current failure zone and locality region that the program is running in
 	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
+	// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+	GetPlatformSubFaultDomain() (string, error)
 }
 
 // labelReconcileInfo lists Node labels to reconcile, and how to reconcile them.
 // primaryKey and secondaryKey are keys of labels to reconcile.
-//   - If both keys exist, but their values don't match. Use the value from the
-//   primaryKey as the source of truth to reconcile.
-//   - If ensureSecondaryExists is true, and the secondaryKey does not
-//   exist, secondaryKey will be added with the value of the primaryKey.
+// - If both keys exist, but their values don't match. Use the value from the
+// primaryKey as the source of truth to reconcile.
+// - If ensureSecondaryExists is true, and the secondaryKey does not
+// exist, secondaryKey will be added with the value of the primaryKey.
 var labelReconcileInfo = []struct {
 	primaryKey            string
 	secondaryKey          string
@@ -175,39 +179,30 @@ func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
 
 // UpdateNodeStatus updates the node status, such as node addresses
 func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
-	nodes, err := cnc.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
-		ResourceVersion: "0",
-		FieldSelector:   fields.OneTermEqualSelector("metadata.name", cnc.nodeName).String(),
-	})
+	node, err := cnc.nodeInformer.Lister().Get(cnc.nodeName)
 	if err != nil {
-		klog.Errorf("Error monitoring node status: %v", err)
+		// If node not found, just ignore it.
+		if apierrors.IsNotFound(err) {
+			return
+		}
+
+		klog.Errorf("Error getting node %q from informer, err: %v", cnc.nodeName, err)
 		return
 	}
 
-	for i := range nodes.Items {
-		cnc.updateNodeAddress(ctx, &nodes.Items[i])
+	err = cnc.updateNodeAddress(ctx, node)
+	if err != nil {
+		klog.Errorf("Error reconciling node address for node %q, err: %v", node.Name, err)
 	}
 
-	for _, node := range nodes.Items {
-		err = cnc.reconcileNodeLabels(node.Name)
-		if err != nil {
-			klog.Errorf("Error reconciling node labels for node %q, err: %v", node.Name, err)
-		}
+	err = cnc.reconcileNodeLabels(node)
+	if err != nil {
+		klog.Errorf("Error reconciling node labels for node %q, err: %v", node.Name, err)
 	}
 }
 
 // reconcileNodeLabels reconciles node labels transitioning from beta to GA
-func (cnc *CloudNodeController) reconcileNodeLabels(nodeName string) error {
-	node, err := cnc.nodeInformer.Lister().Get(nodeName)
-	if err != nil {
-		// If node not found, just ignore it.
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-
-		return err
-	}
-
+func (cnc *CloudNodeController) reconcileNodeLabels(node *v1.Node) error {
 	if node.Labels == nil {
 		// Nothing to reconcile.
 		return nil
@@ -247,33 +242,32 @@ func (cnc *CloudNodeController) reconcileNodeLabels(nodeName string) error {
 }
 
 // UpdateNodeAddress updates the nodeAddress of a single node
-func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.Node) {
+func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.Node) error {
 	// Do not process nodes that are still tainted
-	cloudTaint := getCloudTaint(node.Spec.Taints)
+	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint != nil {
 		klog.V(5).Infof("This node %s is still tainted. Will not process.", node.Name)
-		return
+		return nil
 	}
 
 	// Node that isn't present according to the cloud provider shouldn't have its address updated
 	exists, err := cnc.ensureNodeExistsByProviderID(ctx, node)
 	if err != nil {
 		// Continue to update node address when not sure the node is not exists
-		klog.Error(err)
+		klog.Warningf("ensureNodeExistsByProviderID (node %s) reported an error (%v), continue to update its address", node.Name, err)
 	} else if !exists {
 		klog.V(4).Infof("The node %s is no longer present according to the cloud provider, do not process.", node.Name)
-		return
+		return nil
 	}
 
 	nodeAddresses, err := cnc.getNodeAddressesByName(ctx, node)
 	if err != nil {
-		klog.Errorf("Error getting node addresses for node %q: %v", node.Name, err)
-		return
+		return fmt.Errorf("Error getting node addresses for node %q: %v", node.Name, err)
 	}
 
 	if len(nodeAddresses) == 0 {
 		klog.V(5).Infof("Skipping node address update for node %q since cloud provider did not return any", node.Name)
-		return
+		return nil
 	}
 
 	// Check if a hostname address exists in the cloud provided addresses
@@ -297,19 +291,21 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	// it can be found in the cloud as well (consistent with the behaviour in kubelet)
 	if nodeIP, ok := ensureNodeProvidedIPExists(node, nodeAddresses); ok {
 		if nodeIP == nil {
-			klog.Errorf("Specified Node IP not found in cloudprovider for node %q", node.Name)
-			return
+			return fmt.Errorf("specified Node IP %s not found in cloudprovider for node %q", nodeAddresses, node.Name)
 		}
 	}
 	if !nodeAddressesChangeDetected(node.Status.Addresses, nodeAddresses) {
-		return
+		return nil
 	}
+
 	newNode := node.DeepCopy()
 	newNode.Status.Addresses = nodeAddresses
 	_, _, err = PatchNodeStatus(cnc.kubeClient.CoreV1(), types.NodeName(node.Name), node, newNode)
 	if err != nil {
-		klog.Errorf("Error patching node with cloud ip addresses = [%v]", err)
+		return fmt.Errorf("Error patching node with cloud ip addresses = [%v]", err)
 	}
+
+	return nil
 }
 
 // nodeModifier is used to carry changes to node objects across multiple attempts to update them
@@ -329,7 +325,7 @@ func (cnc *CloudNodeController) UpdateCloudNode(ctx context.Context, _, newObj i
 		return
 	}
 
-	cloudTaint := getCloudTaint(node.Spec.Taints)
+	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint == nil {
 		// The node has already been initialized so nothing to do.
 		return
@@ -347,7 +343,7 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 		return
 	}
 
-	cloudTaint := getCloudTaint(node.Spec.Taints)
+	cloudTaint := GetCloudTaint(node.Spec.Taints)
 	if cloudTaint == nil {
 		klog.V(2).Infof("This node %s is registered without the cloud taint. Will not process.", node.Name)
 		return
@@ -359,13 +355,13 @@ func (cnc *CloudNodeController) AddCloudNode(ctx context.Context, obj interface{
 // This processes nodes that were added into the cluster, and cloud initialize them if appropriate
 func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Node) {
 	klog.Infof("Initializing node %s with cloud provider", node.Name)
-	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
+	curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("failed to get node %s: %w", node.Name, err))
 		return
 	}
 
-	cloudTaint := getCloudTaint(curNode.Spec.Taints)
+	cloudTaint := GetCloudTaint(curNode.Spec.Taints)
 	if cloudTaint == nil {
 		// Node object received from event had the cloud taint but was outdated,
 		// the node has actually already been initialized.
@@ -382,9 +378,16 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 		}
 	}
 
-	nodeModifiers, err := cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
+	var nodeModifiers []nodeModifier
+	err = clientretry.OnError(UpdateNodeSpecBackoff, func(err error) bool {
+		return err != nil && strings.HasPrefix(err.Error(), "failed to set node provider id")
+	}, func() error {
+		nodeModifiers, err = cnc.getNodeModifiersFromCloudProvider(ctx, curNode)
+		return err
+	})
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
+		// Instead of just logging the error, panic and node manager can restart
+		utilruntime.Must(fmt.Errorf("failed to initialize node %s at cloudprovider: %w", node.Name, err))
 		return
 	}
 
@@ -393,7 +396,7 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 	})
 
 	err = clientretry.RetryOnConflict(UpdateNodeSpecBackoff, func() error {
-		curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
+		curNode, err := cnc.kubeClient.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -402,14 +405,17 @@ func (cnc *CloudNodeController) initializeNode(ctx context.Context, node *v1.Nod
 			modify(curNode)
 		}
 
-		_, err = cnc.kubeClient.CoreV1().Nodes().Update(context.TODO(), curNode, metav1.UpdateOptions{})
+		_, err = cnc.kubeClient.CoreV1().Nodes().Update(ctx, curNode, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
 
 		// After adding, call UpdateNodeAddress to set the CloudProvider provided IPAddresses
 		// So that users do not see any significant delay in IP addresses being filled into the node
-		cnc.updateNodeAddress(ctx, curNode)
+		err = cnc.updateNodeAddress(ctx, curNode)
+		if err != nil {
+			return err
+		}
 
 		klog.Infof("Successfully initialized node %s with cloud provider", node.Name)
 		return nil
@@ -436,10 +442,9 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 				}
 			})
 		} else {
-			// we should attempt to set providerID on node, but
-			// we can continue if we fail since we will attempt to set
-			// node addresses given the node name in getNodeAddressesByName
-			klog.Errorf("failed to set node provider id: %v", err)
+			// if we are not able to get node provider id,
+			// we return error here and retry in the caller initializeNode()
+			return nil, fmt.Errorf("failed to set node provider id: %w", err)
 		}
 	}
 
@@ -497,10 +502,24 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		})
 	}
 
+	platformSubFaultDomain, err := cnc.getPlatformSubFaultDomain()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get platformSubFaultDomain: %w", err)
+	}
+	if platformSubFaultDomain != "" {
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", consts.LabelPlatformSubFaultDomain, platformSubFaultDomain)
+		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
+			if n.Labels == nil {
+				n.Labels = map[string]string{}
+			}
+			n.Labels[consts.LabelPlatformSubFaultDomain] = platformSubFaultDomain
+		})
+	}
+
 	return nodeModifiers, nil
 }
 
-func getCloudTaint(taints []v1.Taint) *v1.Taint {
+func GetCloudTaint(taints []v1.Taint) *v1.Taint {
 	for _, taint := range taints {
 		if taint.Key == cloudproviderapi.TaintExternalCloudProvider {
 			return &taint
@@ -603,8 +622,16 @@ func (cnc *CloudNodeController) getZoneByName(ctx context.Context, node *v1.Node
 	return zone, nil
 }
 
+func (cnc *CloudNodeController) getPlatformSubFaultDomain() (string, error) {
+	subFD, err := cnc.nodeProvider.GetPlatformSubFaultDomain()
+	if err != nil {
+		return "", fmt.Errorf("cnc.getPlatformSubfaultDomain: %w", err)
+	}
+	return subFD, nil
+}
+
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
-	_, condition := cloudnodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
+	_, condition := nodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
 	if networkReady && condition != nil && condition.Status == v1.ConditionFalse {
 		klog.V(4).Infof("set node %v with NodeNetworkUnavailable=false was canceled because it is already set", node.Name)
 		return nil
@@ -625,19 +652,19 @@ func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, network
 		// patch in the retry loop.
 		currentTime := metav1.Now()
 		if networkReady {
-			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionFalse,
 				Reason:             "NodeInitialization",
-				Message:            "Should wait for cloud routes",
+				Message:            "Don't need to wait for cloud routes",
 				LastTransitionTime: currentTime,
 			})
 		} else {
-			err = cloudnodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(cnc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionTrue,
 				Reason:             "NodeInitialization",
-				Message:            "Don't need to wait for cloud routes",
+				Message:            "Waiting for cloud routes",
 				LastTransitionTime: currentTime,
 			})
 		}

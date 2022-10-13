@@ -123,7 +123,7 @@ func TestGetZones(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(responseString))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	zoneClient := getTestZoneClient(armClient)
@@ -149,7 +149,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	zoneClient := getTestZoneClient(armClient)
@@ -168,7 +168,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	zoneClient := getTestZoneClient(armClient)

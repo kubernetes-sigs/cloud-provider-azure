@@ -98,7 +98,8 @@ function dump-log() {
   for log_file in "${log_files[@]}"; do
     if [[ "$(should-export-log "${log_file}" "${is_master}")" == "true" ]]; then
       echo "Dumping ${log_file}"
-      kubectl exec "${pod_name}" -- cat "${log_dir}/${log_file}" > "${dir}/${log_file}"
+      # Job pod logs may be deleted between listing and the attempt to dump, so we ignore errors from cat.
+      kubectl exec "${pod_name}" -- sh -c "(cat \"${log_dir}/${log_file}\" > \"${dir}/${log_file}\") || true"
     fi
   done
 

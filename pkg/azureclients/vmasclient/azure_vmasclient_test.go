@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -98,7 +98,7 @@ func TestGet(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	expected := compute.AvailabilitySet{Response: autorest.Response{Response: response}}
@@ -152,7 +152,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmasClient := getTestVMASClient(armClient)
@@ -172,7 +172,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmasClient := getTestVMASClient(armClient)
@@ -198,7 +198,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmasClient := getTestVMASClient(armClient)
@@ -215,7 +215,7 @@ func TestList(t *testing.T) {
 	vmasList := []compute.AvailabilitySet{getTestVMAS("vmas1"), getTestVMAS("vmas2"), getTestVMAS("vmas3")}
 	responseBody, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -237,7 +237,7 @@ func TestListNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmasClient := getTestVMASClient(armClient)
@@ -257,7 +257,7 @@ func TestListInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmasClient := getTestVMASClient(armClient)
@@ -283,7 +283,7 @@ func TestListThrottle(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	vmasClient := getTestVMASClient(armClient)
 	result, rerr := vmasClient.List(context.TODO(), "rg")
@@ -300,7 +300,7 @@ func TestListWithListResponderError(t *testing.T) {
 	vmasList := []compute.AvailabilitySet{getTestVMAS("vmas1"), getTestVMAS("vmas2"), getTestVMAS("vmas3")}
 	responseBody, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -328,7 +328,7 @@ func TestListWithNextPage(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
 		}, nil)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),

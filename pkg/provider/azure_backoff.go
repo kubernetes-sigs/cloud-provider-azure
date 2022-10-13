@@ -17,14 +17,15 @@ limitations under the License.
 package provider
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -97,7 +98,7 @@ func (az *Cloud) ListVirtualMachines(resourceGroup string) ([]compute.VirtualMac
 		klog.Errorf("VirtualMachinesClient.List(%v) failure with err=%v", resourceGroup, rerr)
 		return nil, rerr.Error()
 	}
-	klog.V(2).Infof("VirtualMachinesClient.List(%v) success", resourceGroup)
+	klog.V(6).Infof("VirtualMachinesClient.List(%v) success", resourceGroup)
 	return allNodes, nil
 }
 
@@ -159,6 +160,9 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 		return nil
 	}
 
+	nsgJSON, _ := json.Marshal(sg)
+	klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", to.String(sg.Name), rerr.Error(), string(nsgJSON))
+
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("SecurityGroup cache for %s is cleanup because of http.StatusPreconditionFailed", *sg.Name)
@@ -217,6 +221,9 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 		return nil
 	}
 
+	lbJSON, _ := json.Marshal(lb)
+	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", to.String(lb.Name), rerr.Error(), string(lbJSON))
+
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", to.String(lb.Name))
@@ -234,20 +241,20 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	if strings.Contains(strings.ToLower(retryErrorMessage), strings.ToLower(consts.ReferencedResourceNotProvisionedMessageCode)) {
 		matches := pipErrorMessageRE.FindStringSubmatch(retryErrorMessage)
 		if len(matches) != 3 {
-			klog.Warningf("Failed to parse the retry error message %s", retryErrorMessage)
+			klog.Errorf("Failed to parse the retry error message %s", retryErrorMessage)
 			return rerr.Error()
 		}
 		pipRG, pipName := matches[1], matches[2]
 		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, to.String(lb.Name))
-		pip, _, err := az.getPublicIPAddress(pipRG, pipName)
+		pip, _, err := az.getPublicIPAddress(pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Warningf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
 			return rerr.Error()
 		}
 		// Perform a dummy update to fix the provisioning state
 		err = az.CreateOrUpdatePIP(service, pipRG, pip)
 		if err != nil {
-			klog.Warningf("Failed to update the public IP %s in resource group %s: %v", pipName, pipRG, err)
+			klog.Errorf("Failed to update the public IP %s in resource group %s: %v", pipName, pipRG, err)
 			return rerr.Error()
 		}
 		// Invalidate the LB cache, return the error, and the controller manager
@@ -258,35 +265,101 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	return rerr.Error()
 }
 
-// ListAgentPoolLBs invokes az.LoadBalancerClient.List and filter out
+func (az *Cloud) CreateOrUpdateLBBackendPool(lbName string, backendPool network.BackendAddressPool) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", to.String(backendPool.Name), lbName)
+	rerr := az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, az.getLoadBalancerResourceGroup(), lbName, to.String(backendPool.Name), backendPool, to.String(backendPool.Etag))
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.lbCache.Delete(lbName)
+		return nil
+	}
+
+	// Invalidate the cache because ETAG precondition mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	retryErrorMessage := rerr.Error().Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	return rerr.Error()
+}
+
+func (az *Cloud) DeleteLBBackendPool(lbName, backendPoolName string) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	klog.V(4).Infof("DeleteLBBackendPool: deleting backend pool %s in LB %s", backendPoolName, lbName)
+	rerr := az.LoadBalancerClient.DeleteLBBackendPool(ctx, az.getLoadBalancerResourceGroup(), lbName, backendPoolName)
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.lbCache.Delete(lbName)
+		return nil
+	}
+
+	// Invalidate the cache because ETAG precondition mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	retryErrorMessage := rerr.Error().Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", lbName)
+		_ = az.lbCache.Delete(lbName)
+	}
+
+	return rerr.Error()
+}
+
+// ListManagedLBs invokes az.LoadBalancerClient.List and filter out
 // those that are not managed by cloud provider azure or not associated to a managed VMSet.
-func (az *Cloud) ListAgentPoolLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
+func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterName string) ([]network.LoadBalancer, error) {
 	allLBs, err := az.ListLB(service)
 	if err != nil {
 		return nil, err
 	}
 
 	if allLBs == nil {
-		klog.Warningf("ListAgentPoolLBs: no LBs found")
+		klog.Warningf("ListManagedLBs: no LBs found")
 		return nil, nil
+	}
+
+	// return early if wantLb=false
+	if nodes == nil {
+		klog.V(4).Infof("ListManagedLBs: return all LBs in the resource group %s, including unmanaged LBs", az.getLoadBalancerResourceGroup())
+		return allLBs, nil
 	}
 
 	agentPoolLBs := make([]network.LoadBalancer, 0)
 	agentPoolVMSetNames, err := az.VMSet.GetAgentPoolVMSetNames(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("ListAgentPoolLBs: failed to get agent pool vmSet names: %w", err)
+		return nil, fmt.Errorf("ListManagedLBs: failed to get agent pool vmSet names: %w", err)
 	}
+
 	agentPoolVMSetNamesSet := sets.NewString()
 	if agentPoolVMSetNames != nil && len(*agentPoolVMSetNames) > 0 {
 		for _, vmSetName := range *agentPoolVMSetNames {
+			klog.V(6).Infof("ListManagedLBs: found agent pool vmSet name %s", vmSetName)
 			agentPoolVMSetNamesSet.Insert(strings.ToLower(vmSetName))
 		}
 	}
 
 	for _, lb := range allLBs {
 		vmSetNameFromLBName := az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName)
-		if agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
+		if strings.EqualFold(strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix), clusterName) ||
+			agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
 			agentPoolLBs = append(agentPoolLBs, lb)
+			klog.V(4).Infof("ListManagedLBs: found agent pool LB %s", to.String(lb.Name))
 		}
 	}
 
@@ -338,16 +411,33 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 
 	rerr := az.PublicIPAddressesClient.CreateOrUpdate(ctx, pipResourceGroup, to.String(pip.Name), pip)
 	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, to.String(pip.Name))
-	if rerr != nil {
-		klog.Errorf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error())
-		az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
-		return rerr.Error()
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+		return nil
 	}
 
-	return nil
+	pipJSON, _ := json.Marshal(pip)
+	klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error(), string(pipJSON))
+	az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
+
+	// Invalidate the cache because ETAG precondition mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, to.String(pip.Name))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+	}
+
+	retryErrorMessage := rerr.Error().Error()
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, to.String(pip.Name))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+	}
+
+	return rerr.Error()
 }
 
-// CreateOrUpdateInterface invokes az.PublicIPAddressesClient.CreateOrUpdate with exponential backoff retry
+// CreateOrUpdateInterface invokes az.InterfacesClient.CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateInterface(service *v1.Service, nic network.Interface) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
@@ -380,11 +470,13 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 		return rerr.Error()
 	}
 
+	// Invalidate the cache right after deleting
+	_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pipName))
 	return nil
 }
 
 // DeleteLB invokes az.LoadBalancerClient.Delete with exponential backoff retry
-func (az *Cloud) DeleteLB(service *v1.Service, lbName string) error {
+func (az *Cloud) DeleteLB(service *v1.Service, lbName string) *retry.Error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
@@ -398,7 +490,7 @@ func (az *Cloud) DeleteLB(service *v1.Service, lbName string) error {
 
 	klog.Errorf("LoadBalancerClient.Delete(%s) failed: %s", lbName, rerr.Error().Error())
 	az.Event(service, v1.EventTypeWarning, "DeleteLoadBalancer", rerr.Error().Error())
-	return rerr.Error()
+	return rerr
 }
 
 // CreateOrUpdateRouteTable invokes az.RouteTablesClient.CreateOrUpdate with exponential backoff retry
@@ -412,6 +504,9 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 		_ = az.rtCache.Delete(*routeTable.Name)
 		return nil
 	}
+
+	rtJSON, _ := json.Marshal(routeTable)
+	klog.Warningf("RouteTablesClient.CreateOrUpdate(%s) failed: %v, RouteTable request: %s", to.String(routeTable.Name), rerr.Error(), string(rtJSON))
 
 	// Invalidate the cache because etag mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
@@ -489,6 +584,89 @@ func (az *Cloud) CreateOrUpdateVMSS(resourceGroupName string, VMScaleSetName str
 	if rerr != nil {
 		klog.Errorf("CreateOrUpdateVMSS: error CreateOrUpdate vmss(%s): %v", VMScaleSetName, rerr)
 		return rerr
+	}
+
+	return nil
+}
+
+func (az *Cloud) CreateOrUpdatePLS(service *v1.Service, pls network.PrivateLinkService) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	rerr := az.PrivateLinkServiceClient.CreateOrUpdate(ctx, az.PrivateLinkServiceResourceGroup, to.String(pls.Name), pls, to.String(pls.Etag))
+	if rerr == nil {
+		// Invalidate the cache right after updating
+		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+		return nil
+	}
+
+	rtJSON, _ := json.Marshal(pls)
+	klog.Warningf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v, PrivateLinkService request: %s", to.String(pls.Name), rerr.Error(), string(rtJSON))
+
+	// Invalidate the cache because etag mismatch.
+	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
+		klog.V(3).Infof("Private link service cache for %s is cleanup because of http.StatusPreconditionFailed", to.String(pls.Name))
+		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+	}
+	// Invalidate the cache because another new operation has canceled the current request.
+	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
+		klog.V(3).Infof("Private link service for %s is cleanup because CreateOrUpdatePrivateLinkService is canceled by another operation", to.String(pls.Name))
+		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+	}
+	klog.Errorf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v", to.String(pls.Name), rerr.Error())
+	return rerr.Error()
+}
+
+// DeletePLS invokes az.PrivateLinkServiceClient.Delete with exponential backoff retry
+func (az *Cloud) DeletePLS(service *v1.Service, plsName string, plsLBFrontendID string) *retry.Error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	rerr := az.PrivateLinkServiceClient.Delete(ctx, az.PrivateLinkServiceResourceGroup, plsName)
+	if rerr == nil {
+		// Invalidate the cache right after deleting
+		_ = az.plsCache.Delete(plsLBFrontendID)
+		return nil
+	}
+
+	klog.Errorf("PrivateLinkServiceClient.DeletePLS(%s) failed: %s", plsName, rerr.Error().Error())
+	az.Event(service, v1.EventTypeWarning, "DeletePrivateLinkService", rerr.Error().Error())
+	return rerr
+}
+
+// DeletePEConn invokes az.PrivateLinkServiceClient.DeletePEConnection with exponential backoff retry
+func (az *Cloud) DeletePEConn(service *v1.Service, plsName string, peConnName string) *retry.Error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	rerr := az.PrivateLinkServiceClient.DeletePEConnection(ctx, az.PrivateLinkServiceResourceGroup, plsName, peConnName)
+	if rerr == nil {
+		return nil
+	}
+
+	klog.Errorf("PrivateLinkServiceClient.DeletePEConnection(%s-%s) failed: %s", plsName, peConnName, rerr.Error().Error())
+	az.Event(service, v1.EventTypeWarning, "DeletePrivateEndpointConnection", rerr.Error().Error())
+	return rerr
+}
+
+// CreateOrUpdateSubnet invokes az.SubnetClient.CreateOrUpdate with exponential backoff retry
+func (az *Cloud) CreateOrUpdateSubnet(service *v1.Service, subnet network.Subnet) error {
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	var rg string
+	if len(az.VnetResourceGroup) > 0 {
+		rg = az.VnetResourceGroup
+	} else {
+		rg = az.ResourceGroup
+	}
+
+	rerr := az.SubnetsClient.CreateOrUpdate(ctx, rg, az.VnetName, *subnet.Name, subnet)
+	klog.V(10).Infof("SubnetClient.CreateOrUpdate(%s): end", *subnet.Name)
+	if rerr != nil {
+		klog.Errorf("SubnetClient.CreateOrUpdate(%s) failed: %s", *subnet.Name, rerr.Error().Error())
+		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateSubnet", rerr.Error().Error())
+		return rerr.Error()
 	}
 
 	return nil

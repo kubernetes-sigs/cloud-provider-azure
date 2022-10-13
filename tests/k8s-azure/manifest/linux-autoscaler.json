@@ -4,7 +4,7 @@
     "properties": {
         "orchestratorProfile": {
             "orchestratorType": "Kubernetes",
-            "orchestratorRelease": "1.17",
+            "orchestratorRelease": "1.19",
             "kubernetesConfig": {
                 "useManagedIdentity": false,
                 "networkPolicy": "none",
@@ -12,9 +12,6 @@
                 "cloudProviderRateLimitBucket": 20,
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
-                },
-                "controllerManagerConfig": {
-                    "--feature-gates": "CSIInlineVolume=true,LocalStorageCapacityIsolation=true,ServiceNodeExclusion=true"
                 },
                 "kubeletConfig": {
                     "--feature-gates": "ExecProbeTimeout=true"

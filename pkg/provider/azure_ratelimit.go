@@ -21,6 +21,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+const (
+	defaultAtachDetachDiskQPS    = 6.0
+	defaultAtachDetachDiskBucket = 10
+)
+
 // CloudProviderRateLimitConfig indicates the rate limit config for each clients.
 type CloudProviderRateLimitConfig struct {
 	// The default rate limit config options.
@@ -41,6 +46,14 @@ type CloudProviderRateLimitConfig struct {
 	VirtualMachineScaleSetRateLimit *azclients.RateLimitConfig `json:"virtualMachineScaleSetRateLimit,omitempty" yaml:"virtualMachineScaleSetRateLimit,omitempty"`
 	VirtualMachineSizeRateLimit     *azclients.RateLimitConfig `json:"virtualMachineSizesRateLimit,omitempty" yaml:"virtualMachineSizesRateLimit,omitempty"`
 	AvailabilitySetRateLimit        *azclients.RateLimitConfig `json:"availabilitySetRateLimit,omitempty" yaml:"availabilitySetRateLimit,omitempty"`
+	AttachDetachDiskRateLimit       *azclients.RateLimitConfig `json:"attachDetachDiskRateLimit,omitempty" yaml:"attachDetachDiskRateLimit,omitempty"`
+	ContainerServiceRateLimit       *azclients.RateLimitConfig `json:"containerServiceRateLimit,omitempty" yaml:"containerServiceRateLimit,omitempty"`
+	DeploymentRateLimit             *azclients.RateLimitConfig `json:"deploymentRateLimit,omitempty" yaml:"deploymentRateLimit,omitempty"`
+	PrivateDNSRateLimit             *azclients.RateLimitConfig `json:"privateDNSRateLimit,omitempty" yaml:"privateDNSRateLimit,omitempty"`
+	PrivateDNSZoneGroupRateLimit    *azclients.RateLimitConfig `json:"privateDNSZoneGroupRateLimit,omitempty" yaml:"privateDNSZoneGroupRateLimit,omitempty"`
+	PrivateEndpointRateLimit        *azclients.RateLimitConfig `json:"privateEndpointRateLimit,omitempty" yaml:"privateEndpointRateLimit,omitempty"`
+	PrivateLinkServiceRateLimit     *azclients.RateLimitConfig `json:"privateLinkServiceRateLimit,omitempty" yaml:"privateLinkServiceRateLimit,omitempty"`
+	VirtualNetworkRateLimit         *azclients.RateLimitConfig `json:"virtualNetworkRateLimit,omitempty" yaml:"virtualNetworkRateLimit,omitempty"`
 }
 
 // InitializeCloudProviderRateLimitConfig initializes rate limit configs.
@@ -78,6 +91,13 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 	config.VirtualMachineScaleSetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineScaleSetRateLimit)
 	config.VirtualMachineSizeRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.VirtualMachineSizeRateLimit)
 	config.AvailabilitySetRateLimit = overrideDefaultRateLimitConfig(&config.RateLimitConfig, config.AvailabilitySetRateLimit)
+
+	atachDetachDiskRateLimitConfig := azclients.RateLimitConfig{
+		CloudProviderRateLimit:            true,
+		CloudProviderRateLimitQPSWrite:    defaultAtachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: defaultAtachDetachDiskBucket,
+	}
+	config.AttachDetachDiskRateLimit = overrideDefaultRateLimitConfig(&atachDetachDiskRateLimitConfig, config.AttachDetachDiskRateLimit)
 }
 
 // overrideDefaultRateLimitConfig overrides the default CloudProviderRateLimitConfig.

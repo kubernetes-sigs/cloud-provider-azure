@@ -18,11 +18,13 @@ package network
 
 import (
 	"context"
+	"os"
 	"strings"
 
-	"github.com/Azure/go-autorest/autorest/to"
+	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -46,8 +48,8 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -62,8 +64,12 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		utils.Logf("Waiting for backend pods to be ready")
+		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -79,15 +85,14 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		tc = nil
 	})
 
-	It("should add all nodes in different agent pools to backends [MultipleAgentPools]", func() {
+	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("only test standard load balancer")
+		}
+
 		rgName := tc.GetResourceGroup()
 		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
-
-		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
-			utils.Logf("sku: %s", lb.Sku.Name)
-			Skip("only support standard load balancer")
-		}
 
 		nodeList, err := utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
@@ -95,49 +100,78 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Skip("only support cluster with multiple agent pools")
 		}
 
-		lbBackendAddressPoolsIDMap := make(map[string]bool)
+		ipcIDs := []string{}
 		for _, backendAddressPool := range *lb.BackendAddressPools {
-			backendAddressPoolID := strings.ToLower(to.String(backendAddressPool.ID))
-			lbBackendAddressPoolsIDMap[backendAddressPoolID] = true
-			utils.Logf("found backend pool %s", backendAddressPoolID)
-		}
-		utils.Logf("got lbBackendAddressPoolsIDMap: %v", lbBackendAddressPoolsIDMap)
-
-		NICList, err := utils.ListNICs(tc, rgName)
-		Expect(err).NotTo(HaveOccurred())
-		var found bool
-		for _, nic := range *NICList {
-			found = false
-			if strings.Split(*nic.Name, "-")[1] == "master" || strings.Contains(*nic.Name, "control-plane") {
+			if os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool" {
 				continue
 			}
-			for _, ipConfig := range *nic.IPConfigurations {
-				if found {
-					break
+			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
+				if ipc.ID != nil {
+					ipcIDs = append(ipcIDs, *ipc.ID)
 				}
-				utils.Logf("found ip config %s", to.String(ipConfig.Name))
-				for _, backendAddressPool := range *ipConfig.LoadBalancerBackendAddressPools {
-					backendAddressPoolID := strings.ToLower(to.String(backendAddressPool.ID))
-					utils.Logf("found backend pool on nic %s", backendAddressPoolID)
-					if lbBackendAddressPoolsIDMap[backendAddressPoolID] {
+			}
+		}
+		utils.Logf("got BackendIPConfigurations IDs: %v", ipcIDs)
+
+		// Check if it is a cluster with VMSS
+		vmsses, err := utils.ListVMSSes(tc)
+		Expect(err).NotTo(HaveOccurred())
+		if len(vmsses) != 0 {
+			allVMs := []azcompute.VirtualMachineScaleSetVM{}
+			for _, vmss := range vmsses {
+				if strings.Contains(*vmss.ID, "control-plane") || strings.Contains(*vmss.ID, "master") {
+					continue
+				}
+				vms, err := utils.ListVMSSVMs(tc, *vmss.Name)
+				Expect(err).NotTo(HaveOccurred())
+				allVMs = append(allVMs, vms...)
+			}
+			Expect(len(allVMs)).To(Equal(len(ipcIDs)))
+			for _, vm := range allVMs {
+				utils.Logf("Checking VM %q", *vm.ID)
+				found := false
+				for _, ipcID := range ipcIDs {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*vm.ID)) {
 						found = true
 						break
 					}
 				}
+				Expect(found).To(Equal(true))
 			}
-			Expect(found).To(BeTrue())
+			utils.Logf("Validation succeeded for a VMSS cluster")
+		} else {
+			vms, err := utils.ListVMs(tc)
+			Expect(err).NotTo(HaveOccurred())
+			for _, vm := range *vms {
+				if strings.Contains(*vm.ID, "control-plane") || strings.Contains(*vm.ID, "master") {
+					continue
+				}
+				vmID := *vm.ID
+				vmName := vmID[strings.LastIndex(vmID, "/")+1:]
+				utils.Logf("Checking VM %q", vmName)
+
+				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
+				found := false
+				for _, ipcID := range ipcIDs {
+					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*nic)) {
+						found = true
+						break
+					}
+				}
+				Expect(found).To(Equal(true))
+			}
+			utils.Logf("Validation succeeded for a non-VMSS cluster")
 		}
 	})
 
-	It("should make outbound IP of pod same as in SLB's outbound rules", func() {
+	It("should make outbound IP of pod same as in SLB's outbound rules", Label(utils.TestSuiteLabelSLBOutbound), func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("only test standard load balancer")
+		}
+
 		rgName := tc.GetResourceGroup()
 		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
-
-		if !strings.EqualFold(string(lb.Sku.Name), "standard") {
-			utils.Logf("sku: %s", lb.Sku.Name)
-			Skip("only support standard load balancer")
-		}
 
 		Expect(lb.OutboundRules).NotTo(BeNil())
 		var fipConfigIDs []string
@@ -161,7 +195,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				}
 			}
 		}
-		Expect(len(outboundRuleIPs)).NotTo(Equal(0))
+		if len(outboundRuleIPs) == 0 {
+			Skip("skip validating outbound IPs since outbound rules are not configured on SLB")
+		}
 
 		podTemplate := createPodGetIP()
 		err = utils.CreatePod(cs, ns.Name, podTemplate)
@@ -185,12 +221,10 @@ func createPodGetIP() *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:            "test-app",
-					Image:           "appropriate/curl",
+					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
-						"/bin/sh",
-						"-c",
-						`curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me`,
+						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
 					},
 				},
 			},

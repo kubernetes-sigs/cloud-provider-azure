@@ -29,7 +29,7 @@ Kubernetes v1.12 adds support for [Azure availability zones (AZ)](https://azure.
 
 ## Pre-requirements
 
-Because only standard load balancer is supported with AZ, it is a prerequisite to enable AZ for the cluster. It should be configured in Azure cloud provider configure file (e.g. `/etc/kubernetes/azure.json`):
+Because only standard load balancer is supported with AZ, it is a prerequisite to enable AZ for the cluster. It should be configured in Azure cloud provider configure file (e.g. `/etc/kubernetes/cloud-config/azure.json`):
 
 ```json
 {

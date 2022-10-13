@@ -57,8 +57,8 @@ type Logger interface {
 // and location of the tmpdir are returned.
 //
 // Note: we return a tear-down func instead of a stop channel because the later will leak temporary
-// 		 files that because Golang testing's call to os.Exit will not give a stop channel go routine
-// 		 enough time to remove temporary files.
+// files that because Golang testing's call to os.Exit will not give a stop channel go routine
+// enough time to remove temporary files.
 func StartTestServer(t Logger, customFlags []string) (result TestServer, err error) {
 	stopCh := make(chan struct{})
 	tearDown := func() {
@@ -120,7 +120,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 
 	errCh := make(chan error)
 	go func(stopCh <-chan struct{}) {
-		if err := app.Run(context.TODO(), config.Complete()); err != nil {
+		if err := app.Run(context.TODO(), config.Complete(), nil); err != nil {
 			errCh <- err
 		}
 	}(stopCh)

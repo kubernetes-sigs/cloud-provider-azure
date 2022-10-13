@@ -18,12 +18,15 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
+
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +35,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
@@ -165,7 +169,7 @@ func TestGetZone(t *testing.T) {
 		}()
 		defer listener.Close()
 
-		cloud.metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+		cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
@@ -184,6 +188,62 @@ func TestGetZone(t *testing.T) {
 		if err == nil && zone.Region != cloud.Location {
 			t.Errorf("Test [%s] unexpected region: %s, expected: %s", test.name, zone.Region, cloud.Location)
 		}
+	}
+}
+
+func TestGetPlatformSubFaultDomain(t *testing.T) {
+	for _, testCase := range []struct {
+		description string
+		nilCompute  bool
+		expectedErr error
+	}{
+		{
+			description: "GetPlatformSubFaultDomain should parse the correct platformSubFaultDomain",
+		},
+		{
+			description: "GetPlatformSubFaultDomain should report an error if the compute is nil",
+			nilCompute:  true,
+			expectedErr: errors.New("failure of getting compute information from instance metadata"),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			cloud := &Cloud{
+				Config: Config{
+					Location:            "eastus",
+					UseInstanceMetadata: true,
+				},
+			}
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
+			}
+
+			respString := `{"compute":{"zone":"1", "platformFaultDomain":"1", "location":"westus", "platformSubFaultDomain": "2"}}`
+			if testCase.nilCompute {
+				respString = "{}"
+			}
+			mux := http.NewServeMux()
+			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, respString)
+			}))
+			go func() {
+				_ = http.Serve(listener, mux)
+			}()
+			defer listener.Close()
+
+			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
+			}
+
+			fd, err := cloud.GetPlatformSubFaultDomain()
+			if testCase.expectedErr != nil {
+				assert.Equal(t, testCase.expectedErr, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, "2", fd)
+			}
+		})
 	}
 }
 
@@ -240,4 +300,78 @@ func TestAvailabilitySetGetZoneByNodeName(t *testing.T) {
 	zone, err = az.GetZoneByNodeName(context.Background(), "vm-0")
 	assert.Equal(t, fmt.Errorf("node informer is not synced when trying to GetUnmanagedNodes"), err)
 	assert.Equal(t, cloudprovider.Zone{}, zone)
+}
+
+func TestSyncRegionZonesMap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, testCase := range []struct {
+		description   string
+		zones         map[string][]string
+		getZonesErr   *retry.Error
+		expectedZones map[string][]string
+		expectedErr   error
+	}{
+		{
+			description: "syncRegionZonesMap should report an error if failed to get zones",
+			getZonesErr: retry.NewError(false, fmt.Errorf("error")),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+		},
+		{
+			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
+			expectedZones: make(map[string][]string),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			az := &Cloud{
+				ZoneClient: mockzoneclient.NewMockInterface(ctrl),
+			}
+			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
+			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+
+			err := az.syncRegionZonesMap()
+			if err != nil {
+				assert.EqualError(t, testCase.expectedErr, err.Error())
+			}
+			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
+		})
+	}
+}
+
+func TestGetRegionZonesBackoff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, testCase := range []struct {
+		description   string
+		zones         map[string][]string
+		getZonesErr   *retry.Error
+		expectedZones map[string][]string
+		expectedErr   error
+	}{
+		{
+			description: "syncRegionZonesMap should report an error if failed to get zones",
+			getZonesErr: retry.NewError(false, fmt.Errorf("error")),
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
+		},
+		{
+			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
+			expectedZones: make(map[string][]string),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			az := &Cloud{
+				ZoneClient: mockzoneclient.NewMockInterface(ctrl),
+			}
+			mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
+			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+
+			_, err := az.getRegionZonesBackoff("eastus2")
+			if err != nil {
+				assert.EqualError(t, testCase.expectedErr, err.Error())
+			}
+			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
+		})
+	}
 }

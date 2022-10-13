@@ -7,12 +7,17 @@ description: >
     Deploy a cluster with In-tree Cloud Provider Azure.
 ---
 
-To deploy an In-tree Cloud Provider Azure, all you need to do is deploy a cluster using AKS-Engine with the API model defined [here](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/az.json). The AKS-Engine will automatically deploy the Kubernetes components needed and you don't have to deploy them manually. However, customization is possible by modifying the manifests in `/etc/kubernetes` on master node. Here are the examples:
+[cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) can be used to
+provision a Kubernetes cluster with in-tree cloud-provider-azure.
 
-[`kube-apiserver`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/in-tree/kube-apiserver.yaml)
+```sh
+export AZURE_SUBSCRIPTION_ID=<subscription-id>
+export AZURE_TENANT_ID=<tenant-id>
+export AZURE_CLIENT_ID=<client-id>
+export AZURE_CLIENT_SECRET=<client-secret>
+export CLUSTER_NAME=<cluster-name>
+export AZURE_RESOURCE_GROUP=<resource-group>
+export USE_IN_TREE_CLOUD_PROVIDER=true
 
-[`kube-controller-manager`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/in-tree/kube-controller-manager.yaml)
-
-[`kube-scheduler`](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/in-tree/kube-scheduler.yaml)
-
-To customize `kubelet`, you need to modify the starting command like [here](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/examples/in-tree/kubelet.manifest).
+make deploy-cluster
+```

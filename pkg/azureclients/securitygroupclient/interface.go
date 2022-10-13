@@ -19,14 +19,14 @@ package securitygroupclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
 	// APIVersion is the API version for network.
-	APIVersion = "2020-08-01"
+	APIVersion = "2021-08-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2018-11-01"
 	// AzureStackCloudName is the cloud name of Azure Stack
@@ -34,8 +34,7 @@ const (
 )
 
 // Interface is the client interface for SecurityGroups.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/interface.go -package=mocksecuritygroupclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a SecurityGroup.
 	Get(ctx context.Context, resourceGroupName string, networkSecurityGroupName string, expand string) (result network.SecurityGroup, rerr *retry.Error)

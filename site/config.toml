@@ -1,7 +1,7 @@
-baseURL = "https://kubernetes-sigs.github.io/cloud-provider-azure/"
+baseURL = "https://cloud-provider-azure.sigs.k8s.io"
 title = "Cloud Provider Azure"
 
-publishDir = "../public"
+publishDir = "public"
 
 enableRobotsTXT = true
 
@@ -96,7 +96,7 @@ version = "0.0"
 
 # A link to latest version of the docs. Used in the "version-banner" partial to
 # point people to the main doc site.
-url_latest_version = "https://example.com"
+url_latest_version = "https://cloud-provider-azure.sigs.k8s.io"
 
 # Repository configuration (URLs for in-page links to opening issues and suggesting changes)
 github_repo = "https://github.com/kubernetes-sigs/cloud-provider-azure"

@@ -58,56 +58,60 @@ Note: Cloud provider currently supports three authentication methods, you can ch
 - [Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview):
   - For system-assigned managed identity: set `useManagedIdentityExtension` to true
   - For user-assigned managed identity: set `useManagedIdentityExtension` to true and also set `userAssignedIdentityID`
-- [Service Principal](https://github.com/Azure/aks-engine/blob/master/docs/topics/service-principals.md): set `aadClientID` and `aadClientSecret`
+- [Service Principal](https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/docs/book/src/topics/getting-started.md#setting-up-your-azure-environment): set `aadClientID` and `aadClientSecret`
 - [Client Certificate](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-protocols-oauth-service-to-service): set `aadClientCertPath` and `aadClientCertPassword`
 
 If more than one value is set, the order is `Managed Identity` > `Service Principal` > `Client Certificate`.
 
 ## Cluster config
 
-|Name|Description|Remark|
-|---|---|---|
-|resourceGroup|The name of the resource group that the cluster is deployed in||
-|location|The location of the resource group that the cluster is deployed in||
-|vnetName|The name of the VNet that the cluster is deployed in||
-|vnetResourceGroup|The name of the resource group that the Vnet is deployed in||
-|subnetName|The name of the subnet that the cluster is deployed in||
-|securityGroupName|The name of the security group attached to the cluster's subnet||
-|securityGroupResourceGroup|The name of the resource group that the security group is deployed in||
-|routeTableName|The name of the route table attached to the subnet that the cluster is deployed in|Optional in 1.6|
-|primaryAvailabilitySetName[*](#primaryavailabilitysetname)|The name of the availability set that should be used as the load balancer backend|Optional|
-|vmType|The type of azure nodes. Candidate values are: `vmss` and `standard`|Optional, default to `standard`|
-|primaryScaleSetName[*](#primaryscalesetname)|The name of the scale set that should be used as the load balancer backend|Optional|
-|cloudProviderBackoff|Enable exponential backoff to manage resource request retries|Boolean value, default to false|
-|cloudProviderBackoffRetries|Backoff retry limit|Integer value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffExponent|Backoff exponent|Float value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffDuration|Backoff duration|Integer value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffJitter|Backoff jitter|Float value, valid if `cloudProviderBackoff` is true|
-|cloudProviderBackoffMode|Backoff mode, supported values are "v2" and "default". Note that "v2" has been deprecated since v1.18.0. |Default to "default"|
-|cloudProviderRateLimit|Enable rate limiting|Boolean value, default to false|
-|cloudProviderRateLimitQPS|Rate limit QPS (Read)|Float value, valid if `cloudProviderRateLimit` is true|
-|cloudProviderRateLimitBucket|Rate limit Bucket Size|Integar value, valid if `cloudProviderRateLimit` is true|
-|cloudProviderRateLimitQPSWrite|Rate limit QPS (Write)|Float value, valid if `cloudProviderRateLimit` is true|
-|cloudProviderRateLimitBucketWrite|Rate limit Bucket Size|Integer value, valid if `cloudProviderRateLimit` is true|
-|useInstanceMetadata|Use instance metadata service where possible|Boolean value, default to false|
-|loadBalancerSku|Sku of Load Balancer and Public IP. Candidate values are: `basic` and `standard`.|Default to `basic`.|
-|excludeMasterFromStandardLB|ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.|Boolean value, default to true.|
-|disableOutboundSNAT| Disable outbound SNAT for SLB | Default to false and available since v1.11.9, v1.12.7, v1.13.5 and v1.14.0|
-|maximumLoadBalancerRuleCount|Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer|Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48)|
-|routeTableResourceGroup| The resource group name for routeTable | Default same as resourceGroup and available since v1.15.0 |
-|loadBalancerName| Working together with loadBalancerResourceGroup to determine the LB name in a different resource group | Since v1.18.0, default is cluster name setting on kube-controller-manager|
-|loadBalancerResourceGroup | The load balancer resource group name, which is different from node resource group | Since v1.18.0, default is same as resourceGroup|
-|disableAvailabilitySetNodes| Disable supporting for AvailabilitySet virtual machines in vmss cluster. It should be only used when vmType is "vmss" and all the nodes (including master) are VMSS virtual machines | Since v1.18.0, default is false|
-|availabilitySetNodesCacheTTLInSeconds|Cache TTL in seconds for availabilitySet Nodes|Since v1.18.0, default is 900|
-|vmssCacheTTLInSeconds|Cache TTL in seconds for VMSS|Since v1.18.0, default is 600|
-|vmssVirtualMachinesCacheTTLInSeconds|Cache TTL in seconds for VMSS virtual machines|Since v1.18.0, default is 600|
-|vmCacheTTLInSeconds|Cache TTL in seconds for virtual machines|Since v1.18.0, default is 60|
-|loadBalancerCacheTTLInSeconds|Cache TTL in seconds for load balancers|Since v1.18.0, default is 120|
-|nsgCacheTTLInSeconds|Cache TTL in seconds for network security group|Since v1.18.0, default is 120|
-|routeTableCacheTTLInSeconds|Cache TTL in seconds for route table|Since v1.18.0, default is 120|
-| disableAzureStackCloud | DisableAzureStackCloud disables AzureStackCloud support. It should be used when setting Cloud with "AZURESTACKCLOUD" to customize ARM endpoints while the cluster is not running on AzureStack. Default is false. |Optional. Supported since v1.20.0 in out-of-tree cloud provider Azure. |
-| tags | tags that would be tagged onto the cloud provider managed resources, including lb, public IP, network security group and route table. | Optional. Supported since v1.20.0. |
-| systemTags | tag keys that should not be deleted when being updated. | Optional. Supported since v1.21.0. |
+| Name                                                       | Description                                                                                                                                                                                                       | Remark                                                                                                                                |
+|------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| resourceGroup                                              | The name of the resource group that the cluster is deployed in                                                                                                                                                    ||
+| location                                                   | The location of the resource group that the cluster is deployed in                                                                                                                                                ||
+| vnetName                                                   | The name of the VNet that the cluster is deployed in                                                                                                                                                              ||
+| vnetResourceGroup                                          | The name of the resource group that the Vnet is deployed in                                                                                                                                                       ||
+| subnetName                                                 | The name of the subnet that the cluster is deployed in                                                                                                                                                            ||
+| securityGroupName                                          | The name of the security group attached to the cluster's subnet                                                                                                                                                   ||
+| securityGroupResourceGroup                                 | The name of the resource group that the security group is deployed in                                                                                                                                             ||
+| routeTableName                                             | The name of the route table attached to the subnet that the cluster is deployed in                                                                                                                                | Optional in 1.6                                                                                                                       |
+| primaryAvailabilitySetName[*](#primaryavailabilitysetname) | The name of the availability set that should be used as the load balancer backend                                                                                                                                 | Optional                                                                                                                              |
+| vmType                                                     | The type of azure nodes. Candidate values are: `vmss` and `standard`                                                                                                                                              | Optional, default to `standard`                                                                                                       |
+| primaryScaleSetName[*](#primaryscalesetname)               | The name of the scale set that should be used as the load balancer backend                                                                                                                                        | Optional                                                                                                                              |
+| cloudProviderBackoff                                       | Enable exponential backoff to manage resource request retries                                                                                                                                                     | Boolean value, default to false                                                                                                       |
+| cloudProviderBackoffRetries                                | Backoff retry limit                                                                                                                                                                                               | Integer value, valid if `cloudProviderBackoff` is true                                                                                |
+| cloudProviderBackoffExponent                               | Backoff exponent                                                                                                                                                                                                  | Float value, valid if `cloudProviderBackoff` is true                                                                                  |
+| cloudProviderBackoffDuration                               | Backoff duration                                                                                                                                                                                                  | Integer value, valid if `cloudProviderBackoff` is true                                                                                |
+| cloudProviderBackoffJitter                                 | Backoff jitter                                                                                                                                                                                                    | Float value, valid if `cloudProviderBackoff` is true                                                                                  |
+| cloudProviderBackoffMode                                   | Backoff mode, supported values are "v2" and "default". Note that "v2" has been deprecated since v1.18.0.                                                                                                          | Default to "default"                                                                                                                  |
+| cloudProviderRateLimit                                     | Enable rate limiting                                                                                                                                                                                              | Boolean value, default to false                                                                                                       |
+| cloudProviderRateLimitQPS                                  | Rate limit QPS (Read)                                                                                                                                                                                             | Float value, valid if `cloudProviderRateLimit` is true                                                                                |
+| cloudProviderRateLimitBucket                               | Rate limit Bucket Size                                                                                                                                                                                            | Integar value, valid if `cloudProviderRateLimit` is true                                                                              |
+| cloudProviderRateLimitQPSWrite                             | Rate limit QPS (Write)                                                                                                                                                                                            | Float value, valid if `cloudProviderRateLimit` is true                                                                                |
+| cloudProviderRateLimitBucketWrite                          | Rate limit Bucket Size                                                                                                                                                                                            | Integer value, valid if `cloudProviderRateLimit` is true                                                                              |
+| useInstanceMetadata                                        | Use instance metadata service where possible                                                                                                                                                                      | Boolean value, default to false                                                                                                       |
+| loadBalancerSku                                            | Sku of Load Balancer and Public IP. Candidate values are: `basic` and `standard`.                                                                                                                                 | Default to `basic`.                                                                                                                   |
+| excludeMasterFromStandardLB                                | ExcludeMasterFromStandardLB excludes master nodes from standard load balancer.                                                                                                                                    | Boolean value, default to true.                                                                                                       |
+| disableOutboundSNAT                                        | Disable outbound SNAT for SLB                                                                                                                                                                                     | Default to false and available since v1.11.9, v1.12.7, v1.13.5 and v1.14.0                                                            |
+| maximumLoadBalancerRuleCount                               | Maximum allowed LoadBalancer Rule Count is the limit enforced by Azure Load balancer                                                                                                                              | Integer value, default to [148](https://github.com/kubernetes/kubernetes/blob/v1.10.0/pkg/cloudprovider/providers/azure/azure.go#L48) |
+| routeTableResourceGroup                                    | The resource group name for routeTable                                                                                                                                                                            | Default same as resourceGroup and available since v1.15.0                                                                             |
+| loadBalancerName                                           | Working together with loadBalancerResourceGroup to determine the LB name in a different resource group                                                                                                            | Since v1.18.0, default is cluster name setting on kube-controller-manager                                                             |
+| loadBalancerResourceGroup                                  | The load balancer resource group name, which is different from node resource group                                                                                                                                | Since v1.18.0, default is same as resourceGroup                                                                                       |
+| disableAvailabilitySetNodes                                | Disable supporting for AvailabilitySet virtual machines in vmss cluster. It should be only used when vmType is "vmss" and all the nodes (including master) are VMSS virtual machines                              | Since v1.18.0, default is false                                                                                                       |
+| availabilitySetNodesCacheTTLInSeconds                      | Cache TTL in seconds for availabilitySet Nodes                                                                                                                                                                    | Since v1.18.0, default is 900                                                                                                         |
+| vmssCacheTTLInSeconds                                      | Cache TTL in seconds for VMSS                                                                                                                                                                                     | Since v1.18.0, default is 600                                                                                                         |
+| vmssVirtualMachinesCacheTTLInSeconds                       | Cache TTL in seconds for VMSS virtual machines                                                                                                                                                                    | Since v1.18.0, default is 600                                                                                                         |
+| vmCacheTTLInSeconds                                        | Cache TTL in seconds for virtual machines                                                                                                                                                                         | Since v1.18.0, default is 60                                                                                                          |
+| loadBalancerCacheTTLInSeconds                              | Cache TTL in seconds for load balancers                                                                                                                                                                           | Since v1.18.0, default is 120                                                                                                         |
+| nsgCacheTTLInSeconds                                       | Cache TTL in seconds for network security group                                                                                                                                                                   | Since v1.18.0, default is 120                                                                                                         |
+| routeTableCacheTTLInSeconds                                | Cache TTL in seconds for route table                                                                                                                                                                              | Since v1.18.0, default is 120                                                                                                         |
+| disableAzureStackCloud                                     | DisableAzureStackCloud disables AzureStackCloud support. It should be used when setting Cloud with "AZURESTACKCLOUD" to customize ARM endpoints while the cluster is not running on AzureStack. Default is false. | Optional. Supported since v1.20.0 in out-of-tree cloud provider Azure.                                                                |
+| tags                                                       | Tags that would be tagged onto the cloud provider managed resources, including lb, public IP, network security group and route table.                                                                             | Optional. Supported since v1.20.0.                                                                                                    |
+| tagsMap                                                    | JSON-style tags, will be merged with `tags`                                                                                                                                                                       | Optional. Supported since v1.23.0.                                                                                                    |
+| systemTags                                                 | Tag keys that should not be deleted when being updated.                                                                                                                                                           | Optional. Supported since v1.21.0.                                                                                                    |
+| enableMultipleStandardLoadBalancers                        | Enable multiple standard Load Balancers per cluster.                                                                                                                                                              | Optional. Supported since v1.20.0                                                                                                     |
+| loadBalancerBackendPoolConfigurationType                   | The type of the Load Balancer backend pool. Supported values are `nodeIPConfiguration` (default) and `nodeIP`                                                                                                     | Optional. Supported since v1.23.0                                                                                                     |
+| putVMSSVMBatchSize                                         | The number of requests the client sends concurrently in a batch when putting the VMSS VMs. Anything smaller than or equal to 0 means to update VMSS VMs one by one in sequence.                                   | Optional. Supported since v1.24.0.                                                                                                    |
 
 ### primaryAvailabilitySetName
 
@@ -129,11 +133,11 @@ Master nodes are not added to the backends of Azure Load Balancer (ALB) if `excl
 
 By default, if nodes are labeled with `node-role.kubernetes.io/master`, they would also be excluded from ALB. If you want to add the master nodes to ALB, `excludeMasterFromStandardLB` should be set to false and label `node-role.kubernetes.io/master` should be removed if it has already been applied.
 
-### Setting Azure cloud provider from Kubernetes secrets
+### Dynamically reloading cloud controller manager
 
 Since v1.21.0, Azure cloud provider supports reading the cloud config from Kubernetes secrets. The secret is a serialized version of `azure.json` file. When the secret is changed, the cloud controller manager will re-constructing itself without restarting the pod.
 
-To enable this feature, set `--enable-dynamic-reloading=true` and configure the secret name, namespace and data key by `--cloud-config-secret-name`, `--cloud-config-secret-namespace` and `--cloud-config-key`. When initializing from secret, the `--cloud-config` would be ignored.
+To enable this feature, set `--enable-dynamic-reloading=true` and configure the secret name, namespace and data key by `--cloud-config-secret-name`, `--cloud-config-secret-namespace` and `--cloud-config-key`. When initializing from secret, the `--cloud-config` should not be set.
 
 > Note that the `--enable-dynamic-reloading` cannot be `false` if `--cloud-config` is empty. To build the cloud provider from classic config file, please explicitly specify the `--cloud-config` and do not set `--enable-dynamic-reloading=true`. In this manner, the cloud controller manager will not be updated when the config file is changed. You need to restart the pod to manually trigger the re-initialization.
 
@@ -170,6 +174,8 @@ subjects:
   namespace: kube-system
 ```
 
+It is also supported to build the cloud controller manager from the cloud config file and reload dynamically. To use this way, turn on `--enable-dynamic-reloading` and set `--cloud-config` to an non-empty value.
+
 ### per client rate limiting
 
 Since v1.18.0, the original global rate limiting has been switched to per-client. A set of new rate limit configure options are introduced for each client, which includes:
@@ -188,6 +194,15 @@ Since v1.18.0, the original global rate limiting has been switched to per-client
 - SnapshotRateLimit
 - VirtualMachineScaleSetRateLimit
 - VirtualMachineSizeRateLimit
+- AvailabilitySetRateLimit
+- AttachDetachDiskRateLimit
+- ContainerServiceRateLimit
+- DeploymentRateLimit
+- PrivateDNSRateLimit
+- PrivateDNSZoneGroupRateLimit
+- PrivateEndpointRateLimit
+- PrivateLinkServiceRateLimit
+- VirtualNetworkRateLimit
 
 The original rate limiting options ("cloudProviderRateLimitBucket", "cloudProviderRateLimitBucketWrite", "cloudProviderRateLimitQPS", "cloudProviderRateLimitQPSWrite") are still supported, and they would be the default values if per-client rate limiting is not configured.
 
@@ -219,7 +234,7 @@ Here is an example of per-client config:
 
 When running Kubelet with kube-controller-manager, it also supports running without Azure identity since v1.15.0.
 
-Both kube-controller-manager and kubelet should configure `--cloud-provider=azure --cloud-config=/etc/kubernetes/azure.json`, but the contents for `azure.json` are different:
+Both kube-controller-manager and kubelet should configure `--cloud-provider=azure --cloud-config=/etc/kubernetes/cloud-config/azure.json`, but the contents for `azure.json` are different:
 
 (1) For kube-controller-manager, refer the above part for setting `azure.json`.
 
@@ -296,7 +311,7 @@ For authentication methods, only Service Principal supports this feature, and `a
 
 ## Current default rate-limiting values
 
-The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [AKS-Engine](https://github.com/Azure/aks-engine) clusters prior to Kubernetes version v1.18.0.
+The following are the default rate limiting values configured in [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) clusters prior to Kubernetes version v1.18.0.
 
 ```json
     "cloudProviderBackoff": true,

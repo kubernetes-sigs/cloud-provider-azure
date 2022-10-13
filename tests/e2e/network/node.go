@@ -19,13 +19,14 @@ package network
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
-	. "github.com/onsi/ginkgo"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -46,7 +47,7 @@ var (
 	vmNameRE           = regexp.MustCompile(`(k8s-.+-\d+)-.+`)
 )
 
-var _ = Describe("Azure node resources", func() {
+var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func() {
 	basename := "node-resources"
 
 	var cs clientset.Interface
@@ -81,7 +82,7 @@ var _ = Describe("Azure node resources", func() {
 
 		utils.Logf("getting VMs")
 		vms, err := utils.ListVMs(tc)
-		Expect(utils.HandleVMNotFoundErr(err)).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
 
 		if vms != nil && len(*vms) != 0 {
 			for _, vm := range *vms {
@@ -102,14 +103,14 @@ var _ = Describe("Azure node resources", func() {
 
 		utils.Logf("getting VMSS VMs")
 		vmsses, err := utils.ListVMSSes(tc)
-		Expect(utils.HandleVMSSNotFoundErr(err)).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
 
-		if vmsses != nil && len(*vmsses) != 0 {
-			for _, vmss := range *vmsses {
+		if len(vmsses) != 0 {
+			for _, vmss := range vmsses {
 				vmssVMs, err := utils.ListVMSSVMs(tc, *vmss.Name)
 				Expect(err).NotTo(HaveOccurred())
 
-				for _, vmssVM := range *vmssVMs {
+				for _, vmssVM := range vmssVMs {
 					nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -135,116 +136,105 @@ var _ = Describe("Azure node resources", func() {
 
 		utils.Logf("getting all VMs managed by availabilitySet")
 		vmasVMs, err := utils.ListVMs(tc)
-		Expect(utils.HandleVMNotFoundErr(err)).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
 
-		if vmasVMs != nil && len(*vmasVMs) != 0 {
-			for _, vmasVM := range *vmasVMs {
-				nodeName, err := utils.GetVMComputerName(vmasVM)
-				Expect(err).NotTo(HaveOccurred())
+		for _, vmasVM := range *vmasVMs {
+			nodeName, err := utils.GetVMComputerName(vmasVM)
+			Expect(err).NotTo(HaveOccurred())
 
-				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
-				Expect(err).NotTo(HaveOccurred())
+			node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+			Expect(err).NotTo(HaveOccurred())
 
-				var privateIP string
-				for _, address := range node.Status.Addresses {
-					if address.Type == v1.NodeInternalIP {
-						privateIP = address.Address
-						break
-					}
+			var privateIP string
+			for _, address := range node.Status.Addresses {
+				if address.Type == v1.NodeInternalIP {
+					privateIP = address.Address
+					break
 				}
-
-				nicIDs, err := utils.GetNicIDsFromVM(vmasVM)
-				Expect(err).NotTo(HaveOccurred())
-
-				found := false
-
-			Loop:
-				for nicID := range nicIDs {
-					nic, err := utils.GetNICByID(nicID, vmasNICs)
-					Expect(err).NotTo(HaveOccurred())
-
-					for _, ipConfig := range *nic.IPConfigurations {
-						if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
-							found = true
-							break Loop
-						}
-					}
-				}
-				Expect(found).To(BeTrue())
 			}
+
+			nicIDs, err := utils.GetNicIDsFromVM(vmasVM)
+			Expect(err).NotTo(HaveOccurred())
+
+			found := false
+
+		Loop:
+			for nicID := range nicIDs {
+				nic, err := utils.GetNICByID(nicID, vmasNICs)
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ipConfig := range *nic.IPConfigurations {
+					if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+						found = true
+						break Loop
+					}
+				}
+			}
+			Expect(found).To(BeTrue())
 		}
 
 		utils.Logf("getting all scale sets")
 		vmsses, err := utils.ListVMSSes(tc)
-		Expect(utils.HandleVMSSNotFoundErr(err)).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("getting all NICs of VMSSes")
 		var vmssAllNics []network.Interface
 		vmssVMs := make([]compute.VirtualMachineScaleSetVM, 0)
-		if vmsses != nil && len(*vmsses) != 0 {
-			for _, vmss := range *vmsses {
-				vmssVMList, err := utils.ListVMSSVMs(tc, *vmss.Name)
-				Expect(err).NotTo(HaveOccurred())
-				vmssVMs = append(vmssVMs, *vmssVMList...)
+		for _, vmss := range vmsses {
+			vmssVMList, err := utils.ListVMSSVMs(tc, *vmss.Name)
+			Expect(err).NotTo(HaveOccurred())
+			vmssVMs = append(vmssVMs, vmssVMList...)
 
-				vmssNics, err := utils.ListVMSSNICs(tc, *vmss.Name)
-				Expect(err).NotTo(HaveOccurred())
+			vmssNics, err := utils.ListVMSSNICs(tc, *vmss.Name)
+			Expect(err).NotTo(HaveOccurred())
 
-				vmssAllNics = append(vmssAllNics, *vmssNics...)
-			}
+			vmssAllNics = append(vmssAllNics, *vmssNics...)
 		}
 
 		utils.Logf("getting all NICs of VMSS VMs")
-		if len(vmssVMs) != 0 {
-			utils.Logf("found %d VMSS VMs", len(vmssVMs))
+		for _, vmssVM := range vmssVMs {
+			utils.Logf("Checking %d VMSS VM %q", vmssVM.Name)
+			nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
+			Expect(err).NotTo(HaveOccurred())
 
-			for _, vmssVM := range vmssVMs {
-				nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
-				Expect(err).NotTo(HaveOccurred())
+			node, err := utils.GetNode(cs, strings.ToLower(nodeName))
+			Expect(err).NotTo(HaveOccurred())
 
-				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
-				Expect(err).NotTo(HaveOccurred())
-
-				var privateIP string
-				for _, address := range node.Status.Addresses {
-					if address.Type == v1.NodeInternalIP {
-						privateIP = address.Address
-						break
-					}
+			var privateIP string
+			for _, address := range node.Status.Addresses {
+				if address.Type == v1.NodeInternalIP {
+					privateIP = address.Address
+					break
 				}
-
-				nicIDs, err := utils.GetNicIDsFromVMSSVM(vmssVM)
-				Expect(err).NotTo(HaveOccurred())
-
-				found := false
-
-			VMSSLoop:
-				for nicID := range nicIDs {
-					nic, err := utils.GetNICByID(nicID, &vmssAllNics)
-					Expect(err).NotTo(HaveOccurred())
-
-					for _, ipConfig := range *nic.IPConfigurations {
-						if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
-							found = true
-							break VMSSLoop
-						}
-					}
-				}
-				Expect(found).To(BeTrue())
 			}
+
+			nicIDs, err := utils.GetNicIDsFromVMSSVM(vmssVM)
+			Expect(err).NotTo(HaveOccurred())
+
+			found := false
+
+		VMSSLoop:
+			for nicID := range nicIDs {
+				nic, err := utils.GetNICByID(nicID, &vmssAllNics)
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ipConfig := range *nic.IPConfigurations {
+					if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+						found = true
+						break VMSSLoop
+					}
+				}
+			}
+			Expect(found).To(BeTrue())
 		}
 	})
 
-	It("should set route table correctly when the cluster is enabled by kubenet [Kubenet]", func() {
+	It("should set route table correctly when the cluster is enabled by kubenet", Label(utils.TestSuiteLabelKubenet), func() {
 		utils.Logf("getting route table")
 		routeTables, err := utils.ListRouteTables(tc)
-		if err != nil {
-			if strings.EqualFold(err.Error(), "no route table found") {
-				utils.Logf("got error, error string is: %q", err.Error())
-				Skip("only test cluster with Kubenet network")
-			} else {
-				Fail(fmt.Sprintf("Unexpected err %+v happens", err))
-			}
+		Expect(err).NotTo(HaveOccurred())
+		if len(*routeTables) == 0 {
+			Skip("Skip because there's no routeTables, only test cluster with Kubenet network")
 		}
 
 		nodes, err := utils.GetAllNodes(cs)
@@ -287,8 +277,8 @@ var _ = Describe("Azure nodes", func() {
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		Port:       nginxPort,
-		TargetPort: intstr.FromInt(nginxPort),
+		Port:       serverPort,
+		TargetPort: intstr.FromInt(serverPort),
 	}}
 
 	BeforeEach(func() {
@@ -303,7 +293,7 @@ var _ = Describe("Azure nodes", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating deployment " + serviceName)
-		deployment := createNginxDeploymentManifest(serviceName, labels)
+		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -320,7 +310,7 @@ var _ = Describe("Azure nodes", func() {
 		tc = nil
 	})
 
-	It("should expose zones correctly after created [VMSS][Serial][Slow]", func() {
+	It("should expose zones correctly after created", Label(utils.TestSuiteLabelVMSS, utils.TestSuiteLabelSerial, utils.TestSuiteLabelSlow), func() {
 		utils.Logf("getting test VMSS")
 		vmss, err := utils.FindTestVMSS(tc, tc.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
@@ -343,7 +333,10 @@ var _ = Describe("Azure nodes", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should support crossing resource groups [Multi-Group][AvailabilitySet]", func() {
+	It("should support crossing resource groups", Label(utils.TestSuiteLabelMultiGroup, utils.TestSuiteLabelAvailabilitySet), func() {
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			Skip("aks cluster cannot obtain master node, skip the case")
+		}
 		master, err := utils.GetMaster(cs)
 		Expect(err).NotTo(HaveOccurred())
 

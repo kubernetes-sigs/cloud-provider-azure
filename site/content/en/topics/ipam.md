@@ -58,7 +58,7 @@ The following configurations from cloud-controller-manager would be used as defa
 | name | type | default | description |
 | ----- | -----| ----- | ----- |
 | allocate-node-cidrs | bool | true | Should CIDRs for Pods be allocated and set on the cloud provider. |
-| cluster-cidr | string | "10.244.0.0/16" | CIDR Range for Pods in cluster. Requires --allocate-node-cidrs to be true. |
+| cluster-cidr | string | "10.244.0.0/16" | CIDR Range for Pods in cluster. Requires --allocate-node-cidrs to be true. It will be ignored when enabling dualstack. |
 | service-cluster-ip-range | string | "" | CIDR Range for Services in cluster, this would get excluded from the allocatable range. Requires --allocate-node-cidrs to be true. |
 | node-cidr-mask-size | int | 24 | Mask size for node cidr in cluster. Default is 24 for IPv4 and 64 for IPv6. |
 | node-cidr-mask-size-ipv4 | int | 24 | Mask size for IPv4 node cidr in dual-stack cluster. Default is 24. |
@@ -67,7 +67,7 @@ The following configurations from cloud-controller-manager would be used as defa
 
 ## Limitations
 
-1. We plan to integrate out-of-tree node ipam controller with aks-engine to provider a better experience. Before that, 
+1. We plan to integrate out-of-tree node ipam controller with [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) to provider a better experience. Before that, 
 the manual configuration is required.
 1. It is not supported to change the custom mask size value on the tag once it is set.
 1. For now, there is no e2e test covering this feature, so there can be potential bugs. It is not recommended enabling

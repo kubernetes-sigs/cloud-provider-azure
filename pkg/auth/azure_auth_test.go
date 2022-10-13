@@ -65,13 +65,13 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 	configs := []*AzureAuthConfig{
 		{
 			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "UserAssignedIdentityID",
+			UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
 		},
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
 			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "UserAssignedIdentityID",
+			UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
 			TenantID:                    "TenantID",
 			AADClientID:                 "AADClientID",
 			AADClientSecret:             "AADClientSecret",
@@ -104,6 +104,55 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 		assert.NoError(t, err)
 
 		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(msiEndpoint,
+			env.ServiceManagementEndpoint, config.UserAssignedIdentityID)
+		assert.NoError(t, err)
+		assert.Equal(t, token, spt)
+	}
+}
+
+func TestGetServicePrincipalTokenFromMSIWithIdentityResourceID(t *testing.T) {
+	configs := []*AzureAuthConfig{
+		{
+			UseManagedIdentityExtension: true,
+			UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+		},
+		// The Azure service principal is ignored when
+		// UseManagedIdentityExtension is set to true
+		{
+			UseManagedIdentityExtension: true,
+			UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+			TenantID:                    "TenantID",
+			AADClientID:                 "AADClientID",
+			AADClientSecret:             "AADClientSecret",
+		},
+	}
+	env := &azure.PublicCloud
+
+	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("{}"))
+		assert.NoError(t, err)
+	}))
+	originalEnv := os.Getenv(msiEndpointEnv)
+	originalSecret := os.Getenv(msiSecretEnv)
+	os.Setenv(msiEndpointEnv, server.URL)
+	os.Setenv(msiSecretEnv, "secret")
+	defer func() {
+		server.Close()
+		os.Setenv(msiEndpointEnv, originalEnv)
+		os.Setenv(msiSecretEnv, originalSecret)
+	}()
+
+	for _, config := range configs {
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+
+		msiEndpoint, err := adal.GetMSIVMEndpoint()
+		assert.NoError(t, err)
+
+		spt, err := adal.NewServicePrincipalTokenFromMSIWithIdentityResourceID(msiEndpoint,
 			env.ServiceManagementEndpoint, config.UserAssignedIdentityID)
 		assert.NoError(t, err)
 		assert.Equal(t, token, spt)
@@ -324,4 +373,22 @@ func TestAzureStackOverrides(t *testing.T) {
 	assert.Equal(t, env.ServiceManagementEndpoint, env.TokenAudience)
 	assert.Equal(t, env.ResourceManagerVMDNSSuffix, "cloudapp.test.com")
 	assert.Equal(t, env.ActiveDirectoryEndpoint, "https://login.microsoftonline.com")
+}
+
+func TestUsesNetworkResourceInDifferentTenant(t *testing.T) {
+	config := &AzureAuthConfig{
+		TenantID:                      "TenantID",
+		AADClientID:                   "AADClientID",
+		AADClientSecret:               "AADClientSecret",
+		NetworkResourceTenantID:       "NetworkTenantID",
+		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+	}
+
+	assert.Equal(t, config.UsesNetworkResourceInDifferentTenant(), true)
+	assert.Equal(t, config.UsesNetworkResourceInDifferentSubscription(), true)
+
+	config.NetworkResourceTenantID = ""
+	config.NetworkResourceSubscriptionID = ""
+	assert.Equal(t, config.UsesNetworkResourceInDifferentTenant(), false)
+	assert.Equal(t, config.UsesNetworkResourceInDifferentSubscription(), false)
 }

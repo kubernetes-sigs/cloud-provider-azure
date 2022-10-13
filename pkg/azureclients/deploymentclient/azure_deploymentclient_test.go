@@ -121,7 +121,7 @@ func TestGet(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	expected := resources.DeploymentExtended{}
@@ -136,10 +136,7 @@ func TestGetNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dpGetErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "read", "GetDeployment"),
-		Retriable: true,
-	}
+	dpGetErr := retry.GetRateLimitError(false, "GetDeployment")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 
@@ -154,11 +151,7 @@ func TestGetRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dpGetErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "GetDeployment", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	dpGetErr := retry.GetThrottlingError("GetDeployment", "client throttled", getFutureTime())
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 
@@ -184,7 +177,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -202,7 +195,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -222,7 +215,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -241,7 +234,7 @@ func TestList(t *testing.T) {
 	dpList := []resources.DeploymentExtended{getTestDeploymentExtended("dep"), getTestDeploymentExtended("dep1"), getTestDeploymentExtended("dep2")}
 	responseBody, err := json.Marshal(resources.DeploymentListResult{Value: &dpList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -357,7 +350,7 @@ func TestListWithListResponderError(t *testing.T) {
 	dpList := []resources.DeploymentExtended{getTestDeploymentExtended("dep"), getTestDeploymentExtended("dep1"), getTestDeploymentExtended("dep2")}
 	responseBody, err := json.Marshal(resources.DeploymentListResult{Value: &dpList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -379,7 +372,7 @@ func TestListWithNextPage(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = json.Marshal(resources.DeploymentListResult{Value: &dpList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
@@ -441,7 +434,7 @@ func TestListThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -462,7 +455,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -481,7 +474,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -544,7 +537,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 	dp := resources.Deployment{}
 	dpExtended := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(dpExtended.ID), dp, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -559,7 +552,7 @@ func TestDelete(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID)).Return(nil).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")
@@ -614,7 +607,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(dp.ID)).Return(throttleErr).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")

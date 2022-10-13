@@ -40,7 +40,7 @@ const (
 
 // InitializeCloudFromSecret initializes Azure cloud provider from Kubernetes secret.
 func (az *Cloud) InitializeCloudFromSecret() error {
-	config, err := az.getConfigFromSecret()
+	config, err := az.GetConfigFromSecret()
 	if err != nil {
 		klog.Errorf("Failed to get cloud-config from secret: %v", err)
 		return fmt.Errorf("InitializeCloudFromSecret: failed to get cloud config from secret %s/%s: %w", az.SecretNamespace, az.SecretName, err)
@@ -59,7 +59,7 @@ func (az *Cloud) InitializeCloudFromSecret() error {
 	return nil
 }
 
-func (az *Cloud) getConfigFromSecret() (*Config, error) {
+func (az *Cloud) GetConfigFromSecret() (*Config, error) {
 	// Read config from file and no override, return nil.
 	if az.Config.CloudConfigType == cloudConfigTypeFile {
 		return nil, nil

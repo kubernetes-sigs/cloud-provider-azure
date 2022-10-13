@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -99,7 +99,7 @@ func TestGet(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	expected := compute.VirtualMachineScaleSet{Response: autorest.Response{Response: response}}
@@ -153,7 +153,7 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -173,7 +173,7 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -199,7 +199,7 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -216,7 +216,7 @@ func TestList(t *testing.T) {
 	vmssList := []compute.VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
 	responseBody, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -238,7 +238,7 @@ func TestListNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -258,7 +258,7 @@ func TestListInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -284,7 +284,7 @@ func TestListThrottle(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	vmssClient := getTestVMSSClient(armClient)
 	result, rerr := vmssClient.List(context.TODO(), "rg")
@@ -301,7 +301,7 @@ func TestListWithListResponderError(t *testing.T) {
 	vmssList := []compute.VirtualMachineScaleSet{getTestVMSS("vmss1"), getTestVMSS("vmss2"), getTestVMSS("vmss3")}
 	responseBody, err := json.Marshal(compute.VirtualMachineScaleSetListResult{Value: &vmssList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -329,7 +329,7 @@ func TestListWithNextPage(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
 		}, nil)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
@@ -533,10 +533,7 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	vmssCreateOrUpdateErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "VMSSCreateOrUpdate"),
-		Retriable: true,
-	}
+	vmssCreateOrUpdateErr := retry.GetRateLimitError(true, "VMSSCreateOrUpdate")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssClient := getTestVMSSClientWithNeverRateLimiter(armClient)
@@ -550,11 +547,7 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	vmssCreateOrUpdateErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "VMSSCreateOrUpdate", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	vmssCreateOrUpdateErr := retry.GetThrottlingError("VMSSCreateOrUpdate", "client throttled", getFutureTime())
 
 	vmss := getTestVMSS("vmss1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -678,7 +671,7 @@ func TestWaitForAsyncOperationResult(t *testing.T) {
 
 	armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), &azure.Future{}, "VMSSWaitForAsyncOperationResult").Return(response, nil)
 	vmssClient := getTestVMSSClient(armClient)
-	_, err := vmssClient.WaitForAsyncOperationResult(context.TODO(), &azure.Future{})
+	_, err := vmssClient.WaitForAsyncOperationResult(context.TODO(), &azure.Future{}, "rgName", "req", "VMSSWaitForAsyncOperationResult")
 	assert.NoError(t, err)
 }
 
@@ -696,7 +689,7 @@ func TestDeleteInstances(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(r.ID), "delete", vmInstanceIDs).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(r.ID), "delete", vmInstanceIDs, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	armClient.EXPECT().WaitForAsyncOperationCompletion(gomock.Any(), gomock.Any(), "vmssclient.DeleteInstances").Return(nil).Times(1)
 
@@ -764,7 +757,7 @@ func TestDeleteInstancesThrottle(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{}).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
@@ -793,7 +786,7 @@ func TestDeleteInstancesWaitError(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	armClient.EXPECT().WaitForAsyncOperationCompletion(gomock.Any(), gomock.Any(), "vmssclient.DeleteInstances").Return(err).Times(1)
 
@@ -802,6 +795,7 @@ func TestDeleteInstancesWaitError(t *testing.T) {
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssDeleteInstancesErr, rerr)
 }
+
 func TestDeleteInstancesAsync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -816,19 +810,26 @@ func TestDeleteInstancesAsync(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssClient := getTestVMSSClient(armClient)
-	future, rerr := vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs)
+	future, rerr := vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, false)
+	assert.Nil(t, rerr)
+	assert.Equal(t, future.Status(), "Succeeded")
+
+	// with force delete
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, map[string]interface{}{"forceDeletion": true}).Return(response, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	future, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, true)
 	assert.Nil(t, rerr)
 	assert.Equal(t, future.Status(), "Succeeded")
 
 	// on error
 	retryErr := &retry.Error{RawError: fmt.Errorf("error")}
-	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs).Return(&http.Response{StatusCode: http.StatusBadRequest}, retryErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), to.String(vmss.ID), "delete", vmInstanceIDs, gomock.Any()).Return(&http.Response{StatusCode: http.StatusBadRequest}, retryErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
-	_, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs)
+	_, rerr = vmssClient.DeleteInstancesAsync(context.TODO(), "rg", "vmss1", vmInstanceIDs, false)
 	assert.Equal(t, retryErr, rerr)
 }
 

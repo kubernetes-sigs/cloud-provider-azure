@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
@@ -36,10 +36,6 @@ func ListRouteTables(tc *AzureTestClient) (*[]aznetwork.RouteTable, error) {
 	}
 
 	res := list.Values()
-	if len(res) == 0 {
-		return nil, fmt.Errorf("no route table found")
-	}
-
 	return &res, nil
 }
 

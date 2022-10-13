@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -37,6 +37,8 @@ import (
 )
 
 var _ Interface = &Client{}
+
+const vnetResourceType = "Microsoft.Network/virtualNetworks"
 
 // Client implements Subnet client Interface.
 type Client struct {
@@ -61,7 +63,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -102,7 +104,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, virtualNetwo
 	}
 
 	result, rerr := c.getSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -120,14 +122,14 @@ func (c *Client) getSubnet(ctx context.Context, resourceGroupName string, virtua
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName,
 	)
 	result := network.Subnet{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, expand)
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "subnet.get.request", resourceID, rerr.Error())
@@ -165,7 +167,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualNetw
 	}
 
 	result, rerr := c.listSubnet(ctx, resourceGroupName, virtualNetworkName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -183,7 +185,7 @@ func (c *Client) listSubnet(ctx context.Context, resourceGroupName string, virtu
 	resourceID := armclient.GetChildResourcesListID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets")
 
@@ -191,7 +193,7 @@ func (c *Client) listSubnet(ctx context.Context, resourceGroupName string, virtu
 	page := &SubnetListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "subnet.list.request", resourceID, rerr.Error())
@@ -240,7 +242,7 @@ func (c *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, v
 	}
 
 	rerr := c.createOrUpdateSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName, subnetParameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -258,7 +260,7 @@ func (c *Client) createOrUpdateSubnet(ctx context.Context, resourceGroupName str
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName)
@@ -309,7 +311,7 @@ func (c *Client) Delete(ctx context.Context, resourceGroupName string, virtualNe
 	}
 
 	rerr := c.deleteSubnet(ctx, resourceGroupName, virtualNetworkName, subnetName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -327,12 +329,12 @@ func (c *Client) deleteSubnet(ctx context.Context, resourceGroupName string, vir
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Network/virtualNetworks",
+		vnetResourceType,
 		virtualNetworkName,
 		"subnets",
 		subnetName)
 
-	return c.armClient.DeleteResource(ctx, resourceID, "")
+	return c.armClient.DeleteResource(ctx, resourceID)
 }
 
 func (c *Client) listResponder(resp *http.Response) (result network.SubnetListResult, err error) {

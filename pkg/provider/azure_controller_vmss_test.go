@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -39,6 +40,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	testCases := []struct {
 		desc           string
@@ -47,56 +51,32 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		disks          []string
 		vmList         map[string]string
 		vmssVMList     []string
-		isManagedDisk  bool
 		expectedErr    bool
 		expectedErrMsg error
 	}{
 		{
-			desc:           "an error shall be returned if it is invalid vmss name",
-			vmssVMList:     []string{"vmss-vm-000001"},
-			vmssName:       "vm1",
-			vmssvmName:     "vm1",
-			isManagedDisk:  false,
-			disks:          []string{"disk-name"},
-			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("not a vmss instance"),
+			desc:        "no error shall be returned if everything is good with one managed disk",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name"},
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything is good with one managed disk",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: true,
-			disks:         []string{"disk-name"},
-			expectedErr:   false,
+			desc:        "no error shall be returned if everything is good with 2 managed disks",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name", "disk-name2"},
+			expectedErr: false,
 		},
 		{
-			desc:          "no error shall be returned if everything is good with 2 managed disks",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: true,
-			disks:         []string{"disk-name", "disk-name2"},
-			expectedErr:   false,
-		},
-		{
-			desc:          "no error shall be returned if everything is good with non-managed disk",
-			vmssVMList:    []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:      "vmss00",
-			vmssvmName:    "vmss00-vm-000000",
-			isManagedDisk: false,
-			disks:         []string{"disk-name"},
-			expectedErr:   false,
-		},
-		{
-			desc:           "an error shall be returned if response StatusNotFound",
-			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:       fakeStatusNotFoundVMSSName,
-			vmssvmName:     "vmss00-vm-000000",
-			isManagedDisk:  false,
-			disks:          []string{"disk-name"},
-			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
+			desc:        "no error shall be returned if everything is good with non-managed disk",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{"disk-name"},
+			expectedErr: false,
 		},
 	}
 
@@ -111,6 +91,8 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, scaleSetName).Return(expectedVMSS, nil).MaxTimes(1)
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(nil).MaxTimes(1)
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(testCloud, scaleSetName, "", 0, test.vmssVMList, "succeeded", false)
 		for _, vmssvm := range expectedVMSSVMs {
@@ -130,16 +112,15 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 		if scaleSetName == string(fakeStatusNotFoundVMSSName) {
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+			mockVMSSVMClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
-			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockVMSSVMClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		diskMap := map[string]*AttachDiskOptions{}
 		for i, diskName := range test.disks {
 			options := AttachDiskOptions{
 				lun:                     int32(i),
-				isManagedDisk:           test.isManagedDisk,
 				diskName:                diskName,
 				cachingMode:             compute.CachingTypesReadWrite,
 				diskEncryptionSetID:     "",
@@ -150,7 +131,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = &options
 		}
-		err = ss.AttachDisk(test.vmssvmName, diskMap)
+		_, err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
@@ -161,6 +142,9 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 func TestDetachDiskWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	diskName := "disk-name"
@@ -266,13 +250,16 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+
 		diskMap := map[string]string{}
 		for _, diskName := range test.disks {
 			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err = ss.DetachDisk(test.vmssvmName, diskMap)
+		err = ss.DetachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
@@ -288,6 +275,9 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 func TestUpdateVMWithVMSS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	diskName := "disk-name"
@@ -375,7 +365,10 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		}
 
-		err = ss.UpdateVM(test.vmssvmName)
+		mockVMClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+
+		err = ss.UpdateVM(ctx, test.vmssvmName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)

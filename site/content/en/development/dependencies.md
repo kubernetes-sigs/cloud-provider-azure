@@ -11,8 +11,10 @@ cloud-provider-azure uses [go modules] for Go dependency management.
 
 ## Usage
 
-Run [`hack/update-dependencies.sh`] whenever vendored dependencies change.
+Run `make update-dependencies` whenever vendored dependencies change.
 This takes a minute to complete.
+
+Run `make update-mocks` whenever implementations for pkg/azureclients change.
 
 ### Updating dependencies
 
@@ -58,3 +60,10 @@ See golang's [go.mod], [Using Go Modules] and [Kubernetes Go modules] docs for m
 [Using Go Modules]: https://blog.golang.org/using-go-modules
 [Kubernetes Go modules]: https://github.com/kubernetes/enhancements/blob/master/keps/sig-architecture/2019-03-19-go-modules.md
 
+### Updating mocks
+
+mockgen v1.6.0 is used to generate mocks.
+
+```sh
+mockgen -copyright_file=<copyright file> -source=<azureclient source> -package=<mock package>
+```

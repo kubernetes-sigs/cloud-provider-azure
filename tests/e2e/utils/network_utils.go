@@ -20,14 +20,25 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
+	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2020-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+)
+
+type IPFamily string
+
+var (
+	IPv4      IPFamily = "ipv4"
+	IPv6      IPFamily = "ipv6"
+	DualStack IPFamily = "dualstack"
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -68,14 +79,28 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 }
 
 // CreateSubnet creates a new subnet in the specified virtual network.
-func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string) error {
+func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string, waitUntilComplete bool) (network.Subnet, error) {
 	Logf("creating a new subnet %s, %s", *subnetName, *prefix)
 	subnetParameter := (*vnet.Subnets)[0]
 	subnetParameter.Name = subnetName
 	subnetParameter.AddressPrefix = prefix
 	subnetsClient := azureTestClient.createSubnetsClient()
 	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
-	return err
+	var subnet network.Subnet
+	if err != nil || !waitUntilComplete {
+		return subnet, err
+	}
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		subnet, err = subnetsClient.Get(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return subnet.ID != nil, nil
+	})
+	return subnet, err
 }
 
 // DeleteSubnet deletes a subnet with retry.
@@ -126,7 +151,7 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
 		result, err = securityGroupsClient.List(context.Background(), azureTestClient.GetResourceGroup())
 		if err != nil {
-			Logf("error when listing sgs: %w", err)
+			Logf("error when listing security groups: %w", err)
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
@@ -139,18 +164,23 @@ func (azureTestClient *AzureTestClient) getSecurityGroupList() (result aznetwork
 
 // GetClusterSecurityGroups gets the security groups of the cluster.
 func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []aznetwork.SecurityGroup, err error) {
-	securityGroupsList, err := azureTestClient.getSecurityGroupList()
-	if err != nil {
-		return
-	}
-	Logf("got sg list, length = %d", len(securityGroupsList.Values()))
+	err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+		securityGroupsList, err := azureTestClient.getSecurityGroupList()
+		if err != nil {
+			return false, err
+		}
 
-	if len(securityGroupsList.Values()) != 0 {
-		ret = securityGroupsList.Values()
-		return
+		sgListLength := len(securityGroupsList.Values())
+		Logf("got sg list, length = %d", sgListLength)
+		if sgListLength != 0 {
+			ret = securityGroupsList.Values()
+			return true, nil
+		}
+		return false, nil
+	})
+	if err == wait.ErrWaitTimeout {
+		err = fmt.Errorf("could not find the cluster security group in resource group %s", azureTestClient.GetResourceGroup())
 	}
-
-	err = fmt.Errorf("could not find the cluster security group in resource group %s", azureTestClient.GetResourceGroup())
 	return
 }
 
@@ -190,6 +220,107 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipPa
 		return pip.IPAddress != nil, nil
 	})
 	return pip, err
+}
+
+func WaitCreatePIPPrefix(
+	cli *AzureTestClient,
+	name, rgName string,
+	parameter aznetwork.PublicIPPrefix,
+) (aznetwork.PublicIPPrefix, error) {
+	Logf("Creating PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+	_, err := resourceClient.CreateOrUpdate(context.Background(), rgName, name, parameter)
+	var prefix aznetwork.PublicIPPrefix
+	if err != nil {
+		return prefix, err
+	}
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		prefix, err = resourceClient.Get(context.Background(), rgName, name, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return prefix.IPPrefix != nil, nil
+	})
+	return prefix, err
+}
+
+func WaitGetPIPPrefix(
+	cli *AzureTestClient,
+	name string,
+) (aznetwork.PublicIPPrefix, error) {
+	Logf("Getting PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+	var (
+		prefix aznetwork.PublicIPPrefix
+		err    error
+	)
+	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		prefix, err = resourceClient.Get(context.Background(), cli.GetResourceGroup(), name, "")
+		if err != nil {
+			if !IsRetryableAPIError(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return prefix.IPPrefix != nil, nil
+	})
+	return prefix, err
+}
+
+// WaitGetPIPByPrefix retrieves the ONLY one PIP that created by specified prefix.
+// If untilPIPCreated is true, it will retry until 1 PIP is associated to the prefix.
+func WaitGetPIPByPrefix(
+	cli *AzureTestClient,
+	prefixName string,
+	untilPIPCreated bool,
+) (network.PublicIPAddress, error) {
+
+	var pip network.PublicIPAddress
+
+	err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		prefix, err := WaitGetPIPPrefix(cli, prefixName)
+		if err != nil || prefix.PublicIPAddresses == nil || len(*prefix.PublicIPAddresses) != 1 {
+			numOfIPs := 0
+			if prefix.PublicIPAddresses != nil {
+				numOfIPs = len(*prefix.PublicIPAddresses)
+			}
+			Logf("prefix = [%s] not ready with error = [%v] and number of IP = [%d]", prefixName, err, numOfIPs)
+			if !untilPIPCreated {
+				return true, fmt.Errorf("get pip by prefix = [%s], err = [%v], number of IP = [%d]", prefixName, err, numOfIPs)
+			}
+			return false, nil
+		}
+
+		pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+		parts := strings.Split(pipID, "/")
+		pipName := parts[len(parts)-1]
+		pip, err = WaitGetPIP(cli, pipName)
+
+		return true, err
+	})
+
+	return pip, err
+}
+
+func DeletePIPPrefixWithRetry(cli *AzureTestClient, name string) error {
+	Logf("Deleting PublicIPPrefix named %s", name)
+
+	resourceClient := cli.createPublicIPPrefixesClient()
+
+	err := wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
+		_, err := resourceClient.Delete(context.Background(), cli.GetResourceGroup(), name)
+		if err != nil {
+			Logf("error: %s, will retry soon", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
 }
 
 // DeletePIPWithRetry tries to delete a public ip resource
@@ -240,7 +371,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	if len(*vNet.Subnets) > 1 {
 		for _, sn := range *vNet.Subnets {
 			// if there is more than one subnet, select the first one we find.
-			if !strings.Contains(*sn.Name, "controlplane") {
+			if !strings.Contains(*sn.Name, "controlplane") && !strings.Contains(*sn.Name, "control-plane") {
 				subnet = *sn.AddressPrefix
 				break
 			}
@@ -266,6 +397,20 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	return "", fmt.Errorf("Find no availabePrivateIP in subnet CIDR %s", subnet)
 }
 
+// GetPublicIPFromAddress finds public ip according to ip address
+func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName, ipAddr string) (pip aznetwork.PublicIPAddress, err error) {
+	pipList, err := azureTestClient.ListPublicIPs(resourceGroupName)
+	if err != nil {
+		return pip, err
+	}
+	for _, pip := range pipList {
+		if strings.EqualFold(to.String(pip.IPAddress), ipAddr) {
+			return pip, err
+		}
+	}
+	return
+}
+
 // ListPublicIPs lists all the publicIP addresses active
 func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) ([]aznetwork.PublicIPAddress, error) {
 	pipClient := azureTestClient.createPublicIPAddressesClient()
@@ -287,8 +432,111 @@ func (azureTestClient *AzureTestClient) ListPublicIPs(resourceGroupName string) 
 	return result, nil
 }
 
+// ListLoadBalancers lists all the load balancers active
+func (azureTestClient *AzureTestClient) ListLoadBalancers(resourceGroupName string) ([]aznetwork.LoadBalancer, error) {
+	lbClient := azureTestClient.createLoadBalancerClient()
+
+	iterator, err := lbClient.ListComplete(context.Background(), resourceGroupName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]aznetwork.LoadBalancer, 0)
+	for ; iterator.NotDone(); err = iterator.Next() {
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, iterator.Value())
+	}
+
+	return result, nil
+}
+
 // GetLoadBalancer gets aznetwork.LoadBalancer by loadBalancer name.
 func (azureTestClient *AzureTestClient) GetLoadBalancer(resourceGroupName, lbName string) (aznetwork.LoadBalancer, error) {
-	lbClient := azureTestClient.creteLoadBalancerClient()
+	lbClient := azureTestClient.createLoadBalancerClient()
 	return lbClient.Get(context.Background(), resourceGroupName, lbName, "")
+}
+
+// GetPrivateLinkService gets aznetwork.PrivateLinkService by privateLinkService name.
+func (azureTestClient *AzureTestClient) GetPrivateLinkService(resourceGroupName, plsName string) (aznetwork.PrivateLinkService, error) {
+	plsClient := azureTestClient.createPrivateLinkServiceClient()
+	return plsClient.Get(context.Background(), resourceGroupName, plsName, "")
+}
+
+// ListPrivateLinkServices lists all the private link services active
+func (azureTestClient *AzureTestClient) ListPrivateLinkServices(resourceGroupName string) ([]aznetwork.PrivateLinkService, error) {
+	plsClient := azureTestClient.createPrivateLinkServiceClient()
+
+	iterator, err := plsClient.ListComplete(context.Background(), resourceGroupName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]aznetwork.PrivateLinkService, 0)
+	for ; iterator.NotDone(); err = iterator.Next() {
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, iterator.Value())
+	}
+
+	return result, nil
+}
+
+func retrieveCIDRs(cmd string, reg string) ([]string, error) {
+	res := make([]string, 2)
+	stdout, err := RunKubectl("", strings.Split(cmd, " ")...)
+	if err != nil {
+		return res, fmt.Errorf("error when running the following kubectl command %q: %v, %s", cmd, err, stdout)
+	}
+	re := regexp.MustCompile(reg)
+	matches := re.FindStringSubmatch(stdout)
+	if len(matches) == 0 {
+		return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
+	}
+	cidrs := strings.Split(matches[1], ",")
+	if len(cidrs) == 1 {
+		_, cidr, err := net.ParseCIDR(cidrs[0])
+		if err != nil {
+			return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+		}
+		if cidr.IP.To4() != nil {
+			res[0] = cidrs[0]
+		} else {
+			res[1] = cidrs[0]
+		}
+	} else if len(cidrs) == 2 {
+		_, cidr, err := net.ParseCIDR(cidrs[0])
+		if err != nil {
+			return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+		}
+		if cidr.IP.To4() != nil {
+			res[0] = cidrs[0]
+			res[1] = cidrs[1]
+		} else {
+			res[0] = cidrs[1]
+			res[1] = cidrs[0]
+		}
+	} else {
+		return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+	}
+	return res, nil
+}
+
+// GetClusterServiceIPFamily gets cluster's Service IPFamily according to Service CIDRs.
+func GetClusterServiceIPFamily() (IPFamily, error) {
+	svcCIDRs, err := retrieveCIDRs("cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
+	if err != nil {
+		return "", err
+	}
+	if svcCIDRs[0] != "" && svcCIDRs[1] == "" {
+		return IPv4, nil
+	}
+	if svcCIDRs[0] == "" && svcCIDRs[1] != "" {
+		return IPv6, nil
+	}
+	return DualStack, nil
 }

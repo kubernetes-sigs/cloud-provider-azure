@@ -4,19 +4,20 @@
     "properties": {
         "orchestratorProfile": {
             "orchestratorType": "Kubernetes",
-            "orchestratorRelease": "1.17",
+            "orchestratorRelease": "1.19",
             "kubernetesConfig": {
                 "networkPolicy": "none",
                 "cloudProviderRateLimitQPS": 6,
                 "cloudProviderRateLimitBucket": 20,
-                "controllerManagerConfig": {
-                    "--feature-gates": "CSIInlineVolume=true,LocalStorageCapacityIsolation=true,ServiceNodeExclusion=true"
-                },
                 "apiServerConfig": {
-                    "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages"
+                    "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages",
+                    "--feature-gates": "TopologyAwareHints=True"
                 },
                 "kubeletConfig": {
-                    "--feature-gates": "ExecProbeTimeout=true"
+                    "--feature-gates": "ExecProbeTimeout=true,TopologyAwareHints=True"
+                },
+                "controllerManagerConfig": {
+                    "--feature-gates": "TopologyAwareHints=True"
                 },
                 "outboundRuleIdleTimeoutInMinutes": 30
             }

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -36,12 +35,11 @@ import (
 )
 
 const (
-	deletionTimeout             = 10 * time.Minute
-	poll                        = 2 * time.Second
-	singleCallTimeout           = 20 * time.Minute
-	vmssOperationInterval       = 30 * time.Second
-	vmssOperationTimeout        = 30 * time.Minute
-	recommendedConfigPathEnvVar = "KUBECONFIG"
+	deletionTimeout       = 10 * time.Minute
+	poll                  = 2 * time.Second
+	singleCallTimeout     = 20 * time.Minute
+	vmssOperationInterval = 30 * time.Second
+	vmssOperationTimeout  = 30 * time.Minute
 )
 
 func findExistingKubeConfig() string {
@@ -60,7 +58,7 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 		restConfig *rest.Config
 		err        error
 	)
-	if envVarFiles := os.Getenv(recommendedConfigPathEnvVar); len(envVarFiles) != 0 {
+	if envVarFiles := os.Getenv(clientcmd.RecommendedConfigPathEnvVar); len(envVarFiles) != 0 {
 		filename := findExistingKubeConfig()
 		Logf("Kubernetes configuration file name: %s", filename)
 		c := clientcmd.GetConfigFromFileOrDie(filename)
@@ -69,7 +67,7 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 			return nil, err
 		}
 	} else {
-		Logf("Cannot find %s env var, switch to use the in-cluster config", recommendedConfigPathEnvVar)
+		Logf("Cannot find %s env var, switch to use the in-cluster config", clientcmd.RecommendedConfigPathEnvVar)
 		restConfig, err = rest.InClusterConfig()
 		if err != nil {
 			return nil, err
@@ -86,8 +84,6 @@ func CreateKubeClientSet() (clientset.Interface, error) {
 
 // CreateTestingNamespace builds namespace for each test baseName and labels determine name of the space
 func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namespace, error) {
-	Logf("Creating a test namespace")
-
 	namespaceObj := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("e2e-tests-%v-", baseName),
@@ -110,6 +106,7 @@ func CreateTestingNamespace(baseName string, cs clientset.Interface) (*v1.Namesp
 	}); err != nil {
 		return nil, err
 	}
+	Logf("Created a test namespace %q", got.Name)
 	return got, nil
 }
 
@@ -190,14 +187,4 @@ func StringInSlice(s string, list []string) bool {
 		}
 	}
 	return false
-}
-
-// HandleVMNotFoundErr returns true if the input error is errVMNotFound or nil
-func HandleVMNotFoundErr(err error) bool {
-	return err == nil || reflect.DeepEqual(err, errVMNotFound)
-}
-
-// HandleVMSSNotFoundErr returns true if the input error is errVMSSNotFound or nil
-func HandleVMSSNotFoundErr(err error) bool {
-	return err == nil || reflect.DeepEqual(err, errVMSSNotFound)
 }

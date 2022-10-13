@@ -67,7 +67,7 @@ func (np *IMDSNodeProvider) InstanceID(ctx context.Context, name types.NodeName)
 // InstanceType returns the type of the specified instance.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 // (Implementer Note): This is used by kubelet. Kubelet will label the node. Real log from kubelet:
-//       Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
+// Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
 func (np *IMDSNodeProvider) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
 	return np.azure.InstanceType(ctx, name)
 }
@@ -77,4 +77,9 @@ func (np *IMDSNodeProvider) InstanceType(ctx context.Context, name types.NodeNam
 // If the node is not running with availability zones, then it will fall back to fault domain.
 func (np *IMDSNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error) {
 	return np.azure.GetZone(ctx)
+}
+
+// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+func (np *IMDSNodeProvider) GetPlatformSubFaultDomain() (string, error) {
+	return np.azure.GetPlatformSubFaultDomain()
 }

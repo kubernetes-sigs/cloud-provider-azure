@@ -26,6 +26,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
@@ -84,6 +85,10 @@ type CloudNodeManagerOptions struct {
 	WaitForRoutes bool
 
 	UseInstanceMetadata bool
+
+	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
+	// Its corresponding flag only gets registered in Windows builds
+	WindowsService bool
 }
 
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
@@ -115,12 +120,15 @@ func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
 // Flags returns flags for a specific APIServer by section name
 func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
+
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
 	o.InsecureServing.AddUnqualifiedFlags(fss.FlagSet("insecure serving"))
 	o.Authentication.AddFlags(fss.FlagSet("authentication"))
 	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 
 	fs := fss.FlagSet("misc")
+	o.addOSFlags(fs)
+
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 	fs.StringVar(&o.NodeName, "node-name", o.NodeName, "Name of the Node (default is hostname).")
@@ -171,17 +179,6 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 		return err
 	}
 
-	c.EventRecorder = createRecorder(c.Client, userAgent)
-	c.ClientBuilder = clientbuilder.SimpleControllerClientBuilder{
-		ClientConfig: c.Kubeconfig,
-	}
-	c.VersionedClient = c.ClientBuilder.ClientOrDie("shared-informers")
-	// TODO(feiskyer): filter watch by node name whenever it's supported.
-	c.SharedInformers = informers.NewSharedInformerFactory(c.VersionedClient, resyncPeriod(c)())
-	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
-	c.UseInstanceMetadata = o.UseInstanceMetadata
-	c.CloudConfigFilePath = o.CloudConfigFilePath
-
 	// Default NodeName is hostname.
 	c.NodeName = strings.ToLower(o.NodeName)
 	if c.NodeName == "" {
@@ -192,6 +189,21 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 
 		c.NodeName = strings.ToLower(hostname)
 	}
+
+	c.EventRecorder = createRecorder(c.Client, userAgent)
+	c.ClientBuilder = clientbuilder.SimpleControllerClientBuilder{
+		ClientConfig: c.Kubeconfig,
+	}
+	c.VersionedClient = c.ClientBuilder.ClientOrDie("shared-informers")
+	// Only need to watch the node itself. There is no need to set up a watch on the nodes in the cluster.
+	c.SharedInformers = informers.NewSharedInformerFactoryWithOptions(c.VersionedClient, resyncPeriod(c)(), informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("metadata.name", c.NodeName).String()
+	}))
+	c.NodeStatusUpdateFrequency = o.NodeStatusUpdateFrequency
+	c.UseInstanceMetadata = o.UseInstanceMetadata
+	c.CloudConfigFilePath = o.CloudConfigFilePath
+
+	c.WindowsService = o.WindowsService
 
 	return nil
 }

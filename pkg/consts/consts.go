@@ -19,9 +19,8 @@ package consts
 import (
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
-
-	"k8s.io/component-base/featuregate"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 )
 
 const (
@@ -40,9 +39,10 @@ const (
 
 	// LabelFailureDomainBetaZone refer to https://github.com/kubernetes/api/blob/8519c5ea46199d57724725d5b969c5e8e0533692/core/v1/well_known_labels.go#L22-L23
 	LabelFailureDomainBetaZone = "failure-domain.beta.kubernetes.io/zone"
-
 	// LabelFailureDomainBetaRegion failure-domain region label
 	LabelFailureDomainBetaRegion = "failure-domain.beta.kubernetes.io/region"
+	// LabelPlatformSubFaultDomain is the label key of platformSubFaultDomain
+	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 
 	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
 	ADFSIdentitySystem = "adfs"
@@ -72,10 +72,6 @@ const (
 
 	DiskEncryptionSetIDFormat = "/subscriptions/{subs-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/diskEncryptionSets/{diskEncryptionSet-name}"
 
-	// IPv6DualStack is here to avoid having to import features pkg
-	// and violate import rules
-	IPv6DualStack featuregate.Feature = "IPv6DualStack"
-
 	// MachineIDTemplate is the template of the virtual machine
 	MachineIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s"
 	// AvailabilitySetIDTemplate is the template of the availabilitySet ID
@@ -83,6 +79,8 @@ const (
 
 	// NodeLabelRole specifies the role of a node
 	NodeLabelRole = "kubernetes.io/role"
+	// NodeLabelHostName specifies the host name of a node
+	NodeLabelHostName = "kubernetes.io/hostname"
 	// MasterNodeRoleLabel specifies is the master node label for a node
 	MasterNodeRoleLabel = "node-role.kubernetes.io/master"
 	// ControlPlaneNodeRoleLabel specifies is the control-plane node label for a node
@@ -93,6 +91,8 @@ const (
 
 	// StorageAccountNameMaxLength is the max length of a storage name
 	StorageAccountNameMaxLength = 24
+
+	CannotFindDiskLUN = "cannot find Lun"
 
 	// DefaultStorageAccountType is the default storage account type
 	DefaultStorageAccountType = string(storage.SkuNameStandardLRS)
@@ -126,6 +126,8 @@ const (
 	TagKeyValueDelimiter = "="
 	// VMSetNamesSharingPrimarySLBDelimiter is the delimiter of vmSet names sharing the primary SLB
 	VMSetNamesSharingPrimarySLBDelimiter = ","
+	// PremiumV2_LRS type for Azure Disk
+	PremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
 )
 
 // cache
@@ -136,8 +138,21 @@ const (
 	VMSSKey = "k8svmssKey"
 	// VMASKey is the key when querying vmss cache
 	VMASKey = "k8svmasKey"
+	// NonVmssUniformNodesKey is the key when querying nonVmssUniformNodes cache
+	NonVmssUniformNodesKey = "k8sNonVmssUniformNodesKey"
 	// AvailabilitySetNodesKey is the availability set nodes key
 	AvailabilitySetNodesKey = "k8sAvailabilitySetNodesKey"
+
+	// VmssFlexKey is the key when querying vmssFlexVM cache
+	VmssFlexKey = "k8sVmssFlexKey"
+
+	// GetNodeVmssFlexIDLockKey is the key for getting the lock for getNodeVmssFlexID function
+	GetNodeVmssFlexIDLockKey = "k8sGetNodeVmssFlexIDLockKey"
+	// VMManagementTypeLockKey is the key for getting the lock for getVMManagementType function
+	VMManagementTypeLockKey = "VMManagementType"
+
+	// NonVmssUniformNodesCacheTTLDefaultInSeconds is the TTL of the non vmss uniform node cache
+	NonVmssUniformNodesCacheTTLDefaultInSeconds = 900
 	// AvailabilitySetNodesCacheTTLDefaultInSeconds is the TTL of the availabilitySet node cache
 	AvailabilitySetNodesCacheTTLDefaultInSeconds = 900
 	// VMSSCacheTTLDefaultInSeconds is the TTL of the vmss cache
@@ -146,6 +161,11 @@ const (
 	VMSSVirtualMachinesCacheTTLDefaultInSeconds = 600
 	// VMASCacheTTLDefaultInSeconds is the TTL of the vmas cache
 	VMASCacheTTLDefaultInSeconds = 600
+
+	// VmssFlexCacheTTLDefaultInSeconds is the TTL of the vmss flex cache
+	VmssFlexCacheTTLDefaultInSeconds = 600
+	// VmssFlexVMCacheTTLDefaultInSeconds is the TTL of the vmss flex vm cache
+	VmssFlexVMCacheTTLDefaultInSeconds = 600
 
 	// ZoneFetchingInterval defines the interval of performing zoneClient.GetZones
 	ZoneFetchingInterval = 30 * time.Minute
@@ -169,6 +189,16 @@ const (
 	BackoffDurationDefault = 5 // in seconds
 	// BackoffJitterDefault is the default value of the backoff jitter
 	BackoffJitterDefault = 1.0
+)
+
+// LB variables for dual-stack
+var (
+	// Service.Spec.LoadBalancerIP has been deprecated and may be removed in a future release. Those two annotations are introduced as alternatives to set IPv4/IPv6 LoadBalancer IPs.
+	// Refer https://github.com/kubernetes/api/blob/3638040e4063e0f889c129220cd386497f328276/core/v1/types.go#L4459-L4468 for more details.
+	ServiceAnnotationLoadBalancerIPDualStack = map[bool]string{
+		false: "service.beta.kubernetes.io/azure-load-balancer-ipv4",
+		true:  "service.beta.kubernetes.io/azure-load-balancer-ipv6",
+	}
 )
 
 // load balancer
@@ -231,6 +261,9 @@ const (
 	// ServiceAnnotationPIPName specifies the pip that will be applied to load balancer
 	ServiceAnnotationPIPName = "service.beta.kubernetes.io/azure-pip-name"
 
+	// ServiceAnnotationPIPPrefixID specifies the pip prefix that will be applied to the load balancer.
+	ServiceAnnotationPIPPrefixID = "service.beta.kubernetes.io/azure-pip-prefix-id"
+
 	// ServiceAnnotationIPTagsForPublicIP specifies the iptags used when dynamically creating a public ip
 	ServiceAnnotationIPTagsForPublicIP = "service.beta.kubernetes.io/azure-pip-ip-tags"
 
@@ -255,6 +288,14 @@ const (
 	// If not set, the local service would use the HTTP and the cluster service would use the TCP by default.
 	ServiceAnnotationLoadBalancerHealthProbeProtocol = "service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol"
 
+	// ServiceAnnotationLoadBalancerHealthProbeInterval determines the probe interval of the load balancer health probe.
+	// The minimum probe interval is 5 seconds and the default value is 15. The total duration of all intervals cannot exceed 120 seconds.
+	ServiceAnnotationLoadBalancerHealthProbeInterval = "service.beta.kubernetes.io/azure-load-balancer-health-probe-interval"
+
+	// ServiceAnnotationLoadBalancerHealthProbeNumOfProbe determines the minimum number of unhealthy responses which load balancer cannot tolerate.
+	// The minimum number of probe is 1. The total duration of all intervals cannot exceed 120 seconds.
+	ServiceAnnotationLoadBalancerHealthProbeNumOfProbe = "service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe"
+
 	// ServiceAnnotationLoadBalancerHealthProbeRequestPath determines the request path of the load balancer health probe.
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
 	// `/healthz` would be configured by default.
@@ -265,17 +306,24 @@ const (
 	// is `a=b,c=d,...`. After updated, the old user-assigned tags would not be replaced by the new ones.
 	ServiceAnnotationAzurePIPTags = "service.beta.kubernetes.io/azure-pip-tags"
 
+	// ServiceAnnotationDisableLoadBalancerFloatingIP is the annotation used on the service to disable floating IP in load balancer rule.
+	// If omitted, the default value is false
+	ServiceAnnotationDisableLoadBalancerFloatingIP = "service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip"
+
 	// ServiceAnnotationAzurePIPTags sets the additional Public IPs (split by comma) besides the service's Public IP configured on LoadBalancer.
 	// These additional Public IPs would be consumed by kube-proxy to configure the iptables rules on each node. Note they would not be configured
 	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).
 	ServiceAnnotationAdditionalPublicIPs = "service.beta.kubernetes.io/azure-additional-public-ips"
 
 	// ServiceTagKey is the service key applied for public IP tags.
-	ServiceTagKey = "service"
+	ServiceTagKey       = "k8s-azure-service"
+	LegacyServiceTagKey = "service"
 	// ClusterNameKey is the cluster name key applied for public IP tags.
-	ClusterNameKey = "kubernetes-cluster-name"
+	ClusterNameKey       = "k8s-azure-cluster-name"
+	LegacyClusterNameKey = "kubernetes-cluster-name"
 	// ServiceUsingDNSKey is the service name consuming the DNS label on the public IP
-	ServiceUsingDNSKey = "kubernetes-dns-label-service"
+	ServiceUsingDNSKey       = "k8s-azure-dns-label-service"
+	LegacyServiceUsingDNSKey = "kubernetes-dns-label-service"
 
 	// DefaultLoadBalancerSourceRanges is the default value of the load balancer source ranges
 	DefaultLoadBalancerSourceRanges = "0.0.0.0/0"
@@ -302,6 +350,17 @@ const (
 	FrontendIPConfigNameMaxLength = 80
 	// LoadBalancerRuleNameMaxLength is the max length of the load balancing rule
 	LoadBalancerRuleNameMaxLength = 80
+
+	// LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration is the lb backend pool config type node IP configuration
+	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"
+	// LoadBalancerBackendPoolConfigurationTypeNodeIP is the lb backend pool config type node ip
+	LoadBalancerBackendPoolConfigurationTypeNodeIP = "nodeIP"
+	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
+	// TODO (nilo19): support pod IP in the future
+	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
+
+	// To get pip, we need both resource group name and pip name, key in cache has format: pip_rg:pip_name
+	PIPCacheKeySeparator = ":"
 )
 
 // error messages
@@ -314,6 +373,14 @@ const (
 	CannotDeletePublicIPErrorMessageCode = "PublicIPAddressCannotBeDeleted"
 	// ReferencedResourceNotProvisionedMessageCode means the referenced resource has not been provisioned
 	ReferencedResourceNotProvisionedMessageCode = "ReferencedResourceNotProvisioned"
+	// ParentResourceNotFoundMessageCode is the error code that the parent VMSS of the VM is not found.
+	ParentResourceNotFoundMessageCode = "ParentResourceNotFound"
+	// ConcurrentRequestConflictMessage is the error message that the request failed due to the conflict with another concurrent operation.
+	ConcurrentRequestConflictMessage = "The request failed due to conflict with a concurrent request."
+	// CannotUpdateVMBeingDeletedMessagePrefix is the prefix of the error message that the request failed due to delete a VM that is being deleted
+	CannotUpdateVMBeingDeletedMessagePrefix = "'Put on Virtual Machine Scale Set VM Instance' is not allowed on Virtual Machine Scale Set"
+	// CannotUpdateVMBeingDeletedMessageSuffix is the suffix of the error message that the request failed due to delete a VM that is being deleted
+	CannotUpdateVMBeingDeletedMessageSuffix = "since it is marked for deletion"
 )
 
 // node ipam controller
@@ -329,7 +396,7 @@ const (
 // metadata service
 const (
 	// ImdsInstanceAPIVersion is the imds instance api version
-	ImdsInstanceAPIVersion = "2019-03-11"
+	ImdsInstanceAPIVersion = "2021-10-01"
 	// ImdsLoadBalancerAPIVersion is the imds load balancer api version
 	ImdsLoadBalancerAPIVersion = "2020-10-01"
 	// ImdsServer is the imds server endpoint
@@ -351,4 +418,83 @@ const (
 	DefaultCloudProviderConfigSecName      = "azure-cloud-provider"
 	DefaultCloudProviderConfigSecNamespace = "kube-system"
 	DefaultCloudProviderConfigSecKey       = "cloud-config"
+)
+
+// RateLimited error string
+const RateLimited = "rate limited"
+
+// CreatedByTag tag key for CSI drivers
+const CreatedByTag = "k8s-azure-created-by"
+
+// health probe
+const (
+	HealthProbeAnnotationPrefixPattern = "service.beta.kubernetes.io/port_%d_health-probe_"
+
+	// HealthProbeParamsProbeInterval determines the probe interval of the load balancer health probe.
+	// The minimum probe interval is 5 seconds and the default value is 5. The total duration of all intervals cannot exceed 120 seconds.
+	HealthProbeParamsProbeInterval  HealthProbeParams = "interval"
+	HealthProbeDefaultProbeInterval int32             = 5
+
+	// HealthProbeParamsNumOfProbe determines the minimum number of unhealthy responses which load balancer cannot tolerate.
+	// The minimum number of probe is 2. The total duration of all intervals cannot exceed 120 seconds.
+	HealthProbeParamsNumOfProbe  HealthProbeParams = "num-of-probe"
+	HealthProbeDefaultNumOfProbe int32             = 2
+
+	// HealthProbeParamsRequestPath determines the request path of the load balancer health probe.
+	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
+	// `/healthz` would be configured by default.
+	HealthProbeParamsRequestPath  HealthProbeParams = "request-path"
+	HealthProbeDefaultRequestPath string            = "/"
+)
+
+type HealthProbeParams string
+
+// private link service
+const (
+	// ServiceAnnotationPLSCreation determines whether a PLS needs to be created.
+	ServiceAnnotationPLSCreation = "service.beta.kubernetes.io/azure-pls-create"
+
+	// ServiceAnnotationPLSName determines name of the PLS resource to create.
+	ServiceAnnotationPLSName = "service.beta.kubernetes.io/azure-pls-name"
+
+	// ServiceAnnotationPLSIpConfigurationSubnet determines the subnet name to deploy the PLS resource.
+	ServiceAnnotationPLSIpConfigurationSubnet = "service.beta.kubernetes.io/azure-pls-ip-configuration-subnet"
+
+	// ServiceAnnotationPLSIpConfigurationIPAddressCount determines number of IPs to be associated with the PLS.
+	ServiceAnnotationPLSIpConfigurationIPAddressCount = "service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count"
+
+	// ServiceAnnotationPLSIPConfigurationIPAddress determines a space separated list of static IPs for the PLS.
+	// Total number of IPs should not be greater than the IP count specified in ServiceAnnotationPLSIpConfigurationIPAddressCount.
+	// If there are fewer IPs specified, the rest are dynamically allocated. The first IP in the list is set as Primary.
+	ServiceAnnotationPLSIpConfigurationIPAddress = "service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address"
+
+	// ServiceAnnotationPLSFqdns determines a space separated list of fqdns associated with the PLS.
+	ServiceAnnotationPLSFqdns = "service.beta.kubernetes.io/azure-pls-fqdns"
+
+	// ServiceAnnotationPLSProxyProtocol determines whether TCP Proxy protocol needs to be enabled on the PLS.
+	ServiceAnnotationPLSProxyProtocol = "service.beta.kubernetes.io/azure-pls-proxy-protocol"
+
+	// ServiceAnnotationPLSVisibility determines a space separated list of Azure subscription IDs for which the PLS is visible.
+	// Use "*" to expose the PLS to all subscriptions.
+	ServiceAnnotationPLSVisibility = "service.beta.kubernetes.io/azure-pls-visibility"
+
+	// ServiceAnnotationPLSAutoApproval determines a space separated list of Azure subscription IDs from which requests can be
+	// automatically approved, only works when visibility is set to "*".
+	ServiceAnnotationPLSAutoApproval = "service.beta.kubernetes.io/azure-pls-auto-approval"
+
+	// ID string used to create a not existing PLS placehold in plsCache to avoid redundant
+	PrivateLinkServiceNotExistID = "PrivateLinkServiceNotExistID"
+
+	// Key of tag indicating owner service of the PLS.
+	OwnerServiceTagKey = "k8s-azure-owner-service"
+
+	// Key of tag indicating cluster name of the service that owns PLS.
+	ClusterNameTagKey = "k8s-azure-cluster-name"
+
+	// Default number of IP configs for PLS
+	PLSDefaultNumOfIPConfig = 1
+)
+
+const (
+	VMSSTagForBatchOperation = "aks-managed-coordination"
 )

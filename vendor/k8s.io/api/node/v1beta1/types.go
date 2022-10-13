@@ -33,7 +33,7 @@ import (
 // user or cluster provisioner, and referenced in the PodSpec. The Kubelet is
 // responsible for resolving the RuntimeClassName reference before running the
 // pod.  For more details, see
-// https://git.k8s.io/enhancements/keps/sig-node/runtime-class.md
+// https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
 type RuntimeClass struct {
 	metav1.TypeMeta `json:",inline"`
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
@@ -55,7 +55,6 @@ type RuntimeClass struct {
 	// Overhead represents the resource overhead associated with running a pod for a
 	// given RuntimeClass. For more details, see
 	// https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md
-	// This field is beta-level as of Kubernetes v1.18, and is only honored by servers that enable the PodOverhead feature.
 	// +optional
 	Overhead *Overhead `json:"overhead,omitempty" protobuf:"bytes,3,opt,name=overhead"`
 

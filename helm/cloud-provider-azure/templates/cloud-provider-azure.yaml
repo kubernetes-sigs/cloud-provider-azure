@@ -1,0 +1,509 @@
+{{- if eq .Capabilities.KubeVersion.Minor "21" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.0.23" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "22" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.1.24" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "23" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.23.21" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "24" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.24.8" }}
+{{- else if eq .Capabilities.KubeVersion.Minor "25" -}}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.25.2" }}
+{{- else -}}
+{{- end -}}
+{{- if .Values.cloudControllerManager.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:cloud-controller-manager
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    k8s-app: cloud-controller-manager
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - "*"
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services/status
+    verbs:
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumes
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - create
+      - update
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: system:cloud-controller-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:cloud-controller-manager
+subjects:
+  - kind: ServiceAccount
+    name: cloud-controller-manager
+    namespace: kube-system
+  - kind: User
+    name: cloud-controller-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: system:cloud-controller-manager:extension-apiserver-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: cloud-controller-manager
+    namespace: kube-system
+  - apiGroup: ""
+    kind: User
+    name: cloud-controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
+  labels:
+    component: cloud-controller-manager
+spec:
+  selector:
+    matchLabels:
+      tier: control-plane
+      component: cloud-controller-manager
+  replicas: {{ .Values.cloudControllerManager.replicas }}
+  template:
+    metadata:
+      labels:
+        component: cloud-controller-manager
+        tier: control-plane
+    spec:
+      priorityClassName: system-node-critical
+      hostNetwork: true
+      nodeSelector:
+  {{- if ge .Capabilities.KubeVersion.Minor "24" }}
+        node-role.kubernetes.io/control-plane: ""
+  {{- else }}
+        node-role.kubernetes.io/master: ""
+  {{- end }}
+      serviceAccountName: cloud-controller-manager
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            tier: control-plane
+            component: cloud-controller-manager
+      containers:
+        - name: cloud-controller-manager
+          image: {{ template "image.cloudControllerManager" . | required "you must use a supported version of Kubernetes or provide cloudControllerManager.imageRepository, cloudControllerManager.imageName, and cloudControllerManager.imageTag values" }}
+          imagePullPolicy: {{ .Values.cloudControllerManager.imagePullPolicy }}
+          command: ["cloud-controller-manager"]
+          args:
+            - "--allocate-node-cidrs={{ .Values.cloudControllerManager.allocateNodeCidrs }}"
+            {{- if hasKey .Values.cloudControllerManager "bindAddress" }}
+            - "--bind-address={{ .Values.cloudControllerManager.bindAddress }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "certDir" }}
+            - "--cert-dir={{ .Values.cloudControllerManager.certDir }}"
+            {{- end }}
+            - "--cloud-config={{ .Values.cloudControllerManager.cloudConfig }}"
+            {{- if hasKey .Values.cloudControllerManager "cloudConfigSecretName" }}
+            - "--cloud-config-secret-name={{ .Values.cloudControllerManager.cloudConfigSecretName }}"
+            {{- end }}
+            - "--cloud-provider=azure"
+            - "--cluster-cidr={{ .Values.cloudControllerManager.clusterCIDR }}"
+            - "--cluster-name={{ .Values.infra.clusterName }}"
+            - "--configure-cloud-routes={{ .Values.cloudControllerManager.configureCloudRoutes }}"
+            {{- if hasKey .Values.cloudControllerManager "contentionProfiling" }}
+            - "--contention-profiling={{ .Values.cloudControllerManager.contentionProfiling }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "controllerStartInterval" }}
+            - "--controller-start-interval={{ .Values.cloudControllerManager.controllerStartInterval }}"
+            {{- end }}
+            - "--controllers=*,-cloud-node"
+            {{- if hasKey .Values.cloudControllerManager "enableDynamicReloading" }}
+            - "--enable-dynamic-reloading={{ .Values.cloudControllerManager.enableDynamicReloading }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "http2MaxStreamsPerConnection" }}
+            - "--http2-max-streams-per-connection={{ .Values.cloudControllerManager.http2MaxStreamsPerConnection }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "kubeAPIBurst" }}
+            - "--kube-api-burst={{ .Values.cloudControllerManager.kubeAPIBurst }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "kubeAPIContentType" }}
+            - "--kube-api-content-type={{ .Values.cloudControllerManager.kubeAPIContentType }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "kubeAPIQPS" }}
+            - "--kube-api-qps={{ .Values.cloudControllerManager.kubeAPIQPS }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "kubeconfig" }}
+            - "--kubeconfig={{ .Values.cloudControllerManager.kubeconfig }}"
+            {{- end }}
+            - "--leader-elect={{ .Values.cloudControllerManager.leaderElect }}"
+            {{- if hasKey .Values.cloudControllerManager "leaderElectLeaseDuration" }}
+            - "--leader-elect-lease-duration={{ .Values.cloudControllerManager.leaderElectLeaseDuration }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "leaderElectRenewDeadline" }}
+            - "--leader-elect-renew-deadline={{ .Values.cloudControllerManager.leaderElectRenewDeadline }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "leaderElectRetryPeriod" }}
+            - "--leader-elect-retry-period={{ .Values.cloudControllerManager.leaderElectRetryPeriod }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "leaderElectResourceLock" }}
+            - "--leader-elect-resource-lock={{ .Values.cloudControllerManager.leaderElectResourceLock }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "leaderElectResourceLock" }}
+            - "--leader-elect-resource-lock={{ .Values.cloudControllerManager.leaderElectResourceLock }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "master" }}
+            - "--master={{ .Values.cloudControllerManager.master }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "minResyncPeriod" }}
+            - "--min-resync-period={{ .Values.cloudControllerManager.minResyncPeriod }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "nodeStatusUpdateFrequency" }}
+            - "--node-status-update-frequency={{ .Values.cloudControllerManager.nodeStatusUpdateFrequency }}"
+            {{- end }}
+            - "--route-reconciliation-period={{ .Values.cloudControllerManager.routeReconciliationPeriod }}"
+            - "--port={{ .Values.cloudControllerManager.port }}"
+            {{- if hasKey .Values.cloudControllerManager "profiling" }}
+            - "--profiling={{ .Values.cloudControllerManager.profiling }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "securePort" }}
+            - "--secure-port={{ .Values.cloudControllerManager.securePort }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudControllerManager "useServiceAccountCredentials" }}
+            - "--use-service-account-credentials={{ .Values.cloudControllerManager.useServiceAccountCredentials }}"
+            {{- end }}
+            - "--v={{ .Values.cloudControllerManager.logVerbosity }}"
+          resources:
+            requests:
+              cpu: {{ .Values.cloudControllerManager.containerResourceManagement.requestsCPU }}
+              memory: {{ .Values.cloudControllerManager.containerResourceManagement.requestsMem }}
+            limits:
+              cpu: {{ .Values.cloudControllerManager.containerResourceManagement.limitsCPU }}
+              memory: {{ .Values.cloudControllerManager.containerResourceManagement.limitsMem }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.cloudControllerManager.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: etc-kubernetes
+              mountPath: /etc/kubernetes
+            - name: ssl-mount
+              mountPath: {{ .Values.cloudControllerManager.caCertDir }}
+              readOnly: true
+            - name: msi
+              mountPath: /var/lib/waagent/ManagedIdentity-Settings
+              readOnly: true
+      volumes:
+        - name: etc-kubernetes
+          hostPath:
+            path: /etc/kubernetes
+        - name: ssl-mount
+          hostPath:
+            path: {{ .Values.cloudControllerManager.caCertDir }}
+        - name: msi
+          hostPath:
+            path: /var/lib/waagent/ManagedIdentity-Settings
+{{- end }}
+{{- if .Values.cloudNodeManager.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-app: cloud-node-manager
+    kubernetes.io/cluster-service: "true"
+  name: cloud-node-manager
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cloud-node-manager
+  labels:
+    k8s-app: cloud-node-manager
+    kubernetes.io/cluster-service: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["watch", "list", "get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes/status"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-node-manager
+  labels:
+    k8s-app: cloud-node-manager
+    kubernetes.io/cluster-service: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-node-manager
+subjects:
+  - kind: ServiceAccount
+    name: cloud-node-manager
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cloud-node-manager
+  namespace: kube-system
+  labels:
+    component: cloud-node-manager
+    kubernetes.io/cluster-service: "true"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cloud-node-manager
+  template:
+    metadata:
+      labels:
+        k8s-app: cloud-node-manager
+      annotations:
+        cluster-autoscaler.kubernetes.io/daemonset-pod: "true"
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: cloud-node-manager
+      hostNetwork: true # required to fetch correct hostname
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+        - operator: "Exists"
+          effect: NoExecute
+        - operator: "Exists"
+          effect: NoSchedule
+      containers:
+        - name: cloud-node-manager
+          image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
+          imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
+          command: ["cloud-node-manager"]
+          args:
+            - --node-name=$(NODE_NAME)
+            {{- if hasKey .Values.cloudNodeManager "cloudConfig" }}
+            - "--cloud-config={{ .Values.cloudNodeManager.cloudConfig }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "kubeAPIBurst" }}
+            - "--kube-api-burst={{ .Values.cloudNodeManager.kubeAPIBurst }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "kubeAPIContentType" }}
+            - "--kube-api-content-type={{ .Values.cloudNodeManager.kubeAPIContentType }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "kubeAPIQPS" }}
+            - "--kube-api-qps={{ .Values.cloudNodeManager.kubeAPIQPS }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "kubeconfig" }}
+            - "--kubeconfig={{ .Values.cloudNodeManager.kubeconfig }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "master" }}
+            - "--master={{ .Values.cloudNodeManager.master }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "minResyncPeriod" }}
+            - "--min-resync-period={{ .Values.cloudNodeManager.minResyncPeriod }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "nodeStatusUpdateFrequency" }}
+            - "--node-status-update-frequency={{ .Values.cloudNodeManager.nodeStatusUpdateFrequency }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "useInstanceMetadata" }}
+            - "--use-instance-metadata={{ .Values.cloudNodeManager.useInstanceMetadata }}"
+            {{- end }}
+            {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
+            - "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
+            {{- end }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: {{ .Values.cloudNodeManager.containerResourceManagement.requestsCPU }}
+              memory: {{ .Values.cloudNodeManager.containerResourceManagement.requestsMem }}
+            limits:
+              cpu: {{ .Values.cloudNodeManager.containerResourceManagement.limitsCPU }}
+              memory: {{ .Values.cloudNodeManager.containerResourceManagement.limitsMem }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cloud-node-manager-windows
+  namespace: kube-system
+  labels:
+    component: cloud-node-manager
+    kubernetes.io/cluster-service: "true"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cloud-node-manager-windows
+  template:
+    metadata:
+      labels:
+        k8s-app: cloud-node-manager-windows
+      annotations:
+        cluster-autoscaler.kubernetes.io/daemonset-pod: "true"
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: cloud-node-manager
+      nodeSelector:
+        kubernetes.io/os: windows
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - operator: "Exists"
+        effect: NoExecute
+      - operator: "Exists"
+        effect: NoSchedule
+      containers:
+      - name: cloud-node-manager
+        image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
+        imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
+        command: ["/cloud-node-manager.exe"]
+        args:
+          - --node-name=$(NODE_NAME)
+          {{- if hasKey .Values.cloudNodeManager "cloudConfig" }}
+          - "--cloud-config={{ .Values.cloudNodeManager.cloudConfig }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "kubeAPIBurst" }}
+          - "--kube-api-burst={{ .Values.cloudNodeManager.kubeAPIBurst }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "kubeAPIContentType" }}
+          - "--kube-api-content-type={{ .Values.cloudNodeManager.kubeAPIContentType }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "kubeAPIQPS" }}
+          - "--kube-api-qps={{ .Values.cloudNodeManager.kubeAPIQPS }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "kubeconfig" }}
+          - "--kubeconfig={{ .Values.cloudNodeManager.kubeconfig }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "master" }}
+          - "--master={{ .Values.cloudNodeManager.master }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "minResyncPeriod" }}
+          - "--min-resync-period={{ .Values.cloudNodeManager.minResyncPeriod }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "nodeStatusUpdateFrequency" }}
+          - "--node-status-update-frequency={{ .Values.cloudNodeManager.nodeStatusUpdateFrequency }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "useInstanceMetadata" }}
+          - "--use-instance-metadata={{ .Values.cloudNodeManager.useInstanceMetadata }}"
+          {{- end }}
+          {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
+          - "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
+          {{- end }}
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: {{ .Values.cloudNodeManager.containerResourceManagement.requestsCPUWin }}
+            memory: {{ .Values.cloudNodeManager.containerResourceManagement.requestsMemWin }}
+          limits:
+            cpu: {{ .Values.cloudNodeManager.containerResourceManagement.limitsCPUWin }}
+            memory: {{ .Values.cloudNodeManager.containerResourceManagement.limitsMemWin }}
+{{- end }}

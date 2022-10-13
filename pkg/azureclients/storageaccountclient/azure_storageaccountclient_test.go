@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -102,12 +102,12 @@ func TestGetProperties(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
 	expected := storage.Account{Response: autorest.Response{Response: response}}
-	result, rerr := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result, rerr := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected, result)
 	assert.Nil(t, rerr)
 }
@@ -147,13 +147,13 @@ func TestAllNeverRateLimiter(t *testing.T) {
 	expected1 := storage.Account{}
 	expected2 := storage.AccountListKeysResult{}
 	expected3 := []storage.Account(nil)
-	result1, rerr1 := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result1, rerr1 := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected1, result1)
 	assert.Equal(t, saErr1, rerr1)
-	result2, rerr2 := saClient.ListKeys(context.TODO(), "rg", "sa1")
+	result2, rerr2 := saClient.ListKeys(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected2, result2)
 	assert.Equal(t, saErr2, rerr2)
-	result3, rerr3 := saClient.ListByResourceGroup(context.TODO(), "rg")
+	result3, rerr3 := saClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, expected3, result3)
 	assert.Equal(t, saErr3, rerr3)
 
@@ -161,9 +161,9 @@ func TestAllNeverRateLimiter(t *testing.T) {
 		Location: to.StringPtr("eastus"),
 	}
 
-	rerr4 := saClient.Create(context.TODO(), "rg", "sa1", sa)
+	rerr4 := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
 	assert.Equal(t, saErr4, rerr4)
-	rerr5 := saClient.Delete(context.TODO(), "rg", "sa1")
+	rerr5 := saClient.Delete(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, saErr5, rerr5)
 }
 
@@ -207,13 +207,13 @@ func TestAllRetryAfterReader(t *testing.T) {
 	expected1 := storage.Account{}
 	expected2 := storage.AccountListKeysResult{}
 	expected3 := []storage.Account(nil)
-	result1, rerr1 := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result1, rerr1 := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected1, result1)
 	assert.Equal(t, saErr1, rerr1)
-	result2, rerr2 := saClient.ListKeys(context.TODO(), "rg", "sa1")
+	result2, rerr2 := saClient.ListKeys(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected2, result2)
 	assert.Equal(t, saErr2, rerr2)
-	result3, rerr3 := saClient.ListByResourceGroup(context.TODO(), "rg")
+	result3, rerr3 := saClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, expected3, result3)
 	assert.Equal(t, saErr3, rerr3)
 
@@ -221,9 +221,9 @@ func TestAllRetryAfterReader(t *testing.T) {
 		Location: to.StringPtr("eastus"),
 	}
 
-	rerr4 := saClient.Create(context.TODO(), "rg", "sa1", sa)
+	rerr4 := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
 	assert.Equal(t, saErr4, rerr4)
-	rerr5 := saClient.Delete(context.TODO(), "rg", "sa1")
+	rerr5 := saClient.Delete(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, saErr5, rerr5)
 }
 
@@ -250,30 +250,30 @@ func TestAllThrottle(t *testing.T) {
 	r := getTestStorageAccount("sa1")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, throttleErr).Times(1)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, throttleErr).Times(1)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(3)
 
 	saClient := getTestStorageAccountClient(armClient)
-	result1, rerr1 := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result1, rerr1 := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Empty(t, result1)
 	assert.Equal(t, throttleErr, rerr1)
-	result2, rerr2 := saClient.ListKeys(context.TODO(), "rg", "sa1")
+	result2, rerr2 := saClient.ListKeys(context.TODO(), "", "rg", "sa1")
 	assert.Empty(t, result2)
 	assert.Equal(t, throttleErr, rerr2)
-	rerr3 := saClient.Create(context.TODO(), "rg", "sa1", sa)
+	rerr3 := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
 	assert.Equal(t, throttleErr, rerr3)
-	rerr4 := saClient.Delete(context.TODO(), "rg", "sa1")
+	rerr4 := saClient.Delete(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, throttleErr, rerr4)
 
 	armClient2 := mockarmclient.NewMockInterface(ctrl)
-	armClient2.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient2.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient2.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient2 := getTestStorageAccountClient(armClient2)
-	result5, rerr5 := saClient2.ListByResourceGroup(context.TODO(), "rg")
+	result5, rerr5 := saClient2.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Empty(t, result5)
 	assert.Equal(t, throttleErr, rerr5)
 }
@@ -287,12 +287,12 @@ func TestGetPropertiesNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
 	expected := storage.Account{Response: autorest.Response{}}
-	result, rerr := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result, rerr := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
@@ -307,12 +307,12 @@ func TestGetPropertiesInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
 	expected := storage.Account{Response: autorest.Response{}}
-	result, rerr := saClient.GetProperties(context.TODO(), "rg", "sa1")
+	result, rerr := saClient.GetProperties(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
@@ -327,12 +327,12 @@ func TestListKeys(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
 	expected := storage.AccountListKeysResult{Response: autorest.Response{Response: response}}
-	result, rerr := saClient.ListKeys(context.TODO(), "rg", "sa1")
+	result, rerr := saClient.ListKeys(context.TODO(), "", "rg", "sa1")
 	assert.Nil(t, rerr)
 	assert.Equal(t, expected, result)
 }
@@ -346,12 +346,12 @@ func TestListKeysResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}).Return(response, nil).Times(1)
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
 	expected := storage.AccountListKeysResult{Response: autorest.Response{}}
-	result, rerr := saClient.ListKeys(context.TODO(), "rg", "sa1")
+	result, rerr := saClient.ListKeys(context.TODO(), "", "rg", "sa1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
@@ -459,7 +459,7 @@ func TestListByResourceGroup(t *testing.T) {
 	snList := []storage.Account{getTestStorageAccount("sn1"), getTestStorageAccount("pip2"), getTestStorageAccount("pip3")}
 	responseBody, err := json.Marshal(map[string]interface{}{"value": snList, "nextLink": ""})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -467,7 +467,7 @@ func TestListByResourceGroup(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	result, rerr := saClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := saClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Nil(t, rerr)
 	assert.Equal(t, 3, len(result))
 }
@@ -480,7 +480,7 @@ func TestListByResourceGroupResponderError(t *testing.T) {
 	snList := []storage.Account{getTestStorageAccount("sn1"), getTestStorageAccount("pip2"), getTestStorageAccount("pip3")}
 	responseBody, err := json.Marshal(storage.AccountListResult{Value: &snList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -488,7 +488,7 @@ func TestListByResourceGroupResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	result, rerr := saClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := saClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, 0, len(result))
 }
@@ -509,7 +509,7 @@ func TestCreate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	rerr := saClient.Create(context.TODO(), "rg", "sa1", sa)
+	rerr := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
 	assert.Nil(t, rerr)
 }
 
@@ -529,7 +529,7 @@ func TestCreateResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	rerr := saClient.Create(context.TODO(), "rg", "sa1", sa)
+	rerr := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
 	assert.NotNil(t, rerr)
 }
 
@@ -549,7 +549,7 @@ func TestUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	rerr := saClient.Update(context.TODO(), "rg", "sa1", sa)
+	rerr := saClient.Update(context.TODO(), "", "rg", "sa1", sa)
 	assert.Nil(t, rerr)
 }
 
@@ -569,7 +569,7 @@ func TestUpdateResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	saClient := getTestStorageAccountClient(armClient)
-	rerr := saClient.Update(context.TODO(), "rg", "sa1", sa)
+	rerr := saClient.Update(context.TODO(), "", "rg", "sa1", sa)
 	assert.NotNil(t, rerr)
 }
 
@@ -579,10 +579,10 @@ func TestDelete(t *testing.T) {
 
 	r := getTestStorageAccount("sa1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	rtClient := getTestStorageAccountClient(armClient)
-	rerr := rtClient.Delete(context.TODO(), "rg", "sa1")
+	rerr := rtClient.Delete(context.TODO(), "", "rg", "sa1")
 	assert.Nil(t, rerr)
 }
 

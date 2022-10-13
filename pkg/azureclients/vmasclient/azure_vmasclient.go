@@ -18,12 +18,11 @@ package vmasclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -37,7 +36,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-//var _ Interface = &Client{}
+var _ Interface = &Client{}
+
+const vmasResourceType = "Microsoft.Compute/availabilitySets"
 
 // Client implements VMAS client Interface.
 type Client struct {
@@ -62,7 +63,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -103,7 +104,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, vmasName str
 	}
 
 	result, rerr := c.getVMAS(ctx, resourceGroupName, vmasName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -121,12 +122,12 @@ func (c *Client) getVMAS(ctx context.Context, resourceGroupName string, vmasName
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/availabilitySets",
+		vmasResourceType,
 		vmasName,
 	)
 	result := compute.AvailabilitySet{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	response, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmas.get.request", resourceID, rerr.Error())
@@ -164,7 +165,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 	}
 
 	result, rerr := c.listVMAS(ctx, resourceGroupName)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -179,14 +180,12 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 
 // listVMAS gets a list of AvailabilitySets in the resource group.
 func (c *Client) listVMAS(ctx context.Context, resourceGroupName string) ([]compute.AvailabilitySet, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/availabilitySets",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName))
+	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, vmasResourceType)
 	result := make([]compute.AvailabilitySet, 0)
 	page := &AvailabilitySetListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, "")
+	resp, rerr := c.armClient.GetResource(ctx, resourceID)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmas.list.request", resourceID, rerr.Error())

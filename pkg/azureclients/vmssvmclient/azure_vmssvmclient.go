@@ -18,12 +18,11 @@ package vmssvmclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -34,11 +33,17 @@ import (
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 var _ Interface = &Client{}
+
+const (
+	vmssResourceType = "Microsoft.Compute/virtualMachineScaleSets"
+	vmResourceType   = "virtualMachines"
+)
 
 // Client implements VMSS client Interface.
 type Client struct {
@@ -63,7 +68,7 @@ func New(config *azclients.ClientConfig) *Client {
 	if strings.EqualFold(config.CloudName, AzureStackCloudName) && !config.DisableAzureStackCloud {
 		apiVersion = AzureStackCloudAPIVersion
 	}
-	armClient := armclient.New(authorizer, baseURI, config.UserAgent, apiVersion, config.Location, config.Backoff)
+	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
 	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
 
 	if azclients.RateLimitEnabled(config.RateLimitConfig) {
@@ -104,7 +109,7 @@ func (c *Client) Get(ctx context.Context, resourceGroupName string, VMScaleSetNa
 	}
 
 	result, rerr := c.getVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -122,14 +127,14 @@ func (c *Client) getVMSSVM(ctx context.Context, resourceGroupName string, VMScal
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		VMScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 		instanceID,
 	)
 	result := compute.VirtualMachineScaleSetVM{}
 
-	response, rerr := c.armClient.GetResource(ctx, resourceID, string(expand))
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, string(expand))
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.get.request", resourceID, rerr.Error())
@@ -167,7 +172,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMach
 	}
 
 	result, rerr := c.listVMSSVM(ctx, resourceGroupName, virtualMachineScaleSetName, expand)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -182,17 +187,19 @@ func (c *Client) List(ctx context.Context, resourceGroupName string, virtualMach
 
 // listVMSSVM gets a list of VirtualMachineScaleSetVMs in the virtualMachineScaleSet.
 func (c *Client) listVMSSVM(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, expand string) ([]compute.VirtualMachineScaleSetVM, *retry.Error) {
-	resourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines",
-		autorest.Encode("path", c.subscriptionID),
-		autorest.Encode("path", resourceGroupName),
-		autorest.Encode("path", virtualMachineScaleSetName),
+	resourceID := armclient.GetChildResourcesListID(
+		c.subscriptionID,
+		resourceGroupName,
+		vmssResourceType,
+		virtualMachineScaleSetName,
+		vmResourceType,
 	)
 
 	result := make([]compute.VirtualMachineScaleSetVM, 0)
 	page := &VirtualMachineScaleSetVMListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID, expand)
+	resp, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.list.request", resourceID, rerr.Error())
@@ -241,7 +248,7 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSe
 	}
 
 	rerr := c.updateVMSSVM(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters)
-	_ = mc.Observe(rerr.Error())
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -254,14 +261,70 @@ func (c *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSe
 	return nil
 }
 
+// UpdateAsync updates a VirtualMachineScaleSetVM asynchronously
+func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM, source string) (*azure.Future, *retry.Error) {
+	mc := metrics.NewMetricContext("vmssvm", "updateasync", resourceGroupName, c.subscriptionID, source)
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return nil, retry.GetRateLimitError(true, "VMSSVMUpdateAsync")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("VMSSVMUpdateAsync", "client throttled", c.RetryAfterWriter)
+		return nil, rerr
+	}
+
+	resourceID := armclient.GetChildResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		vmssResourceType,
+		VMScaleSetName,
+		vmResourceType,
+		instanceID,
+	)
+
+	future, rerr := c.armClient.PutResourceAsync(ctx, resourceID, parameters)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return nil, rerr
+	}
+
+	return future, nil
+}
+
+// WaitForUpdateResult waits for the response of the update request
+func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
+	mc := metrics.NewMetricContext("vmss", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
+	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMSSWaitForUpdateResult")
+	mc.Observe(retry.NewErrorOrNil(false, err))
+	if err != nil {
+		if response != nil {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', response code %d", err.Error(), response.StatusCode)
+		} else {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', no response", err.Error())
+		}
+		return retry.GetError(response, err)
+	}
+	return nil
+}
+
 // updateVMSSVM updates a VirtualMachineScaleSetVM.
 func (c *Client) updateVMSSVM(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM) *retry.Error {
 	resourceID := armclient.GetChildResourceID(
 		c.subscriptionID,
 		resourceGroupName,
-		"Microsoft.Compute/virtualMachineScaleSets",
+		vmssResourceType,
 		VMScaleSetName,
-		"virtualMachines",
+		vmResourceType,
 		instanceID,
 	)
 
@@ -384,7 +447,9 @@ func (page VirtualMachineScaleSetVMListResultPage) Values() []compute.VirtualMac
 }
 
 // UpdateVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string) *retry.Error {
+// If the batch size > 0, it will send sync requests concurrently in batches, or it will send sync requests in sequence.
+// No matter what the batch size is, it will process the async requests concurrently in one single batch.
+func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, source string, batchSize int) *retry.Error {
 	mc := metrics.NewMetricContext("vmssvm", "update_vms", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
@@ -400,8 +465,8 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 		return rerr
 	}
 
-	rerr := c.updateVMSSVMs(ctx, resourceGroupName, VMScaleSetName, instances)
-	_ = mc.Observe(rerr.Error())
+	rerr := c.updateVMSSVMs(ctx, resourceGroupName, VMScaleSetName, instances, batchSize)
+	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
@@ -415,21 +480,21 @@ func (c *Client) UpdateVMs(ctx context.Context, resourceGroupName string, VMScal
 }
 
 // updateVMSSVMs updates a list of VirtualMachineScaleSetVM from map[instanceID]compute.VirtualMachineScaleSetVM.
-func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM) *retry.Error {
+func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VMScaleSetName string, instances map[string]compute.VirtualMachineScaleSetVM, batchSize int) *retry.Error {
 	resources := make(map[string]interface{})
 	for instanceID, parameter := range instances {
 		resourceID := armclient.GetChildResourceID(
 			c.subscriptionID,
 			resourceGroupName,
-			"Microsoft.Compute/virtualMachineScaleSets",
+			vmssResourceType,
 			VMScaleSetName,
-			"virtualMachines",
+			vmResourceType,
 			instanceID,
 		)
 		resources[resourceID] = parameter
 	}
 
-	responses := c.armClient.PutResources(ctx, resources)
+	responses := c.armClient.PutResourcesInBatches(ctx, resources, batchSize)
 	errors := make([]*retry.Error, 0)
 	for resourceID, resp := range responses {
 		if resp == nil {
@@ -439,6 +504,22 @@ func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VM
 		defer c.armClient.CloseResponse(ctx, resp.Response)
 		if resp.Error != nil {
 			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vmssvm.put.request", resourceID, resp.Error.Error())
+
+			errMsg := resp.Error.Error().Error()
+			if strings.Contains(errMsg, consts.VmssVMNotActiveErrorMessage) {
+				klog.V(2).Infof("VMSS VM %s is not active, skip updating it.", resourceID)
+				continue
+			}
+			if strings.Contains(errMsg, consts.ParentResourceNotFoundMessageCode) {
+				klog.V(2).Info("The parent resource of VMSS VM %s is not found, skip updating it.", resourceID)
+				continue
+			}
+			if strings.Contains(errMsg, consts.CannotUpdateVMBeingDeletedMessagePrefix) &&
+				strings.Contains(errMsg, consts.CannotUpdateVMBeingDeletedMessageSuffix) {
+				klog.V(2).Infof("The VM %s is being deleted, skip updating it.", resourceID)
+				continue
+			}
+
 			errors = append(errors, resp.Error)
 			continue
 		}
@@ -457,7 +538,12 @@ func (c *Client) updateVMSSVMs(ctx context.Context, resourceGroupName string, VM
 		rerr := &retry.Error{}
 		errs := make([]error, 0)
 		for _, err := range errors {
-			if err.IsThrottled() && err.RetryAfter.After(err.RetryAfter) {
+			if !err.Retriable && strings.Contains(err.Error().Error(), consts.ConcurrentRequestConflictMessage) {
+				err.Retriable = true
+				err.RetryAfter = time.Now().Add(5 * time.Second)
+			}
+
+			if err.IsThrottled() && err.RetryAfter.After(rerr.RetryAfter) {
 				rerr.RetryAfter = err.RetryAfter
 			}
 			errs = append(errs, err.Error())

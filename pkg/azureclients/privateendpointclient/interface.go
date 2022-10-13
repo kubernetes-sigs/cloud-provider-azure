@@ -19,15 +19,25 @@ package privateendpointclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+)
+
+const (
+	// APIVersion is the API version for network.
+	APIVersion = "2021-08-01"
+	// AzureStackCloudName is the cloud name of Azure Stack
+	AzureStackCloudName = "AZURESTACKCLOUD"
 )
 
 // Interface is the client interface for Private Endpoints.
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 
 	// Get gets the private endpoint
-	Get(ctx context.Context, resourceGroupName string, privateEndpointName string, expand string) (result network.PrivateEndpoint, err error)
+	Get(ctx context.Context, resourceGroupName string, privateEndpointName string, expand string) (result network.PrivateEndpoint, rerr *retry.Error)
 
 	// CreateOrUpdate creates or updates a private endpoint.
-	CreateOrUpdate(ctx context.Context, resourceGroupName string, endpointName string, privateEndpoint network.PrivateEndpoint, waitForCompletion bool) error
+	CreateOrUpdate(ctx context.Context, resourceGroupName string, endpointName string, privateEndpoint network.PrivateEndpoint, etag string, waitForCompletion bool) *retry.Error
 }

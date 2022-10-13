@@ -19,14 +19,14 @@ package interfaceclient
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
 	// APIVersion is the API version for network.
-	APIVersion = "2020-08-01"
+	APIVersion = "2021-08-01"
 	// AzureStackCloudAPIVersion is the API version for Azure Stack
 	AzureStackCloudAPIVersion = "2018-11-01"
 
@@ -40,8 +40,7 @@ const (
 )
 
 // Interface is the client interface for NetworkInterface.
-// Don't forget to run the following command to generate the mock client:
-// mockgen -source=$GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/interface.go -package=mockinterfaceclient Interface > $GOPATH/src/sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient/interface.go
+// Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
 	// Get gets a network.Interface.
 	Get(ctx context.Context, resourceGroupName string, networkInterfaceName string, expand string) (result network.Interface, rerr *retry.Error)

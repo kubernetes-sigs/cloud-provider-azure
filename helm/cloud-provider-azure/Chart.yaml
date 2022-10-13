@@ -1,0 +1,16 @@
+apiVersion: v1
+description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure components
+home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
+keywords:
+- cloud-provider-azure
+- kubernetes-sigs
+- kubernetes
+maintainers:
+- email: jackfrancis@gmail.com
+  name: Jack Francis
+- email: zhechengli1995@outlook.com
+  name: Zhecheng Li
+name: cloud-provider-azure
+sources:
+- https://github.com/kubernetes-sigs/cloud-provider-azure
+version: 1.25.2

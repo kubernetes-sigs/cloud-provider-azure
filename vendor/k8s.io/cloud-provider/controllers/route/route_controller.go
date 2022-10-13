@@ -24,8 +24,9 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	netutils "k8s.io/utils/net"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,8 +41,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	clientretry "k8s.io/client-go/util/retry"
 	cloudprovider "k8s.io/cloud-provider"
-	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
+	controllersmetrics "k8s.io/component-base/metrics/prometheus/controllers"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
+	nodeutil "k8s.io/component-helpers/node/util"
 )
 
 const (
@@ -77,7 +79,6 @@ func New(routes cloudprovider.Routes, kubeClient clientset.Interface, nodeInform
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartStructuredLogging(0)
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "route_controller"})
 
 	rc := &RouteController{
@@ -94,18 +95,23 @@ func New(routes cloudprovider.Routes, kubeClient clientset.Interface, nodeInform
 	return rc
 }
 
-func (rc *RouteController) Run(stopCh <-chan struct{}, syncPeriod time.Duration) {
+func (rc *RouteController) Run(ctx context.Context, syncPeriod time.Duration, controllerManagerMetrics *controllersmetrics.ControllerManagerMetrics) {
 	defer utilruntime.HandleCrash()
+
+	// Start event processing pipeline.
+	if rc.broadcaster != nil {
+		rc.broadcaster.StartStructuredLogging(0)
+		rc.broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: rc.kubeClient.CoreV1().Events("")})
+		defer rc.broadcaster.Shutdown()
+	}
 
 	klog.Info("Starting route controller")
 	defer klog.Info("Shutting down route controller")
+	controllerManagerMetrics.ControllerStarted("route")
+	defer controllerManagerMetrics.ControllerStopped("route")
 
-	if !cache.WaitForNamedCacheSync("route", stopCh, rc.nodeListerSynced) {
+	if !cache.WaitForNamedCacheSync("route", ctx.Done(), rc.nodeListerSynced) {
 		return
-	}
-
-	if rc.broadcaster != nil {
-		rc.broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: rc.kubeClient.CoreV1().Events("")})
 	}
 
 	// TODO: If we do just the full Resync every 5 minutes (default value)
@@ -114,16 +120,16 @@ func (rc *RouteController) Run(stopCh <-chan struct{}, syncPeriod time.Duration)
 	// We should have a watch on node and if we observe a new node (with CIDR?)
 	// trigger reconciliation for that node.
 	go wait.NonSlidingUntil(func() {
-		if err := rc.reconcileNodeRoutes(); err != nil {
+		if err := rc.reconcileNodeRoutes(ctx); err != nil {
 			klog.Errorf("Couldn't reconcile node routes: %v", err)
 		}
-	}, syncPeriod, stopCh)
+	}, syncPeriod, ctx.Done())
 
-	<-stopCh
+	<-ctx.Done()
 }
 
-func (rc *RouteController) reconcileNodeRoutes() error {
-	routeList, err := rc.routes.ListRoutes(context.TODO(), rc.clusterName)
+func (rc *RouteController) reconcileNodeRoutes(ctx context.Context) error {
+	routeList, err := rc.routes.ListRoutes(ctx, rc.clusterName)
 	if err != nil {
 		return fmt.Errorf("error listing routes: %v", err)
 	}
@@ -131,10 +137,10 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	if err != nil {
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
-	return rc.reconcile(nodes, routeList)
+	return rc.reconcile(ctx, nodes, routeList)
 }
 
-func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.Route) error {
+func (rc *RouteController) reconcile(ctx context.Context, nodes []*v1.Node, routes []*cloudprovider.Route) error {
 	var l sync.Mutex
 	// for each node a map of podCIDRs and their created status
 	nodeRoutesStatuses := make(map[types.NodeName]map[string]bool)
@@ -191,7 +197,7 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 					// CreateRoute calls in flight.
 					rateLimiter <- struct{}{}
 					klog.Infof("Creating route for node %s %s with hint %s, throttled %v", nodeName, route.DestinationCIDR, nameHint, time.Since(startTime))
-					err := rc.routes.CreateRoute(context.TODO(), rc.clusterName, nameHint, route)
+					err := rc.routes.CreateRoute(ctx, rc.clusterName, nameHint, route)
 					<-rateLimiter
 					if err != nil {
 						msg := fmt.Sprintf("Could not create route %s %s for node %s after %v: %v", nameHint, route.DestinationCIDR, nodeName, time.Since(startTime), err)
@@ -244,7 +250,7 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 					// respect the rate limiter
 					rateLimiter <- struct{}{}
 					klog.Infof("Deleting route %s %s", route.Name, route.DestinationCIDR)
-					if err := rc.routes.DeleteRoute(context.TODO(), rc.clusterName, route); err != nil {
+					if err := rc.routes.DeleteRoute(ctx, rc.clusterName, route); err != nil {
 						klog.Errorf("Could not delete route %s %s after %v: %v", route.Name, route.DestinationCIDR, time.Since(startTime), err)
 					} else {
 						klog.Infof("Deleted route %s %s after %v", route.Name, route.DestinationCIDR, time.Since(startTime))
@@ -267,7 +273,9 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 			go func(n *v1.Node) {
 				defer wg.Done()
 				klog.Infof("node %v has no routes assigned to it. NodeNetworkUnavailable will be set to true", n.Name)
-				rc.updateNetworkingCondition(n, false)
+				if err := rc.updateNetworkingCondition(n, false); err != nil {
+					klog.Errorf("failed to update networking condition when no nodeRoutes: %v", err)
+				}
 			}(node)
 			continue
 		}
@@ -281,7 +289,9 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 		}
 		go func(n *v1.Node) {
 			defer wg.Done()
-			rc.updateNetworkingCondition(n, allRoutesCreated)
+			if err := rc.updateNetworkingCondition(n, allRoutesCreated); err != nil {
+				klog.Errorf("failed to update networking condition: %v", err)
+			}
 		}(node)
 	}
 	wg.Wait()
@@ -289,7 +299,7 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 }
 
 func (rc *RouteController) updateNetworkingCondition(node *v1.Node, routesCreated bool) error {
-	_, condition := cloudnodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
+	_, condition := nodeutil.GetNodeCondition(&(node.Status), v1.NodeNetworkUnavailable)
 	if routesCreated && condition != nil && condition.Status == v1.ConditionFalse {
 		klog.V(2).Infof("set node %v with NodeNetworkUnavailable=false was canceled because it is already set", node.Name)
 		return nil
@@ -310,7 +320,7 @@ func (rc *RouteController) updateNetworkingCondition(node *v1.Node, routesCreate
 		// patch in the retry loop.
 		currentTime := metav1.Now()
 		if routesCreated {
-			err = cloudnodeutil.SetNodeCondition(rc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(rc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionFalse,
 				Reason:             "RouteCreated",
@@ -318,7 +328,7 @@ func (rc *RouteController) updateNetworkingCondition(node *v1.Node, routesCreate
 				LastTransitionTime: currentTime,
 			})
 		} else {
-			err = cloudnodeutil.SetNodeCondition(rc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
+			err = nodeutil.SetNodeCondition(rc.kubeClient, types.NodeName(node.Name), v1.NodeCondition{
 				Type:               v1.NodeNetworkUnavailable,
 				Status:             v1.ConditionTrue,
 				Reason:             "NoRouteCreated",
@@ -340,7 +350,7 @@ func (rc *RouteController) updateNetworkingCondition(node *v1.Node, routesCreate
 }
 
 func (rc *RouteController) isResponsibleForRoute(route *cloudprovider.Route) bool {
-	_, cidr, err := net.ParseCIDR(route.DestinationCIDR)
+	_, cidr, err := netutils.ParseCIDRSloppy(route.DestinationCIDR)
 	if err != nil {
 		klog.Errorf("Ignoring route %s, unparsable CIDR: %v", route.Name, err)
 		return false

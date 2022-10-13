@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -96,12 +96,12 @@ func TestGet(t *testing.T) {
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	expected := compute.Snapshot{Response: autorest.Response{Response: response}}
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Equal(t, expected, result)
 	assert.Nil(t, rerr)
 }
@@ -118,7 +118,7 @@ func TestGetNeverRateLimiter(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithNeverRateLimiter(armClient)
 	expected := compute.Snapshot{}
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Equal(t, expected, result)
 	assert.Equal(t, snGetErr, rerr)
 }
@@ -136,7 +136,7 @@ func TestGetRetryAfterReader(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithRetryAfterReader(armClient)
 	expected := compute.Snapshot{}
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Equal(t, expected, result)
 	assert.Equal(t, snGetErr, rerr)
 }
@@ -150,12 +150,12 @@ func TestGetNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
 	expected := compute.Snapshot{Response: autorest.Response{}}
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
@@ -176,11 +176,11 @@ func TestGetThrottle(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Empty(t, result)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -194,12 +194,12 @@ func TestGetInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourceID, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
 	expected := compute.Snapshot{Response: autorest.Response{}}
-	result, rerr := snClient.Get(context.TODO(), "rg", "sn1")
+	result, rerr := snClient.Get(context.TODO(), "", "rg", "sn1")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
@@ -213,7 +213,7 @@ func TestListByResourceGroup(t *testing.T) {
 	snList := []compute.Snapshot{getTestSnapshot("sn1"), getTestSnapshot("sn2"), getTestSnapshot("sn3")}
 	responseBody, err := json.Marshal(compute.SnapshotList{Value: &snList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
@@ -221,7 +221,7 @@ func TestListByResourceGroup(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Nil(t, rerr)
 	assert.Equal(t, 3, len(result))
 }
@@ -235,12 +235,12 @@ func TestListByResourceGroupNotFound(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
 	expected := []compute.Snapshot{}
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusNotFound, rerr.HTTPStatusCode)
@@ -255,12 +255,12 @@ func TestListByResourceGroupInternalError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, nil).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
 	expected := []compute.Snapshot{}
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, expected, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
@@ -281,10 +281,10 @@ func TestListByResourceGroupThrottle(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(response, throttleErr).Times(1)
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Empty(t, result)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
@@ -298,14 +298,14 @@ func TestListByResourceGroupWithListResponderError(t *testing.T) {
 	snList := []compute.Snapshot{getTestSnapshot("sn1"), getTestSnapshot("sn2"), getTestSnapshot("sn3")}
 	responseBody, err := json.Marshal(compute.SnapshotList{Value: &snList})
 	assert.NoError(t, err)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusNotFound,
 			Body:       ioutil.NopCloser(bytes.NewReader(responseBody)),
 		}, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, 0, len(result))
 }
@@ -326,14 +326,14 @@ func TestListWithNextPage(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(pagedResponse)),
 		}, nil)
-	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix, "").Return(
+	armClient.EXPECT().GetResource(gomock.Any(), testResourcePrefix).Return(
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Body:       ioutil.NopCloser(bytes.NewReader(partialResponse)),
 		}, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
 	snClient := getTestSnapshotClient(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Nil(t, rerr)
 	assert.Equal(t, 6, len(result))
 }
@@ -349,7 +349,7 @@ func TestListByResourceGroupNeverRateLimiter(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithNeverRateLimiter(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, 0, len(result))
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snListErr, rerr)
@@ -367,7 +367,7 @@ func TestListByResourceGroupRetryAfterReader(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithRetryAfterReader(armClient)
-	result, rerr := snClient.ListByResourceGroup(context.TODO(), "rg")
+	result, rerr := snClient.ListByResourceGroup(context.TODO(), "", "rg")
 	assert.Equal(t, 0, len(result))
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snListErr, rerr)
@@ -481,7 +481,7 @@ func TestCreateOrUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	rerr := snClient.CreateOrUpdate(context.TODO(), "rg", "sn1", sn)
+	rerr := snClient.CreateOrUpdate(context.TODO(), "", "rg", "sn1", sn)
 	assert.Nil(t, rerr)
 }
 
@@ -498,7 +498,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	rerr := snClient.CreateOrUpdate(context.TODO(), "rg", "sn1", sn)
+	rerr := snClient.CreateOrUpdate(context.TODO(), "", "rg", "sn1", sn)
 	assert.NotNil(t, rerr)
 }
 
@@ -506,15 +506,12 @@ func TestCreateOrUpdateNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	snCreateOrUpdateErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "SnapshotCreateOrUpdate"),
-		Retriable: true,
-	}
+	snCreateOrUpdateErr := retry.GetRateLimitError(true, "SnapshotCreateOrUpdate")
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithNeverRateLimiter(armClient)
 	sn := getTestSnapshot("sn1")
-	rerr := snClient.CreateOrUpdate(context.TODO(), "rg", "sn1", sn)
+	rerr := snClient.CreateOrUpdate(context.TODO(), "", "rg", "sn1", sn)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snCreateOrUpdateErr, rerr)
 }
@@ -523,16 +520,12 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	snCreateOrUpdateErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "SnapshotCreateOrUpdate", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	snCreateOrUpdateErr := retry.GetThrottlingError("SnapshotCreateOrUpdate", "client throttled", getFutureTime())
 
 	sn := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithRetryAfterReader(armClient)
-	rerr := snClient.CreateOrUpdate(context.TODO(), "rg", "sn1", sn)
+	rerr := snClient.CreateOrUpdate(context.TODO(), "", "rg", "sn1", sn)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snCreateOrUpdateErr, rerr)
 }
@@ -558,7 +551,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	rerr := snClient.CreateOrUpdate(context.TODO(), "rg", "sn1", sn)
+	rerr := snClient.CreateOrUpdate(context.TODO(), "", "rg", "sn1", sn)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
 }
@@ -569,10 +562,10 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	rtClient := getTestSnapshotClient(armClient)
-	rerr := rtClient.Delete(context.TODO(), "rg", "sn1")
+	rerr := rtClient.Delete(context.TODO(), "", "rg", "sn1")
 	assert.Nil(t, rerr)
 }
 
@@ -587,7 +580,7 @@ func TestDeleteNeverRateLimiter(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithNeverRateLimiter(armClient)
-	rerr := snClient.Delete(context.TODO(), "rg", "sn1")
+	rerr := snClient.Delete(context.TODO(), "", "rg", "sn1")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snDeleteErr, rerr)
 }
@@ -604,7 +597,7 @@ func TestDeleteRetryAfterReader(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snClient := getTestSnapshotClientWithRetryAfterReader(armClient)
-	rerr := snClient.Delete(context.TODO(), "rg", "sn1")
+	rerr := snClient.Delete(context.TODO(), "", "rg", "sn1")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, snDeleteErr, rerr)
 }
@@ -622,10 +615,10 @@ func TestDeleteThrottle(t *testing.T) {
 
 	sn := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(sn.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(sn.ID)).Return(throttleErr).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
-	rerr := snClient.Delete(context.TODO(), "rg", "sn1")
+	rerr := snClient.Delete(context.TODO(), "", "rg", "sn1")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
 }

@@ -23,24 +23,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	mocknodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager/mock"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestEnsureNodeExistsByProviderID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	testCases := []struct {
 		testName           string
 		node               *v1.Node
@@ -103,10 +109,9 @@ func TestEnsureNodeExistsByProviderID(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
 			ctx := context.TODO()
-			mockNP := &mocknodeprovider.NodeProvider{}
+			mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
 			if tc.node.Spec.ProviderID == "" {
-				mockNP.On("InstanceID", ctx, types.NodeName(tc.node.Name)).
-					Return(tc.providerID, tc.nodeNameErr)
+				mockNP.EXPECT().InstanceID(ctx, types.NodeName(tc.node.Name)).Return(tc.providerID, tc.nodeNameErr)
 			}
 
 			cnc := &CloudNodeController{nodeProvider: mockNP}
@@ -119,6 +124,9 @@ func TestEnsureNodeExistsByProviderID(t *testing.T) {
 
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized
 func TestNodeInitialized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -153,14 +161,14 @@ func TestNodeInitialized(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("node0", nil)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -173,9 +181,9 @@ func TestNodeInitialized(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
 
-	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
 		factory.Core().V1().Nodes(),
@@ -183,16 +191,19 @@ func TestNodeInitialized(t *testing.T) {
 		mockNP,
 		time.Second,
 		false)
-	eventBroadcaster.StartLogging(klog.Infof)
 
 	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
+	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
 }
 
 func TestUpdateCloudNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -227,14 +238,14 @@ func TestUpdateCloudNode(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("node0", nil)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -247,7 +258,8 @@ func TestUpdateCloudNode(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -266,10 +278,14 @@ func TestUpdateCloudNode(t *testing.T) {
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
 	assert.Equal(t, 2, len(fnh.UpdatedNodes[0].Status.Conditions), "Node Contions was not updated")
 	assert.Equal(t, "NetworkUnavailable", string(fnh.UpdatedNodes[0].Status.Conditions[0].Type), "Node Condition NetworkUnavailable was not updated")
+	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
 }
 
 // This test checks that a node without the external cloud provider taint are NOT cloudprovider initialized
 func TestNodeIgnored(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -293,29 +309,8 @@ func TestNodeIgnored(t *testing.T) {
 		DeleteWaitChan: make(chan struct{}),
 	}
 
-	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
-		Region:        "eastus",
-		FailureDomain: "1",
-	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
-		{
-			Type:    v1.NodeHostName,
-			Address: "node0.cloud.internal",
-		},
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
-		},
-	}, nil)
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -335,6 +330,9 @@ func TestNodeIgnored(t *testing.T) {
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized and
 // and that zone labels are added correctly
 func TestZoneInitialized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -370,14 +368,14 @@ func TestZoneInitialized(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("node0", nil)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -390,7 +388,8 @@ func TestZoneInitialized(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -420,7 +419,12 @@ func TestZoneInitialized(t *testing.T) {
 
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized and
 // and nodeAddresses are updated from the cloudprovider
-func TestNodeAddresses(t *testing.T) {
+func TestAddCloudNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -459,16 +463,14 @@ func TestNodeAddresses(t *testing.T) {
 		DeleteWaitChan: make(chan struct{}),
 	}
 
-	ctx := context.TODO()
-	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(gomock.Any(), types.NodeName("node0")).Return("node0", nil)
+	mockNP.EXPECT().InstanceType(gomock.Any(), types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(gomock.Any(), gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(gomock.Any(), types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -481,25 +483,83 @@ func TestNodeAddresses(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
 
-	eventBroadcaster := record.NewBroadcaster()
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		nodeInformer,
 		fnh,
 		mockNP,
 		time.Second,
 		false)
-	eventBroadcaster.StartLogging(klog.Infof)
-	cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+	factory.Start(ctx.Done())
+	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
 
+	cloudNodeController.AddCloudNode(ctx, fnh.Existing[0])
 	assert.Equal(t, 1, len(fnh.UpdatedNodes), "Node was not updated")
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 3, len(fnh.UpdatedNodes[0].Status.Addresses), "Node status not updated")
+}
 
-	mockNP.ExpectedCalls = nil
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+func TestUpdateNodeAddresses(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fnh := &testutil.FakeNodeHandler{
+		Existing: []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node0",
+					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					Labels:            map[string]string{},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:               v1.NodeReady,
+							Status:             v1.ConditionUnknown,
+							LastHeartbeatTime:  metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+							LastTransitionTime: metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key:    "ImproveCoverageTaint",
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+		Clientset:      fake.NewSimpleClientset(&v1.PodList{}),
+		DeleteWaitChan: make(chan struct{}),
+	}
+
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+
+	cloudNodeController := NewCloudNodeController(
+		"node0",
+		nodeInformer,
+		fnh,
+		mockNP,
+		time.Second,
+		false)
+	factory.Start(ctx.Done())
+	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
+
+	mockNP.EXPECT().InstanceID(gomock.Any(), types.NodeName("node0")).Return("node0", nil)
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0.cloud.internal",
@@ -509,7 +569,7 @@ func TestNodeAddresses(t *testing.T) {
 			Address: "10.0.0.1",
 		},
 	}, nil)
-	cloudNodeController.UpdateNodeStatus(context.TODO())
+	cloudNodeController.UpdateNodeStatus(ctx)
 	updatedNodes := fnh.GetUpdatedNodesCopy()
 	assert.Equal(t, 2, len(updatedNodes[0].Status.Addresses), "Node Addresses not correctly updated")
 }
@@ -517,6 +577,9 @@ func TestNodeAddresses(t *testing.T) {
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized and
 // and the provided node ip is validated with the cloudprovider and nodeAddresses are updated from the cloudprovider
 func TestNodeProvidedIPAddresses(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -567,14 +630,13 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("node0", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeInternalIP,
 			Address: "10.0.0.1",
@@ -583,7 +645,8 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -613,6 +676,12 @@ func Test_reconcileNodeLabels(t *testing.T) {
 		expectedLabels map[string]string
 		expectedErr    error
 	}{
+		{
+			name:           "no labels",
+			labels:         map[string]string{},
+			expectedLabels: map[string]string{},
+			expectedErr:    nil,
+		},
 		{
 			name: "requires reconcile",
 			labels: map[string]string{
@@ -694,7 +763,7 @@ func Test_reconcileNodeLabels(t *testing.T) {
 			factory.Start(nil)
 			factory.WaitForCacheSync(nil)
 
-			err := cnc.reconcileNodeLabels("node01")
+			err := cnc.reconcileNodeLabels(testNode)
 			if !errors.Is(err, test.expectedErr) {
 				t.Logf("actual err: %v", err)
 				t.Logf("expected err: %v", test.expectedErr)
@@ -846,10 +915,14 @@ func TestNodeAddressesChangeDetected(t *testing.T) {
 		"Node address changes are not detected correctly")
 }
 
-// This test checks that a node with the external cloud provider taint is cloudprovider initialized and
+// This test checks that a node with the external cloud provider taint is cloudprovider initialized
 // and node addresses will not be updated when node isn't present according to the cloudprovider
 func TestNodeAddressesNotUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
+		Clientset: fake.NewSimpleClientset(),
 		Existing: []*v1.Node{
 			{
 				ObjectMeta: metav1.ObjectMeta{
@@ -882,27 +955,8 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("", cloudprovider.InstanceNotFound)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
-		Region:        "eastus",
-		FailureDomain: "eastus-1",
-	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
-		{
-			Type:    v1.NodeHostName,
-			Address: "node0",
-		},
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
-		},
-	}, nil)
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -913,7 +967,10 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
 		nodeStatusUpdateFrequency: 1 * time.Second,
 	}
-	cloudNodeController.updateNodeAddress(context.TODO(), fnh.Existing[0])
+	err := cloudNodeController.updateNodeAddress(context.TODO(), fnh.Existing[0])
+	if err != nil {
+		t.Errorf("unexpected error when updating node address: %v", err)
+	}
 
 	if len(fnh.UpdatedNodes) != 0 {
 		t.Errorf("Node was not correctly updated, the updated len(nodes) got: %v, wanted=0", len(fnh.UpdatedNodes))
@@ -922,6 +979,9 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 
 // This test checks that a node is set with the correct providerID
 func TestNodeProviderID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -962,14 +1022,14 @@ func TestNodeProviderID(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("test:///12345", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("test:///12345", nil)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0",
@@ -982,7 +1042,8 @@ func TestNodeProviderID(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1004,6 +1065,9 @@ func TestNodeProviderID(t *testing.T) {
 
 // This test checks that a node's provider ID will not be overwritten
 func TestNodeProviderIDAlreadySet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	fnh := &testutil.FakeNodeHandler{
 		Existing: []*v1.Node{
 			{
@@ -1045,14 +1109,13 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 
 	ctx := context.TODO()
 	factory := informers.NewSharedInformerFactory(fnh, 0)
-	mockNP := &mocknodeprovider.NodeProvider{}
-	mockNP.On("InstanceID", ctx, types.NodeName("node0")).Return("test:///12345", nil)
-	mockNP.On("InstanceType", ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
-	mockNP.On("GetZone", ctx).Return(cloudprovider.Zone{
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	mockNP.EXPECT().InstanceType(ctx, types.NodeName("node0")).Return("Standard_D2_v3", nil)
+	mockNP.EXPECT().GetZone(ctx, gomock.Any()).Return(cloudprovider.Zone{
 		Region:        "eastus",
 		FailureDomain: "eastus-1",
 	}, nil)
-	mockNP.On("NodeAddresses", ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
+	mockNP.EXPECT().NodeAddresses(ctx, types.NodeName("node0")).Return([]v1.NodeAddress{
 		{
 			Type:    v1.NodeHostName,
 			Address: "node0",
@@ -1065,7 +1128,8 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 			Type:    v1.NodeExternalIP,
 			Address: "132.143.154.163",
 		},
-	}, nil)
+	}, nil).AnyTimes()
+	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1084,4 +1148,79 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	// CCM node controller should not overwrite provider if it's already set
 	assert.Equal(t, "test-provider-id", fnh.UpdatedNodes[0].Spec.ProviderID, "Node ProviderID not set correctly")
+}
+
+// This test checks that a node manager should retry 20 times when failing to get providerID and then panic
+func TestNodeProviderIDNotSet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fnh := &testutil.FakeNodeHandler{
+		Existing: []*v1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "node0",
+					CreationTimestamp: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					Labels:            map[string]string{},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:               v1.NodeReady,
+							Status:             v1.ConditionUnknown,
+							LastHeartbeatTime:  metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+							LastTransitionTime: metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key:    "ImproveCoverageTaint",
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+						{
+							Key:    cloudproviderapi.TaintExternalCloudProvider,
+							Value:  "true",
+							Effect: v1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+		Clientset:      fake.NewSimpleClientset(&v1.PodList{}),
+		DeleteWaitChan: make(chan struct{}),
+	}
+
+	ctx := context.TODO()
+	factory := informers.NewSharedInformerFactory(fnh, 0)
+	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
+	// InstanceID function should be retried for 20 times when error happens consistently
+	mockNP.EXPECT().InstanceID(ctx, types.NodeName("node0")).Return("", cloudprovider.InstanceNotFound).MinTimes(20).MaxTimes(20)
+
+	eventBroadcaster := record.NewBroadcaster()
+	cloudNodeController := &CloudNodeController{
+		kubeClient:                fnh,
+		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeName:                  "node0",
+		nodeProvider:              mockNP,
+		nodeStatusUpdateFrequency: 1 * time.Second,
+		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
+	}
+	eventBroadcaster.StartLogging(klog.Infof)
+
+	// Expect AddCloudNode() to panic when providerID is not set properly
+	func() {
+		defer func() {
+			err := recover()
+			assert.NotNil(t, err, "AddCloudNode() didn't panic")
+		}()
+
+		cloudNodeController.AddCloudNode(context.TODO(), fnh.Existing[0])
+		t.Errorf("AddCloudNode() didn't panic when providerID not found")
+	}()
+
+	// Node update should fail
+	assert.Equal(t, 0, len(fnh.UpdatedNodes), "Node was updated (unexpected)")
 }

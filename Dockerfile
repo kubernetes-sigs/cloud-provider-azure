@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.1-experimental
+# syntax=docker/dockerfile:1.3.1
 
 # Copyright 2019 The Kubernetes Authors.
 #
@@ -14,8 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+FROM --platform=linux/amd64 golang:1.19.2-buster AS builder
+
 ARG ENABLE_GIT_COMMAND=true
-FROM golang:1.15.8-stretch AS builder
+ARG ARCH=amd64
+
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
@@ -24,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build ./cmd/cloud-controller-manager
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-     make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
+     make bin/azure-cloud-controller-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} ARCH=${ARCH}
 
 FROM gcr.io/distroless/static
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-controller-manager /usr/local/bin/cloud-controller-manager

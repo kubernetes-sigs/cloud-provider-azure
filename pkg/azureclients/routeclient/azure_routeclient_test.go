@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -95,7 +95,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -107,10 +107,7 @@ func TestCreateOrUpdateWithNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	rcCreateOrUpdateErr := &retry.Error{
-		RawError:  fmt.Errorf("azure cloud provider rate limited(%s) for operation %q", "write", "RouteCreateOrUpdate"),
-		Retriable: true,
-	}
+	rcCreateOrUpdateErr := retry.GetRateLimitError(true, "RouteCreateOrUpdate")
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -124,11 +121,7 @@ func TestCreateOrUpdateRetryAfterReader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	rcCreateOrUpdateErr := &retry.Error{
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "RouteCreateOrUpdate", "client throttled"),
-		Retriable:  true,
-		RetryAfter: getFutureTime(),
-	}
+	rcCreateOrUpdateErr := retry.GetThrottlingError("RouteCreateOrUpdate", "client throttled", getFutureTime())
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -156,7 +149,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -175,7 +168,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
-	armClient.EXPECT().PutResourceWithDecorators(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -189,7 +182,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")
@@ -242,7 +235,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID), "").Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")

@@ -35,6 +35,7 @@ const (
 	masterNodeRoleLabel       = "node-role.kubernetes.io/master"
 	controlPlaneNodeRoleLabel = "node-role.kubernetes.io/control-plane"
 	nodeLabelRole             = "kubernetes.io/role"
+	nodeOSLabel               = "kubernetes.io/os"
 	typeLabel                 = "type"
 	agentpoolLabelKey         = "agentpool"
 
@@ -187,11 +188,10 @@ func DeleteNodes(cs clientset.Interface, names []string) error {
 	return nil
 }
 
-//deleteNodes deletes nodes according to names
+// deleteNodes deletes nodes according to names
 func deleteNode(cs clientset.Interface, name string) error {
 	Logf("Deleting node: %s", name)
-	zero := int64(0)
-	if err := cs.CoreV1().Nodes().Delete(context.TODO(), name, metav1.DeleteOptions{GracePeriodSeconds: &zero}); err != nil {
+	if err := cs.CoreV1().Nodes().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 
@@ -205,13 +205,13 @@ func deleteNode(cs clientset.Interface, name string) error {
 	return err
 }
 
-// WaitAutoScaleNodes returns nodes count after autoscaling in 30 minutes
+// WaitAutoScaleNodes returns nodes count after autoscaling in 60 minutes
 func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown bool) error {
 	Logf(fmt.Sprintf("waiting for auto-scaling the node... Target node count: %v", targetNodeCount))
 	var nodes []v1.Node
 	var err error
 	poll := 60 * time.Second
-	autoScaleTimeOut := 50 * time.Minute
+	autoScaleTimeOut := 60 * time.Minute
 	if err = wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {

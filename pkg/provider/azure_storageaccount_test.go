@@ -19,11 +19,14 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
-	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient/mockprivatednsclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
@@ -31,6 +34,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient/mockvirtualnetworklinksclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const TestLocation = "testLocation"
@@ -38,6 +42,9 @@ const TestLocation = "testLocation"
 func TestGetStorageAccessKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 	value := "foo bar"
@@ -76,8 +83,8 @@ func TestGetStorageAccessKeys(t *testing.T) {
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
-		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
-		key, err := cloud.GetStorageAccesskey("acct", "rg")
+		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "", "rg", gomock.Any()).Return(test.results, nil).AnyTimes()
+		key, err := cloud.GetStorageAccesskey(ctx, "", "acct", "rg")
 		if test.expectErr && err == nil {
 			t.Errorf("Unexpected non-error")
 			continue
@@ -95,6 +102,9 @@ func TestGetStorageAccessKeys(t *testing.T) {
 func TestGetStorageAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -133,9 +143,9 @@ func TestGetStorageAccount(t *testing.T) {
 	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 	cloud.StorageAccountClient = mockStorageAccountsClient
 
-	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(testResourceGroups, nil).Times(1)
+	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(testResourceGroups, nil).Times(1)
 
-	accountsWithLocations, err := cloud.getStorageAccounts(accountOptions)
+	accountsWithLocations, err := cloud.getStorageAccounts(ctx, accountOptions)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -171,6 +181,9 @@ func TestGetStorageAccount(t *testing.T) {
 func TestGetStorageAccountEdgeCases(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
 
 	cloud := &Cloud{}
 
@@ -305,9 +318,9 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient
 
-		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "rg").Return(test.testResourceGroups, nil).AnyTimes()
+		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), "", "rg").Return(test.testResourceGroups, nil).AnyTimes()
 
-		accountsWithLocations, err := cloud.getStorageAccounts(test.testAccountOptions)
+		accountsWithLocations, err := cloud.getStorageAccounts(ctx, test.testAccountOptions)
 		if !errors.Is(err, test.expectedError) {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -318,13 +331,28 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 	}
 }
 
-func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
+func TestEnsureStorageAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	resourceGroup := "ResourceGroup"
+	vnetName := "VnetName"
+	vnetResourceGroup := "VnetResourceGroup"
+	subnetName := "SubnetName"
+	location := TestLocation
+
 	cloud := &Cloud{}
+	cloud.ResourceGroup = resourceGroup
+	cloud.VnetResourceGroup = vnetResourceGroup
+	cloud.VnetName = vnetName
+	cloud.SubnetName = subnetName
+	cloud.Location = location
+	cloud.SubscriptionID = "testSub"
 
 	name := "testStorageAccount"
-	location := TestLocation
 	sku := &storage.Sku{
 		Name: "testSku",
 		Tier: "testSkuTier",
@@ -340,47 +368,278 @@ func TestEnsureStorageAccountWithPrivateEndpoint(t *testing.T) {
 		},
 	}
 
-	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
-	mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
-	mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
-	cloud.StorageAccountClient = mockStorageAccountsClient
-
-	subnet := network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{}}
-	mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
-	mockSubnetsClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(subnet, nil).Times(1)
-	mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	cloud.SubnetsClient = mockSubnetsClient
-
-	mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
-	mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
-	cloud.privatednsclient = mockPrivateDNSClient
-
-	mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
-	mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
-	cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
-
-	mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
-	mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
-	cloud.privateendpointclient = mockPrivateEndpointClient
-
-	mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
-	mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
-	cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
-
-	testAccountOptions := &AccountOptions{
-		ResourceGroup:         "rg",
-		CreatePrivateEndpoint: true,
+	tests := []struct {
+		name                            string
+		createAccount                   bool
+		createPrivateEndpoint           bool
+		SubnetPropertiesFormatNil       bool
+		mockStorageAccountsClient       bool
+		setAccountOptions               bool
+		accessTier                      string
+		requireInfrastructureEncryption *bool
+		keyVaultURL                     *string
+		accountName                     string
+		subscriptionID                  string
+		resourceGroup                   string
+		expectedErr                     string
+	}{
+		{
+			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
+			createAccount:                   true,
+			createPrivateEndpoint:           true,
+			mockStorageAccountsClient:       true,
+			setAccountOptions:               true,
+			requireInfrastructureEncryption: to.BoolPtr(true),
+			keyVaultURL:                     to.StringPtr("keyVaultURL"),
+			resourceGroup:                   "rg",
+			accessTier:                      "AccessTierHot",
+			accountName:                     "",
+			expectedErr:                     "",
+		},
+		{
+			name:                      "[Failed] EnsureStorageAccount with createPrivateEndpoint: get storage key failed",
+			createAccount:             true,
+			createPrivateEndpoint:     true,
+			SubnetPropertiesFormatNil: true,
+			mockStorageAccountsClient: true,
+			setAccountOptions:         true,
+			resourceGroup:             "rg",
+			accountName:               "accountname",
+			expectedErr:               "could not get storage key for storage account",
+		},
+		{
+			name:                      "[Failed] account options is nil",
+			mockStorageAccountsClient: false,
+			setAccountOptions:         false,
+			expectedErr:               "account options is nil",
+		},
+		{
+			name:              "[Failed] resourceGroup must be specified when subscriptionID is not empty",
+			subscriptionID:    "abc",
+			resourceGroup:     "",
+			setAccountOptions: true,
+			expectedErr:       "resourceGroup must be specified when subscriptionID(abc) is not empty",
+		},
+		{
+			name:              "[Failed] could not get storage key for storage account",
+			subscriptionID:    "",
+			resourceGroup:     "",
+			setAccountOptions: true,
+			expectedErr:       "could not get storage key for storage account",
+		},
 	}
 
-	cloud.ResourceGroup = "rg"
-	cloud.VnetName = "testVnetName"
-	cloud.SubnetName = "testSubnetname"
-	cloud.Location = location
-	cloud.SubscriptionID = "testSub"
+	for _, test := range tests {
+		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
+		if test.mockStorageAccountsClient {
+			cloud.StorageAccountClient = mockStorageAccountsClient
+		}
 
-	if _, _, err := cloud.EnsureStorageAccount(testAccountOptions, "test"); err != nil {
-		t.Errorf("unexpected error: %v", err)
+		if test.createPrivateEndpoint {
+			mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
+			mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
+			if test.accountName == "" {
+				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, nil).AnyTimes()
+			} else {
+				mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storageAccountListKeys, &retry.Error{}).AnyTimes()
+			}
+
+			subnetPropertiesFormat := &network.SubnetPropertiesFormat{}
+			if test.SubnetPropertiesFormatNil {
+				subnetPropertiesFormat = nil
+			}
+			subnet := network.Subnet{SubnetPropertiesFormat: subnetPropertiesFormat}
+
+			mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
+			mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
+			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
+			cloud.SubnetsClient = mockSubnetsClient
+
+			mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
+			mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
+			cloud.privatednsclient = mockPrivateDNSClient
+
+			mockPrivateDNSZoneGroup := mockprivatednszonegroupclient.NewMockInterface(ctrl)
+			mockPrivateDNSZoneGroup.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
+			cloud.privatednszonegroupclient = mockPrivateDNSZoneGroup
+
+			mockPrivateEndpointClient := mockprivateendpointclient.NewMockInterface(ctrl)
+			mockPrivateEndpointClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
+			cloud.privateendpointclient = mockPrivateEndpointClient
+
+			mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
+			mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
+			cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
+		}
+
+		var testAccountOptions *AccountOptions
+		if test.setAccountOptions {
+			testAccountOptions = &AccountOptions{
+				ResourceGroup:         test.resourceGroup,
+				CreatePrivateEndpoint: test.createPrivateEndpoint,
+				Name:                  test.accountName,
+				CreateAccount:         test.createAccount,
+				SubscriptionID:        test.subscriptionID,
+				AccessTier:            test.accessTier,
+			}
+		}
+
+		_, _, err := cloud.EnsureStorageAccount(ctx, testAccountOptions, "test")
+		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
+		if test.expectedErr != "" {
+			assert.Equal(t, err != nil, strings.Contains(err.Error(), test.expectedErr), err.Error(), test.name)
+		}
+	}
+}
+
+func TestIsPrivateEndpointAsExpected(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: true,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: false,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: false,
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: true,
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isPrivateEndpointAsExpected(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsTagsEqual(t *testing.T) {
+	tests := []struct {
+		desc           string
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			desc: "nil tags",
+			account: storage.Account{
+				Tags: nil,
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "empty tags",
+			account: storage.Account{
+				Tags: map[string]*string{},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key":  to.StringPtr("value"),
+					"key2": nil,
+				},
+			},
+			accountOptions: &AccountOptions{
+				Tags: map[string]string{
+					"key":  "value",
+					"key2": "",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			desc: "identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key":  to.StringPtr("value"),
+					"key2": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				Tags: map[string]string{
+					"key2": "value2",
+					"key":  "value",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			desc: "non-identitical tags while MatchTags is false",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				MatchTags: false,
+				Tags: map[string]string{
+					"key": "value",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			desc: "non-identitical tags",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key": to.StringPtr("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				MatchTags: true,
+				Tags: map[string]string{
+					"key": "value",
+				},
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isTagsEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
 	}
 }

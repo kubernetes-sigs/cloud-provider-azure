@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -25,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-12-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -289,6 +290,11 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		shouldBeEmpty, err := az.lbCache.Get("lb", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
+
+		// public ip cache should be populated since there's GetPIP
+		shouldNotBeEmpty, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "pip"), cache.CacheReadTypeDefault)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
 }
 
@@ -338,7 +344,7 @@ func TestListAgentPoolLBs(t *testing.T) {
 		mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmas-0").AnyTimes()
 		az.VMSet = mockVMSet
 
-		lbs, err := az.ListAgentPoolLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
+		lbs, err := az.ListManagedLBs(&v1.Service{}, []*v1.Node{}, "kubernetes")
 		assert.Equal(t, test.expectedErr, err)
 		assert.Equal(t, test.expectedLBs, lbs)
 	}
@@ -376,12 +382,49 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-	mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+	tests := []struct {
+		clientErr          *retry.Error
+		expectedErr        error
+		cacheExpectedEmpty bool
+	}{
+		{
+			clientErr:          &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+			cacheExpectedEmpty: true,
+		},
+		{
+			clientErr:          &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
+			cacheExpectedEmpty: true,
+		},
+		{
+			clientErr:          &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
+			expectedErr:        fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
+			cacheExpectedEmpty: false,
+		},
+	}
 
-	err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	for _, test := range tests {
+		az := GetTestCloud(ctrl)
+		cacheKey := az.getPIPCacheKey(az.ResourceGroup, "nic")
+		az.pipCache.Set(cacheKey, "test")
+		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(test.clientErr)
+		if test.cacheExpectedEmpty {
+			mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(network.PublicIPAddress{}, nil)
+		}
+
+		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
+		assert.EqualError(t, test.expectedErr, err.Error())
+
+		cachedPIP, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
+		assert.NoError(t, err)
+		if test.cacheExpectedEmpty {
+			assert.Empty(t, cachedPIP)
+		} else {
+			assert.NotEmpty(t, cachedPIP)
+		}
+	}
 }
 
 func TestCreateOrUpdateInterface(t *testing.T) {
@@ -417,7 +460,7 @@ func TestDeleteLB(t *testing.T) {
 	mockLBClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, "lb").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
 	err := az.DeleteLB(&v1.Service{}, "lb")
-	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
 }
 
 func TestCreateOrUpdateRouteTable(t *testing.T) {
@@ -588,4 +631,66 @@ func TestRequestBackoff(t *testing.T) {
 	backoff := az.RequestBackoff()
 	assert.Equal(t, wait.Backoff{Steps: 3}, backoff)
 
+}
+
+func TestCreateOrUpdateLBBackendPool(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description       string
+		createOrUpdateErr *retry.Error
+		expectedErr       bool
+	}{
+		{
+			description: "CreateOrUpdateLBBackendPool should not report an error if the api call succeeds",
+		},
+		{
+			description: "CreateOrUpdateLBBackendPool should report an error if the api call fails",
+			createOrUpdateErr: &retry.Error{
+				HTTPStatusCode: http.StatusPreconditionFailed,
+				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			},
+			expectedErr: true,
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+		lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.createOrUpdateErr)
+		az.LoadBalancerClient = lbClient
+
+		err := az.CreateOrUpdateLBBackendPool("kubernetes", network.BackendAddressPool{})
+		assert.Equal(t, tc.expectedErr, err != nil)
+	}
+}
+
+func TestDeleteLBBackendPool(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description string
+		deleteErr   *retry.Error
+		expectedErr bool
+	}{
+		{
+			description: "DeleteLBBackendPool should not report an error if the api call succeeds",
+		},
+		{
+			description: "DeleteLBBackendPool should report an error if the api call fails",
+			deleteErr: &retry.Error{
+				HTTPStatusCode: http.StatusPreconditionFailed,
+				RawError:       errors.New(consts.OperationCanceledErrorMessage),
+			},
+			expectedErr: true,
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+		lbClient.EXPECT().DeleteLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.deleteErr)
+		az.LoadBalancerClient = lbClient
+
+		err := az.DeleteLBBackendPool("kubernetes", "kubernetes")
+		assert.Equal(t, tc.expectedErr, err != nil)
+	}
 }

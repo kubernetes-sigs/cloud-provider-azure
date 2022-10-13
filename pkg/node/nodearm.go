@@ -81,7 +81,7 @@ func (np *ARMNodeProvider) InstanceID(ctx context.Context, name types.NodeName) 
 // InstanceType returns the type of the specified instance.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 // (Implementer Note): This is used by kubelet. Kubelet will label the node. Real log from kubelet:
-//       Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
+// Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
 func (np *ARMNodeProvider) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
 	return np.azure.InstanceType(ctx, name)
 }
@@ -96,4 +96,9 @@ func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cl
 	}
 
 	return np.azure.GetZone(ctx)
+}
+
+// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
+func (np *ARMNodeProvider) GetPlatformSubFaultDomain() (string, error) {
+	return "", nil
 }

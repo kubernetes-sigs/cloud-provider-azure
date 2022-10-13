@@ -10,11 +10,11 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-controller-manager
-      image: k8s.gcr.io/hyperkube-amd64:v1.18.0
+      image: k8s.gcr.io/kube-controller-manager:v1.22.1
       imagePullPolicy: IfNotPresent
-      command: ["/hyperkube", "kube-controller-manager"]
+      command: ["kube-controller-manager"]
       args:
-        - "--allocate-node-cidrs=true"       # "false" for Azure CNI and "true" for other network plugins
+        - "--allocate-node-cidrs=false" # allocate-node-cidrs should be disabled when it is enabled on cloud-controller-manager.
         - "--cluster-cidr=10.244.0.0/16"
         - "--cluster-name=k8s"
         - "--cluster-signing-cert-file=/etc/kubernetes/certs/ca.crt"

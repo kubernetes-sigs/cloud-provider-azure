@@ -7,7 +7,7 @@ description: >
     Deploy cross resource group nodes.
 ---
 
-**Feature status:** Alpha since v1.12.
+**Feature status:** GA since v1.21.
 
 Kubernetes v1.12 adds support for cross resource group (RG) nodes and unmanaged (such as on-prem) nodes in Azure cloud provider. A few assumptions are made for such nodes:
 
@@ -20,23 +20,22 @@ Kubernetes v1.12 adds support for cross resource group (RG) nodes and unmanaged 
 
 <!-- TOC -->
 
-- [Cross resource group nodes](#cross-resource-group-nodes)
-  - [Pre-requirements](#pre-requirements)
-  - [Cross-RG nodes](#cross-rg-nodes)
-  - [Unmanaged nodes](#unmanaged-nodes)
-  - [Reference](#reference)
+- [Pre-requirements](#pre-requirements)
+- [Cross-RG nodes](#cross-rg-nodes)
+- [Unmanaged nodes](#unmanaged-nodes)
+- [Reference](#reference)
 
 <!-- /TOC -->
 
 ## Pre-requirements
 
-Because cross-RG nodes and unmanaged nodes won't be added to Azure load balancer backends, feature gate `ServiceNodeExclusion` should be enabled for master components (e.g. kube-controller-manager).
+Because cross-RG nodes and unmanaged nodes won't be added to Azure load balancer backends, feature gate `ServiceNodeExclusion` should be enabled for master components (`ServiceNodeExclusion` has been GA and enabled by default since v1.21).
 
 ## Cross-RG nodes
 
 Cross-RG nodes should register themselves with required labels together with cloud provider:
 
-- `node.kubernetes.io/exclude-balancer`, which is used to exclude the node from load balancer.
+- `node.kubernetes.io/exclude-from-external-load-balancers`, which is used to exclude the node from load balancer.
   - `alpha.service-controller.kubernetes.io/exclude-balancer=true` should be used if the cluster version is below v1.16.0.
 - `kubernetes.azure.com/resource-group=<rg-name>`, which provides external RG and is used to get node information.
 - cloud provider config
@@ -48,17 +47,17 @@ For example,
 ```shell script
 kubelet ... \
   --cloud-provider=azure \
-  --cloud-config=/etc/kubernetes/azure.json \
-  --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/resource-group=<rg-name>
+  --cloud-config=/etc/kubernetes/cloud-config/azure.json \
+  --node-labels=node.kubernetes.io/exclude-from-external-load-balancers=true,kubernetes.azure.com/resource-group=<rg-name>
 ```
 
 ## Unmanaged nodes
 
 On-prem nodes are different from Azure nodes, all Azure coupled features (such as load balancers and Azure managed disks) are not supported for them. To prevent the node being deleted, Azure cloud provider will always assumes the node existing.
 
-On-prem nodes should register themselves with labels `node.kubernetes.io/exclude-balancer=true` and `kubernetes.azure.com/managed=false`:
+On-prem nodes should register themselves with labels `node.kubernetes.io/exclude-from-external-load-balancers=true` and `kubernetes.azure.com/managed=false`:
 
-- `node.kubernetes.io/exclude-balancer=true`, which is used to exclude the node from load balancer.
+- `node.kubernetes.io/exclude-from-external-load-balancers=true`, which is used to exclude the node from load balancer.
 - `kubernetes.azure.com/managed=false`, which indicates the node is on-prem or on other clouds.
 
 For example,
@@ -66,9 +65,9 @@ For example,
 ```shell script
 kubelet ...\
   --cloud-provider= \
-  --node-labels=node.kubernetes.io/exclude-balancer=true,kubernetes.azure.com/managed=false
+  --node-labels=node.kubernetes.io/exclude-from-external-load-balancers=true,kubernetes.azure.com/managed=false
 ```
 
 ## Reference
 
-See design docs for cross resource group nodes in [KEP 20180809-cross-resource-group-nodes](https://github.com/kubernetes/enhancements/blob/master/keps/sig-cloud-provider/azure/20180809-cross-resource-group-nodes.md).
+See design docs for cross resource group nodes in [KEP 20180809-cross-resource-group-nodes](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/azure/604-cross-resource-group-nodes).
