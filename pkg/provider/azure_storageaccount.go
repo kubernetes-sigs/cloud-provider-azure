@@ -349,7 +349,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if accountOptions.AccessTier != "" {
-			klog.V(2).Infof("set AccessTier(%s) on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup, accountOptions.AccessTier)
+			klog.V(2).Infof("set AccessTier(%s) on account(%s), subscription(%s), resource group(%s)", accountOptions.AccessTier, accountName, subsID, resourceGroup)
 			cp.AccountPropertiesCreateParameters.AccessTier = storage.AccessTier(accountOptions.AccessTier)
 		}
 
