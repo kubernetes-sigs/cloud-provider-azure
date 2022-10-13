@@ -317,7 +317,7 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint test-boilerplate test-helm ## Run all static checks.
+test-check: test-lint test-boilerplate test-helm verify-vendor-licenses ## Run all static checks.
 
 .PHONY: test-lint
 test-lint: ## Run golint test.
@@ -330,6 +330,10 @@ test-boilerplate: ## Run boilerplate test.
 .PHONY: test-helm
 test-helm: ## Validate helm charts
 	hack/verify-helm-repo.sh
+
+.PHONY: verify-vendor-licenses
+verify-vendor-licenses: ## Verify vendor licenses
+	hack/verify-azure-vendor-licenses.sh
 
 .PHONY: update-helm
 update-helm: ## Update helm charts
@@ -347,8 +351,12 @@ update-gofmt: ## Update go formats.
 update-mocks: ## Create or update mock clients.
 	@hack/update-mock-clients.sh
 
+.PHONY: update-vendor-licenses
+update-vendor-licenses: ## Update vendor licenses
+	hack/update-azure-vendor-licenses.sh
+
 .PHONY: update
-update: update-dependencies update-gofmt update-mocks ## Update go formats, mocks and dependencies.
+update: update-dependencies update-gofmt update-mocks update-vendor-licenses ## Update go formats, mocks and dependencies.
 
 test-e2e: ## Run k8s e2e tests.
 	hack/test_k8s_e2e.sh $(TEST_E2E_ARGS)
