@@ -9,7 +9,6 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "25" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.25.2" }}
 {{- else -}}
-  {{- $_ := set . "unsupportedKubernetesVersion" "true" }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
