@@ -39,7 +39,7 @@ export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:-Standard_D2s_v3}"
 export AZURE_LOCATION="${AZURE_LOCATION:-westus2}"
 export AZURE_CLOUD_CONTROLLER_MANAGER_IMG="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.1}"
 export AZURE_CLOUD_NODE_MANAGER_IMG="${AZURE_CLOUD_NODE_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.1}"
-export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.23.0}"
+export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.25.0}"
 export USE_IN_TREE_CLOUD_PROVIDER="${USE_IN_TREE_CLOUD_PROVIDER:-false}"
 export EXP_MACHINE_POOL=true
 export EXP_CLUSTER_RESOURCE_SET=true
@@ -111,7 +111,7 @@ function create_workload_cluster() {
   fi
 
   echo "Waiting for the kubeconfig to become available"
-  timeout --foreground 300 bash -c "while ! kubectl get secrets | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
+  timeout --foreground 1000 bash -c "while ! kubectl get secrets | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the kubeconfig to become available, please check the logs of the capz controller to get the detailed error"
     return 124
@@ -119,7 +119,7 @@ function create_workload_cluster() {
   echo "Get kubeconfig and store it locally."
   kubectl --context=kind-"${MANAGEMENT_CLUSTER_NAME}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json | jq -r .data.value | base64 --decode > ./"${CLUSTER_NAME}"-kubeconfig
   echo "Waiting for the control plane nodes to show up"
-  timeout --foreground 600 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes | grep master; do sleep 1; done"
+  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes | grep master; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the control plane nodes"
     return 124

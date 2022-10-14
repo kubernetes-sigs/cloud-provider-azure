@@ -66,7 +66,7 @@ const (
 
 func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
-		localCache := &sync.Map{} // [vmasName]*vmssEntry
+		localCache := &sync.Map{} // [vmssName]*vmssEntry
 
 		allResourceGroups, err := ss.GetResourceGroups()
 		if err != nil {
