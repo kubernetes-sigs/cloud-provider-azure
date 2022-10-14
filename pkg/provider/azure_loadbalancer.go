@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/netip"
 	"reflect"
 	"sort"
 	"strconv"
@@ -1873,7 +1874,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 				if loadBalancerIP != "" {
 					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = &loadBalancerIP
-				} else if status != nil && len(status.Ingress) > 0 {
+				} else if status != nil && len(status.Ingress) > 0 && ipInSubnet(status.Ingress[0].IP, &subnet) {
 					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): keep the original private IP %s", serviceName, status.Ingress[0].IP)
 					configProperties.PrivateIPAllocationMethod = network.IPAllocationMethodStatic
 					configProperties.PrivateIPAddress = to.StringPtr(status.Ingress[0].IP)
@@ -3286,6 +3287,35 @@ func subnet(service *v1.Service) *string {
 	}
 
 	return nil
+}
+
+func ipInSubnet(ip string, subnet *network.Subnet) bool {
+	if subnet == nil || subnet.SubnetPropertiesFormat == nil {
+		return false
+	}
+	netIP, err := netip.ParseAddr(ip)
+	if err != nil {
+		klog.Errorf("ipInSubnet: failed to parse ip %s: %v", netIP, err)
+		return false
+	}
+	cidrs := make([]string, 0)
+	if subnet.AddressPrefix != nil {
+		cidrs = append(cidrs, *subnet.AddressPrefix)
+	}
+	if subnet.AddressPrefixes != nil {
+		cidrs = append(cidrs, *subnet.AddressPrefixes...)
+	}
+	for _, cidr := range cidrs {
+		network, err := netip.ParsePrefix(cidr)
+		if err != nil {
+			klog.Errorf("ipInSubnet: failed to parse ip cidr %s: %v", cidr, err)
+			continue
+		}
+		if network.Contains(netIP) {
+			return true
+		}
+	}
+	return false
 }
 
 // getServiceLoadBalancerMode parses the mode value.
