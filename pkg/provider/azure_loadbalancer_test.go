@@ -5198,7 +5198,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 		regionZonesMap            map[string][]string
 		expectedZones             *[]string
 		expectedDirty             bool
-		expectedIP                string
+		expectedIP                *string
 		expectedErr               error
 	}{
 		{
@@ -5272,14 +5272,25 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			expectedDirty: true,
 		},
 		{
-			description: "reconcileFrontendIPConfigs should reuse the existing private IP for internal services",
+			description: "reconcileFrontendIPConfigs should reuse the existing private IP for internal services when subnet does not change",
 			service:     getInternalTestService("test", 80),
 			status: &v1.LoadBalancerStatus{
 				Ingress: []v1.LoadBalancerIngress{
 					{IP: "1.2.3.4"},
 				},
 			},
-			expectedIP:    "1.2.3.4",
+			expectedIP:    to.StringPtr("1.2.3.4"),
+			expectedDirty: true,
+		},
+		{
+			description: "reconcileFrontendIPConfigs should not reuse the existing private IP for internal services when subnet changes",
+			service:     getInternalTestService("test", 80),
+			status: &v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{
+					{IP: "1.2.3.6"},
+				},
+			},
+			expectedIP:    to.StringPtr(""),
 			expectedDirty: true,
 		},
 	} {
@@ -5297,7 +5308,8 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).MaxTimes(1)
 
 			subnetClient := cloud.SubnetsClient.(*mocksubnetclient.MockInterface)
-			subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(network.Subnet{}, nil).MaxTimes(1)
+			subnetClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", gomock.Any()).Return(
+				network.Subnet{SubnetPropertiesFormat: &network.SubnetPropertiesFormat{AddressPrefix: to.StringPtr("1.2.3.4/31")}}, nil).MaxTimes(1)
 
 			zoneClient := mockzoneclient.NewMockInterface(ctrl)
 			zoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(1)
@@ -5318,9 +5330,13 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 				}
 			}
 
-			if tc.expectedIP != "" {
-				assert.Equal(t, network.IPAllocationMethodStatic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
-				assert.Equal(t, tc.expectedIP, to.String((*lb.FrontendIPConfigurations)[0].PrivateIPAddress))
+			if tc.expectedIP != nil {
+				assert.Equal(t, *tc.expectedIP, to.String((*lb.FrontendIPConfigurations)[0].PrivateIPAddress))
+				if *tc.expectedIP != "" {
+					assert.Equal(t, network.IPAllocationMethodStatic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
+				} else {
+					assert.Equal(t, network.IPAllocationMethodDynamic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
+				}
 			}
 		})
 	}
