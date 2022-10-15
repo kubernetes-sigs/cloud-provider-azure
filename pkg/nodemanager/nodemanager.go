@@ -72,32 +72,7 @@ var labelReconcileInfo = []struct {
 	primaryKey            string
 	secondaryKey          string
 	ensureSecondaryExists bool
-}{
-	{
-		// Reconcile the beta and the GA zone label using the beta label as
-		// the source of truth
-		// TODO: switch the primary key to GA labels in v1.21
-		primaryKey:            v1.LabelZoneFailureDomain,
-		secondaryKey:          v1.LabelZoneFailureDomainStable,
-		ensureSecondaryExists: true,
-	},
-	{
-		// Reconcile the beta and the stable region label using the beta label as
-		// the source of truth
-		// TODO: switch the primary key to GA labels in v1.21
-		primaryKey:            v1.LabelZoneRegion,
-		secondaryKey:          v1.LabelZoneRegionStable,
-		ensureSecondaryExists: true,
-	},
-	{
-		// Reconcile the beta and the stable instance-type label using the beta label as
-		// the source of truth
-		// TODO: switch the primary key to GA labels in v1.21
-		primaryKey:            v1.LabelInstanceType,
-		secondaryKey:          v1.LabelInstanceTypeStable,
-		ensureSecondaryExists: true,
-	},
-}
+}{}
 
 // UpdateNodeSpecBackoff is the back configure for node update.
 var UpdateNodeSpecBackoff = wait.Backoff{
@@ -464,44 +439,36 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 	if instanceType, err := cnc.getInstanceTypeByName(ctx, node); err != nil {
 		return nil, err
 	} else if instanceType != "" {
-		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceType, instanceType)
 		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceTypeStable, instanceType)
 		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
 			if n.Labels == nil {
 				n.Labels = map[string]string{}
 			}
-			n.Labels[v1.LabelInstanceType] = instanceType
 			n.Labels[v1.LabelInstanceTypeStable] = instanceType
 		})
 	}
-
 	zone, err := cnc.getZoneByName(ctx, node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get zone from cloud provider: %w", err)
 	}
 	if zone.FailureDomain != "" {
-		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomain, zone.FailureDomain)
 		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomainStable, zone.FailureDomain)
 		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
 			if n.Labels == nil {
 				n.Labels = map[string]string{}
 			}
-			n.Labels[v1.LabelZoneFailureDomain] = zone.FailureDomain
 			n.Labels[v1.LabelZoneFailureDomainStable] = zone.FailureDomain
 		})
 	}
 	if zone.Region != "" {
-		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegion, zone.Region)
 		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegionStable, zone.Region)
 		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
 			if n.Labels == nil {
 				n.Labels = map[string]string{}
 			}
-			n.Labels[v1.LabelZoneRegion] = zone.Region
 			n.Labels[v1.LabelZoneRegionStable] = zone.Region
 		})
 	}
-
 	platformSubFaultDomain, err := cnc.getPlatformSubFaultDomain()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get platformSubFaultDomain: %w", err)
