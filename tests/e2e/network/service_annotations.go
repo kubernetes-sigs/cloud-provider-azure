@@ -569,8 +569,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		} else {
 			// TODO: dual-stack support
 		}
-		pip, err := utils.WaitCreatePIP(tc, pipName, tc.GetResourceGroup(), pip)
+		rg := tc.GetResourceGroup()
+		pip, err := utils.WaitCreatePIP(tc, pipName, rg, pip)
 		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			utils.Logf("Cleaning up public IP")
+			err = utils.DeletePIPWithRetry(tc, pipName, rg)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		pipAddr := to.String(pip.IPAddress)
 		utils.Logf("Created pip with address %s", pipAddr)
 
