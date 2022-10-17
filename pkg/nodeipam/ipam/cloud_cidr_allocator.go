@@ -211,7 +211,7 @@ func (ca *cloudCIDRAllocator) updateMaxSubnetMaskSizes() {
 		maxNodeSubnetMaskSizes[i] = 0
 	}
 
-	// find the max maks sizes on all existing nodes
+	// find the max mask sizes on all existing nodes
 	for _, sizes := range ca.nodeNameSubnetMaskSizesMap {
 		for i := 0; i < len(ca.clusterCIDRs); i++ {
 			if sizes[i] > maxNodeSubnetMaskSizes[i] {

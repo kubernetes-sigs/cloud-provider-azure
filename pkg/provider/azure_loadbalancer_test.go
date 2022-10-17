@@ -690,12 +690,12 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		flipService       bool
 	}{
 		{
-			desc:        "exteral service then flipped to internal should be created and deleted successfully",
+			desc:        "external service then flipped to internal should be created and deleted successfully",
 			service:     getTestService("service1", v1.ProtocolTCP, nil, false, 80),
 			flipService: true,
 		},
 		{
-			desc:          "interal service then flipped to external should be created and deleted successfully",
+			desc:          "internal service then flipped to external should be created and deleted successfully",
 			service:       getInternalTestService("service2", 80),
 			isInternalSvc: true,
 			flipService:   true,

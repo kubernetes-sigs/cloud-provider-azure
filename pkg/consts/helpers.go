@@ -26,7 +26,7 @@ import (
 	"k8s.io/utils/net"
 )
 
-// IsK8sServiceHasHAModeEnabled return if HA Mode is enabled in kuberntes service annotations
+// IsK8sServiceHasHAModeEnabled return if HA Mode is enabled in kubernetes service annotations
 func IsK8sServiceHasHAModeEnabled(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts, TrueAnnotationValue)
 }

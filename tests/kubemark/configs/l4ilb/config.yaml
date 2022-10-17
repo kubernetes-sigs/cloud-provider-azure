@@ -17,7 +17,7 @@ tuningSets:
   qpsLoad:
     averageQps: {{$ilbQPS}}
 steps:
-# Mesure each of the ILB services separately, this will provide insight on how long programming
+# Measure each of the ILB services separately, this will provide insight on how long programming
 # ILB takes as a function of number of backends.
 - measurements:
   - Identifier: ServiceCreationLatencyLarge
