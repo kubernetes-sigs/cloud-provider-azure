@@ -2414,42 +2414,38 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		description        string
-		backendPoolID      string
-		ipConfigurationIDs []string
-		isVMSSDeallocating bool
-		isVMSSNilNICConfig bool
-		expectedPutVMSS    bool
-		vmssClientErr      *retry.Error
-		expectedErr        error
+		description                    string
+		backendPoolID                  string
+		ipConfigurationIDs             []string
+		isVMSSDeallocating             bool
+		isVMSSNilNICConfig             bool
+		isVMSSNilVirtualMachineProfile bool
+		expectedPutVMSS                bool
+		vmssClientErr                  *retry.Error
+		expectedErr                    error
 	}{
 		{
-			description:        "ensureBackendPoolDeletedFromVMSS should skip the IP config if it's ID is invalid",
-			ipConfigurationIDs: []string{"invalid/id"},
-		},
-		{
 			description:        "ensureBackendPoolDeletedFromVMSS should skip the VMSS if it's being deleting",
-			ipConfigurationIDs: []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000/networkInterfaces/nic"},
 			isVMSSDeallocating: true,
 		},
 		{
 			description:        "ensureBackendPoolDeletedFromVMSS should skip the VMSS if it's NIC config is nil",
-			ipConfigurationIDs: []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000/networkInterfaces/nic"},
 			isVMSSNilNICConfig: true,
 		},
 		{
-			description:        "ensureBackendPoolDeletedFromVMSS should delete the corresponding LB backendpool ID",
-			ipConfigurationIDs: []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000/networkInterfaces/nic"},
-			backendPoolID:      testLBBackendpoolID0,
-			expectedPutVMSS:    true,
+			description:     "ensureBackendPoolDeletedFromVMSS should delete the corresponding LB backendpool ID",
+			backendPoolID:   testLBBackendpoolID0,
+			expectedPutVMSS: true,
 		},
 		{
-			description:        "ensureBackendPoolDeletedFromVMSS should skip the VMSS if there's no wanted LB backendpool ID",
-			ipConfigurationIDs: []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000/networkInterfaces/nic"},
-			backendPoolID:      testLBBackendpoolID1,
+			description:   "ensureBackendPoolDeletedFromVMSS should skip the VMSS if there's no wanted LB backendpool ID",
+			backendPoolID: testLBBackendpoolID1,
 		},
 		{
-			description:        "ensureBackendPoolDeletedFromVMSS should report the error that occurs during VMSS client's call",
+			description:                    "ensureBackendPoolDeletedFromVMSS should skip the VMSS if there's no vm profile",
+			isVMSSNilVirtualMachineProfile: true,
+		},
+		{
 			ipConfigurationIDs: []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/vmss-vm-000000/networkInterfaces/nic"},
 			backendPoolID:      testLBBackendpoolID0,
 			expectedPutVMSS:    true,
@@ -2471,8 +2467,11 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
 		}
+		if test.isVMSSNilVirtualMachineProfile {
+			expectedVMSS.VirtualMachineProfile = nil
+		}
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil)
 		vmssPutTimes := 0
 		if test.expectedPutVMSS {
 			vmssPutTimes = 1
@@ -2484,7 +2483,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		err = ss.ensureBackendPoolDeletedFromVMSS(&v1.Service{}, test.backendPoolID, testVMSSName, test.ipConfigurationIDs)
+		err = ss.ensureBackendPoolDeletedFromVMSS(test.backendPoolID, testVMSSName)
 		if test.expectedErr != nil {
 			assert.EqualError(t, test.expectedErr, err.Error(), test.description+", but an error occurs")
 		}
