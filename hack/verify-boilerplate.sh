@@ -24,7 +24,7 @@ REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 boilerDir="${REPO_ROOT}/hack/boilerplate"
 boiler="${boilerDir}/boilerplate.py"
 
-files_need_boilerplate=($(${boiler} --rootdir=${REPO_ROOT}))
+files_need_boilerplate=($(${boiler} --rootdir=${REPO_ROOT} -v))
 
 # Run boilerplate.py unit tests
 unitTestOut="$(mktemp)"
