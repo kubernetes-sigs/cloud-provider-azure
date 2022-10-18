@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -488,7 +489,7 @@ func (azureTestClient *AzureTestClient) ListPrivateLinkServices(resourceGroupNam
 
 func retrieveCIDRs(cmd string, reg string) ([]string, error) {
 	res := make([]string, 2)
-	stdout, err := RunKubectl("", strings.Split(cmd, " ")...)
+	stdout, err := RunKubectlNoPrint("", strings.Split(cmd, " ")...)
 	if err != nil {
 		return res, fmt.Errorf("error when running the following kubectl command %q: %v, %s", cmd, err, stdout)
 	}
@@ -528,6 +529,11 @@ func retrieveCIDRs(cmd string, reg string) ([]string, error) {
 
 // GetClusterServiceIPFamily gets cluster's Service IPFamily according to Service CIDRs.
 func GetClusterServiceIPFamily() (IPFamily, error) {
+	// Only test IPv4 in AKS pipeline
+	if os.Getenv(AKSTestCCM) != "" {
+		return IPv4, nil
+	}
+
 	svcCIDRs, err := retrieveCIDRs("cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
 	if err != nil {
 		return "", err
