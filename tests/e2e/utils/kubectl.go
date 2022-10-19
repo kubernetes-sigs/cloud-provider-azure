@@ -75,7 +75,13 @@ func RunKubectlOrDie(namespace string, args ...string) string {
 
 // RunKubectl is a convenience wrapper over kubectlBuilder
 func RunKubectl(namespace string, args ...string) (string, error) {
-	return NewKubectlCommand(namespace, args...).Exec()
+	return NewKubectlCommand(namespace, args...).Exec(true)
+}
+
+// RunKubectlNoPrint is a convenience wrapper over kubectlBuilder.
+// It doesn't print output and error.
+func RunKubectlNoPrint(namespace string, args ...string) (string, error) {
+	return NewKubectlCommand(namespace, args...).Exec(false)
 }
 
 // KubectlBuilder is used to build, customize and execute a kubectl Command.
@@ -113,7 +119,7 @@ func KubectlCmd(namespace string, args ...string) *exec.Cmd {
 
 // ExecOrDie runs the kubectl executable or dies if error occurs.
 func (b KubectlBuilder) ExecOrDie(namespace string) string {
-	str, err := b.Exec()
+	str, err := b.Exec(true)
 	// In case of i/o timeout error, try talking to the apiserver again after 2s before dying.
 	// Note that we're still dying after retrying so that we can get visibility to triage it further.
 	if isTimeout(err) {
@@ -128,13 +134,13 @@ func (b KubectlBuilder) ExecOrDie(namespace string) string {
 }
 
 // Exec runs the kubectl executable.
-func (b KubectlBuilder) Exec() (string, error) {
-	stdout, stderr, err := b.ExecWithFullOutput()
+func (b KubectlBuilder) Exec(print bool) (string, error) {
+	stdout, stderr, err := b.ExecWithFullOutput(print)
 	return fmt.Sprintf("stdout:%s\nstderr:%s", stdout, stderr), err
 }
 
 // ExecWithFullOutput runs the kubectl executable, and returns the stdout and stderr.
-func (b KubectlBuilder) ExecWithFullOutput() (string, string, error) {
+func (b KubectlBuilder) ExecWithFullOutput(print bool) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := b.cmd
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -164,8 +170,10 @@ func (b KubectlBuilder) ExecWithFullOutput() (string, string, error) {
 		_ = b.cmd.Process.Kill()
 		return "", "", fmt.Errorf("timed out waiting for command %v:\nCommand stdout:\n%v\nstderr:\n%v", cmd, cmd.Stdout, cmd.Stderr)
 	}
-	Logf("stderr: %q", stderr.String())
-	Logf("stdout: %q", stdout.String())
+	if print {
+		Logf("stderr: %q", stderr.String())
+		Logf("stdout: %q", stdout.String())
+	}
 	return stdout.String(), stderr.String(), nil
 }
 
