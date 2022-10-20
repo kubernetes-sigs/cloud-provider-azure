@@ -24,12 +24,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Get Go version
-        run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - name: Build binary
         run: |
           rm -rf ./bin
@@ -57,12 +55,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Get Go version
-        run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - name: Build binary for linux
         if: matrix.os == 'linux'
         run: |
@@ -97,7 +93,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: ^1.18
+          go-version-file: go.mod
       - name: Build binary
         run: |
           cd kubetest2-aks
@@ -126,7 +122,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: ^1.18
+          go-version-file: go.mod
       - name: Generate release note
         env:
           GITHUB_TOKEN: ${{ github.token }}
