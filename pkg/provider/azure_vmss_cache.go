@@ -146,8 +146,16 @@ func extractVmssVMName(name string) (string, string, error) {
 func (ss *ScaleSet) getVMSSVMCache(resourceGroup, vmssName string) (string, *azcache.TimedCache, error) {
 	cacheKey := strings.ToLower(fmt.Sprintf("%s/%s", resourceGroup, vmssName))
 	if entry, ok := ss.vmssVMCache.Load(cacheKey); ok {
-		cache := entry.(*azcache.TimedCache)
-		return cacheKey, cache, nil
+		return cacheKey, entry.(*azcache.TimedCache), nil
+	}
+
+	// lock and try find cacheKey from cache again, refresh cache if still not found
+	lockKey := cacheKey + "/search"
+	ss.lockMap.LockEntry(lockKey)
+	defer ss.lockMap.UnlockEntry(lockKey)
+	if entry, ok := ss.vmssVMCache.Load(cacheKey); ok {
+		klog.V(2).Infof("found cacheKey %s after retry", cacheKey)
+		return cacheKey, entry.(*azcache.TimedCache), nil
 	}
 
 	cache, err := ss.newVMSSVirtualMachinesCache(resourceGroup, vmssName, cacheKey)
