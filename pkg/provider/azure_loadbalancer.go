@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/netip"
 	"reflect"
 	"sort"
 	"strconv"
@@ -3397,11 +3396,7 @@ func ipInSubnet(ip string, subnet *network.Subnet) bool {
 	if subnet == nil || subnet.SubnetPropertiesFormat == nil {
 		return false
 	}
-	netIP, err := netip.ParseAddr(ip)
-	if err != nil {
-		klog.Errorf("ipInSubnet: failed to parse ip %s: %v", netIP, err)
-		return false
-	}
+	netIP := net.ParseIP(ip)
 	cidrs := make([]string, 0)
 	if subnet.AddressPrefix != nil {
 		cidrs = append(cidrs, *subnet.AddressPrefix)
@@ -3410,12 +3405,12 @@ func ipInSubnet(ip string, subnet *network.Subnet) bool {
 		cidrs = append(cidrs, *subnet.AddressPrefixes...)
 	}
 	for _, cidr := range cidrs {
-		network, err := netip.ParsePrefix(cidr)
+		_, netCidr, err := net.ParseCIDR(cidr)
 		if err != nil {
 			klog.Errorf("ipInSubnet: failed to parse ip cidr %s: %v", cidr, err)
 			continue
 		}
-		if network.Contains(netIP) {
+		if netCidr.Contains(netIP) {
 			return true
 		}
 	}
