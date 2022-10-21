@@ -626,6 +626,11 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 		if err != nil {
 			return err
 		}
+	} else if strings.EqualFold(consts.VMTypeVmssFlex, az.Config.VMType) {
+		az.VMSet, err = newFlexScaleSet(az)
+		if err != nil {
+			return err
+		}
 	} else {
 		az.VMSet, err = newAvailabilitySet(az)
 		if err != nil {

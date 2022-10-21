@@ -113,12 +113,16 @@ type ExtendedLocation struct {
 
 // getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.
 func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.AzureCacheReadType) (VMSet, error) {
-	// 1. vmType is standard, return cloud.VMSet directly.
-	if c.cloud.VMType == consts.VMTypeStandard {
+	// 1. vmType is standard or vmssflex, return cloud.VMSet directly.
+	// 1.1 all the nodes in the cluster are avset nodes.
+	// 1.2 all the nodes in the cluster are vmssflex nodes.
+	if c.cloud.VMType == consts.VMTypeStandard || c.cloud.VMType == consts.VMTypeVmssFlex {
 		return c.cloud.VMSet, nil
 	}
 
 	// 2. vmType is Virtual Machine Scale Set (vmss), convert vmSet to ScaleSet.
+	// 2.1 all the nodes in the cluster are vmss unifrom nodes.
+	// 2.2 mix node: the nodes in the cluster can be any of avset nodes, vmss uniform nodes and vmssflex nodes.
 	ss, ok := c.cloud.VMSet.(*ScaleSet)
 	if !ok {
 		return nil, fmt.Errorf("error of converting vmSet (%q) to ScaleSet with vmType %q", c.cloud.VMSet, c.cloud.VMType)

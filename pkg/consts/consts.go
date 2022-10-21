@@ -28,6 +28,8 @@ const (
 	VMTypeVMSS = "vmss"
 	// VMTypeStandard is the vmas vm type
 	VMTypeStandard = "standard"
+	// VMTypeVmssFlex is the vmssflex vm type
+	VMTypeVmssFlex = "vmssflex"
 
 	// ExternalResourceGroupLabel is the label representing the node is in a different
 	// resource group from other cloud provider components
