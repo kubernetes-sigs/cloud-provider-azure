@@ -149,21 +149,18 @@ func (ss *ScaleSet) getVMSSVMCache(resourceGroup, vmssName string) (string, *azc
 		return cacheKey, entry.(*azcache.TimedCache), nil
 	}
 
-	// lock and try find cacheKey from cache again, refresh cache if still not found
-	lockKey := cacheKey + "/search"
-	ss.lockMap.LockEntry(lockKey)
-	defer ss.lockMap.UnlockEntry(lockKey)
-	if entry, ok := ss.vmssVMCache.Load(cacheKey); ok {
-		klog.V(2).Infof("found cacheKey %s after retry", cacheKey)
-		return cacheKey, entry.(*azcache.TimedCache), nil
-	}
-
-	cache, err := ss.newVMSSVirtualMachinesCache(resourceGroup, vmssName, cacheKey)
+	v, err, _ := ss.group.Do(cacheKey, func() (interface{}, error) {
+		cache, err := ss.newVMSSVirtualMachinesCache(resourceGroup, vmssName, cacheKey)
+		if err != nil {
+			return nil, err
+		}
+		ss.vmssVMCache.Store(cacheKey, cache)
+		return cache, nil
+	})
 	if err != nil {
 		return "", nil, err
 	}
-	ss.vmssVMCache.Store(cacheKey, cache)
-	return cacheKey, cache, nil
+	return cacheKey, v.(*azcache.TimedCache), nil
 }
 
 // gcVMSSVMCache delete stale VMSS VMs caches from deleted VMSSes.

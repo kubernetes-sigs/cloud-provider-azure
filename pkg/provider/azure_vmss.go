@@ -35,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+	"golang.org/x/sync/singleflight"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
@@ -91,6 +92,8 @@ type ScaleSet struct {
 
 	// lockMap in cache refresh
 	lockMap *lockMap
+	// group represents a class of work and units of work can be executed with duplicate suppression
+	group singleflight.Group
 }
 
 // newScaleSet creates a new ScaleSet.
