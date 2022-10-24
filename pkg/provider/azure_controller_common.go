@@ -121,7 +121,7 @@ func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.Azu
 	}
 
 	// 2. vmType is Virtual Machine Scale Set (vmss), convert vmSet to ScaleSet.
-	// 2.1 all the nodes in the cluster are vmss unifrom nodes.
+	// 2.1 all the nodes in the cluster are vmss uniform nodes.
 	// 2.2 mix node: the nodes in the cluster can be any of avset nodes, vmss uniform nodes and vmssflex nodes.
 	ss, ok := c.cloud.VMSet.(*ScaleSet)
 	if !ok {
