@@ -198,7 +198,7 @@ github.com/prometheus/procfs/internal/util
 # github.com/rubiojr/go-vhd v0.0.0-20200706122120-ccecf6c0760f
 ## explicit
 github.com/rubiojr/go-vhd/vhd
-# github.com/spf13/cobra v1.6.0
+# github.com/spf13/cobra v1.6.1
 ## explicit
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
