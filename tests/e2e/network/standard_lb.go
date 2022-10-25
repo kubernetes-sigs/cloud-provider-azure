@@ -30,6 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
@@ -199,9 +200,14 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Skip("skip validating outbound IPs since outbound rules are not configured on SLB")
 		}
 
+		podName := "test-pod" + string(uuid.NewUUID())[0:4]
 		podTemplate := createPodGetIP()
 		err = utils.CreatePod(cs, ns.Name, podTemplate)
 		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, podName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 
 		podOutboundIP, err := utils.GetPodOutboundIP(cs, podTemplate, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -210,8 +216,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 })
 
-func createPodGetIP() *v1.Pod {
-	podName := "test-pod"
+func createPodGetIP(podName string) *v1.Pod {
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: podName,
