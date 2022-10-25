@@ -14,7 +14,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.3.1
 	github.com/onsi/gomega v1.22.1
 	github.com/rubiojr/go-vhd v0.0.0-20200706122120-ccecf6c0760f
-	github.com/spf13/cobra v1.6.0
+	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
