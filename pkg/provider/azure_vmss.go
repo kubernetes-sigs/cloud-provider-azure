@@ -1477,22 +1477,72 @@ func getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID string
 	return scaleSetName, resourceGroup, nil
 }
 
-func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(service *v1.Service, backendPoolID, vmSetName string, ipConfigurationIDs []string) error {
+func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName string) error {
 	vmssNamesMap := make(map[string]bool)
 
 	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
 	if ss.useStandardLoadBalancer() {
-		for _, ipConfigurationID := range ipConfigurationIDs {
-			// in this scenario the vmSetName is an empty string and the name of vmss should be obtained from the provider IDs of nodes
-			vmssName, resourceGroupName, err := getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID)
+		cachedUniform, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeDefault)
+		if err != nil {
+			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
+			return err
+		}
+		vmssUniformMap := cachedUniform.(*sync.Map)
+
+		var errorList []error
+		walk := func(key, value interface{}) bool {
+			var vmss *compute.VirtualMachineScaleSet
+			if vmssEntry, ok := value.(*vmssEntry); ok {
+				vmss = vmssEntry.vmss
+			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
+				vmss = v
+			}
+
+			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
+			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
+			if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.VirtualMachineScaleSetsDeallocating) {
+				klog.V(3).Infof("ensureBackendPoolDeletedFromVMSS: found vmss %s being deleted, skipping", to.String(vmss.Name))
+				return true
+			}
+			if vmss.VirtualMachineProfile == nil {
+				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: vmss %s has no VirtualMachineProfile, skipping", to.String(vmss.Name))
+				return true
+			}
+			if vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
+				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: cannot obtain the primary network interface configuration, of vmss %s", to.String(vmss.Name))
+				return true
+			}
+			vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+			primaryNIC, err := ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(vmssNIC, to.String(vmss.Name))
 			if err != nil {
-				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: found VMAS ipcConfigurationID %s, will skip checking and continue", ipConfigurationID)
-				continue
+				klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get the primary network interface config of the VMSS %s: %v", to.String(vmss.Name), err)
+				errorList = append(errorList, err)
+				return true
 			}
-			// only vmsses in the resource group same as it's in azure config are included
-			if strings.EqualFold(resourceGroupName, ss.ResourceGroup) {
-				vmssNamesMap[vmssName] = true
+			primaryIPConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(primaryNIC)
+			if err != nil {
+				klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to the primary IP config from the VMSS %s's network config : %v", to.String(vmss.Name), err)
+				errorList = append(errorList, err)
+				return true
 			}
+			loadBalancerBackendAddressPools := make([]compute.SubResource, 0)
+			if primaryIPConfig.LoadBalancerBackendAddressPools != nil {
+				loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
+			}
+			for _, loadBalancerBackendAddressPool := range loadBalancerBackendAddressPools {
+				if strings.EqualFold(to.String(loadBalancerBackendAddressPool.ID), backendPoolID) {
+					klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: found vmss %s with backend pool %s, removing it", to.String(vmss.Name), backendPoolID)
+					vmssNamesMap[to.String(vmss.Name)] = true
+				}
+			}
+
+			return true
+		}
+
+		// Walk through all cached vmss, and find the vmss that contains the backendPoolID.
+		vmssUniformMap.Range(walk)
+		if len(errorList) > 0 {
+			return utilerrors.Flatten(utilerrors.NewAggregate(errorList))
 		}
 	} else {
 		vmssNamesMap[vmSetName] = true
@@ -1529,7 +1579,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 
 	// 1. Ensure the backendPoolID is deleted from the VMSS.
 	if deleteFromVMSet {
-		err := ss.ensureBackendPoolDeletedFromVMSS(service, backendPoolID, vmSetName, ipConfigurationIDs)
+		err := ss.ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName)
 		if err != nil {
 			return err
 		}
@@ -1687,23 +1737,23 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]b
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 		// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
 		if vmss.ProvisioningState != nil && strings.EqualFold(*vmss.ProvisioningState, consts.VirtualMachineScaleSetsDeallocating) {
-			klog.V(3).Infof("ensureVMSSInPool: found vmss %s being deleted, skipping", vmssName)
+			klog.V(3).Infof("EnsureBackendPoolDeletedFromVMSets: found vmss %s being deleted, skipping", vmssName)
 			continue
 		}
 		if vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations == nil {
-			klog.V(4).Infof("EnsureHostInPool: cannot obtain the primary network interface configuration, of vmss %s", vmssName)
+			klog.V(4).Infof("EnsureBackendPoolDeletedFromVMSets: cannot obtain the primary network interface configuration, of vmss %s", vmssName)
 			continue
 		}
 		vmssNIC := *vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 		primaryNIC, err := ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(vmssNIC, vmssName)
 		if err != nil {
-			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get the primary network interface config of the VMSS %s: %v", vmssName, err)
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to get the primary network interface config of the VMSS %s: %v", vmssName, err)
 			errors = append(errors, err)
 			continue
 		}
 		primaryIPConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(primaryNIC)
 		if err != nil {
-			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to the primary IP config from the VMSS %s's network config : %v", vmssName, err)
+			klog.Errorf("EnsureBackendPoolDeletedFromVMSets: failed to the primary IP config from the VMSS %s's network config : %v", vmssName, err)
 			errors = append(errors, err)
 			continue
 		}
@@ -1717,7 +1767,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]b
 		for i := len(loadBalancerBackendAddressPools) - 1; i >= 0; i-- {
 			curPool := loadBalancerBackendAddressPools[i]
 			if strings.EqualFold(backendPoolID, *curPool.ID) {
-				klog.V(10).Infof("ensureBackendPoolDeletedFromVMSS gets unwanted backend pool %q for VMSS %s", backendPoolID, vmssName)
+				klog.V(10).Infof("EnsureBackendPoolDeletedFromVMSets gets unwanted backend pool %q for VMSS %s", backendPoolID, vmssName)
 				found = true
 				newBackendPools = append(loadBalancerBackendAddressPools[:i], loadBalancerBackendAddressPools[i+1:]...)
 			}
@@ -1740,10 +1790,10 @@ func (ss *ScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[string]b
 				},
 			}
 
-			klog.V(2).Infof("ensureBackendPoolDeletedFromVMSS begins to update vmss(%s) with backendPoolID %s", vmssName, backendPoolID)
+			klog.V(2).Infof("EnsureBackendPoolDeletedFromVMSets begins to update vmss(%s) with backendPoolID %s", vmssName, backendPoolID)
 			rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 			if rerr != nil {
-				klog.Errorf("ensureBackendPoolDeletedFromVMSS CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr)
+				klog.Errorf("EnsureBackendPoolDeletedFromVMSets CreateOrUpdateVMSS(%s) with new backendPoolID %s, err: %v", vmssName, backendPoolID, rerr)
 				return rerr.Error()
 			}
 
