@@ -476,8 +476,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			By("Cleaning up service and public IP")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
-			Expect(err).NotTo(HaveOccurred())
 		}()
 		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
 		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
@@ -524,8 +522,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		defer func() {
 			By("Cleaning up service and public IP")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
@@ -770,8 +766,6 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			defer func() {
 				By("Cleaning up service and public IP")
 				err := utils.DeleteService(cs, ns.Name, serviceName)
-				Expect(err).NotTo(HaveOccurred())
-				err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 				Expect(err).NotTo(HaveOccurred())
 			}()
 

@@ -171,7 +171,7 @@ func CreateHostExecPod(cs clientset.Interface, ns, name string) (bool, error) {
 				},
 			},
 			NodeSelector: map[string]string{
-				controlPlaneNodeRoleLabel: "",
+				nodeOSLabel: "linux",
 			},
 		},
 	}
