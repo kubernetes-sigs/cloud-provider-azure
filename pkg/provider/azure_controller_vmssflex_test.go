@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
+	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -263,7 +265,14 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
-		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), "update_vm").Return(tc.vmssFlexVMUpdateError).AnyTimes()
+
+		r := autorestmocks.NewResponseWithStatus("200", 200)
+		r.Request.Method = http.MethodPut
+
+		future, err := azure.NewFutureFromResponse(r)
+
+		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), "update_vm").Return(&future, err).AnyTimes()
+		mockVMClient.EXPECT().WaitForUpdateResult(gomock.Any(), &future, gomock.Any(), gomock.Any()).Return(tc.vmssFlexVMUpdateError).AnyTimes()
 
 		err = fs.UpdateVM(ctx, tc.nodeName)
 

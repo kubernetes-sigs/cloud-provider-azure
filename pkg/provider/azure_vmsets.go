@@ -88,6 +88,9 @@ type VMSet interface {
 	// UpdateVM updates a vm
 	UpdateVM(ctx context.Context, nodeName types.NodeName) error
 
+	// UpdateVMAsync updates a vm asynchronously
+	UpdateVMAsync(ctx context.Context, nodeName types.NodeName) (*azure.Future, error)
+
 	// GetPowerStatusByNodeName returns the powerState for the specified node.
 	GetPowerStatusByNodeName(name string) (string, error)
 

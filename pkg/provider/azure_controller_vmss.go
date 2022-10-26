@@ -263,20 +263,31 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 
 // UpdateVM updates a vm
 func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error {
+	future, err := ss.UpdateVMAsync(ctx, nodeName)
+	if err != nil {
+		return err
+	}
+
+	return ss.WaitForUpdateResult(ctx, future, nodeName, "update_vm")
+}
+
+// UpdateVMAsync updates a vm asynchronously
+func (ss *ScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeName) (*azure.Future, error) {
 	vmName := mapNodeNameToVMName(nodeName)
 	vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	nodeResourceGroup, err := ss.GetNodeResourceGroup(vmName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var updateResult *compute.VirtualMachineScaleSetVM
+	var future *azure.Future
 	var rerr *retry.Error
 
+	// Invalidate the cache right after updating
 	defer func() {
 		// If there is an error with Update operation,
 		// invalidate the cache
@@ -284,26 +295,16 @@ func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error
 			_ = ss.DeleteCacheForNode(vmName)
 			return
 		}
-
-		// Update the cache with the updated result only if its not nil
-		// and contains the VirtualMachineScaleSetVMProperties
-		if updateResult != nil && updateResult.VirtualMachineScaleSetVMProperties != nil {
-			if err := ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, updateResult); err != nil {
-				klog.Errorf("updateCache(%s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
-				// if err faced during updating cache, invalidate the cache
-				_ = ss.DeleteCacheForNode(vmName)
-			}
-		}
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, nodeName)
-	updateResult, rerr = ss.VirtualMachineScaleSetVMsClient.Update(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, compute.VirtualMachineScaleSetVM{}, "update_vmss_instance")
+	future, rerr = ss.VirtualMachineScaleSetVMsClient.UpdateAsync(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, compute.VirtualMachineScaleSetVM{}, "update_vmss_instance")
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - returned with %v", nodeResourceGroup, nodeName, rerr)
 	if rerr != nil {
-		return rerr.Error()
+		return future, rerr.Error()
 	}
-	return nil
+	return future, nil
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
