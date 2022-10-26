@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -92,7 +92,7 @@ func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 					klog.Warning("failed to get the name of VMSS")
 					continue
 				}
-				if scaleSet.OrchestrationMode == "" || scaleSet.OrchestrationMode == compute.OrchestrationModeUniform {
+				if scaleSet.OrchestrationMode == "" || scaleSet.OrchestrationMode == compute.Uniform {
 					localCache.Store(*scaleSet.Name, &vmssEntry{
 						vmss:          &scaleSet,
 						resourceGroup: resourceGroup,
