@@ -22,6 +22,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
 
@@ -84,11 +85,13 @@ func (c *Client) WithSubscriptionID(subscriptionID string) Interface {
 }
 
 // CreateFileShare creates a file share
-func (c *Client) CreateFileShare(ctx context.Context, resourceGroupName, accountName string, shareOptions *ShareOptions) error {
+// expand - optional, used to expand the properties within share's properties. Valid values are: snapshots.
+// Should be passed as a string with delimiter ','
+func (c *Client) CreateFileShare(ctx context.Context, resourceGroupName, accountName string, shareOptions *ShareOptions, expand string) (storage.FileShare, error) {
 	mc := metrics.NewMetricContext("file_shares", "create", resourceGroupName, c.subscriptionID, "")
 
 	if shareOptions == nil {
-		return fmt.Errorf("share options is nil")
+		return storage.FileShare{}, fmt.Errorf("share options is nil")
 	}
 	quota := int32(shareOptions.RequestGiB)
 	fileShareProperties := &storage.FileShareProperties{
@@ -110,7 +113,7 @@ func (c *Client) CreateFileShare(ctx context.Context, resourceGroupName, account
 		Name:                &shareOptions.Name,
 		FileShareProperties: fileShareProperties,
 	}
-	_, err := c.fileSharesClient.Create(ctx, resourceGroupName, accountName, shareOptions.Name, fileShare, "")
+	FileShare, err := c.fileSharesClient.Create(ctx, resourceGroupName, accountName, shareOptions.Name, fileShare, expand)
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -119,14 +122,16 @@ func (c *Client) CreateFileShare(ctx context.Context, resourceGroupName, account
 	}
 	mc.Observe(rerr)
 
-	return err
+	return FileShare, err
 }
 
 // DeleteFileShare deletes a file share
-func (c *Client) DeleteFileShare(ctx context.Context, resourceGroupName, accountName, name string) error {
+// xMsSnapshot - optional, used to delete a snapshot.
+// It is a DateTime value that uniquely identifies the share snapshot. e.g. "2017-05-10T17:52:33.9551861Z"
+func (c *Client) DeleteFileShare(ctx context.Context, resourceGroupName, accountName, name, xMsSnapshot string) error {
 	mc := metrics.NewMetricContext("file_shares", "delete", resourceGroupName, c.subscriptionID, "")
 
-	_, err := c.fileSharesClient.Delete(ctx, resourceGroupName, accountName, name, "", "")
+	_, err := c.fileSharesClient.Delete(ctx, resourceGroupName, accountName, name, xMsSnapshot, "")
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -176,10 +181,12 @@ func (c *Client) ResizeFileShare(ctx context.Context, resourceGroupName, account
 }
 
 // GetFileShare gets a file share
-func (c *Client) GetFileShare(ctx context.Context, resourceGroupName, accountName, name string) (storage.FileShare, error) {
+// xMsSnapshot - optional, used to retrieve properties of a snapshot.
+// It is a DateTime value that uniquely identifies the share snapshot. e.g. "2017-05-10T17:52:33.9551861Z"
+func (c *Client) GetFileShare(ctx context.Context, resourceGroupName, accountName, name, xMsSnapshot string) (storage.FileShare, error) {
 	mc := metrics.NewMetricContext("file_shares", "get", resourceGroupName, c.subscriptionID, "")
 
-	result, err := c.fileSharesClient.Get(ctx, resourceGroupName, accountName, name, "stats", "")
+	result, err := c.fileSharesClient.Get(ctx, resourceGroupName, accountName, name, "stats", xMsSnapshot)
 	var rerr *retry.Error
 	if err != nil {
 		rerr = &retry.Error{
@@ -187,6 +194,40 @@ func (c *Client) GetFileShare(ctx context.Context, resourceGroupName, accountNam
 		}
 	}
 	mc.Observe(rerr)
+
+	return result, err
+}
+
+// ListFileShare gets a file share list
+// expand - optional, used to expand the properties within share's properties. Valid values are: deleted,
+// snapshots. Should be passed as a string with delimiter ','
+func (c *Client) ListFileShare(ctx context.Context, resourceGroupName, accountName, filter, expand string) ([]storage.FileShareItem, error) {
+	mc := metrics.NewMetricContext("file_shares", "list", resourceGroupName, c.subscriptionID, "")
+
+	page, err := c.fileSharesClient.List(ctx, resourceGroupName, accountName, "", filter, expand)
+	var rerr *retry.Error
+	if err != nil {
+		rerr = &retry.Error{
+			RawError: err,
+		}
+	}
+	mc.Observe(rerr)
+
+	result := make([]storage.FileShareItem, 0)
+
+	for {
+		result = append(result, page.Values()...)
+
+		// Abort the loop when there's no nextLink in the response.
+		if to.String(page.Response().NextLink) == "" {
+			break
+		}
+
+		if err = page.NextWithContext(ctx); err != nil {
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "snapshot.list.next", resourceGroupName, err)
+			mc.Observe(retry.GetError(page.Response().Response.Response, err))
+		}
+	}
 
 	return result, err
 }

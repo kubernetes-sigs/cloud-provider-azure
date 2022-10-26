@@ -26,11 +26,12 @@ import (
 
 // create file share
 func (az *Cloud) createFileShare(ctx context.Context, subsID, resourceGroupName, accountName string, shareOptions *fileclient.ShareOptions) error {
-	return az.FileClient.WithSubscriptionID(subsID).CreateFileShare(ctx, resourceGroupName, accountName, shareOptions)
+	_, err := az.FileClient.WithSubscriptionID(subsID).CreateFileShare(ctx, resourceGroupName, accountName, shareOptions, "")
+	return err
 }
 
 func (az *Cloud) deleteFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string) error {
-	return az.FileClient.WithSubscriptionID(subsID).DeleteFileShare(ctx, resourceGroupName, accountName, name)
+	return az.FileClient.WithSubscriptionID(subsID).DeleteFileShare(ctx, resourceGroupName, accountName, name, "")
 }
 
 func (az *Cloud) resizeFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string, sizeGiB int) error {
@@ -38,5 +39,5 @@ func (az *Cloud) resizeFileShare(ctx context.Context, subsID, resourceGroupName,
 }
 
 func (az *Cloud) getFileShare(ctx context.Context, subsID, resourceGroupName, accountName, name string) (storage.FileShare, error) {
-	return az.FileClient.WithSubscriptionID(subsID).GetFileShare(ctx, resourceGroupName, accountName, name)
+	return az.FileClient.WithSubscriptionID(subsID).GetFileShare(ctx, resourceGroupName, accountName, name, "")
 }

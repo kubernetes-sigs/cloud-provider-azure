@@ -25,10 +25,11 @@ import (
 // Interface is the client interface for creating file shares, interface for test injection.
 // Don't forget to run "hack/update-mock-clients.sh" command to generate the mock client.
 type Interface interface {
-	CreateFileShare(ctx context.Context, resourceGroupName, accountName string, shareOptions *ShareOptions) error
-	DeleteFileShare(ctx context.Context, resourceGroupName, accountName, name string) error
+	CreateFileShare(ctx context.Context, resourceGroupName, accountName string, shareOptions *ShareOptions, expand string) (storage.FileShare, error)
+	DeleteFileShare(ctx context.Context, resourceGroupName, accountName, name, xMsSnapshot string) error
 	ResizeFileShare(ctx context.Context, resourceGroupName, accountName, name string, sizeGiB int) error
-	GetFileShare(ctx context.Context, resourceGroupName, accountName, name string) (storage.FileShare, error)
+	GetFileShare(ctx context.Context, resourceGroupName, accountName, name, xMsSnapshot string) (storage.FileShare, error)
+	ListFileShare(ctx context.Context, resourceGroupName, accountName, filter, expand string) ([]storage.FileShareItem, error)
 	GetServiceProperties(ctx context.Context, resourceGroupName, accountName string) (storage.FileServiceProperties, error)
 	SetServiceProperties(ctx context.Context, resourceGroupName, accountName string, parameters storage.FileServiceProperties) (storage.FileServiceProperties, error)
 	WithSubscriptionID(subscriptionID string) Interface
