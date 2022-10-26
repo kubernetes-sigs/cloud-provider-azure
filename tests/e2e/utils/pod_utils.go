@@ -223,6 +223,9 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 		}
 		if pod.Status.Phase != v1.PodSucceeded {
 			Logf("waiting for the pod to succeed, current status: %s", pod.Status.Phase)
+			if pod.Status.Phase == v1.PodFailed {
+				return false, wait.ErrWaitTimeout
+			}
 			return false, nil
 		}
 		if pod.Status.ContainerStatuses[0].State.Terminated == nil || pod.Status.ContainerStatuses[0].State.Terminated.Reason != "Completed" {
@@ -237,6 +240,13 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 		return PodIPRE.MatchString(string(log)), nil
 	})
 	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			output, _ := RunKubectl(nsName, "describe", "pod", podTemplate.Name)
+			Logf("Describe info of Pod %q:\n%s", podTemplate.Name, output)
+
+			log, _ = GetPodLogs(cs, nsName, podTemplate.Name, &v1.PodLogOptions{Previous: true})
+			Logf("Log of Pod %q:\n%s", podTemplate.Name, log)
+		}
 		return "", err
 	}
 	Logf("Got pod outbound IP %s", string(log))
