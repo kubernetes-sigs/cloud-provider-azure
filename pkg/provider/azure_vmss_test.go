@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -72,7 +72,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 		ipConfig = append(ipConfig, compute.VirtualMachineScaleSetIPConfiguration{
 			VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 				LoadBalancerBackendAddressPools: &lbBackendpools,
-				PrivateIPAddressVersion:         compute.IPVersionIPv6,
+				PrivateIPAddressVersion:         compute.IPv6,
 			},
 		})
 	}
@@ -80,7 +80,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 	expectedVMSS := compute.VirtualMachineScaleSet{
 		Name: &name,
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-			OrchestrationMode: compute.OrchestrationModeUniform,
+			OrchestrationMode: compute.Uniform,
 			ProvisioningState: to.StringPtr("Running"),
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
@@ -107,7 +107,7 @@ func buildTestVMSS(name, computerNamePrefix string) compute.VirtualMachineScaleS
 	return compute.VirtualMachineScaleSet{
 		Name: &name,
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-			OrchestrationMode: compute.OrchestrationModeUniform,
+			OrchestrationMode: compute.Uniform,
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
 					ComputerNamePrefix: &computerNamePrefix,
@@ -168,7 +168,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 								Primary:                         to.BoolPtr(false),
 								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: to.StringPtr(testLBBackendpoolID0)}},
-								PrivateIPAddressVersion:         compute.IPVersionIPv6,
+								PrivateIPAddressVersion:         compute.IPv6,
 							},
 						},
 					},
@@ -1840,13 +1840,13 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPVersionIPv4,
+						PrivateIPAddressVersion: compute.IPv4,
 					},
 				},
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPVersionIPv6,
+						PrivateIPAddressVersion: compute.IPv6,
 					},
 				},
 			},
@@ -2734,7 +2734,7 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 				Name: to.StringPtr("vmss"),
 				Tags: tc.tags,
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					OrchestrationMode: compute.OrchestrationModeUniform,
+					OrchestrationMode: compute.Uniform,
 				},
 			}
 			mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -2881,7 +2881,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 				consts.VMSSTagForBatchOperation: to.StringPtr(""),
 			},
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-				OrchestrationMode: compute.OrchestrationModeUniform,
+				OrchestrationMode: compute.Uniform,
 			},
 		}
 		mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -2903,7 +2903,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		scaleSet := compute.VirtualMachineScaleSet{
 			Name: to.StringPtr("bar"),
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-				OrchestrationMode: compute.OrchestrationModeUniform,
+				OrchestrationMode: compute.Uniform,
 			},
 		}
 		mockVMSSClient := ss.Cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)

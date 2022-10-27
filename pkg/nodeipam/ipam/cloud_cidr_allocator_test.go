@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -235,7 +235,7 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 				Name: to.StringPtr("vmss"),
 				Tags: tc.tags,
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					OrchestrationMode: compute.OrchestrationModeUniform,
+					OrchestrationMode: compute.Uniform,
 				},
 			}
 			mockVMSSClient := ss.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)

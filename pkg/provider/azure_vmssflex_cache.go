@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -60,7 +60,7 @@ func (fs *FlexScaleSet) newVmssFlexCache() (*azcache.TimedCache, error) {
 					continue
 				}
 
-				if scaleSet.OrchestrationMode == compute.OrchestrationModeFlexible {
+				if scaleSet.OrchestrationMode == compute.Flexible {
 					localCache.Store(*scaleSet.ID, &scaleSet)
 				}
 			}

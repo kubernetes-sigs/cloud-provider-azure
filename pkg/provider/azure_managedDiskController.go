@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
@@ -141,7 +141,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 
 	if options.NetworkAccessPolicy != "" {
 		diskProperties.NetworkAccessPolicy = options.NetworkAccessPolicy
-		if options.NetworkAccessPolicy == compute.NetworkAccessPolicyAllowPrivate {
+		if options.NetworkAccessPolicy == compute.AllowPrivate {
 			if options.DiskAccessID == nil {
 				return "", fmt.Errorf("DiskAccessID should not be empty when NetworkAccessPolicy is AllowPrivate")
 			}
@@ -153,9 +153,9 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 	}
 
-	if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS || diskSku == consts.PremiumV2LRS {
+	if diskSku == compute.UltraSSDLRS || diskSku == consts.PremiumV2LRS {
 		if options.DiskIOPSReadWrite == "" {
-			if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS {
+			if diskSku == compute.UltraSSDLRS {
 				diskIOPSReadWrite := int64(consts.DefaultDiskIOPSReadWrite)
 				diskProperties.DiskIOPSReadWrite = to.Int64Ptr(diskIOPSReadWrite)
 			}
@@ -169,7 +169,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 
 		if options.DiskMBpsReadWrite == "" {
-			if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS {
+			if diskSku == compute.UltraSSDLRS {
 				diskMBpsReadWrite := int64(consts.DefaultDiskMBpsReadWrite)
 				diskProperties.DiskMBpsReadWrite = to.Int64Ptr(diskMBpsReadWrite)
 			}
@@ -363,7 +363,7 @@ func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, 
 		return newSizeQuant, nil
 	}
 
-	if !supportOnlineResize && result.DiskProperties.DiskState != compute.DiskStateUnattached {
+	if !supportOnlineResize && result.DiskProperties.DiskState != compute.Unattached {
 		return oldSize, fmt.Errorf("azureDisk - disk resize is only supported on Unattached disk, current disk state: %s, already attached to %s", result.DiskProperties.DiskState, to.String(result.ManagedBy))
 	}
 

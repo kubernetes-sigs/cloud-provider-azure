@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -67,7 +67,7 @@ func setTestVirtualMachines(c *Cloud, vmList map[string]string, isDataDisksFull 
 		vm.VirtualMachineProperties = &compute.VirtualMachineProperties{
 			ProvisioningState: to.StringPtr(string(compute.ProvisioningStateSucceeded)),
 			HardwareProfile: &compute.HardwareProfile{
-				VMSize: compute.VirtualMachineSizeTypesStandardA0,
+				VMSize: compute.StandardA0,
 			},
 			InstanceView: &compute.VirtualMachineInstanceView{
 				Statuses: &status,
@@ -880,7 +880,7 @@ func TestInstanceMetadata(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
 		expectedVM := buildDefaultTestVirtualMachine("as", []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1"})
 		expectedVM.HardwareProfile = &compute.HardwareProfile{
-			VMSize: compute.VirtualMachineSizeTypesBasicA0,
+			VMSize: compute.BasicA0,
 		}
 		expectedVM.Location = to.StringPtr("westus2")
 		expectedVM.Zones = &[]string{"1"}
@@ -907,7 +907,7 @@ func TestInstanceMetadata(t *testing.T) {
 
 		expectedMetadata := cloudprovider.InstanceMetadata{
 			ProviderID:   "azure:///subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/VirtualMachines/vm",
-			InstanceType: string(compute.VirtualMachineSizeTypesBasicA0),
+			InstanceType: string(compute.BasicA0),
 			NodeAddresses: []v1.NodeAddress{
 				{
 					Type:    v1.NodeInternalIP,
