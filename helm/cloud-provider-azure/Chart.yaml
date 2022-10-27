@@ -5,6 +5,7 @@ keywords:
 - cloud-provider-azure
 - kubernetes-sigs
 - kubernetes
+kubeVersion: '>= 1.21.0-0 < 1.26.0'
 maintainers:
 - email: jackfrancis@gmail.com
   name: Jack Francis
@@ -13,4 +14,4 @@ maintainers:
 name: cloud-provider-azure
 sources:
 - https://github.com/kubernetes-sigs/cloud-provider-azure
-version: 1.25.2
+version: 1.25.3
