@@ -42,6 +42,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 	testCases := []struct {
 		description                    string
 		nodeName                       types.NodeName
+		vmName                         string
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
 		vmListErr                      error
@@ -50,7 +51,8 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 	}{
 		{
 			description:                    "AttachDisk should work as expected with managed disk",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -68,7 +70,8 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		},
 		{
 			description:                    "AttachDisk should return error if update VM fails",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -88,7 +91,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
+		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
 
 		options := AttachDiskOptions{
 			lun:                     0,
@@ -119,6 +122,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 	testCases := []struct {
 		description                    string
 		nodeName                       types.NodeName
+		vmName                         string
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
 		vmListErr                      error
@@ -128,7 +132,8 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 	}{
 		{
 			description:                    "DetachDisk should work as expected with managed disk",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -148,7 +153,8 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 		},
 		{
 			description:                    "DetachDisk should should do nothing if there's a corresponding disk",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -158,7 +164,8 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 		},
 		{
 			description:                    "AttachDisk should return error if update VM fails",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -179,7 +186,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
-		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "detach_disk").Return(tc.vmssFlexVMUpdateError).AnyTimes()
+		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), "detach_disk").Return(tc.vmssFlexVMUpdateError).AnyTimes()
 
 		err = fs.DetachDisk(ctx, tc.nodeName, tc.diskMap)
 		if tc.expectedErr == nil {
@@ -201,6 +208,7 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 	testCases := []struct {
 		description                    string
 		nodeName                       types.NodeName
+		vmName                         string
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
 		vmListErr                      error
@@ -209,7 +217,8 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 	}{
 		{
 			description:                    "UpdateVM should work as expected if vm client update succeeds",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -218,7 +227,8 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 		},
 		{
 			description:                    "UpdateVM should return error if update VM fails",
-			nodeName:                       "vmssflex1000001",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -237,7 +247,7 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
-		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "update_vm").Return(tc.vmssFlexVMUpdateError).AnyTimes()
+		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), "update_vm").Return(tc.vmssFlexVMUpdateError).AnyTimes()
 
 		err = fs.UpdateVM(ctx, tc.nodeName)
 
