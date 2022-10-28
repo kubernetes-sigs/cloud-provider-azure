@@ -199,7 +199,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Skip("skip validating outbound IPs since outbound rules are not configured on SLB")
 		}
 
-		podTemplate := createPodGetIP()
+		podTemplate := utils.CreatePodGetIPManifest()
 		err = utils.CreatePod(cs, ns.Name, podTemplate)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -209,26 +209,3 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		Expect(found).To(BeTrue())
 	})
 })
-
-func createPodGetIP() *v1.Pod {
-	podName := "test-pod"
-	return &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: podName,
-		},
-		Spec: v1.PodSpec{
-			Hostname: podName,
-			Containers: []v1.Container{
-				{
-					Name:            "test-app",
-					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
-					ImagePullPolicy: v1.PullIfNotPresent,
-					Command: []string{
-						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
-					},
-				},
-			},
-			RestartPolicy: v1.RestartPolicyNever,
-		},
-	}
-}
