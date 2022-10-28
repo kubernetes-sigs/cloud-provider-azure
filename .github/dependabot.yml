@@ -13,7 +13,19 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-
+  - package-ecosystem: "gomod"
+    directory: "/kubetest2-aks/"
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
