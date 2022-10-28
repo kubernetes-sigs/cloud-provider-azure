@@ -47,15 +47,3 @@ require (
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	google.golang.org/grpc v1.42.0 // indirect
 )
-
-replace (
-	k8s.io/api => k8s.io/api v0.22.12
-	k8s.io/apimachinery => k8s.io/apimachinery v0.22.12
-	k8s.io/apiserver => k8s.io/apiserver v0.22.12
-	k8s.io/client-go => k8s.io/client-go v0.22.12
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.22.12
-	k8s.io/component-base => k8s.io/component-base v0.22.12
-	k8s.io/component-helpers => k8s.io/component-helpers v0.22.12
-	k8s.io/controller-manager => k8s.io/controller-manager v0.22.12
-	k8s.io/kubelet => k8s.io/kubelet v0.22.12
-)
