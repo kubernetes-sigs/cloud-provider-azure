@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -938,9 +938,9 @@ func (ss *ScaleSet) getConfigForScaleSetByIPFamily(config *compute.VirtualMachin
 
 	var ipVersion compute.IPVersion
 	if IPv6 {
-		ipVersion = compute.IPVersionIPv6
+		ipVersion = compute.IPv6
 	} else {
-		ipVersion = compute.IPVersionIPv4
+		ipVersion = compute.IPv4
 	}
 	for idx := range ipConfigurations {
 		ipConfig := &ipConfigurations[idx]
