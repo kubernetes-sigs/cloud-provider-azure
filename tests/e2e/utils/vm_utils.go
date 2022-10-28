@@ -20,14 +20,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 )
 
 // ListVMs returns all VMs in the resource group
 func ListVMs(tc *AzureTestClient) (*[]compute.VirtualMachine, error) {
 	vmClient := tc.createVMClient()
 
-	list, err := vmClient.List(context.Background(), tc.GetResourceGroup())
+	list, err := vmClient.List(context.Background(), tc.GetResourceGroup(), "")
 	if err != nil {
 		return nil, err
 	}

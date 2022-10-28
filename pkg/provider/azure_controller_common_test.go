@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -103,7 +103,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				DiskProperties: &compute.DiskProperties{
 					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
 					DiskSizeGB: to.Int32Ptr(4096),
-					DiskState:  compute.DiskStateUnattached,
+					DiskState:  compute.Unattached,
 				},
 				Tags: testTags},
 			expectedLun: 3,
@@ -118,7 +118,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				DiskProperties: &compute.DiskProperties{
 					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
 					DiskSizeGB: to.Int32Ptr(4096),
-					DiskState:  compute.DiskStateAttached,
+					DiskState:  compute.Attached,
 				},
 				Tags: testTags},
 			expectedLun: -1,
@@ -630,7 +630,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "",
 			sourceType:       "",
 			expected1: compute.CreationData{
-				CreateOption: compute.DiskCreateOptionEmpty,
+				CreateOption: compute.Empty,
 			},
 			expected2: nil,
 		},
@@ -640,7 +640,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.Compute/snapshots/xxx",
 			sourceType:       sourceSnapshot,
 			expected1: compute.CreationData{
-				CreateOption:     compute.DiskCreateOptionCopy,
+				CreateOption:     compute.Copy,
 				SourceResourceID: &sourceResourceSnapshotID,
 			},
 			expected2: nil,
@@ -651,7 +651,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "xxx",
 			sourceType:       sourceSnapshot,
 			expected1: compute.CreationData{
-				CreateOption:     compute.DiskCreateOptionCopy,
+				CreateOption:     compute.Copy,
 				SourceResourceID: &sourceResourceSnapshotID,
 			},
 			expected2: nil,
@@ -694,7 +694,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "xxx",
 			sourceType:       "",
 			expected1: compute.CreationData{
-				CreateOption: compute.DiskCreateOptionEmpty,
+				CreateOption: compute.Empty,
 			},
 			expected2: nil,
 		},
@@ -704,7 +704,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.Compute/disks/xxx",
 			sourceType:       sourceVolume,
 			expected1: compute.CreationData{
-				CreateOption:     compute.DiskCreateOptionCopy,
+				CreateOption:     compute.Copy,
 				SourceResourceID: &sourceResourceVolumeID,
 			},
 			expected2: nil,
@@ -715,7 +715,7 @@ func TestGetValidCreationData(t *testing.T) {
 			sourceResourceID: "xxx",
 			sourceType:       sourceVolume,
 			expected1: compute.CreationData{
-				CreateOption:     compute.DiskCreateOptionCopy,
+				CreateOption:     compute.Copy,
 				SourceResourceID: &sourceResourceVolumeID,
 			},
 			expected2: nil,
