@@ -271,9 +271,14 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		// Check Service connectivity with the deny-all-except-lb-range ExecAgnhostPod
 		By("Waiting for the service to expose")
-		internalIP, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
-		Expect(err).NotTo(HaveOccurred())
+		internalIP, err = utils.WaitServiceExposureAndGetIP(cs, ns.Name, serviceName)
+		for _, port := range service.Spec.Ports {
+			utils.Logf("checking the connectivity of addr %s:%d with protocol %v", internalIP, int(port.Port), port.Protocol)
+			err := utils.ValidateServiceConnectivity(ns.Name, agnhostPod, internalIP, int(port.Port), port.Protocol)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		By("Checking if there is a LoadBalancerSourceRanges rule")
 		nsgs, err = tc.GetClusterSecurityGroups()
