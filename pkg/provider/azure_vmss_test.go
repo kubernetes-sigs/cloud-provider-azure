@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -70,7 +70,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 		ipConfig = append(ipConfig, compute.VirtualMachineScaleSetIPConfiguration{
 			VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 				LoadBalancerBackendAddressPools: &lbBackendpools,
-				PrivateIPAddressVersion:         compute.IPVersionIPv6,
+				PrivateIPAddressVersion:         compute.IPv6,
 			},
 		})
 	}
@@ -164,7 +164,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 								Primary:                         to.BoolPtr(false),
 								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: to.StringPtr(testLBBackendpoolID0)}},
-								PrivateIPAddressVersion:         compute.IPVersionIPv6,
+								PrivateIPAddressVersion:         compute.IPv6,
 							},
 						},
 					},
@@ -1757,13 +1757,13 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPVersionIPv4,
+						PrivateIPAddressVersion: compute.IPv4,
 					},
 				},
 				{
 					Name: to.StringPtr("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPVersionIPv6,
+						PrivateIPAddressVersion: compute.IPv6,
 					},
 				},
 			},
