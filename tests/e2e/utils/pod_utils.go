@@ -56,26 +56,28 @@ func GetPodList(cs clientset.Interface, ns string) (*v1.PodList, error) {
 	return pods, nil
 }
 
-// CountPendingPods counts how many pods is in the `pending` state
-func CountPendingPods(cs clientset.Interface, ns string) (int, error) {
-	pods, err := GetPodList(cs, ns)
-	if err != nil {
-		return -1, err
-	}
-
+// countPendingPods counts how many pods is in the `pending` state
+func countPendingPods(cs clientset.Interface, ns string, pods []v1.Pod) int {
 	pendingPodCount := 0
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		if p.Status.Phase == v1.PodPending {
 			pendingPodCount++
 		}
 	}
 
-	return pendingPodCount, nil
+	return pendingPodCount
 }
 
 func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
-	return wait.PollImmediate(pollInterval, pollTimeout, func() (done bool, err error) {
-		pendingPodCount, err := CountPendingPods(cs, ns)
+	var pods []v1.Pod
+	err := wait.PollImmediate(pollInterval, pollTimeout, func() (done bool, err error) {
+		podList, err := GetPodList(cs, ns)
+		if err != nil {
+			Logf("failed to list pods in namespace %s", ns)
+			return false, err
+		}
+		pods = podList.Items
+		pendingPodCount := countPendingPods(cs, ns, pods)
 		if err != nil {
 			Logf("unexpected error: %w", err)
 			return false, err
@@ -84,11 +86,28 @@ func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
 		Logf("%d pods in namespace %s are pending", pendingPodCount, ns)
 		return pendingPodCount == 0, nil
 	})
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			for _, pod := range pods {
+				printPodInfo(cs, ns, pod.Name)
+			}
+		}
+		return err
+	}
+
+	return nil
 }
 
 // LogPodStatus logs the rate of pending
 func LogPodStatus(cs clientset.Interface, ns string) error {
-	pendingPodCount, err := CountPendingPods(cs, ns)
+	podList, err := GetPodList(cs, ns)
+	if err != nil {
+		Logf("failed to list pods in namespace %s", ns)
+		return err
+	}
+
+	pods := podList.Items
+	pendingPodCount := countPendingPods(cs, ns, pods)
 	if err != nil {
 		return err
 	}
