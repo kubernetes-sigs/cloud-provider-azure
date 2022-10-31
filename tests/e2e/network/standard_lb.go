@@ -21,7 +21,7 @@ import (
 	"os"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
+	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 
 	. "github.com/onsi/ginkgo/v2"
