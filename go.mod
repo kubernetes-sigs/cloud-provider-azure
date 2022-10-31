@@ -22,7 +22,7 @@ require (
 	k8s.io/api v0.22.15
 	k8s.io/apimachinery v0.22.15
 	k8s.io/apiserver v0.22.12
-	k8s.io/client-go v0.22.12
+	k8s.io/client-go v0.22.15
 	k8s.io/cloud-provider v0.22.12
 	k8s.io/component-base v0.22.12
 	k8s.io/controller-manager v0.22.12
