@@ -394,7 +394,23 @@ func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ipConfigurationID 
 		return "", "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
 	}
 
-	vmName := strings.Replace(nicName, "-nic", "", 1)
+	// get vmName by nic name
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+	nic, rerr := fs.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
+	if rerr != nil {
+		return "", "", "", fmt.Errorf("getNodeInformationByIPConfigurationID(%s): failed to get interface of name %s: %w", ipConfigurationID, nicName, rerr.Error())
+	}
+	if nic.InterfacePropertiesFormat == nil || nic.InterfacePropertiesFormat.VirtualMachine == nil || nic.InterfacePropertiesFormat.VirtualMachine.ID == nil {
+		return "", "", "", fmt.Errorf("failed to get vm ID of ip config ID %s", ipConfigurationID)
+	}
+	vmID := to.String(nic.InterfacePropertiesFormat.VirtualMachine.ID)
+	matches = vmIDRE.FindStringSubmatch(vmID)
+	if len(matches) != 2 {
+		return "", "", "", fmt.Errorf("invalid virtual machine ID %s", vmID)
+	}
+	vmName := matches[1]
+
 	nodeName, err := fs.getNodeNameByVMName(vmName)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to map VM Name to NodeName: VM Name %s", vmName)
