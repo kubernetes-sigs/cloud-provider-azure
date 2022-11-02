@@ -251,7 +251,7 @@ func CreatePodGetIPManifest() *v1.Pod {
 					Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
-						"/bin/sh", "-c", "curl -v -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
+						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
 					},
 				},
 			},
