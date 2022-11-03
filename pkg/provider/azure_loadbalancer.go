@@ -1191,7 +1191,8 @@ func reconcileDNSSettings(pip *network.PublicIPAddress, domainNameLabel, service
 		} else {
 			existingDNSLabel := pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel
 			if !strings.EqualFold(to.String(existingDNSLabel), domainNameLabel) {
-				return false, fmt.Errorf("ensurePublicIPExists for service(%s): pip(%s) - there is an existing DNS label %s on the public IP", serviceName, pipName, *existingDNSLabel)
+				pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel = &domainNameLabel
+				changed = true
 			}
 		}
 
