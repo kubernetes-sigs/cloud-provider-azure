@@ -37,6 +37,7 @@ import (
 
 var (
 	testVmssFlex1ID = "subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmssflex1"
+	testVmssFlex2ID = "subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmssflex2"
 
 	testVM1Spec = VmssFlexTestVMSpec{
 		VMName:              "testvm1",
@@ -90,7 +91,7 @@ var (
 
 	testVMListWithOnlyInstanceView = generateTestVMListWithOnlyInstanceView()
 
-	testVmssFlex1 = genreteTestVmssFlex()
+	testVmssFlex1 = genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 	testVmssFlexList = genreateTestVmssFlexList()
 )
@@ -104,17 +105,17 @@ func generateTestVMListWithOnlyInstanceView() []compute.VirtualMachine {
 }
 
 func genreateTestVmssFlexList() []compute.VirtualMachineScaleSet {
-	return []compute.VirtualMachineScaleSet{genreteTestVmssFlex()}
+	return []compute.VirtualMachineScaleSet{genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)}
 }
 
-func genreteTestVmssFlex() compute.VirtualMachineScaleSet {
+func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.VirtualMachineScaleSet {
 	return compute.VirtualMachineScaleSet{
-		ID:   to.StringPtr(testVmssFlex1ID),
-		Name: to.StringPtr("vmssflex1"),
+		ID:   to.StringPtr(testVmssFlexID),
+		Name: to.StringPtr(vmssFlexName),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
-					ComputerNamePrefix: to.StringPtr("vmssflex1"),
+					ComputerNamePrefix: to.StringPtr(vmssFlexName),
 				},
 				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{

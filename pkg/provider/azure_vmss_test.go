@@ -2471,7 +2471,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 			expectedVMSS.VirtualMachineProfile = nil
 		}
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).Times(2)
+		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes().MinTimes(1)
 		vmssPutTimes := 0
 		if test.expectedPutVMSS {
 			vmssPutTimes = 1
