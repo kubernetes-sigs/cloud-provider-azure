@@ -724,6 +724,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.No
 				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 					NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 						NetworkInterfaceConfigurations: &vmssNIC,
+						NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
 					},
 				},
 			},
@@ -854,6 +855,7 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[stri
 					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 						NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 							NetworkInterfaceConfigurations: &vmssNIC,
+							NetworkAPIVersion:              compute.TwoZeroTwoZeroHyphenMinusOneOneHyphenMinusZeroOne,
 						},
 					},
 				},
