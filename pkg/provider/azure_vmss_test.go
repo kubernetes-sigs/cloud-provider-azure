@@ -957,12 +957,13 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			assert.Nil(t, err)
 			virtualMachines := cached.(*sync.Map)
 			for _, vm := range test.goneVMList {
-				entry := vmssVirtualMachinesEntry{
-					resourceGroup: ss.ResourceGroup,
-					vmssName:      testVMSSName,
+				entry := VMSSVirtualMachinesEntry{
+					ResourceGroup: ss.ResourceGroup,
+					VMSSName:      testVMSSName,
 				}
 				virtualMachines.Store(vm, &entry)
 			}
+			cache.Set(cacheKey, cached)
 
 			for i := 0; i < len(test.vmList); i++ {
 				node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}
