@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -111,6 +110,7 @@ func TestVMSSVMCache(t *testing.T) {
 		vmName := to.String(vm.OsProfile.ComputerName)
 		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
+		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
 		assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
 		assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
@@ -122,16 +122,7 @@ func TestVMSSVMCache(t *testing.T) {
 	err = ss.DeleteCacheForNode(vmName)
 	assert.NoError(t, err)
 
-	// the VM should be removed from cache after DeleteCacheForNode().
-	cacheKey, cache, err := ss.getVMSSVMCache("rg", testVMSSName)
-	assert.NoError(t, err)
-	cached, err := cache.Get(cacheKey, azcache.CacheReadTypeDefault)
-	assert.NoError(t, err)
-	cachedVirtualMachines := cached.(*sync.Map)
-	_, ok := cachedVirtualMachines.Load(vmName)
-	assert.Equal(t, false, ok)
-
-	// the VM should be back after another cache refresh.
+	// the VM should be in cache after refresh.
 	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
@@ -151,18 +142,20 @@ func TestDeleteCacheForAvailabilitySetNodeInVMSS(t *testing.T) {
 
 	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{
 		{Name: to.StringPtr("vm1")},
-	}, nil).AnyTimes()
+	}, nil)
+	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 	ss.cloud.nodeNames = sets.NewString("vm1")
 
 	err = ss.DeleteCacheForNode("vm1")
 	assert.NoError(t, err)
 
+	ss.cloud.nodeNames = sets.NewString()
 	cached, err := ss.availabilitySetNodesCache.Get(consts.AvailabilitySetNodesKey, azcache.CacheReadTypeUnsafe)
 	assert.NoError(t, err)
-	entry := cached.(*availabilitySetNodeEntry)
-	assert.Equal(t, 0, len(entry.nodeNames))
-	assert.Equal(t, 0, len(entry.vmNames))
-	assert.Equal(t, 0, len(entry.vms))
+	entry := cached.(*AvailabilitySetNodeEntry)
+	assert.Equal(t, 0, len(entry.NodeNames))
+	assert.Equal(t, 0, len(entry.VMNames))
+	assert.Equal(t, 0, len(entry.VMs))
 }
 
 func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
