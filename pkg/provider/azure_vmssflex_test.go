@@ -1409,7 +1409,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 			fs.EnableMultipleStandardLoadBalancers = true
 		}
 
-		testVmssFlex := genreteTestVmssFlex()
+		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
 			testVmssFlex.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
@@ -1535,7 +1535,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		}
 
 		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{genreteTestVmssFlex()}, nil).AnyTimes()
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)}, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
 
@@ -1657,7 +1657,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		testVmssFlex := genreteTestVmssFlex()
+		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
 			testVmssFlex.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
@@ -1841,7 +1841,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 		{
 			description:                    "EnsureBackendPoolDeleted should do nothing if the VMSetName does not match nic's vmss",
 			service:                        &v1.Service{},
-			vmSetName:                      "vmss",
+			vmSetName:                      "vmssflex2",
 			backendPoolID:                  testBackendPoolID0,
 			backendAddressPools:            testBackendPools,
 			deleteFromVMSet:                true,
@@ -1884,8 +1884,8 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			fs.EnableMultipleStandardLoadBalancers = true
 		}
 
-		testVmssFlex := genreteTestVmssFlex()
-		vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
+		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
+		vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex, genreteTestVmssFlex("vmssflex2", testVmssFlex2ID)}
 
 		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()

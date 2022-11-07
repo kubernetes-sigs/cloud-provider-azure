@@ -1682,24 +1682,75 @@ func getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID string
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName string) error {
-	vmssNamesMap := make(map[string]bool)
+	if !ss.useStandardLoadBalancer() {
+		found := false
 
-	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
-	if ss.useStandardLoadBalancer() {
 		cachedUniform, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
 			return err
 		}
+		vmssUniformMap := cachedUniform.(*sync.Map)
+
+		vmssUniformMap.Range(func(key, value interface{}) bool {
+			vmssEntry := value.(*VMSSEntry)
+			if to.String(vmssEntry.VMSS.Name) == vmSetName {
+				found = true
+				return false
+			}
+			return true
+		})
+		if found {
+			return ss.ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSetName)
+		}
+
 		flexScaleSet := ss.flexScaleSet.(*FlexScaleSet)
 		cachedFlex, err := flexScaleSet.vmssFlexCache.Get(consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss flex from cache: %v", err)
 			return err
 		}
-		vmssUniformMap := cachedUniform.(*sync.Map)
 		vmssFlexMap := cachedFlex.(*sync.Map)
+		vmssFlexMap.Range(func(key, value interface{}) bool {
+			vmssFlex := value.(*compute.VirtualMachineScaleSet)
+			if to.String(vmssFlex.Name) == vmSetName {
+				found = true
+				return false
+			}
+			return true
+		})
 
+		if found {
+			return flexScaleSet.ensureBackendPoolDeletedFromVmssFlex(backendPoolID, vmSetName)
+		}
+
+		return cloudprovider.InstanceNotFound
+
+	}
+
+	err := ss.ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSetName)
+	if err != nil {
+		return err
+	}
+	if !ss.DisableAvailabilitySetNodes || ss.EnableVmssFlexNodes {
+		flexScaleSet := ss.flexScaleSet.(*FlexScaleSet)
+		err = flexScaleSet.ensureBackendPoolDeletedFromVmssFlex(backendPoolID, vmSetName)
+	}
+	return err
+}
+
+func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSetName string) error {
+	vmssNamesMap := make(map[string]bool)
+
+	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
+	if ss.useStandardLoadBalancer() && !ss.EnableMultipleStandardLoadBalancers {
+		cachedUniform, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeDefault)
+		if err != nil {
+			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
+			return err
+		}
+
+		vmssUniformMap := cachedUniform.(*sync.Map)
 		var errorList []error
 		walk := func(key, value interface{}) bool {
 			var vmss *compute.VirtualMachineScaleSet
@@ -1752,7 +1803,6 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 
 		// Walk through all cached vmss, and find the vmss that contains the backendPoolID.
 		vmssUniformMap.Range(walk)
-		vmssFlexMap.Range(walk)
 		if len(errorList) > 0 {
 			return utilerrors.Flatten(utilerrors.NewAggregate(errorList))
 		}
@@ -1952,7 +2002,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.ensureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssUniformBackendPools, deleteFromVMSet)
+		err := ss.ensureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssUniformBackendPools, false)
 		if err != nil {
 			return err
 		}
@@ -1967,7 +2017,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.flexScaleSet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssFlexBackendPools, deleteFromVMSet)
+		err := ss.flexScaleSet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssFlexBackendPools, false)
 		if err != nil {
 			return err
 		}
@@ -1982,7 +2032,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.availabilitySet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, avSetBackendPools, deleteFromVMSet)
+		err := ss.availabilitySet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, avSetBackendPools, false)
 		if err != nil {
 			return err
 		}
