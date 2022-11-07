@@ -6,11 +6,6 @@
   "properties": {
     "kubernetesVersion": "{KUBERNETES_VERSION}",
     "dnsPrefix": "aks",
-    "masterProfile": {
-      "count": 3,
-      "dnsPrefix": "{dnsPrefix}",
-      "vmSize": "Standard_DS2_v2"
-    },
     "agentPoolProfiles": [
       {
         "name": "agentpool1",
@@ -19,7 +14,6 @@
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
-        "storageProfile": "ManagedDisks",
         "enableAutoScaling": true,
         "maxCount": 1000,
         "minCount": 1

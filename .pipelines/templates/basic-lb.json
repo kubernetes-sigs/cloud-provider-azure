@@ -6,11 +6,6 @@
   "properties": {
     "kubernetesVersion": "{KUBERNETES_VERSION}",
     "dnsPrefix": "aks",
-    "masterProfile": {
-      "count": 3,
-      "dnsPrefix": "{dnsPrefix}",
-      "vmSize": "Standard_DS2_v2"
-    },
     "agentPoolProfiles": [
       {
         "name": "agentpool1",
@@ -18,8 +13,7 @@
         "mode" : "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
-        "availabilityProfile": "VirtualMachineScaleSets",
-        "storageProfile": "ManagedDisks"
+        "availabilityProfile": "VirtualMachineScaleSets"
       }
     ],
     "servicePrincipalProfile": {
