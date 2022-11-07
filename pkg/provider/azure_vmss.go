@@ -2039,7 +2039,6 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 	}
 
 	return nil
-
 }
 
 // GetNodeCIDRMaskByProviderID returns the node CIDR subnet mask by provider ID.
