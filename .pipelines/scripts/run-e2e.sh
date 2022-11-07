@@ -23,8 +23,10 @@ export GOPATH="/home/vsts/go"
 export PATH="${PATH}:${GOPATH}/bin"
 export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/${RESOURCE_GROUP}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME}"
 
-az extension add -n aks-preview
-az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+if [[ -z "${RELEASE_PIPELINE}"  ]]; then
+  az extension add -n aks-preview
+  az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+fi
 
 get_random_location() {
   local LOCATIONS=("eastus")
@@ -38,13 +40,17 @@ cleanup() {
       ${REPO_ROOT}/.pipelines/scripts/collect-log.sh || echo "Unable to collect logs"
   fi
   echo "gc the aks cluster"
-  kubetest2 aks --down --rgName "${RESOURCE_GROUP}" --clusterName "${CLUSTER_NAME}"
+  # It is possible that kubetest2-aks is not built before cleanup(), so the following command
+  # is fine to fail.
+  kubetest2 aks --down --rgName "${RESOURCE_GROUP}" --clusterName "${CLUSTER_NAME}" || true
 }
 trap cleanup EXIT
 
 export AZURE_LOCATION="$(get_random_location)"
 
-IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+if [[ -z "${IMAGE_TAG}" ]]; then
+  IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+fi
 CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
 if [[ "${CLUSTER_TYPE}" == "autoscaling" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
@@ -64,8 +70,18 @@ go get -d sigs.k8s.io/kubetest2@latest
 go install sigs.k8s.io/kubetest2@latest
 go mod tidy
 make deployer
-sudo GOPATH="/home/vsts/go" make install
+if [[ -n "${RELEASE_PIPELINE}" ]]; then
+  make install
+else
+  sudo GOPATH="/home/vsts/go" make install
+fi
 popd
+if [[ -n "${RELEASE_PIPELINE}" ]]; then
+  rm -rf kubetest2-aks
+  go mod tidy
+  go mod vendor
+fi
+
 kubetest2 aks --up --rgName "${RESOURCE_GROUP}" \
 --location "${AZURE_LOCATION}" \
 --config "${CLUSTER_CONFIG_PATH}" \
