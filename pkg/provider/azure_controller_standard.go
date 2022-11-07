@@ -124,7 +124,7 @@ func (as *availabilitySet) DeleteCacheForNode(nodeName string) error {
 }
 
 // WaitForUpdateResult waits for the response of the update request
-func (as *availabilitySet) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) error {
+func (as *availabilitySet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, resourceGroupName, source string) error {
 	if rerr := as.VirtualMachinesClient.WaitForUpdateResult(ctx, future, resourceGroupName, source); rerr != nil {
 		return rerr.Error()
 	}

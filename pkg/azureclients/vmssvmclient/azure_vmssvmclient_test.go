@@ -509,9 +509,13 @@ func TestUpdate(t *testing.T) {
 	armClient.EXPECT().PutResource(gomock.Any(), to.String(vmssVM.ID), vmssVM).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
+	expected := &compute.VirtualMachineScaleSetVM{}
+	expected.Response = autorest.Response{Response: response}
+
 	vmssClient := getTestVMSSVMClient(armClient)
-	rerr := vmssClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
+	result, rerr := vmssClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
 	assert.Nil(t, rerr)
+	assert.Equal(t, expected, result)
 }
 
 func TestUpdateAsync(t *testing.T) {
@@ -575,8 +579,14 @@ func TestWaitForUpdateResult(t *testing.T) {
 		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(test.response, test.responseErr).Times(1)
 
 		vmssClient := getTestVMSSVMClient(armClient)
-		err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
+		response, err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
 		assert.Equal(t, err, test.expectedResult)
+		var output *compute.VirtualMachineScaleSetVM
+		if err == nil {
+			output = &compute.VirtualMachineScaleSetVM{}
+			output.Response = autorest.Response{Response: test.response}
+		}
+		assert.Equal(t, response, output)
 	}
 }
 
@@ -592,10 +602,13 @@ func TestUpdateWithUpdateResponderError(t *testing.T) {
 	}
 	armClient.EXPECT().PutResource(gomock.Any(), to.String(vmssVM.ID), vmssVM).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+	expected := &compute.VirtualMachineScaleSetVM{}
+	expected.Response = autorest.Response{Response: response}
 
 	vmssvmClient := getTestVMSSVMClient(armClient)
-	rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
+	result, rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
 	assert.NotNil(t, rerr)
+	assert.Equal(t, expected, result)
 }
 
 func TestUpdateNeverRateLimiter(t *testing.T) {
@@ -610,9 +623,11 @@ func TestUpdateNeverRateLimiter(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmssvmClient := getTestVMSSVMClientWithNeverRateLimiter(armClient)
 	vmssVM := getTestVMSSVM("vmss1", "0")
-	rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
+	var expected *compute.VirtualMachineScaleSetVM
+	result, rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssvmUpdateErr, rerr)
+	assert.Equal(t, expected, result)
 }
 
 func TestUpdateRetryAfterReader(t *testing.T) {
@@ -628,9 +643,11 @@ func TestUpdateRetryAfterReader(t *testing.T) {
 	vmssVM := getTestVMSSVM("vmss1", "0")
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmClient := getTestVMSSVMClientWithRetryAfterReader(armClient)
-	rerr := vmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
+	var expected *compute.VirtualMachineScaleSetVM
+	result, rerr := vmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmssvmUpdateErr, rerr)
+	assert.Equal(t, expected, result)
 }
 
 func TestUpdateThrottle(t *testing.T) {
@@ -654,9 +671,11 @@ func TestUpdateThrottle(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmssvmClient := getTestVMSSVMClient(armClient)
-	rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
+	var expected *compute.VirtualMachineScaleSetVM
+	result, rerr := vmssvmClient.Update(context.TODO(), "rg", "vmss1", "0", vmssVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
+	assert.Equal(t, expected, result)
 }
 
 func TestUpdateVMs(t *testing.T) {
