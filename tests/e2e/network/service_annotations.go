@@ -158,6 +158,39 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			time.Sleep(20 * time.Second)
 		}
 		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
+		By("Update service")
+		annotation = map[string]string{
+			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix + "new",
+		}
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		service.Annotations = annotation
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		serviceDomainName = utils.GetServiceDomainName(serviceDomainNamePrefix)
+		url = fmt.Sprintf("http://%s:%v", serviceDomainName, ports[0].Port)
+		for i := 1; i <= 30; i++ {
+			/* #nosec G107: Potential HTTP request made with variable url */
+			resp, err := http.Get(url)
+			if err == nil {
+				defer func() {
+					if resp != nil {
+						resp.Body.Close()
+					}
+				}()
+				code = resp.StatusCode
+				if code == nginxStatusCode {
+					break
+				} else {
+					utils.Logf("Received %d status code from %s", code, url)
+				}
+			} else {
+				utils.Logf("Received the following error when validating %s: %v", url, err)
+			}
+			utils.Logf("Retrying in 20 seconds")
+			time.Sleep(20 * time.Second)
+		}
+		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {

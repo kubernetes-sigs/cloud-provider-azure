@@ -4200,6 +4200,63 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			shouldPutPIP: true,
 		},
 		{
+			desc:                    "shall update existed PIP's dns label for IPv4",
+			inputDNSLabel:           "newdns",
+			foundDNSLabelAnnotation: true,
+			isIPv6:                  false,
+			existingPIPs: []network.PublicIPAddress{{
+
+				Name: to.StringPtr("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					DNSSettings: &network.PublicIPAddressDNSSettings{
+						DomainNameLabel: to.StringPtr("previousdns"),
+					},
+					PublicIPAllocationMethod: "Dynamic",
+					PublicIPAddressVersion:   "IPv4",
+				},
+			}},
+			expectedPIP: &network.PublicIPAddress{
+				Name: to.StringPtr("pip1"),
+				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
+					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					DNSSettings: &network.PublicIPAddressDNSSettings{
+						DomainNameLabel: to.StringPtr("newdns"),
+					},
+					PublicIPAllocationMethod: "Dynamic",
+					PublicIPAddressVersion:   "IPv4",
+				},
+			},
+			shouldPutPIP: true,
+		},
+		{
+			desc:                    "shall update existed PIP's dns label for IPv6",
+			inputDNSLabel:           "newdns",
+			foundDNSLabelAnnotation: true,
+			isIPv6:                  true,
+			existingPIPs: []network.PublicIPAddress{{
+				Name: to.StringPtr("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					DNSSettings: &network.PublicIPAddressDNSSettings{
+						DomainNameLabel: to.StringPtr("previousdns"),
+					},
+				},
+			}},
+			expectedPIP: &network.PublicIPAddress{
+				Name: to.StringPtr("pip1"),
+				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
+					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					DNSSettings: &network.PublicIPAddressDNSSettings{
+						DomainNameLabel: to.StringPtr("newdns"),
+					},
+					PublicIPAllocationMethod: "Dynamic",
+					PublicIPAddressVersion:   "IPv6",
+				},
+			},
+			shouldPutPIP: true,
+		},
+		{
 			desc:                    "shall report an conflict error if the DNS label is conflicted",
 			inputDNSLabel:           "test",
 			foundDNSLabelAnnotation: true,
