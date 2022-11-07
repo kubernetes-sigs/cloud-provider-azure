@@ -2041,6 +2041,61 @@ func TestIsFrontendIPChanged(t *testing.T) {
 	}
 }
 
+func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPIP := network.PublicIPAddress{
+		Name: to.StringPtr("pipName"),
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			IPAddress: to.StringPtr("1.2.3.4"),
+		},
+	}
+	var nilPIPs []network.PublicIPAddress
+	testCases := []struct {
+		desc          string
+		pips          *[]network.PublicIPAddress
+		pipListResult []network.PublicIPAddress
+		expectedPIPs  *[]network.PublicIPAddress
+		expectedError bool
+	}{
+		{
+			desc:          "findMatchedPIPByLoadBalancerIP shall return error if pip slice passed in is nil",
+			expectedError: true,
+		},
+		{
+			desc:          "findMatchedPIPByLoadBalancerIP shall list pips if pip slice passed in is nil",
+			pips:          &nilPIPs,
+			pipListResult: []network.PublicIPAddress{testPIP},
+			expectedPIPs:  &[]network.PublicIPAddress{testPIP},
+		},
+		{
+			desc:          "findMatchedPIPByLoadBalancerIP shall not list pip again if pip slice is empty",
+			pips:          &[]network.PublicIPAddress{},
+			expectedPIPs:  &[]network.PublicIPAddress{},
+			expectedError: true, // pip not found
+		},
+		{
+			desc:         "findMatchedPIPByLoadBalancerIP shall not list pip again if pip slice already has pips",
+			pips:         &[]network.PublicIPAddress{testPIP},
+			expectedPIPs: &[]network.PublicIPAddress{testPIP},
+		},
+	}
+	for i, test := range testCases {
+		az := GetTestCloud(ctrl)
+		service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+		setServiceLoadBalancerIP(&service, "1.2.3.4")
+
+		mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+		if test.pipListResult != nil {
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipListResult, nil)
+		}
+		_, err := az.findMatchedPIPByLoadBalancerIP(&service, "1.2.3.4", "rg", test.pips)
+		assert.Equal(t, test.expectedPIPs, test.pips, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
 func TestDeterminePublicIPName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -2096,7 +2151,8 @@ func TestDeterminePublicIPName(t *testing.T) {
 				t.Fatalf("TestCase[%d] meets unexpected error: %v", i, err)
 			}
 		}
-		ip, _, err := az.determinePublicIPName("testCluster", &service, nil)
+		var pips []network.PublicIPAddress
+		ip, _, err := az.determinePublicIPName("testCluster", &service, &pips)
 		assert.Equal(t, test.expectedIP, ip, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
@@ -3989,7 +4045,7 @@ func TestReconcilePublicIP(t *testing.T) {
 				return nil
 			})
 
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).AnyTimes()
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil)
 			if i == 2 {
 				mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "testCluster-atest1", gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(1)
 				mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "testCluster-atest1", gomock.Any()).Return(network.PublicIPAddress{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testCluster-atest1")}, nil).Times(1)
