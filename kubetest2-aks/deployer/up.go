@@ -147,7 +147,7 @@ func (d *deployer) createAKSWithCustomConfig(imageTag string) error {
 		return fmt.Errorf("failed to unmarshal cluster config: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	poller, err := client.BeginCreateOrUpdate(ctx, d.ResourceGroupName, d.ClusterName, mcConfig, nil)
