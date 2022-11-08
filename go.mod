@@ -11,13 +11,13 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/golang/mock v1.6.0
-	github.com/onsi/ginkgo/v2 v2.3.1
-	github.com/onsi/gomega v1.22.1
+	github.com/onsi/ginkgo/v2 v2.5.0
+	github.com/onsi/gomega v1.24.0
 	github.com/rubiojr/go-vhd v0.0.0-20200706122120-ccecf6c0760f
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
+	golang.org/x/crypto v0.1.0
 	golang.org/x/text v0.4.0
 	k8s.io/api v0.22.15
 	k8s.io/apimachinery v0.22.15
@@ -41,7 +41,6 @@ require (
 	github.com/prometheus/client_golang v1.11.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.1 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.1 // indirect
-	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
