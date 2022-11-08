@@ -414,7 +414,7 @@ func (mr *MockVMSetMockRecorder) UpdateVM(ctx, nodeName interface{}) *gomock.Cal
 }
 
 // WaitForUpdateResult mocks base method.
-func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) error {
+func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, resourceGroupName, source string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForUpdateResult", ctx, future, resourceGroupName, source)
 	ret0, _ := ret[0].(error)
@@ -422,7 +422,7 @@ func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Futur
 }
 
 // WaitForUpdateResult indicates an expected call of WaitForUpdateResult.
-func (mr *MockVMSetMockRecorder) WaitForUpdateResult(ctx, future, resourceGroupName, source interface{}) *gomock.Call {
+func (mr *MockVMSetMockRecorder) WaitForUpdateResult(ctx, future, nodeName, resourceGroupName, source interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForUpdateResult", reflect.TypeOf((*MockVMSet)(nil).WaitForUpdateResult), ctx, future, resourceGroupName, source)
 }

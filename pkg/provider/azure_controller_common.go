@@ -271,7 +271,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	if err != nil {
 		return -1, err
 	}
-	return lun, vmset.WaitForUpdateResult(ctx, future, resourceGroup, "attach_disk")
+	return lun, vmset.WaitForUpdateResult(ctx, future, nodeName, resourceGroup, "attach_disk")
 }
 
 func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {

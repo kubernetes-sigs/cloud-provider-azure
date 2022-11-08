@@ -173,7 +173,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache(resourceGroupName, vmssName, cac
 	vmssVirtualMachinesCacheTTL := time.Duration(ss.Config.VmssVirtualMachinesCacheTTLInSeconds) * time.Second
 
 	getter := func(key string) (interface{}, error) {
-		localCache := &sync.Map{} // [nodeName]*vmssVirtualMachinesEntry
+		localCache := &sync.Map{} // [nodeName]*VMSSVirtualMachinesEntry
 
 		oldCache := make(map[string]VMSSVirtualMachinesEntry)
 
@@ -304,6 +304,43 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 		klog.Errorf("DeleteCacheForNode(%s) failed to gc stale vmss caches: %v", nodeName, err)
 	}
 
+	return nil
+}
+
+func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *compute.VirtualMachineScaleSetVM) error {
+	cacheKey, timedCache, err := ss.getVMSSVMCache(resourceGroupName, vmssName)
+	if err != nil {
+		klog.Errorf("updateCache(%s, %s, %s) failed with error: %v", vmssName, resourceGroupName, nodeName, err)
+		return err
+	}
+
+	localCache := &sync.Map{}
+
+	vmssVMCacheEntry := &VMSSVirtualMachinesEntry{
+		ResourceGroup:  resourceGroupName,
+		VMSSName:       vmssName,
+		InstanceID:     instanceID,
+		VirtualMachine: updatedVM,
+		LastUpdate:     time.Now().UTC(),
+	}
+
+	localCache.Store(nodeName, vmssVMCacheEntry)
+
+	vmCache, err := timedCache.Get(cacheKey, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		klog.Errorf("updateCache(%s, %s, %s) failed getting vmCache with error: %v", vmssName, resourceGroupName, nodeName, err)
+	}
+
+	virtualMachines := vmCache.(*sync.Map)
+	virtualMachines.Range(func(key, value interface{}) bool {
+		if key.(string) != nodeName {
+			localCache.Store(key.(string), value.(*VMSSVirtualMachinesEntry))
+		}
+		return true
+	})
+
+	timedCache.Update(cacheKey, localCache)
+	klog.V(4).Infof("updateCache(%s, %s, %s) for cacheKey(%s) updated successfully", vmssName, resourceGroupName, nodeName, cacheKey)
 	return nil
 }
 
