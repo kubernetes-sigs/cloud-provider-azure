@@ -68,8 +68,6 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		numInstance := *vmss.Sku.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
-		originalNodes, err := utils.GetAgentNodes(k8sCli)
-		Expect(err).NotTo(HaveOccurred())
 
 		By("deallocate VMSS instance")
 		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
@@ -90,7 +88,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectedCap[*vmss.Name] = numInstance
 
-			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 			Expect(err).NotTo(HaveOccurred())
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
@@ -98,7 +96,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
-		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
+		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -112,8 +110,6 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		numInstance := *vmss.Sku.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
-		originalNodes, err := utils.GetAgentNodes(k8sCli)
-		Expect(err).NotTo(HaveOccurred())
 
 		By("allocate VMSS instance")
 		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
@@ -134,7 +130,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectedCap[*vmss.Name] = numInstance
 
-			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
+			err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 			Expect(err).NotTo(HaveOccurred())
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
@@ -142,7 +138,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
 		}()
 
-		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
+		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

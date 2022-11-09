@@ -38,6 +38,15 @@ var (
 func FindTestVMSS(tc *AzureTestClient, rgName string) (*azcompute.VirtualMachineScaleSet, error) {
 	Logf("FindTestVMSS: start")
 
+	vmssList, err := GetTestVMSSList(tc, rgName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vmssList[0], nil
+}
+
+func GetTestVMSSList(tc *AzureTestClient, rgName string) ([]azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
 
 	list, err := vmssClient.List(context.Background(), rgName)
@@ -50,7 +59,7 @@ func FindTestVMSS(tc *AzureTestClient, rgName string) (*azcompute.VirtualMachine
 		return nil, nil
 	}
 
-	return &vmssList[0], nil
+	return vmssList, nil
 }
 
 // ScaleVMSS scales the given VMSS
@@ -152,15 +161,10 @@ func waitVMSSVMCountToEqual(tc *AzureTestClient, expected int, vmssName string) 
 	return err
 }
 
-func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map[string]int64, originalNodes []v1.Node) error {
+func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map[string]int64) error {
 	k8sCli, err := CreateKubeClientSet()
 	if err != nil {
 		return err
-	}
-
-	originalNodeSet := sets.NewString()
-	for _, originalNode := range originalNodes {
-		originalNodeSet.Insert(strings.ToLower(originalNode.Name))
 	}
 
 	return wait.PollImmediate(vmssOperationInterval, vmssOperationTimeout, func() (bool, error) {
@@ -213,9 +217,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 			cap, ok := expectedCap[*vmss.Name]
 			if ok {
 				actualCap[*vmss.Name] = *vmss.Sku.Capacity
-				// For autoscaling cluster, simply comparing the capacity may not work since if the number of current nodes is lower than the "minCount", a new node may be created after scaling down.
-				// In this situation, we compare the expected capacity with the length of intersection between original nodes and current nodes.
-				if cap != *vmss.Sku.Capacity && cap != int64(originalNodeSet.Intersection(vmssInstanceSet).Len()) {
+				if cap != *vmss.Sku.Capacity {
 					capMatch = false
 					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.Sku.Capacity)
 				}

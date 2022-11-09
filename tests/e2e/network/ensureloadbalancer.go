@@ -108,6 +108,83 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		tc = nil
 	})
 
+	It("should decouple vmss with 0 capacity from the load balancer", func() {
+		By("Creating a test service")
+		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, testServiceName, "")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Getting all VMSS in the resource group")
+		vmssList, err := utils.GetTestVMSSList(tc, tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+
+		var (
+			caps  []int64
+			total int64
+		)
+		for _, vmss := range vmssList {
+			c := to.Int64(vmss.Sku.Capacity)
+			caps = append(caps, c)
+			total += c
+		}
+
+		By("Scaling all VMSS to 0")
+		expectedCap := make(map[string]int64)
+		for _, vmss := range vmssList {
+			vmssName := to.String(vmss.Name)
+			if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+				err = utils.ScaleMachinePool(vmssName, 0)
+			} else {
+				err = utils.ScaleVMSS(tc, vmssName, tc.GetResourceGroup(), 0)
+			}
+			Expect(err).NotTo(HaveOccurred())
+			expectedCap[*vmss.Name] = 0
+		}
+		defer func() {
+			for i, vmss := range vmssList {
+				vmssName := to.String(vmss.Name)
+				By(fmt.Sprintf("resetting VMSS instance %s", vmssName))
+				if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
+					err = utils.ScaleMachinePool(vmssName, caps[i])
+				} else {
+					err = utils.ScaleVMSS(tc, vmssName, tc.GetResourceGroup(), caps[i])
+				}
+				Expect(err).NotTo(HaveOccurred())
+				expectedCap[vmssName] = caps[i]
+
+				err = utils.ValidateClusterNodesMatchVMSSInstances(tc, expectedCap)
+				Expect(err).NotTo(HaveOccurred())
+
+				vmssAfterTest, err := utils.GetVMSS(tc, vmssName)
+				Expect(err).NotTo(HaveOccurred())
+				utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
+			}
+		}()
+		err = utils.ValidateClusterNodesMatchVMSSInstances(tc, expectedCap)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking if the LB backend pool is empty")
+		err = waitForNodesInLBBackendPool(tc, publicIP, 0)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Deleting the test service")
+		err = utils.DeleteService(cs, ns.Name, testServiceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking if the VMSS is decoupled from the LB")
+		vmssList, err = utils.GetTestVMSSList(tc, tc.GetResourceGroup())
+		Expect(err).NotTo(HaveOccurred())
+		for _, vmss := range vmssList {
+			nic := (*vmss.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0]
+			lbBackendPools := (*nic.IPConfigurations)[0].LoadBalancerBackendAddressPools
+			if lbBackendPools != nil && len(*lbBackendPools) != 0 {
+				Fail(fmt.Sprintf("VMSS %q is still associated with the LB %q", *vmss.Name, (*lbBackendPools)[0]))
+			}
+		}
+	})
+
 	It("should support mixed protocol services", func() {
 		utils.Logf("Updating deployment %s", testDeploymentName)
 		tcpPort := int32(serverPort)
@@ -965,15 +1042,15 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lb
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
-		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
-		ipConfigNum := 0
-		if lbBackendPoolIPConfigs != nil {
-			ipConfigNum = len(*lbBackendPoolIPConfigs)
+		lbBackendPoolAddresses := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
+		ipAddrNum := 0
+		if lbBackendPoolAddresses != nil {
+			ipAddrNum = len(*lbBackendPoolAddresses)
 		}
-		if expectedNum == ipConfigNum {
+		if expectedNum == ipAddrNum {
 			return true, nil
 		}
-		utils.Logf("Number of IP configs: %d in the LB backend pool, will retry soon", ipConfigNum)
+		utils.Logf("Number of address: %d in the LB backend pool, will retry soon", ipAddrNum)
 		return false, nil
 	})
 }
