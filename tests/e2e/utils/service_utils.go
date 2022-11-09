@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	serviceTimeout        = 5 * time.Minute
+	serviceTimeout        = 10 * time.Minute
 	serviceTimeoutBasicLB = 10 * time.Minute
 	pullInterval          = 10 * time.Second
 	pullTimeout           = 3 * time.Minute

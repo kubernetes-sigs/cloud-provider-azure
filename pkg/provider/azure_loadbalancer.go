@@ -925,7 +925,9 @@ func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalance
 		}
 		pips = &pipList
 	}
+	klog.Infof("DEBUG: pips: %d", len(*pips))
 	for _, pip := range *pips {
+		klog.Infof("DEBUG: pip, ID: %s, Name: %s", pip.ID, pip.Name)
 		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
 			*pip.PublicIPAddressPropertiesFormat.IPAddress == loadBalancerIP {
 			return &pip, nil

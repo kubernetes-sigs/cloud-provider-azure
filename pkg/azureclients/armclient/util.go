@@ -109,7 +109,7 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 		return autorest.SenderFunc(func(request *http.Request) (*http.Response, error) {
 			response, rerr := s.Do(request)
 			if response == nil {
-				klog.V(2).Infof("response is empty")
+				klog.Infof("response is empty")
 				return response, rerr
 			}
 
@@ -120,7 +120,7 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 
 			bodyString := string(bodyBytes)
 			trimmed := strings.TrimSpace(bodyString)
-			klog.V(5).Infof("Send.sendRequest got response with ContentLength %d, StatusCode %d and responseBody length %d", response.ContentLength, response.StatusCode, len(trimmed))
+			klog.Infof("Send.sendRequest got response with ContentLength %d, StatusCode %d and responseBody length %d, trimmed: %s", response.ContentLength, response.StatusCode, len(trimmed), trimmed)
 
 			// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
 			// Empty content and 2xx http status code are returned in this case.
@@ -140,7 +140,7 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 
 				err, ok := body["error"].(map[string]interface{})
 				if !ok || err["code"] == nil || !strings.EqualFold(err["code"].(string), "ResourceGroupNotFound") {
-					klog.V(5).Infof("Send.sendRequest: response body does not contain ResourceGroupNotFound error code. Skip retrying regional host")
+					klog.Infof("Send.sendRequest: response body does not contain ResourceGroupNotFound error code. Skip retrying regional host")
 					return response, rerr
 				}
 			}
@@ -152,13 +152,13 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 			}
 
 			if strings.HasPrefix(strings.ToLower(currentHost), c.regionalEndpoint) {
-				klog.V(5).Infof("Send.sendRequest: current host %s is regional host. Skip retrying regional host.", html.EscapeString(currentHost))
+				klog.Infof("Send.sendRequest: current host %s is regional host. Skip retrying regional host.", html.EscapeString(currentHost))
 				return response, rerr
 			}
 
 			request.Host = c.regionalEndpoint
 			request.URL.Host = c.regionalEndpoint
-			klog.V(6).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
+			klog.Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(request.Host))
 
 			regionalResponse, regionalError := s.Do(request)
 
@@ -171,7 +171,7 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 					regionalErrStr = regionalError.Error()
 				}
 
-				klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
+				klog.Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
 				return response, rerr
 			}
 

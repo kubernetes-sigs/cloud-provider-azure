@@ -18,8 +18,8 @@ set -o errexit
 set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-DEFAULT_LABEL_FILTER="!Serial && !Slow"
-LABEL_FILTER="${LABEL_FILTER:-${DEFAULT_LABEL_FILTER}}"
+DEFAULT_LABEL_FILTER="ServiceAnnotation"
+LABEL_FILTER="ServiceAnnotation"
 
 source "${REPO_ROOT}/hack/ensure-ginkgo-v2.sh"
 

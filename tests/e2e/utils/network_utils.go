@@ -210,15 +210,30 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipPa
 	if err != nil {
 		return pip, err
 	}
+	// TODO: Because of latency at ARM side, List() instead of Get()
+	// is used here to ensure CCM is working properly.
 	err = wait.PollImmediate(poll, singleCallTimeout, func() (bool, error) {
-		pip, err = pipClient.Get(context.Background(), rgName, ipName, "")
+		result, err := pipClient.List(context.Background(), rgName)
 		if err != nil {
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
 			return false, nil
 		}
-		return pip.IPAddress != nil, nil
+		if result.NotDone() {
+			for i := range result.Values() {
+				currentPIP := result.Values()[i]
+				if *currentPIP.Name == ipName {
+					if currentPIP.IPAddress == nil {
+						return false, nil
+					}
+					pip = currentPIP
+					return true, nil
+				}
+			}
+			result.Next()
+		}
+		return false, nil
 	})
 	return pip, err
 }
