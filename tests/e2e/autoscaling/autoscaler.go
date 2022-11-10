@@ -331,7 +331,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 	It("should support scaling up or down Azure Spot VM", Label(utils.TestSuiteLabelVMSS, utils.TestSuiteLabelSpotVM), func() {
 		By("Checking the spot vms")
-		scaleSets, err := utils.ListVMSSes(tc)
+		scaleSets, err := utils.ListUniformVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())
 
 		if len(scaleSets) == 0 {

@@ -87,12 +87,14 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		if vms != nil && len(*vms) != 0 {
 			for _, vm := range *vms {
 				nodeName, err := utils.GetVMComputerName(vm)
+				utils.Logf("nodeName: %s", nodeName)
 				Expect(err).NotTo(HaveOccurred())
 
 				node, err := utils.GetNode(cs, strings.ToLower(nodeName))
 				Expect(err).NotTo(HaveOccurred())
 
 				providerID := node.Spec.ProviderID
+				utils.Logf("providerID: %s", providerID)
 				providerIDMatches := vmProviderIDRE.FindStringSubmatch(providerID)
 				Expect(len(providerIDMatches)).To(Equal(4))
 				Expect(strings.EqualFold(providerIDMatches[1], subscriptionID)).To(BeTrue())
@@ -102,7 +104,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		}
 
 		utils.Logf("getting VMSS VMs")
-		vmsses, err := utils.ListVMSSes(tc)
+		vmsses, err := utils.ListUniformVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())
 
 		if len(vmsses) != 0 {
@@ -130,7 +132,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 	})
 
 	It("should set correct private IP address for every node", func() {
-		utils.Logf("getting all NICs of availabilitySet VMs")
+		utils.Logf("getting all NICs of availabilitySet VMs and vmssflex VMs")
 		vmasNICs, err := utils.ListNICs(tc, tc.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
 
@@ -173,8 +175,8 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 			Expect(found).To(BeTrue())
 		}
 
-		utils.Logf("getting all scale sets")
-		vmsses, err := utils.ListVMSSes(tc)
+		utils.Logf("getting all uniform scale sets")
+		vmsses, err := utils.ListUniformVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("getting all NICs of VMSSes")
