@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
@@ -457,6 +458,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			cloud.SubnetsClient = mockSubnetsClient
 
 			mockPrivateDNSClient := mockprivatednsclient.NewMockInterface(ctrl)
+			mockPrivateDNSClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any()).Return(privatedns.PrivateZone{}, &retry.Error{}).Times(1)
 			mockPrivateDNSClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), "", true).Return(nil).Times(1)
 			cloud.privatednsclient = mockPrivateDNSClient
 
@@ -469,6 +471,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			cloud.privateendpointclient = mockPrivateEndpointClient
 
 			mockVirtualNetworkLinksClient := mockvirtualnetworklinksclient.NewMockInterface(ctrl)
+			mockVirtualNetworkLinksClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any()).Return(privatedns.VirtualNetworkLink{}, &retry.Error{}).Times(1)
 			mockVirtualNetworkLinksClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, gomock.Any(), gomock.Any(), gomock.Any(), "", false).Return(nil).Times(1)
 			cloud.virtualNetworkLinksClient = mockVirtualNetworkLinksClient
 		}
