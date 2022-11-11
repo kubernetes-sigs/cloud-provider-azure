@@ -295,6 +295,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-resource-group'", func() {
+		if os.Getenv(utils.AKSTestCCM) != utils.TrueValue {
+			Skip("Skip this test because ARM is not working properly on testgrid testbeds")
+		}
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
 		defer cleanup(to.String(rg.Name))

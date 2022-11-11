@@ -44,6 +44,8 @@ const (
 	// If "E2E_ON_AKS_CLUSTER" is true, the test is running on a AKS cluster.
 	AKSTestCCM     = "E2E_ON_AKS_CLUSTER"
 	AKSClusterType = "CLUSTER_TYPE"
+
+	TrueValue = "true"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
