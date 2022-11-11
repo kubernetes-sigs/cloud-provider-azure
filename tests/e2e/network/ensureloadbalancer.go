@@ -979,7 +979,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 }
 
 func judgeInternal(service v1.Service) bool {
-	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == "true"
+	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == utils.TrueValue
 }
 
 func getLBBackendPoolIndex(lb *aznetwork.LoadBalancer) int {
@@ -1011,7 +1011,7 @@ func updateServiceLBIP(service *v1.Service, isInternal bool, ip string) (result 
 		return
 	}
 	if isInternal {
-		result.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
+		result.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = utils.TrueValue
 	} else {
 		delete(result.Annotations, consts.ServiceAnnotationLoadBalancerInternal)
 	}
