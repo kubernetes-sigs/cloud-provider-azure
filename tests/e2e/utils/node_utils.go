@@ -271,7 +271,7 @@ func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete boo
 		Logf("Found label %s on node %s, do nothing", label, node.Name)
 		return node, nil
 	}
-	node.Labels[label] = "true"
+	node.Labels[label] = TrueValue
 	node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	return node, err
 }
