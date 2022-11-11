@@ -54,9 +54,15 @@ elif [[ "${CLUSTER_TYPE}" == "autoscaling-multipool" ]]; then
   export AZURE_LOADBALANCER_SKU=standard
 fi
 
+if [[ ! -d kubetest2-aks ]]; then
+  git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
+  cp -r cloud-provider-azure/kubetest2-aks .
+  rm -rf cloud-provider-azure
+fi
 pushd kubetest2-aks
 go get -d sigs.k8s.io/kubetest2@latest
 go install sigs.k8s.io/kubetest2@latest
+go mod tidy
 make deployer
 sudo GOPATH="/home/vsts/go" make install
 popd
