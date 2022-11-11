@@ -1561,95 +1561,104 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		description         string
-		vmssNamesMap        map[string]bool
-		backendPoolID       string
-		isVMSSDeallocating  bool
-		hasDefaultVMProfile bool
-		isNicConfigEmpty    bool
-		isIPConfigEmpty     bool
-		vmssPutErr          *retry.Error
-		expectedErr         error
+		description          string
+		vmssNamesMap         map[string]bool
+		backendPoolID        string
+		isVMSSDeallocating   bool
+		hasDefaultVMProfile  bool
+		isNicConfigEmpty     bool
+		isIPConfigEmpty      bool
+		vmssListCallingTimes int
+		vmssPutErr           *retry.Error
+		expectedErr          error
 	}{
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should remove a backend pool from the vmss",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			hasDefaultVMProfile: true,
-			expectedErr:         nil,
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			hasDefaultVMProfile:  true,
+			vmssListCallingTimes: 2,
+			expectedErr:          nil,
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should return error if the vmss does not exist",
 			vmssNamesMap: map[string]bool{
 				"NonExistingVmssflex": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			hasDefaultVMProfile: true,
-			expectedErr:         cloudprovider.InstanceNotFound,
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			hasDefaultVMProfile:  true,
+			vmssListCallingTimes: 1,
+			expectedErr:          cloudprovider.InstanceNotFound,
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss if it is deallocating",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			isVMSSDeallocating:  true,
-			hasDefaultVMProfile: true,
-			expectedErr:         nil,
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			isVMSSDeallocating:   true,
+			hasDefaultVMProfile:  true,
+			vmssListCallingTimes: 1,
+			expectedErr:          nil,
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss does not have default VM profile",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			isVMSSDeallocating:  false,
-			hasDefaultVMProfile: false,
-			expectedErr:         nil,
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			isVMSSDeallocating:   false,
+			hasDefaultVMProfile:  false,
+			vmssListCallingTimes: 1,
+			expectedErr:          nil,
 		},
 		{
-			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss does not have default VM profile",
+			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss has empty nic config",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			isVMSSDeallocating:  false,
-			hasDefaultVMProfile: true,
-			isNicConfigEmpty:    true,
-			expectedErr:         fmt.Errorf("failed to find a primary network configuration for the scale set \"vmssflex1\""),
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			isVMSSDeallocating:   false,
+			hasDefaultVMProfile:  true,
+			isNicConfigEmpty:     true,
+			vmssListCallingTimes: 1,
+			expectedErr:          fmt.Errorf("failed to find a primary network configuration for the scale set \"vmssflex1\""),
 		},
 		{
-			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss does not have default VM profile",
+			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss has empty IP config",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			isVMSSDeallocating:  false,
-			hasDefaultVMProfile: true,
-			isNicConfigEmpty:    false,
-			isIPConfigEmpty:     true,
-			expectedErr:         fmt.Errorf("failed to find a primary IP configuration"),
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			isVMSSDeallocating:   false,
+			hasDefaultVMProfile:  true,
+			isNicConfigEmpty:     false,
+			isIPConfigEmpty:      true,
+			vmssListCallingTimes: 1,
+			expectedErr:          fmt.Errorf("failed to find a primary IP configuration"),
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss if the backend pool is not in the vmss's backend pool list",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1",
-			hasDefaultVMProfile: true,
-			expectedErr:         nil,
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1",
+			hasDefaultVMProfile:  true,
+			vmssListCallingTimes: 1,
+			expectedErr:          nil,
 		},
 		{
-			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss if the backend pool is not in the vmss's backend pool list",
+			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss update fails",
 			vmssNamesMap: map[string]bool{
 				"vmssflex1": true,
 			},
-			backendPoolID:       "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
-			hasDefaultVMProfile: true,
-			vmssPutErr:          &retry.Error{RawError: fmt.Errorf("failed to update nic")},
-			expectedErr:         fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
+			backendPoolID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0",
+			hasDefaultVMProfile:  true,
+			vmssPutErr:           &retry.Error{RawError: fmt.Errorf("failed to update nic")},
+			vmssListCallingTimes: 2,
+			expectedErr:          fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to update nic"),
 		},
 	}
 
@@ -1675,11 +1684,12 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 		vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
 
 		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).Times(tc.vmssListCallingTimes)
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
 
 		err = fs.EnsureBackendPoolDeletedFromVMSets(tc.vmssNamesMap, tc.backendPoolID)
+		_, _ = fs.getVmssFlexByName("vmssflex1")
 
 		if tc.expectedErr != nil {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
