@@ -4101,6 +4101,11 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				Name: to.StringPtr("pip1"),
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+				},
+				Tags: map[string]*string{},
 			},
 			shouldPutPIP: true,
 		},
@@ -4128,6 +4133,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					},
 					PublicIPAddressVersion: "IPv4",
 				},
+				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
 			shouldPutPIP: true,
 		},
@@ -4150,6 +4156,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings:            nil,
 					PublicIPAddressVersion: "IPv4",
 				},
+				Tags: map[string]*string{},
 			},
 			shouldPutPIP: true,
 		},
@@ -4196,6 +4203,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					PublicIPAllocationMethod: "Dynamic",
 					PublicIPAddressVersion:   "IPv6",
 				},
+				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
 			shouldPutPIP: true,
 		},
@@ -4226,33 +4234,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					PublicIPAllocationMethod: "Dynamic",
 					PublicIPAddressVersion:   "IPv4",
 				},
-			},
-			shouldPutPIP: true,
-		},
-		{
-			desc:                    "shall update existed PIP's dns label for IPv6",
-			inputDNSLabel:           "newdns",
-			foundDNSLabelAnnotation: true,
-			isIPv6:                  true,
-			existingPIPs: []network.PublicIPAddress{{
-				Name: to.StringPtr("pip1"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					DNSSettings: &network.PublicIPAddressDNSSettings{
-						DomainNameLabel: to.StringPtr("previousdns"),
-					},
-				},
-			}},
-			expectedPIP: &network.PublicIPAddress{
-				Name: to.StringPtr("pip1"),
-				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					DNSSettings: &network.PublicIPAddressDNSSettings{
-						DomainNameLabel: to.StringPtr("newdns"),
-					},
-					PublicIPAllocationMethod: "Dynamic",
-					PublicIPAddressVersion:   "IPv6",
-				},
+				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
 			shouldPutPIP: true,
 		},
@@ -4318,6 +4300,11 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				Name: to.StringPtr("pip1"),
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+				},
+				Tags: map[string]*string{},
 			},
 			shouldPutPIP: true,
 		},
@@ -4342,6 +4329,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					PublicIPAddressVersion:   network.IPVersionIPv6,
 					PublicIPAllocationMethod: network.IPAllocationMethodDynamic,
 				},
+				Tags: map[string]*string{},
 			},
 			shouldPutPIP: true,
 		},
@@ -4349,9 +4337,14 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			desc:         "shall update pip tags if there is any change",
 			existingPIPs: []network.PublicIPAddress{{Name: to.StringPtr("pip1"), Tags: map[string]*string{"a": to.StringPtr("b")}}},
 			expectedPIP: &network.PublicIPAddress{
-				Name: to.StringPtr("pip1"), Tags: map[string]*string{"a": to.StringPtr("c")},
+				Name: to.StringPtr("pip1"),
+				Tags: map[string]*string{"a": to.StringPtr("c")},
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+				},
 			},
 			additionalAnnotations: map[string]string{
 				consts.ServiceAnnotationAzurePIPTags: "a=c",
@@ -4371,7 +4364,12 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			service.ObjectMeta.Annotations = test.additionalAnnotations
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 			if test.shouldPutPIP {
-				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil)
+				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
+					if len(test.existingPIPs) != 0 {
+						test.existingPIPs[0] = parameters
+					}
+					return nil
+				}).AnyTimes()
 			}
 			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, expand string) (network.PublicIPAddress, *retry.Error) {
 				var basicPIP network.PublicIPAddress

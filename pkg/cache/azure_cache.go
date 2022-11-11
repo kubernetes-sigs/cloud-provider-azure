@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/tools/cache"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/deepcopy"
 )
 
 // AzureCacheReadType defines the read type for cache data
@@ -120,8 +122,14 @@ func (t *TimedCache) getInternal(key string) (*AzureCacheEntry, error) {
 	return newEntry, nil
 }
 
-// Get returns the requested item by key.
+// Get returns the requested item by key with deep copy.
 func (t *TimedCache) Get(key string, crt AzureCacheReadType) (interface{}, error) {
+	data, err := t.get(key, crt)
+	copied := deepcopy.Copy(data)
+	return copied, err
+}
+
+func (t *TimedCache) get(key string, crt AzureCacheReadType) (interface{}, error) {
 	entry, err := t.getInternal(key)
 	if err != nil {
 		return nil, err
