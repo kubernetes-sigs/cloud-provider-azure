@@ -114,7 +114,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		utils.Logf("got BackendIPConfigurations IDs: %v", ipcIDs)
 
 		// Check if it is a cluster with VMSS
-		vmsses, err := utils.ListVMSSes(tc)
+		vmsses, err := utils.ListUniformVMSSes(tc)
 		Expect(err).NotTo(HaveOccurred())
 		if len(vmsses) != 0 {
 			allVMs := []azcompute.VirtualMachineScaleSetVM{}
@@ -140,6 +140,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			}
 			utils.Logf("Validation succeeded for a VMSS cluster")
 		} else {
+			// AvSet VMs, standalone VMs, VMSS Flex VMs
 			vms, err := utils.ListVMs(tc)
 			Expect(err).NotTo(HaveOccurred())
 			for _, vm := range *vms {

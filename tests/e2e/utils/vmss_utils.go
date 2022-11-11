@@ -193,7 +193,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 		}
 
 		// ignore error; check intersection of sets instead.
-		vmssList, _ := ListVMSSes(tc)
+		vmssList, _ := ListUniformVMSSes(tc)
 		capMatch := true
 		for _, vmss := range vmssList {
 			vms, err := ListVMSSVMs(tc, *vmss.Name)
@@ -280,8 +280,8 @@ func GetVMSS(tc *AzureTestClient, vmssName string) (azcompute.VirtualMachineScal
 	return vmssClient.Get(context.Background(), tc.GetResourceGroup(), vmssName, "")
 }
 
-// ListVMSSes returns the list of scale sets
-func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error) {
+// ListUniformVMSSes returns the list of scale sets
+func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
 
 	list, err := vmssClient.List(context.Background(), tc.GetResourceGroup())
@@ -290,7 +290,14 @@ func ListVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error)
 	}
 
 	res := list.Values()
-	return res, nil
+	vmssUniforms := make([]azcompute.VirtualMachineScaleSet, 0)
+	for i := range res {
+		vmssUniform := res[i]
+		if vmssUniform.OrchestrationMode == "" || vmssUniform.OrchestrationMode == azcompute.Uniform {
+			vmssUniforms = append(vmssUniforms, vmssUniform)
+		}
+	}
+	return vmssUniforms, nil
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM

@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -62,8 +63,8 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil {
-			Skip("skip non-VMSS")
+		if vmss == nil || vmss.OrchestrationMode == compute.Flexible {
+			Skip("skip non-VMSS or VMSS Flex")
 		}
 		numInstance := *vmss.Sku.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
@@ -106,8 +107,8 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil {
-			Skip("skip non-VMSS")
+		if vmss == nil || vmss.OrchestrationMode == compute.Flexible {
+			Skip("skip non-VMSS or VMSS Flex")
 		}
 		numInstance := *vmss.Sku.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
