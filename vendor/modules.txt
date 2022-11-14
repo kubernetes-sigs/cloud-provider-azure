@@ -1041,7 +1041,7 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/cloud-provider v0.24.7
+# k8s.io/cloud-provider v0.24.8
 ## explicit; go 1.16
 k8s.io/cloud-provider
 k8s.io/cloud-provider/api
