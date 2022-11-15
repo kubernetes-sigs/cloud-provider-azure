@@ -140,6 +140,9 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if cached == nil {
+			return "", nil
+		}
 		vmssFlexes := cached.(*sync.Map)
 
 		vmssFlexes.Range(func(key, value interface{}) bool {
@@ -181,6 +184,9 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if cached == nil {
+			return "", nil
+		}
 		vmssFlexes := cached.(*sync.Map)
 
 		vmssFlexes.Range(func(key, value interface{}) bool {
@@ -218,7 +224,9 @@ func (fs *FlexScaleSet) getVmssFlexVM(nodeName string, crt azcache.AzureCacheRea
 	if err != nil {
 		return vm, err
 	}
-
+	if cached == nil {
+		return vm, nil
+	}
 	vmMap := cached.(*sync.Map)
 	cachedVM, ok := vmMap.Load(nodeName)
 	if !ok {
@@ -234,7 +242,9 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.A
 	if err != nil {
 		return nil, err
 	}
-
+	if cached == nil {
+		return nil, nil
+	}
 	vmssFlexes := cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
 		result := vmssFlex.(*compute.VirtualMachineScaleSet)
@@ -246,7 +256,9 @@ func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.A
 	if err != nil {
 		return nil, err
 	}
-
+	if cached == nil {
+		return nil, nil
+	}
 	vmssFlexes = cached.(*sync.Map)
 	if vmssFlex, ok := vmssFlexes.Load(vmssFlexID); ok {
 		result := vmssFlex.(*compute.VirtualMachineScaleSet)
@@ -272,7 +284,9 @@ func (fs *FlexScaleSet) getVmssFlexIDByName(vmssFlexName string) (string, error)
 	if err != nil {
 		return "", err
 	}
-
+	if cached == nil {
+		return "", nil
+	}
 	var targetVmssFlexID string
 	vmssFlexes := cached.(*sync.Map)
 	vmssFlexes.Range(func(key, value interface{}) bool {
@@ -297,6 +311,9 @@ func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.Virtual
 	cached, err := fs.vmssFlexCache.Get(consts.VmssFlexKey, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, err
+	}
+	if cached == nil {
+		return nil, nil
 	}
 
 	var targetVmssFlex *compute.VirtualMachineScaleSet
@@ -330,7 +347,9 @@ func (fs *FlexScaleSet) DeleteCacheForNode(nodeName string) error {
 	if err != nil {
 		return err
 	}
-
+	if cached == nil {
+		return nil
+	}
 	vmMap := cached.(*sync.Map)
 	vmMap.Delete(nodeName)
 

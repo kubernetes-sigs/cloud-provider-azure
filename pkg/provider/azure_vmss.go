@@ -141,6 +141,9 @@ func (ss *ScaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*c
 		if err != nil {
 			return nil, err
 		}
+		if cached == nil {
+			return nil, nil
+		}
 
 		vmsses := cached.(*sync.Map)
 		if vmss, ok := vmsses.Load(vmssName); ok {
@@ -185,6 +188,9 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 		cached, err := cache.Get(cacheKey, crt)
 		if err != nil {
 			return nil, found, err
+		}
+		if cached == nil {
+			return nil, found, nil
 		}
 
 		virtualMachines := cached.(*sync.Map)
@@ -332,6 +338,9 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 		cached, err := cache.Get(cacheKey, crt)
 		if err != nil {
 			return nil, false, err
+		}
+		if cached == nil {
+			return nil, false, nil
 		}
 
 		virtualMachines := cached.(*sync.Map)
@@ -790,6 +799,9 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 		cached, err := ss.vmssCache.Get(consts.VMSSKey, crt)
 		if err != nil {
 			return nil, err
+		}
+		if cached == nil {
+			return nil, nil
 		}
 
 		vmsses := cached.(*sync.Map)
@@ -1690,6 +1702,9 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
 			return err
 		}
+		if cachedUniform == nil {
+			return nil
+		}
 		vmssUniformMap := cachedUniform.(*sync.Map)
 
 		vmssUniformMap.Range(func(key, value interface{}) bool {
@@ -1709,6 +1724,9 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss flex from cache: %v", err)
 			return err
+		}
+		if cachedFlex == nil {
+			return nil
 		}
 		vmssFlexMap := cachedFlex.(*sync.Map)
 		vmssFlexMap.Range(func(key, value interface{}) bool {
@@ -1748,6 +1766,9 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSet
 		if err != nil {
 			klog.Errorf("ensureBackendPoolDeletedFromVMSS: failed to get vmss uniform from cache: %v", err)
 			return err
+		}
+		if cachedUniform == nil {
+			return nil
 		}
 
 		vmssUniformMap := cachedUniform.(*sync.Map)
