@@ -261,22 +261,6 @@ func getNodePrivateIPAddresses(node *v1.Node) []string {
 	return addresses
 }
 
-func isLBBackendPoolTypeIPConfig(service *v1.Service, lb *network.LoadBalancer, clusterName string) bool {
-	if lb == nil || lb.LoadBalancerPropertiesFormat == nil || lb.BackendAddressPools == nil {
-		klog.V(4).Infof("isLBBackendPoolTypeIPConfig: no backend pools in the LB %s", to.String(lb.Name))
-		return false
-	}
-	lbBackendPoolName := getBackendPoolName(clusterName, service)
-	for _, bp := range *lb.BackendAddressPools {
-		if strings.EqualFold(to.String(bp.Name), lbBackendPoolName) {
-			return bp.BackendAddressPoolPropertiesFormat != nil &&
-				bp.BackendIPConfigurations != nil &&
-				len(*bp.BackendIPConfigurations) != 0
-		}
-	}
-	return false
-}
-
 func getBoolValueFromServiceAnnotations(service *v1.Service, key string) bool {
 	if l, found := service.Annotations[key]; found {
 		return strings.EqualFold(strings.TrimSpace(l), consts.TrueAnnotationValue)
