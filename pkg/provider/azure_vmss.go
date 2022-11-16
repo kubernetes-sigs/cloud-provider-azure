@@ -141,7 +141,6 @@ func (ss *ScaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*c
 		if err != nil {
 			return nil, err
 		}
-
 		vmsses := cached.(*sync.Map)
 		if vmss, ok := vmsses.Load(vmssName); ok {
 			result := vmss.(*VMSSEntry)
@@ -186,7 +185,6 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 		if err != nil {
 			return nil, found, err
 		}
-
 		virtualMachines := cached.(*sync.Map)
 		if entry, ok := virtualMachines.Load(nodeName); ok {
 			result := entry.(*VMSSVirtualMachinesEntry)

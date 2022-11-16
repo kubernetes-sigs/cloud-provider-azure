@@ -328,9 +328,11 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 
 	vmCache, err := timedCache.Get(cacheKey, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		klog.Errorf("updateCache(%s, %s, %s) failed getting vmCache with error: %v", vmssName, resourceGroupName, nodeName, err)
+		return err
 	}
-
+	if vmCache == nil {
+		return fmt.Errorf("nil vmCache")
+	}
 	virtualMachines := vmCache.(*sync.Map)
 	virtualMachines.Range(func(key, value interface{}) bool {
 		if key.(string) != nodeName {

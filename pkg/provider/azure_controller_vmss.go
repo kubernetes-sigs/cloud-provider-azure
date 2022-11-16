@@ -223,7 +223,8 @@ func (ss *ScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName, dis
 		// Update the cache with the updated result only if its not nil
 		// and contains the VirtualMachineScaleSetVMProperties
 		if updateResult != nil && updateResult.VirtualMachineScaleSetVMProperties != nil {
-			if updErr := ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, updateResult); updErr != nil {
+			if err := ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, updateResult); err != nil {
+				klog.Errorf("updateCache(%s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
 				// if err faced during updating cache, invalidate the cache
 				_ = ss.DeleteCacheForNode(vmName)
 			}
@@ -277,7 +278,8 @@ func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error
 		// Update the cache with the updated result only if its not nil
 		// and contains the VirtualMachineScaleSetVMProperties
 		if updateResult != nil && updateResult.VirtualMachineScaleSetVMProperties != nil {
-			if updErr := ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, updateResult); updErr != nil {
+			if err := ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, updateResult); err != nil {
+				klog.Errorf("updateCache(%s, %s, %s) failed with error: %v", vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, err)
 				// if err faced during updating cache, invalidate the cache
 				_ = ss.DeleteCacheForNode(vmName)
 			}
