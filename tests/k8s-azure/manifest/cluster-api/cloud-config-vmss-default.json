@@ -20,5 +20,6 @@
   "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
   "enableMultipleStandardLoadBalancers": ${ENABLE_MULTI_SLB},
   "loadBalancerBackendPoolConfigurationType": "${LB_BACKEND_POOL_CONFIG_TYPE}",
-  "putVMSSVMBatchSize": ${PUT_VMSS_VM_BATCH_SIZE}
+  "putVMSSVMBatchSize": ${PUT_VMSS_VM_BATCH_SIZE},
+  "enableVmssFlexNodes": ${ENABLE_VMSS_FLEX}
 }
