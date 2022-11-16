@@ -5408,6 +5408,7 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 		existingLBs                                                                                           []network.LoadBalancer
 		listLBErr                                                                                             *retry.Error
 		expectedListCount, expectedDeleteCount, expectedGetNamesCount, expectedCreateOrUpdateBackendPoolCount int
+		expectedEnsureHostsInPoolCount                                                                        int
 		expectedLBs                                                                                           []network.LoadBalancer
 		expectedErr                                                                                           error
 	}{
@@ -5531,9 +5532,10 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 					},
 				},
 			},
-			expectedListCount:     1,
-			expectedGetNamesCount: 1,
-			expectedDeleteCount:   1,
+			expectedListCount:              1,
+			expectedGetNamesCount:          1,
+			expectedDeleteCount:            1,
+			expectedEnsureHostsInPoolCount: 1,
 		},
 		{
 			description:             "reconcileSharedLoadBalancer should decouple the vmSet from its dedicated lb if the vmSet is sharing the primary slb",
@@ -5724,14 +5726,13 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 
 			if tc.useVMIP {
 				cloud.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
-				tc.expectedDeleteCount = 0
 			}
 
 			mockVMSet := NewMockVMSet(ctrl)
 			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
 			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1-internal/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes-internal/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedDeleteCount)
+			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedEnsureHostsInPoolCount)
+			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes-internal/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedEnsureHostsInPoolCount)
 			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmss1", "vmss2"}, nil).MaxTimes(tc.expectedGetNamesCount)
 			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss2").AnyTimes()
 			mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).DoAndReturn(func(node *v1.Node) (string, error) {
@@ -5891,5 +5892,62 @@ func TestEqualLoadBalancingRulePropertiesFormat(t *testing.T) {
 
 	for _, tc := range testcases {
 		assert.Equal(t, tc.expected, equalLoadBalancingRulePropertiesFormat(tc.s, tc.t, tc.wantLb))
+	}
+}
+
+func TestSafeDeleteLoadBalancer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+
+	testCases := []struct {
+		desc                string
+		expectedDeleteCall  bool
+		expectedDecoupleErr error
+		expectedErr         *retry.Error
+	}{
+		{
+			desc:               "Standard SKU: should delete the load balancer",
+			expectedDeleteCall: true,
+			expectedErr:        nil,
+		},
+		{
+			desc:                "Standard SKU: should not delete the load balancer if failed to ensure backend pool deleted",
+			expectedDeleteCall:  false,
+			expectedDecoupleErr: errors.New("error"),
+			expectedErr: retry.NewError(
+				false,
+				fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", errors.New("error")),
+			),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockLBClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			if tc.expectedDeleteCall {
+				mockLBClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.expectedErr).Times(1)
+			}
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().EnsureBackendPoolDeleted(
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Return(tc.expectedDecoupleErr)
+			cloud.VMSet = mockVMSet
+			cloud.LoadBalancerClient = mockLBClient
+			svc := getTestService("svc", v1.ProtocolTCP, nil, false, 80)
+			lb := network.LoadBalancer{
+				Name: to.StringPtr("test"),
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+					BackendAddressPools: &[]network.BackendAddressPool{},
+				},
+			}
+			err := cloud.safeDeleteLoadBalancer(lb, "cluster", "vmss", &svc)
+			assert.Equal(t, tc.expectedErr, err)
+		})
 	}
 }
