@@ -803,9 +803,6 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(backendPoolID strin
 			klog.Errorf("ensureBackendPoolDeletedFromVmssFlex: failed to get vmss flex from cache: %v", err)
 			return err
 		}
-		if cached == nil {
-			return nil
-		}
 		vmssFlexes := cached.(*sync.Map)
 		vmssFlexes.Range(func(key, value interface{}) bool {
 			vmssFlex := value.(*compute.VirtualMachineScaleSet)

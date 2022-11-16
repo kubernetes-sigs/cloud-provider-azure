@@ -1240,11 +1240,12 @@ func (as *availabilitySet) getAvailabilitySetByNodeName(nodeName string, crt azc
 	if err != nil {
 		return nil, err
 	}
-	if cached == nil {
+	vmasList := cached.(*sync.Map)
+
+	if vmasList == nil {
 		klog.Warning("Couldn't get all vmas from cache")
 		return nil, nil
 	}
-	vmasList := cached.(*sync.Map)
 
 	var result *compute.AvailabilitySet
 	vmasList.Range(func(_, value interface{}) bool {

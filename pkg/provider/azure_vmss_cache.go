@@ -333,7 +333,6 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 	if vmCache == nil {
 		return fmt.Errorf("nil vmCache")
 	}
-
 	virtualMachines := vmCache.(*sync.Map)
 	virtualMachines.Range(func(key, value interface{}) bool {
 		if key.(string) != nodeName {
