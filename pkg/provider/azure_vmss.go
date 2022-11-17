@@ -1730,7 +1730,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 	if err != nil {
 		return err
 	}
-	if !ss.DisableAvailabilitySetNodes || ss.EnableVmssFlexNodes {
+	if ss.EnableVmssFlexNodes {
 		flexScaleSet := ss.flexScaleSet.(*FlexScaleSet)
 		err = flexScaleSet.ensureBackendPoolDeletedFromVmssFlex(backendPoolID, vmSetName)
 	}

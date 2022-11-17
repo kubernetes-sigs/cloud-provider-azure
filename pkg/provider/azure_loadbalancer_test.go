@@ -5793,3 +5793,60 @@ func TestGetClusterFromPIPClusterTags(t *testing.T) {
 		assert.Equal(t, actual, c.expected, "TestCase[%d]: %s", i, c.desc)
 	}
 }
+
+func TestSafeDeleteLoadBalancer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+
+	testCases := []struct {
+		desc                string
+		expectedDeleteCall  bool
+		expectedDecoupleErr error
+		expectedErr         *retry.Error
+	}{
+		{
+			desc:               "Standard SKU: should delete the load balancer",
+			expectedDeleteCall: true,
+			expectedErr:        nil,
+		},
+		{
+			desc:                "Standard SKU: should not delete the load balancer if failed to ensure backend pool deleted",
+			expectedDeleteCall:  false,
+			expectedDecoupleErr: errors.New("error"),
+			expectedErr: retry.NewError(
+				false,
+				fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", errors.New("error")),
+			),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockLBClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			if tc.expectedDeleteCall {
+				mockLBClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.expectedErr).Times(1)
+			}
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().EnsureBackendPoolDeleted(
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Return(tc.expectedDecoupleErr)
+			cloud.VMSet = mockVMSet
+			cloud.LoadBalancerClient = mockLBClient
+			svc := getTestService("svc", v1.ProtocolTCP, nil, false, 80)
+			lb := network.LoadBalancer{
+				Name: to.StringPtr("test"),
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+					BackendAddressPools: &[]network.BackendAddressPool{},
+				},
+			}
+			err := cloud.safeDeleteLoadBalancer(lb, "cluster", "vmss", &svc)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
