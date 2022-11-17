@@ -36,7 +36,7 @@ get_random_location() {
 cleanup() {
   if [[ -n ${KUBECONFIG:-} ]]; then
       kubectl get node -owide || echo "Unable to get nodes"
-      kubectl get pod -A -owide || echo "Unable to get pods"
+      kubectl get pod --all-namespaces=true -owide || echo "Unable to get pods"
       ${REPO_ROOT}/.pipelines/scripts/collect-log.sh || echo "Unable to collect logs"
   fi
   echo "gc the aks cluster"
@@ -53,20 +53,22 @@ fi
 if [[ -z "${IMAGE_TAG:-}" ]]; then
   IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
 fi
-CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
-if [[ "${CLUSTER_TYPE:-}" == "autoscaling" ]]; then
-  CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
-  export AZURE_LOADBALANCER_SKU=standard
-elif [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
-  CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling-multipool.json"
-  export AZURE_LOADBALANCER_SKU=standard
+
+if [[ -z "${CLUSTER_CONFIG_PATH}" ]]; then
+  CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
+  if [[ "${CLUSTER_TYPE:-}" == "autoscaling" ]]; then
+    CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
+    export AZURE_LOADBALANCER_SKU=standard
+  elif [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
+    CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling-multipool.json"
+    export AZURE_LOADBALANCER_SKU=standard
+  fi
 fi
 
-if [[ ! -d kubetest2-aks ]]; then
-  git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
-  cp -r cloud-provider-azure/kubetest2-aks .
-  rm -rf cloud-provider-azure
-fi
+rm -rf kubetest2-aks
+git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
+cp -r cloud-provider-azure/kubetest2-aks .
+rm -rf cloud-provider-azure
 pushd kubetest2-aks
 go get -d sigs.k8s.io/kubetest2@latest
 go install sigs.k8s.io/kubetest2@latest
@@ -100,7 +102,7 @@ fi
 
 # Ensure the provisioned cluster can be accessed with the kubeconfig
 for i in `seq 1 6`; do
-  kubectl get pod -A && break
+  kubectl get pod --all-namespaces=true && break
   sleep 10
 done
 
