@@ -85,7 +85,8 @@ func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, servic
 	// there is a chance that we could orphan public IP resources while we delete the load balancer (kubernetes/kubernetes#80571).
 	// We need to make sure the existence of the load balancer depends on the load balancer resource and public IP resource on Azure.
 	existsPip := func() bool {
-		pipName, _, err := az.determinePublicIPName(clusterName, service, nil)
+		var pips []network.PublicIPAddress
+		pipName, _, err := az.determinePublicIPName(clusterName, service, &pips)
 		if err != nil {
 			return false
 		}
@@ -140,7 +141,8 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 		return nil, err
 	}
 
-	lbStatus, fipConfig, err := az.getServiceLoadBalancerStatus(service, lb, nil)
+	var pips []network.PublicIPAddress
+	lbStatus, fipConfig, err := az.getServiceLoadBalancerStatus(service, lb, &pips)
 	if err != nil {
 		klog.Errorf("getServiceLoadBalancerStatus(%s) failed: %v", serviceName, err)
 		if !errors.Is(err, ErrorNotVmssInstance) {
@@ -644,7 +646,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 	}
 
 	// reuse pip list to reduce api call
-	var pips *[]network.PublicIPAddress
+	var pips []network.PublicIPAddress
 
 	// check if the service already has a load balancer
 	for i := range existingLBs {
@@ -682,7 +684,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 			continue
 		}
 		var fipConfig *network.FrontendIPConfiguration
-		status, fipConfig, err = az.getServiceLoadBalancerStatus(service, &existingLB, pips)
+		status, fipConfig, err = az.getServiceLoadBalancerStatus(service, &existingLB, &pips)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -816,6 +818,7 @@ func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, exi
 	return selectedLB, existsLb, nil
 }
 
+// pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.LoadBalancer, pips *[]network.PublicIPAddress) (status *v1.LoadBalancerStatus, fipConfig *network.FrontendIPConfiguration, err error) {
 	if lb == nil {
 		klog.V(10).Info("getServiceLoadBalancerStatus: lb is nil")
@@ -882,6 +885,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 	return nil, nil, nil
 }
 
+// pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
 	var shouldPIPExisted bool
 
@@ -915,13 +919,17 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	return "", shouldPIPExisted, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
 }
 
+// pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalancerIP, pipResourceGroup string, pips *[]network.PublicIPAddress) (*network.PublicIPAddress, error) {
 	if pips == nil {
+		// this should not happen
+		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: nil pip list passed")
+	} else if *pips == nil {
 		pipList, err := az.ListPIP(service, pipResourceGroup)
 		if err != nil {
 			return nil, err
 		}
-		pips = &pipList
+		*pips = pipList
 	}
 	for _, pip := range *pips {
 		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
@@ -1137,10 +1145,9 @@ func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.S
 	serviceName := getServiceName(service)
 	ipv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
 	if ipv6 {
-		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv6 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
-
 		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv6)) {
 			pip.PublicIPAddressVersion = network.IPVersionIPv6
+			klog.V(2).Infof("service(%s): pip(%s) - creating as ipv6 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
 			changed = true
 		}
 
@@ -1155,10 +1162,9 @@ func (az *Cloud) reconcileIPSettings(pip *network.PublicIPAddress, service *v1.S
 			changed = true
 		}
 	} else {
-		klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
-
 		if !strings.EqualFold(string(pip.PublicIPAddressVersion), string(network.IPVersionIPv4)) {
 			pip.PublicIPAddressVersion = network.IPVersionIPv4
+			klog.V(2).Infof("service(%s): pip(%s) - creating as ipv4 for clusterIP:%v", serviceName, *pip.Name, service.Spec.ClusterIP)
 			changed = true
 		}
 	}
@@ -1339,6 +1345,7 @@ func getDomainNameLabel(pip *network.PublicIPAddress) string {
 	return to.String(pip.PublicIPAddressPropertiesFormat.DNSSettings.DomainNameLabel)
 }
 
+// pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) isFrontendIPChanged(clusterName string, config network.FrontendIPConfiguration, service *v1.Service, lbFrontendIPConfigName string, pips *[]network.PublicIPAddress) (bool, error) {
 	isServiceOwnsFrontendIP, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service, pips)
 	if err != nil {
@@ -1774,12 +1781,12 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 	}
 
 	// Save pip list so it can be reused in loop
-	var pips *[]network.PublicIPAddress
+	var pips []network.PublicIPAddress
 	var ownedFIPConfig *network.FrontendIPConfiguration
 	if !wantLb {
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
-			isServiceOwnsFrontendIP, _, err := az.serviceOwnsFrontendIP(config, service, pips)
+			isServiceOwnsFrontendIP, _, err := az.serviceOwnsFrontendIP(config, service, &pips)
 			if err != nil {
 				return nil, toDeleteConfigs, false, err
 			}
@@ -1817,13 +1824,13 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 		)
 		for i := len(newConfigs) - 1; i >= 0; i-- {
 			config := newConfigs[i]
-			isServiceOwnsFrontendIP, _, _ := az.serviceOwnsFrontendIP(config, service, pips)
+			isServiceOwnsFrontendIP, _, _ := az.serviceOwnsFrontendIP(config, service, &pips)
 			if !isServiceOwnsFrontendIP {
 				klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): the frontend IP configuration %s does not belong to the service", serviceName, to.String(config.Name))
 				continue
 			}
 			klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): checking owned frontend IP configuration %s", serviceName, to.String(config.Name))
-			isFipChanged, err = az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName, pips)
+			isFipChanged, err = az.isFrontendIPChanged(clusterName, config, service, defaultLBFrontendIPConfigName, &pips)
 			if err != nil {
 				return nil, toDeleteConfigs, false, err
 			}
@@ -1837,7 +1844,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 			break
 		}
 
-		ownedFIPConfig, _, err = az.findFrontendIPConfigOfService(&newConfigs, service, pips)
+		ownedFIPConfig, _, err = az.findFrontendIPConfigOfService(&newConfigs, service, &pips)
 		if err != nil {
 			return nil, toDeleteConfigs, false, err
 		}
@@ -1885,7 +1892,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 
 				fipConfigurationProperties = &configProperties
 			} else {
-				pipName, shouldPIPExisted, err := az.determinePublicIPName(clusterName, service, pips)
+				pipName, shouldPIPExisted, err := az.determinePublicIPName(clusterName, service, &pips)
 				if err != nil {
 					return nil, toDeleteConfigs, false, err
 				}
