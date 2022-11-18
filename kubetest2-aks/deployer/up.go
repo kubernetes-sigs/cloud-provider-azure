@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -87,9 +88,26 @@ func (d *deployer) createResourceGroup(subscriptionID string) (armresources.Reso
 	return rgClient.CreateOrUpdate(ctx, d.ResourceGroupName, param, nil)
 }
 
+func openPath(path string) ([]byte, error) {
+	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
+		return ioutil.ReadFile(path)
+	}
+	resp, err := http.Get(path)
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to http get url: %s", path)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return []byte{}, fmt.Errorf("failed to http get url with StatusCode: %d", resp.StatusCode)
+	}
+
+	return ioutil.ReadAll(resp.Body)
+}
+
 // prepareClusterConfig generates cluster config.
 func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (string, error) {
-	configFile, err := ioutil.ReadFile(d.ConfigPath)
+	configFile, err := openPath(d.ConfigPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
 	}
@@ -106,7 +124,7 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (stri
 		clusterConfig = strings.ReplaceAll(clusterConfig, k, v)
 	}
 
-	customConfig, err := ioutil.ReadFile(d.CustomConfigPath)
+	customConfig, err := openPath(d.CustomConfigPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
 	}
