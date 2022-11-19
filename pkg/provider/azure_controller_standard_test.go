@@ -47,10 +47,11 @@ func TestStandardAttachDisk(t *testing.T) {
 	defer cancel()
 
 	testCases := []struct {
-		desc         string
-		nodeName     types.NodeName
-		isAttachFail bool
-		expectedErr  bool
+		desc            string
+		nodeName        types.NodeName
+		inconsistentLUN bool
+		isAttachFail    bool
+		expectedErr     bool
 	}{
 		{
 			desc:        "an error shall be returned if there's no corresponding vms",
@@ -68,10 +69,15 @@ func TestStandardAttachDisk(t *testing.T) {
 			expectedErr: false,
 		},
 		{
-			desc:         "an error shall be returned if update attach disk failed",
-			nodeName:     "vm1",
-			isAttachFail: true,
-			expectedErr:  true,
+			desc:            "an error shall be returned if update attach disk failed",
+			nodeName:        "vm1",
+			inconsistentLUN: true,
+			expectedErr:     true,
+		},
+		{
+			desc:        "error should be returned when disk lun is inconsistent",
+			nodeName:    "vm1",
+			expectedErr: false,
 		},
 	}
 
@@ -93,6 +99,13 @@ func TestStandardAttachDisk(t *testing.T) {
 				},
 				DataDisks: &[]compute.DataDisk{},
 			}
+			if test.inconsistentLUN {
+				diskName := "disk-name2"
+				diskURI := "uri"
+				vm.StorageProfile.DataDisks = &[]compute.DataDisk{
+					{Lun: to.Int32Ptr(0), Name: &diskName, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+				}
+			}
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
 		}
 		mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, "vm2", gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
@@ -104,10 +117,13 @@ func TestStandardAttachDisk(t *testing.T) {
 
 		options := AttachDiskOptions{
 			lun:                     0,
-			diskName:                "",
+			diskName:                "disk-name2",
 			cachingMode:             compute.CachingTypesReadOnly,
 			diskEncryptionSetID:     "",
 			writeAcceleratorEnabled: false,
+		}
+		if test.inconsistentLUN {
+			options.lun = 63
 		}
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
