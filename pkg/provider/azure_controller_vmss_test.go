@@ -43,40 +43,48 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
+	diskname := "disk-name" //nolint: goconst
+
 	fakeStatusNotFoundVMSSName := types.NodeName("FakeStatusNotFoundVMSSName")
 	testCases := []struct {
-		desc           string
-		vmssName       types.NodeName
-		vmssvmName     types.NodeName
-		disks          []string
-		vmList         map[string]string
-		vmssVMList     []string
-		expectedErr    bool
-		expectedErrMsg error
+		desc            string
+		vmssName        types.NodeName
+		vmssvmName      types.NodeName
+		disks           []string
+		vmList          map[string]string
+		vmssVMList      []string
+		inconsistentLUN bool
+		expectedErr     error
 	}{
 		{
-			desc:        "no error shall be returned if everything is good with one managed disk",
-			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:    "vmss00",
-			vmssvmName:  "vmss00-vm-000000",
-			disks:       []string{"disk-name"},
-			expectedErr: false,
+			desc:       "no error shall be returned if everything is good with one managed disk",
+			vmssVMList: []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:   "vmss00",
+			vmssvmName: "vmss00-vm-000000",
+			disks:      []string{"disk-name"},
 		},
 		{
-			desc:        "no error shall be returned if everything is good with 2 managed disks",
-			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:    "vmss00",
-			vmssvmName:  "vmss00-vm-000000",
-			disks:       []string{"disk-name", "disk-name2"},
-			expectedErr: false,
+			desc:       "no error shall be returned if everything is good with 2 managed disks",
+			vmssVMList: []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:   "vmss00",
+			vmssvmName: "vmss00-vm-000000",
+			disks:      []string{"disk-name", "disk-name2"},
 		},
 		{
-			desc:        "no error shall be returned if everything is good with non-managed disk",
-			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
-			vmssName:    "vmss00",
-			vmssvmName:  "vmss00-vm-000000",
-			disks:       []string{"disk-name"},
-			expectedErr: false,
+			desc:       "no error shall be returned if everything is good with non-managed disk",
+			vmssVMList: []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:   "vmss00",
+			vmssvmName: "vmss00-vm-000000",
+			disks:      []string{"disk-name"},
+		},
+		{
+			desc:            "error should be returned when disk lun is inconsistent",
+			vmssVMList:      []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:        "vmss00",
+			vmssvmName:      "vmss00-vm-000000",
+			disks:           []string{"disk-name", "disk-name2"},
+			inconsistentLUN: true,
+			expectedErr:     fmt.Errorf("disk(/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/disks/disk-name) already attached to node(vmss00-vm-000000) on LUN(0), but target LUN is 63"),
 		},
 	}
 
@@ -108,6 +116,13 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				},
 				DataDisks: &[]compute.DataDisk{},
 			}
+			if test.inconsistentLUN {
+				diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
+					testCloud.SubscriptionID, testCloud.ResourceGroup, diskname)
+				vmssvm.StorageProfile.DataDisks = &[]compute.DataDisk{
+					{Lun: to.Int32Ptr(0), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+				}
+			}
 		}
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
@@ -126,16 +141,16 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				diskEncryptionSetID:     "",
 				writeAcceleratorEnabled: true,
 			}
+			if test.inconsistentLUN {
+				options.lun = 63
+			}
 
 			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = &options
 		}
 		_, err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
-		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
-		if test.expectedErr {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)
-		}
+		assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErr, err)
 	}
 }
 
