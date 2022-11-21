@@ -317,29 +317,62 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 	}
 }
 
+func TestGetVMSSVMCacheKey(t *testing.T) {
+	tests := []struct {
+		description       string
+		resourceGroupName string
+		vmssName          string
+		cacheKey          string
+	}{
+		{
+			description:       "Resource group and Vmss Name are in lower case",
+			resourceGroupName: "resgrp",
+			vmssName:          "vmss",
+			cacheKey:          "resgrp/vmss",
+		},
+		{
+			description:       "Resource group has upper case and Vmss Name is in lower case",
+			resourceGroupName: "Resgrp",
+			vmssName:          "vmss",
+			cacheKey:          "resgrp/vmss",
+		},
+		{
+			description:       "Resource group is in lower case and Vmss Name has upper case",
+			resourceGroupName: "resgrp",
+			vmssName:          "Vmss",
+			cacheKey:          "resgrp/vmss",
+		},
+		{
+			description:       "Resource group and Vmss Name are both in upper case",
+			resourceGroupName: "Resgrp",
+			vmssName:          "Vmss",
+			cacheKey:          "resgrp/vmss",
+		},
+	}
+
+	for _, test := range tests {
+		result := getVMSSVMCacheKey(test.resourceGroupName, test.vmssName)
+		assert.Equal(t, result, test.cacheKey, test.description)
+	}
+}
+
 func TestIsNodeInVMSSVMCache(t *testing.T) {
-	emptyTimedCacheMap := &sync.Map{}
-	emptyTimedCacheMap.Store("key", &azcache.TimedCache{})
 
 	getter := func(key string) (interface{}, error) {
 		return nil, nil
 	}
 	emptyCacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
 	emptyCacheEntryTimedCache.Set("key", nil)
-	emptyCacheEntryTimedCacheMap := &sync.Map{}
-	emptyCacheEntryTimedCacheMap.Store("key", emptyCacheEntryTimedCache)
 
 	cacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
 	syncMap := &sync.Map{}
 	syncMap.Store("node", nil)
 	cacheEntryTimedCache.Set("key", syncMap)
-	cacheEntryTimedCacheMap := &sync.Map{}
-	cacheEntryTimedCacheMap.Store("key", cacheEntryTimedCache)
 
 	tests := []struct {
 		description    string
 		nodeName       string
-		vmssVMCache    *sync.Map
+		vmssVMCache    *azcache.TimedCache
 		expectedResult bool
 	}{
 		{
@@ -348,30 +381,20 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			description:    "empty cache",
-			vmssVMCache:    &sync.Map{},
-			expectedResult: false,
-		},
-		{
-			description:    "empty timed cache",
-			vmssVMCache:    emptyTimedCacheMap,
-			expectedResult: false,
-		},
-		{
 			description:    "empty CacheEntry timed cache",
-			vmssVMCache:    emptyCacheEntryTimedCacheMap,
+			vmssVMCache:    emptyCacheEntryTimedCache,
 			expectedResult: false,
 		},
 		{
 			description:    "node name in the cache",
 			nodeName:       "node",
-			vmssVMCache:    cacheEntryTimedCacheMap,
+			vmssVMCache:    cacheEntryTimedCache,
 			expectedResult: true,
 		},
 		{
 			description:    "node name not in the cache",
 			nodeName:       "node2",
-			vmssVMCache:    cacheEntryTimedCacheMap,
+			vmssVMCache:    cacheEntryTimedCache,
 			expectedResult: false,
 		},
 	}

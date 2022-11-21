@@ -298,36 +298,40 @@ func removeDuplicatedSecurityRules(rules []network.SecurityRule) []network.Secur
 	return rules
 }
 
+func getVMSSVMCacheKey(resourceGroup, vmssName string) string {
+	cacheKey := strings.ToLower(fmt.Sprintf("%s/%s", resourceGroup, vmssName))
+	return cacheKey
+}
+
 // isNodeInVMSSVMCache check whether nodeName is in vmssVMCache
-func isNodeInVMSSVMCache(nodeName string, vmssVMCache *sync.Map) bool {
+func isNodeInVMSSVMCache(nodeName string, vmssVMCache *azcache.TimedCache) bool {
 	if vmssVMCache == nil {
 		return false
 	}
+
 	var isInCache bool
-	vmssVMCache.Range(func(_, value interface{}) bool {
-		if value != nil && value.(*azcache.TimedCache).Store != nil {
-			for _, v := range value.(*azcache.TimedCache).Store.List() {
-				if v != nil {
-					data := v.(*azcache.AzureCacheEntry).Data
-					if data != nil {
-						data.(*sync.Map).Range(func(vmName, _ interface{}) bool {
-							if vmName != nil && vmName.(string) == nodeName {
-								isInCache = true
-								return false
-							}
-							return true
-						})
+
+	vmssVMCache.Lock.Lock()
+	defer vmssVMCache.Lock.Unlock()
+
+	for _, entry := range vmssVMCache.Store.List() {
+		if entry != nil {
+			data := entry.(*azcache.AzureCacheEntry).Data
+			if data != nil {
+				data.(*sync.Map).Range(func(vmName, _ interface{}) bool {
+					if vmName != nil && vmName.(string) == nodeName {
+						isInCache = true
+						return false
 					}
-				}
-				if isInCache {
-					return false
-				}
+					return true
+				})
 			}
 		}
+
 		if isInCache {
-			return false
+			break
 		}
-		return true
-	})
+	}
+
 	return isInCache
 }
