@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -67,7 +68,7 @@ func getTestCloudConfigTypeSecretConfig() *Config {
 		RouteTableName:          "RouteTableName",
 		RouteTableResourceGroup: "RouteTableResourceGroup",
 		SecurityGroupName:       "SecurityGroupName",
-		CloudConfigType:         cloudConfigTypeSecret,
+		CloudConfigType:         config.cloudConfigTypeSecret,
 	}
 }
 
@@ -81,14 +82,14 @@ func getTestCloudConfigTypeMergeConfig() *Config {
 		RouteTableName:          "RouteTableName",
 		RouteTableResourceGroup: "RouteTableResourceGroup",
 		SecurityGroupName:       "SecurityGroupName",
-		CloudConfigType:         cloudConfigTypeMerge,
+		CloudConfigType:         config.cloudConfigTypeMerge,
 	}
 }
 
 func getTestCloudConfigTypeMergeConfigExpected() *Config {
 	config := getTestConfig()
 	config.SecurityGroupName = "SecurityGroupName"
-	config.CloudConfigType = cloudConfigTypeMerge
+	config.CloudConfigType = config.cloudConfigTypeMerge
 	return config
 }
 
@@ -106,7 +107,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 			name: "Azure config shouldn't be override when cloud config type is file",
 			existingConfig: &Config{
 				ResourceGroup:   "ResourceGroup1",
-				CloudConfigType: cloudConfigTypeFile,
+				CloudConfigType: config.cloudConfigTypeFile,
 			},
 			secretConfig: getTestConfig(),
 			expected:     nil,
@@ -146,7 +147,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
-				InitSecretConfig: InitSecretConfig{
+				SecretConfigLoader: config.SecretConfigLoader{
 					SecretName:      "azure-cloud-provider",
 					SecretNamespace: "kube-system",
 					CloudConfigKey:  "cloud-config",
@@ -207,7 +208,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 			name: "Azure config shouldn't be override when cloud config type is file",
 			existingConfig: &Config{
 				ResourceGroup:   "ResourceGroup1",
-				CloudConfigType: cloudConfigTypeFile,
+				CloudConfigType: config.cloudConfigTypeFile,
 			},
 			secretConfig: getTestConfig(),
 			expected:     nil,
@@ -251,7 +252,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
-				InitSecretConfig: InitSecretConfig{
+				SecretConfigLoader: config.SecretConfigLoader{
 					SecretName:      "azure-cloud-provider",
 					SecretNamespace: "kube-system",
 					CloudConfigKey:  "cloud-config",

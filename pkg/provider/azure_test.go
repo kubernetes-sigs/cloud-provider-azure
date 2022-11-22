@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	config2 "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"strings"
 	"testing"
 	"time"
@@ -3622,7 +3623,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		AzureAuthConfig: auth.AzureAuthConfig{
 			Cloud: "AZUREPUBLICCLOUD",
 		},
-		CloudConfigType: cloudConfigTypeFile,
+		CloudConfigType: config2.cloudConfigTypeFile,
 	}
 	err = az.InitializeCloudFromConfig(&config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
