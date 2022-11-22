@@ -54,7 +54,7 @@ if [[ -z "${IMAGE_TAG:-}" ]]; then
   IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
 fi
 
-if [[ -z "${CLUSTER_CONFIG_PATH}" ]]; then
+if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
   if [[ "${CLUSTER_TYPE:-}" == "autoscaling" ]]; then
     CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
