@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -295,4 +296,38 @@ func removeDuplicatedSecurityRules(rules []network.SecurityRule) []network.Secur
 		ruleNames[to.String(rules[i].Name)] = true
 	}
 	return rules
+}
+
+// isNodeInVMSSVMCache check whether nodeName is in vmssVMCache
+func isNodeInVMSSVMCache(nodeName string, vmssVMCache *sync.Map) bool {
+	if vmssVMCache == nil {
+		return false
+	}
+	var isInCache bool
+	vmssVMCache.Range(func(_, value interface{}) bool {
+		if value != nil && value.(*azcache.TimedCache).Store != nil {
+			for _, v := range value.(*azcache.TimedCache).Store.List() {
+				if v != nil {
+					data := v.(*azcache.AzureCacheEntry).Data
+					if data != nil {
+						data.(*sync.Map).Range(func(vmName, _ interface{}) bool {
+							if vmName != nil && vmName.(string) == nodeName {
+								isInCache = true
+								return false
+							}
+							return true
+						})
+					}
+				}
+				if isInCache {
+					return false
+				}
+			}
+		}
+		if isInCache {
+			return false
+		}
+		return true
+	})
+	return isInCache
 }

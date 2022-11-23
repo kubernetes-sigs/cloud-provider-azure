@@ -348,7 +348,6 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 
 func (ss *ScaleSet) newNonVmssUniformNodesCache() (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
-		klog.V(6).Infof("refresh the cache of NonVmssUniformNodesCache")
 		vmssFlexVMNodeNames := sets.NewString()
 		vmssFlexVMProviderIDs := sets.NewString()
 		avSetVMNodeNames := sets.NewString()
@@ -357,6 +356,7 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (*azcache.TimedCache, error) {
 		if err != nil {
 			return nil, err
 		}
+		klog.V(2).Infof("refresh the cache of NonVmssUniformNodesCache in rg %v", resourceGroups)
 
 		for _, resourceGroup := range resourceGroups.List() {
 			vms, err := ss.Cloud.ListVirtualMachines(resourceGroup)
@@ -415,9 +415,20 @@ func (ss *ScaleSet) getVMManagementTypeByNodeName(nodeName string, crt azcache.A
 	}
 
 	cachedNodes := cached.(NonVmssUniformNodesEntry).ClusterNodeNames
-
 	// if the node is not in the cache, assume the node has joined after the last cache refresh and attempt to refresh the cache.
 	if !cachedNodes.Has(nodeName) {
+		if cached.(NonVmssUniformNodesEntry).AvSetVMNodeNames.Has(nodeName) {
+			return ManagedByAvSet, nil
+		}
+
+		if cached.(NonVmssUniformNodesEntry).VMSSFlexVMNodeNames.Has(nodeName) {
+			return ManagedByVmssFlex, nil
+		}
+
+		if isNodeInVMSSVMCache(nodeName, ss.vmssVMCache) {
+			return ManagedByVmssUniform, nil
+		}
+
 		klog.V(2).Infof("Node %s has joined the cluster since the last VM cache refresh in NonVmssUniformNodesEntry, refreshing the cache", nodeName)
 		cached, err = ss.nonVmssUniformNodesCache.Get(consts.NonVmssUniformNodesKey, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
@@ -434,6 +445,7 @@ func (ss *ScaleSet) getVMManagementTypeByNodeName(nodeName string, crt azcache.A
 	if cachedVmssFlexVMs.Has(nodeName) {
 		return ManagedByVmssFlex, nil
 	}
+
 	return ManagedByVmssUniform, nil
 }
 
