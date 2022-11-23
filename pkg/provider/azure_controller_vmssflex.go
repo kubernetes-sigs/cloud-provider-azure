@@ -198,8 +198,13 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 }
 
 // WaitForUpdateResult waits for the response of the update request
-func (fs *FlexScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, resourceGroupName, source string) error {
-	if rerr := fs.VirtualMachinesClient.WaitForUpdateResult(ctx, future, resourceGroupName, source); rerr != nil {
+func (fs *FlexScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, source string) error {
+	vmName := mapNodeNameToVMName(nodeName)
+	nodeResourceGroup, err := fs.GetNodeResourceGroup(vmName)
+	if err != nil {
+		return err
+	}
+	if rerr := fs.VirtualMachinesClient.WaitForUpdateResult(ctx, future, nodeResourceGroup, source); rerr != nil {
 		return rerr.Error()
 	}
 	return nil

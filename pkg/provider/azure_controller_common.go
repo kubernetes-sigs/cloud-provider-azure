@@ -267,11 +267,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 			klog.Warningf("azureDisk - switch to batch operation due to rate limited, QPS: %f", c.diskOpRateLimiter.QPS())
 		}
 	}
-	resourceGroup, _, err := getInfoFromDiskURI(diskURI)
-	if err != nil {
-		return -1, err
-	}
-	return lun, vmset.WaitForUpdateResult(ctx, future, nodeName, resourceGroup, "attach_disk")
+	return lun, vmset.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
 }
 
 func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {
