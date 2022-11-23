@@ -132,22 +132,27 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 }
 
 // WaitForUpdateResult waits for the response of the update request
-func (ss *ScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, resourceGroupName, source string) error {
+func (ss *ScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, source string) error {
+	vmName := mapNodeNameToVMName(nodeName)
+	nodeResourceGroup, err := ss.GetNodeResourceGroup(vmName)
+	if err != nil {
+		return err
+	}
+
 	var result *compute.VirtualMachineScaleSetVM
 	var rerr *retry.Error
 	defer func() {
 		if rerr == nil && result != nil && result.VirtualMachineScaleSetVMProperties != nil {
 			// If we have an updated result, we update the vmss vm cache
-			vmName := mapNodeNameToVMName(nodeName)
 			vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 			if err != nil {
 				return
 			}
-			_ = ss.updateCache(vmName, resourceGroupName, vm.VMSSName, vm.InstanceID, result)
+			_ = ss.updateCache(vmName, nodeResourceGroup, vm.VMSSName, vm.InstanceID, result)
 		}
 	}()
 
-	result, rerr = ss.VirtualMachineScaleSetVMsClient.WaitForUpdateResult(ctx, future, resourceGroupName, source)
+	result, rerr = ss.VirtualMachineScaleSetVMsClient.WaitForUpdateResult(ctx, future, nodeResourceGroup, source)
 	if rerr != nil {
 		return rerr.Error()
 	}
