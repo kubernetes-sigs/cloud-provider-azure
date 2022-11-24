@@ -18,6 +18,7 @@ package provider
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
@@ -312,5 +314,70 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 			rules = removeDuplicatedSecurityRules(rules)
 			assert.Equal(t, testCase.expected, rules)
 		})
+	}
+}
+
+func TestIsNodeInVMSSVMCache(t *testing.T) {
+	emptyTimedCacheMap := &sync.Map{}
+	emptyTimedCacheMap.Store("key", &azcache.TimedCache{})
+
+	getter := func(key string) (interface{}, error) {
+		return nil, nil
+	}
+	emptyCacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
+	emptyCacheEntryTimedCache.Set("key", nil)
+	emptyCacheEntryTimedCacheMap := &sync.Map{}
+	emptyCacheEntryTimedCacheMap.Store("key", emptyCacheEntryTimedCache)
+
+	cacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
+	syncMap := &sync.Map{}
+	syncMap.Store("node", nil)
+	cacheEntryTimedCache.Set("key", syncMap)
+	cacheEntryTimedCacheMap := &sync.Map{}
+	cacheEntryTimedCacheMap.Store("key", cacheEntryTimedCache)
+
+	tests := []struct {
+		description    string
+		nodeName       string
+		vmssVMCache    *sync.Map
+		expectedResult bool
+	}{
+		{
+			description:    "nil cache",
+			vmssVMCache:    nil,
+			expectedResult: false,
+		},
+		{
+			description:    "empty cache",
+			vmssVMCache:    &sync.Map{},
+			expectedResult: false,
+		},
+		{
+			description:    "empty timed cache",
+			vmssVMCache:    emptyTimedCacheMap,
+			expectedResult: false,
+		},
+		{
+			description:    "empty CacheEntry timed cache",
+			vmssVMCache:    emptyCacheEntryTimedCacheMap,
+			expectedResult: false,
+		},
+		{
+			description:    "node name in the cache",
+			nodeName:       "node",
+			vmssVMCache:    cacheEntryTimedCacheMap,
+			expectedResult: true,
+		},
+		{
+			description:    "node name not in the cache",
+			nodeName:       "node2",
+			vmssVMCache:    cacheEntryTimedCacheMap,
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isNodeInVMSSVMCache(test.nodeName, test.vmssVMCache)
+		assert.Equal(t, test.expectedResult, result, test.description)
 	}
 }
