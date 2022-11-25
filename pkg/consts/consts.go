@@ -300,7 +300,7 @@ const (
 
 	// ServiceAnnotationLoadBalancerHealthProbeRequestPath determines the request path of the load balancer health probe.
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
-	// `/healthz` would be configured by default.
+	// `/` would be configured by default.
 	ServiceAnnotationLoadBalancerHealthProbeRequestPath = "service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path"
 
 	// ServiceAnnotationAzurePIPTags determines what tags should be applied to the public IP of the service. The cluster name
@@ -428,9 +428,19 @@ const RateLimited = "rate limited"
 // CreatedByTag tag key for CSI drivers
 const CreatedByTag = "k8s-azure-created-by"
 
+// port specific
+const (
+	PortAnnotationPrefixPattern            = "service.beta.kubernetes.io/port_%d_%s"
+	PortAnnotationNoLBRule      PortParams = "no_lb_rule"
+	// NoHealthProbeRule determines whether the port is only used for health probe. no lb probe rule will be created.
+	PortAnnotationNoHealthProbeRule PortParams = "no_probe_rule"
+)
+
+type PortParams string
+
 // health probe
 const (
-	HealthProbeAnnotationPrefixPattern = "service.beta.kubernetes.io/port_%d_health-probe_"
+	HealthProbeAnnotationPrefixPattern = "health-probe_%s"
 
 	// HealthProbeParamsProtocol determines the protocol for the health probe params.
 	// It always takes priority over spec.appProtocol or any other specified protocol
