@@ -182,8 +182,9 @@ func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMW
 				},
 				DataDisks: &[]compute.DataDisk{
 					{
-						Lun:  to.Int32Ptr(1),
-						Name: to.StringPtr("dataDisk" + spec.VMName),
+						Lun:         to.Int32Ptr(1),
+						Name:        to.StringPtr("dataDisk" + spec.VMName),
+						ManagedDisk: &compute.ManagedDiskParameters{ID: to.StringPtr("uri")},
 					},
 				},
 			},
