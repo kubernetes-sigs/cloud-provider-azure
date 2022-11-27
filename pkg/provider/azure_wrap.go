@@ -145,7 +145,7 @@ func (az *Cloud) getSubnet(virtualNetworkName string, subnetName string) (networ
 	return subnet, exists, nil
 }
 
-func (az *Cloud) getAzureLoadBalancer(name string, crt azcache.AzureCacheReadType) (lb network.LoadBalancer, exists bool, err error) {
+func (az *Cloud) getAzureLoadBalancer(name string, crt azcache.AzureCacheReadType) (lb *network.LoadBalancer, exists bool, err error) {
 	cachedLB, err := az.lbCache.Get(name, crt)
 	if err != nil {
 		return lb, false, err
@@ -155,7 +155,7 @@ func (az *Cloud) getAzureLoadBalancer(name string, crt azcache.AzureCacheReadTyp
 		return lb, false, nil
 	}
 
-	return *(cachedLB.(*network.LoadBalancer)), true, nil
+	return cachedLB.(*network.LoadBalancer), true, nil
 }
 
 func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (network.SecurityGroup, error) {
