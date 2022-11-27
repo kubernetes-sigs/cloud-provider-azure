@@ -913,10 +913,10 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeletedFromVMSets(vmssNamesMap map[stri
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) error {
+func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
-		return nil
+		return false, nil
 	}
 
 	mc := metrics.NewMetricContext("services", "vmssflex_ensure_backend_pool_deleted", fs.ResourceGroup, fs.SubscriptionID, getServiceName(service))
@@ -981,25 +981,26 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoo
 	klog.V(2).Infof("2. Ensure the backendPoolID is deleted from the VMSS VMs.")
 	// 2. Ensure the backendPoolID is deleted from the VMSS VMs.
 	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %s", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
-	err := fs.ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap, backendPoolID)
+	nicUpdated, err := fs.ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap, backendPoolID)
 	klog.V(2).Infof("exit from fs.ensureBackendPoolDeletedFromNode")
 	if err != nil {
 		allErrs = append(allErrs, err)
 	}
 
 	if len(allErrs) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return nicUpdated, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
-	return nil
+	return nicUpdated, nil
 
 }
 
-func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[string]string, backendPoolID string) error {
+func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[string]string, backendPoolID string) (bool, error) {
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
 	i := 0
+	var nicUpdated bool
 	for nodeName, nicName := range vmssFlexVMNameMap {
 		i++
 		klog.V(2).Infof("i = %s", i)
@@ -1008,7 +1009,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 		defer cancel()
 		nic, rerr := fs.InterfacesClient.Get(ctx, fs.ResourceGroup, nicName, "")
 		if rerr != nil {
-			return fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name %s: %w", nicName, rerr.Error())
+			return false, fmt.Errorf("ensureBackendPoolDeletedFromNode: failed to get interface of name %s: %w", nicName, rerr.Error())
 		}
 
 		if nic.ProvisioningState == consts.NicFailedState {
@@ -1046,6 +1047,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 					klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.resourceGroup, to.String(nic.Name), rerr.Error())
 					return rerr.Error()
 				}
+				nicUpdated = true
 				klog.V(2).Infof("EnsureBackendPoolDeleted done")
 				return nil
 			})
@@ -1057,7 +1059,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 		allErrs = append(allErrs, utilerrors.Flatten(errs))
 	}
 	if len(allErrs) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return nicUpdated, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
-	return nil
+	return nicUpdated, nil
 }

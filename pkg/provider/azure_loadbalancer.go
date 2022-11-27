@@ -525,7 +525,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, existingLBs
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
 func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vmSetName string, service *v1.Service) *retry.Error {
 	lbBackendPoolID := az.getBackendPoolID(to.String(lb.Name), az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
-	err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools, true)
+	_, err := az.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolID, vmSetName, lb.BackendAddressPools, true)
 	if err != nil {
 		return retry.NewError(false, fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err))
 	}
@@ -1650,7 +1650,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 			if !exist {
 				return nil, fmt.Errorf("load balancer %q not found", lbName)
 			}
-			lb = &newLB
+			lb = newLB
 		}
 	}
 
@@ -2497,7 +2497,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		if !exist {
 			return nil, fmt.Errorf("unable to get lb %s", to.String(lbName))
 		}
-		backendPrivateIPv4s, backendPrivateIPv6s := az.LoadBalancerBackendPool.GetBackendPrivateIPs(clusterName, service, &lb)
+		backendPrivateIPv4s, backendPrivateIPv6s := az.LoadBalancerBackendPool.GetBackendPrivateIPs(clusterName, service, lb)
 		backendIPAddresses = backendPrivateIPv4s
 		if utilnet.IsIPv6String(*lbIP) {
 			backendIPAddresses = backendPrivateIPv6s
@@ -3016,11 +3016,10 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 	}
 
 	if lbName != "" {
-		loadBalancer, _, err := az.getAzureLoadBalancer(lbName, azcache.CacheReadTypeDefault)
+		lb, _, err = az.getAzureLoadBalancer(lbName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			return nil, err
 		}
-		lb = &loadBalancer
 	}
 
 	discoveredDesiredPublicIP, pipsToBeDeleted, deletedDesiredPublicIP, pipsToBeUpdated, err := az.getPublicIPUpdates(

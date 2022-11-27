@@ -1812,10 +1812,10 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSet
 }
 
 // ensureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) error {
+func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
-		return nil
+		return false, nil
 	}
 
 	mc := metrics.NewMetricContext("services", "vmss_ensure_backend_pool_deleted", ss.ResourceGroup, ss.SubscriptionID, getServiceName(service))
@@ -1900,6 +1900,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolID,
 	}
 
 	// Update VMs with best effort that have already been added to nodeUpdates.
+	var updatedVM bool
 	for meta, update := range nodeUpdates {
 		// create new instance of meta and update for passing to anonymous function
 		meta := meta
@@ -1928,27 +1929,28 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				return rerr.Error()
 			}
 
+			updatedVM = true
 			return nil
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(hostUpdates...)
 	if errs != nil {
-		return utilerrors.Flatten(errs)
+		return updatedVM, utilerrors.Flatten(errs)
 	}
 
 	// Fail if there are other errors.
 	if len(allErrs) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return updatedVM, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
-	return nil
+	return updatedVM, nil
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) error {
+func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	if backendAddressPools == nil {
-		return nil
+		return false, nil
 	}
 	vmssUniformBackendIPConfigurations := []network.InterfaceIPConfiguration{}
 	vmssFlexBackendIPConfigurations := []network.InterfaceIPConfiguration{}
@@ -1987,10 +1989,11 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 	if deleteFromVMSet {
 		err := ss.ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
+	var updated bool
 	if len(vmssUniformBackendIPConfigurations) > 0 {
 		vmssUniformBackendPools := &[]network.BackendAddressPool{
 			{
@@ -2000,9 +2003,12 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.ensureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssUniformBackendPools, false)
+		updatedVM, err := ss.ensureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssUniformBackendPools)
 		if err != nil {
-			return err
+			return false, err
+		}
+		if updatedVM {
+			updated = true
 		}
 	}
 
@@ -2015,9 +2021,12 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.flexScaleSet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssFlexBackendPools, false)
+		updatedNIC, err := ss.flexScaleSet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, vmssFlexBackendPools, false)
 		if err != nil {
-			return err
+			return false, err
+		}
+		if updatedNIC {
+			updated = true
 		}
 	}
 
@@ -2030,13 +2039,16 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 				},
 			},
 		}
-		err := ss.availabilitySet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, avSetBackendPools, false)
+		updatedNIC, err := ss.availabilitySet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, avSetBackendPools, false)
 		if err != nil {
-			return err
+			return false, err
+		}
+		if updatedNIC {
+			updated = true
 		}
 	}
 
-	return nil
+	return updated, nil
 
 }
 
