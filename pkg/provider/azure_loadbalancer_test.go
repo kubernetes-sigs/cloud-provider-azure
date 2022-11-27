@@ -38,6 +38,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -689,12 +690,12 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		flipService       bool
 	}{
 		{
-			desc:        "exteral service then flipped to internal should be created and deleted successfully",
+			desc:        "external service then flipped to internal should be created and deleted successfully",
 			service:     getTestService("service1", v1.ProtocolTCP, nil, false, 80),
 			flipService: true,
 		},
 		{
-			desc:          "interal service then flipped to external should be created and deleted successfully",
+			desc:          "internal service then flipped to external should be created and deleted successfully",
 			service:       getInternalTestService("service2", 80),
 			isInternalSvc: true,
 			flipService:   true,
@@ -1062,7 +1063,7 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: false,
 		},
 		{
-			desc:           "existing public ip with no format properties (unit test only?), tags required by annotation, no release",
+			desc:           "existing public ip with no format properties (unit test only?), tags required by annotation, expect release",
 			existingPip:    existingPipWithNoPublicIPAddressFormatProperties,
 			lbShouldExist:  true,
 			lbIsInternal:   false,
@@ -5785,8 +5786,8 @@ func TestReconcileSharedLoadBalancer(t *testing.T) {
 			}
 
 			mockVMSet := NewMockVMSet(ctrl)
-			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1-internal/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(nil).Times(tc.expectedDeleteCount)
+			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(false, nil).Times(tc.expectedDeleteCount)
+			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1-internal/backendAddressPools/kubernetes", "vmss1", gomock.Any(), gomock.Any()).Return(false, nil).Times(tc.expectedDeleteCount)
 			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedEnsureHostsInPoolCount)
 			mockVMSet.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/kubernetes-internal/backendAddressPools/kubernetes", "vmss1").Return(nil).Times(tc.expectedEnsureHostsInPoolCount)
 			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmss1", "vmss2"}, nil).MaxTimes(tc.expectedGetNamesCount)
@@ -5992,7 +5993,7 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
-			).Return(tc.expectedDecoupleErr)
+			).Return(false, tc.expectedDecoupleErr)
 			cloud.VMSet = mockVMSet
 			cloud.LoadBalancerClient = mockLBClient
 			svc := getTestService("svc", v1.ProtocolTCP, nil, false, 80)
