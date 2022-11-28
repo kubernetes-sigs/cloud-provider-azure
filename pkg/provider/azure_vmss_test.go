@@ -2593,8 +2593,11 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		mockVMsClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 
-		err = ss.EnsureBackendPoolDeleted(&v1.Service{}, test.backendpoolID, testVMSSName, test.backendAddressPools, true)
+		updated, err := ss.EnsureBackendPoolDeleted(&v1.Service{}, test.backendpoolID, testVMSSName, test.backendAddressPools, true)
 		assert.Equal(t, test.expectedErr, err != nil, test.description+", but an error occurs")
+		if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
+			assert.True(t, updated, test.description)
+		}
 	}
 }
 
@@ -2676,7 +2679,8 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		i := i
 		id := id
 		testFunc = append(testFunc, func() error {
-			return ss.EnsureBackendPoolDeleted(&v1.Service{}, id, testVMSSNames[i], backendAddressPools, true)
+			_, err = ss.EnsureBackendPoolDeleted(&v1.Service{}, id, testVMSSNames[i], backendAddressPools, true)
+			return err
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(testFunc...)
