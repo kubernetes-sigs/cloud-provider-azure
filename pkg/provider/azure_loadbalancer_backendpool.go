@@ -185,8 +185,13 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 				for _, ipConf := range *bp.BackendIPConfigurations {
 					ipConfID := to.String(ipConf.ID)
 					nodeName, _, err := bc.VMSet.GetNodeNameByIPConfigurationID(ipConfID)
-					if err != nil && !errors.Is(err, cloudprovider.InstanceNotFound) {
-						return false, false, err
+					if err != nil {
+						if errors.Is(err, cloudprovider.InstanceNotFound) {
+							klog.V(2).Infof("bc.ReconcileBackendPools for service (%s): vm not found for ipConfID %s", serviceName, ipConfID)
+							backendIPConfigurationsToBeDeleted = append(backendIPConfigurationsToBeDeleted, ipConf)
+						} else {
+							return false, false, err
+						}
 					}
 
 					// If a node is not supposed to be included in the LB, it
