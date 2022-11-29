@@ -19,7 +19,6 @@ package provider
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -955,12 +954,9 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-			// Make some nil VMSS VM in cache.
-			cacheKey, cache, err := ss.getVMSSVMCache(ss.ResourceGroup, testVMSSName)
+			cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, testVMSSName)
+			virtualMachines, err := ss.getVMSSVMsFromCache(ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
 			assert.Nil(t, err)
-			cached, err := cache.Get(cacheKey, azcache.CacheReadTypeDefault)
-			assert.Nil(t, err)
-			virtualMachines := cached.(*sync.Map)
 			for _, vm := range test.goneVMList {
 				entry := VMSSVirtualMachinesEntry{
 					ResourceGroup: ss.ResourceGroup,
@@ -968,7 +964,7 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 				}
 				virtualMachines.Store(vm, &entry)
 			}
-			cache.Set(cacheKey, cached)
+			ss.vmssVMCache.Update(cacheKey, virtualMachines)
 
 			for i := 0; i < len(test.vmList); i++ {
 				node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}
@@ -982,11 +978,9 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 				assert.Equal(t, test.goneVMExpectedErr, err)
 			}
 
-			cacheKey, cache, err = ss.getVMSSVMCache(ss.ResourceGroup, testVMSSName)
+			virtualMachines, err = ss.getVMSSVMsFromCache(ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
 			assert.Nil(t, err)
-			cached, err = cache.Get(cacheKey, azcache.CacheReadTypeDefault)
-			assert.Nil(t, err)
-			virtualMachines = cached.(*sync.Map)
+
 			for _, vm := range test.goneVMList {
 				_, ok := virtualMachines.Load(vm)
 				assert.True(t, ok)

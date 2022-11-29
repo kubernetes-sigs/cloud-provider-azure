@@ -19,6 +19,7 @@ package provider
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -218,7 +219,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		scaleSetName := string(test.vmssName)
+		scaleSetName := strings.ToLower(string(test.vmssName))
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
@@ -264,7 +265,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		}
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-		if scaleSetName == string(fakeStatusNotFoundVMSSName) {
+		if scaleSetName == strings.ToLower(string(fakeStatusNotFoundVMSSName)) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()
@@ -348,7 +349,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		scaleSetName := string(test.vmssName)
+		scaleSetName := strings.ToLower(string(test.vmssName))
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
 		testCloud := ss.cloud
@@ -385,7 +386,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		}
 		mockVMSSVMClient := testCloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-		if scaleSetName == string(fakeStatusNotFoundVMSSName) {
+		if scaleSetName == strings.ToLower(string(fakeStatusNotFoundVMSSName)) {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, scaleSetName, gomock.Any(), gomock.Any(), gomock.Any()).Return(updatedVMSSVM, nil).AnyTimes()

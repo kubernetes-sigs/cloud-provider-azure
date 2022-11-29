@@ -19,7 +19,6 @@ package provider
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -178,7 +177,7 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).Times(1)
 
 	expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, vmList, "", false)
-	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).Times(1)
 
 	// validate getting VMSS VM via cache.
 	vm := expectedVMs[0]
@@ -190,19 +189,20 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 
 	// verify cache has test vmss.
-	cacheKey := strings.ToLower(fmt.Sprintf("%s/%s", "rg", testVMSSName))
-	_, ok := ss.vmssVMCache.Load(cacheKey)
-	assert.Equal(t, true, ok)
+	cacheKey := getVMSSVMCacheKey("rg", testVMSSName)
+	_, err = ss.vmssVMCache.Get(cacheKey, azcache.CacheReadTypeDefault)
+	assert.Nil(t, err)
 
 	// refresh the cache with error.
 	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(2)
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), "rg", testVMSSName, gomock.Any()).Return([]compute.VirtualMachineScaleSetVM{}, &retry.Error{HTTPStatusCode: http.StatusNotFound}).Times(1)
 	realVM, err = ss.getVmssVM(vmName, azcache.CacheReadTypeForceRefresh)
 	assert.Nil(t, realVM)
 	assert.Equal(t, cloudprovider.InstanceNotFound, err)
 
 	// verify cache is cleared.
-	_, ok = ss.vmssVMCache.Load(cacheKey)
-	assert.Equal(t, false, ok)
+	_, err = ss.vmssVMCache.Get(cacheKey, azcache.CacheReadTypeDefault)
+	assert.NotNil(t, err)
 }
 
 func TestGetVMManagementTypeByNodeName(t *testing.T) {
