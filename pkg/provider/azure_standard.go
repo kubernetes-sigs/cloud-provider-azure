@@ -1048,10 +1048,10 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
-func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) error {
+func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
-		return nil
+		return false, nil
 	}
 
 	mc := metrics.NewMetricContext("services", "vmas_ensure_backend_pool_deleted", as.ResourceGroup, as.SubscriptionID, getServiceName(service))
@@ -1076,6 +1076,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 	}
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
+	var nicUpdated bool
 	for i := range ipConfigurationIDs {
 		ipConfigurationID := ipConfigurationIDs[i]
 		nodeName, _, err := as.GetNodeNameByIPConfigurationID(ipConfigurationID)
@@ -1093,15 +1094,15 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 		if err != nil {
 			if errors.Is(err, errNotInVMSet) {
 				klog.V(3).Infof("EnsureBackendPoolDeleted skips node %s because it is not in the vmSet %s", nodeName, vmSetName)
-				return nil
+				return false, nil
 			}
 
 			klog.Errorf("error: az.EnsureBackendPoolDeleted(%s), az.VMSet.GetPrimaryInterface.Get(%s, %s), err=%v", nodeName, vmName, vmSetName, err)
-			return err
+			return false, err
 		}
 		vmasName, err := getAvailabilitySetNameByID(vmasID)
 		if err != nil {
-			return fmt.Errorf("EnsureBackendPoolDeleted: failed to parse the VMAS ID %s: %w", vmasID, err)
+			return false, fmt.Errorf("EnsureBackendPoolDeleted: failed to parse the VMAS ID %s: %w", vmasID, err)
 		}
 		// Only remove nodes belonging to specified vmSet to basic LB backends.
 		if !strings.EqualFold(vmasName, vmSetName) {
@@ -1111,7 +1112,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 
 		if nic.ProvisioningState == consts.NicFailedState {
 			klog.Warningf("EnsureBackendPoolDeleted skips node %s because its primary nic %s is in Failed state", nodeName, *nic.Name)
-			return nil
+			return false, nil
 		}
 
 		if nic.InterfacePropertiesFormat != nil && nic.InterfacePropertiesFormat.IPConfigurations != nil {
@@ -1143,21 +1144,22 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 					klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.resourceGroup, to.String(nic.Name), rerr.Error())
 					return rerr.Error()
 				}
+				nicUpdated = true
 				return nil
 			})
 		}
 	}
 	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
 	if errs != nil {
-		return utilerrors.Flatten(errs)
+		return nicUpdated, utilerrors.Flatten(errs)
 	}
 	// Fail if there are other errors.
 	if len(allErrs) > 0 {
-		return utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return nicUpdated, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
-	return nil
+	return nicUpdated, nil
 }
 
 func getAvailabilitySetNameByID(asID string) (string, error) {

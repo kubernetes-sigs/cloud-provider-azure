@@ -1844,8 +1844,9 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		cloud.InterfacesClient = mockNICClient
 
-		err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools, true)
+		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
+		assert.True(t, nicUpdated)
 	}
 }
 
