@@ -103,6 +103,7 @@ The following configuration is made available for advanced users. There are no d
 | configuration value | description |
 | --- | --- |
 | `cloudControllerManager.imageTag` | `"v1.23.11"` | container image tag for the Azure `cloud-controller-manager` runtime |
+| `cloudControllerManager.allocateNodeCidrs` | Should CIDRs for Pods be allocated and set on the cloud provider. If you're using Azure CNI set to "false" |
 | `cloudControllerManager.bindAddress` | The IP address on which to listen for the --secure-port port. The associated interface(s) must be reachable by the rest of the cluster, and by CLI/web clients. If blank or an unspecified address (0.0.0.0 or ::), all interfaces will be used.|
 | `cloudControllerManager.certDir` | The directory where the TLS certs are located. If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored. |
 | `cloudControllerManager.cloudConfigSecretName` | The name of the cloud config secret. |
