@@ -159,7 +159,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	It("should support BYO public IP", func() {
 		By("creating a public IP with tags")
 		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
-		pip := defaultPublicIPAddress(ipName, false)
+		pip := defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6)
 		expectedTags := map[string]*string{
 			"foo": to.StringPtr("bar"),
 		}
@@ -204,7 +204,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
 
-		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 		utils.Logf("PIP to %s", targetIP)
@@ -288,7 +288,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
 
-		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
@@ -327,7 +327,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	It("should have no operation since no change in service when update", Label(utils.TestSuiteLabelSlow), func() {
 		suffix := string(uuid.NewUUID())[0:4]
 		ipName := basename + "-public-remain" + suffix
-		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
 
@@ -358,6 +358,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for 5 minutes, there should return timeout err, since external ip should not change
+		utils.Logf("External IP should be %s", targetIP)
 		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
 			service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 			if err != nil {
@@ -369,12 +370,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 			ingressList := service.Status.LoadBalancer.Ingress
 			if len(ingressList) == 0 {
-				err = fmt.Errorf("Cannot find Ingress in limited time")
+				err = fmt.Errorf("cannot find Ingress in limited time")
 				utils.Logf("Fail to get ingress, retry it in %s seconds", 10)
 				return false, nil
 			}
 			if targetIP == ingressList[0].IP {
-				utils.Logf("External IP is still %s, as expected", targetIP)
 				return false, nil
 			}
 			utils.Logf("External IP changed, unexpected")
@@ -385,7 +385,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 	It("should support multiple external services sharing one preset public IP address", func() {
 		ipName := fmt.Sprintf("%s-public-remain-%s", basename, string(uuid.NewUUID())[0:4])
-		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
 		defer func() {
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -515,7 +515,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			}
 
 			for _, pip := range pips {
-				if strings.EqualFold(*pip.IPAddress, sharedIP) {
+				if pip.IPAddress != nil && strings.EqualFold(*pip.IPAddress, sharedIP) {
 					utils.Logf("the public IP with address %s still exists", sharedIP)
 					return false, nil
 				}
@@ -620,7 +620,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	It("should support disabling floating IP in load balancer rule with kubernetes service annotations", func() {
 		By("creating a public IP with tags")
 		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
-		pip := defaultPublicIPAddress(ipName, false)
+		pip := defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6)
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
@@ -723,7 +723,8 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:  "8",
 		}
 
-		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) &&
+			tc.IPFamily == utils.IPv4 {
 			// Routing preference is only supported in standard public IPs
 			annotation[consts.ServiceAnnotationIPTagsForPublicIP] = "RoutingPreference=Internet"
 		}
@@ -744,7 +745,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 	It("should respect service with BYO public IP with various configurations", func() {
 		By("Creating a BYO public IP")
 		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
-		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, false))
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
 		defer func() {
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -790,11 +791,11 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 
 		By("Creating a BYO public IP prefix")
 		prefixName := "prefix"
-		prefix, err := utils.WaitCreatePIPPrefix(tc, prefixName, tc.GetResourceGroup(), defaultPublicIPPrefix(prefixName))
-		Expect(err).NotTo(HaveOccurred())
+		prefix, err := utils.WaitCreatePIPPrefix(tc, prefixName, tc.GetResourceGroup(), defaultPublicIPPrefix(prefixName, tc.IPFamily == utils.IPv6))
 		defer func() {
 			Expect(utils.DeletePIPPrefixWithRetry(tc, prefixName)).NotTo(HaveOccurred())
 		}()
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating a service and expose it")
 		annotation := map[string]string{
@@ -897,9 +898,10 @@ func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*network.Sub
 	if subnetToReturn == nil {
 		By("Test subnet doesn't exist. Creating a new one...")
 		isNew = true
-		newSubnetCIDR, err := utils.GetNextSubnetCIDR(vNet)
+		newSubnetCIDR, err := utils.GetNextSubnetCIDR(vNet, tc.IPFamily)
 		Expect(err).NotTo(HaveOccurred())
-		newSubnet, err := tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR, true)
+		newSubnetCIDRStr := newSubnetCIDR.String()
+		newSubnet, err := tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDRStr, true)
 		Expect(err).NotTo(HaveOccurred())
 		subnetToReturn = &newSubnet
 	}
@@ -1042,7 +1044,13 @@ func defaultPublicIPAddress(ipName string, isIPv6 bool) aznetwork.PublicIPAddres
 	return pip
 }
 
-func defaultPublicIPPrefix(name string) aznetwork.PublicIPPrefix {
+func defaultPublicIPPrefix(name string, isIPv6 bool) aznetwork.PublicIPPrefix {
+	pipAddrVersion := aznetwork.IPVersionIPv4
+	var prefixLen int32 = 28
+	if isIPv6 {
+		pipAddrVersion = aznetwork.IPVersionIPv6
+		prefixLen = 124
+	}
 	return aznetwork.PublicIPPrefix{
 		Name:     to.StringPtr(name),
 		Location: to.StringPtr(os.Getenv(utils.ClusterLocationEnv)),
@@ -1050,7 +1058,8 @@ func defaultPublicIPPrefix(name string) aznetwork.PublicIPPrefix {
 			Name: aznetwork.PublicIPPrefixSkuNameStandard,
 		},
 		PublicIPPrefixPropertiesFormat: &aznetwork.PublicIPPrefixPropertiesFormat{
-			PrefixLength: to.Int32Ptr(28),
+			PrefixLength:           to.Int32Ptr(prefixLen),
+			PublicIPAddressVersion: pipAddrVersion,
 		},
 	}
 }

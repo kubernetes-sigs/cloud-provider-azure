@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -26,41 +27,82 @@ const (
 	leastPrefix = 24
 )
 
-// ValidateIPInCIDR validates whether certain ip fits CIDR
-func ValidateIPInCIDR(ip, cidr string) (bool, error) {
-	ipTemp := ip + "/24"
-	ipInt, _, err := cidrString2intArray(ipTemp)
+func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
+	// Filter existSubnets with IP family
+	isIPv6, err := isCIDRIPv6(vnetCIDR)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	cidrInt, mask, err := cidrString2intArray(cidr)
-	if err != nil {
-		return false, err
-	}
-	for i := 0; i < mask; i++ {
-		if cidrInt[i] != ipInt[i] {
-			return false, nil
+	existSubnetsWithSameIPFamily := []string{}
+	for _, subnet := range existSubnets {
+		isSubnetIPv6, err := isCIDRIPv6(subnet)
+		if err != nil {
+			return nil, err
+		}
+		if isSubnetIPv6 == isIPv6 {
+			existSubnetsWithSameIPFamily = append(existSubnetsWithSameIPFamily, subnet)
 		}
 	}
-	return true, nil
-}
 
-func getNextSubnet(vnetCIDR string, existSubnets []string) (string, error) {
+	// IPv6
+	// TODO: A better solution to replace this hack.
+	if isIPv6 {
+		ip, ipNet, _ := net.ParseCIDR(vnetCIDR)
+		mask := ipNet.Mask
+		pos := 0
+		for i := range ip {
+			if mask[i] != 255 {
+				pos = i
+				break
+			}
+		}
+		found := false
+		for i := 255; i > 0; i-- {
+			ip[pos] = byte(i)
+			// Check if the subnet is in any existing one
+			contains := false
+			for _, existSubnet := range existSubnetsWithSameIPFamily {
+				_, existSubnetIPNet, err := net.ParseCIDR(existSubnet)
+				if err != nil {
+					return nil, err
+				}
+				if existSubnetIPNet.Contains(ip) {
+					contains = true
+					break
+				}
+			}
+			if !contains {
+				found = true
+				break
+			}
+
+		}
+		if !found {
+			return nil, fmt.Errorf("failed to find the next subnet: vnetCIDR: %s, existsSubnets: %v",
+				vnetCIDR, existSubnets)
+		}
+		// Prefix length can only be 64 in case of IPv6 address prefixes in subnets.
+		_, nextSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/64", ip))
+		return nextSubnet, err
+	}
+
+	// IPv4
 	intIPArray, vNetMask, err := cidrString2intArray(vnetCIDR)
 	if err != nil {
-		return "", fmt.Errorf("Unexpected vnet address CIDR")
+		return nil, fmt.Errorf("unexpected vnet address CIDR: %v", err)
 	}
 	root := initIPTreeRoot(vNetMask)
-	for _, subnet := range existSubnets {
+	for _, subnet := range existSubnetsWithSameIPFamily {
 		subnetIPArray, subnetPrefix, err := cidrString2intArray(subnet)
 		if err != nil {
-			return "", fmt.Errorf("Unexpected subnet address prefix")
+			return nil, fmt.Errorf("unexpected subnet address prefix: %v", err)
 		}
 		setOccupiedByPrefix(root, subnetIPArray, subnetPrefix)
 	}
 	retArray, retMask := findNodeUsable(root, intIPArray)
 	ret := prefixIntArray2String(retArray, retMask)
-	return ret, nil
+	_, retSubnet, err := net.ParseCIDR(ret)
+	return retSubnet, err
 }
 
 type ipNode struct {
@@ -157,7 +199,7 @@ func prefixIntArray2String(ret []int, prefix int) (ip string) {
 func cidrString2intArray(ip string) (ret []int, prefix int, err error) {
 	splitPos := strings.Index(ip, "/")
 	if splitPos == -1 {
-		err = fmt.Errorf("It is not a valid CIDR format")
+		err = fmt.Errorf("it is not a valid CIDR format")
 	} else {
 		prefix, err = strconv.Atoi(ip[splitPos+1:])
 	}

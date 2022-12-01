@@ -19,7 +19,7 @@ package network
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -50,15 +50,11 @@ var (
 	scalesetRE               = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
 	lbNameRE                 = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Network/loadBalancers/(.+)/frontendIPConfigurations(?:.*)`)
 	backendIPConfigurationRE = regexp.MustCompile(`^/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-
-	ipFamily = utils.IPv4
 )
 
 const (
 	serverPort  = 80
 	testingPort = 81
-
-	nginxStatusCode = 200
 )
 
 var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnnotation), func() {
@@ -100,9 +96,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Waiting for backend pods to be ready")
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
-
-		ipFamily, err = utils.GetClusterServiceIPFamily()
-		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -142,7 +135,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		annotation := map[string]string{
 			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix,
 		}
-
 		// create service with given annotation and wait it to expose
 		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
@@ -151,63 +143,34 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
-		By("Validating External domain name")
-		var code int
+		// Use a hostNetwork Pod to validate Service connectivity via the cluster Node's
+		// network because the current VM running go test may not support IPv6.
+		agnhostPod := fmt.Sprintf("%s-%s", utils.ExecAgnhostPod, "azure-dns-label-name")
+		result, err := utils.CreateHostExecPod(cs, ns.Name, agnhostPod)
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, agnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(result).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+
 		serviceDomainName := utils.GetServiceDomainName(serviceDomainNamePrefix)
-		url := fmt.Sprintf("http://%s:%v", serviceDomainName, ports[0].Port)
-		for i := 1; i <= 30; i++ {
-			/* #nosec G107: Potential HTTP request made with variable url */
-			resp, err := http.Get(url)
-			if err == nil {
-				defer func() {
-					if resp != nil {
-						resp.Body.Close()
-					}
-				}()
-				code = resp.StatusCode
-				if code == nginxStatusCode {
-					break
-				} else {
-					utils.Logf("Received %d status code from %s", code, url)
-				}
-			} else {
-				utils.Logf("Received the following error when validating %s: %v", url, err)
-			}
-			utils.Logf("Retrying in 20 seconds")
-			time.Sleep(20 * time.Second)
-		}
-		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
+		By(fmt.Sprintf("Validating External domain name %q", serviceDomainName))
+		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, serviceDomainName, int(ports[0].Port), v1.ProtocolTCP)
+		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
+
 		By("Update service")
 		annotation = map[string]string{
 			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix + "new",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		_, err := cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
 		serviceDomainName = utils.GetServiceDomainName(serviceDomainNamePrefix)
-		url = fmt.Sprintf("http://%s:%v", serviceDomainName, ports[0].Port)
-		for i := 1; i <= 30; i++ {
-			/* #nosec G107: Potential HTTP request made with variable url */
-			resp, err := http.Get(url)
-			if err == nil {
-				defer func() {
-					if resp != nil {
-						resp.Body.Close()
-					}
-				}()
-				code = resp.StatusCode
-				if code == nginxStatusCode {
-					break
-				} else {
-					utils.Logf("Received %d status code from %s", code, url)
-				}
-			} else {
-				utils.Logf("Received the following error when validating %s: %v", url, err)
-			}
-			utils.Logf("Retrying in 20 seconds")
-			time.Sleep(20 * time.Second)
-		}
-		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
+		By(fmt.Sprintf("Validating External domain name %q", serviceDomainName))
+		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, serviceDomainName, int(ports[0].Port), v1.ProtocolTCP)
+		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-internal'", func() {
@@ -232,20 +195,48 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		vNet, err := tc.GetClusterVirtualNetwork()
 		Expect(err).NotTo(HaveOccurred())
 
-		var newSubnetCIDR string
+		var newSubnetCIDR *net.IPNet
 		for _, existingSubnet := range *vNet.Subnets {
-			if *existingSubnet.Name == subnetName {
-				By("Test subnet have existed, skip creating")
-				newSubnetCIDR = *existingSubnet.AddressPrefix
-				break
+			if *existingSubnet.Name != subnetName {
+				continue
 			}
+			utils.Logf("Test subnet have existed, skip creating")
+			if existingSubnet.AddressPrefix != nil {
+				// IPv4 picks the only AddressPrefix.
+				_, newSubnetCIDR, err = net.ParseCIDR(*existingSubnet.AddressPrefix)
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(existingSubnet.AddressPrefixes).NotTo(BeNil(),
+					"subnet AddressPrefix and AddressPrefixes shouldn't be both nil")
+
+				addrPrefixPicked := false
+				for _, addrPrefix := range *existingSubnet.AddressPrefixes {
+					var parsedIP net.IP
+					parsedIP, newSubnetCIDR, err = net.ParseCIDR(addrPrefix)
+					Expect(err).NotTo(HaveOccurred(), "failed to parse CIDR %q", addrPrefix)
+					if tc.IPFamily == utils.DualStack && parsedIP.To4() != nil {
+						// Dual-stack picks IPv4 prefix.
+						addrPrefixPicked = true
+						break
+					}
+					if tc.IPFamily == utils.IPv6 && parsedIP.To4() == nil {
+						// IPv6 picks IPv6 prefix.
+						addrPrefixPicked = true
+						break
+					}
+				}
+				Expect(addrPrefixPicked).To(BeTrue(), "there's no matching AddressPrefixes")
+			}
+			break
 		}
 
-		if newSubnetCIDR == "" {
+		if newSubnetCIDR == nil {
 			By("Test subnet doesn't exist. Creating a new one...")
-			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet)
+			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet, tc.IPFamily)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDR, false)
+			newSubnetCIDRStr := newSubnetCIDR.String()
+			By(fmt.Sprintf("Creating a subnet %q", newSubnetCIDRStr))
+			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDRStr, false)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
@@ -269,9 +260,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Get External IP: %s", ip)
 
 		By("Validating external ip in target subnet")
-		ret, err := utils.ValidateIPInCIDR(ip, newSubnetCIDR)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ret).To(BeTrue(), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
+		contains := newSubnetCIDR.Contains(net.ParseIP(ip))
+		Expect(contains).To(BeTrue(), "external ip %s is not in the target subnet %s", ip, newSubnetCIDR)
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout'", func() {
@@ -304,7 +294,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("creating test PIP in the test resource group")
 		testPIPName := "testPIP-" + string(uuid.NewUUID())[0:4]
-		pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, false))
+		pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, tc.IPFamily == utils.IPv6))
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			utils.Logf("Cleaning up service and public IP")
@@ -392,7 +382,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-name`", func() {
 		By("Creating two test pips")
 		pipName1 := "pip1"
-		pip1, err := utils.WaitCreatePIP(tc, pipName1, tc.GetResourceGroup(), defaultPublicIPAddress(pipName1, false))
+		pip1, err := utils.WaitCreatePIP(tc, pipName1, tc.GetResourceGroup(), defaultPublicIPAddress(pipName1, tc.IPFamily == utils.IPv6))
 		defer func() {
 			By("Cleaning up test PIP")
 			err := utils.DeletePIPWithRetry(tc, pipName1, tc.GetResourceGroup())
@@ -400,7 +390,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 		Expect(err).NotTo(HaveOccurred())
 		pipName2 := "pip2"
-		pip2, err := utils.WaitCreatePIP(tc, pipName2, tc.GetResourceGroup(), defaultPublicIPAddress(pipName2, false))
+		pip2, err := utils.WaitCreatePIP(tc, pipName2, tc.GetResourceGroup(), defaultPublicIPAddress(pipName2, tc.IPFamily == utils.IPv6))
 		defer func() {
 			By("Cleaning up test PIP")
 			err := utils.DeletePIPWithRetry(tc, pipName2, tc.GetResourceGroup())
@@ -448,19 +438,19 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		)
 
 		By("Creating two test PIPPrefix")
-		prefix1, err := utils.WaitCreatePIPPrefix(tc, prefix1Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix1Name))
-		Expect(err).NotTo(HaveOccurred())
+		prefix1, err := utils.WaitCreatePIPPrefix(tc, prefix1Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix1Name, tc.IPFamily == utils.IPv6))
 		defer func() {
 			By(fmt.Sprintf("Cleaning up pip-prefix: %s", prefix1Name))
 			Expect(utils.DeletePIPPrefixWithRetry(tc, prefix1Name)).NotTo(HaveOccurred())
 		}()
-
-		prefix2, err := utils.WaitCreatePIPPrefix(tc, prefix2Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix2Name))
 		Expect(err).NotTo(HaveOccurred())
+
+		prefix2, err := utils.WaitCreatePIPPrefix(tc, prefix2Name, tc.GetResourceGroup(), defaultPublicIPPrefix(prefix2Name, tc.IPFamily == utils.IPv6))
 		defer func() {
 			By(fmt.Sprintf("Cleaning up pip-prefix: %s", prefix2Name))
 			Expect(utils.DeletePIPPrefixWithRetry(tc, prefix2Name)).NotTo(HaveOccurred())
 		}()
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating a service referring to the prefix")
 		{
@@ -614,10 +604,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		pipName := fmt.Sprintf("%s-public-IP%s", basename, string(uuid.NewUUID())[0:4])
 		By(fmt.Sprintf("Creating a public IP %q", pipName))
 		var pip network.PublicIPAddress
-		if ipFamily == utils.IPv4 {
-			pip = defaultPublicIPAddress(pipName, false)
-		} else if ipFamily == utils.IPv6 {
-			pip = defaultPublicIPAddress(pipName, true)
+		if tc.IPFamily != utils.DualStack {
+			pip = defaultPublicIPAddress(pipName, tc.IPFamily == utils.IPv6)
 		} else {
 			// TODO: dual-stack support
 		}
@@ -633,9 +621,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Created pip with address %s", pipAddr)
 
 		annotation := map[string]string{}
-		if ipFamily == utils.IPv4 {
+		if tc.IPFamily == utils.IPv4 {
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[false]] = pipAddr
-		} else if ipFamily == utils.IPv6 {
+		} else if tc.IPFamily == utils.IPv6 {
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[true]] = pipAddr
 		} else {
 			// TODO: dual-stack support
