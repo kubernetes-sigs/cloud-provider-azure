@@ -19,7 +19,6 @@ package network
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/utils/strings/slices"
 
@@ -104,42 +104,35 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(validateUnsharedSecurityRuleExists(nsgs, ip, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 
 		By("Validating network security group working")
-		var code int
-		url := fmt.Sprintf("http://%s:%d", ip, ports[0].Port)
-		for i := 1; i <= 30; i++ {
-			utils.Logf("round %d, GET %s", i, url)
-			/* #nosec G107: Potential HTTP request made with variable url */
-			resp, err := http.Get(url)
-			if err == nil {
-				defer func() {
-					if resp != nil {
-						resp.Body.Close()
-					}
-				}()
-				code = resp.StatusCode
-				if resp.StatusCode == nginxStatusCode {
-					break
-				}
-			}
-			time.Sleep(20 * time.Second)
-		}
+		// Use a hostNetwork Pod to validate Service connectivity via the cluster Node's
+		// network because the current VM running go test may not support IPv6.
+		agnhostPod := fmt.Sprintf("%s-%s", utils.ExecAgnhostPod, "nsg")
+		result, err := utils.CreateHostExecPod(cs, ns.Name, agnhostPod)
+		defer func() {
+			err = utils.DeletePod(cs, ns.Name, agnhostPod)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(result).To(BeTrue())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(code).To(Equal(nginxStatusCode), "Fail to get response from the domain name")
+
+		By(fmt.Sprintf("Validating External domain name %q", ip))
+		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, ip, int(ports[0].Port), v1.ProtocolTCP)
+		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
 
 		By("Validate automatically delete the rule, when service is deleted")
 		Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
-		isDeleted := false
-		for i := 1; i <= 30; i++ {
+		err = wait.PollImmediate(20*time.Second, 10*time.Minute, func() (done bool, err error) {
 			nsgs, err := tc.GetClusterSecurityGroups()
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				return false, err
+			}
 			if !validateUnsharedSecurityRuleExists(nsgs, ip, port) {
 				utils.Logf("Target rule successfully deleted")
-				isDeleted = true
-				break
+				return true, nil
 			}
-			time.Sleep(20 * time.Second)
-		}
-		Expect(isDeleted).To(BeTrue(), "Fail to automatically delete the rule")
+			return false, nil
+		})
+		Expect(err).To(BeNil(), "Fail to automatically delete the rule")
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
@@ -266,7 +259,11 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).NotTo(HaveOccurred())
 		hostExecPodIP := hostExecPod.Status.PodIP
 
-		allowCIDR := fmt.Sprintf("%s/32", hostExecPodIP)
+		mask := 32
+		if tc.IPFamily == utils.IPv6 {
+			mask = 128
+		}
+		allowCIDR := fmt.Sprintf("%s/%d", hostExecPodIP, mask)
 		service.Spec.LoadBalancerSourceRanges = []string{allowCIDR}
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -283,7 +280,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		By("Checking if there is a LoadBalancerSourceRanges rule")
 		nsgs, err = tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, allowCIDR, fmt.Sprintf("%s_32", hostExecPodIP))
+		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, allowCIDR, fmt.Sprintf("%s_%d", hostExecPodIP, mask))
 		Expect(found).To(BeTrue())
 
 		By("Checking if there is a deny_all rule")
@@ -294,7 +291,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 	It("should support service annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`", func() {
 		By("Creating a public IP with tags")
 		ipName := basename + "-public-IP-disable-floating-ip"
-		pip := defaultPublicIPAddress(ipName, false)
+		pip := defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6)
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
 		Expect(err).NotTo(HaveOccurred())
 		targetIP := to.String(pip.IPAddress)
