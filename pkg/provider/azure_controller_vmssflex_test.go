@@ -43,6 +43,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		description                    string
 		nodeName                       types.NodeName
 		vmName                         string
+		inconsistentLUN                bool
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
 		vmListErr                      error
@@ -78,6 +79,17 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 			vmssFlexVMUpdateError:          &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound},
 			expectedErr:                    fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: instance not found"),
 		},
+		{
+			description:                    "error should be returned when disk lun is inconsistent",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
+			inconsistentLUN:                true,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			vmssFlexVMUpdateError:          nil,
+			expectedErr:                    fmt.Errorf("disk(uri) already attached to node(vmssflex1000001) on LUN(1), but target LUN is 63"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -94,11 +106,14 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
 
 		options := AttachDiskOptions{
-			lun:                     0,
-			diskName:                "",
+			lun:                     1,
+			diskName:                "diskname",
 			cachingMode:             compute.CachingTypesReadOnly,
 			diskEncryptionSetID:     "",
 			writeAcceleratorEnabled: false,
+		}
+		if tc.inconsistentLUN {
+			options.lun = 63
 		}
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
@@ -281,8 +296,9 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			expectedDataDisks: []compute.DataDisk{
 				{
-					Lun:  to.Int32Ptr(1),
-					Name: to.StringPtr("dataDisktestvm1"),
+					Lun:         to.Int32Ptr(1),
+					Name:        to.StringPtr("dataDisktestvm1"),
+					ManagedDisk: &compute.ManagedDiskParameters{ID: to.StringPtr("uri")},
 				},
 			},
 			expectedErr: nil,
