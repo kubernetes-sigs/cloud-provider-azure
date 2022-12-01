@@ -47,6 +47,8 @@ type AzureTestClient struct {
 	acrClient      acr.BaseClient
 	authClient     azauth.BaseClient
 	computeClient  azcompute.BaseClient
+
+	IPFamily IPFamily
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
@@ -94,6 +96,11 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 	location := getLocationFromNodeLabels(&nodes[0])
 
+	ipFamily, err := GetClusterServiceIPFamily()
+	if err != nil {
+		return nil, err
+	}
+
 	c := &AzureTestClient{
 		location:       location,
 		resourceGroup:  resourceGroup,
@@ -103,6 +110,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		acrClient:      acrClient,
 		authClient:     authClient,
 		computeClient:  computeClient,
+		IPFamily:       ipFamily,
 	}
 
 	return c, nil
