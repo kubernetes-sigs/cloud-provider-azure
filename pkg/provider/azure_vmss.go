@@ -1519,8 +1519,9 @@ func getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID string
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName string) error {
-	vmssNamesMap := make(map[string]bool)
+	klog.V(2).Infof("ensureBackendPoolDeletedFromVMSS: vmSetName (%s), backendPoolID (%s)", vmSetName, backendPoolID)
 
+	vmssNamesMap := make(map[string]bool)
 	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
 	if ss.useStandardLoadBalancer() {
 		cachedUniform, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeDefault)
@@ -1538,6 +1539,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
+			klog.V(2).Infof("ensureBackendPoolDeletedFromVmss: vmss (%s)", to.String(vmss.Name))
 
 			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
@@ -1571,6 +1573,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 				loadBalancerBackendAddressPools = *primaryIPConfig.LoadBalancerBackendAddressPools
 			}
 			for _, loadBalancerBackendAddressPool := range loadBalancerBackendAddressPools {
+				klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: loadBalancerBackendAddressPool (%s) on vmss (%s)", to.String(loadBalancerBackendAddressPool.ID), to.String(vmss.Name))
 				if strings.EqualFold(to.String(loadBalancerBackendAddressPool.ID), backendPoolID) {
 					klog.V(4).Infof("ensureBackendPoolDeletedFromVMSS: found vmss %s with backend pool %s, removing it", to.String(vmss.Name), backendPoolID)
 					vmssNamesMap[to.String(vmss.Name)] = true
