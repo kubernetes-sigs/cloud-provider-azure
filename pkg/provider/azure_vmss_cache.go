@@ -295,6 +295,11 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 }
 
 func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *compute.VirtualMachineScaleSetVM) error {
+	// lock the VMSS entry to ensure a consistent view of the VM map when there are concurrent updates.
+	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
+	ss.lockMap.LockEntry(cacheKey)
+	defer ss.lockMap.UnlockEntry(cacheKey)
+
 	virtualMachines, err := ss.getVMSSVMsFromCache(resourceGroupName, vmssName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		err = fmt.Errorf("updateCache(%s, %s, %s) failed getting vmCache with error: %v", vmssName, resourceGroupName, nodeName, err)
@@ -320,7 +325,6 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 		return true
 	})
 
-	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
 	ss.vmssVMCache.Update(cacheKey, localCache)
 	klog.V(4).Infof("updateCache(%s, %s, %s) for cacheKey(%s) updated successfully", vmssName, resourceGroupName, nodeName, cacheKey)
 	return nil
