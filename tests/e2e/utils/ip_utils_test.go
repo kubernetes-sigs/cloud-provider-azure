@@ -51,24 +51,37 @@ func TestPrefixIntArray2String(t *testing.T) {
 	assert.Equal(t, cidrIP, cidrSuppose)
 }
 
-func TestValidateIPInCIDR(t *testing.T) {
-	cidr := "10.24.0.0/16"
-	ip1 := "10.24.0.100"
-	ip2 := "20.24.0.0"
-	flag1, _ := ValidateIPInCIDR(ip1, cidr)
-	assert.Equal(t, flag1, true)
-	flag2, _ := ValidateIPInCIDR(ip2, cidr)
-	assert.Equal(t, flag2, false)
-}
-
 func TestGetNextSubnet(t *testing.T) {
-	vNetCIDR := "10.24.0.0/16"
-	existSubnets := []string{
-		"10.24.0.0/24",
-		"10.24.1.0/24",
+	tests := []struct {
+		vNetCIDR     string
+		existSubnets []string
+		resultIP     string
+		resultMask   []byte
+	}{
+		{
+			vNetCIDR: "10.24.0.0/16",
+			existSubnets: []string{
+				"10.24.0.0/24",
+				"10.24.1.0/24",
+			},
+			resultIP:   "10.24.2.0",
+			resultMask: []byte{255, 255, 255, 0},
+		},
+		{
+			vNetCIDR: "2001:1234:5678:9a00::/56",
+			existSubnets: []string{
+				"2001:1234:5678:9abc::/64",
+				"2001:1234:5678:9abd::/64",
+			},
+			resultIP:   "2001:1234:5678:9aff::",
+			resultMask: []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+		},
 	}
-	cidrResult := "10.24.2.0/24"
-	cidr, err := getNextSubnet(vNetCIDR, existSubnets)
-	assert.Empty(t, err)
-	assert.Equal(t, cidrResult, cidr)
+
+	for _, tc := range tests {
+		cidr, err := getNextSubnet(tc.vNetCIDR, tc.existSubnets)
+		assert.Empty(t, err)
+		assert.Equal(t, tc.resultIP, cidr.IP.String())
+		assert.Equal(t, tc.resultMask, []byte(cidr.Mask))
+	}
 }
