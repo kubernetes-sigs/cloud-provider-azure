@@ -4837,7 +4837,7 @@ func TestUnbindServiceFromPIP(t *testing.T) {
 	}
 
 	for i, pip := range pips {
-		_ = unbindServiceFromPIP(pip, &service, serviceName, "")
+		_ = unbindServiceFromPIP(pip, &service, serviceName, "", false)
 		assert.Equal(t, expectedTags[i], pip.Tags)
 	}
 }

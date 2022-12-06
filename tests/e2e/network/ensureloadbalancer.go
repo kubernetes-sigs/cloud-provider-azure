@@ -733,7 +733,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
@@ -775,7 +775,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
@@ -814,7 +814,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
@@ -848,7 +848,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, testServiceName)
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())

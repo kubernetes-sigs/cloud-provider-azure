@@ -129,9 +129,15 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-dns-label-name'", func() {
-		By("Create service")
-		serviceDomainNamePrefix := serviceName + string(uuid.NewUUID())
-
+		// This test creates/deletes/updates some Services:
+		// 1. Create a Service with managed PIP and check connectivity with DNS
+		// 2. Delete the Service
+		// 3. Create a Service with user assigned PIP
+		// 4. Delete the Servcie and check tags
+		// 5. Create a Service with different name
+		// 6. Update the Service with new tag
+		By("Create a Service with managed PIP")
+		serviceDomainNamePrefix := fmt.Sprintf("%s-%s", serviceName, uuid.NewUUID())
 		annotation := map[string]string{
 			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix,
 		}
@@ -151,19 +157,74 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err = utils.DeletePod(cs, ns.Name, agnhostPod)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		Expect(result).To(BeTrue())
 		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(BeTrue())
 
 		serviceDomainName := utils.GetServiceDomainName(serviceDomainNamePrefix)
 		By(fmt.Sprintf("Validating External domain name %q", serviceDomainName))
 		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, serviceDomainName, int(ports[0].Port), v1.ProtocolTCP)
 		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
 
+		By("Delete the Service")
+		err = utils.DeleteService(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Create a PIP")
+		ipName := fmt.Sprintf("%s-public-IP-%s", basename, uuid.NewUUID()[0:4])
+		nsName := ns.Name
+		rgName := tc.GetResourceGroup()
+		pip, err := utils.WaitCreatePIP(tc, ipName, rgName, defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6))
+		defer func() {
+			err := utils.DeletePIPWithRetry(tc, ipName, rgName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := to.String(pip.IPAddress)
+		pipName := to.String(pip.Name)
+		utils.Logf("PIP %q to %q", pipName, targetIP)
+
+		By("Create a Service which will be deleted with the PIP")
+		oldServiceName := fmt.Sprintf("%s-old", serviceName)
+		service := utils.CreateLoadBalancerServiceManifest(oldServiceName, annotation, labels, nsName, ports)
+		service = updateServiceLBIP(service, false, targetIP)
+
+		// create service with given annotation and wait it to expose
+		_, err = cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
+		defer func() {
+			utils.Logf("Delete test Service %q", oldServiceName)
+			err := utils.DeleteService(cs, ns.Name, oldServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, nsName, oldServiceName, targetIP)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Delete the old Service")
+		err = utils.DeleteService(cs, ns.Name, oldServiceName)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Check if PIP DNS label is deleted")
+		deleted, err := ifPIPDNSLabelDeleted(tc, pipName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(deleted).To(BeTrue())
+
+		By("Create a different Service with the same azure-dns-label-name tag")
+		service.Name = serviceName
+		_, err = cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
+		defer func() {
+			utils.Logf("Delete test Service %q", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		serviceDomainName = utils.GetServiceDomainName(serviceDomainNamePrefix)
+		By(fmt.Sprintf("Validating External domain name %q", serviceDomainName))
+		err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, serviceDomainName, int(ports[0].Port), v1.ProtocolTCP)
+		Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name")
+
 		By("Update service")
-		annotation = map[string]string{
-			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix + "new",
-		}
-		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		service.Annotations[consts.ServiceAnnotationDNSLabelName] = fmt.Sprintf("%s-new", serviceDomainNamePrefix)
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -369,7 +430,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -425,7 +486,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		defer func() {
 			By("Cleaning up test service")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -492,7 +553,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		defer func() {
 			By("Cleaning up test service")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
@@ -550,7 +611,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		defer func() {
 			By("Cleaning up test service")
-			Expect(utils.DeleteServiceIfExists(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
+			Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
 		}()
 
 		By("Waiting for the service to expose")
@@ -999,6 +1060,26 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 		return reflect.DeepEqual(tags, expectedTags), nil
 	})
 	return err
+}
+
+func ifPIPDNSLabelDeleted(tc *utils.AzureTestClient, pipName string) (bool, error) {
+	if err := wait.PollImmediate(10*time.Second, 2*time.Minute, func() (done bool, err error) {
+		pip, err := utils.WaitGetPIP(tc, pipName)
+		if err != nil {
+			return false, err
+		}
+		keyDeleted, legacyKeyDeleted := false, false
+		if name, ok := pip.Tags[consts.ServiceUsingDNSKey]; !ok || name == nil {
+			keyDeleted = true
+		}
+		if name, ok := pip.Tags[consts.LegacyServiceUsingDNSKey]; !ok || name == nil {
+			legacyKeyDeleted = true
+		}
+		return keyDeleted && legacyKeyDeleted, nil
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) string {

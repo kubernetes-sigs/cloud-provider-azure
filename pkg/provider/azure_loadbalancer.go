@@ -1223,6 +1223,11 @@ func getServiceFromPIPDNSTags(tags map[string]*string) string {
 	return ""
 }
 
+func deleteServicePIPDNSTags(tags *map[string]*string) {
+	delete(*tags, consts.ServiceUsingDNSKey)
+	delete(*tags, consts.LegacyServiceUsingDNSKey)
+}
+
 func getServiceFromPIPServiceTags(tags map[string]*string) string {
 	v, ok := tags[consts.ServiceTagKey]
 	if ok && v != nil {
@@ -3097,10 +3102,9 @@ func (az *Cloud) getPublicIPUpdates(
 		owns, isUserAssignedPIP := serviceOwnsPublicIP(service, &pip, clusterName)
 		if owns {
 			var dirtyPIP, toBeDeleted bool
-			if !wantLb && !isUserAssignedPIP {
+			if !wantLb {
 				klog.V(2).Infof("reconcilePublicIP for service(%s): unbinding the service from pip %s", serviceName, *pip.Name)
-				err = unbindServiceFromPIP(&pip, service, serviceName, clusterName)
-				if err != nil {
+				if err = unbindServiceFromPIP(&pip, service, serviceName, clusterName, isUserAssignedPIP); err != nil {
 					return false, nil, false, nil, err
 				}
 				dirtyPIP = true
@@ -3572,9 +3576,17 @@ func bindServicesToPIP(pip *network.PublicIPAddress, incomingServiceNames []stri
 	return addedNew, nil
 }
 
-func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, serviceName, clusterName string) error {
+func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service,
+	serviceName, clusterName string, isUserAssignedPIP bool) error {
 	if pip == nil || pip.Tags == nil {
 		return fmt.Errorf("nil public IP or tags")
+	}
+
+	if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
+		deleteServicePIPDNSTags(&pip.Tags)
+	}
+	if isUserAssignedPIP {
+		return nil
 	}
 
 	// skip removing tags for user assigned pips
@@ -3585,6 +3597,7 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, ser
 		if strings.EqualFold(existingServiceNames[i], serviceName) {
 			existingServiceNames = append(existingServiceNames[:i], existingServiceNames[i+1:]...)
 			found = true
+			break
 		}
 	}
 	if !found {
@@ -3592,15 +3605,7 @@ func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service, ser
 	}
 
 	_, err := bindServicesToPIP(pip, existingServiceNames, true)
-	if err != nil {
-		return err
-	}
-
-	if existingServiceName := getServiceFromPIPDNSTags(pip.Tags); existingServiceName != "" && strings.EqualFold(existingServiceName, serviceName) {
-		pip.Tags[consts.ServiceUsingDNSKey] = to.StringPtr("")
-	}
-
-	return nil
+	return err
 }
 
 // ensureLoadBalancerTagged ensures every load balancer in the resource group is tagged as configured
