@@ -261,9 +261,18 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
-	future, err := vmset.AttachDisk(ctx, nodeName, diskMap)
-	if future == nil {
-		return -1, fmt.Errorf("nil future was returned: %w", err)
+
+	defer func() {
+		// invalidate the cache if there is error in disk attach
+		if err != nil {
+			_ = vmset.DeleteCacheForNode(string(nodeName))
+		}
+	}()
+
+	var future *azure.Future
+	future, err = vmset.AttachDisk(ctx, nodeName, diskMap)
+	if err != nil {
+		return -1, err
 	}
 	// err will be handled by waitForUpdateResult below
 

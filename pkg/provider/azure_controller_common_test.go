@@ -105,8 +105,8 @@ func TestCommonAttachDisk(t *testing.T) {
 		initVM(testCloud, expectedVMs)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(statusCode)).MaxTimes(1)
-		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MaxTimes(1)
-		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result).MaxTimes(1)
+		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).MaxTimes(1)
+		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).MaxTimes(1)
 	}
 
 	maxShare := int32(1)
@@ -238,8 +238,8 @@ func TestCommonAttachDisk(t *testing.T) {
 				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200)).AnyTimes()
 				gomock.InOrder(
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result),
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil),
+					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result),
+					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, nil),
 				)
 			},
 		},
@@ -257,7 +257,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				defaultSetup(testCloud, expectedVMs, statusCode, result)
 				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200)).AnyTimes()
-				mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result).AnyTimes()
+				mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).AnyTimes()
 			},
 			contextDuration:      time.Second,
 			isContextDeadlineErr: true,
@@ -322,8 +322,8 @@ func TestWaitForUpdateResult(t *testing.T) {
 	defaultSetup := func(testCloud *Cloud, statusCode int, result *retry.Error) {
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(statusCode)).MaxTimes(1)
-		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MaxTimes(1)
-		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result).MaxTimes(1)
+		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).MaxTimes(1)
+		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).MaxTimes(1)
 	}
 
 	testCases := []struct {
@@ -371,8 +371,8 @@ func TestWaitForUpdateResult(t *testing.T) {
 				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200))
 				gomock.InOrder(
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result),
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil),
+					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result),
+					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, nil),
 				)
 			},
 		},
@@ -387,7 +387,7 @@ func TestWaitForUpdateResult(t *testing.T) {
 				defaultSetup(testCloud, statusCode, result)
 				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200)).AnyTimes()
-				mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(result).AnyTimes()
+				mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).AnyTimes()
 			},
 			contextDuration:   time.Second,
 			expectedErrorType: context.DeadlineExceeded,
@@ -512,7 +512,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			if len(expectedVMs) == 0 {
 				mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 			}
-			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		lun, err := common.AttachDisk(ctx, true, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk)
@@ -573,7 +573,7 @@ func TestCommonDetachDisk(t *testing.T) {
 		if len(expectedVMs) == 0 {
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(compute.VirtualMachine{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		}
-		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 		err := common.DetachDisk(ctx, test.diskName, diskURI, test.nodeName)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
@@ -648,9 +648,9 @@ func TestCommonUpdateVM(t *testing.T) {
 		if test.isErrorRetriable {
 			testCloud.CloudProviderBackoff = true
 			testCloud.ResourceRequestBackoff = wait.Backoff{Steps: 1}
-			mockVMsClient.EXPECT().WaitForUpdateResult(ctx, &future, testCloud.ResourceGroup, gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusBadRequest, Retriable: true, RawError: fmt.Errorf("Retriable: true")}).AnyTimes()
+			mockVMsClient.EXPECT().WaitForUpdateResult(ctx, &future, testCloud.ResourceGroup, gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusBadRequest, Retriable: true, RawError: fmt.Errorf("Retriable: true")}).AnyTimes()
 		} else {
-			mockVMsClient.EXPECT().WaitForUpdateResult(ctx, &future, testCloud.ResourceGroup, gomock.Any()).Return(nil).AnyTimes()
+			mockVMsClient.EXPECT().WaitForUpdateResult(ctx, &future, testCloud.ResourceGroup, gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		err = common.UpdateVM(ctx, test.nodeName)

@@ -845,7 +845,7 @@ func TestUpdate(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmClient := getTestVMClient(armClient)
-	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
+	_, rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.Nil(t, rerr)
 }
 
@@ -911,7 +911,7 @@ func TestWaitForUpdateResult(t *testing.T) {
 		armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 		vmClient := getTestVMClient(armClient)
-		err := vmClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
+		_, err := vmClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
 		assert.Equal(t, err, test.expectedResult)
 	}
 }
@@ -930,7 +930,7 @@ func TestUpdateWithUpdateResponderError(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmClient := getTestVMClient(armClient)
-	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
+	_, rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.NotNil(t, rerr)
 }
 
@@ -946,7 +946,7 @@ func TestUpdateNeverRateLimiter(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmClient := getTestVMClientWithNeverRateLimiter(armClient)
 	testVM := compute.VirtualMachineUpdate{}
-	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
+	_, rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmUpdateErr, rerr)
 }
@@ -964,7 +964,7 @@ func TestUpdateRetryAfterReader(t *testing.T) {
 	testVM := compute.VirtualMachineUpdate{}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmClient := getTestVMClientWithRetryAfterReader(armClient)
-	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
+	_, rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, vmUpdateErr, rerr)
 }
@@ -990,7 +990,7 @@ func TestUpdateThrottle(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vmClient := getTestVMClient(armClient)
-	rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
+	_, rerr := vmClient.Update(context.TODO(), "rg", "vm1", testVM, "test")
 	assert.NotNil(t, rerr)
 	assert.Equal(t, throttleErr, rerr)
 }
