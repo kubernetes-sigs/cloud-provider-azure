@@ -198,7 +198,7 @@ func ValidateServiceConnectivity(ns, execPod, serviceIP string, port int, protoc
 			Logf("Expected output to contain 'succeeded', got %q; retrying...", stdout)
 			return false, nil
 		}
-		Logf("Validation succeeded: Service addr %s:%d with protocol %v", serviceIP, port, protocol)
+		Logf("Validation succeeded: Service addr %s and port %d with protocol %v", serviceIP, port, protocol)
 		return true, nil
 	})
 	return pollErr

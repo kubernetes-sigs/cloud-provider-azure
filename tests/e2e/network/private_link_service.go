@@ -68,6 +68,11 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
+		if tc.IPFamily != utils.IPv4 {
+			// https://learn.microsoft.com/en-us/azure/private-link/private-link-service-overview#limitations
+			Skip("private link service only works with IPv4")
+		}
+
 		utils.Logf("Creating deployment " + serviceName)
 		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
