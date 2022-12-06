@@ -168,8 +168,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 			Routes: &[]network.Route{},
 		},
 	}
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil)
-	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTablesAfterFirstDeletion, nil)
+	routeTableClient.EXPECT().Get(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, "").Return(routeTables, nil).AnyTimes()
 	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterFirstDeletion, "").Return(nil)
 	routeTableClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.RouteTableResourceGroup, cloud.RouteTableName, routeTablesAfterSecondDeletion, "").Return(nil)
 	err := cloud.DeleteRoute(context.TODO(), "cluster", &route)

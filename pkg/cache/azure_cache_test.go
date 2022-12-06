@@ -30,7 +30,7 @@ const (
 	fakeCacheTTL = 2 * time.Second
 )
 
-type fakeDataObj struct{ Data string }
+type fakeDataObj struct{}
 
 type fakeDataSource struct {
 	called int
@@ -116,40 +116,6 @@ func TestCacheGetError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, getError, err)
 	assert.Nil(t, val)
-}
-
-func TestCacheGetWithDeepCopy(t *testing.T) {
-	changed, unchanged := "changed", "unchanged"
-	valFake := &fakeDataObj{unchanged}
-	cases := []struct {
-		name     string
-		data     map[string]*fakeDataObj
-		key      string
-		expected interface{}
-	}{
-		{
-			name:     "cache should return data for existing key",
-			data:     map[string]*fakeDataObj{"key1": valFake},
-			key:      "key1",
-			expected: unchanged,
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			dataSource, cache := newFakeCache(t)
-			dataSource.set(c.data)
-			cache.Set(c.key, valFake)
-			val, err := cache.Get(c.key, CacheReadTypeDefault)
-			assert.NoError(t, err)
-			assert.Equal(t, c.expected, val.(*fakeDataObj).Data)
-
-			// Change the value
-			valFake.Data = changed
-			cache.Set(c.key, valFake)
-			assert.Equal(t, c.expected, val.(*fakeDataObj).Data)
-		})
-	}
 }
 
 func TestCacheDelete(t *testing.T) {

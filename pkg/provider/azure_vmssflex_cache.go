@@ -33,6 +33,7 @@ import (
 )
 
 func (fs *FlexScaleSet) newVmssFlexCache() (*azcache.TimedCache, error) {
+
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{}
 
@@ -219,13 +220,13 @@ func (fs *FlexScaleSet) getVmssFlexVM(nodeName string, crt azcache.AzureCacheRea
 		return vm, err
 	}
 	vmMap := cached.(*sync.Map)
-	cachedVM, ok := vmMap.Load(nodeName)
+	cachvmedVM, ok := vmMap.Load(nodeName)
 	if !ok {
 		klog.V(2).Infof("did not find node (%s) in the existing cache, which means it is deleted...", nodeName)
 		return vm, cloudprovider.InstanceNotFound
 	}
 
-	return *(cachedVM.(*compute.VirtualMachine)), nil
+	return *(cachvmedVM.(*compute.VirtualMachine)), nil
 }
 
 func (fs *FlexScaleSet) getVmssFlexByVmssFlexID(vmssFlexID string, crt azcache.AzureCacheReadType) (*compute.VirtualMachineScaleSet, error) {

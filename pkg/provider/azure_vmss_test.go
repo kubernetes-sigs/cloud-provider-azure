@@ -954,17 +954,15 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-			cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, testVMSSName)
 			virtualMachines, err := ss.getVMSSVMsFromCache(ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
 			assert.Nil(t, err)
 			for _, vm := range test.goneVMList {
-				entry := VMSSVirtualMachinesEntry{
-					ResourceGroup: ss.ResourceGroup,
-					VMSSName:      testVMSSName,
+				entry := vmssVirtualMachinesEntry{
+					resourceGroup: ss.ResourceGroup,
+					vmssName:      testVMSSName,
 				}
 				virtualMachines.Store(vm, &entry)
 			}
-			ss.vmssVMCache.Update(cacheKey, virtualMachines)
 
 			for i := 0; i < len(test.vmList); i++ {
 				node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}

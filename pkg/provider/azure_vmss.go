@@ -148,8 +148,8 @@ func (ss *ScaleSet) getVMSS(vmssName string, crt azcache.AzureCacheReadType) (*c
 		}
 		vmsses := cached.(*sync.Map)
 		if vmss, ok := vmsses.Load(vmssName); ok {
-			result := vmss.(*VMSSEntry)
-			return result.VMSS, nil
+			result := vmss.(*vmssEntry)
+			return result.vmss, nil
 		}
 
 		return nil, nil
@@ -193,13 +193,13 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 		}
 
 		if entry, ok := virtualMachines.Load(node.nodeName); ok {
-			result := entry.(*VMSSVirtualMachinesEntry)
-			if result.VirtualMachine == nil {
+			result := entry.(*vmssVirtualMachinesEntry)
+			if result.virtualMachine == nil {
 				klog.Warningf("VM is nil on Node %q, VM is in deleting state", node.nodeName)
 				return nil, true, nil
 			}
 			found = true
-			return virtualmachine.FromVirtualMachineScaleSetVM(result.VirtualMachine, virtualmachine.ByVMSS(result.VMSSName)), found, nil
+			return virtualmachine.FromVirtualMachineScaleSetVM(result.virtualMachine, virtualmachine.ByVMSS(result.vmssName)), found, nil
 		}
 
 		return nil, found, nil
@@ -329,11 +329,11 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 		}
 
 		virtualMachines.Range(func(key, value interface{}) bool {
-			vmEntry := value.(*VMSSVirtualMachinesEntry)
-			if strings.EqualFold(vmEntry.ResourceGroup, resourceGroup) &&
-				strings.EqualFold(vmEntry.VMSSName, scaleSetName) &&
-				strings.EqualFold(vmEntry.InstanceID, instanceID) {
-				vm = vmEntry.VirtualMachine
+			vmEntry := value.(*vmssVirtualMachinesEntry)
+			if strings.EqualFold(vmEntry.resourceGroup, resourceGroup) &&
+				strings.EqualFold(vmEntry.vmssName, scaleSetName) &&
+				strings.EqualFold(vmEntry.instanceID, instanceID) {
+				vm = vmEntry.virtualMachine
 				found = true
 				return false
 			}
@@ -787,21 +787,21 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 
 		vmsses := cached.(*sync.Map)
 		vmsses.Range(func(key, value interface{}) bool {
-			v := value.(*VMSSEntry)
-			if v.VMSS.Name == nil {
+			v := value.(*vmssEntry)
+			if v.vmss.Name == nil {
 				return true
 			}
 
-			vmssPrefix := *v.VMSS.Name
-			if v.VMSS.VirtualMachineProfile != nil &&
-				v.VMSS.VirtualMachineProfile.OsProfile != nil &&
-				v.VMSS.VirtualMachineProfile.OsProfile.ComputerNamePrefix != nil {
-				vmssPrefix = *v.VMSS.VirtualMachineProfile.OsProfile.ComputerNamePrefix
+			vmssPrefix := *v.vmss.Name
+			if v.vmss.VirtualMachineProfile != nil &&
+				v.vmss.VirtualMachineProfile.OsProfile != nil &&
+				v.vmss.VirtualMachineProfile.OsProfile.ComputerNamePrefix != nil {
+				vmssPrefix = *v.vmss.VirtualMachineProfile.OsProfile.ComputerNamePrefix
 			}
 
 			if strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
-				node.vmssName = *v.VMSS.Name
-				node.resourceGroup = v.ResourceGroup
+				node.vmssName = *v.vmss.Name
+				node.resourceGroup = v.resourceGroup
 				return false
 			}
 
@@ -1686,8 +1686,8 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 		vmssUniformMap := cachedUniform.(*sync.Map)
 
 		vmssUniformMap.Range(func(key, value interface{}) bool {
-			vmssEntry := value.(*VMSSEntry)
-			if to.String(vmssEntry.VMSS.Name) == vmSetName {
+			vmssEntry := value.(*vmssEntry)
+			if to.String(vmssEntry.vmss.Name) == vmSetName {
 				found = true
 				return false
 			}
@@ -1748,8 +1748,8 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSet
 		var errorList []error
 		walk := func(key, value interface{}) bool {
 			var vmss *compute.VirtualMachineScaleSet
-			if vmssEntry, ok := value.(*VMSSEntry); ok {
-				vmss = vmssEntry.VMSS
+			if vmssEntry, ok := value.(*vmssEntry); ok {
+				vmss = vmssEntry.vmss
 			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}

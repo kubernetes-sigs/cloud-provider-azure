@@ -449,9 +449,9 @@ type availabilitySet struct {
 	vmasCache *azcache.TimedCache
 }
 
-type AvailabilitySetEntry struct {
-	VMAS          *compute.AvailabilitySet
-	ResourceGroup string
+type availabilitySetEntry struct {
+	vmas          *compute.AvailabilitySet
+	resourceGroup string
 }
 
 func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
@@ -476,9 +476,9 @@ func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
 					klog.Warning("failed to get the name of the VMAS")
 					continue
 				}
-				localCache.Store(to.String(vmas.Name), &AvailabilitySetEntry{
-					VMAS:          &vmas,
-					ResourceGroup: resourceGroup,
+				localCache.Store(to.String(vmas.Name), &availabilitySetEntry{
+					vmas:          &vmas,
+					resourceGroup: resourceGroup,
 				})
 			}
 		}
@@ -1251,8 +1251,8 @@ func (as *availabilitySet) getAvailabilitySetByNodeName(nodeName string, crt azc
 
 	var result *compute.AvailabilitySet
 	vmasList.Range(func(_, value interface{}) bool {
-		vmasEntry := value.(*AvailabilitySetEntry)
-		vmas := vmasEntry.VMAS
+		vmasEntry := value.(*availabilitySetEntry)
+		vmas := vmasEntry.vmas
 		if vmas != nil && vmas.AvailabilitySetProperties != nil && vmas.VirtualMachines != nil {
 			for _, vmIDRef := range *vmas.VirtualMachines {
 				if vmIDRef.ID != nil {
