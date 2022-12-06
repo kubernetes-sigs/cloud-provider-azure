@@ -132,17 +132,49 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 }
 
 // GetNextSubnetCIDR obtains a new ip address which has no overlap with existing subnets.
-func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork) (string, error) {
+func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) (*net.IPNet, error) {
 	if len(*vnet.AddressSpace.AddressPrefixes) == 0 {
-		return "", fmt.Errorf("vNet has no prefix")
+		return nil, fmt.Errorf("vNet has no prefix")
 	}
+	// Because of Azure vNet limitation, underlying vNet is dual-stack for
+	// those single stack IPv6 clusters. Pods and Services are single stack
+	// IPv6 while Nodes and routes are dual-stack.
 	vnetCIDR := (*vnet.AddressSpace.AddressPrefixes)[0]
+	if ipFamily == IPv6 {
+		for i := range *vnet.AddressSpace.AddressPrefixes {
+			addrPrefix := (*vnet.AddressSpace.AddressPrefixes)[i]
+			ip, _, err := net.ParseCIDR(addrPrefix)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse address prefix CIDR: %v", err)
+			}
+			if ip.To4() == nil {
+				vnetCIDR = addrPrefix
+				break
+			}
+		}
+	}
+
 	var existSubnets []string
 	for _, subnet := range *vnet.Subnets {
-		subnet := *subnet.AddressPrefix
-		existSubnets = append(existSubnets, subnet)
+		if subnet.AddressPrefix != nil {
+			existSubnets = append(existSubnets, *subnet.AddressPrefix)
+			continue
+		}
+		if subnet.AddressPrefixes == nil {
+			return nil, fmt.Errorf("subnet AddressPrefix and AddressPrefixes shouldn't be both nil")
+		}
+		existSubnets = append(existSubnets, *subnet.AddressPrefixes...)
 	}
 	return getNextSubnet(vnetCIDR, existSubnets)
+}
+
+// isCIDRIPv6 checks if the provided CIDR is an IPv6 one.
+func isCIDRIPv6(cidr string) (bool, error) {
+	ip, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse CIDR: %q", cidr)
+	}
+	return ip.To4() == nil, nil
 }
 
 // getSecurityGroupList returns the list of security groups in the cluster resource group.
@@ -187,6 +219,7 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []aznetw
 
 // CreateLoadBalancerServiceManifest return the specific service to be created
 func CreateLoadBalancerServiceManifest(name string, annotation map[string]string, labels map[string]string, namespace string, ports []v1.ServicePort) *v1.Service {
+	ipFamilyPreferDS := v1.IPFamilyPolicyPreferDualStack
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -194,9 +227,10 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 			Annotations: annotation,
 		},
 		Spec: v1.ServiceSpec{
-			Selector: labels,
-			Ports:    ports,
-			Type:     "LoadBalancer",
+			Selector:       labels,
+			Ports:          ports,
+			Type:           "LoadBalancer",
+			IPFamilyPolicy: &ipFamilyPreferDS,
 		},
 	}
 }
@@ -230,9 +264,10 @@ func WaitCreatePIPPrefix(
 ) (aznetwork.PublicIPPrefix, error) {
 	Logf("Creating PublicIPPrefix named %s", name)
 
+	var prefix aznetwork.PublicIPPrefix
+
 	resourceClient := cli.createPublicIPPrefixesClient()
 	_, err := resourceClient.CreateOrUpdate(context.Background(), rgName, name, parameter)
-	var prefix aznetwork.PublicIPPrefix
 	if err != nil {
 		return prefix, err
 	}
@@ -373,7 +408,23 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 		for _, sn := range *vNet.Subnets {
 			// if there is more than one subnet, select the first one we find.
 			if !strings.Contains(*sn.Name, "controlplane") && !strings.Contains(*sn.Name, "control-plane") {
-				subnet = *sn.AddressPrefix
+				if tc.IPFamily == DualStack {
+					subnet = (*sn.AddressPrefixes)[0]
+				} else if tc.IPFamily == IPv4 {
+					subnet = *sn.AddressPrefix
+				} else {
+					for i := range *sn.AddressPrefixes {
+						addrPrefix := (*sn.AddressPrefixes)[i]
+						isIPv6, err := isCIDRIPv6(addrPrefix)
+						if err != nil {
+							return "", err
+						}
+						if isIPv6 {
+							subnet = addrPrefix
+							break
+						}
+					}
+				}
 				break
 			}
 		}
@@ -382,9 +433,15 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", to.String(vNet.Name), err)
 	}
+
 	baseIP := ip.To4()
+	pos := 3
+	if tc.IPFamily == IPv6 {
+		baseIP = ip.To16()
+		pos = 15
+	}
 	for i := 0; i <= 254; i++ {
-		baseIP[3]++
+		baseIP[pos]++
 		IP := baseIP.String()
 		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), to.String(vNet.Name), IP)
 		if err != nil {
@@ -395,7 +452,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 			return IP, nil
 		}
 	}
-	return "", fmt.Errorf("Find no availabePrivateIP in subnet CIDR %s", subnet)
+	return "", fmt.Errorf("find no availabePrivateIP in subnet CIDR %s", subnet)
 }
 
 // GetPublicIPFromAddress finds public ip according to ip address
