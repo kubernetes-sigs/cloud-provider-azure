@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -253,7 +254,16 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	}
 	c.diskStateMap.Store(disk, "attaching")
 	defer c.diskStateMap.Delete(disk)
-	future, err := vmset.AttachDisk(ctx, nodeName, diskMap)
+
+	defer func() {
+		// invalidate the cache if there is error in disk attach
+		if err != nil {
+			_ = vmset.DeleteCacheForNode(string(nodeName))
+		}
+	}()
+
+	var future *azure.Future
+	future, err = vmset.AttachDisk(ctx, nodeName, diskMap)
 	if err != nil {
 		return -1, err
 	}
@@ -267,7 +277,8 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 			klog.Warningf("azureDisk - switch to batch operation due to rate limited, QPS: %f", c.diskOpRateLimiter.QPS())
 		}
 	}
-	return lun, vmset.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
+	err = vmset.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
+	return lun, err
 }
 
 func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {

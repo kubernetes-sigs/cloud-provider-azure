@@ -254,7 +254,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 	if options.SkipGetDiskOperation {
 		klog.Warningf("azureDisk - GetDisk(%s, StorageAccountType:%s) is throttled, unable to confirm provisioningState in poll process", options.DiskName, options.StorageAccountType)
 	} else {
-		err = kwait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
+		err = kwait.ExponentialBackoffWithContext(ctx, defaultBackOff, func() (bool, error) {
 			provisionState, id, err := c.GetDisk(ctx, subsID, rg, options.DiskName)
 			if err == nil {
 				if id != "" {

@@ -324,34 +324,32 @@ func (c *Client) listVmssFlexVMs(ctx context.Context, vmssFlexID string, statusO
 }
 
 // Update updates a VirtualMachine.
-func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error {
+func (c *Client) Update(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) (*compute.VirtualMachine, *retry.Error) {
 	mc := metrics.NewMetricContext("vm", "update", resourceGroupName, c.subscriptionID, source)
 
 	// Report errors if the client is rate limited.
 	if !c.rateLimiterWriter.TryAccept() {
 		mc.RateLimitedCount()
-		return retry.GetRateLimitError(true, "VMUpdate")
+		return nil, retry.GetRateLimitError(true, "VMUpdate")
 	}
 
 	// Report errors if the client is throttled.
 	if c.RetryAfterWriter.After(time.Now()) {
 		mc.ThrottledCount()
 		rerr := retry.GetThrottlingError("VMUpdate", "client throttled", c.RetryAfterWriter)
-		return rerr
+		return nil, rerr
 	}
 
-	rerr := c.updateVM(ctx, resourceGroupName, VMName, parameters, source)
+	result, rerr := c.updateVM(ctx, resourceGroupName, VMName, parameters, source)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
 			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
 			c.RetryAfterWriter = rerr.RetryAfter
 		}
-
-		return rerr
+		return result, rerr
 	}
-
-	return nil
+	return result, rerr
 }
 
 // UpdateAsync updates a VirtualMachine asynchronously
@@ -393,7 +391,7 @@ func (c *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMNa
 }
 
 // WaitForUpdateResult waits for the response of the update request
-func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) *retry.Error {
+func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, resourceGroupName, source string) (*compute.VirtualMachine, *retry.Error) {
 	mc := metrics.NewMetricContext("vm", "wait_for_update_result", resourceGroupName, c.subscriptionID, source)
 	response, err := c.armClient.WaitForAsyncOperationResult(ctx, future, "VMWaitForUpdateResult")
 	mc.Observe(retry.NewErrorOrNil(false, err))
@@ -405,13 +403,24 @@ func (c *Client) WaitForUpdateResult(ctx context.Context, future *azure.Future, 
 		} else {
 			klog.V(5).Infof("Received error in WaitForAsyncOperationResult: '%s', no response", err.Error())
 		}
-		return retry.GetError(response, err)
+		return nil, retry.GetError(response, err)
 	}
-	return nil
+	if response != nil && response.StatusCode != http.StatusNoContent {
+		result, rerr := c.updateResponder(response)
+		if rerr != nil {
+			klog.V(5).Infof("Received error in WaitForAsyncOperationResult updateResponder: '%s'", rerr.Error())
+		}
+
+		return result, rerr
+	}
+
+	result := &compute.VirtualMachine{}
+	result.Response = autorest.Response{Response: response}
+	return result, nil
 }
 
 // updateVM updates a VirtualMachine.
-func (c *Client) updateVM(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) *retry.Error {
+func (c *Client) updateVM(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachineUpdate, source string) (*compute.VirtualMachine, *retry.Error) {
 	resourceID := armclient.GetResourceID(
 		c.subscriptionID,
 		resourceGroupName,
@@ -423,18 +432,20 @@ func (c *Client) updateVM(ctx context.Context, resourceGroupName string, VMName 
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.put.request", resourceID, rerr.Error())
-		return rerr
+		return nil, rerr
 	}
 
 	if response != nil && response.StatusCode != http.StatusNoContent {
-		_, rerr = c.updateResponder(response)
+		result, rerr := c.updateResponder(response)
 		if rerr != nil {
 			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.put.respond", resourceID, rerr.Error())
-			return rerr
 		}
+		return result, rerr
 	}
 
-	return nil
+	result := &compute.VirtualMachine{}
+	result.Response = autorest.Response{Response: response}
+	return result, nil
 }
 
 func (c *Client) updateResponder(resp *http.Response) (*compute.VirtualMachine, *retry.Error) {
