@@ -320,11 +320,11 @@ var _ = Describe("Azure nodes", func() {
 
 		utils.Logf("scaling VMSS")
 		count := *vmss.Sku.Capacity
-		err = utils.ScaleVMSS(tc, *vmss.Name, tc.GetResourceGroup(), int64(vmssScaleUpCelling))
+		err = utils.ScaleVMSS(tc, *vmss.Name, int64(vmssScaleUpCelling))
 
 		defer func() {
 			utils.Logf("restoring VMSS")
-			err = utils.ScaleVMSS(tc, *vmss.Name, tc.GetResourceGroup(), count)
+			err = utils.ScaleVMSS(tc, *vmss.Name, count)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
