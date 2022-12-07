@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-type VMSSVirtualMachinesEntry struct {
+type VMSSVirtualMachineEntry struct {
 	ResourceGroup  string
 	VMSSName       string
 	InstanceID     string
@@ -162,9 +162,9 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 	vmssVirtualMachinesCacheTTL := time.Duration(ss.Config.VmssVirtualMachinesCacheTTLInSeconds) * time.Second
 
 	getter := func(cacheKey string) (interface{}, error) {
-		localCache := &sync.Map{} // [nodeName]*VMSSVirtualMachinesEntry
+		localCache := &sync.Map{} // [nodeName]*VMSSVirtualMachineEntry
 
-		oldCache := make(map[string]*VMSSVirtualMachinesEntry)
+		oldCache := make(map[string]*VMSSVirtualMachineEntry)
 
 		entry, exists, err := ss.vmssVMCache.Store.GetByKey(cacheKey)
 		if err != nil {
@@ -175,7 +175,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 			if cached != nil {
 				virtualMachines := cached.(*sync.Map)
 				virtualMachines.Range(func(key, value interface{}) bool {
-					oldCache[key.(string)] = value.(*VMSSVirtualMachinesEntry)
+					oldCache[key.(string)] = value.(*VMSSVirtualMachineEntry)
 					return true
 				})
 			}
@@ -207,7 +207,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 				continue
 			}
 
-			vmssVMCacheEntry := &VMSSVirtualMachinesEntry{
+			vmssVMCacheEntry := &VMSSVirtualMachineEntry{
 				ResourceGroup:  resourceGroupName,
 				VMSSName:       vmssName,
 				InstanceID:     to.String(vm.InstanceID),
@@ -242,7 +242,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 			}
 
 			klog.V(5).Infof("adding old entries to new cache for %s", name)
-			localCache.Store(name, &VMSSVirtualMachinesEntry{
+			localCache.Store(name, &VMSSVirtualMachineEntry{
 				ResourceGroup:  vmEntry.ResourceGroup,
 				VMSSName:       vmEntry.VMSSName,
 				InstanceID:     vmEntry.InstanceID,
@@ -286,7 +286,6 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 		return err
 	}
 
-	// Delete in VMSS VM cache
 	if err := ss.gcVMSSVMCache(); err != nil {
 		klog.Errorf("DeleteCacheForNode(%s) failed to gc stale vmss caches: %v", nodeName, err)
 	}
@@ -308,7 +307,7 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 
 	localCache := &sync.Map{}
 
-	vmssVMCacheEntry := &VMSSVirtualMachinesEntry{
+	vmssVMCacheEntry := &VMSSVirtualMachineEntry{
 		ResourceGroup:  resourceGroupName,
 		VMSSName:       vmssName,
 		InstanceID:     instanceID,
@@ -320,7 +319,7 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 
 	virtualMachines.Range(func(key, value interface{}) bool {
 		if key.(string) != nodeName {
-			localCache.Store(key.(string), value.(*VMSSVirtualMachinesEntry))
+			localCache.Store(key.(string), value.(*VMSSVirtualMachineEntry))
 		}
 		return true
 	})

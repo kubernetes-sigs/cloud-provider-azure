@@ -959,7 +959,7 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			virtualMachines, err := ss.getVMSSVMsFromCache(ss.ResourceGroup, testVMSSName, azcache.CacheReadTypeDefault)
 			assert.Nil(t, err)
 			for _, vm := range test.goneVMList {
-				entry := VMSSVirtualMachinesEntry{
+				entry := VMSSVirtualMachineEntry{
 					ResourceGroup: ss.ResourceGroup,
 					VMSSName:      testVMSSName,
 				}
