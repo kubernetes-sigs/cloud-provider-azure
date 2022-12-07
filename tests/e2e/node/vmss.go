@@ -17,9 +17,6 @@ limitations under the License.
 package node
 
 import (
-	"os"
-	"strings"
-
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +27,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
+var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.TestSuiteLabelVMSSScale), func() {
 	var (
 		ns     *v1.Namespace
 		k8sCli kubernetes.Interface
@@ -73,21 +70,13 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("deallocate VMSS instance")
-		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
-			err = utils.ScaleMachinePool(*vmss.Name, numInstance-1)
-		} else {
-			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance-1)
-		}
+		err = utils.Scale(azCli, *vmss.Name, numInstance-1)
 		Expect(err).NotTo(HaveOccurred())
 		expectedCap[*vmss.Name] = numInstance - 1
 
 		defer func() {
 			By("reset VMSS instance")
-			if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
-				err = utils.ScaleMachinePool(*vmss.Name, numInstance)
-			} else {
-				err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
-			}
+			err = utils.Scale(azCli, *vmss.Name, numInstance)
 			Expect(err).NotTo(HaveOccurred())
 			expectedCap[*vmss.Name] = numInstance
 
@@ -117,21 +106,13 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("allocate VMSS instance")
-		if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
-			err = utils.ScaleMachinePool(*vmss.Name, numInstance+1)
-		} else {
-			err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance+1)
-		}
+		err = utils.Scale(azCli, *vmss.Name, numInstance+1)
 		Expect(err).NotTo(HaveOccurred())
 		expectedCap[*vmss.Name] = numInstance + 1
 
 		defer func() {
 			By("reset VMSS instance")
-			if strings.EqualFold(os.Getenv(utils.CAPZTestCCM), "true") {
-				err = utils.ScaleMachinePool(*vmss.Name, numInstance)
-			} else {
-				err = utils.ScaleVMSS(azCli, *vmss.Name, azCli.GetResourceGroup(), numInstance)
-			}
+			err = utils.Scale(azCli, *vmss.Name, numInstance)
 			Expect(err).NotTo(HaveOccurred())
 			expectedCap[*vmss.Name] = numInstance
 

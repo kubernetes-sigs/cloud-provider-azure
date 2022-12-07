@@ -81,11 +81,14 @@ type ScaleSet struct {
 	// the same cluster.
 	flexScaleSet VMSet
 
+	// vmssCache is timed cache where the Store in the cache is a map of
+	// Key: consts.VMSSKey
+	// Value: sync.Map of [vmssName]*VMSSEntry
 	vmssCache *azcache.TimedCache
 
 	// vmssVMCache is timed cache where the Store in the cache is a map of
 	// Key: [resourcegroup/vmssName]
-	// Value: sync.Map of [vmName]*VMSSVirtualMachinesEntry
+	// Value: sync.Map of [vmName]*VMSSVirtualMachineEntry
 	vmssVMCache *azcache.TimedCache
 
 	// nonVmssUniformNodesCache is used to store node names from non uniform vm.
@@ -195,7 +198,7 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 		}
 
 		if entry, ok := virtualMachines.Load(node.nodeName); ok {
-			result := entry.(*VMSSVirtualMachinesEntry)
+			result := entry.(*VMSSVirtualMachineEntry)
 			if result.VirtualMachine == nil {
 				klog.Warningf("VM is nil on Node %q, VM is in deleting state", node.nodeName)
 				return nil, true, nil
@@ -331,7 +334,7 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 		}
 
 		virtualMachines.Range(func(key, value interface{}) bool {
-			vmEntry := value.(*VMSSVirtualMachinesEntry)
+			vmEntry := value.(*VMSSVirtualMachineEntry)
 			if strings.EqualFold(vmEntry.ResourceGroup, resourceGroup) &&
 				strings.EqualFold(vmEntry.VMSSName, scaleSetName) &&
 				strings.EqualFold(vmEntry.InstanceID, instanceID) {
