@@ -1,26 +1,40 @@
 run:
-  deadline: 30m
-  concurrency: 2
+  timeout: 30m
   go: '1.18'
-  allow-serial-runners: true
-skip-dirs:
+  tests: true
+  skip-dirs:
     - vendor
 linters:
   disable-all: true
   enable:
-    - LINTER_TO_RUN
-  # Run with --fast=false for more extensive checks
+    - errcheck
+    - goconst
+    - gofmt
+    - goimports
+    - revive
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unused
   fast: false
-  govet:
-    # Report about shadowed variables.
-    # Default: false
-    check-shadowing: true
 issues:
   exclude-rules:
     - path: tests/e2e
       linters:
         - revive
-  #include:
-  #  - EXC0002 # include "missing comments" issues from golint
   max-issues-per-linter: 0
   max-same-issues: 0
+linters-settings:
+  staticcheck:
+    checks: ["all", "-SA1019"]
+  gosec:
+    excludes:
+      - G114
+  govet:
+    check-shadowing: false
