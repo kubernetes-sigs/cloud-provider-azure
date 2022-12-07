@@ -234,7 +234,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")), err.Error())
 
 	// security group should be removed from cache if the operation is canceled
-	shouldBeEmpty, err := az.nsgCache.Get("sg", cache.CacheReadTypeDefault)
+	shouldBeEmpty, err := az.nsgCache.GetWithDeepCopy("sg", cache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Empty(t, shouldBeEmpty)
 }
@@ -287,12 +287,12 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
-		shouldBeEmpty, err := az.lbCache.Get("lb", cache.CacheReadTypeDefault)
+		shouldBeEmpty, err := az.lbCache.GetWithDeepCopy("lb", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
 
 		// public ip cache should be populated since there's GetPIP
-		shouldNotBeEmpty, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "pip"), cache.CacheReadTypeDefault)
+		shouldNotBeEmpty, err := az.pipCache.GetWithDeepCopy(az.getPIPCacheKey(az.ResourceGroup, "pip"), cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
@@ -417,7 +417,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
-		cachedPIP, err := az.pipCache.Get(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
+		cachedPIP, err := az.pipCache.GetWithDeepCopy(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		if test.cacheExpectedEmpty {
 			assert.Empty(t, cachedPIP)
@@ -496,7 +496,7 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		// route table should be removed from cache if the etag is mismatch or the operation is canceled
-		shouldBeEmpty, err := az.rtCache.Get("rt", cache.CacheReadTypeDefault)
+		shouldBeEmpty, err := az.rtCache.GetWithDeepCopy("rt", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
 	}
@@ -542,7 +542,7 @@ func TestCreateOrUpdateRoute(t *testing.T) {
 			assert.EqualError(t, test.expectedErr, err.Error())
 		}
 
-		shouldBeEmpty, err := az.rtCache.Get("rt", cache.CacheReadTypeDefault)
+		shouldBeEmpty, err := az.rtCache.GetWithDeepCopy("rt", cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.Empty(t, shouldBeEmpty)
 	}
