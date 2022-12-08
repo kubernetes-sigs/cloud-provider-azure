@@ -15,7 +15,7 @@
       {
         "name": "agentpool1",
         "count": 1,
-        "mode" : "System",
+        "mode": "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
@@ -27,7 +27,7 @@
       {
         "name": "agentpool2",
         "count": 1,
-        "mode" : "System",
+        "mode": "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
@@ -37,10 +37,6 @@
         "minCount": 1
       }
     ],
-    "servicePrincipalProfile": {
-        "clientId": "{AZURE_CLIENT_ID}",
-        "secret": "{AZURE_CLIENT_SECRET}"
-    },
     "encodedCustomConfiguration": "{CUSTOM_CONFIG}"
   }
 }

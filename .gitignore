@@ -3,7 +3,6 @@
 bin/
 obj/
 testResults/
-_artifacts
 _report
 _output/
 translations/
@@ -29,3 +28,8 @@ site/public/
 
 # helm chart verification
 chart_verify/
+
+# kubetest2
+_artifacts
+_kubeconfig
+_rundir
