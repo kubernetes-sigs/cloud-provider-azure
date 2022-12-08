@@ -24,7 +24,6 @@
         "maxCount": 1000,
         "minCount": 1
       }
-    ],
-    "encodedCustomConfiguration": "{CUSTOM_CONFIG}"
+    ]
   }
 }
