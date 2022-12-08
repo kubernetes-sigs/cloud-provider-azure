@@ -464,7 +464,7 @@ func CreateControllerContext(s *cloudcontrollerconfig.CompletedConfig, clientBui
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
 	// important when we start apiserver and controller manager at the same time.
 	if err := genericcontrollermanager.WaitForAPIServer(versionedClient, 10*time.Second); err != nil {
-		return genericcontrollermanager.ControllerContext{}, fmt.Errorf("failed to wait for apiserver being healthy: %v", err)
+		return genericcontrollermanager.ControllerContext{}, fmt.Errorf("failed to wait for apiserver being healthy: %w", err)
 	}
 
 	// Use a discovery client capable of being refreshed.
@@ -514,7 +514,7 @@ func GetAvailableResources(clientBuilder clientbuilder.ControllerClientBuilder) 
 	discoveryClient := client.Discovery()
 	_, resourceMap, err := discoveryClient.ServerGroupsAndResources()
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to get all supported resources from server: %v", err))
+		utilruntime.HandleError(fmt.Errorf("unable to get all supported resources from server: %w", err))
 	}
 	if len(resourceMap) == 0 {
 		return nil, fmt.Errorf("unable to get any supported resources from server")

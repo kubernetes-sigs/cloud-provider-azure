@@ -44,6 +44,7 @@ import (
 var (
 	// ErrorNotVmssInstance indicates an instance is not belonging to any vmss.
 	ErrorNotVmssInstance = errors.New("not a vmss instance")
+	ErrScaleSetNotFound  = errors.New("scale set not found")
 
 	scaleSetNameRE         = regexp.MustCompile(`.*/subscriptions/(?:.*)/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
 	resourceGroupRE        = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(?:.*)/virtualMachines(?:.*)`)
@@ -832,7 +833,7 @@ func (ss *ScaleSet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (*[]str
 		}
 		if !found {
 			klog.Errorf("ss.GetVMSetNames - scale set (%s) in service annotation not found", serviceVMSetName)
-			return nil, fmt.Errorf("scale set (%s) - not found", serviceVMSetName)
+			return nil, ErrScaleSetNotFound
 		}
 		return &[]string{serviceVMSetName}, nil
 	}
