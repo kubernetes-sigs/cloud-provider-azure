@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
@@ -87,7 +88,7 @@ func WaitPodsToBeReady(cs clientset.Interface, ns string) error {
 		return pendingPodCount == 0, nil
 	})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
+		if errors.Is(err, wait.ErrWaitTimeout) {
 			for _, pod := range pods {
 				printPodInfo(cs, ns, pod.Name)
 			}
@@ -208,7 +209,7 @@ func GetPod(cs clientset.Interface, ns, name string) (pod *v1.Pod, err error) {
 			return false, err
 		}
 		return true, nil
-	}); pollErr == wait.ErrWaitTimeout {
+	}); errors.Is(pollErr, wait.ErrWaitTimeout) {
 		return nil, fmt.Errorf("failed to get Pod %q in namespace %q", name, ns)
 	}
 	return pod, err
@@ -291,7 +292,7 @@ func GetPodOutboundIP(cs clientset.Interface, podTemplate *v1.Pod, nsName string
 		return PodIPRE.MatchString(string(log)), nil
 	})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
+		if errors.Is(err, wait.ErrWaitTimeout) {
 			printPodInfo(cs, nsName, podTemplate.Name)
 		}
 		return "", err

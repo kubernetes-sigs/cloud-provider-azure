@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -145,7 +146,7 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) (*net.I
 			addrPrefix := (*vnet.AddressSpace.AddressPrefixes)[i]
 			ip, _, err := net.ParseCIDR(addrPrefix)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse address prefix CIDR: %v", err)
+				return nil, fmt.Errorf("failed to parse address prefix CIDR: %w", err)
 			}
 			if ip.To4() == nil {
 				vnetCIDR = addrPrefix
@@ -211,7 +212,7 @@ func (azureTestClient *AzureTestClient) GetClusterSecurityGroups() (ret []aznetw
 		}
 		return false, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if errors.Is(err, wait.ErrWaitTimeout) {
 		err = fmt.Errorf("could not find the cluster security group in resource group %s", azureTestClient.GetResourceGroup())
 	}
 	return
@@ -327,7 +328,7 @@ func WaitGetPIPByPrefix(
 			}
 			Logf("prefix = [%s] not ready with error = [%v] and number of IP = [%d]", prefixName, err, numOfIPs)
 			if !untilPIPCreated {
-				return true, fmt.Errorf("get pip by prefix = [%s], err = [%v], number of IP = [%d]", prefixName, err, numOfIPs)
+				return true, fmt.Errorf("get pip by prefix = [%s], err = [%w], number of IP = [%d]", prefixName, err, numOfIPs)
 			}
 			return false, nil
 		}
@@ -548,7 +549,7 @@ func retrieveCIDRs(cmd string, reg string) ([]string, error) {
 	res := make([]string, 2)
 	stdout, err := RunKubectlNoPrint("", strings.Split(cmd, " ")...)
 	if err != nil {
-		return res, fmt.Errorf("error when running the following kubectl command %q: %v, %s", cmd, err, stdout)
+		return res, fmt.Errorf("error when running the following kubectl command %q: %w, %s", cmd, err, stdout)
 	}
 	re := regexp.MustCompile(reg)
 	matches := re.FindStringSubmatch(stdout)

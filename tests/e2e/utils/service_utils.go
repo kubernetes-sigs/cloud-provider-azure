@@ -115,7 +115,7 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespac
 		}
 	}()
 	if !result || err != nil {
-		return "", fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %v", result, err)
+		return "", fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %w", result, err)
 	}
 
 	// TODO: Check if other WaitServiceExposureAndValidateConnectivity() callers with internal Service
