@@ -22,10 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/controller-manager/pkg/leadermigration/options"
-
 	"github.com/spf13/pflag"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -36,6 +33,8 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	kubectrlmgrconfig "k8s.io/controller-manager/config"
 	cmoptions "k8s.io/controller-manager/options"
+	"k8s.io/controller-manager/pkg/leadermigration/options"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/config"
 )

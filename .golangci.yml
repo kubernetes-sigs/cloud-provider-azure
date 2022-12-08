@@ -22,6 +22,11 @@ linters:
     - typecheck
     - unconvert
     - unused
+    - asasalint
+    - asciicheck
+    - bidichk
+    - errorlint
+    - loggercheck
   fast: false
 issues:
   exclude-rules:
@@ -36,5 +41,5 @@ linters-settings:
   gosec:
     excludes:
       - G114
-  govet:
-    check-shadowing: false
+  goimports:
+    local-prefixes: sigs.k8s.io/cloud-provider-azure

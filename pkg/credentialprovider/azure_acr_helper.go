@@ -91,13 +91,13 @@ func receiveChallengeFromLoginServer(serverAddress, scheme string) (*authDirecti
 	var r *http.Request
 	r, err = http.NewRequest("GET", challengeURL.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct request, got %v", err)
+		return nil, fmt.Errorf("failed to construct request, got %w", err)
 	}
 	r.Header.Add(userAgentHeader, userAgent)
 
 	var challenge *http.Response
 	if challenge, err = client.Do(r); err != nil {
-		return nil, fmt.Errorf("error reaching registry endpoint %s, error: %s", challengeURL.String(), err)
+		return nil, fmt.Errorf("error reaching registry endpoint %s, error: %w", challengeURL.String(), err)
 	}
 	defer challenge.Body.Close()
 
@@ -164,7 +164,7 @@ func performTokenExchange(
 	var r *http.Request
 	r, err = http.NewRequest("POST", authEndpoint, bytes.NewBufferString(datac))
 	if err != nil {
-		return "", fmt.Errorf("failed to construct request, got %v", err)
+		return "", fmt.Errorf("failed to construct request, got %w", err)
 	}
 	r.Header.Add(userAgentHeader, userAgent)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")

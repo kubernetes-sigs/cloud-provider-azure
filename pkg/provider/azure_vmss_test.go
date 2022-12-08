@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -1628,7 +1629,7 @@ func TestGetVMSetNames(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: fmt.Errorf("scale set (vmss-1) - not found"),
+			expectedErr: ErrScaleSetNotFound,
 		},
 		{
 			description: "GetVMSetNames should report an error if vm's network profile is nil",
@@ -1642,7 +1643,7 @@ func TestGetVMSetNames(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: fmt.Errorf("instance not found"),
+			expectedErr: cloudprovider.InstanceNotFound,
 		},
 		{
 			description: "GetVMSetNames should return the correct vmss names",
@@ -1711,7 +1712,9 @@ func TestGetVMSetNames(t *testing.T) {
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 		vmSetNames, err := ss.GetVMSetNames(test.service, test.nodes)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		if test.expectedErr != nil {
+			assert.True(t, errors.Is(err, test.expectedErr), "expected error %v, got %v", test.expectedErr, err)
+		}
 		assert.Equal(t, test.expectedVMSetNames, vmSetNames, test.description)
 	}
 }

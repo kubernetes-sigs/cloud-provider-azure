@@ -56,6 +56,15 @@ var (
 	vmasIDRE           = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/availabilitySets/(.+)`)
 )
 
+// getStandardMachineID returns the full identifier of a virtual machine.
+func (az *Cloud) getStandardMachineID(subscriptionID, resourceGroup, machineName string) string {
+	return fmt.Sprintf(
+		consts.MachineIDTemplate,
+		subscriptionID,
+		strings.ToLower(resourceGroup),
+		machineName)
+}
+
 // returns the full identifier of an availabilitySet
 func (az *Cloud) getAvailabilitySetID(resourceGroup, availabilitySetName string) string {
 	return fmt.Sprintf(
@@ -1223,7 +1232,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ipConfigurationID stri
 
 	asName, err := getAvailabilitySetNameByID(asID)
 	if err != nil {
-		return "", "", fmt.Errorf("cannot get the availability set name by the availability set ID %s: %v", asID, err)
+		return "", "", fmt.Errorf("cannot get the availability set name by the availability set ID %s: %w", asID, err)
 	}
 	return vmName, strings.ToLower(asName), nil
 }
