@@ -50,6 +50,16 @@ func GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations map[string]strin
 	return GetAttributeValueInSvcAnnotation(annotations, BuildHealthProbeAnnotationKeyForPort(port, key), validators...)
 }
 
+// IsHealthProbeRuleOnK8sServicePortDisabled return if port is for health probe only
+func IsHealthProbeRuleOnK8sServicePortDisabled(annotations map[string]string, port int32) (bool, error) {
+	return expectAttributeInSvcAnnotationBeEqualTo(annotations, BuildAnnotationKeyForPort(port, PortAnnotationNoHealthProbeRule), TrueAnnotationValue), nil
+}
+
+// IsHealthProbeRuleOnK8sServicePortDisabled return if port is for health probe only
+func IsLBRuleOnK8sServicePortDisabled(annotations map[string]string, port int32) (bool, error) {
+	return expectAttributeInSvcAnnotationBeEqualTo(annotations, BuildAnnotationKeyForPort(port, PortAnnotationNoLBRule), TrueAnnotationValue), nil
+}
+
 // Getint32ValueFromK8sSvcAnnotation get health probe configuration for port
 func Getint32ValueFromK8sSvcAnnotation(annotations map[string]string, key string, validators ...Int32BusinessValidator) (*int32, error) {
 	val, err := GetAttributeValueInSvcAnnotation(annotations, key)
@@ -60,8 +70,13 @@ func Getint32ValueFromK8sSvcAnnotation(annotations map[string]string, key string
 }
 
 // BuildHealthProbeAnnotationKeyForPort get health probe configuration key for port
+func BuildAnnotationKeyForPort(port int32, key PortParams) string {
+	return fmt.Sprintf(PortAnnotationPrefixPattern, port, string(key))
+}
+
+// BuildHealthProbeAnnotationKeyForPort get health probe configuration key for port
 func BuildHealthProbeAnnotationKeyForPort(port int32, key HealthProbeParams) string {
-	return fmt.Sprintf(HealthProbeAnnotationPrefixPattern, port) + string(key)
+	return BuildAnnotationKeyForPort(port, PortParams(fmt.Sprintf(HealthProbeAnnotationPrefixPattern, key)))
 }
 
 // GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation get health probe configuration for port

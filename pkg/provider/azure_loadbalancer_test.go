@@ -2486,21 +2486,61 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedProbes: getDefaultTestProbes("Tcp", ""),
 		},
 		{
-			desc: "getExpectedLBRules should allow setting port specific health probe port",
+			desc: "getExpectedLBRules should support customize health probe port in multi-port service",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
-				"service.beta.kubernetes.io/port_80_health-probe_protocol": "Http",
-				"service.beta.kubernetes.io/port_80_health-probe_port":     "15012",
-			}, false, 80),
-			expectedRules:  getDefaultTestRules(false),
-			expectedProbes: getTestProbes("Http", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(15012), to.Int32Ptr(2)),
+				"service.beta.kubernetes.io/port_8000_health-probe_port": "port-tcp-80",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				getTestRule(false, 8000),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(8000), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
 		},
 		{
-			desc: "getExpectedLBRules should not include duplicate probes when overrides would create them",
+			desc: "getExpectedLBRules should support customize health probe port in multi-port service",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
-				"service.beta.kubernetes.io/port_8000_health-probe_port": "10080",
+				"service.beta.kubernetes.io/port_8000_health-probe_port": "80",
 			}, false, 80, 8000),
-			expectedRules:  []network.LoadBalancingRule{getTestRule(false, 80), getTestRule(false, 8000)},
-			expectedProbes: getTestProbes("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(8000), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				getTestRule(false, 8000),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(8000), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
+		{
+			desc: "getExpectedLBRules should not generate probe rule when no health probe rule is specified.",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_no_probe_rule": "true",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				func() network.LoadBalancingRule {
+					rule := getTestRule(false, 8000)
+					rule.Probe = nil
+					return rule
+				}(),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
+		{
+			desc: "getExpectedLBRules should not generate lb rule and health probe rule when no lb rule is specified.",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_no_lb_rule": "true",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
 		},
 	}
 	rules := getDefaultTestRules(true)
