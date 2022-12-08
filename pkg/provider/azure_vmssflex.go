@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -56,7 +57,7 @@ type FlexScaleSet struct {
 	lockMap *lockMap
 }
 
-func newFlexScaleSet(az *Cloud) (VMSet, error) {
+func newFlexScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {
 	fs := &FlexScaleSet{
 		Cloud:                    az,
 		vmssFlexVMNameToVmssID:   &sync.Map{},
@@ -65,11 +66,11 @@ func newFlexScaleSet(az *Cloud) (VMSet, error) {
 	}
 
 	var err error
-	fs.vmssFlexCache, err = fs.newVmssFlexCache()
+	fs.vmssFlexCache, err = fs.newVmssFlexCache(ctx)
 	if err != nil {
 		return nil, err
 	}
-	fs.vmssFlexVMCache, err = fs.newVmssFlexVMCache()
+	fs.vmssFlexVMCache, err = fs.newVmssFlexVMCache(ctx)
 	if err != nil {
 		return nil, err
 	}

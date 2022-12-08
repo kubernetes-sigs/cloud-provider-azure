@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -86,7 +87,7 @@ func TestVMSSVMCache(t *testing.T) {
 	vmList := []string{"vmssee6c2000000", "vmssee6c2000001", "vmssee6c2000002"}
 	c := GetTestCloud(ctrl)
 	c.DisableAvailabilitySetNodes = true
-	vmSet, err := newScaleSet(c)
+	vmSet, err := newScaleSet(context.Background(), c)
 	assert.NoError(t, err)
 	ss := vmSet.(*ScaleSet)
 

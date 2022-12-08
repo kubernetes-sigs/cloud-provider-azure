@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -246,7 +247,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			} else {
 				testCloud.DisableAvailabilitySetNodes = true
 			}
-			ss, err := newScaleSet(testCloud)
+			ss, err := newScaleSet(context.Background(), testCloud)
 			assert.NoError(t, err)
 			testCloud.VMSet = ss
 		}

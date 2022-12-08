@@ -5346,7 +5346,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 	t.Run("cleanOrphanedLoadBalancer should retry deleting lb when meeting LoadBalancerInUseByVirtualMachineScaleSet", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		vmss, err := newScaleSet(cloud)
+		vmss, err := newScaleSet(context.Background(), cloud)
 		assert.NoError(t, err)
 		cloud.VMSet = vmss
 		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
@@ -5371,7 +5371,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 	t.Run("cleanupOrphanedLoadBalancer should not call delete api if the lb does not exist", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		vmss, err := newScaleSet(cloud)
+		vmss, err := newScaleSet(context.Background(), cloud)
 		assert.NoError(t, err)
 		cloud.VMSet = vmss
 		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard

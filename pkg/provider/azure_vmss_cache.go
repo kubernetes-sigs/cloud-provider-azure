@@ -64,7 +64,7 @@ const (
 	ManagedByUnknownVMSet VMManagementType = "ManagedByUnknownVMSet"
 )
 
-func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
+func (ss *ScaleSet) newVMSSCache(ctx context.Context) (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{} // [vmssName]*vmssEntry
 
@@ -75,7 +75,7 @@ func (ss *ScaleSet) newVMSSCache() (*azcache.TimedCache, error) {
 
 		resourceGroupNotFound := false
 		for _, resourceGroup := range allResourceGroups.List() {
-			allScaleSets, rerr := ss.VirtualMachineScaleSetsClient.List(context.Background(), resourceGroup)
+			allScaleSets, rerr := ss.VirtualMachineScaleSetsClient.List(ctx, resourceGroup)
 			if rerr != nil {
 				if rerr.IsNotFound() {
 					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())

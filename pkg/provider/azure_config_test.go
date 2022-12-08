@@ -283,7 +283,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 			mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).MaxTimes(1)
 			az.ZoneClient = mockZoneClient
 
-			err := az.InitializeCloudFromSecret()
+			err := az.InitializeCloudFromSecret(context.Background())
 			assert.Equal(t, test.expectErr, err != nil)
 		})
 	}

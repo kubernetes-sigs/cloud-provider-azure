@@ -125,7 +125,7 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 	}
 
 	run := func(ctx context.Context) {
-		if err := startControllers(c, ctx.Done(), healthzHandler); err != nil {
+		if err := startControllers(ctx, c, ctx.Done(), healthzHandler); err != nil {
 			klog.Fatalf("error running controllers: %v", err)
 		}
 	}
@@ -135,7 +135,7 @@ func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
+func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	klog.V(1).Infof("Starting cloud-node-manager...")
 
 	// Start the CloudNodeController
@@ -144,7 +144,7 @@ func startControllers(c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthz
 		c.SharedInformers.Core().V1().Nodes(),
 		// cloud node controller uses existing cluster role from node-controller
 		c.ClientBuilder.ClientOrDie("node-controller"),
-		nodeprovider.NewNodeProvider(c.UseInstanceMetadata, c.CloudConfigFilePath),
+		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath),
 		c.NodeStatusUpdateFrequency.Duration,
 		c.WaitForRoutes)
 
