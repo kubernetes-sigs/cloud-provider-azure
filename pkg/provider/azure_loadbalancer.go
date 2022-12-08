@@ -2537,7 +2537,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 
 	additionalIPs, err := getServiceAdditionalPublicIPs(service)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get additional public IPs, error=%v", err)
+		return nil, fmt.Errorf("unable to get additional public IPs, error=%w", err)
 	}
 
 	destinationIPAddresses := []string{destinationIPAddress}

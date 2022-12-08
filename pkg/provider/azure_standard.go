@@ -1223,7 +1223,7 @@ func (as *availabilitySet) GetNodeNameByIPConfigurationID(ipConfigurationID stri
 
 	asName, err := getAvailabilitySetNameByID(asID)
 	if err != nil {
-		return "", "", fmt.Errorf("cannot get the availability set name by the availability set ID %s: %v", asID, err)
+		return "", "", fmt.Errorf("cannot get the availability set name by the availability set ID %s: %w", asID, err)
 	}
 	return vmName, strings.ToLower(asName), nil
 }

@@ -18,6 +18,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -157,8 +158,9 @@ func (b KubectlBuilder) ExecWithFullOutput(print bool) (string, string, error) {
 	case err := <-errCh:
 		if err != nil {
 			var rc = 127
-			if ee, ok := err.(*exec.ExitError); ok {
-				rc = ee.Sys().(syscall.WaitStatus).ExitStatus()
+			var exitError *exec.ExitError
+			if errors.As(err, &exitError) {
+				rc = exitError.Sys().(syscall.WaitStatus).ExitStatus()
 				Logf("rc: %d", rc)
 			}
 			return stdout.String(), stderr.String(), uexec.CodeExitError{
@@ -178,16 +180,17 @@ func (b KubectlBuilder) ExecWithFullOutput(print bool) (string, string, error) {
 }
 
 func isTimeout(err error) bool {
-	switch err := err.(type) {
-	case *url.Error:
-		if err, ok := err.Err.(net.Error); ok && err.Timeout() {
-			return true
-		}
-	case net.Error:
-		if err.Timeout() {
-			return true
-		}
+	var (
+		urlError *url.Error
+		netError net.Error
+	)
+	if errors.As(err, &urlError) {
+		err = urlError.Err
 	}
+	if errors.As(err, &netError) {
+		return netError.Timeout()
+	}
+
 	return false
 }
 
