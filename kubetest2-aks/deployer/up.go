@@ -106,19 +106,17 @@ func openPath(path string) ([]byte, error) {
 }
 
 // prepareClusterConfig generates cluster config.
-func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (string, error) {
+func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*armcontainerservicev2.ManagedCluster, error) {
 	configFile, err := openPath(d.ConfigPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
+		return nil, fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
 	}
 	clusterConfig := string(configFile)
 	clusterConfigMap := map[string]string{
-		"{AKS_CLUSTER_ID}":      clusterID,
-		"{CLUSTER_NAME}":        d.ClusterName,
-		"{AZURE_LOCATION}":      d.Location,
-		"{AZURE_CLIENT_ID}":     clientID,
-		"{AZURE_CLIENT_SECRET}": clientSecret,
-		"{KUBERNETES_VERSION}":  d.K8sVersion,
+		"{AKS_CLUSTER_ID}":     clusterID,
+		"{CLUSTER_NAME}":       d.ClusterName,
+		"{AZURE_LOCATION}":     d.Location,
+		"{KUBERNETES_VERSION}": d.K8sVersion,
 	}
 	for k, v := range clusterConfigMap {
 		clusterConfig = strings.ReplaceAll(clusterConfig, k, v)
@@ -126,7 +124,7 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (stri
 
 	customConfig, err := openPath(d.CustomConfigPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
+		return nil, fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
 	}
 
 	cloudProviderImageMap := map[string]string{
@@ -136,12 +134,44 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (stri
 	for k, v := range cloudProviderImageMap {
 		customConfig = bytes.ReplaceAll(customConfig, []byte(k), []byte(v))
 	}
-	klog.Infof("AKS cluster custom config: %s", customConfig)
 
 	encodedCustomConfig := base64.StdEncoding.EncodeToString(customConfig)
 	clusterConfig = strings.ReplaceAll(clusterConfig, "{CUSTOM_CONFIG}", encodedCustomConfig)
 
-	return clusterConfig, nil
+	klog.Infof("AKS cluster config without credential: %s", clusterConfig)
+
+	mcConfig := &armcontainerservicev2.ManagedCluster{}
+	err = json.Unmarshal([]byte(clusterConfig), mcConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cluster config: %v", err)
+	}
+	updateAzureCredential(mcConfig)
+
+	return mcConfig, nil
+}
+
+func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
+	klog.Infof("Updating Azure credentials to manage cluster resource group")
+
+	if len(clientID) != 0 && len(clientSecret) != 0 {
+		klog.Infof("Service principal is used to manage cluster resource group")
+		// Reset `Identity` in case managed identity is defined in templates while service principal is used.
+		mcConfig.Identity = nil
+		mcConfig.Properties.ServicePrincipalProfile = &armcontainerservicev2.ManagedClusterServicePrincipalProfile{
+			ClientID: &clientID,
+			Secret:   &clientSecret,
+		}
+		return
+	}
+	// Managed identity is preferable over service principal and picked by default when creating an AKS cluster.
+	// TODO(mainred): we can consider supporting user-assigned managed identity.
+	klog.Infof("System assigned managed identity is used to manage cluster resource group")
+	// Reset `ServicePrincipalProfile` in case service principal is defined in templates while managed identity is used.
+	mcConfig.Properties.ServicePrincipalProfile = nil
+	systemAssignedIdentity := armcontainerservicev2.ResourceIdentityTypeSystemAssigned
+	mcConfig.Identity = &armcontainerservicev2.ManagedClusterIdentity{
+		Type: &systemAssignedIdentity,
+	}
 }
 
 // createAKSWithCustomConfig creates an AKS cluster with custom configuration.
@@ -149,26 +179,16 @@ func (d *deployer) createAKSWithCustomConfig(imageTag string) error {
 	klog.Infof("Creating the AKS cluster with custom config")
 	clusterID := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", subscriptionID, d.ResourceGroupName, d.ClusterName)
 
-	clusterConfig, err := d.prepareClusterConfig(imageTag, clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to prepare cluster config: %v", err)
-	}
-	klog.Infof("AKS cluster config: %s", clusterConfig)
+	mcConfig, err := d.prepareClusterConfig(imageTag, clusterID)
 	client, err := armcontainerservicev2.NewManagedClustersClient(subscriptionID, cred, nil)
 	if err != nil {
 		return fmt.Errorf("failed to new managed cluster client with sub ID %q: %v", subscriptionID, err)
 	}
 
-	mcConfig := armcontainerservicev2.ManagedCluster{}
-	err = json.Unmarshal([]byte(clusterConfig), &mcConfig)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal cluster config: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	poller, err := client.BeginCreateOrUpdate(ctx, d.ResourceGroupName, d.ClusterName, mcConfig, nil)
+	poller, err := client.BeginCreateOrUpdate(ctx, d.ResourceGroupName, d.ClusterName, *mcConfig, nil)
 	if err != nil {
 		return fmt.Errorf("failed to put resource: %v", err.Error())
 	}
