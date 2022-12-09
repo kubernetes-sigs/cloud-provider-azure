@@ -577,6 +577,7 @@ func TestWaitForUpdateResult(t *testing.T) {
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
 		armClient.EXPECT().WaitForAsyncOperationResult(gomock.Any(), gomock.Any(), "VMSSWaitForUpdateResult").Return(test.response, test.responseErr).Times(1)
+		armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 		vmssClient := getTestVMSSVMClient(armClient)
 		response, err := vmssClient.WaitForUpdateResult(context.TODO(), &azure.Future{}, "rg", "test")
