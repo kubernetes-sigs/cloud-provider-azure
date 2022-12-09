@@ -29,6 +29,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	armcontainerservicev2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
@@ -40,7 +43,7 @@ import (
 )
 
 var (
-	apiVersion           = "2022-04-02-preview"
+	apiVersion           = "2022-09-01"
 	defaultKubeconfigDir = "_kubeconfig"
 	usageTag             = "aks-cluster-e2e"
 	cred                 *azidentity.DefaultAzureCredential
@@ -54,6 +57,70 @@ type UpOptions struct {
 	ConfigPath       string `flag:"config" desc:"--config flag for AKS cluster"`
 	CustomConfigPath string `flag:"customConfig" desc:"--customConfig flag for custom configuration"`
 	K8sVersion       string `flag:"k8sVersion" desc:"--k8sVersion flag for cluster Kubernetes version"`
+}
+
+type enableCustomFeaturesPolicy struct{}
+
+type changeLocationPolicy struct{}
+
+type addCustomConfigPolicy struct {
+	customConfig string
+}
+
+func (p enableCustomFeaturesPolicy) Do(req *policy.Request) (*http.Response, error) {
+	req.Raw().Header.Add("AKSHTTPCustomFeatures", "Microsoft.ContainerService/EnableCloudControllerManager")
+	return req.Next()
+}
+
+func (p changeLocationPolicy) Do(req *policy.Request) (*http.Response, error) {
+	if strings.Contains(req.Raw().URL.String(), "Microsoft.ContainerService/locations") {
+		q := req.Raw().URL.Query()
+		q.Set("api-version", "2017-08-31")
+		req.Raw().URL.RawQuery = q.Encode()
+	}
+
+	return req.Next()
+}
+
+func (p addCustomConfigPolicy) Do(req *policy.Request) (*http.Response, error) {
+	if req.Raw().Method != http.MethodPut {
+		return req.Next()
+	}
+
+	body, err := ioutil.ReadAll(req.Raw().Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := req.Raw().Body.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close req.Raw().Body: %w", err)
+	}
+
+	var managedCluster map[string]interface{}
+	if err = json.Unmarshal([]byte(body), &managedCluster); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal managed cluster config: %v", err)
+	}
+
+	propertiesMap, ok := managedCluster["properties"]
+	if !ok {
+		propertiesMap = make(map[string]interface{})
+		managedCluster["properties"] = propertiesMap
+	}
+	pMap, ok := propertiesMap.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("")
+	}
+	pMap["encodedCustomConfiguration"] = []byte(p.customConfig)
+	managedCluster["properties"] = pMap
+
+	var marshalledManagedCluster []byte
+	if marshalledManagedCluster, err = json.Marshal(managedCluster); err != nil {
+		return nil, fmt.Errorf("failed to marshal managed cluster config: %v", err)
+	}
+
+	readSeekerCloser := streaming.NopCloser(bytes.NewReader(marshalledManagedCluster))
+	req.SetBody(readSeekerCloser, "application/json")
+
+	return req.Next()
 }
 
 func runCmd(cmd exec.Cmd) error {
@@ -106,10 +173,10 @@ func openPath(path string) ([]byte, error) {
 }
 
 // prepareClusterConfig generates cluster config.
-func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*armcontainerservicev2.ManagedCluster, error) {
+func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*armcontainerservicev2.ManagedCluster, string, error) {
 	configFile, err := openPath(d.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
+		return nil, "", fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
 	}
 	clusterConfig := string(configFile)
 	clusterConfigMap := map[string]string{
@@ -124,7 +191,7 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*arm
 
 	customConfig, err := openPath(d.CustomConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
+		return nil, "", fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
 	}
 
 	cloudProviderImageMap := map[string]string{
@@ -143,11 +210,11 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*arm
 	mcConfig := &armcontainerservicev2.ManagedCluster{}
 	err = json.Unmarshal([]byte(clusterConfig), mcConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cluster config: %v", err)
+		return nil, "", fmt.Errorf("failed to unmarshal cluster config: %v", err)
 	}
 	updateAzureCredential(mcConfig)
 
-	return mcConfig, nil
+	return mcConfig, string(customConfig), nil
 }
 
 func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
@@ -179,8 +246,22 @@ func (d *deployer) createAKSWithCustomConfig(imageTag string) error {
 	klog.Infof("Creating the AKS cluster with custom config")
 	clusterID := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", subscriptionID, d.ResourceGroupName, d.ClusterName)
 
-	mcConfig, err := d.prepareClusterConfig(imageTag, clusterID)
-	client, err := armcontainerservicev2.NewManagedClustersClient(subscriptionID, cred, nil)
+	mcConfig, encodedCustomConfig, err := d.prepareClusterConfig(imageTag, clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to prepare cluster config: %v", err)
+	}
+	options := arm.ClientOptions{
+		ClientOptions: policy.ClientOptions{
+			APIVersion: apiVersion,
+			PerCallPolicies: []policy.Policy{
+				&enableCustomFeaturesPolicy{},
+				&changeLocationPolicy{},
+				&addCustomConfigPolicy{customConfig: encodedCustomConfig},
+			},
+		},
+		DisableRPRegistration: false,
+	}
+	client, err := armcontainerservicev2.NewManagedClustersClient(subscriptionID, cred, &options)
 	if err != nil {
 		return fmt.Errorf("failed to new managed cluster client with sub ID %q: %v", subscriptionID, err)
 	}
@@ -192,8 +273,7 @@ func (d *deployer) createAKSWithCustomConfig(imageTag string) error {
 	if err != nil {
 		return fmt.Errorf("failed to put resource: %v", err.Error())
 	}
-	_, err = poller.PollUntilDone(ctx, nil)
-	if err != nil {
+	if _, err = poller.PollUntilDone(ctx, nil); err != nil {
 		return fmt.Errorf("failed to put resource: %v", err.Error())
 	}
 
