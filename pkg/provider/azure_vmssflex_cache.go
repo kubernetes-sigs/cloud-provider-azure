@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-func (fs *FlexScaleSet) newVmssFlexCache() (*azcache.TimedCache, error) {
+func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{}
 
@@ -42,7 +42,7 @@ func (fs *FlexScaleSet) newVmssFlexCache() (*azcache.TimedCache, error) {
 		}
 
 		for _, resourceGroup := range allResourceGroups.List() {
-			allScaleSets, rerr := fs.VirtualMachineScaleSetsClient.List(context.Background(), resourceGroup)
+			allScaleSets, rerr := fs.VirtualMachineScaleSetsClient.List(ctx, resourceGroup)
 			if rerr != nil {
 				if rerr.IsNotFound() {
 					klog.Warningf("Skip caching vmss for resource group %s due to error: %v", resourceGroup, rerr.Error())
@@ -74,12 +74,9 @@ func (fs *FlexScaleSet) newVmssFlexCache() (*azcache.TimedCache, error) {
 	return azcache.NewTimedcache(time.Duration(fs.Config.VmssFlexCacheTTLInSeconds)*time.Second, getter)
 }
 
-func (fs *FlexScaleSet) newVmssFlexVMCache() (*azcache.TimedCache, error) {
+func (fs *FlexScaleSet) newVmssFlexVMCache(ctx context.Context) (*azcache.TimedCache, error) {
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{}
-
-		ctx, cancel := getContextWithCancel()
-		defer cancel()
 
 		vms, rerr := fs.VirtualMachinesClient.ListVmssFlexVMsWithoutInstanceView(ctx, key)
 		if rerr != nil {

@@ -17,17 +17,19 @@ limitations under the License.
 package node
 
 import (
+	"context"
+
 	nodemanager "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 )
 
 // NewNodeProvider returns a node provider depending on the use case
-func NewNodeProvider(useMetadata bool, cloudConfigFilePath string) nodemanager.NodeProvider {
+func NewNodeProvider(ctx context.Context, useMetadata bool, cloudConfigFilePath string) nodemanager.NodeProvider {
 	var nodeProvider nodemanager.NodeProvider
 
 	if useMetadata {
-		nodeProvider = NewIMDSNodeProvider()
+		nodeProvider = NewIMDSNodeProvider(ctx)
 	} else {
-		nodeProvider = NewARMNodeProvider(cloudConfigFilePath)
+		nodeProvider = NewARMNodeProvider(ctx, cloudConfigFilePath)
 	}
 
 	return nodeProvider

@@ -2335,7 +2335,7 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
 	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
 
-	err = az.InitializeCloudFromConfig(c, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), c, false, true)
 	assert.NoError(t, err)
 
 	return az
@@ -3607,14 +3607,14 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 	az.ZoneClient = mockZoneClient
 
-	err := az.InitializeCloudFromConfig(nil, false, true)
+	err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
 	config := Config{
 		DisableAvailabilitySetNodes: true,
 		VMType:                      consts.VMTypeStandard,
 	}
-	err = az.InitializeCloudFromConfig(&config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 	assert.Equal(t, expectedErr, err)
 
@@ -3624,19 +3624,19 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		},
 		CloudConfigType: cloudConfigTypeFile,
 	}
-	err = az.InitializeCloudFromConfig(&config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 	assert.Equal(t, expectedErr, err)
 
 	config = Config{
 		LoadBalancerBackendPoolConfigurationType: "invalid",
 	}
-	err = az.InitializeCloudFromConfig(&config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr = errors.New("loadBalancerBackendPoolConfigurationType invalid is not supported, supported values are")
 	assert.Contains(t, err.Error(), expectedErr.Error())
 
 	config = Config{}
-	err = az.InitializeCloudFromConfig(&config, false, true)
+	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	assert.NoError(t, err)
 	assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -98,7 +99,7 @@ type ScaleSet struct {
 }
 
 // newScaleSet creates a new ScaleSet.
-func newScaleSet(az *Cloud) (VMSet, error) {
+func newScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {
 	if az.Config.VmssVirtualMachinesCacheTTLInSeconds == 0 {
 		az.Config.VmssVirtualMachinesCacheTTLInSeconds = consts.VMSSVirtualMachinesCacheTTLDefaultInSeconds
 	}
@@ -108,7 +109,7 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	fs, err := newFlexScaleSet(az)
+	fs, err := newFlexScaleSet(ctx, az)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func newScaleSet(az *Cloud) (VMSet, error) {
 		}
 	}
 
-	ss.vmssCache, err = ss.newVMSSCache()
+	ss.vmssCache, err = ss.newVMSSCache(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/golang/mock/gomock"
@@ -52,7 +53,7 @@ func NewTestScaleSet(ctrl *gomock.Controller) (*ScaleSet, error) {
 
 func newTestScaleSetWithState(ctrl *gomock.Controller) (*ScaleSet, error) {
 	cloud := GetTestCloud(ctrl)
-	ss, err := newScaleSet(cloud)
+	ss, err := newScaleSet(context.Background(), cloud)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func newTestScaleSetWithState(ctrl *gomock.Controller) (*ScaleSet, error) {
 
 func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 	cloud := GetTestCloud(ctrl)
-	fs, err := newFlexScaleSet(cloud)
+	fs, err := newFlexScaleSet(context.Background(), cloud)
 	if err != nil {
 		return nil, err
 	}
