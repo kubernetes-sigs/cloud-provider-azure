@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,8 +54,9 @@ var (
 )
 
 const (
-	serverPort  = 80
-	testingPort = 81
+	serverPort             = 80
+	alterNativeServicePort = 8080
+	testingPort            = 81
 )
 
 var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnnotation), func() {
@@ -70,10 +72,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	labels := map[string]string{
 		"app": serviceName,
 	}
-	ports := []v1.ServicePort{{
-		Port:       serverPort,
-		TargetPort: intstr.FromInt(serverPort),
-	}}
+	var ports []v1.ServicePort
 
 	BeforeEach(func() {
 		var err error
@@ -95,6 +94,12 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Waiting for backend pods to be ready")
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
+
+		ports = []v1.ServicePort{{
+			Name:       "http",
+			Port:       serverPort,
+			TargetPort: intstr.FromInt(serverPort),
+		}}
 	})
 
 	AfterEach(func() {
@@ -571,6 +576,70 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 		// get lb from azure client
 		By("Validating health probe configs")
+		Expect((len(targetProbes))).To(Equal(1))
+		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
+	})
+
+	It("should generate health probe configs in multi-port scenario", func() {
+		By("Creating a service with health probe annotations")
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                      "5",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsNumOfProbe):    "3",
+			consts.ServiceAnnotationLoadBalancerHealthProbeInterval:                                        "15",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsProbeInterval): "10",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsPort):          strconv.Itoa(alterNativeServicePort),
+			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                        "Http",
+			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                                     "/",
+			consts.BuildAnnotationKeyForPort(alterNativeServicePort, consts.PortAnnotationNoLBRule):        "true",
+		}
+		ports = append(ports, v1.ServicePort{
+			Name:       "port2",
+			Port:       alterNativeServicePort,
+			TargetPort: intstr.FromInt(serverPort),
+		})
+
+		// create service with given annotation and wait it to expose
+		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			By("Cleaning up service")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
+
+		var lb *network.LoadBalancer
+		var targetProbes []*network.Probe
+		//wait for backend update
+		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
+			targetProbes = []*network.Probe{}
+			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				utils.Logf("One probe of LB is %q", *probe.Name)
+				targetProbes = append(targetProbes, &probe)
+			}
+			return len(targetProbes) == 1, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Validating health probe configs")
+		var numberOfProbes *int32
+		var intervalInSeconds *int32
+		for _, probe := range targetProbes {
+			if probe.NumberOfProbes != nil {
+				numberOfProbes = probe.NumberOfProbes
+			}
+			if probe.IntervalInSeconds != nil {
+				intervalInSeconds = probe.IntervalInSeconds
+			}
+		}
+		utils.Logf("Validating health probe config numberOfProbes")
+		Expect(*numberOfProbes).To(Equal(int32(3)))
+		utils.Logf("Validating health probe config intervalInSeconds")
+		Expect(*intervalInSeconds).To(Equal(int32(10)))
+		utils.Logf("Validating health probe config protocol")
 		Expect((len(targetProbes))).To(Equal(1))
 		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
 	})
