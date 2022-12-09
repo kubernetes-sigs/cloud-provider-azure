@@ -2344,7 +2344,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "getExpectedLBRules should return error when deprecated tcp health probe annotations and protocols are added and config is not valid",
+			desc: "getExpectedLBRules should return error when probe interval * num > 120",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":             "10",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe":         "20",
@@ -2355,7 +2355,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedErr:     true,
 		},
 		{
-			desc: "getExpectedLBRules should return error when deprecated tcp health probe annotations and protocols are added and config is not valid",
+			desc: "getExpectedLBRules should return error when probe interval * num ==  120",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":             "10",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe":         "20",
@@ -2374,18 +2374,18 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			loadBalancerSku: "standard",
 			probeProtocol:   "Https",
 			probePath:       "/healthy1",
-			expectedProbes:  getTestProbes("Https", "/healthy1", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Https", "/healthy1", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
-			desc: "getExpectedLBRules should return correct rule when health probe annotations are added,default path should be /healthy",
+			desc: "getExpectedLBRules should return correct rule when health probe annotations are added,default path should be /",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_interval":     "20",
 				"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "5",
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Http",
-			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Http", "/", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
@@ -2396,7 +2396,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			probeProtocol:   "Tcp",
-			expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(20), to.Int32Ptr(10080), to.Int32Ptr(5)),
+			expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(20), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(5)),
 			expectedRules:   getDefaultTestRules(true),
 		},
 		{
@@ -2448,6 +2448,100 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			},
 			expectedProbes: getDefaultTestProbes("Tcp", ""),
 		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over defaults",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "HtTp",
+			}, false, 80),
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Http", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over appProtocol",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "HtTp",
+			}, false, 80),
+			probeProtocol:  "Mongodb",
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Http", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should prioritize port specific probe protocol over deprecated annotation",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol":             "HtTpS",
+				"service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol": "TcP",
+			}, false, 80),
+			loadBalancerSku: "standard",
+			probeProtocol:   "Https",
+			expectedRules:   getDefaultTestRules(true),
+			expectedProbes:  getDefaultTestProbes("Https", "/"),
+		},
+		{
+			desc: "getExpectedLBRules should default to Tcp on invalid port specific probe protocol",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_80_health-probe_protocol": "FooBar",
+			}, false, 80),
+			probeProtocol:  "Http",
+			expectedRules:  getDefaultTestRules(false),
+			expectedProbes: getDefaultTestProbes("Tcp", ""),
+		},
+		{
+			desc: "getExpectedLBRules should support customize health probe port in multi-port service",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_health-probe_port": "port-tcp-80",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				getTestRule(false, 8000),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(8000), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
+		{
+			desc: "getExpectedLBRules should support customize health probe port in multi-port service",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_health-probe_port": "80",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				getTestRule(false, 8000),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(8000), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
+		{
+			desc: "getExpectedLBRules should not generate probe rule when no health probe rule is specified.",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_no_probe_rule": "true",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+				func() network.LoadBalancingRule {
+					rule := getTestRule(false, 8000)
+					rule.Probe = nil
+					return rule
+				}(),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
+		{
+			desc: "getExpectedLBRules should not generate lb rule and health probe rule when no lb rule is specified.",
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_no_lb_rule": "true",
+			}, false, 80, 8000),
+			expectedRules: []network.LoadBalancingRule{
+				getTestRule(false, 80),
+			},
+			expectedProbes: []network.Probe{
+				getTestProbe("Tcp", "/", to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2)),
+			},
+		},
 	}
 	rules := getDefaultTestRules(true)
 	rules[0].IdleTimeoutInMinutes = to.Int32Ptr(5)
@@ -2469,7 +2563,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		}, false, 80),
 		loadBalancerSku: "standard",
 		probeProtocol:   "Tcp",
-		expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(10), to.Int32Ptr(10080), to.Int32Ptr(10)),
+		expectedProbes:  getTestProbes("Tcp", "", to.Int32Ptr(10), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(10)),
 		expectedRules:   rules,
 	})
 	rules1 := []network.LoadBalancingRule{
@@ -2480,14 +2574,19 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 	rules1[0].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
 	rules1[1].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
 	rules1[2].Probe.ID = to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
+
+	// When the service spec externalTrafficPolicy is Local all of these annotations should be ignored
 	svc := getTestService("test1", v1.ProtocolTCP, map[string]string{
-		"service.beta.kubernetes.io/port_80_health-probe_interval":     "10",
-		"service.beta.kubernetes.io/port_80_health-probe_num-of-probe": "10",
+		consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                "tcp",
+		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                             "/broken/global/path",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProbeInterval): "10",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol):      "https",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsRequestPath):   "/broken/local/path",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsNumOfProbe):    "10",
 	}, false, 80, 443, 421)
 	svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 	svc.Spec.HealthCheckNodePort = 34567
-	probes := getTestProbes("Http", "/healthz", to.Int32Ptr(5), to.Int32Ptr(34567), to.Int32Ptr(2))
-	probes[0].Name = to.StringPtr("atest1-TCP-34567")
+	probes := getTestProbes("Http", "/healthz", to.Int32Ptr(5), to.Int32Ptr(34567), to.Int32Ptr(34567), to.Int32Ptr(2))
 	testCases = append(testCases, struct {
 		desc            string
 		service         v1.Service
@@ -2498,7 +2597,7 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedRules   []network.LoadBalancingRule
 		expectedErr     bool
 	}{
-		desc:            "getExpectedLBRules should expected rules when externaltrafficpolicy is local",
+		desc:            "getExpectedLBRules should expected rules when externalTrafficPolicy is local",
 		service:         svc,
 		loadBalancerSku: "standard",
 		probeProtocol:   "Http",
@@ -2528,18 +2627,19 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		}
 	}
 }
-func getTestProbes(protocol, path string, interval, port, numOfProbe *int32) []network.Probe {
+
+func getTestProbes(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) []network.Probe {
 	return []network.Probe{
-		getTestProbe(protocol, path, interval, port, numOfProbe),
+		getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe),
 	}
 }
 
-func getTestProbe(protocol, path string, interval, port, numOfProbe *int32) network.Probe {
+func getTestProbe(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) network.Probe {
 	expectedProbes := network.Probe{
-		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", *port-10000)),
+		Name: to.StringPtr(fmt.Sprintf("atest1-TCP-%d", *servicePort)),
 		ProbePropertiesFormat: &network.ProbePropertiesFormat{
 			Protocol:          network.ProbeProtocol(protocol),
-			Port:              port,
+			Port:              probePort,
 			IntervalInSeconds: interval,
 			NumberOfProbes:    numOfProbe,
 		},
@@ -2550,7 +2650,7 @@ func getTestProbe(protocol, path string, interval, port, numOfProbe *int32) netw
 	return expectedProbes
 }
 func getDefaultTestProbes(protocol, path string) []network.Probe {
-	return getTestProbes(protocol, path, to.Int32Ptr(5), to.Int32Ptr(10080), to.Int32Ptr(2))
+	return getTestProbes(protocol, path, to.Int32Ptr(5), to.Int32Ptr(80), to.Int32Ptr(10080), to.Int32Ptr(2))
 }
 
 func getDefaultTestRules(enableTCPReset bool) []network.LoadBalancingRule {

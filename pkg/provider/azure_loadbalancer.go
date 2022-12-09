@@ -2062,7 +2062,7 @@ func lbRuleConflictsWithPort(rule network.LoadBalancingRule, frontendIPConfigID 
 // buildHealthProbeRulesForPort
 // for following sku: basic loadbalancer vs standard load balancer
 // for following protocols: TCP HTTP HTTPS(SLB only)
-func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, port v1.ServicePort, lbrule string) (*network.Probe, error) {
+func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port v1.ServicePort, lbrule string) (*network.Probe, error) {
 	if port.Protocol == v1.ProtocolUDP || port.Protocol == v1.ProtocolSCTP {
 		return nil, nil
 	}
@@ -2070,19 +2070,45 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 
 	properties := &network.ProbePropertiesFormat{}
 	var err error
-	if port.AppProtocol == nil {
-		if port.AppProtocol, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeProtocol); err != nil {
+
+	// order - Specific Override
+	// port_ annotation
+	// global annotation
+
+	// Select Protocol
+	//
+	var protocol *string
+
+	// 1. Look up port-specific override
+	protocol, err = consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsProtocol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsProtocol), err)
+	}
+
+	// 2. If not specified, look up from AppProtocol
+	// Note - this order is to remain compatible with previous versions
+	if protocol == nil {
+		protocol = port.AppProtocol
+	}
+
+	// 3. If protocol is still nil, check the global annotation
+	if protocol == nil {
+		protocol, err = consts.GetAttributeValueInSvcAnnotation(serviceManifest.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeProtocol)
+		if err != nil {
 			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeProtocol, err)
 		}
-		if port.AppProtocol == nil {
-			port.AppProtocol = to.StringPtr(string(network.ProtocolTCP))
-		}
 	}
-	protocol := strings.TrimSpace(*port.AppProtocol)
+
+	// 4. Finally, if protocol is still nil, default to TCP
+	if protocol == nil {
+		protocol = to.StringPtr(string(network.ProtocolTCP))
+	}
+
+	*protocol = strings.TrimSpace(*protocol)
 	switch {
-	case strings.EqualFold(protocol, string(network.ProtocolTCP)):
+	case strings.EqualFold(*protocol, string(network.ProtocolTCP)):
 		properties.Protocol = network.ProbeProtocolTCP
-	case strings.EqualFold(protocol, string(network.ProtocolHTTPS)):
+	case strings.EqualFold(*protocol, string(network.ProtocolHTTPS)):
 		//HTTPS probe is only supported in standard loadbalancer
 		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
 		if !az.useStandardLoadBalancer() {
@@ -2090,21 +2116,81 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 		} else {
 			properties.Protocol = network.ProbeProtocolHTTPS
 		}
-	case strings.EqualFold(protocol, string(network.ProtocolHTTP)):
+	case strings.EqualFold(*protocol, string(network.ProtocolHTTP)):
 		properties.Protocol = network.ProbeProtocolHTTP
 	default:
 		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
 		properties.Protocol = network.ProbeProtocolTCP
 	}
 
+	// Lookup or Override Health Probe Port
+	properties.Port = &port.NodePort
+
+	probePort, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsPort, func(s *string) error {
+		if s == nil {
+			return nil
+		}
+		//nolint:gosec
+		port, err := strconv.Atoi(*s)
+		if err != nil {
+			//not a integer
+			for _, item := range serviceManifest.Spec.Ports {
+				if strings.EqualFold(item.Name, *s) {
+					//found the port
+					return nil
+				}
+			}
+			return fmt.Errorf("port %s not found in service", *s)
+		}
+		if port < 0 || port > 65535 {
+			return fmt.Errorf("port %d is out of range", port)
+		}
+		for _, item := range serviceManifest.Spec.Ports {
+			//nolint:gosec
+			if item.Port == int32(port) {
+				//found the port
+				return nil
+			}
+		}
+		return fmt.Errorf("port %s not found in service", *s)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsPort), err)
+	}
+
+	if probePort != nil {
+		//nolint:gosec
+		port, err := strconv.Atoi(*probePort)
+		if err != nil {
+			//not a integer
+			for _, item := range serviceManifest.Spec.Ports {
+				if strings.EqualFold(item.Name, *probePort) {
+					//found the port
+					properties.Port = to.Int32Ptr(item.NodePort)
+				}
+			}
+		} else {
+			if port >= 0 || port <= 65535 {
+				for _, item := range serviceManifest.Spec.Ports {
+					//nolint:gosec
+					if item.Port == int32(port) {
+						//found the port
+						properties.Port = to.Int32Ptr(item.NodePort)
+					}
+				}
+			}
+		}
+	}
+
+	// Select request path
 	if strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTPS)) || strings.EqualFold(string(properties.Protocol), string(network.ProtocolHTTP)) {
 		// get request path ,only used with http/https probe
-		path, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsRequestPath)
+		path, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsRequestPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsRequestPath), err)
 		}
 		if path == nil {
-			if path, err = consts.GetAttributeValueInSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath); err != nil {
+			if path, err = consts.GetAttributeValueInSvcAnnotation(serviceManifest.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath); err != nil {
 				return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath, err)
 			}
 		}
@@ -2124,12 +2210,12 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 		}
 		return nil
 	}
-	numberOfProbes, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsNumOfProbe, numOfProbeValidator)
+	numberOfProbes, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsNumOfProbe, numOfProbeValidator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsNumOfProbe), err)
 	}
 	if numberOfProbes == nil {
-		if numberOfProbes, err = consts.Getint32ValueFromK8sSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, numOfProbeValidator); err != nil {
+		if numberOfProbes, err = consts.Getint32ValueFromK8sSvcAnnotation(serviceManifest.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, numOfProbeValidator); err != nil {
 			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe, err)
 		}
 	}
@@ -2150,12 +2236,12 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 		}
 		return nil
 	}
-	probeInterval, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(annotations, port.Port, consts.HealthProbeParamsProbeInterval, probeIntervalValidator)
+	probeInterval, err := consts.GetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsProbeInterval, probeIntervalValidator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse annotation %s:%w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsProbeInterval), err)
 	}
 	if probeInterval == nil {
-		if probeInterval, err = consts.Getint32ValueFromK8sSvcAnnotation(annotations, consts.ServiceAnnotationLoadBalancerHealthProbeInterval, probeIntervalValidator); err != nil {
+		if probeInterval, err = consts.Getint32ValueFromK8sSvcAnnotation(serviceManifest.Annotations, consts.ServiceAnnotationLoadBalancerHealthProbeInterval, probeIntervalValidator); err != nil {
 			return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.ServiceAnnotationLoadBalancerHealthProbeInterval, err)
 		}
 	}
@@ -2170,7 +2256,6 @@ func (az *Cloud) buildHealthProbeRulesForPort(annotations map[string]string, por
 	}
 	properties.IntervalInSeconds = probeInterval
 	properties.NumberOfProbes = numberOfProbes
-	properties.Port = &port.NodePort
 	probe := &network.Probe{
 		Name:                  &lbrule,
 		ProbePropertiesFormat: properties,
@@ -2229,17 +2314,17 @@ func (az *Cloud) getExpectedLBRules(
 		if nodeEndpointHealthprobe == nil {
 			// use user customized health probe rule if any
 			for _, port := range service.Spec.Ports {
-				portprobe, err := az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName)
+				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName)
 				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
 					//ignore error because we only need one correct rule
 				}
 				if portprobe != nil {
-					expectedProbes = append(expectedProbes, *portprobe)
 					props.Probe = &network.SubResource{
 						ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
 					}
+					expectedProbes = append(expectedProbes, *portprobe)
 					break
 				}
 			}
@@ -2260,7 +2345,16 @@ func (az *Cloud) getExpectedLBRules(
 		for _, port := range service.Spec.Ports {
 			lbRuleName := az.getLoadBalancerRuleName(service, port.Protocol, port.Port)
 			klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s)", lbName, lbRuleName)
-
+			isNoLBRuleRequired, err := consts.IsLBRuleOnK8sServicePortDisabled(service.Annotations, port.Port)
+			if err != nil {
+				err := fmt.Errorf("failed to parse annotation %s: %w", consts.BuildAnnotationKeyForPort(port.Port, consts.PortAnnotationNoLBRule), err)
+				klog.V(2).ErrorS(err, "error occurred when getExpectedLoadBalancingRulePropertiesForPort", "service", service.Name, "namespace", service.Namespace,
+					"rule-name", lbRuleName, "port", port.Port)
+			}
+			if isNoLBRuleRequired {
+				klog.V(2).Infof("getExpectedLBRules lb name (%s) rule name (%s) no lb rule required", lbName, lbRuleName)
+				continue
+			}
 			if port.Protocol == v1.ProtocolSCTP && !(az.useStandardLoadBalancer() && consts.IsK8sServiceUsingInternalLoadBalancer(service)) {
 				return expectedProbes, expectedRules, fmt.Errorf("SCTP is only supported on standard loadbalancer in internal mode")
 			}
@@ -2274,22 +2368,30 @@ func (az *Cloud) getExpectedLBRules(
 				return expectedProbes, expectedRules, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 			}
 
-			if nodeEndpointHealthprobe == nil {
-				portprobe, err := az.buildHealthProbeRulesForPort(service.Annotations, port, lbRuleName)
-				if err != nil {
-					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
-						"rule-name", lbRuleName, "port", port.Port)
-					return expectedProbes, expectedRules, err
-				}
-				if portprobe != nil {
-					expectedProbes = append(expectedProbes, *portprobe)
-					props.Probe = &network.SubResource{
-						ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+			isNoHealthProbeRule, err := consts.IsHealthProbeRuleOnK8sServicePortDisabled(service.Annotations, port.Port)
+			if err != nil {
+				err := fmt.Errorf("failed to parse annotation %s: %w", consts.BuildAnnotationKeyForPort(port.Port, consts.PortAnnotationNoHealthProbeRule), err)
+				klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
+					"rule-name", lbRuleName, "port", port.Port)
+			}
+			if !isNoHealthProbeRule {
+				if nodeEndpointHealthprobe == nil {
+					portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName)
+					if err != nil {
+						klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
+							"rule-name", lbRuleName, "port", port.Port)
+						return expectedProbes, expectedRules, err
 					}
-				}
-			} else {
-				props.Probe = &network.SubResource{
-					ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
+					if portprobe != nil {
+						props.Probe = &network.SubResource{
+							ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+						}
+						expectedProbes = append(expectedProbes, *portprobe)
+					}
+				} else {
+					props.Probe = &network.SubResource{
+						ID: to.StringPtr(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
+					}
 				}
 			}
 			if consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
@@ -2300,7 +2402,6 @@ func (az *Cloud) getExpectedLBRules(
 				Name:                              &lbRuleName,
 				LoadBalancingRulePropertiesFormat: props,
 			})
-
 		}
 	}
 

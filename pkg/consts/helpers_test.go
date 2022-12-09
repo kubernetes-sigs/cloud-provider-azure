@@ -376,3 +376,39 @@ func TestGetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildAnnotationKeyForPort(t *testing.T) {
+	type args struct {
+		port int32
+		key  PortParams
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "no lb rule",
+			args: args{
+				port: 80,
+				key:  PortAnnotationNoLBRule,
+			},
+			want: "service.beta.kubernetes.io/port_80_no_lb_rule",
+		},
+		{
+			name: "no lb rule",
+			args: args{
+				port: 80,
+				key:  PortAnnotationNoHealthProbeRule,
+			},
+			want: "service.beta.kubernetes.io/port_80_no_probe_rule",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BuildAnnotationKeyForPort(tt.args.port, tt.args.key); got != tt.want {
+				t.Errorf("BuildAnnotationKeyForPort() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
