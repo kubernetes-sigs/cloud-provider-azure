@@ -107,13 +107,18 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 		},
 	}
 
-	// Invalidate the cache right after updating
+	var future *azure.Future
+	var rerr *retry.Error
+
+	// Invalidate the cache if update call failed with an error
 	defer func() {
-		_ = ss.DeleteCacheForNode(vmName)
+		if rerr != nil {
+			_ = ss.DeleteCacheForNode(vmName)
+		}
 	}()
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%s)", nodeResourceGroup, nodeName, diskMap)
-	future, rerr := ss.VirtualMachineScaleSetVMsClient.UpdateAsync(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, newVM, "attach_disk")
+	future, rerr = ss.VirtualMachineScaleSetVMsClient.UpdateAsync(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, newVM, "attach_disk")
 	if rerr != nil {
 		klog.Errorf("azureDisk - attach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, nodeName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
@@ -142,7 +147,13 @@ func (ss *ScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.Futur
 	var result *compute.VirtualMachineScaleSetVM
 	var rerr *retry.Error
 	defer func() {
-		if rerr == nil && result != nil && result.VirtualMachineScaleSetVMProperties != nil {
+		// if wait fails with an error, invalidate the cache
+		if rerr != nil {
+			_ = ss.DeleteCacheForNode(vmName)
+			return
+		}
+
+		if result != nil && result.VirtualMachineScaleSetVMProperties != nil {
 			// If we have an updated result, we update the vmss vm cache
 			vm, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 			if err != nil {
