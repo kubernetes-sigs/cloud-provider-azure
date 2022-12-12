@@ -23,10 +23,10 @@ require (
 	golang.org/x/text v0.5.0
 	k8s.io/api v0.23.15
 	k8s.io/apimachinery v0.23.15
-	k8s.io/apiserver v0.23.14
+	k8s.io/apiserver v0.23.15
 	k8s.io/client-go v0.23.15
 	k8s.io/cloud-provider v0.23.14
-	k8s.io/component-base v0.23.14
+	k8s.io/component-base v0.23.15
 	k8s.io/component-helpers v0.23.15
 	k8s.io/controller-manager v0.23.14
 	k8s.io/klog/v2 v2.80.1
