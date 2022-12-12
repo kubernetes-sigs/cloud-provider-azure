@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
+    open-pull-requests-limit: 30
     schedule:
       interval: daily
       time: "01:00"
@@ -15,6 +16,7 @@ updates:
       - "approved"
   - package-ecosystem: "gomod"
     directory: "/kubetest2-aks/"
+    open-pull-requests-limit: 30
     schedule:
       interval: daily
       time: "01:00"
@@ -74,6 +76,7 @@ updates:
       interval: daily
       time: "01:00"
       timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 30
     labels:
       - "area/dependency"
       - "release-note-none"
@@ -116,6 +119,7 @@ updates:
       - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
+    open-pull-requests-limit: 30
     schedule:
       interval: daily
       time: "01:00"
@@ -161,6 +165,7 @@ updates:
       - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
+    open-pull-requests-limit: 30
     schedule:
       interval: daily
       time: "01:00"
@@ -206,6 +211,7 @@ updates:
       - "approved"
   - package-ecosystem: "gomod"
     directory: "/"
+    open-pull-requests-limit: 30
     schedule:
       interval: daily
       time: "01:00"
