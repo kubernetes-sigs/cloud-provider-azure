@@ -18,7 +18,7 @@ set -o errexit
 set -o pipefail
 
 REPO_ROOT=$(realpath $(dirname ${BASH_SOURCE})/..)
-K8S_RELEASE="release-1.25"
+K8S_RELEASE="release-1.26"
 
 # Download scripts from kubernetes/kubernetes
 curl -o "${REPO_ROOT}/hack/verify-vendor-licenses.sh" "https://raw.githubusercontent.com/kubernetes/kubernetes/${K8S_RELEASE}/hack/verify-vendor-licenses.sh"
