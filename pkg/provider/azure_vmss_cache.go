@@ -302,7 +302,7 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 
 	virtualMachines, err := ss.getVMSSVMsFromCache(resourceGroupName, vmssName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		err = fmt.Errorf("updateCache(%s, %s, %s) failed getting vmCache with error: %v", vmssName, resourceGroupName, nodeName, err)
+		err = fmt.Errorf("updateCache(%s, %s, %s) failed getting vmCache with error: %w", vmssName, resourceGroupName, nodeName, err)
 		return err
 	}
 

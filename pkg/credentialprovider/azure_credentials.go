@@ -29,12 +29,12 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/kubelet/pkg/apis/credentialprovider/v1alpha1"
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	"sigs.k8s.io/yaml"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
@@ -85,7 +85,7 @@ func newAcrProviderFromConfigReader(configReader io.Reader) (*acrProvider, error
 
 	servicePrincipalToken, err := auth.GetServicePrincipalToken(config, env, env.ServiceManagementEndpoint)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create service principal token: %v", err)
+		return nil, fmt.Errorf("failed to create service principal token: %w", err)
 	}
 
 	return &acrProvider{
