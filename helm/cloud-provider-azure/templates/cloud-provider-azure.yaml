@@ -254,7 +254,6 @@ spec:
             - "--node-status-update-frequency={{ .Values.cloudControllerManager.nodeStatusUpdateFrequency }}"
             {{- end }}
             - "--route-reconciliation-period={{ .Values.cloudControllerManager.routeReconciliationPeriod }}"
-            - "--port={{ .Values.cloudControllerManager.port }}"
             {{- if hasKey .Values.cloudControllerManager "profiling" }}
             - "--profiling={{ .Values.cloudControllerManager.profiling }}"
             {{- end }}
@@ -275,7 +274,8 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: {{ .Values.cloudControllerManager.port }}
+              port: {{ .Values.cloudControllerManager.securePort }}
+              scheme: HTTPS
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
