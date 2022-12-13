@@ -51,8 +51,6 @@ const (
 	cloudNodeManagerUserAgent = "cloud-node-manager"
 	// defaultCloudNodeManagerPort is the default cloud-node manager port.
 	defaultCloudNodeManagerPort = 0
-	// defaultInsecureCloudNodeManagerBindAddress is the default cloud-node manager address.
-	defaultInsecureCloudNodeManagerBindAddress = "127.0.0.1"
 	// CloudControllerManagerPort is the default port for the cloud controller manager server.
 	// This value may be overridden by a flag at startup.
 	CloudControllerManagerPort = 10263
@@ -67,10 +65,9 @@ type CloudNodeManagerOptions struct {
 	NodeName            string
 	CloudConfigFilePath string
 
-	SecureServing   *apiserveroptions.SecureServingOptionsWithLoopback
-	InsecureServing *apiserveroptions.DeprecatedInsecureServingOptionsWithLoopback
-	Authentication  *apiserveroptions.DelegatingAuthenticationOptions
-	Authorization   *apiserveroptions.DelegatingAuthorizationOptions
+	SecureServing  *apiserveroptions.SecureServingOptionsWithLoopback
+	Authentication *apiserveroptions.DelegatingAuthenticationOptions
+	Authorization  *apiserveroptions.DelegatingAuthorizationOptions
 
 	// NodeStatusUpdateFrequency is the frequency at which the manager updates nodes' status
 	NodeStatusUpdateFrequency metav1.Duration
@@ -94,12 +91,7 @@ type CloudNodeManagerOptions struct {
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
 func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
 	s := CloudNodeManagerOptions{
-		SecureServing: apiserveroptions.NewSecureServingOptions().WithLoopback(),
-		InsecureServing: (&apiserveroptions.DeprecatedInsecureServingOptions{
-			BindAddress: net.ParseIP(defaultInsecureCloudNodeManagerBindAddress),
-			BindPort:    defaultCloudNodeManagerPort,
-			BindNetwork: "tcp",
-		}).WithLoopback(),
+		SecureServing:  apiserveroptions.NewSecureServingOptions().WithLoopback(),
 		Authentication: apiserveroptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  apiserveroptions.NewDelegatingAuthorizationOptions(),
 		NodeStatusUpdateFrequency: metav1.Duration{
@@ -122,7 +114,6 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
 
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
-	o.InsecureServing.AddUnqualifiedFlags(fss.FlagSet("insecure serving"))
 	o.Authentication.AddFlags(fss.FlagSet("authentication"))
 	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 
@@ -146,9 +137,6 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 // ApplyTo fills up cloud controller manager config with options.
 func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent string) error {
 	var err error
-	if err = o.InsecureServing.ApplyTo(&c.InsecureServing, &c.LoopbackClientConfig); err != nil {
-		return err
-	}
 	if err = o.SecureServing.ApplyTo(&c.SecureServing, &c.LoopbackClientConfig); err != nil {
 		return err
 	}

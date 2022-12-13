@@ -71,7 +71,7 @@ func NewSecretWatcher(informerFactory informers.SharedInformerFactory, secretNam
 		informerFactory: informerFactory,
 		secretInformer:  secretInformer,
 	}
-	secretInformer.Informer().AddEventHandler(
+	_, _ = secretInformer.Informer().AddEventHandler(
 		// Your custom resource event handlers.
 		cache.ResourceEventHandlerFuncs{
 			UpdateFunc: func(oldObj, newObj interface{}) {
