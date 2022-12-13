@@ -34,6 +34,7 @@ import (
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient/mockarmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -90,6 +91,7 @@ func TestGetNotFound(t *testing.T) {
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "GET"},
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
@@ -110,6 +112,7 @@ func TestGetInternalError(t *testing.T) {
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "GET"},
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, nil).Times(1)
@@ -147,6 +150,80 @@ func TestGetThrottle(t *testing.T) {
 	assert.Equal(t, throttleErr, rerr)
 }
 
+func TestGetArmThrottled(t *testing.T) {
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "GET"},
+		Header:     http.Header{},
+	}
+	response.Header.Set(consts.RemainingSubscriptionReadsHeaderKey, "1")
+
+	recreate := armclient.RecreateClientDueToArmLimits(response)
+
+	assert.Equal(t, true, recreate)
+
+	response.Header.Set(consts.RemainingSubscriptionReadsHeaderKey, "2")
+	recreate = armclient.RecreateClientDueToArmLimits(response)
+
+	assert.Equal(t, false, recreate)
+}
+
+func TestWriteArmThrottled(t *testing.T) {
+	putResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "PUT"},
+		Header:     http.Header{},
+	}
+	putResponse.Header.Set(consts.RemainingSubscriptionWritesHeaderKey, "1")
+
+	putRecreate := armclient.RecreateClientDueToArmLimits(putResponse)
+
+	assert.Equal(t, true, putRecreate)
+
+	putResponse.Header.Set(consts.RemainingSubscriptionWritesHeaderKey, "2")
+	putRecreate = armclient.RecreateClientDueToArmLimits(putResponse)
+
+	assert.Equal(t, false, putRecreate)
+
+	patchResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "PATCH"},
+		Header:     http.Header{},
+	}
+	patchResponse.Header.Set(consts.RemainingSubscriptionWritesHeaderKey, "1")
+
+	patchRecreate := armclient.RecreateClientDueToArmLimits(patchResponse)
+
+	assert.Equal(t, true, patchRecreate)
+
+	patchResponse.Header.Set(consts.RemainingSubscriptionWritesHeaderKey, "2")
+	patchRecreate = armclient.RecreateClientDueToArmLimits(patchResponse)
+
+	assert.Equal(t, false, patchRecreate)
+}
+
+func TestDeleteArmThrottled(t *testing.T) {
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Request:    &http.Request{Method: "DELETE"},
+		Header:     http.Header{},
+	}
+	response.Header.Set(consts.RemainingSubscriptionDeletesHeaderKey, "1")
+
+	recreate := armclient.RecreateClientDueToArmLimits(response)
+
+	assert.Equal(t, true, recreate)
+
+	response.Header.Set(consts.RemainingSubscriptionDeletesHeaderKey, "2")
+	recreate = armclient.RecreateClientDueToArmLimits(response)
+
+	assert.Equal(t, false, recreate)
+}
+
 func TestCreateOrUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -155,6 +232,7 @@ func TestCreateOrUpdate(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusOK,
+		Request:    &http.Request{Method: "PUT"},
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 	armClient.EXPECT().PutResource(gomock.Any(), to.String(disk.ID), disk).Return(response, nil).Times(1)
@@ -189,6 +267,7 @@ func TestUpdate(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusOK,
+		Request:    &http.Request{Method: "PATCH"},
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 	armClient.EXPECT().PatchResource(gomock.Any(), testResourceID, diskUpdate).Return(response, nil).Times(1)
