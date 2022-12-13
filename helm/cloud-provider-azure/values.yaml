@@ -31,11 +31,10 @@ cloudControllerManager:
   # master: "192.168.4.20"
   # minResyncPeriod: "100m"
   # nodeStatusUpdateFrequency: "10m"
-  port: 10267
   replicas: 1
   # profiling: "false"
   routeReconciliationPeriod: "10s"
-  # securePort: 10001
+  securePort: 10268
   # useServiceAccountCredentials: "false"
   containerResourceManagement:
     requestsCPU: "100m"
