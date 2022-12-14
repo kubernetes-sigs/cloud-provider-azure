@@ -69,6 +69,7 @@ rm -rf kubetest2-aks
 git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/kubetest2-aks .
 rm -rf cloud-provider-azure
+git config --global --add safe.directory "$(pwd)" || true
 pushd kubetest2-aks
 go get -d sigs.k8s.io/kubetest2@latest
 go install sigs.k8s.io/kubetest2@latest
