@@ -93,7 +93,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -143,7 +143,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		ip1 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
 
 		defer func() {
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -151,7 +151,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		ip2 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName2, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up")
-			err := utils.DeleteServiceIfExists(cs, ns.Name, serviceName2)
+			err := utils.DeleteService(cs, ns.Name, serviceName2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
