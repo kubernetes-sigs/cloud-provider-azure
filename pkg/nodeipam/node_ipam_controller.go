@@ -80,7 +80,7 @@ func registerRateLimiterMetric(ownerName string) error {
 		StabilityLevel: metrics.ALPHA,
 	})
 	if err := legacyregistry.Register(metric); err != nil {
-		return fmt.Errorf("error registering rate limiter usage metric: %v", err)
+		return fmt.Errorf("error registering rate limiter usage metric: %w", err)
 	}
 	stopCh := make(chan struct{})
 	rateLimiterMetrics[ownerName] = &rateLimiterMetric{
