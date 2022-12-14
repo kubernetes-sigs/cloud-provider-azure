@@ -425,3 +425,16 @@ func getOperationNotAllowedReason(msg string) string {
 	}
 	return OperationNotAllowed
 }
+
+// PartialUpdateError implements error interface. It is meant to be returned for errors with http status code of 2xx
+type PartialUpdateError struct {
+	message string
+}
+
+func NewPartialUpdateError(msg string) *PartialUpdateError {
+	return &PartialUpdateError{message: msg}
+}
+
+func (e *PartialUpdateError) Error() string {
+	return e.message
+}

@@ -218,16 +218,27 @@ func (fs *FlexScaleSet) WaitForUpdateResult(ctx context.Context, future *azure.F
 
 // UpdateVM updates a vm
 func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error {
+	future, err := fs.UpdateVMAsync(ctx, nodeName)
+	if err != nil {
+		return err
+	}
+
+	return fs.WaitForUpdateResult(ctx, future, nodeName, "update_vm")
+}
+
+// UpdateVMAsync updates a vm asynchronously
+func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeName) (*azure.Future, error) {
 	vmName := mapNodeNameToVMName(nodeName)
+
 	vm, err := fs.getVmssFlexVM(vmName, azcache.CacheReadTypeDefault)
 	if err != nil {
 		// if host doesn't exist, no need to update
 		klog.Warningf("azureDisk - cannot find node %s, skip updating vm)", nodeName)
-		return nil
+		return nil, nil
 	}
 	nodeResourceGroup, err := fs.GetNodeResourceGroup(vmName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -236,12 +247,12 @@ func (fs *FlexScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) e
 
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, vmName)
 
-	rerr := fs.VirtualMachinesClient.Update(ctx, nodeResourceGroup, *vm.Name, compute.VirtualMachineUpdate{}, "update_vm")
+	future, rerr := fs.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, *vm.Name, compute.VirtualMachineUpdate{}, "update_vm")
 	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - returned with %v", nodeResourceGroup, vmName, rerr)
 	if rerr != nil {
-		return rerr.Error()
+		return future, rerr.Error()
 	}
-	return nil
+	return future, nil
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
