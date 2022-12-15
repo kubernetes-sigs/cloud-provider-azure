@@ -22,6 +22,6 @@ export GO111MODULE=on
 # Explicitly clear GOFLAGS, since GOFLAGS=-mod=vendor breaks dependency resolution while rebuilding vendor
 export GOFLAGS=
 
-go mod tidy
+go mod tidy -compat=1.17
 go mod vendor
 echo SUCCESS
