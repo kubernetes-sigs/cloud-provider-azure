@@ -316,11 +316,11 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-lint test-boilerplate test-helm verify-vendor-licenses ## Run all static checks.
+test-check: test-boilerplate test-helm verify-vendor-licenses ## Run all static checks.
 
-.PHONY: test-lint
-test-lint: ## Run golint test.
-	hack/verify-golint.sh
+.PHONY: lint
+lint: golangci-lint ## Run golangci-lint against code.
+	$(LINTER) run -v
 
 .PHONY: test-boilerplate
 test-boilerplate: ## Run boilerplate test.
@@ -399,3 +399,12 @@ endif
 .PHONY: deploy-cluster
 deploy-cluster:
 	hack/deploy-cluster-capz.sh
+
+##@ Tools
+
+LINTER = $(shell pwd)/bin/golangci-lint
+LINTER_VERSION = v1.50.1
+.PHONY: golangci-lint
+golangci-lint:  ## Download golangci-lint locally if necessary.
+	@echo "Installing golangci-lint"
+	@test -s $(LINTER) || curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/$(LINTER_VERSION)/install.sh | sh -s -- -b $(shell pwd)/bin $(LINTER_VERSION)

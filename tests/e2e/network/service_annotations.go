@@ -711,10 +711,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		pipName := fmt.Sprintf("%s-public-IP%s", basename, string(uuid.NewUUID())[0:4])
 		By(fmt.Sprintf("Creating a public IP %q", pipName))
 		var pip network.PublicIPAddress
+		// TODO: dual-stack support
 		if tc.IPFamily != utils.DualStack {
 			pip = defaultPublicIPAddress(pipName, tc.IPFamily == utils.IPv6)
-		} else {
-			// TODO: dual-stack support
 		}
 		rg := tc.GetResourceGroup()
 		pip, err := utils.WaitCreatePIP(tc, pipName, rg, pip)
@@ -728,12 +727,11 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Created pip with address %s", pipAddr)
 
 		annotation := map[string]string{}
+		// TODO: dual-stack support
 		if tc.IPFamily == utils.IPv4 {
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[false]] = pipAddr
 		} else if tc.IPFamily == utils.IPv6 {
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[true]] = pipAddr
-		} else {
-			// TODO: dual-stack support
 		}
 
 		By("Creating a Service")
