@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	"github.com/golang/mock/gomock"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 
 	"github.com/Azure/go-autorest/autorest/to"
@@ -32,8 +33,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	"sigs.k8s.io/yaml"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 )
 
 func getTestConfig() *Config {

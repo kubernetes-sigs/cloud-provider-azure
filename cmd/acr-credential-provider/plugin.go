@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/kubelet/pkg/apis/credentialprovider/install"
 	"k8s.io/kubelet/pkg/apis/credentialprovider/v1alpha1"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/credentialprovider"
 )
 
@@ -140,7 +141,7 @@ func encodeResponse(response *v1alpha1.CredentialProviderResponse) ([]byte, erro
 	encoder := codecs.EncoderForVersion(info.Serializer, v1alpha1.SchemeGroupVersion)
 	data, err := runtime.Encode(encoder, response)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode response: %v", err)
+		return nil, fmt.Errorf("failed to encode response: %w", err)
 	}
 
 	return data, nil
