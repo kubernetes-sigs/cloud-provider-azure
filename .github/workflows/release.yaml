@@ -166,7 +166,8 @@ jobs:
           fi
 
           if [[ "${VERSION_PATCH}" = "0" ]]; then
-            START_TAG=remotes/origin/release-${VERSION_MAJOR}.$((VERSION_MINOR-1))
+            # when release a new minor version, generate release note from the last minor version
+            START_TAG=v${VERSION_MAJOR}.$((VERSION_MINOR-1)).0
           else
             START_TAG=v${VERSION_MAJOR}.${VERSION_MINOR}.$((VERSION_PATCH-1))
           fi
