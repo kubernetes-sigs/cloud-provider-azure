@@ -1256,7 +1256,7 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 			// in this scenario the vmSetName is an empty string and the name of vmss should be obtained from the provider IDs of nodes
 			resourceGroupName, vmssName, err := getVmssAndResourceGroupNameByVMProviderID(node.Spec.ProviderID)
 			if err != nil {
-				klog.V(4).Infof("ensureVMSSInPool: found VMAS node %s, will skip checking and continue", node.Name)
+				klog.V(4).Infof("ensureVMSSInPool: found VMSS node %s, will skip checking and continue", node.Name)
 				continue
 			}
 			// only vmsses in the resource group same as it's in azure config are included
