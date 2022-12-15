@@ -205,13 +205,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	if accountOptions.CreatePrivateEndpoint {
 		// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
 		if err := az.createPrivateDNSZone(ctx, vnetResourceGroup); err != nil {
-			return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %v", PrivateDNSZoneName, vnetResourceGroup, err)
+			return "", "", fmt.Errorf("Failed to create private DNS zone(%s) in resourceGroup(%s), error: %w", PrivateDNSZoneName, vnetResourceGroup, err)
 		}
 
 		// Create virtual link to the private DNS zone
 		vNetLinkName := accountName + "-vnetlink"
 		if err := az.createVNetLink(ctx, vNetLinkName, vnetResourceGroup, vnetName); err != nil {
-			return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %v", vnetName, PrivateDNSZoneName, vnetResourceGroup, err)
+			return "", "", fmt.Errorf("Failed to create virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s), error: %w", vnetName, PrivateDNSZoneName, vnetResourceGroup, err)
 		}
 	}
 
@@ -341,13 +341,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			// Create private endpoint
 			privateEndpointName := accountName + "-pvtendpoint"
 			if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location); err != nil {
-				return "", "", fmt.Errorf("Failed to create private endpoint for storage account(%s), resourceGroup(%s), error: %v", accountName, vnetResourceGroup, err)
+				return "", "", fmt.Errorf("create private endpoint for storage account(%s), resourceGroup(%s): %w", accountName, vnetResourceGroup, err)
 			}
 
 			// Create dns zone group
 			dnsZoneGroupName := accountName + "-dnszonegroup"
 			if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName); err != nil {
-				return "", "", fmt.Errorf("Failed to create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s), error: %v", privateEndpointName, vnetName, vnetResourceGroup, err)
+				return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s): %w", privateEndpointName, vnetName, vnetResourceGroup, err)
 			}
 		}
 	}

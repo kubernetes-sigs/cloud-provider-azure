@@ -89,13 +89,13 @@ func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
 	// IPv4
 	intIPArray, vNetMask, err := cidrString2intArray(vnetCIDR)
 	if err != nil {
-		return nil, fmt.Errorf("unexpected vnet address CIDR: %v", err)
+		return nil, fmt.Errorf("unexpected vnet address CIDR: %w", err)
 	}
 	root := initIPTreeRoot(vNetMask)
 	for _, subnet := range existSubnetsWithSameIPFamily {
 		subnetIPArray, subnetPrefix, err := cidrString2intArray(subnet)
 		if err != nil {
-			return nil, fmt.Errorf("unexpected subnet address prefix: %v", err)
+			return nil, fmt.Errorf("unexpected subnet address prefix: %w", err)
 		}
 		setOccupiedByPrefix(root, subnetIPArray, subnetPrefix)
 	}

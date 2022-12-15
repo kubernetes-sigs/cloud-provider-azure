@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -159,7 +160,7 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 	}
 
 	nodeName, err := getter(vmName, azcache.CacheReadTypeDefault)
-	if err == cloudprovider.InstanceNotFound {
+	if errors.Is(err, cloudprovider.InstanceNotFound) {
 		klog.V(2).Infof("Could not find node (%s) in the existing cache. Forcely freshing the cache to check again...", nodeName)
 		return getter(vmName, azcache.CacheReadTypeForceRefresh)
 	}
@@ -200,7 +201,7 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 	}
 
 	vmssFlexID, err := getter(nodeName, azcache.CacheReadTypeDefault)
-	if err == cloudprovider.InstanceNotFound {
+	if errors.Is(err, cloudprovider.InstanceNotFound) {
 		klog.V(2).Infof("Could not find node (%s) in the existing cache. Forcely freshing the cache to check again...", nodeName)
 		return getter(nodeName, azcache.CacheReadTypeForceRefresh)
 	}

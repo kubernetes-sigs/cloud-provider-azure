@@ -403,7 +403,7 @@ func NewCloudFromConfigFile(configFilePath string, calFromCCM bool) (cloudprovid
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("could not init cloud provider azure: %v", err)
+		return nil, fmt.Errorf("could not init cloud provider azure: %w", err)
 	}
 	if cloud == nil {
 		return nil, fmt.Errorf("nil cloud")
@@ -447,7 +447,7 @@ func NewCloudFromSecret(clientBuilder cloudprovider.ControllerClientBuilder, sec
 
 	err := az.InitializeCloudFromSecret()
 	if err != nil {
-		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %v", az.SecretNamespace, az.SecretName, err)
+		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %w", az.SecretNamespace, az.SecretName, err)
 	}
 
 	az.ipv6DualStackEnabled = true
