@@ -1,12 +1,18 @@
 name: Test Docs
 
 on:
-    pull_request: {}
-    push: {}
+    pull_request:
+      branches: [ master ]
+      paths:
+        - 'site/**'
+    push:
+      branches: [ master ]
+      paths:
+        - 'site/**'
 
 jobs:
   deploy:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -26,4 +32,3 @@ jobs:
           npm install autoprefixer
           npm audit fix
           hugo --minify
-
