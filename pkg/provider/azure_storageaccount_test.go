@@ -345,7 +345,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 	subnetName := "SubnetName"
 	location := TestLocation
 
-	cloud := &Cloud{}
+	cloud := GetTestCloud(ctrl)
 	cloud.ResourceGroup = resourceGroup
 	cloud.VnetResourceGroup = vnetResourceGroup
 	cloud.VnetName = vnetName
