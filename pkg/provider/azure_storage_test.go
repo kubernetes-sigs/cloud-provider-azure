@@ -35,7 +35,8 @@ func TestCreateFileShare(t *testing.T) {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	cloud := &Cloud{controllerCommon: &controllerCommon{resourceGroup: "rg"}}
+	cloud := &Cloud{controllerCommon: &controllerCommon{}}
+	cloud.ResourceGroup = "rg"
 	name := "baz"
 	sku := "sku"
 	kind := "StorageV2"

@@ -1043,10 +1043,10 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 			nicUpdaters = append(nicUpdaters, func() error {
 				ctx, cancel := getContextWithCancel()
 				defer cancel()
-				klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolID %s", fs.resourceGroup, to.String(nic.Name), backendPoolID)
+				klog.V(2).Infof("EnsureBackendPoolDeleted begins to CreateOrUpdate for NIC(%s, %s) with backendPoolID %s", fs.ResourceGroup, to.String(nic.Name), backendPoolID)
 				rerr := fs.InterfacesClient.CreateOrUpdate(ctx, fs.ResourceGroup, to.String(nic.Name), nic)
 				if rerr != nil {
-					klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.resourceGroup, to.String(nic.Name), rerr.Error())
+					klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.ResourceGroup, to.String(nic.Name), rerr.Error())
 					return rerr.Error()
 				}
 				nicUpdated = true

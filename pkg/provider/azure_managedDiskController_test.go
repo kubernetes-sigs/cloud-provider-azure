@@ -326,13 +326,13 @@ func TestCreateManagedDiskWithExtendedLocation(t *testing.T) {
 	}
 
 	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
-	mockDisksClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.subscriptionID, testCloud.ResourceGroup, diskName, gomock.Any()).
+	mockDisksClient.EXPECT().CreateOrUpdate(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, diskName, gomock.Any()).
 		Do(func(ctx interface{}, subsID, rg, dn string, disk compute.Disk) {
 			assert.Equal(t, el.Name, disk.ExtendedLocation.Name, "The extended location name should match.")
 			assert.Equal(t, el.Type, disk.ExtendedLocation.Type, "The extended location type should match.")
 		}).Return(nil)
 
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.subscriptionID, testCloud.ResourceGroup, diskName).Return(diskreturned, nil).AnyTimes()
+	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, diskName).Return(diskreturned, nil).AnyTimes()
 
 	actualDiskID, err := managedDiskController.CreateManagedDisk(ctx, volumeOptions)
 	assert.Equal(t, expectedDiskID, actualDiskID, "Disk ID does not match.")
@@ -387,11 +387,11 @@ func TestDeleteManagedDisk(t *testing.T) {
 
 		mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
 		if test.diskName == fakeGetDiskFailed {
-			mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.subscriptionID, testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, &retry.Error{RawError: fmt.Errorf("Get Disk failed")}).AnyTimes()
+			mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, &retry.Error{RawError: fmt.Errorf("Get Disk failed")}).AnyTimes()
 		} else {
-			mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.subscriptionID, testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, nil).AnyTimes()
+			mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName).Return(test.existedDisk, nil).AnyTimes()
 		}
-		mockDisksClient.EXPECT().Delete(gomock.Any(), testCloud.subscriptionID, testCloud.ResourceGroup, test.diskName).Return(nil).AnyTimes()
+		mockDisksClient.EXPECT().Delete(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName).Return(nil).AnyTimes()
 
 		err := managedDiskController.DeleteManagedDisk(ctx, diskURI)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)

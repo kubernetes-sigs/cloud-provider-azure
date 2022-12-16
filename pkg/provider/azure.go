@@ -1006,20 +1006,9 @@ func initDiskControllers(az *Cloud) error {
 	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
 
 	common := &controllerCommon{
-		location:              az.Location,
-		storageEndpointSuffix: az.Environment.StorageEndpointSuffix,
-		resourceGroup:         az.ResourceGroup,
-		subscriptionID:        az.SubscriptionID,
-		cloud:                 az,
-		lockMap:               newLockMap(),
-		diskOpRateLimiter:     flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
-	}
-
-	if az.HasExtendedLocation() {
-		common.extendedLocation = &ExtendedLocation{
-			Name: az.ExtendedLocationName,
-			Type: az.ExtendedLocationType,
-		}
+		cloud:             az,
+		lockMap:           newLockMap(),
+		diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
 	}
 
 	az.ManagedDiskController = &ManagedDiskController{common: common}
