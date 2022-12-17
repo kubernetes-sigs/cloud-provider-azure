@@ -262,7 +262,6 @@ func (ss *ScaleSet) UpdateVM(ctx context.Context, nodeName types.NodeName) error
 	if err != nil {
 		return err
 	}
-
 	return ss.WaitForUpdateResult(ctx, future, nodeName, "update_vm")
 }
 
@@ -279,23 +278,7 @@ func (ss *ScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeName) 
 		return nil, err
 	}
 
-	var future *azure.Future
-	var rerr *retry.Error
-
-	// Invalidate the cache right after updating
-	defer func() {
-		// If there is an error with Update operation,
-		// invalidate the cache
-		if rerr != nil {
-			_ = ss.DeleteCacheForNode(vmName)
-			return
-		}
-	}()
-
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, nodeName)
-	future, rerr = ss.VirtualMachineScaleSetVMsClient.UpdateAsync(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, compute.VirtualMachineScaleSetVM{}, "update_vmss_instance")
-
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - returned with %v", nodeResourceGroup, nodeName, rerr)
+	future, rerr := ss.VirtualMachineScaleSetVMsClient.UpdateAsync(ctx, nodeResourceGroup, vm.VMSSName, vm.InstanceID, compute.VirtualMachineScaleSetVM{}, "update_vmss_instance")
 	if rerr != nil {
 		return future, rerr.Error()
 	}

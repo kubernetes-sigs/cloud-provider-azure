@@ -246,7 +246,6 @@ func (as *availabilitySet) UpdateVM(ctx context.Context, nodeName types.NodeName
 	if err != nil {
 		return err
 	}
-
 	return as.WaitForUpdateResult(ctx, future, nodeName, "update_vm")
 }
 
@@ -257,23 +256,8 @@ func (as *availabilitySet) UpdateVMAsync(ctx context.Context, nodeName types.Nod
 	if err != nil {
 		return nil, err
 	}
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s)", nodeResourceGroup, vmName)
-
-	var result *compute.VirtualMachine
-	var rerr *retry.Error
-	defer func() {
-		// invalidate the cache right after updating
-		_ = as.DeleteCacheForNode(vmName)
-
-		// update the cache with the updated result only if its not nil
-		// and contains the VirtualMachineProperties
-		if rerr == nil && result != nil && result.VirtualMachineProperties != nil {
-			as.updateCache(vmName, result)
-		}
-	}()
 
 	future, rerr := as.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, vmName, compute.VirtualMachineUpdate{}, "update_vm")
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - returned with %v", nodeResourceGroup, vmName, rerr)
 	if rerr != nil {
 		return future, rerr.Error()
 	}
