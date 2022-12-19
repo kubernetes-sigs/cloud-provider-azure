@@ -35,10 +35,11 @@ var (
 	GitTag string
 
 	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
-	tenantID       = os.Getenv("AZURE_TENANT_ID")
 	clientID       = os.Getenv("AZURE_CLIENT_ID")
 	clientSecret   = os.Getenv("AZURE_CLIENT_SECRET")
 	imageRegistry  = os.Getenv("IMAGE_REGISTRY")
+	registryURL    = os.Getenv("REGISTRY_URL")
+	registryRepo   = os.Getenv("REGISTRY_REPO")
 	ctx            = context.Background()
 )
 

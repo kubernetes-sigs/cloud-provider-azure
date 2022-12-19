@@ -53,10 +53,16 @@ var (
 type UpOptions struct {
 	ClusterName      string `flag:"clusterName" desc:"--clusterName flag for aks cluster name"`
 	Location         string `flag:"location" desc:"--location flag for resource group and cluster location"`
-	CCMImageTag      string `flag:"ccmImageTag" desc:"--ccmImageTag flag for CCM image tag"`
 	ConfigPath       string `flag:"config" desc:"--config flag for AKS cluster"`
 	CustomConfigPath string `flag:"customConfig" desc:"--customConfig flag for custom configuration"`
 	K8sVersion       string `flag:"k8sVersion" desc:"--k8sVersion flag for cluster Kubernetes version"`
+
+	CCMImageTag        string `flag:"ccmImageTag" desc:"--ccmImageTag flag for CCM image tag"`
+	CNMImageTag        string `flag:"cnmImageTag" desc:"--cnmImageTag flag for CNM image tag"`
+	AzureDiskImageTag  string `flag:"azureDiskImageTag" desc:"--azureDiskImageTag flag for Azure disk image tag"`
+	AzureFileImageTag  string `flag:"azureFileImageTag" desc:"--azureFileImageTag flag for Azure file image tag"`
+	KubernetesImageTag string `flag:"kubernetesImageTag" desc:"--kubernetesImageTag flag for Kubernetes image tag"`
+	KubeletURL         string `flag:"kubeletURL" desc:"--kubeletURL flag for kubelet binary URL"`
 }
 
 type enableCustomFeaturesPolicy struct{}
@@ -172,8 +178,36 @@ func openPath(path string) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+func (d *deployer) prepareCustomConfig() ([]byte, error) {
+	customConfig, err := openPath(d.CustomConfigPath)
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
+	}
+
+	imageMap := map[string]string{}
+
+	prefix := imageRegistry
+	if registryURL != "" && registryRepo != "" {
+		prefix = fmt.Sprintf("%s/%s", registryURL, registryRepo)
+	}
+	imageMap["{CUSTOM_CCM_IMAGE}"] = fmt.Sprintf("%s/azure-cloud-controller-manager:%s", prefix, d.CCMImageTag)
+	imageMap["{CUSTOM_CNM_IMAGE}"] = fmt.Sprintf("%s/azure-cloud-node-manager:%s-linux-amd64", prefix, d.CNMImageTag)
+	imageMap["{CUSTOM_AZURE_DISK_IMAGE}"] = fmt.Sprintf("%s/azuredisk-csi:%s", prefix, d.AzureDiskImageTag)
+	imageMap["{CUSTOM_AZURE_FILE_IMAGE}"] = fmt.Sprintf("%s/azurefile-csi:%s", prefix, d.AzureFileImageTag)
+	imageMap["{CUSTOM_KUBE_APISERVER_IMAGE}"] = fmt.Sprintf("%s/kube-apiserver:%s", prefix, d.KubernetesImageTag)
+	imageMap["{CUSTOM_KCM_IMAGE}"] = fmt.Sprintf("%s/kube-controller-manager:%s", prefix, d.KubernetesImageTag)
+	imageMap["{CUSTOM_KUBE_PROXY_IMAGE}"] = fmt.Sprintf("%s/kube-proxy:%s", prefix, d.KubernetesImageTag)
+	imageMap["{CUSTOM_KUBE_SCHEDULER_IMAGE}"] = fmt.Sprintf("%s/kube-scheduler:%s", prefix, d.KubernetesImageTag)
+	imageMap["{CUSTOM_KUBELET_URL}"] = d.KubeletURL
+
+	for k, v := range imageMap {
+		customConfig = bytes.ReplaceAll(customConfig, []byte(k), []byte(v))
+	}
+	return customConfig, nil
+}
+
 // prepareClusterConfig generates cluster config.
-func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*armcontainerservicev2.ManagedCluster, string, error) {
+func (d *deployer) prepareClusterConfig(clusterID string) (*armcontainerservicev2.ManagedCluster, string, error) {
 	configFile, err := openPath(d.ConfigPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read cluster config file at %q: %v", d.ConfigPath, err)
@@ -189,17 +223,9 @@ func (d *deployer) prepareClusterConfig(imageTag string, clusterID string) (*arm
 		clusterConfig = strings.ReplaceAll(clusterConfig, k, v)
 	}
 
-	customConfig, err := openPath(d.CustomConfigPath)
+	customConfig, err := d.prepareCustomConfig()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read custom config file at %q: %v", d.CustomConfigPath, err)
-	}
-
-	cloudProviderImageMap := map[string]string{
-		"{CUSTOM_CCM_IMAGE}": fmt.Sprintf("%s/azure-cloud-controller-manager:%s", imageRegistry, imageTag),
-		"{CUSTOM_CNM_IMAGE}": fmt.Sprintf("%s/azure-cloud-node-manager:%s-linux-amd64", imageRegistry, imageTag),
-	}
-	for k, v := range cloudProviderImageMap {
-		customConfig = bytes.ReplaceAll(customConfig, []byte(k), []byte(v))
+		return nil, "", fmt.Errorf("failed to prepare custom config: %v", err)
 	}
 
 	encodedCustomConfig := base64.StdEncoding.EncodeToString(customConfig)
@@ -242,11 +268,11 @@ func updateAzureCredential(mcConfig *armcontainerservicev2.ManagedCluster) {
 }
 
 // createAKSWithCustomConfig creates an AKS cluster with custom configuration.
-func (d *deployer) createAKSWithCustomConfig(imageTag string) error {
+func (d *deployer) createAKSWithCustomConfig() error {
 	klog.Infof("Creating the AKS cluster with custom config")
 	clusterID := fmt.Sprintf("/subscriptions/%s/resourcegroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", subscriptionID, d.ResourceGroupName, d.ClusterName)
 
-	mcConfig, encodedCustomConfig, err := d.prepareClusterConfig(imageTag, clusterID)
+	mcConfig, encodedCustomConfig, err := d.prepareClusterConfig(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to prepare cluster config: %v", err)
 	}
@@ -339,11 +365,12 @@ func (d *deployer) verifyUpFlags() error {
 	if d.CustomConfigPath == "" {
 		return fmt.Errorf("custom config path is empty")
 	}
-	if d.CCMImageTag == "" {
-		return fmt.Errorf("ccm image tag is empty")
-	}
 	if d.K8sVersion == "" {
 		return fmt.Errorf("k8s version is empty")
+	}
+
+	if d.CNMImageTag == "" {
+		d.CNMImageTag = d.CCMImageTag
 	}
 	return nil
 }
@@ -361,7 +388,7 @@ func (d *deployer) Up() error {
 	klog.Infof("Resource group %s created", *resourceGroup.ResourceGroup.ID)
 
 	// Create the AKS cluster
-	if err := d.createAKSWithCustomConfig(d.CCMImageTag); err != nil {
+	if err := d.createAKSWithCustomConfig(); err != nil {
 		return fmt.Errorf("failed to create the AKS cluster: %v", err)
 	}
 
