@@ -23,7 +23,7 @@ export GOPATH="/home/vsts/go"
 export PATH="${PATH:-}:${GOPATH}/bin"
 export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
-if [[ -z "${RELEASE_PIPELINE:-}"  ]]; then
+if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
   az extension add -n aks-preview
   az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
 fi
@@ -31,6 +31,21 @@ fi
 get_random_location() {
   local LOCATIONS=("eastus")
   echo "${LOCATIONS[${RANDOM} % ${#LOCATIONS[@]}]}"
+}
+
+get_k8s_version() {
+  if [[ -n "${AKS_KUBERNETES_VERSION:-}" ]]; then
+    return
+  fi
+  K8S_RELEASE="${K8S_RELEASE:-$(echo ${BUILD_SOURCE_BRANCH_NAME:-} | cut -f2 -d'-')}"
+  AKS_KUBERNETES_VERSION=$(az aks get-versions -l "${AZURE_LOCATION:-}" --output json \
+    | jq -r --arg K8S_RELEASE "${K8S_RELEASE:-}" '[.orchestrators |.[] | select(.orchestratorVersion | startswith($K8S_RELEASE))][0] | .orchestratorVersion')
+  # Normally, K8S_RELEASE has at least one match in AKS, but in case the k8s release is the first minor version,
+  # not picked by AKS, we use the latest AKS k8s version as a try-your-best workaround.
+  if  [ -z ${AKS_KUBERNETES_VERSION:-} ]; then
+  AKS_KUBERNETES_VERSION=$(az aks get-versions -l "${AZURE_LOCATION:-}" --output json \
+    | jq -r '.orchestrators |.[] |select(.upgrades | .==null) |.orchestratorVersion')
+  fi
 }
 
 cleanup() {
@@ -65,6 +80,8 @@ if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   fi
 fi
 
+CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
+
 rm -rf kubetest2-aks
 git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/kubetest2-aks .
@@ -87,13 +104,16 @@ if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
   go mod vendor
 fi
 
+get_k8s_version
+echo "AKS Kubernetes version is: ${AKS_KUBERNETES_VERSION:-}"
+
 kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --location "${AZURE_LOCATION:-}" \
 --config "${CLUSTER_CONFIG_PATH:-}" \
---customConfig "${REPO_ROOT}/.pipelines/templates/customconfiguration.json" \
+--customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
 --ccmImageTag "${IMAGE_TAG:-}" \
---k8sVersion "${KUBERNETES_VERSION:-}"
+--k8sVersion "${AKS_KUBERNETES_VERSION:-}"
 
 export KUBECONFIG="${REPO_ROOT}/_kubeconfig/${RESOURCE_GROUP:-}_${CLUSTER_NAME:-}.kubeconfig"
 if [[ ! -f "${KUBECONFIG:-}" ]]; then
