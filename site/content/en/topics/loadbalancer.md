@@ -3,8 +3,7 @@ title: "Azure LoadBalancer"
 linkTitle: "Azure LoadBalancer"
 weight: 2
 type: docs
-description: >
-    Azure LoadBalancer basics.
+description: Azure LoadBalancer basics.
 ---
 
 The way Azure defines a LoadBalancer is different from GCE or AWS. Azure's LB can have multiple frontend IP refs. GCE and AWS only allow one, if you want more, you would need multiple LBs. Since Public IP's are not part of the LB in Azure, an NSG is not part of the LB in Azure either. However, you cannot delete them in parallel, a Public IP can only be deleted after the LB's frontend IP ref is removed.
@@ -33,8 +32,10 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` | Health probe interval | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  with out-of-tree cloud provider  |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe` | The minimum number of unhealthy responses of health probe  |  Refer to the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later  with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later  with out-of-tree cloud provider|
+| `service.beta.kubernetes.io/port_{port}_no_lb_rule` | true/false |  {port} is the port number in the service. When it is set to true, no lb rule and health probe rule for this port will be generated. health check service should not be exposed to the public internet(e.g. istio/envoy health check service) | v1.24 and later with out-of-tree cloud provider|
+| `service.beta.kubernetes.io/port_{port}_no_probe_rule` | true/false |  {port} is the port number in the service. When it is set to true, no health probe rule for this port will be generated. | v1.24 and later with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_health-probe_protocol` | Health probe protocol | {port} is the port number in the service. Explicit protocol for the health probe for the service port {port}, overriding port.appProtocol if set.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later with out-of-tree cloud provider|
-| `service.beta.kubernetes.io/port_{port}_health-probe_port` | Health probe protocol |  port} is the port number in the service. Explicit port for the health probe for the service port {port}, overriding the default value.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later with out-of-tree cloud provider|
+| `service.beta.kubernetes.io/port_{port}_health-probe_port` | port number or port name in service manifest |  {port} is the port number in the service. Explicit port for the health probe for the service port {port}, overriding the default value.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.24 and later with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_health-probe_interval` | Health probe interval |  {port} is port number of service.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_health-probe_num-of-probe` | The minimum number of unhealthy responses of health probe  | {port} is port number of service. Refer to the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_health-probe_request-path` | Request path of the health probe | {port} is port number of service.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later with out-of-tree cloud provider|
@@ -197,6 +198,8 @@ The following annotations can be used to customize probe configuration per servi
 
 | port specific annotation | global probe annotation | Usage |
 | --| -- | -- |
+|service.beta.kubernetes.io/port_{port}_no_lb_rule| N/A (no equivalent globally) | if set true, no lb rules and probe rules will be generated |
+|service.beta.kubernetes.io/port_{port}_no_probe_rule| N/A (no equivalent globally) | if set true, no probe rules will be generated |
 |service.beta.kubernetes.io/port_{port}_health-probe_protocol| N/A (no equivalent globally) | Set the health probe protocol for this service port (e.g. Http, Https, Tcp) |
 |service.beta.kubernetes.io/port_{port}_health-probe_port| N/A (no equivalent globally) | Sets the health probe port for this service port (e.g. 15021) |
 |service.beta.kubernetes.io/port_{port}_health-probe_request-path|service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path| For Http or Https, sets the health probe request path. Defaults to /|
