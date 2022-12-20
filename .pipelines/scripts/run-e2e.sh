@@ -42,7 +42,7 @@ get_k8s_version() {
     | jq -r --arg K8S_RELEASE "${K8S_RELEASE:-}" '[.orchestrators |.[] | select(.orchestratorVersion | startswith($K8S_RELEASE))][0] | .orchestratorVersion')
   # Normally, K8S_RELEASE has at least one match in AKS, but in case the k8s release is the first minor version,
   # not picked by AKS, we use the latest AKS k8s version as a try-your-best workaround.
-  if  [ -z ${AKS_KUBERNETES_VERSION:-} ]; then
+  if [[ "${AKS_KUBERNETES_VERSION:-}" == "null" ]]; then
   AKS_KUBERNETES_VERSION=$(az aks get-versions -l "${AZURE_LOCATION:-}" --output json \
     | jq -r '.orchestrators |.[] |select(.upgrades | .==null) |.orchestratorVersion')
   fi
