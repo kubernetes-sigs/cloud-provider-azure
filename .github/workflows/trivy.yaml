@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/trivy.yaml'
       - 'pkg/**.go'
+      - '!pkg/azureclients/v2/**.go'
+      - '!kubetest2-aks/**.go'
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'
@@ -14,6 +16,8 @@ on:
     paths:
       - '.github/workflows/trivy.yaml'
       - 'pkg/**.go'
+      - '!pkg/azureclients/v2/**.go'
+      - '!kubetest2-aks/**.go'
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'

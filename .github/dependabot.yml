@@ -28,6 +28,19 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+  - package-ecosystem: "gomod"
+    directory: "/pkg/azureclients/v2/"
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
