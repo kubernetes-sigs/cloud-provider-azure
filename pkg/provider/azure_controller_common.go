@@ -91,14 +91,9 @@ var (
 )
 
 type controllerCommon struct {
-	subscriptionID        string
-	location              string
-	extendedLocation      *ExtendedLocation
-	storageEndpointSuffix string
-	resourceGroup         string
-	diskStateMap          sync.Map // <diskURI, attaching/detaching state>
-	lockMap               *lockMap
-	cloud                 *Cloud
+	diskStateMap sync.Map // <diskURI, attaching/detaching state>
+	lockMap      *lockMap
+	cloud        *Cloud
 	// disk queue that is waiting for attach or detach on specific node
 	// <nodeName, map<diskURI, *AttachDiskOptions/DetachDiskOptions>>
 	attachDiskMap sync.Map

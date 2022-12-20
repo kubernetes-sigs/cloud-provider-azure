@@ -138,9 +138,5 @@ func GetTestCloudWithExtendedLocation(ctrl *gomock.Controller) (az *Cloud) {
 	az = GetTestCloud(ctrl)
 	az.Config.ExtendedLocationName = "microsoftlosangeles1"
 	az.Config.ExtendedLocationType = "EdgeZone"
-	az.controllerCommon.extendedLocation = &ExtendedLocation{
-		Name: az.Config.ExtendedLocationName,
-		Type: az.Config.ExtendedLocationType,
-	}
 	return az
 }

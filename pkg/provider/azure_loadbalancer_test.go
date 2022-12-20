@@ -4592,7 +4592,7 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 	exLocName := "microsoftlosangeles1"
 	expectedPIP := &network.PublicIPAddress{
 		Name:     to.StringPtr("pip1"),
-		Location: &az.location,
+		Location: &az.Location,
 		ExtendedLocation: &network.ExtendedLocation{
 			Name: to.StringPtr("microsoftlosangeles1"),
 			Type: network.ExtendedLocationTypesEdgeZone,
