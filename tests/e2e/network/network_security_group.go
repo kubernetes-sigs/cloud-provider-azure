@@ -23,13 +23,13 @@ import (
 	"time"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/strings/slices"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -294,7 +294,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		pip := defaultPublicIPAddress(ipName, tc.IPFamily == utils.IPv6)
 		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
 		Expect(err).NotTo(HaveOccurred())
-		targetIP := to.String(pip.IPAddress)
+		targetIP := pointer.StringDeref(pip.IPAddress, "")
 		utils.Logf("created pip with address %s", targetIP)
 
 		By("Creating a test load balancer service with floating IP disabled")
@@ -340,8 +340,8 @@ func validateUnsharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip strin
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
-			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
-			if strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) && strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
+			utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
+			if strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) && strings.EqualFold(pointer.StringDeref(securityRule.DestinationPortRange, ""), port) {
 				utils.Logf("Found target security rule")
 				return true
 			}
@@ -356,8 +356,8 @@ func validateSharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []stri
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
-			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
-			if strings.EqualFold(to.String(securityRule.DestinationPortRange), port) {
+			utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
+			if strings.EqualFold(pointer.StringDeref(securityRule.DestinationPortRange, ""), port) {
 				found := true
 				for _, ip := range ips {
 					if !utils.StringInSlice(ip, *securityRule.DestinationAddressPrefixes) {
@@ -381,11 +381,11 @@ func validateLoadBalancerSourceRangesRuleExists(nsgs []aznetwork.SecurityGroup, 
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
-			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
+			utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
 			if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
-				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
-				strings.HasSuffix(to.String(securityRule.Name), ipRangesSuffix) &&
-				strings.EqualFold(to.String(securityRule.SourceAddressPrefix), sourceAddressPrefix) {
+				strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) &&
+				strings.HasSuffix(pointer.StringDeref(securityRule.Name, ""), ipRangesSuffix) &&
+				strings.EqualFold(pointer.StringDeref(securityRule.SourceAddressPrefix, ""), sourceAddressPrefix) {
 				return true
 			}
 		}
@@ -400,11 +400,11 @@ func validateDenyAllSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ip string
 			continue
 		}
 		for _, securityRule := range *nsg.SecurityRules {
-			utils.Logf("Checking security rule %q", to.String(securityRule.Name))
+			utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
 			if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
-				strings.EqualFold(to.String(securityRule.DestinationAddressPrefix), ip) &&
-				strings.HasSuffix(to.String(securityRule.Name), "deny_all") &&
-				strings.EqualFold(to.String(securityRule.SourceAddressPrefix), "*") {
+				strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) &&
+				strings.HasSuffix(pointer.StringDeref(securityRule.Name, ""), "deny_all") &&
+				strings.EqualFold(pointer.StringDeref(securityRule.SourceAddressPrefix, ""), "*") {
 				return true
 			}
 		}

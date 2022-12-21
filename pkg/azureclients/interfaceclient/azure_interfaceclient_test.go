@@ -27,9 +27,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -199,7 +199,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(testInterface.ID, ""), testInterface, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
@@ -217,7 +217,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(testInterface.ID), testInterface, gomock.Any()).Return(response, noContentErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(testInterface.ID, ""), testInterface, gomock.Any()).Return(response, noContentErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = nicClient.CreateOrUpdate(context.TODO(), "rg", "nic1", testInterface)
 	assert.Equal(t, noContentErr, rerr)
@@ -229,7 +229,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestInterface("interface1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
 
 	nicClient := getTestInterfaceClient(armClient)
 	rerr := nicClient.Delete(context.TODO(), "rg", "interface1")
@@ -241,7 +241,7 @@ func TestDelete(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(noContentErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(noContentErr).Times(1)
 
 	rerr = nicClient.Delete(context.TODO(), "rg", "interface1")
 	assert.Equal(t, noContentErr, rerr)
@@ -250,19 +250,19 @@ func TestDelete(t *testing.T) {
 func getTestInterface(name string) network.Interface {
 	resourceID := fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/%s", name)
 	return network.Interface{
-		ID:       to.StringPtr(resourceID),
-		Name:     to.StringPtr(name),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(resourceID),
+		Name:     pointer.String(name),
+		Location: pointer.String("eastus"),
 	}
 }
 
 func getTestVMSSInterface(name string) network.Interface {
 	resourceID := fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/%s", name)
 	return network.Interface{
-		ID:       to.StringPtr(resourceID),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(resourceID),
+		Location: pointer.String("eastus"),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
-			EnableAcceleratedNetworking: to.BoolPtr(true),
+			EnableAcceleratedNetworking: pointer.Bool(true),
 		},
 	}
 }

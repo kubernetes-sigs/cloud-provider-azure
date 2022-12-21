@@ -24,12 +24,12 @@ import (
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -106,7 +106,7 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.Warning("parseTags: empty key, ignoring this key-value pair")
 				continue
 			}
-			formatted[k] = to.StringPtr(v)
+			formatted[k] = pointer.String(v)
 		}
 	}
 
@@ -122,7 +122,7 @@ func parseTags(tags string, tagsMap map[string]string) map[string]*string {
 				klog.V(4).Infof("parseTags: found identical keys: %s from tags and %s from tagsMap (case-insensitive), %s will replace %s", k, key, key, k)
 				delete(formatted, k)
 			}
-			formatted[key] = to.StringPtr(value)
+			formatted[key] = pointer.String(value)
 		}
 	}
 
@@ -150,7 +150,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		}
 
 		for _, systemTag := range systemTags {
-			systemTagsMap[systemTag] = to.StringPtr("")
+			systemTagsMap[systemTag] = pointer.String("")
 		}
 	}
 
@@ -161,7 +161,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		if !found {
 			currentTagsOnResource[k] = v
 			changed = true
-		} else if !strings.EqualFold(to.String(v), to.String(currentTagsOnResource[key])) {
+		} else if !strings.EqualFold(pointer.StringDeref(v, ""), pointer.StringDeref(currentTagsOnResource[key], "")) {
 			currentTagsOnResource[key] = v
 			changed = true
 		}
@@ -279,11 +279,11 @@ func sameContentInSlices(s1 []string, s2 []string) bool {
 func removeDuplicatedSecurityRules(rules []network.SecurityRule) []network.SecurityRule {
 	ruleNames := make(map[string]bool)
 	for i := len(rules) - 1; i >= 0; i-- {
-		if _, ok := ruleNames[to.String(rules[i].Name)]; ok {
-			klog.Warningf("Found duplicated rule %s, will be removed.", to.String(rules[i].Name))
+		if _, ok := ruleNames[pointer.StringDeref(rules[i].Name, "")]; ok {
+			klog.Warningf("Found duplicated rule %s, will be removed.", pointer.StringDeref(rules[i].Name, ""))
 			rules = append(rules[:i], rules[i+1:]...)
 		}
-		ruleNames[to.String(rules[i].Name)] = true
+		ruleNames[pointer.StringDeref(rules[i].Name, "")] = true
 	}
 	return rules
 }

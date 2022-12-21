@@ -28,11 +28,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -214,7 +214,7 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 
 	testPip := network.PublicIPAddress{
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: to.StringPtr("10.10.10.10"),
+			IPAddress: pointer.String("10.10.10.10"),
 		},
 	}
 	pip, err := testPip.MarshalJSON()
@@ -233,7 +233,7 @@ func TestGetVMSSPublicIPAddress(t *testing.T) {
 	expected := network.PublicIPAddress{
 		Response: autorest.Response{Response: response},
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: to.StringPtr("10.10.10.10"),
+			IPAddress: pointer.String("10.10.10.10"),
 		},
 	}
 	result, rerr := pipClient.GetVirtualMachineScaleSetPublicIPAddress(context.TODO(), "rg", "vmss", "0", "nic", "ipConfig", "pip1", "")
@@ -455,7 +455,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	pipList := []network.PublicIPAddress{getTestPublicIPAddress("pip1"), getTestPublicIPAddress("pip2"), getTestPublicIPAddress("pip3")}
-	partialResponse, err := json.Marshal(network.PublicIPAddressListResult{Value: &pipList, NextLink: to.StringPtr("nextLink")})
+	partialResponse, err := json.Marshal(network.PublicIPAddressListResult{Value: &pipList, NextLink: pointer.String("nextLink")})
 	assert.NoError(t, err)
 	pagedResponse, err := json.Marshal(network.PublicIPAddressListResult{Value: &pipList})
 	assert.NoError(t, err)
@@ -533,7 +533,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := network.PublicIPAddressListResult{
-		NextLink: to.StringPtr("next"),
+		NextLink: pointer.String("next"),
 	}
 
 	for _, test := range tests {
@@ -578,7 +578,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := network.PublicIPAddressListResult{
-		NextLink: to.StringPtr("next"),
+		NextLink: pointer.String("next"),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -616,7 +616,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pip.ID), pip).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pip.ID, ""), pip).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
@@ -633,7 +633,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pip.ID), pip).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pip.ID, ""), pip).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
@@ -686,7 +686,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pip.ID), pip).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pip.ID, ""), pip).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
@@ -701,7 +701,7 @@ func TestDelete(t *testing.T) {
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID)).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(pip.ID, "")).Return(nil).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
 	rerr := pipClient.Delete(context.TODO(), "rg", "pip1")
@@ -754,7 +754,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	pip := getTestPublicIPAddress("pip1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pip.ID)).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(pip.ID, "")).Return(throttleErr).Times(1)
 
 	pipClient := getTestPublicIPAddressClient(armClient)
 	rerr := pipClient.Delete(context.TODO(), "rg", "pip1")
@@ -769,9 +769,9 @@ func getFutureTime() time.Time {
 
 func getTestPublicIPAddress(name string) network.PublicIPAddress {
 	return network.PublicIPAddress{
-		ID:       to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/%s", name)),
-		Name:     to.StringPtr(name),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/%s", name)),
+		Name:     pointer.String(name),
+		Location: pointer.String("eastus"),
 	}
 }
 

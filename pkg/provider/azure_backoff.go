@@ -26,7 +26,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -152,7 +152,7 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rerr := az.SecurityGroupsClient.CreateOrUpdate(ctx, az.SecurityGroupResourceGroup, *sg.Name, sg, to.String(sg.Etag))
+	rerr := az.SecurityGroupsClient.CreateOrUpdate(ctx, az.SecurityGroupResourceGroup, *sg.Name, sg, pointer.StringDeref(sg.Etag, ""))
 	klog.V(10).Infof("SecurityGroupsClient.CreateOrUpdate(%s): end", *sg.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
@@ -161,7 +161,7 @@ func (az *Cloud) CreateOrUpdateSecurityGroup(sg network.SecurityGroup) error {
 	}
 
 	nsgJSON, _ := json.Marshal(sg)
-	klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", to.String(sg.Name), rerr.Error(), string(nsgJSON))
+	klog.Warningf("CreateOrUpdateSecurityGroup(%s) failed: %v, NSG request: %s", pointer.StringDeref(sg.Name, ""), rerr.Error(), string(nsgJSON))
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
@@ -213,7 +213,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	lb = cleanupSubnetInFrontendIPConfigurations(&lb)
 
 	rgName := az.getLoadBalancerResourceGroup()
-	rerr := az.LoadBalancerClient.CreateOrUpdate(ctx, rgName, to.String(lb.Name), lb, to.String(lb.Etag))
+	rerr := az.LoadBalancerClient.CreateOrUpdate(ctx, rgName, pointer.StringDeref(lb.Name, ""), lb, pointer.StringDeref(lb.Etag, ""))
 	klog.V(10).Infof("LoadBalancerClient.CreateOrUpdate(%s): end", *lb.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
@@ -222,18 +222,18 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 	}
 
 	lbJSON, _ := json.Marshal(lb)
-	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", to.String(lb.Name), rerr.Error(), string(lbJSON))
+	klog.Warningf("LoadBalancerClient.CreateOrUpdate(%s) failed: %v, LoadBalancer request: %s", pointer.StringDeref(lb.Name, ""), rerr.Error(), string(lbJSON))
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", to.String(lb.Name))
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", pointer.StringDeref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", to.String(lb.Name))
+		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", pointer.StringDeref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
@@ -245,7 +245,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 			return rerr.Error()
 		}
 		pipRG, pipName := matches[1], matches[2]
-		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, to.String(lb.Name))
+		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, pointer.StringDeref(lb.Name, ""))
 		pip, _, err := az.getPublicIPAddress(pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
@@ -269,8 +269,8 @@ func (az *Cloud) CreateOrUpdateLBBackendPool(lbName string, backendPool network.
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", to.String(backendPool.Name), lbName)
-	rerr := az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, az.getLoadBalancerResourceGroup(), lbName, to.String(backendPool.Name), backendPool, to.String(backendPool.Etag))
+	klog.V(4).Infof("CreateOrUpdateLBBackendPool: updating backend pool %s in LB %s", pointer.StringDeref(backendPool.Name, ""), lbName)
+	rerr := az.LoadBalancerClient.CreateOrUpdateBackendPools(ctx, az.getLoadBalancerResourceGroup(), lbName, pointer.StringDeref(backendPool.Name, ""), backendPool, pointer.StringDeref(backendPool.Etag, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.lbCache.Delete(lbName)
@@ -355,11 +355,11 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 	}
 
 	for _, lb := range allLBs {
-		vmSetNameFromLBName := az.mapLoadBalancerNameToVMSet(to.String(lb.Name), clusterName)
-		if strings.EqualFold(strings.TrimSuffix(to.String(lb.Name), consts.InternalLoadBalancerNameSuffix), clusterName) ||
+		vmSetNameFromLBName := az.mapLoadBalancerNameToVMSet(pointer.StringDeref(lb.Name, ""), clusterName)
+		if strings.EqualFold(strings.TrimSuffix(pointer.StringDeref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix), clusterName) ||
 			agentPoolVMSetNamesSet.Has(strings.ToLower(vmSetNameFromLBName)) {
 			agentPoolLBs = append(agentPoolLBs, lb)
-			klog.V(4).Infof("ListManagedLBs: found agent pool LB %s", to.String(lb.Name))
+			klog.V(4).Infof("ListManagedLBs: found agent pool LB %s", pointer.StringDeref(lb.Name, ""))
 		}
 	}
 
@@ -409,29 +409,29 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rerr := az.PublicIPAddressesClient.CreateOrUpdate(ctx, pipResourceGroup, to.String(pip.Name), pip)
-	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, to.String(pip.Name))
+	rerr := az.PublicIPAddressesClient.CreateOrUpdate(ctx, pipResourceGroup, pointer.StringDeref(pip.Name, ""), pip)
+	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
 		return nil
 	}
 
 	pipJSON, _ := json.Marshal(pip)
-	klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, to.String(pip.Name), rerr.Error().Error(), string(pipJSON))
+	klog.Warningf("PublicIPAddressesClient.CreateOrUpdate(%s, %s) failed: %s, PublicIP request: %s", pipResourceGroup, pointer.StringDeref(pip.Name, ""), rerr.Error().Error(), string(pipJSON))
 	az.Event(service, v1.EventTypeWarning, "CreateOrUpdatePublicIPAddress", rerr.Error().Error())
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, to.String(pip.Name))
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, to.String(pip.Name))
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, to.String(pip.Name)))
+		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
+		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
 	}
 
 	return rerr.Error()
@@ -498,7 +498,7 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rerr := az.RouteTablesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, routeTable, to.String(routeTable.Etag))
+	rerr := az.RouteTablesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, routeTable, pointer.StringDeref(routeTable.Etag, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.rtCache.Delete(*routeTable.Name)
@@ -506,7 +506,7 @@ func (az *Cloud) CreateOrUpdateRouteTable(routeTable network.RouteTable) error {
 	}
 
 	rtJSON, _ := json.Marshal(routeTable)
-	klog.Warningf("RouteTablesClient.CreateOrUpdate(%s) failed: %v, RouteTable request: %s", to.String(routeTable.Name), rerr.Error(), string(rtJSON))
+	klog.Warningf("RouteTablesClient.CreateOrUpdate(%s) failed: %v, RouteTable request: %s", pointer.StringDeref(routeTable.Name, ""), rerr.Error(), string(rtJSON))
 
 	// Invalidate the cache because etag mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
@@ -527,7 +527,7 @@ func (az *Cloud) CreateOrUpdateRoute(route network.Route) error {
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rerr := az.RoutesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, *route.Name, route, to.String(route.Etag))
+	rerr := az.RoutesClient.CreateOrUpdate(ctx, az.RouteTableResourceGroup, az.RouteTableName, *route.Name, route, pointer.StringDeref(route.Etag, ""))
 	klog.V(10).Infof("RoutesClient.CreateOrUpdate(%s): end", *route.Name)
 	if rerr == nil {
 		_ = az.rtCache.Delete(az.RouteTableName)
@@ -593,27 +593,27 @@ func (az *Cloud) CreateOrUpdatePLS(service *v1.Service, pls network.PrivateLinkS
 	ctx, cancel := getContextWithCancel()
 	defer cancel()
 
-	rerr := az.PrivateLinkServiceClient.CreateOrUpdate(ctx, az.PrivateLinkServiceResourceGroup, to.String(pls.Name), pls, to.String(pls.Etag))
+	rerr := az.PrivateLinkServiceClient.CreateOrUpdate(ctx, az.PrivateLinkServiceResourceGroup, pointer.StringDeref(pls.Name, ""), pls, pointer.StringDeref(pls.Etag, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+		_ = az.plsCache.Delete(pointer.StringDeref((*pls.LoadBalancerFrontendIPConfigurations)[0].ID, ""))
 		return nil
 	}
 
 	rtJSON, _ := json.Marshal(pls)
-	klog.Warningf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v, PrivateLinkService request: %s", to.String(pls.Name), rerr.Error(), string(rtJSON))
+	klog.Warningf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v, PrivateLinkService request: %s", pointer.StringDeref(pls.Name, ""), rerr.Error(), string(rtJSON))
 
 	// Invalidate the cache because etag mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("Private link service cache for %s is cleanup because of http.StatusPreconditionFailed", to.String(pls.Name))
-		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+		klog.V(3).Infof("Private link service cache for %s is cleanup because of http.StatusPreconditionFailed", pointer.StringDeref(pls.Name, ""))
+		_ = az.plsCache.Delete(pointer.StringDeref((*pls.LoadBalancerFrontendIPConfigurations)[0].ID, ""))
 	}
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(rerr.Error().Error()), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("Private link service for %s is cleanup because CreateOrUpdatePrivateLinkService is canceled by another operation", to.String(pls.Name))
-		_ = az.plsCache.Delete(to.String((*pls.LoadBalancerFrontendIPConfigurations)[0].ID))
+		klog.V(3).Infof("Private link service for %s is cleanup because CreateOrUpdatePrivateLinkService is canceled by another operation", pointer.StringDeref(pls.Name, ""))
+		_ = az.plsCache.Delete(pointer.StringDeref((*pls.LoadBalancerFrontendIPConfigurations)[0].ID, ""))
 	}
-	klog.Errorf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v", to.String(pls.Name), rerr.Error())
+	klog.Errorf("PrivateLinkServiceClient.CreateOrUpdate(%s) failed: %v", pointer.StringDeref(pls.Name, ""), rerr.Error())
 	return rerr.Error()
 }
 

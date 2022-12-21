@@ -28,11 +28,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/pointer"
 )
 
 type IPFamily string
@@ -333,7 +333,7 @@ func WaitGetPIPByPrefix(
 			return false, nil
 		}
 
-		pipID := to.String((*prefix.PublicIPAddresses)[0].ID)
+		pipID := pointer.StringDeref((*prefix.PublicIPAddresses)[0].ID, "")
 		parts := strings.Split(pipID, "/")
 		pipName := parts[len(parts)-1]
 		pip, err = WaitGetPIP(cli, pipName)
@@ -402,9 +402,9 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 		return "", err
 	}
 	if vNet.Subnets == nil || len(*vNet.Subnets) == 0 {
-		return "", fmt.Errorf("failed to find a subnet in vNet %s", to.String(vNet.Name))
+		return "", fmt.Errorf("failed to find a subnet in vNet %s", pointer.StringDeref(vNet.Name, ""))
 	}
-	subnet := to.String((*vNet.Subnets)[0].AddressPrefix)
+	subnet := pointer.StringDeref((*vNet.Subnets)[0].AddressPrefix, "")
 	if len(*vNet.Subnets) > 1 {
 		for _, sn := range *vNet.Subnets {
 			// if there is more than one subnet, select the first one we find.
@@ -432,7 +432,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	}
 	ip, _, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", to.String(vNet.Name), err)
+		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", pointer.StringDeref(vNet.Name, ""), err)
 	}
 
 	baseIP := ip.To4()
@@ -444,7 +444,7 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 	for i := 0; i <= 254; i++ {
 		baseIP[pos]++
 		IP := baseIP.String()
-		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), to.String(vNet.Name), IP)
+		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), pointer.StringDeref(vNet.Name, ""), IP)
 		if err != nil {
 			// just ignore
 			continue
@@ -463,7 +463,7 @@ func (azureTestClient *AzureTestClient) GetPublicIPFromAddress(resourceGroupName
 		return pip, err
 	}
 	for _, pip := range pipList {
-		if strings.EqualFold(to.String(pip.IPAddress), ipAddr) {
+		if strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), ipAddr) {
 			return pip, err
 		}
 	}

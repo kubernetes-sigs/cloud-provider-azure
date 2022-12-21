@@ -25,9 +25,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient/mockprivatednsclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
@@ -392,8 +392,8 @@ func TestEnsureStorageAccount(t *testing.T) {
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
 			storageType:                     StorageTypeBlob,
-			requireInfrastructureEncryption: to.BoolPtr(true),
-			keyVaultURL:                     to.StringPtr("keyVaultURL"),
+			requireInfrastructureEncryption: pointer.Bool(true),
+			keyVaultURL:                     pointer.String("keyVaultURL"),
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
@@ -405,8 +405,8 @@ func TestEnsureStorageAccount(t *testing.T) {
 			createPrivateEndpoint:           true,
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
-			requireInfrastructureEncryption: to.BoolPtr(true),
-			keyVaultURL:                     to.StringPtr("keyVaultURL"),
+			requireInfrastructureEncryption: pointer.Bool(true),
+			keyVaultURL:                     pointer.String("keyVaultURL"),
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
@@ -597,7 +597,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key":  to.StringPtr("value"),
+					"key":  pointer.String("value"),
 					"key2": nil,
 				},
 			},
@@ -613,8 +613,8 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key":  to.StringPtr("value"),
-					"key2": to.StringPtr("value2"),
+					"key":  pointer.String("value"),
+					"key2": pointer.String("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -629,7 +629,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "non-identitical tags while MatchTags is false",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key": to.StringPtr("value2"),
+					"key": pointer.String("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
@@ -644,7 +644,7 @@ func TestIsTagsEqual(t *testing.T) {
 			desc: "non-identitical tags",
 			account: storage.Account{
 				Tags: map[string]*string{
-					"key": to.StringPtr("value2"),
+					"key": pointer.String("value2"),
 				},
 			},
 			accountOptions: &AccountOptions{
