@@ -2598,6 +2598,13 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 	}
 }
 
+func TestEnsureBackendPoolDeletedConcurrentlyLoop(t *testing.T) {
+	// run TestEnsureBackendPoolDeletedConcurrently 20 times to detect race conditions
+	for i := 0; i < 20; i++ {
+		TestEnsureBackendPoolDeletedConcurrently(t)
+	}
+}
+
 func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
