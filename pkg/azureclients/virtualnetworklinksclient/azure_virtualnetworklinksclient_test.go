@@ -29,9 +29,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -139,7 +139,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(vnl.ID), vnl, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(vnl.ID, ""), vnl, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vnlClient := getTestVirtualNetworkLinkClient(armClient)
@@ -153,7 +153,7 @@ func TestCreateOrUpdateAsync(t *testing.T) {
 
 	vnl := getTestVirtualNetworkLink("pz1", "vnl1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceAsync(gomock.Any(), to.String(vnl.ID), vnl, gomock.Any()).Return(&azure.Future{}, nil).Times(1)
+	armClient.EXPECT().PutResourceAsync(gomock.Any(), pointer.StringDeref(vnl.ID, ""), vnl, gomock.Any()).Return(&azure.Future{}, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	vnlClient := getTestVirtualNetworkLinkClient(armClient)
@@ -163,9 +163,9 @@ func TestCreateOrUpdateAsync(t *testing.T) {
 
 func getTestVirtualNetworkLink(privateZoneName, virtualNetworkLinkName string) privatedns.VirtualNetworkLink {
 	return privatedns.VirtualNetworkLink{
-		ID:       to.StringPtr(fmt.Sprintf(testResourceIDFormat, privateZoneName, virtualNetworkLinkName)),
-		Name:     to.StringPtr(virtualNetworkLinkName),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(fmt.Sprintf(testResourceIDFormat, privateZoneName, virtualNetworkLinkName)),
+		Name:     pointer.String(virtualNetworkLinkName),
+		Location: pointer.String("eastus"),
 	}
 }
 
