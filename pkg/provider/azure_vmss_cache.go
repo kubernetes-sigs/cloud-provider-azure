@@ -152,11 +152,6 @@ func (ss *ScaleSet) getVMSSVMsFromCache(resourceGroup, vmssName string, crt azca
 	return virtualMachines, nil
 }
 
-// gcVMSSVMCache delete stale VMSS VMs caches from deleted VMSSes.
-func (ss *ScaleSet) gcVMSSVMCache() error {
-	return ss.vmssCache.Delete(consts.VMSSKey)
-}
-
 // newVMSSVirtualMachinesCache instantiates a new VMs cache for VMs belonging to the provided VMSS.
 func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 	vmssVirtualMachinesCacheTTL := time.Duration(ss.Config.VmssVirtualMachinesCacheTTLInSeconds) * time.Second
