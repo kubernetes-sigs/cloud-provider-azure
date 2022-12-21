@@ -26,11 +26,11 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -95,7 +95,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(r.ID, ""), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -156,7 +156,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(r.ID, ""), r, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -175,7 +175,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(r.ID), r, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(r.ID, ""), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
@@ -189,7 +189,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")
@@ -242,7 +242,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	r := getTestRoute("r1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(throttleErr).Times(1)
 
 	routeClient := getTestRouteClient(armClient)
 	rerr := routeClient.Delete(context.TODO(), "rg", "rt", "r1")
@@ -251,8 +251,8 @@ func TestDeleteThrottle(t *testing.T) {
 
 func getTestRoute(name string) network.Route {
 	return network.Route{
-		ID:   to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt/routes/%s", name)),
-		Name: to.StringPtr(name),
+		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/routeTables/rt/routes/%s", name)),
+		Name: pointer.String(name),
 	}
 }
 

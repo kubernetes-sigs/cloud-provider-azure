@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -32,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -48,31 +48,31 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	bi := newBackendPoolTypeNodeIP(az)
 
 	backendPool := network.BackendAddressPool{
-		Name: to.StringPtr("kubernetes"),
+		Name: pointer.String("kubernetes"),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 				{
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: to.StringPtr("10.0.0.1"),
+						IPAddress: pointer.String("10.0.0.1"),
 					},
 				},
 			},
 		},
 	}
 	expectedBackendPool := network.BackendAddressPool{
-		Name: to.StringPtr("kubernetes"),
+		Name: pointer.String("kubernetes"),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+			VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 				{
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: to.StringPtr("10.0.0.1"),
+						IPAddress: pointer.String("10.0.0.1"),
 					},
 				},
 				{
-					Name: to.StringPtr("vmss-0"),
+					Name: pointer.String("vmss-0"),
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: to.StringPtr("10.0.0.2"),
+						IPAddress: pointer.String("10.0.0.2"),
 					},
 				},
 			},
@@ -136,15 +136,15 @@ func TestCleanupVMSetFromBackendPoolByConditionNodeIPConfig(t *testing.T) {
 	cloud.VMSet = mockVMSet
 
 	expectedLB := network.LoadBalancer{
-		Name: to.StringPtr("testCluster"),
+		Name: pointer.String("testCluster"),
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 			BackendAddressPools: &[]network.BackendAddressPool{
 				{
-					Name: to.StringPtr("testCluster"),
+					Name: pointer.String("testCluster"),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
+								ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
 							},
 						},
 					},
@@ -229,15 +229,15 @@ func TestCleanupVMSetFromBackendPoolForInstanceNotFound(t *testing.T) {
 	cloud.VMSet = mockVMSet
 
 	expectedLB := network.LoadBalancer{
-		Name: to.StringPtr("testCluster"),
+		Name: pointer.String("testCluster"),
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 			BackendAddressPools: &[]network.BackendAddressPool{
 				{
-					Name: to.StringPtr("testCluster"),
+					Name: pointer.String("testCluster"),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
+								ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
 							},
 						},
 					},
@@ -286,7 +286,7 @@ func TestReconcileBackendPoolsNodeIPConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	lb = network.LoadBalancer{
-		Name:                         to.StringPtr(testClusterName),
+		Name:                         pointer.String(testClusterName),
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 	}
 	az = GetTestCloud(ctrl)
@@ -415,15 +415,15 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 	}
 
 	bp := network.BackendAddressPool{
-		Name: to.StringPtr("kubernetes"),
+		Name: pointer.String("kubernetes"),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 			VirtualNetwork: &network.SubResource{
-				ID: to.StringPtr("vnet"),
+				ID: pointer.String("vnet"),
 			},
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 				{
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: to.StringPtr("10.0.0.2"),
+						IPAddress: pointer.String("10.0.0.2"),
 					},
 				},
 			},
@@ -449,7 +449,7 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 	assert.NoError(t, err)
 
 	lb = &network.LoadBalancer{
-		Name:                         to.StringPtr(testClusterName),
+		Name:                         pointer.String(testClusterName),
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 	}
 	az = GetTestCloud(ctrl)
@@ -622,11 +622,11 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 		{
 			description: "should ignore excluded IP configurations if the backend pool will be empty after removing IP configurations of not found vms",
 			bipConfigNotFound: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig1")},
-				{ID: to.StringPtr("ipconfig2")},
+				{ID: pointer.String("ipconfig1")},
+				{ID: pointer.String("ipconfig2")},
 			},
 			bipConfigExclude: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig3")},
+				{ID: pointer.String("ipconfig3")},
 			},
 			expected: map[string]bool{
 				"ipconfig1": true,
@@ -636,10 +636,10 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 		{
 			description: "should remove both not found and excluded vms",
 			bipConfigNotFound: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig1")},
+				{ID: pointer.String("ipconfig1")},
 			},
 			bipConfigExclude: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig3")},
+				{ID: pointer.String("ipconfig3")},
 			},
 			expected: map[string]bool{
 				"ipconfig1": true,
@@ -649,12 +649,12 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 		{
 			description: "should remove all not found vms even if the backend pool will be empty",
 			bipConfigNotFound: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig1")},
-				{ID: to.StringPtr("ipconfig2")},
-				{ID: to.StringPtr("ipconfig3")},
+				{ID: pointer.String("ipconfig1")},
+				{ID: pointer.String("ipconfig2")},
+				{ID: pointer.String("ipconfig3")},
 			},
 			bipConfigExclude: []network.InterfaceIPConfiguration{
-				{ID: to.StringPtr("ipconfig4")},
+				{ID: pointer.String("ipconfig4")},
 			},
 			expected: map[string]bool{
 				"ipconfig1": true,
@@ -666,9 +666,9 @@ func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
 		bp := network.BackendAddressPool{
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-					{ID: to.StringPtr("ipconfig1")},
-					{ID: to.StringPtr("ipconfig2")},
-					{ID: to.StringPtr("ipconfig3")},
+					{ID: pointer.String("ipconfig1")},
+					{ID: pointer.String("ipconfig2")},
+					{ID: pointer.String("ipconfig3")},
 				},
 			},
 		}
