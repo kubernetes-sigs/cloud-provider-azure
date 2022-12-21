@@ -317,17 +317,28 @@ func (fs *FlexScaleSet) getVmssFlexByName(vmssFlexName string) (*compute.Virtual
 func (fs *FlexScaleSet) DeleteCacheForNode(nodeName string) error {
 	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
 	if err != nil {
+		klog.Errorf("getNodeVmssFlexID(%s) failed with %v", nodeName, err)
 		return err
 	}
 
+	fs.lockMap.LockEntry(vmssFlexID)
+	defer fs.lockMap.UnlockEntry(vmssFlexID)
 	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeDefault)
 	if err != nil {
+		klog.Errorf("vmssFlexVMCache.Get(%s, %s) failed with %v", vmssFlexID, nodeName, err)
+		return err
+	}
+	if cached == nil {
+		err := fmt.Errorf("nil cache returned from %s", vmssFlexID)
+		klog.Errorf("DeleteCacheForNode(%s, %s) failed with %v", vmssFlexID, nodeName, err)
 		return err
 	}
 	vmMap := cached.(*sync.Map)
 	vmMap.Delete(nodeName)
 
+	fs.vmssFlexVMCache.Update(vmssFlexID, vmMap)
 	fs.vmssFlexVMNameToVmssID.Delete(nodeName)
 
+	klog.V(2).Infof("DeleteCacheForNode(%s, %s) successfully", vmssFlexID, nodeName)
 	return nil
 }
