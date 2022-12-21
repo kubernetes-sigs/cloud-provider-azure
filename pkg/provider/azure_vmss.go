@@ -47,11 +47,13 @@ var (
 	ErrorNotVmssInstance = errors.New("not a vmss instance")
 	ErrScaleSetNotFound  = errors.New("scale set not found")
 
-	scaleSetNameRE         = regexp.MustCompile(`.*/subscriptions/(?:.*)/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
-	resourceGroupRE        = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(?:.*)/virtualMachines(?:.*)`)
-	vmssIPConfigurationRE  = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces(?:.*)`)
-	vmssPIPConfigurationRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces/(.+)/ipConfigurations/(.+)/publicIPAddresses/(.+)`)
-	vmssVMProviderIDRE     = regexp.MustCompile(`azure:///subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`)
+	scaleSetNameRE           = regexp.MustCompile(`.*/subscriptions/(?:.*)/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines(?:.*)`)
+	resourceGroupRE          = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(?:.*)/virtualMachines(?:.*)`)
+	vmssIPConfigurationRE    = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces(?:.*)`)
+	vmssPIPConfigurationRE   = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)/networkInterfaces/(.+)/ipConfigurations/(.+)/publicIPAddresses/(.+)`)
+	vmssVMResourceIDTemplate = `/subscriptions/(?:.*)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(?:\d+)`
+	vmssVMResourceIDRE       = regexp.MustCompile(vmssVMResourceIDTemplate)
+	vmssVMProviderIDRE       = regexp.MustCompile(fmt.Sprintf("%s%s", "azure://", vmssVMResourceIDTemplate))
 )
 
 // vmssMetaInfo contains the metadata for a VMSS.
@@ -1231,6 +1233,14 @@ func getVmssAndResourceGroupNameByVMProviderID(providerID string) (string, strin
 	return matches[1], matches[2], nil
 }
 
+func getVmssAndResourceGroupNameByVMID(id string) (string, string, error) {
+	matches := vmssVMResourceIDRE.FindStringSubmatch(id)
+	if len(matches) != 3 {
+		return "", "", ErrorNotVmssInstance
+	}
+	return matches[1], matches[2], nil
+}
+
 func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	klog.V(2).Infof("ensureVMSSInPool: ensuring VMSS with backendPoolID %s", backendPoolID)
 	vmssNamesMap := make(map[string]bool)
@@ -1254,10 +1264,25 @@ func (ss *ScaleSet) ensureVMSSInPool(service *v1.Service, nodes []*v1.Node, back
 			}
 
 			// in this scenario the vmSetName is an empty string and the name of vmss should be obtained from the provider IDs of nodes
-			resourceGroupName, vmssName, err := getVmssAndResourceGroupNameByVMProviderID(node.Spec.ProviderID)
-			if err != nil {
-				klog.V(4).Infof("ensureVMSSInPool: found VMSS node %s, will skip checking and continue", node.Name)
-				continue
+			var resourceGroupName, vmssName string
+			if node.Spec.ProviderID != "" {
+				resourceGroupName, vmssName, err = getVmssAndResourceGroupNameByVMProviderID(node.Spec.ProviderID)
+				if err != nil {
+					klog.V(4).Infof("ensureVMSSInPool: the provider ID %s of node %s is not the format of VMSS VM, will skip checking and continue", node.Spec.ProviderID, node.Name)
+					continue
+				}
+			} else {
+				klog.V(4).Infof("ensureVMSSInPool: the provider ID of node %s is empty, will check the VM ID", node.Name)
+				instanceID, err := ss.InstanceID(context.TODO(), types.NodeName(node.Name))
+				if err != nil {
+					klog.Errorf("ensureVMSSInPool: Failed to get instance ID for node %q: %v", node.Name, err)
+					return err
+				}
+				resourceGroupName, vmssName, err = getVmssAndResourceGroupNameByVMID(instanceID)
+				if err != nil {
+					klog.V(4).Infof("ensureVMSSInPool: the instance ID %s of node %s is not the format of VMSS VM, will skip checking and continue", node.Spec.ProviderID, node.Name)
+					continue
+				}
 			}
 			// only vmsses in the resource group same as it's in azure config are included
 			if strings.EqualFold(resourceGroupName, ss.ResourceGroup) {
