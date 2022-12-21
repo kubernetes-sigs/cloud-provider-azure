@@ -22,7 +22,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -30,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
@@ -62,11 +62,11 @@ var (
 
 	testBackendPools = &[]network.BackendAddressPool{
 		{
-			ID: to.StringPtr(testBackendPoolID0),
+			ID: pointer.String(testBackendPoolID0),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
-						ID: to.StringPtr(testIPConfigurationID),
+						ID: pointer.String(testIPConfigurationID),
 					},
 				},
 			},
@@ -80,17 +80,17 @@ var (
 
 func generateTestNic(nicName string, isIPConfigurationsNil bool, provisioningState network.ProvisioningState, vmID string) network.Interface {
 	result := network.Interface{
-		ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/" + nicName),
-		Name: to.StringPtr(nicName),
+		ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/" + nicName),
+		Name: pointer.String(nicName),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						Primary:          to.BoolPtr(true),
-						PrivateIPAddress: to.StringPtr(nicName + "testPrivateIP"),
+						Primary:          pointer.Bool(true),
+						PrivateIPAddress: pointer.String(nicName + "testPrivateIP"),
 						LoadBalancerBackendAddressPools: &[]network.BackendAddressPool{
 							{
-								ID: to.StringPtr(testBackendPoolID0),
+								ID: pointer.String(testBackendPoolID0),
 							},
 						},
 					},
@@ -98,7 +98,7 @@ func generateTestNic(nicName string, isIPConfigurationsNil bool, provisioningSta
 			},
 			ProvisioningState: provisioningState,
 			VirtualMachine: &network.SubResource{
-				ID: to.StringPtr(vmID),
+				ID: pointer.String(vmID),
 			},
 		},
 	}
@@ -888,7 +888,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
 			},
 			expectedNodeMaskCIDRIPv4: 24,
 			expectedNodeMaskCIDRIPv6: 0,
@@ -901,8 +901,8 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
-				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("abc"),
+				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
 			},
 			expectedNodeMaskCIDRIPv4: 0,
 			expectedNodeMaskCIDRIPv6: 64,
@@ -1413,7 +1413,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
-			testVmssFlex.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
+			testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if !tc.hasDefaultVMProfile {
 			testVmssFlex.VirtualMachineProfile = nil
@@ -1670,7 +1670,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
-			testVmssFlex.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
+			testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if !tc.hasDefaultVMProfile {
 			testVmssFlex.VirtualMachineProfile = nil

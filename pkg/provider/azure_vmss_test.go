@@ -24,7 +24,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -34,6 +33,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -59,7 +59,7 @@ const (
 func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv6 bool) compute.VirtualMachineScaleSet {
 	lbBackendpools := make([]compute.SubResource, 0)
 	for _, id := range lbBackendpoolIDs {
-		lbBackendpools = append(lbBackendpools, compute.SubResource{ID: to.StringPtr(id)})
+		lbBackendpools = append(lbBackendpools, compute.SubResource{ID: pointer.String(id)})
 	}
 	ipConfig := []compute.VirtualMachineScaleSetIPConfiguration{
 		{
@@ -81,7 +81,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 		Name: &name,
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 			OrchestrationMode: compute.Uniform,
-			ProvisioningState: to.StringPtr("Running"),
+			ProvisioningState: pointer.String("Running"),
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
 					ComputerNamePrefix: &namePrefix,
@@ -90,7 +90,7 @@ func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv
 					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
 						{
 							VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-								Primary:          to.BoolPtr(true),
+								Primary:          pointer.Bool(true),
 								IPConfigurations: &ipConfig,
 							},
 						},
@@ -135,23 +135,23 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 			{
 				ID: &interfaceID,
 				NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-					Primary: to.BoolPtr(true),
+					Primary: pointer.Bool(true),
 				},
 			},
 		}
 		ipConfigurations := []compute.VirtualMachineScaleSetIPConfiguration{
 			{
-				Name: to.StringPtr("ipconfig1"),
+				Name: pointer.String("ipconfig1"),
 				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-					Primary:                         to.BoolPtr(true),
-					LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: to.StringPtr(testLBBackendpoolID0)}},
+					Primary:                         pointer.Bool(true),
+					LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: pointer.String(testLBBackendpoolID0)}},
 				},
 			},
 		}
 		networkConfigurations := []compute.VirtualMachineScaleSetNetworkConfiguration{
 			{
-				Name: to.StringPtr("ipconfig1"),
-				ID:   to.StringPtr("fakeNetworkConfiguration"),
+				Name: pointer.String("ipconfig1"),
+				ID:   pointer.String("fakeNetworkConfiguration"),
 				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 					IPConfigurations: &ipConfigurations,
 				},
@@ -159,15 +159,15 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 		}
 		if isIPv6 {
 			networkConfigurations = append(networkConfigurations, compute.VirtualMachineScaleSetNetworkConfiguration{
-				Name: to.StringPtr("ipconfig1v6"),
-				ID:   to.StringPtr("fakeNetworkConfigurationIPv6"),
+				Name: pointer.String("ipconfig1v6"),
+				ID:   pointer.String("fakeNetworkConfigurationIPv6"),
 				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 						{
-							Name: to.StringPtr("ipconfig1"),
+							Name: pointer.String("ipconfig1"),
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-								Primary:                         to.BoolPtr(false),
-								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: to.StringPtr(testLBBackendpoolID0)}},
+								Primary:                         pointer.Bool(false),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: pointer.String(testLBBackendpoolID0)}},
 								PrivateIPAddressVersion:         compute.IPv6,
 							},
 						},
@@ -178,7 +178,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 
 		vmssVM := compute.VirtualMachineScaleSetVM{
 			VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-				ProvisioningState: to.StringPtr(state),
+				ProvisioningState: pointer.String(state),
 				OsProfile: &compute.OSProfile{
 					ComputerName: &nodeName,
 				},
@@ -191,7 +191,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 				InstanceView: &compute.VirtualMachineScaleSetVMInstanceView{
 					PlatformFaultDomain: &faultDomain,
 					Statuses: &[]compute.InstanceViewStatus{
-						{Code: to.StringPtr(testVMPowerState)},
+						{Code: pointer.String(testVMPowerState)},
 					},
 				},
 			},
@@ -199,7 +199,7 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 			InstanceID: &instanceID,
 			Name:       &vmName,
 			Location:   &ss.Location,
-			Sku:        &compute.Sku{Name: to.StringPtr("sku")},
+			Sku:        &compute.Sku{Name: pointer.String("sku")},
 		}
 		if zone != "" {
 			zones := []string{zone}
@@ -208,16 +208,16 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 
 		// set interfaces.
 		expectedInterface = network.Interface{
-			Name: to.StringPtr("nic"),
+			Name: pointer.String("nic"),
 			ID:   &interfaceID,
 			InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 				IPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
 						InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-							Primary:          to.BoolPtr(true),
-							PrivateIPAddress: to.StringPtr(fakePrivateIP),
+							Primary:          pointer.Bool(true),
+							PrivateIPAddress: pointer.String(fakePrivateIP),
 							PublicIPAddress: &network.PublicIPAddress{
-								ID: to.StringPtr(publicAddressID),
+								ID: pointer.String(publicAddressID),
 							},
 						},
 					},
@@ -227,9 +227,9 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 
 		// set public IPs.
 		expectedPIP = network.PublicIPAddress{
-			ID: to.StringPtr(publicAddressID),
+			ID: pointer.String(publicAddressID),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				IPAddress: to.StringPtr(fakePublicIP),
+				IPAddress: pointer.String(fakePublicIP),
 			},
 		}
 
@@ -703,7 +703,7 @@ func TestGetVMSS(t *testing.T) {
 		ss.cloud.VirtualMachineScaleSetsClient = mockVMSSClient
 
 		expected := compute.VirtualMachineScaleSet{
-			Name: to.StringPtr(test.existedVMSSName),
+			Name: pointer.String(test.existedVMSSName),
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 			},
@@ -857,7 +857,7 @@ func TestGetProvisioningStateByNodeName(t *testing.T) {
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, test.vmList, "", false)
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		if test.provisioningState != "" {
-			expectedVMSSVMs[0].ProvisioningState = to.StringPtr(test.provisioningState)
+			expectedVMSSVMs[0].ProvisioningState = pointer.String(test.provisioningState)
 		} else {
 			expectedVMSSVMs[0].ProvisioningState = nil
 		}
@@ -894,7 +894,7 @@ func TestGetVmssVMByInstanceID(t *testing.T) {
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		expectedVMSS := compute.VirtualMachineScaleSet{
-			Name: to.StringPtr(testVMSSName),
+			Name: pointer.String(testVMSSName),
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 			},
@@ -943,7 +943,7 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 			expectedVMSS := compute.VirtualMachineScaleSet{
-				Name: to.StringPtr(testVMSSName),
+				Name: pointer.String(testVMSSName),
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 					VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 				},
@@ -1052,12 +1052,12 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 			description: "GetPrimaryInterfaceID should return the ID of the primary NIC on the VMSS VM",
 			existedInterfaces: []compute.NetworkInterfaceReference{
 				{
-					ID: to.StringPtr("1"),
+					ID: pointer.String("1"),
 					NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-						Primary: to.BoolPtr(true),
+						Primary: pointer.Bool(true),
 					},
 				},
-				{ID: to.StringPtr("2")},
+				{ID: pointer.String("2")},
 			},
 			expectedID: "1",
 		},
@@ -1065,15 +1065,15 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 			description: "GetPrimaryInterfaceID should report an error if there's no primary NIC on the VMSS VM",
 			existedInterfaces: []compute.NetworkInterfaceReference{
 				{
-					ID: to.StringPtr("1"),
+					ID: pointer.String("1"),
 					NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-						Primary: to.BoolPtr(false),
+						Primary: pointer.Bool(false),
 					},
 				},
 				{
-					ID: to.StringPtr("2"),
+					ID: pointer.String("2"),
 					NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-						Primary: to.BoolPtr(false),
+						Primary: pointer.Bool(false),
 					},
 				},
 			},
@@ -1091,7 +1091,7 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		vm := compute.VirtualMachineScaleSetVM{
-			Name: to.StringPtr("vm"),
+			Name: pointer.String("vm"),
 			VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
 				NetworkProfile: &compute.NetworkProfile{
 					NetworkInterfaces: &test.existedInterfaces,
@@ -1189,15 +1189,15 @@ func TestGetPrimaryInterface(t *testing.T) {
 		expectedVMSSVMs, expectedInterface, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, test.vmList, "", false)
 		if !test.hasPrimaryInterface {
 			networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
-			networkInterfaces[0].Primary = to.BoolPtr(false)
+			networkInterfaces[0].Primary = pointer.Bool(false)
 			networkInterfaces = append(networkInterfaces, compute.NetworkInterfaceReference{
-				NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{Primary: to.BoolPtr(false)},
+				NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{Primary: pointer.Bool(false)},
 			})
 			expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
 		}
 		if test.isInvalidNICID {
 			networkInterfaces := *expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces
-			networkInterfaces[0].ID = to.StringPtr("invalid/id/")
+			networkInterfaces[0].ID = pointer.String("invalid/id/")
 			expectedVMSSVMs[0].NetworkProfile.NetworkInterfaces = &networkInterfaces
 		}
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
@@ -1387,27 +1387,27 @@ func TestListScaleSets(t *testing.T) {
 			description: "listScaleSets should return the correct scale sets",
 			existedScaleSets: []compute.VirtualMachineScaleSet{
 				{
-					Name: to.StringPtr("vmss-0"),
-					Sku:  &compute.Sku{Capacity: to.Int64Ptr(1)},
+					Name: pointer.String("vmss-0"),
+					Sku:  &compute.Sku{Capacity: pointer.Int64(1)},
 					VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 						VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 					},
 				},
 				{
-					Name: to.StringPtr("vmss-1"),
+					Name: pointer.String("vmss-1"),
 					VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 						VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 					},
 				},
 				{
-					Name: to.StringPtr("vmss-2"),
-					Sku:  &compute.Sku{Capacity: to.Int64Ptr(0)},
+					Name: pointer.String("vmss-2"),
+					Sku:  &compute.Sku{Capacity: pointer.Int64(0)},
 					VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 						VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{},
 					},
 				},
 				{
-					Name: to.StringPtr("vmss-3"),
+					Name: pointer.String("vmss-3"),
 				},
 			},
 			expectedVMSSNames: []string{"vmss-0", "vmss-1"},
@@ -1447,8 +1447,8 @@ func TestListScaleSetVMs(t *testing.T) {
 		{
 			description: "listScaleSetVMs should return the correct vmss vms",
 			existedVMSSVMs: []compute.VirtualMachineScaleSetVM{
-				{Name: to.StringPtr("vmss-vm-000000")},
-				{Name: to.StringPtr("vmss-vm-000001")},
+				{Name: pointer.String("vmss-vm-000000")},
+				{Name: pointer.String("vmss-vm-000001")},
 			},
 		},
 		{
@@ -1542,7 +1542,7 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 		expectedVMSSVMs := []compute.VirtualMachineScaleSetVM{
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000000")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000000")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1550,7 +1550,7 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 			},
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000001")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000001")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1558,7 +1558,7 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 			},
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000002")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000002")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1676,7 +1676,7 @@ func TestGetVMSetNames(t *testing.T) {
 		expectedVMSSVMs := []compute.VirtualMachineScaleSetVM{
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000000")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000000")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1684,7 +1684,7 @@ func TestGetVMSetNames(t *testing.T) {
 			},
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000001")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000001")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1692,7 +1692,7 @@ func TestGetVMSetNames(t *testing.T) {
 			},
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000002")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000002")},
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{},
 					},
@@ -1700,7 +1700,7 @@ func TestGetVMSetNames(t *testing.T) {
 			},
 			{
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
-					OsProfile: &compute.OSProfile{ComputerName: to.StringPtr("vmss-vm-000003")},
+					OsProfile: &compute.OSProfile{ComputerName: pointer.String("vmss-vm-000003")},
 				},
 			},
 		}
@@ -1723,7 +1723,7 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 	defer ctrl.Finish()
 
 	networkConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{
-		{Name: to.StringPtr("config-0")},
+		{Name: pointer.String("config-0")},
 	}
 	config, err := getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
 	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
@@ -1731,15 +1731,15 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 
 	networkConfigs = []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{
-			Name: to.StringPtr("config-0"),
+			Name: pointer.String("config-0"),
 			VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-				Primary: to.BoolPtr(false),
+				Primary: pointer.Bool(false),
 			},
 		},
 		{
-			Name: to.StringPtr("config-1"),
+			Name: pointer.String("config-1"),
 			VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-				Primary: to.BoolPtr(true),
+				Primary: pointer.Bool(true),
 			},
 		},
 	}
@@ -1749,15 +1749,15 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 
 	networkConfigs = []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{
-			Name: to.StringPtr("config-0"),
+			Name: pointer.String("config-0"),
 			VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-				Primary: to.BoolPtr(false),
+				Primary: pointer.Bool(false),
 			},
 		},
 		{
-			Name: to.StringPtr("config-1"),
+			Name: pointer.String("config-1"),
 			VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-				Primary: to.BoolPtr(false),
+				Primary: pointer.Bool(false),
 			},
 		},
 	}
@@ -1771,7 +1771,7 @@ func TestGetPrimaryIPConfigFromVMSSNetworkConfig(t *testing.T) {
 		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 				{
-					Name: to.StringPtr("config-0"),
+					Name: pointer.String("config-0"),
 				},
 			},
 		},
@@ -1785,15 +1785,15 @@ func TestGetPrimaryIPConfigFromVMSSNetworkConfig(t *testing.T) {
 		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 				{
-					Name: to.StringPtr("config-0"),
+					Name: pointer.String("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: to.BoolPtr(false),
+						Primary: pointer.Bool(false),
 					},
 				},
 				{
-					Name: to.StringPtr("config-1"),
+					Name: pointer.String("config-1"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: to.BoolPtr(true),
+						Primary: pointer.Bool(true),
 					},
 				},
 			},
@@ -1808,15 +1808,15 @@ func TestGetPrimaryIPConfigFromVMSSNetworkConfig(t *testing.T) {
 		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 				{
-					Name: to.StringPtr("config-0"),
+					Name: pointer.String("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: to.BoolPtr(false),
+						Primary: pointer.Bool(false),
 					},
 				},
 				{
-					Name: to.StringPtr("config-1"),
+					Name: pointer.String("config-1"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: to.BoolPtr(false),
+						Primary: pointer.Bool(false),
 					},
 				},
 			},
@@ -1836,13 +1836,13 @@ func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
 		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 				{
-					Name: to.StringPtr("config-0"),
+					Name: pointer.String("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 						PrivateIPAddressVersion: compute.IPv4,
 					},
 				},
 				{
-					Name: to.StringPtr("config-0"),
+					Name: pointer.String("config-0"),
 					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 						PrivateIPAddressVersion: compute.IPv6,
 					},
@@ -1930,25 +1930,25 @@ func TestEnsureHostInPool(t *testing.T) {
 			expectedVMSSName:          testVMSSName,
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &compute.VirtualMachineScaleSetVM{
-				Location: to.StringPtr("westus"),
+				Location: pointer.String("westus"),
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
 							{
-								Name: to.StringPtr("ipconfig1"),
-								ID:   to.StringPtr("fakeNetworkConfiguration"),
+								Name: pointer.String("ipconfig1"),
+								ID:   pointer.String("fakeNetworkConfiguration"),
 								VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 									IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 										{
-											Name: to.StringPtr("ipconfig1"),
+											Name: pointer.String("ipconfig1"),
 											VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-												Primary: to.BoolPtr(true),
+												Primary: pointer.Bool(true),
 												LoadBalancerBackendAddressPools: &[]compute.SubResource{
 													{
-														ID: to.StringPtr(testLBBackendpoolID0),
+														ID: pointer.String(testLBBackendpoolID0),
 													},
 													{
-														ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1"),
+														ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1"),
 													},
 												},
 											},
@@ -2223,7 +2223,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
+			expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2322,7 +2322,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 		assert.NoError(t, err, test.description)
 
 		ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		ss.ExcludeMasterFromStandardLB = to.BoolPtr(true)
+		ss.ExcludeMasterFromStandardLB = pointer.Bool(true)
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -2380,19 +2380,19 @@ func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
 			expectedVMSSName:          testVMSSName,
 			expectedInstanceID:        "0",
 			expectedVMSSVM: &compute.VirtualMachineScaleSetVM{
-				Location: to.StringPtr("westus"),
+				Location: pointer.String("westus"),
 				VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
 					NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
 							{
-								Name: to.StringPtr("ipconfig1"),
-								ID:   to.StringPtr("fakeNetworkConfiguration"),
+								Name: pointer.String("ipconfig1"),
+								ID:   pointer.String("fakeNetworkConfiguration"),
 								VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 									IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
 										{
-											Name: to.StringPtr("ipconfig1"),
+											Name: pointer.String("ipconfig1"),
 											VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-												Primary:                         to.BoolPtr(true),
+												Primary:                         pointer.Bool(true),
 												LoadBalancerBackendAddressPools: &[]compute.SubResource{},
 											},
 										},
@@ -2497,7 +2497,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = to.StringPtr(consts.VirtualMachineScaleSetsDeallocating)
+			expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2542,25 +2542,25 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			backendpoolID: testLBBackendpoolID0,
 			backendAddressPools: &[]network.BackendAddressPool{
 				{
-					ID: to.StringPtr(testLBBackendpoolID0),
+					ID: pointer.String(testLBBackendpoolID0),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								Name: to.StringPtr("ip-1"),
-								ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+								Name: pointer.String("ip-1"),
+								ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
 							},
 							{
-								Name: to.StringPtr("ip-2"),
+								Name: pointer.String("ip-2"),
 							},
 							{
-								Name: to.StringPtr("ip-3"),
-								ID:   to.StringPtr("/invalid/id"),
+								Name: pointer.String("ip-3"),
+								ID:   pointer.String("/invalid/id"),
 							},
 						},
 					},
 				},
 				{
-					ID: to.StringPtr(testLBBackendpoolID1),
+					ID: pointer.String(testLBBackendpoolID1),
 				},
 			},
 			expectedVMSSVMPutTimes: 1,
@@ -2570,18 +2570,18 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			backendpoolID: testLBBackendpoolID0,
 			backendAddressPools: &[]network.BackendAddressPool{
 				{
-					ID: to.StringPtr(testLBBackendpoolID0),
+					ID: pointer.String(testLBBackendpoolID0),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								Name: to.StringPtr("ip-1"),
-								ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
+								Name: pointer.String("ip-1"),
+								ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0/networkInterfaces/nic"),
 							},
 						},
 					},
 				},
 				{
-					ID: to.StringPtr(testLBBackendpoolID1),
+					ID: pointer.String(testLBBackendpoolID1),
 				},
 			},
 			expectedVMSSVMPutTimes: 1,
@@ -2593,18 +2593,18 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 			backendpoolID: testLBBackendpoolID0,
 			backendAddressPools: &[]network.BackendAddressPool{
 				{
-					ID: to.StringPtr(testLBBackendpoolID0),
+					ID: pointer.String(testLBBackendpoolID0),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								Name: to.StringPtr("ip-1"),
-								ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/6/networkInterfaces/nic"),
+								Name: pointer.String("ip-1"),
+								ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/6/networkInterfaces/nic"),
 							},
 						},
 					},
 				},
 				{
-					ID: to.StringPtr(testLBBackendpoolID1),
+					ID: pointer.String(testLBBackendpoolID1),
 				},
 			},
 		},
@@ -2652,34 +2652,34 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 
 	backendAddressPools := &[]network.BackendAddressPool{
 		{
-			ID: to.StringPtr(testLBBackendpoolID0),
+			ID: pointer.String(testLBBackendpoolID0),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
-						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						Name: pointer.String("ip-1"),
+						ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
 		},
 		{
-			ID: to.StringPtr(testLBBackendpoolID1),
+			ID: pointer.String(testLBBackendpoolID1),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
-						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-1/virtualMachines/0/networkInterfaces/nic"),
+						Name: pointer.String("ip-1"),
+						ID:   pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-1/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
 		},
 		{
-			ID: to.StringPtr(testLBBackendpoolID2),
+			ID: pointer.String(testLBBackendpoolID2),
 			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 					{
-						Name: to.StringPtr("ip-1"),
-						ID:   to.StringPtr("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
+						Name: pointer.String("ip-1"),
+						ID:   pointer.String("/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss-0/virtualMachines/0/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -2695,7 +2695,7 @@ func TestEnsureBackendPoolDeletedConcurrently(t *testing.T) {
 		vmssVMNetworkConfigs := expectedVMSSVMs[0].NetworkProfileConfiguration
 		vmssVMIPConfigs := (*vmssVMNetworkConfigs.NetworkInterfaceConfigurations)[0].VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations
 		lbBackendpools := (*vmssVMIPConfigs)[0].LoadBalancerBackendAddressPools
-		*lbBackendpools = append(*lbBackendpools, compute.SubResource{ID: to.StringPtr(testLBBackendpoolID1)})
+		*lbBackendpools = append(*lbBackendpools, compute.SubResource{ID: pointer.String(testLBBackendpoolID1)})
 	}
 
 	mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -2749,8 +2749,8 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
-				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
+				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
 			},
 			expectedIPV4MaskSize: 24,
 			expectedIPV6MaskSize: 64,
@@ -2759,7 +2759,7 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes even if some of the tags are not specified",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
 			},
 			expectedIPV4MaskSize: 24,
 		},
@@ -2767,8 +2767,8 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should not fail even if some of the tag is invalid",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
-				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("abc"),
+				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
 			},
 			expectedIPV6MaskSize: 64,
 		},
@@ -2778,7 +2778,7 @@ func TestGetNodeCIDRMasksByProviderID(t *testing.T) {
 			assert.NoError(t, err)
 
 			expectedVMSS := compute.VirtualMachineScaleSet{
-				Name: to.StringPtr("vmss"),
+				Name: pointer.String("vmss"),
 				Tags: tc.tags,
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 					OrchestrationMode: compute.Uniform,
@@ -2807,24 +2807,24 @@ func TestGetAgentPoolVMSetNamesMixedInstances(t *testing.T) {
 
 	existingVMs := []compute.VirtualMachine{
 		{
-			Name: to.StringPtr("vm-0"),
+			Name: pointer.String("vm-0"),
 			VirtualMachineProperties: &compute.VirtualMachineProperties{
 				OsProfile: &compute.OSProfile{
-					ComputerName: to.StringPtr("vm-0"),
+					ComputerName: pointer.String("vm-0"),
 				},
 				AvailabilitySet: &compute.SubResource{
-					ID: to.StringPtr("vmas-0"),
+					ID: pointer.String("vmas-0"),
 				},
 			},
 		},
 		{
-			Name: to.StringPtr("vm-1"),
+			Name: pointer.String("vm-1"),
 			VirtualMachineProperties: &compute.VirtualMachineProperties{
 				OsProfile: &compute.OSProfile{
-					ComputerName: to.StringPtr("vm-1"),
+					ComputerName: pointer.String("vm-1"),
 				},
 				AvailabilitySet: &compute.SubResource{
-					ID: to.StringPtr("vmas-1"),
+					ID: pointer.String("vmas-1"),
 				},
 			},
 		},
@@ -2923,9 +2923,9 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		ss.Cloud.PutVMSSVMBatchSize = BatchSize
 
 		scaleSet := compute.VirtualMachineScaleSet{
-			Name: to.StringPtr("foo"),
+			Name: pointer.String("foo"),
 			Tags: map[string]*string{
-				consts.VMSSTagForBatchOperation: to.StringPtr(""),
+				consts.VMSSTagForBatchOperation: pointer.String(""),
 			},
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 				OrchestrationMode: compute.Uniform,
@@ -2935,7 +2935,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return([]compute.VirtualMachineScaleSet{scaleSet}, nil)
 
-		batchSize, err := ss.VMSSBatchSize(to.String(scaleSet.Name))
+		batchSize, err := ss.VMSSBatchSize(pointer.StringDeref(scaleSet.Name, ""))
 		assert.NoError(t, err)
 		assert.Equal(t, BatchSize, batchSize)
 	})
@@ -2948,7 +2948,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		ss.Cloud.PutVMSSVMBatchSize = BatchSize
 
 		scaleSet := compute.VirtualMachineScaleSet{
-			Name: to.StringPtr("bar"),
+			Name: pointer.String("bar"),
 			VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 				OrchestrationMode: compute.Uniform,
 			},
@@ -2957,7 +2957,7 @@ func TestScaleSet_VMSSBatchSize(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).
 			Return([]compute.VirtualMachineScaleSet{scaleSet}, nil)
 
-		batchSize, err := ss.VMSSBatchSize(to.String(scaleSet.Name))
+		batchSize, err := ss.VMSSBatchSize(pointer.StringDeref(scaleSet.Name, ""))
 		assert.NoError(t, err)
 		assert.Equal(t, 0, batchSize)
 	})

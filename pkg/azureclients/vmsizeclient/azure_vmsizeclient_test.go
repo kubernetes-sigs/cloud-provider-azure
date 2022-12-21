@@ -28,11 +28,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -220,7 +220,7 @@ func getTestVMSizeClient(armClient armclient.Interface) *Client {
 
 func getTestVMSize(name string) compute.VirtualMachineSize {
 	return compute.VirtualMachineSize{
-		Name: to.StringPtr(name),
+		Name: pointer.String(name),
 	}
 }
 
