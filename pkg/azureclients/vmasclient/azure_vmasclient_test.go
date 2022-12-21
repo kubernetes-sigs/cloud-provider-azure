@@ -29,11 +29,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -318,7 +318,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmasList := []compute.AvailabilitySet{getTestVMAS("vmas1"), getTestVMAS("vmas2"), getTestVMAS("vmas3")}
-	partialResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList, NextLink: to.StringPtr("nextLink")})
+	partialResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList, NextLink: pointer.String("nextLink")})
 	assert.NoError(t, err)
 	pagedResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList})
 	assert.NoError(t, err)
@@ -403,7 +403,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := compute.AvailabilitySetListResult{
-		NextLink: to.StringPtr("next"),
+		NextLink: pointer.String("next"),
 	}
 
 	for _, test := range tests {
@@ -459,7 +459,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := compute.AvailabilitySetListResult{
-		NextLink: to.StringPtr("next"),
+		NextLink: pointer.String("next"),
 	}
 
 	for _, test := range tests {
@@ -495,12 +495,12 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 
 func getTestVMAS(name string) compute.AvailabilitySet {
 	return compute.AvailabilitySet{
-		ID:       to.StringPtr("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/vmas1"),
-		Name:     to.StringPtr(name),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/vmas1"),
+		Name:     pointer.String(name),
+		Location: pointer.String("eastus"),
 		Sku: &compute.Sku{
-			Name:     to.StringPtr("Standard"),
-			Capacity: to.Int64Ptr(3),
+			Name:     pointer.String("Standard"),
+			Capacity: pointer.Int64(3),
 		},
 	}
 }

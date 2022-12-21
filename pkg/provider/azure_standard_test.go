@@ -25,7 +25,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -34,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
@@ -664,21 +664,21 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 		{
 			name: "GetPrimaryInterfaceID should get primary NIC ID",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm2"),
+				Name: pointer.String("vm2"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 							{
 								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-									Primary: to.BoolPtr(true),
+									Primary: pointer.Bool(true),
 								},
-								ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
+								ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
 							},
 							{
 								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-									Primary: to.BoolPtr(false),
+									Primary: pointer.Bool(false),
 								},
-								ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
+								ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
 							},
 						},
 					},
@@ -689,21 +689,21 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 		{
 			name: "GetPrimaryInterfaceID should report error if node don't have primary NIC",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm3"),
+				Name: pointer.String("vm3"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					NetworkProfile: &compute.NetworkProfile{
 						NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 							{
 								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-									Primary: to.BoolPtr(false),
+									Primary: pointer.Bool(false),
 								},
-								ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
+								ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1"),
 							},
 							{
 								NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-									Primary: to.BoolPtr(false),
+									Primary: pointer.Bool(false),
 								},
-								ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
+								ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic2"),
 							},
 						},
 					},
@@ -731,51 +731,51 @@ func TestGetPrimaryIPConfig(t *testing.T) {
 		{
 			name: "GetPrimaryIPConfig should get the only IP configuration",
 			nic: network.Interface{
-				Name: to.StringPtr("nic"),
+				Name: pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 					IPConfigurations: &[]network.InterfaceIPConfiguration{
 						{
-							Name: to.StringPtr("ipconfig1"),
+							Name: pointer.String("ipconfig1"),
 						},
 					},
 				},
 			},
 			expectedIPConfig: &network.InterfaceIPConfiguration{
-				Name: to.StringPtr("ipconfig1"),
+				Name: pointer.String("ipconfig1"),
 			},
 		},
 		{
 			name: "GetPrimaryIPConfig should get the primary IP configuration",
 			nic: network.Interface{
-				Name: to.StringPtr("nic"),
+				Name: pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 					IPConfigurations: &[]network.InterfaceIPConfiguration{
 						{
-							Name: to.StringPtr("ipconfig1"),
+							Name: pointer.String("ipconfig1"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								Primary: to.BoolPtr(true),
+								Primary: pointer.Bool(true),
 							},
 						},
 						{
-							Name: to.StringPtr("ipconfig2"),
+							Name: pointer.String("ipconfig2"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								Primary: to.BoolPtr(false),
+								Primary: pointer.Bool(false),
 							},
 						},
 					},
 				},
 			},
 			expectedIPConfig: &network.InterfaceIPConfiguration{
-				Name: to.StringPtr("ipconfig1"),
+				Name: pointer.String("ipconfig1"),
 				InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-					Primary: to.BoolPtr(true),
+					Primary: pointer.Bool(true),
 				},
 			},
 		},
 		{
 			name: "GetPrimaryIPConfig should report error if nic don't have IP configuration",
 			nic: network.Interface{
-				Name:                      to.StringPtr("nic"),
+				Name:                      pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
 			},
 			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
@@ -783,19 +783,19 @@ func TestGetPrimaryIPConfig(t *testing.T) {
 		{
 			name: "GetPrimaryIPConfig should report error if node has more than one IP configuration and don't have primary IP configuration",
 			nic: network.Interface{
-				Name: to.StringPtr("nic"),
+				Name: pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 					IPConfigurations: &[]network.InterfaceIPConfiguration{
 						{
-							Name: to.StringPtr("ipconfig1"),
+							Name: pointer.String("ipconfig1"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								Primary: to.BoolPtr(false),
+								Primary: pointer.Bool(false),
 							},
 						},
 						{
-							Name: to.StringPtr("ipconfig2"),
+							Name: pointer.String("ipconfig2"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								Primary: to.BoolPtr(false),
+								Primary: pointer.Bool(false),
 							},
 						},
 					},
@@ -814,21 +814,21 @@ func TestGetPrimaryIPConfig(t *testing.T) {
 
 func TestGetIPConfigByIPFamily(t *testing.T) {
 	ipv4IPconfig := network.InterfaceIPConfiguration{
-		Name: to.StringPtr("ipconfig1"),
+		Name: pointer.String("ipconfig1"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
 			PrivateIPAddressVersion: network.IPv4,
-			PrivateIPAddress:        to.StringPtr("10.10.0.12"),
+			PrivateIPAddress:        pointer.String("10.10.0.12"),
 		},
 	}
 	ipv6IPconfig := network.InterfaceIPConfiguration{
-		Name: to.StringPtr("ipconfig2"),
+		Name: pointer.String("ipconfig2"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
 			PrivateIPAddressVersion: network.IPv6,
-			PrivateIPAddress:        to.StringPtr("1111:11111:00:00:1111:1111:000:111"),
+			PrivateIPAddress:        pointer.String("1111:11111:00:00:1111:1111:000:111"),
 		},
 	}
 	testNic := network.Interface{
-		Name: to.StringPtr("nic"),
+		Name: pointer.String("nic"),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 			IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig, ipv6IPconfig},
 		},
@@ -854,7 +854,7 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IP configuration",
 			nic: network.Interface{
-				Name:                      to.StringPtr("nic"),
+				Name:                      pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{},
 			},
 			expectedErrMsg: fmt.Errorf("nic.IPConfigurations for nic (nicname=%q) is nil", "nic"),
@@ -862,7 +862,7 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have IPv6 configuration when IPv6 is true",
 			nic: network.Interface{
-				Name: to.StringPtr("nic"),
+				Name: pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 					IPConfigurations: &[]network.InterfaceIPConfiguration{ipv4IPconfig},
 				},
@@ -873,11 +873,11 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 		{
 			name: "GetIPConfigByIPFamily should report error if nic don't have PrivateIPAddress",
 			nic: network.Interface{
-				Name: to.StringPtr("nic"),
+				Name: pointer.String("nic"),
 				InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 					IPConfigurations: &[]network.InterfaceIPConfiguration{
 						{
-							Name: to.StringPtr("ipconfig1"),
+							Name: pointer.String("ipconfig1"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
 								PrivateIPAddressVersion: network.IPv4,
 							},
@@ -928,8 +928,8 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 	cloud := GetTestCloud(ctrl)
 
 	expectedVM := compute.VirtualMachine{
-		Name: to.StringPtr("vm1"),
-		ID:   to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"),
+		Name: pointer.String("vm1"),
+		ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"),
 	}
 	invalidResouceID := "/subscriptions/subscription/resourceGroups/rg/Microsoft.Compute/virtualMachines/vm4"
 	testcases := []struct {
@@ -968,8 +968,8 @@ func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 			RawError:       fmt.Errorf("VMGet error"),
 		}).AnyTimes()
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm4", gomock.Any()).Return(compute.VirtualMachine{
-			Name: to.StringPtr("vm4"),
-			ID:   to.StringPtr(invalidResouceID),
+			Name: pointer.String("vm4"),
+			ID:   pointer.String(invalidResouceID),
 		}, nil).AnyTimes()
 
 		instanceID, err := cloud.VMSet.GetInstanceIDByNodeName(test.nodeName)
@@ -1007,13 +1007,13 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			name:     "GetPowerStatusByNodeName should get power status as expected",
 			nodeName: "vm2",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm2"),
+				Name: pointer.String("vm2"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					ProvisioningState: to.StringPtr("Succeeded"),
+					ProvisioningState: pointer.String("Succeeded"),
 					InstanceView: &compute.VirtualMachineInstanceView{
 						Statuses: &[]compute.InstanceViewStatus{
 							{
-								Code: to.StringPtr("PowerState/Running"),
+								Code: pointer.String("PowerState/Running"),
 							},
 						},
 					},
@@ -1025,9 +1025,9 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			name:     "GetPowerStatusByNodeName should get vmPowerStateStopped if vm.InstanceView is nil",
 			nodeName: "vm3",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm3"),
+				Name: pointer.String("vm3"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					ProvisioningState: to.StringPtr("Succeeded"),
+					ProvisioningState: pointer.String("Succeeded"),
 				},
 			},
 			expectedStatus: vmPowerStateStopped,
@@ -1036,9 +1036,9 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 			name:     "GetPowerStatusByNodeName should get vmPowerStateStopped if vm.InstanceView.statuses is nil",
 			nodeName: "vm4",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm4"),
+				Name: pointer.String("vm4"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					ProvisioningState: to.StringPtr("Succeeded"),
+					ProvisioningState: pointer.String("Succeeded"),
 					InstanceView:      &compute.VirtualMachineInstanceView{},
 				},
 			},
@@ -1082,13 +1082,13 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 			name:     "GetProvisioningStateByNodeName should return Succeeded for running VM",
 			nodeName: "vm2",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm2"),
+				Name: pointer.String("vm2"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
-					ProvisioningState: to.StringPtr("Succeeded"),
+					ProvisioningState: pointer.String("Succeeded"),
 					InstanceView: &compute.VirtualMachineInstanceView{
 						Statuses: &[]compute.InstanceViewStatus{
 							{
-								Code: to.StringPtr("PowerState/Running"),
+								Code: pointer.String("PowerState/Running"),
 							},
 						},
 					},
@@ -1100,7 +1100,7 @@ func TestGetStandardVMProvisioningStateByNodeName(t *testing.T) {
 			name:     "GetProvisioningStateByNodeName should return empty string when vm.ProvisioningState is nil",
 			nodeName: "vm3",
 			vm: compute.VirtualMachine{
-				Name: to.StringPtr("vm3"),
+				Name: pointer.String("vm3"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					ProvisioningState: nil,
 				},
@@ -1146,8 +1146,8 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			name:     "GetZoneByNodeName should get zone as expected",
 			nodeName: "vm2",
 			vm: compute.VirtualMachine{
-				Name:     to.StringPtr("vm2"),
-				Location: to.StringPtr("EASTUS"),
+				Name:     pointer.String("vm2"),
+				Location: pointer.String("EASTUS"),
 				Zones:    &[]string{"2"},
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					InstanceView: &compute.VirtualMachineInstanceView{
@@ -1164,8 +1164,8 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			name:     "GetZoneByNodeName should get FailureDomain as zone if zone is not used for node",
 			nodeName: "vm3",
 			vm: compute.VirtualMachine{
-				Name:     to.StringPtr("vm3"),
-				Location: to.StringPtr("EASTUS"),
+				Name:     pointer.String("vm3"),
+				Location: pointer.String("EASTUS"),
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					InstanceView: &compute.VirtualMachineInstanceView{
 						PlatformFaultDomain: &faultDomain,
@@ -1181,8 +1181,8 @@ func TestGetStandardVMZoneByNodeName(t *testing.T) {
 			name:     "GetZoneByNodeName should report error if zones is invalid",
 			nodeName: "vm4",
 			vm: compute.VirtualMachine{
-				Name:     to.StringPtr("vm4"),
-				Location: to.StringPtr("EASTUS"),
+				Name:     pointer.String("vm4"),
+				Location: pointer.String("EASTUS"),
 				Zones:    &[]string{"a"},
 				VirtualMachineProperties: &compute.VirtualMachineProperties{
 					InstanceView: &compute.VirtualMachineInstanceView{
@@ -1210,13 +1210,13 @@ func TestGetStandardVMSetNames(t *testing.T) {
 	defer ctrl.Finish()
 
 	testVM := compute.VirtualMachine{
-		Name: to.StringPtr("vm1"),
+		Name: pointer.String("vm1"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: to.StringPtr(asID)},
+			AvailabilitySet: &compute.SubResource{ID: pointer.String(asID)},
 		},
 	}
 	testVMWithoutAS := compute.VirtualMachine{
-		Name:                     to.StringPtr("vm2"),
+		Name:                     pointer.String("vm2"),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{},
 	}
 	testCases := []struct {
@@ -1463,10 +1463,10 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		}
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
-		testVM.Name = to.StringPtr(string(test.nodeName))
+		testVM.Name = pointer.String(string(test.nodeName))
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
-		testNIC.Name = to.StringPtr(test.nicName)
-		testNIC.ID = to.StringPtr(test.nicID)
+		testNIC.Name = pointer.String(test.nicName)
+		testNIC.ID = pointer.String(test.nicID)
 		testNIC.ProvisioningState = test.nicProvisionState
 
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -1601,13 +1601,13 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 
 	for _, test := range testCases {
 		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		cloud.Config.ExcludeMasterFromStandardLB = to.BoolPtr(true)
+		cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
 		cloud.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
-		testNIC.Name = to.StringPtr(test.nicName)
-		testNIC.ID = to.StringPtr(test.nicID)
+		testNIC.Name = pointer.String(test.nicName)
+		testNIC.ID = pointer.String(test.nicID)
 
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(testVM, nil).AnyTimes()
@@ -1642,7 +1642,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 		{
 			desc: "serviceOwnsFrontendIP should detect the primary service",
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
@@ -1655,7 +1655,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 		{
 			desc: "serviceOwnsFrontendIP should return false if the secondary external service doesn't set it's loadBalancer IP",
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
@@ -1668,17 +1668,17 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 				"found according to the external service's loadBalancer IP but do not return the error",
 			existingPIPs: []network.PublicIPAddress{
 				{
-					ID: to.StringPtr("pip"),
+					ID: pointer.String("pip"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						IPAddress: to.StringPtr("4.3.2.1"),
+						IPAddress: pointer.String("4.3.2.1"),
 					},
 				},
 			},
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PublicIPAddress: &network.PublicIPAddress{
-						ID: to.StringPtr("pip"),
+						ID: pointer.String("pip"),
 					},
 				},
 			},
@@ -1694,17 +1694,17 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 				"the counterpart on the frontend IP config",
 			existingPIPs: []network.PublicIPAddress{
 				{
-					ID: to.StringPtr("pip"),
+					ID: pointer.String("pip"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						IPAddress: to.StringPtr("4.3.2.1"),
+						IPAddress: pointer.String("4.3.2.1"),
 					},
 				},
 			},
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PublicIPAddress: &network.PublicIPAddress{
-						ID: to.StringPtr("pip1"),
+						ID: pointer.String("pip1"),
 					},
 				},
 			},
@@ -1719,17 +1719,17 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			desc: "serviceOwnsFrontendIP should return false if there is no public IP address in the frontend IP config",
 			existingPIPs: []network.PublicIPAddress{
 				{
-					ID: to.StringPtr("pip"),
+					ID: pointer.String("pip"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						IPAddress: to.StringPtr("4.3.2.1"),
+						IPAddress: pointer.String("4.3.2.1"),
 					},
 				},
 			},
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PublicIPPrefix: &network.SubResource{
-						ID: to.StringPtr("pip1"),
+						ID: pointer.String("pip1"),
 					},
 				},
 			},
@@ -1744,17 +1744,17 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			desc: "serviceOwnsFrontendIP should detect the secondary external service",
 			existingPIPs: []network.PublicIPAddress{
 				{
-					ID: to.StringPtr("pip"),
+					ID: pointer.String("pip"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						IPAddress: to.StringPtr("4.3.2.1"),
+						IPAddress: pointer.String("4.3.2.1"),
 					},
 				},
 			},
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 					PublicIPAddress: &network.PublicIPAddress{
-						ID: to.StringPtr("pip"),
+						ID: pointer.String("pip"),
 					},
 				},
 			},
@@ -1769,9 +1769,9 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 		{
 			desc: "serviceOwnsFrontendIP should detect the secondary internal service",
 			fip: network.FrontendIPConfiguration{
-				Name: to.StringPtr("auid"),
+				Name: pointer.String("auid"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAddress: to.StringPtr("4.3.2.1"),
+					PrivateIPAddress: pointer.String("4.3.2.1"),
 				},
 			},
 			service: &v1.Service{
@@ -1814,11 +1814,11 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 			desc: "EnsureBackendPoolDeleted should decouple the nic and the load balancer properly",
 			backendAddressPools: &[]network.BackendAddressPool{
 				{
-					ID: to.StringPtr(backendPoolID),
+					ID: pointer.String(backendPoolID),
 					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
 							{
-								ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
+								ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
 							},
 						},
 					},
@@ -1838,7 +1838,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		cloud.VirtualMachinesClient = mockVMClient
 		mockNICClient := mockinterfaceclient.NewMockInterface(ctrl)
 		test.existingNIC.VirtualMachine = &network.SubResource{
-			ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-1"),
+			ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-1"),
 		}
 		mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(test.existingNIC, nil).Times(2)
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
@@ -1857,7 +1857,7 @@ func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) networ
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						Primary: to.BoolPtr(isPrimary),
+						Primary: pointer.Bool(isPrimary),
 					},
 				},
 			},
@@ -1866,7 +1866,7 @@ func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) networ
 	backendAddressPool := make([]network.BackendAddressPool, 0)
 	for _, id := range lbBackendpoolIDs {
 		backendAddressPool = append(backendAddressPool, network.BackendAddressPool{
-			ID: to.StringPtr(id),
+			ID: pointer.String(id),
 		})
 	}
 	(*expectedNIC.IPConfigurations)[0].LoadBalancerBackendAddressPools = &backendAddressPool
@@ -1877,7 +1877,7 @@ func buildDefaultTestVirtualMachine(asID string, nicIDs []string) compute.Virtua
 	expectedVM := compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			AvailabilitySet: &compute.SubResource{
-				ID: to.StringPtr(asID),
+				ID: pointer.String(asID),
 			},
 			NetworkProfile: &compute.NetworkProfile{},
 		},
@@ -1885,7 +1885,7 @@ func buildDefaultTestVirtualMachine(asID string, nicIDs []string) compute.Virtua
 	networkInterfaces := make([]compute.NetworkInterfaceReference, 0)
 	for _, nicID := range nicIDs {
 		networkInterfaces = append(networkInterfaces, compute.NetworkInterfaceReference{
-			ID: to.StringPtr(nicID),
+			ID: pointer.String(nicID),
 		})
 	}
 	expectedVM.VirtualMachineProperties.NetworkProfile.NetworkInterfaces = &networkInterfaces
@@ -1897,12 +1897,12 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 	expectedVM := buildDefaultTestVirtualMachine("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/AGENTPOOL1-AVAILABILITYSET-00000000", []string{})
-	expectedVM.Name = to.StringPtr("name")
+	expectedVM.Name = pointer.String("name")
 	mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-0", gomock.Any()).Return(expectedVM, nil)
 	expectedNIC := buildDefaultTestInterface(true, []string{})
 	expectedNIC.VirtualMachine = &network.SubResource{
-		ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-0"),
+		ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-0"),
 	}
 	mockNICClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
 	mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-0", gomock.Any()).Return(expectedNIC, nil)
@@ -1962,11 +1962,11 @@ func TestGetAvailabilitySetByNodeName(t *testing.T) {
 		subResources := make([]compute.SubResource, 0)
 		for _, vmID := range test.vmasVMIDs {
 			subResources = append(subResources, compute.SubResource{
-				ID: to.StringPtr(vmID),
+				ID: pointer.String(vmID),
 			})
 		}
 		expected := compute.AvailabilitySet{
-			Name: to.StringPtr("vmas-1"),
+			Name: pointer.String("vmas-1"),
 			AvailabilitySetProperties: &compute.AvailabilitySetProperties{
 				VirtualMachines: &subResources,
 			},
@@ -2002,8 +2002,8 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
-				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
+				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
 			},
 			expectedIPV4MaskSize: 24,
 			expectedIPV6MaskSize: 64,
@@ -2018,7 +2018,7 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should return the correct mask sizes even if some of the tags are not specified",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("24"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
 			},
 			expectedIPV4MaskSize: 24,
 		},
@@ -2026,8 +2026,8 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			description: "GetNodeCIDRMaksByProviderID should not fail even if some of the tag is invalid",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: to.StringPtr("abc"),
-				consts.VMSetCIDRIPV6TagKey: to.StringPtr("64"),
+				consts.VMSetCIDRIPV4TagKey: pointer.String("abc"),
+				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
 			},
 			expectedIPV6MaskSize: 64,
 		},
@@ -2042,10 +2042,10 @@ func TestGetNodeCIDRMasksByProviderIDAvailabilitySet(t *testing.T) {
 			cloud.AvailabilitySetsClient = mockVMASClient
 
 			expected := compute.AvailabilitySet{
-				Name: to.StringPtr("vmas-1"),
+				Name: pointer.String("vmas-1"),
 				AvailabilitySetProperties: &compute.AvailabilitySetProperties{
 					VirtualMachines: &[]compute.SubResource{
-						{ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0")},
+						{ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-0")},
 					},
 				},
 				Tags: tc.tags,
@@ -2129,10 +2129,10 @@ func TestGetNodeVMSetName(t *testing.T) {
 			},
 			expectedVMs: []compute.VirtualMachine{
 				{
-					Name: to.StringPtr("vm"),
+					Name: pointer.String("vm"),
 					VirtualMachineProperties: &compute.VirtualMachineProperties{
 						AvailabilitySet: &compute.SubResource{
-							ID: to.StringPtr("/"),
+							ID: pointer.String("/"),
 						},
 					},
 				},
@@ -2154,10 +2154,10 @@ func TestGetNodeVMSetName(t *testing.T) {
 			},
 			expectedVMs: []compute.VirtualMachine{
 				{
-					Name: to.StringPtr("vm"),
+					Name: pointer.String("vm"),
 					VirtualMachineProperties: &compute.VirtualMachineProperties{
 						AvailabilitySet: &compute.SubResource{
-							ID: to.StringPtr("as"),
+							ID: pointer.String("as"),
 						},
 					},
 				},
