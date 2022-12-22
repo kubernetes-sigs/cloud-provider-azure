@@ -37,7 +37,8 @@ import (
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
 const GroupIDFile = "file"
-const privateDNSZonePrefix = "privatelink.file."
+
+var privateDNSZoneName = "privatelink.file.%s"
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -48,6 +49,7 @@ type AccountOptions struct {
 	CreateAccount                           bool
 	EnableLargeFileShare                    bool
 	CreatePrivateEndpoint                   bool
+	StorageEndpointSuffix                   string
 	DisableFileServiceDeleteRetentionPolicy bool
 	IsHnsEnabled                            *bool
 	EnableNfsV3                             *bool
@@ -160,6 +162,14 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		subsID = accountOptions.SubscriptionID
 	}
 
+	if len(accountOptions.StorageEndpointSuffix) == 0 {
+		accountOptions.StorageEndpointSuffix = az.cloud.Environment.StorageEndpointSuffix
+	}
+
+	if accountOptions.CreatePrivateEndpoint {
+		privateDNSZoneName = fmt.Sprintf(privateDNSZoneName, accountOptions.StorageEndpointSuffix)
+	}
+
 	if len(accountOptions.Tags) == 0 {
 		accountOptions.Tags = make(map[string]string)
 	}
@@ -205,7 +215,6 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	if accountOptions.CreatePrivateEndpoint {
-		privateDNSZoneName := privateDNSZonePrefix + az.cloud.Environment.StorageEndpointSuffix
 		if _, err := az.privatednsclient.Get(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
 			klog.V(2).Infof("get private dns zone %s returned with %v", privateDNSZoneName, err.Error())
 			// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
@@ -419,7 +428,6 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 }
 
 func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup string) error {
-	privateDNSZoneName := privateDNSZonePrefix + az.cloud.Environment.StorageEndpointSuffix
 	klog.V(2).Infof("Creating private dns zone(%s) in resourceGroup (%s)", privateDNSZoneName, vnetResourceGroup)
 	location := LocationGlobal
 	privateDNSZone := privatedns.PrivateZone{Location: &location}
@@ -434,7 +442,6 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup str
 }
 
 func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName string) error {
-	privateDNSZoneName := privateDNSZonePrefix + az.cloud.Environment.StorageEndpointSuffix
 	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, privateDNSZoneName, vnetResourceGroup)
 	location := LocationGlobal
 	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s", az.SubscriptionID, vnetResourceGroup, vnetName)
@@ -449,7 +456,6 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceG
 
 func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName string) error {
 	klog.V(2).Infof("Creating private DNS zone group(%s) with privateEndpoint(%s), vNetName(%s), resourceGroup(%s)", dnsZoneGroupName, privateEndpointName, vnetName, vnetResourceGroup)
-	privateDNSZoneName := privateDNSZonePrefix + az.cloud.Environment.StorageEndpointSuffix
 	privateDNSZoneID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s", az.SubscriptionID, vnetResourceGroup, privateDNSZoneName)
 	dnsZoneName := privateDNSZoneName
 	privateDNSZoneConfig := network.PrivateDNSZoneConfig{
