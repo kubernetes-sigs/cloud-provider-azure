@@ -72,10 +72,10 @@ fi
 if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/basic-lb.json"
   if [[ "${CLUSTER_TYPE:-}" == "autoscaling" ]]; then
-    CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling.json"
+    CLUSTER_CONFIG_PATH="${REPO_ROOT}/kubetest2-aks/cluster-templates/autoscaling.json"
     export AZURE_LOADBALANCER_SKU=standard
   elif [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
-    CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling-multipool.json"
+    CLUSTER_CONFIG_PATH="${REPO_ROOT}/kubetest2-aks/cluster-templates/autoscaling-multipool.json"
     export AZURE_LOADBALANCER_SKU=standard
   fi
 fi
@@ -87,7 +87,7 @@ else
 fi
 
 rm -rf kubetest2-aks
-git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
+git clone --single-branch --branch "cas_config_setup" https://github.com/aagusuab/cloud-provider-azure.git
 cp -r cloud-provider-azure/kubetest2-aks .
 rm -rf cloud-provider-azure
 git config --global --add safe.directory "$(pwd)" || true
@@ -117,6 +117,7 @@ kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
 --ccmImageTag "${IMAGE_TAG:-}" \
+--casImageTag "${CUSTOM_CAS_IMAGE:-}" \
 --kubernetesImageTag "${IMAGE_TAG:-}" \
 --kubeletURL "${KUBELET_URL:-}" \
 --k8sVersion "${AKS_KUBERNETES_VERSION:-}"
@@ -145,6 +146,6 @@ fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
-  export LABEL_FILTER="Feature:Autoscaling || !Serial && !Slow"
+  export LABEL_FILTER="Feature:Autoscaling"
 fi
 make test-ccm-e2e

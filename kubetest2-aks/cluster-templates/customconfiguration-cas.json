@@ -1,0 +1,10 @@
+{
+  "kubernetesConfigurations": {
+    "cluster-autoscaler": {
+      "image": "{CUSTOM_CAS_IMAGE}",
+      "config": {
+        "--scan-interval": "5s"
+      }
+    }
+  }
+}
