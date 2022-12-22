@@ -36,50 +36,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
-func TestExtractVmssVMName(t *testing.T) {
-	cases := []struct {
-		description        string
-		vmName             string
-		expectError        bool
-		expectedScaleSet   string
-		expectedInstanceID string
-	}{
-		{
-			description: "wrong vmss VM name should report error",
-			vmName:      "vm1234",
-			expectError: true,
-		},
-		{
-			description: "wrong VM name separator should report error",
-			vmName:      "vm-1234",
-			expectError: true,
-		},
-		{
-			description:        "correct vmss VM name should return correct ScaleSet and instanceID",
-			vmName:             "vm_1234",
-			expectedScaleSet:   "vm",
-			expectedInstanceID: "1234",
-		},
-		{
-			description:        "correct vmss VM name with Extra Separator should return correct ScaleSet and instanceID",
-			vmName:             "vm_test_1234",
-			expectedScaleSet:   "vm_test",
-			expectedInstanceID: "1234",
-		},
-	}
-
-	for _, c := range cases {
-		ssName, instanceID, err := extractVmssVMName(c.vmName)
-		if c.expectError {
-			assert.Error(t, err, c.description)
-			continue
-		}
-
-		assert.Equal(t, c.expectedScaleSet, ssName, c.description)
-		assert.Equal(t, c.expectedInstanceID, instanceID, c.description)
-	}
-}
-
 func TestVMSSVMCache(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -444,5 +400,34 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
 		}
 
+	}
+}
+
+func TestVMSSUpdateCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err, "unexpected error when creating test ScaleSet")
+
+	testCases := []struct {
+		description                 string
+		nodeName, resourceGroupName string
+		vmssName, instanceID        string
+		vm                          *compute.VirtualMachineScaleSetVM
+		disableUpdateCache          bool
+		expectedErr                 error
+	}{
+		{
+			description:        "disableUpdateCache is set",
+			disableUpdateCache: true,
+			expectedErr:        nil,
+		},
+	}
+
+	for _, test := range testCases {
+		ss.DisableUpdateCache = test.disableUpdateCache
+		err = ss.updateCache(test.nodeName, test.nodeName, test.resourceGroupName, test.instanceID, test.vm)
+		assert.Equal(t, test.expectedErr, err, test.description)
 	}
 }

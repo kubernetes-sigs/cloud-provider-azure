@@ -344,7 +344,7 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 	}
 }
 
-func TestUpdateCache(t *testing.T) {
+func TestVMSSFlexUpdateCache(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -352,10 +352,11 @@ func TestUpdateCache(t *testing.T) {
 	assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
 	testCases := []struct {
-		description string
-		nodeName    string
-		vm          *compute.VirtualMachine
-		expectedErr error
+		description        string
+		nodeName           string
+		vm                 *compute.VirtualMachine
+		disableUpdateCache bool
+		expectedErr        error
 	}{
 		{
 			description: "vm is nil",
@@ -388,11 +389,16 @@ func TestUpdateCache(t *testing.T) {
 			},
 			expectedErr: fmt.Errorf("vm.OsProfile.ComputerName is nil"),
 		},
+		{
+			description:        "disableUpdateCache is set",
+			disableUpdateCache: true,
+			expectedErr:        nil,
+		},
 	}
 
 	for _, test := range testCases {
+		fs.DisableUpdateCache = test.disableUpdateCache
 		err = fs.updateCache(test.nodeName, test.vm)
 		assert.Equal(t, test.expectedErr, err, test.description)
 	}
-
 }

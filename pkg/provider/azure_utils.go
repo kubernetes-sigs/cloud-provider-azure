@@ -328,3 +328,17 @@ func isNodeInVMSSVMCache(nodeName string, vmssVMCache *azcache.TimedCache) bool 
 
 	return isInCache
 }
+
+func extractVmssVMName(name string) (string, string, error) {
+	split := strings.SplitAfter(name, consts.VMSSNameSeparator)
+	if len(split) < 2 {
+		klog.V(3).Infof("Failed to extract vmssVMName %q", name)
+		return "", "", ErrorNotVmssInstance
+	}
+
+	ssName := strings.Join(split[0:len(split)-1], "")
+	// removing the trailing `vmssNameSeparator` since we used SplitAfter
+	ssName = ssName[:len(ssName)-1]
+	instanceID := split[len(split)-1]
+	return ssName, instanceID, nil
+}

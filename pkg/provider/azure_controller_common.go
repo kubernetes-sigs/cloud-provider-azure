@@ -100,6 +100,8 @@ type controllerCommon struct {
 	detachDiskMap sync.Map
 	// attach/detach disk rate limiter
 	diskOpRateLimiter flowcontrol.RateLimiter
+	// DisableUpdateCache whether disable update cache in disk attach/detach
+	DisableUpdateCache bool
 }
 
 // AttachDiskOptions attach disk options
@@ -432,16 +434,11 @@ func (c *controllerCommon) UpdateVM(ctx context.Context, nodeName types.NodeName
 	defer c.lockMap.UnlockEntry(node)
 
 	defer func() {
-		// invalidate the cache if there is an error with UpdateVM operation
-		if err != nil {
-			_ = vmset.DeleteCacheForNode(string(nodeName))
-		}
+		_ = vmset.DeleteCacheForNode(string(nodeName))
 	}()
 
 	klog.V(2).Infof("azureDisk - update: vm(%s)", nodeName)
-	err = vmset.UpdateVM(ctx, nodeName)
-	klog.V(2).Infof("azureDisk - update: vm(%s) returned with %v", err)
-	return err
+	return vmset.UpdateVM(ctx, nodeName)
 }
 
 func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName string) error {

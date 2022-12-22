@@ -404,3 +404,47 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 		assert.Equal(t, test.expectedResult, result, test.description)
 	}
 }
+
+func TestExtractVmssVMName(t *testing.T) {
+	cases := []struct {
+		description        string
+		vmName             string
+		expectError        bool
+		expectedScaleSet   string
+		expectedInstanceID string
+	}{
+		{
+			description: "wrong vmss VM name should report error",
+			vmName:      "vm1234",
+			expectError: true,
+		},
+		{
+			description: "wrong VM name separator should report error",
+			vmName:      "vm-1234",
+			expectError: true,
+		},
+		{
+			description:        "correct vmss VM name should return correct ScaleSet and instanceID",
+			vmName:             "vm_1234",
+			expectedScaleSet:   "vm",
+			expectedInstanceID: "1234",
+		},
+		{
+			description:        "correct vmss VM name with Extra Separator should return correct ScaleSet and instanceID",
+			vmName:             "vm_test_1234",
+			expectedScaleSet:   "vm_test",
+			expectedInstanceID: "1234",
+		},
+	}
+
+	for _, c := range cases {
+		ssName, instanceID, err := extractVmssVMName(c.vmName)
+		if c.expectError {
+			assert.Error(t, err, c.description)
+			continue
+		}
+
+		assert.Equal(t, c.expectedScaleSet, ssName, c.description)
+		assert.Equal(t, c.expectedInstanceID, instanceID, c.description)
+	}
+}
