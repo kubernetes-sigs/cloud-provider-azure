@@ -37,8 +37,9 @@ import (
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
 const GroupIDFile = "file"
+const privateDNSZoneNameStr = "privatelink.file.%s"
 
-var privateDNSZoneName = "privatelink.file.%s"
+var privateDNSZoneName string
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -167,7 +168,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	if accountOptions.CreatePrivateEndpoint {
-		privateDNSZoneName = fmt.Sprintf(privateDNSZoneName, accountOptions.StorageEndpointSuffix)
+		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameStr, accountOptions.StorageEndpointSuffix)
 	}
 
 	if len(accountOptions.Tags) == 0 {
