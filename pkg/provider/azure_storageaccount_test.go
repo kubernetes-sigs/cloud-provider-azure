@@ -377,6 +377,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		mockStorageAccountsClient       bool
 		setAccountOptions               bool
 		accessTier                      string
+		storageType                     StorageType
 		requireInfrastructureEncryption *bool
 		keyVaultURL                     *string
 		accountName                     string
@@ -390,6 +391,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			createPrivateEndpoint:           true,
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
+			storageType:                     StorageTypeFile,
 			requireInfrastructureEncryption: to.BoolPtr(true),
 			keyVaultURL:                     to.StringPtr("keyVaultURL"),
 			resourceGroup:                   "rg",
@@ -404,6 +406,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			SubnetPropertiesFormatNil: true,
 			mockStorageAccountsClient: true,
 			setAccountOptions:         true,
+			storageType:               StorageTypeFile,
 			resourceGroup:             "rg",
 			accountName:               "accountname",
 			expectedErr:               "could not get storage key for storage account",
@@ -485,6 +488,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 				CreateAccount:         test.createAccount,
 				SubscriptionID:        test.subscriptionID,
 				AccessTier:            test.accessTier,
+				StorageType:           test.storageType,
 			}
 		}
 
