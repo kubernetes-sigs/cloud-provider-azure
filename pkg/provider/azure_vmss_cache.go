@@ -122,20 +122,6 @@ func (ss *ScaleSet) newVMSSCache(ctx context.Context) (*azcache.TimedCache, erro
 	return azcache.NewTimedcache(time.Duration(ss.Config.VmssCacheTTLInSeconds)*time.Second, getter)
 }
 
-func extractVmssVMName(name string) (string, string, error) {
-	split := strings.SplitAfter(name, consts.VMSSNameSeparator)
-	if len(split) < 2 {
-		klog.V(3).Infof("Failed to extract vmssVMName %q", name)
-		return "", "", ErrorNotVmssInstance
-	}
-
-	ssName := strings.Join(split[0:len(split)-1], "")
-	// removing the trailing `vmssNameSeparator` since we used SplitAfter
-	ssName = ssName[:len(ssName)-1]
-	instanceID := split[len(split)-1]
-	return ssName, instanceID, nil
-}
-
 func (ss *ScaleSet) getVMSSVMsFromCache(resourceGroup, vmssName string, crt azcache.AzureCacheReadType) (*sync.Map, error) {
 	cacheKey := getVMSSVMCacheKey(resourceGroup, vmssName)
 	entry, err := ss.vmssVMCache.Get(cacheKey, crt)
@@ -158,7 +144,6 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 
 	getter := func(cacheKey string) (interface{}, error) {
 		localCache := &sync.Map{} // [nodeName]*VMSSVirtualMachineEntry
-
 		oldCache := make(map[string]*VMSSVirtualMachineEntry)
 
 		entry, exists, err := ss.vmssVMCache.Store.GetByKey(cacheKey)
@@ -292,6 +277,9 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 }
 
 func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceID string, updatedVM *compute.VirtualMachineScaleSetVM) error {
+	if ss.common.DisableUpdateCache {
+		return nil
+	}
 	// lock the VMSS entry to ensure a consistent view of the VM map when there are concurrent updates.
 	cacheKey := getVMSSVMCacheKey(resourceGroupName, vmssName)
 	ss.lockMap.LockEntry(cacheKey)

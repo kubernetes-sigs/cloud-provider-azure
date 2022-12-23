@@ -264,6 +264,9 @@ func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeNa
 }
 
 func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine) error {
+	if fs.common.DisableUpdateCache {
+		return nil
+	}
 	if vm == nil {
 		return fmt.Errorf("vm is nil")
 	}
@@ -290,7 +293,6 @@ func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine)
 	}
 	vmMap := cached.(*sync.Map)
 	vmMap.Store(nodeName, vm)
-	fs.vmssFlexVMCache.Update(vmssFlexID, vmMap)
 
 	fs.vmssFlexVMNameToVmssID.Store(strings.ToLower(*vm.OsProfile.ComputerName), vmssFlexID)
 	fs.vmssFlexVMNameToNodeName.Store(*vm.Name, strings.ToLower(*vm.OsProfile.ComputerName))
