@@ -2031,18 +2031,20 @@ func TestEnsureVMSSInPool(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		description        string
-		backendPoolID      string
-		vmSetName          string
-		clusterIP          string
-		nodes              []*v1.Node
-		isBasicLB          bool
-		isVMSSDeallocating bool
-		isVMSSNilNICConfig bool
-		expectedPutVMSS    bool
-		setIPv6Config      bool
-		useMultipleSLBs    bool
-		expectedErr        error
+		description           string
+		backendPoolID         string
+		vmSetName             string
+		clusterIP             string
+		nodes                 []*v1.Node
+		isBasicLB             bool
+		isVMSSDeallocating    bool
+		isVMSSNilNICConfig    bool
+		expectedGetInstanceID string
+		expectedPutVMSS       bool
+		setIPv6Config         bool
+		useMultipleSLBs       bool
+		getInstanceIDErr      error
+		expectedErr           error
 	}{
 		{
 			description: "ensureVMSSInPool should skip the node if it isn't managed by VMSS",
@@ -2179,6 +2181,36 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			useMultipleSLBs: true,
 			expectedPutVMSS: true,
 		},
+		{
+			description: "ensureVMSSInPool should get the vmss name from vm instance ID if the provider ID of the node is empty",
+			nodes: []*v1.Node{
+				{},
+			},
+			vmSetName:             testVMSSName,
+			backendPoolID:         testLBBackendpoolID1,
+			expectedGetInstanceID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+			expectedPutVMSS:       true,
+		},
+		{
+			description: "ensureVMSSInPool should skip updating vmss if the node is not a vmss vm",
+			nodes: []*v1.Node{
+				{},
+			},
+			vmSetName:             testVMSSName,
+			backendPoolID:         testLBBackendpoolID1,
+			expectedGetInstanceID: "invalid",
+		},
+		{
+			description: "ensureVMSSInPool should report an error if failed to get instsance ID",
+			nodes: []*v1.Node{
+				{},
+			},
+			vmSetName:             testVMSSName,
+			backendPoolID:         testLBBackendpoolID1,
+			expectedGetInstanceID: "invalid",
+			getInstanceIDErr:      errors.New("error"),
+			expectedErr:           errors.New("error"),
+		},
 	}
 
 	for _, test := range testCases {
@@ -2208,6 +2240,12 @@ func TestEnsureVMSSInPool(t *testing.T) {
 		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", test.setIPv6Config)
 		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+
+		if test.expectedGetInstanceID != "" {
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
+			ss.VMSet = mockVMSet
+		}
 
 		err = ss.ensureVMSSInPool(&v1.Service{Spec: v1.ServiceSpec{ClusterIP: test.clusterIP}}, test.nodes, test.backendPoolID, test.vmSetName)
 		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
