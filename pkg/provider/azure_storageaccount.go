@@ -37,7 +37,15 @@ import (
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
 const GroupIDFile = "file"
-const privateDNSZoneNameFmt = "privatelink.file.%s"
+const GroupIDBlob = "blob"
+const privateDNSZoneNameFmt = "privatelink.%s.%s"
+
+type StorageType string
+
+const (
+	StorageTypeBlob StorageType = "blob"
+	StorageTypeFile StorageType = "file"
+)
 
 // AccountOptions contains the fields which are used to create storage account.
 type AccountOptions struct {
@@ -48,6 +56,7 @@ type AccountOptions struct {
 	CreateAccount                           bool
 	EnableLargeFileShare                    bool
 	CreatePrivateEndpoint                   bool
+	StorageType                             StorageType
 	StorageEndpointSuffix                   string
 	DisableFileServiceDeleteRetentionPolicy bool
 	IsHnsEnabled                            *bool
@@ -163,10 +172,15 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 	var privateDNSZoneName string
 	if accountOptions.CreatePrivateEndpoint {
+		if accountOptions.StorageType == "" {
+			klog.V(2).Info("set StorageType as file when not specified")
+			accountOptions.StorageType = StorageTypeFile
+		}
+
 		if len(accountOptions.StorageEndpointSuffix) == 0 {
 			accountOptions.StorageEndpointSuffix = az.cloud.Environment.StorageEndpointSuffix
 		}
-		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, accountOptions.StorageEndpointSuffix)
+		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
 	}
 
 	if len(accountOptions.Tags) == 0 {
@@ -413,7 +427,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 	privateLinkServiceConnection := network.PrivateLinkServiceConnection{
 		Name: &privateLinkServiceConnectionName,
 		PrivateLinkServiceConnectionProperties: &network.PrivateLinkServiceConnectionProperties{
-			GroupIds:             &[]string{GroupIDFile},
+			GroupIds:             &[]string{GroupIDFile, GroupIDBlob},
 			PrivateLinkServiceID: accountID,
 		},
 	}
