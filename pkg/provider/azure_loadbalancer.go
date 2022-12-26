@@ -887,8 +887,6 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 
 // pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
-	var shouldPIPExisted bool
-
 	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
 		return name, true, nil
 	}
@@ -902,21 +900,21 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	// Assume that the service without loadBalancerIP set is a primary service.
 	// If a secondary service doesn't set the loadBalancerIP, it is not allowed to share the IP.
 	if len(loadBalancerIP) == 0 {
-		return az.getPublicIPName(clusterName, service), shouldPIPExisted, nil
+		return az.getPublicIPName(clusterName, service), false, nil
 	}
 
 	// For the services with loadBalancerIP set, an existing public IP is required, primary
 	// or secondary, or a public IP not found error would be reported.
 	pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup, pips)
 	if err != nil {
-		return "", shouldPIPExisted, err
+		return "", false, err
 	}
 
 	if pip != nil && pip.Name != nil {
-		return *pip.Name, shouldPIPExisted, nil
+		return *pip.Name, false, nil
 	}
 
-	return "", shouldPIPExisted, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
+	return "", false, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
 }
 
 // pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
@@ -1511,22 +1509,22 @@ func (az *Cloud) findFrontendIPConfigOfService(
 	fipConfigs *[]network.FrontendIPConfiguration,
 	service *v1.Service,
 	pips *[]network.PublicIPAddress,
-) (*network.FrontendIPConfiguration, bool, error) {
+) (*network.FrontendIPConfiguration, error) {
 	for _, config := range *fipConfigs {
-		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(config, service, pips)
+		owns, _, err := az.serviceOwnsFrontendIP(config, service, pips)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if owns {
-			return &config, isPrimaryService, nil
+			return &config, nil
 		}
 	}
 
-	return nil, false, nil
+	return nil, nil
 }
 
 // reconcileLoadBalancer ensures load balancer exists and the frontend ip config is setup.
-// This also reconciles the Service's Ports  with the LoadBalancer config.
+// This also reconciles the Service's Ports with the LoadBalancer config.
 // This entails adding rules/probes for expected Ports and removing stale rules/ports.
 // nodes only used if wantLb is true
 func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, nodes []*v1.Node, wantLb bool) (*network.LoadBalancer, error) {
@@ -1849,7 +1847,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string, service *v1.Serv
 			break
 		}
 
-		ownedFIPConfig, _, err = az.findFrontendIPConfigOfService(&newConfigs, service, &pips)
+		ownedFIPConfig, err = az.findFrontendIPConfigOfService(&newConfigs, service, &pips)
 		if err != nil {
 			return nil, toDeleteConfigs, false, err
 		}
@@ -1940,7 +1938,7 @@ func (az *Cloud) getFrontendZones(
 	fipConfig *network.FrontendIPConfiguration,
 	previousZone *[]string,
 	isFipChanged bool,
-	serviceName, defaultLBFrontendIPConfigName string) error {
+	serviceName, lbFrontendIPConfigName string) error {
 	if !isFipChanged { // fetch zone information from API for new frontends
 		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
 		location := az.Location
@@ -1953,10 +1951,10 @@ func (az *Cloud) getFrontendZones(
 		}
 	} else {
 		if previousZone == nil { // keep the existing zone information for existing frontends
-			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to nil", serviceName, defaultLBFrontendIPConfigName)
+			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to nil", serviceName, lbFrontendIPConfigName)
 		} else {
 			zoneStr := strings.Join(*previousZone, ",")
-			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to %s", serviceName, defaultLBFrontendIPConfigName, zoneStr)
+			klog.V(2).Infof("getFrontendZones for service (%s): lb frontendconfig(%s): setting zone to %s", serviceName, lbFrontendIPConfigName, zoneStr)
 		}
 		fipConfig.Zones = previousZone
 	}
