@@ -75,7 +75,7 @@ func sender() autorest.Sender {
 				Timeout:   30 * time.Second, // the same as default transport
 				KeepAlive: 30 * time.Second, // the same as default transport
 			}).DialContext,
-			ForceAttemptHTTP2:     true,             // always attempt HTTP/2 even though custom dialer is provided
+			ForceAttemptHTTP2:     false,            // respect custom dialer (default is true)
 			MaxIdleConns:          100,              // Zero means no limit, the same as default transport
 			MaxIdleConnsPerHost:   100,              // Default is 2, ref:https://cs.opensource.google/go/go/+/go1.18.4:src/net/http/transport.go;l=58
 			IdleConnTimeout:       90 * time.Second, // the same as default transport
