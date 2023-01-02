@@ -40,6 +40,7 @@ var (
 	imageRegistry  = os.Getenv("IMAGE_REGISTRY")
 	registryURL    = os.Getenv("REGISTRY_URL")
 	registryRepo   = os.Getenv("REGISTRY_REPO")
+	imageTagEnvVar = os.Getenv("IMAGE_TAG")
 	ctx            = context.Background()
 )
 

@@ -73,6 +73,10 @@ func (d *deployer) makeCloudProviderImages(path string) (string, error) {
 		}
 	}
 
+	if imageTagEnvVar != "" {
+		return imageTagEnvVar, nil
+	}
+
 	imageTag, err := exec.Output(exec.Command("git", "-C", path, "rev-parse", "--short=7", "HEAD"))
 	if err != nil {
 		return "", fmt.Errorf("failed to get image tag: %v", err)
