@@ -21,6 +21,8 @@ steps:
       make deployer
       sudo GOPATH="/home/vsts/go" make install
       popd
+
+      export IMAGE_TAG="$(git describe --tags)"
       kubetest2 aks --build --target ccm --targetPath `pwd`
     displayName: make and push ccm image
     env:
