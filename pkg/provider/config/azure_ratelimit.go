@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package provider
+package config
 
 import (
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	defaultAtachDetachDiskQPS    = 6.0
-	defaultAtachDetachDiskBucket = 10
+	DefaultAtachDetachDiskQPS    = 6.0
+	DefaultAtachDetachDiskBucket = 10
 )
 
 // CloudProviderRateLimitConfig indicates the rate limit config for each clients.
@@ -94,8 +94,8 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 
 	atachDetachDiskRateLimitConfig := azclients.RateLimitConfig{
 		CloudProviderRateLimit:            true,
-		CloudProviderRateLimitQPSWrite:    defaultAtachDetachDiskQPS,
-		CloudProviderRateLimitBucketWrite: defaultAtachDetachDiskBucket,
+		CloudProviderRateLimitQPSWrite:    DefaultAtachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: DefaultAtachDetachDiskBucket,
 	}
 	config.AttachDetachDiskRateLimit = overrideDefaultRateLimitConfig(&atachDetachDiskRateLimitConfig, config.AttachDetachDiskRateLimit)
 }
