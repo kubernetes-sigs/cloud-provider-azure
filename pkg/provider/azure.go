@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -101,7 +103,7 @@ var (
 // for more details.
 type Config struct {
 	auth.AzureAuthConfig
-	CloudProviderRateLimitConfig
+	ratelimitconfig.CloudProviderRateLimitConfig
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
 	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
@@ -559,7 +561,7 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 	}
 
 	// Initialize rate limiting config options.
-	InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
+	ratelimitconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
 
 	resourceRequestBackoff := az.setCloudProviderBackoffDefaults(config)
 
@@ -967,8 +969,8 @@ func initDiskControllers(az *Cloud) error {
 	// Common controller contains the function
 	// needed by both blob disk and managed disk controllers
 
-	qps := float32(defaultAtachDetachDiskQPS)
-	bucket := defaultAtachDetachDiskBucket
+	qps := float32(ratelimitconfig.DefaultAtachDetachDiskQPS)
+	bucket := ratelimitconfig.DefaultAtachDetachDiskBucket
 	if az.Config.AttachDetachDiskRateLimit != nil {
 		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
 		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
