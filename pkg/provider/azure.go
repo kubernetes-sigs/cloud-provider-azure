@@ -47,7 +47,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient"
@@ -104,7 +103,7 @@ var (
 // See https://kubernetes.io/docs/reference/using-api/deprecation-policy/#deprecating-a-flag-or-cli
 // for more details.
 type Config struct {
-	auth.AzureAuthConfig
+	ratelimitconfig.AzureAuthConfig
 	ratelimitconfig.CloudProviderRateLimitConfig
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
@@ -545,13 +544,13 @@ func (az *Cloud) InitializeCloudFromConfig(config *Config, fromSecret, callFromC
 		}
 	}
 
-	env, err := auth.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
+	env, err := ratelimitconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
 	if err != nil {
 		return err
 	}
 
-	servicePrincipalToken, err := auth.GetServicePrincipalToken(&config.AzureAuthConfig, env, env.ServiceManagementEndpoint)
-	if errors.Is(err, auth.ErrorNoAuth) {
+	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureAuthConfig, env, env.ServiceManagementEndpoint)
+	if errors.Is(err, ratelimitconfig.ErrorNoAuth) {
 		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
 		if fromSecret {
 			err := fmt.Errorf("no credentials provided for Azure cloud provider")
@@ -725,11 +724,11 @@ func (az *Cloud) configureMultiTenantClients(servicePrincipalToken *adal.Service
 	var multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken
 	var networkResourceServicePrincipalToken *adal.ServicePrincipalToken
 	if az.Config.UsesNetworkResourceInDifferentTenant() {
-		multiTenantServicePrincipalToken, err = auth.GetMultiTenantServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
+		multiTenantServicePrincipalToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
 		if err != nil {
 			return err
 		}
-		networkResourceServicePrincipalToken, err = auth.GetNetworkResourceServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
+		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
 		if err != nil {
 			return err
 		}
