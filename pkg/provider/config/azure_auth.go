@@ -14,14 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package auth
+package config
 
 import (
 	"crypto/rsa"
 	"crypto/x509"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"os"
 	"strings"
+
+	"sigs.k8s.io/yaml"
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -36,6 +40,10 @@ import (
 var (
 	// ErrorNoAuth indicates that no credentials are provided.
 	ErrorNoAuth = fmt.Errorf("no credentials provided for Azure cloud provider")
+)
+
+const (
+	maxReadLength = 10 * 1 << 20 // 10MB
 )
 
 // AzureAuthConfig holds auth related part of cloud config
@@ -137,7 +145,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, r
 
 	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
 		klog.V(2).Infoln("azure: using jwt client_assertion (client_cert+client_private_key) to retrieve access token")
-		certData, err := ioutil.ReadFile(config.AADClientCertPath)
+		certData, err := os.ReadFile(config.AADClientCertPath)
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
@@ -246,6 +254,35 @@ func ParseAzureEnvironment(cloudName, resourceManagerEndpoint, identitySystem st
 		env, err = azure.EnvironmentFromName(cloudName)
 	}
 	return &env, err
+}
+
+// ParseAzureAuthConfig returns a parsed configuration for an Azure cloudprovider config file
+func ParseAzureAuthConfig(configReader io.Reader) (*AzureAuthConfig, *azure.Environment, error) {
+	var config AzureAuthConfig
+
+	if configReader == nil {
+		return nil, nil, errors.New("nil config is provided")
+	}
+
+	limitedReader := &io.LimitedReader{R: configReader, N: maxReadLength}
+	configContents, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, nil, err
+	}
+	if limitedReader.N <= 0 {
+		return nil, nil, errors.New("the read limit is reached")
+	}
+	err = yaml.Unmarshal(configContents, &config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	environment, err := ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &config, environment, nil
 }
 
 // UsesNetworkResourceInDifferentTenant determines whether the AzureAuthConfig indicates to use network resources in
