@@ -12,7 +12,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.9
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.3.0
 	github.com/spf13/cobra v1.6.1
 	gopkg.in/dnaeon/go-vcr.v2 v2.3.0
 	k8s.io/client-go v0.26.0
