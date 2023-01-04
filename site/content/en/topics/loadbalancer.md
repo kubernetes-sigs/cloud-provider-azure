@@ -32,6 +32,8 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-interval` | Health probe interval | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later  with out-of-tree cloud provider  |
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe` | The minimum number of unhealthy responses of health probe  |  Refer to the detailed docs [here](#custom-load-balancer-health-probe) |	v1.21 and later  with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` | Request path of the health probe | Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.20 and later  with out-of-tree cloud provider|
+| `service.beta.kubernetes.io/azure-load-balancer-ipv4` | Load balancer IPv4 address | Specify the load balancer IP of IPv4, deprecating Service.spec.loadBalancerIP | v1.21 and later |
+| `service.beta.kubernetes.io/azure-load-balancer-ipv6` | Load balancer IPv6 address | Specify the load balancer IP of IPv6, deprecating Service.spec.loadBalancerIP | v1.21 and later |
 | `service.beta.kubernetes.io/port_{port}_no_lb_rule` | true/false |  {port} is the port number in the service. When it is set to true, no lb rule and health probe rule for this port will be generated. health check service should not be exposed to the public internet(e.g. istio/envoy health check service) | v1.24 and later with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_no_probe_rule` | true/false |  {port} is the port number in the service. When it is set to true, no health probe rule for this port will be generated. | v1.24 and later with out-of-tree cloud provider|
 | `service.beta.kubernetes.io/port_{port}_health-probe_protocol` | Health probe protocol | {port} is the port number in the service. Explicit protocol for the health probe for the service port {port}, overriding port.appProtocol if set.  Refer to the detailed docs [here](#custom-load-balancer-health-probe) | v1.21 and later with out-of-tree cloud provider|
@@ -47,6 +49,13 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 Please note that
 
 * When `loadBalancerSourceRanges` have been set on service spec, `service.beta.kubernetes.io/azure-allowed-service-tags` won't work because of DROP iptables rules from kube-proxy. The CIDRs from service tags should be merged into `loadBalancerSourceRanges` to make it work.
+
+### Setting LoadBalaner IP
+
+If you want to specify an IP address for the load balancer, there are two ways:
+
+* Recommended: Set Service annotations `service.beta.kubernetes.io/azure-load-balancer-ipv4` for an IPv4 address and `service.beta.kubernetes.io/azure-load-balancer-ipv6` for an IPv6 address. Dual-stack support will be implemented soon. It is highly recommended for new Services.
+* Deprecating: Set Service field: `Service.Spec.LoadbalancerIP`. This field is deprecating following [upstream kubernetes](https://github.com/kubernetes/kubernetes/pull/107235) and it cannot support dual-stack. However, current usage remains the same and existing Services are expected to work without modification.
 
 ### Load balancer selection modes
 
