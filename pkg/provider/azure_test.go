@@ -164,45 +164,46 @@ func setMockEnv(az *Cloud, ctrl *gomock.Controller, expectedInterfaces []network
 }
 
 func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
-	expectedPIPs := []network.PublicIPAddress{
-		{
-			Name:     pointer.String("testCluster-aservicea"),
-			Location: &az.Location,
-			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-				PublicIPAddressVersion:   network.IPVersionIPv4,
-				IPAddress:                pointer.String("1.2.3.4"),
-			},
-			Tags: map[string]*string{
-				consts.ServiceTagKey:  pointer.String("default/servicea"),
-				consts.ClusterNameKey: pointer.String(testClusterName),
-			},
-			Sku: &network.PublicIPAddressSku{
-				Name: network.PublicIPAddressSkuNameStandard,
-			},
-			ID: pointer.String("testCluster-aservice1"),
+	expectedPIP := network.PublicIPAddress{
+		Name:     pointer.String("testCluster-aservicea"),
+		Location: &az.Location,
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+			PublicIPAddressVersion:   network.IPVersionIPv4,
+			IPAddress:                pointer.String("1.2.3.4"),
 		},
+		Tags: map[string]*string{
+			consts.ServiceTagKey:  pointer.String("default/servicea"),
+			consts.ClusterNameKey: pointer.String(testClusterName),
+		},
+		Sku: &network.PublicIPAddressSku{
+			Name: network.PublicIPAddressSkuNameStandard,
+		},
+		ID: pointer.String("testCluster-aservice1"),
 	}
 
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
 	az.PublicIPAddressesClient = mockPIPsClient
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(expectedPIPs, nil).AnyTimes()
 	mockPIPsClient.EXPECT().List(gomock.Any(), gomock.Not(az.ResourceGroup)).Return(nil, nil).AnyTimes()
 	mockPIPsClient.EXPECT().Get(gomock.Any(), gomock.Not(az.ResourceGroup), gomock.Any(), gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 
 	a := 'a'
+	var expectedPIPs []network.PublicIPAddress
 	for i := 1; i <= serviceCount; i++ {
-		expectedPIPs[0].Name = pointer.String(fmt.Sprintf("testCluster-aservice%d", i))
-		expectedPIPs[0].Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%d", i))
-		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i), gomock.Any()).Return(expectedPIPs[0], nil).AnyTimes()
+		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%d", i))
+		expectedPIP.Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%d", i))
+		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i)).Return(nil).AnyTimes()
-		expectedPIPs[0].Name = pointer.String(fmt.Sprintf("testCluster-aservice%c", a))
-		expectedPIPs[0].Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%c", a))
-		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a), gomock.Any()).Return(expectedPIPs[0], nil).AnyTimes()
+		expectedPIPs = append(expectedPIPs, expectedPIP)
+		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%c", a))
+		expectedPIP.Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%c", a))
+		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a)).Return(nil).AnyTimes()
+		expectedPIPs = append(expectedPIPs, expectedPIP)
 		a++
 	}
+	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(expectedPIPs, nil).AnyTimes()
 }
 
 func setMockSecurityGroup(az *Cloud, ctrl *gomock.Controller, sgs ...*network.SecurityGroup) {
@@ -1087,7 +1088,7 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
 	az.PublicIPAddressesClient = mockPIPsClient
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesaomitted1", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).AnyTimes()
 
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
@@ -1141,7 +1142,8 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
 	az.PublicIPAddressesClient = mockPIPsClient
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).AnyTimes()
+	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesanone", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
 
 	expectedPLS := make([]network.PrivateLinkService, 0)
 	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
@@ -1201,7 +1203,8 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
 	az.PublicIPAddressesClient = mockPIPsClient
 	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+	mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster-aservicesaclientip", gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+	mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).AnyTimes()
 
 	expectedPLS := make([]network.PrivateLinkService, 0)
 	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)

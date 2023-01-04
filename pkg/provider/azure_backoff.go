@@ -385,25 +385,6 @@ func (az *Cloud) ListLB(service *v1.Service) ([]network.LoadBalancer, error) {
 	return allLBs, nil
 }
 
-// ListPIP list the PIP resources in the given resource group
-func (az *Cloud) ListPIP(service *v1.Service, pipResourceGroup string) ([]network.PublicIPAddress, error) {
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	allPIPs, rerr := az.PublicIPAddressesClient.List(ctx, pipResourceGroup)
-	if rerr != nil {
-		if rerr.IsNotFound() {
-			return nil, nil
-		}
-		az.Event(service, v1.EventTypeWarning, "ListPublicIPs", rerr.Error().Error())
-		klog.Errorf("PublicIPAddressesClient.List(%v) failure with err=%v", pipResourceGroup, rerr)
-		return nil, rerr.Error()
-	}
-
-	klog.V(2).Infof("PublicIPAddressesClient.List(%v) success", pipResourceGroup)
-	return allPIPs, nil
-}
-
 // CreateOrUpdatePIP invokes az.PublicIPAddressesClient.CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string, pip network.PublicIPAddress) error {
 	ctx, cancel := getContextWithCancel()
@@ -413,7 +394,7 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	klog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
 	if rerr == nil {
 		// Invalidate the cache right after updating
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
+		_ = az.pipCache.Delete(pipResourceGroup)
 		return nil
 	}
 
@@ -424,14 +405,14 @@ func (az *Cloud) CreateOrUpdatePIP(service *v1.Service, pipResourceGroup string,
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
 		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because of http.StatusPreconditionFailed", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
+		_ = az.pipCache.Delete(pipResourceGroup)
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
 		klog.V(3).Infof("PublicIP cache for (%s, %s) is cleanup because CreateOrUpdate is canceled by another operation", pipResourceGroup, pointer.StringDeref(pip.Name, ""))
-		_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pointer.StringDeref(pip.Name, "")))
+		_ = az.pipCache.Delete(pipResourceGroup)
 	}
 
 	return rerr.Error()
@@ -471,7 +452,7 @@ func (az *Cloud) DeletePublicIP(service *v1.Service, pipResourceGroup string, pi
 	}
 
 	// Invalidate the cache right after deleting
-	_ = az.pipCache.Delete(az.getPIPCacheKey(pipResourceGroup, pipName))
+	_ = az.pipCache.Delete(pipResourceGroup)
 	return nil
 }
 
