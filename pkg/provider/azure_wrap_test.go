@@ -19,13 +19,18 @@ package provider
 import (
 	"net/http"
 	"reflect"
+	"sync"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -288,5 +293,116 @@ func TestIsBackendPoolOnSameLB(t *testing.T) {
 
 		assert.Equal(t, test.expected, isSameLB)
 		assert.Equal(t, test.expectedLBName, lbName)
+	}
+}
+
+func TestGetPublicIPAddress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		desc          string
+		pipCache      []network.PublicIPAddress
+		expectPIPList bool
+		existingPIPs  []network.PublicIPAddress
+		expectExists  bool
+		expectedPIP   network.PublicIPAddress
+	}{
+		{
+			desc:         "getPublicIPAddress should return pip from cache when it exists",
+			pipCache:     []network.PublicIPAddress{{Name: pointer.String("pip")}},
+			expectExists: true,
+			expectedPIP:  network.PublicIPAddress{Name: pointer.String("pip")},
+		},
+		{
+			desc:          "getPublicIPAddress should from list call when cache is empty",
+			expectPIPList: true,
+			existingPIPs: []network.PublicIPAddress{
+				{Name: pointer.String("pip")},
+				{Name: pointer.String("pip1")},
+			},
+			expectExists: true,
+			expectedPIP:  network.PublicIPAddress{Name: pointer.String("pip")},
+		},
+		{
+			desc:          "getPublicIPAddress should try listing when pip does not exist",
+			pipCache:      []network.PublicIPAddress{{Name: pointer.String("pip1")}},
+			expectPIPList: true,
+			existingPIPs:  []network.PublicIPAddress{{Name: pointer.String("pip1")}},
+			expectExists:  false,
+			expectedPIP:   network.PublicIPAddress{},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			pipCache := &sync.Map{}
+			for _, pip := range test.pipCache {
+				pip := pip
+				pipCache.Store(pointer.StringDeref(pip.Name, ""), &pip)
+			}
+			az := GetTestCloud(ctrl)
+			az.pipCache.Set(az.ResourceGroup, pipCache)
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			if test.expectPIPList {
+				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
+			}
+			pip, pipExists, err := az.getPublicIPAddress(az.ResourceGroup, "pip", azcache.CacheReadTypeDefault)
+			assert.Equal(t, test.expectedPIP, pip)
+			assert.Equal(t, test.expectExists, pipExists)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestListPIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		desc          string
+		pipCache      []network.PublicIPAddress
+		expectPIPList bool
+		existingPIPs  []network.PublicIPAddress
+	}{
+		{
+			desc:     "listPIP should return data from cache, when data is empty slice",
+			pipCache: []network.PublicIPAddress{},
+		},
+		{
+			desc: "listPIP should return data from cache",
+			pipCache: []network.PublicIPAddress{
+				{Name: pointer.String("pip1")},
+				{Name: pointer.String("pip2")},
+			},
+		},
+		{
+			desc:          "listPIP should return data from arm list call",
+			expectPIPList: true,
+			existingPIPs:  []network.PublicIPAddress{{Name: pointer.String("pip")}},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			if test.pipCache != nil {
+				pipCache := &sync.Map{}
+				for _, pip := range test.pipCache {
+					pip := pip
+					pipCache.Store(pointer.StringDeref(pip.Name, ""), &pip)
+				}
+				az.pipCache.Set(az.ResourceGroup, pipCache)
+			}
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			if test.expectPIPList {
+				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
+			}
+			pips, err := az.listPIP(az.ResourceGroup)
+			if test.expectPIPList {
+				assert.ElementsMatch(t, test.existingPIPs, pips)
+			} else {
+				assert.ElementsMatch(t, test.pipCache, pips)
+			}
+			assert.NoError(t, err)
+		})
 	}
 }
