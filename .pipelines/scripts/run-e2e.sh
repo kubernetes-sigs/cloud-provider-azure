@@ -51,7 +51,7 @@ if [[ -z "${AZURE_LOCATION:-}" ]]; then
 fi
 
 if [[ -z "${IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="$(git rev-parse --short=7 HEAD)"
+  IMAGE_TAG="$(git describe --tags)"
 fi
 
 if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
