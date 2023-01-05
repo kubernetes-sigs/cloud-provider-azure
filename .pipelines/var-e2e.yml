@@ -2,5 +2,3 @@ variables:
 - group: aks-ci
 - name: DisableDockerDetector
   value: true
-- name: k8sVersion
-  value: "1.23.8"
