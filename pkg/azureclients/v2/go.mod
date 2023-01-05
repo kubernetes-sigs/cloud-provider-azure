@@ -17,7 +17,7 @@ require (
 	gopkg.in/dnaeon/go-vcr.v2 v2.3.0
 	k8s.io/client-go v0.26.0
 	k8s.io/klog/v2 v2.80.1
-	sigs.k8s.io/cloud-provider-azure v1.26.1
+	sigs.k8s.io/cloud-provider-azure v1.26.2
 	sigs.k8s.io/controller-tools v0.11.1
 )
 
@@ -47,11 +47,11 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.4.0 // indirect
+	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	golang.org/x/tools v0.4.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
