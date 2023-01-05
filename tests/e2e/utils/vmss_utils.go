@@ -64,7 +64,7 @@ func ScaleVMSS(tc *AzureTestClient, vmssName, rgName string, instanceCount int64
 		return err
 	}
 	parameters := azcompute.VirtualMachineScaleSet{
-		Location: to.StringPtr(tc.GetLocation()),
+		Location: vmss.Location,
 		Sku: &azcompute.Sku{
 			Name:     vmss.Sku.Name,
 			Capacity: to.Int64Ptr(instanceCount),
