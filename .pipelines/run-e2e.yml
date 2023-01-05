@@ -11,7 +11,6 @@ steps:
       export AZURE_TENANT_ID=$AZ_TENANT_ID
       export AZURE_CLIENT_ID=$SP_CLIENT_ID
       export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
-      export KUBERNETES_VERSION=$K8S_VERSION
       export ARTIFACT_DIR=$BUILD_ARTIFACT_STAGING_DIRECTORY
 
       export RESOURCE_GROUP=$(RESOURCE_GROUP)
@@ -26,8 +25,9 @@ steps:
       AZ_TENANT_ID: $(az.tenant_id)
       SP_CLIENT_ID: $(sp.client_id)
       SP_CLIENT_SECRET: $(sp.client_secret)
-      K8S_VERSION: $(k8sVersion)
       BUILD_ARTIFACT_STAGING_DIRECTORY: $(Build.ArtifactStagingDirectory)
+      BUILD_SOURCE_BRANCH_NAME: $(Build.SourceBranchName)
+
   - task: PublishBuildArtifacts@1
     inputs:
       pathToPublish: '$(Build.ArtifactStagingDirectory)'
