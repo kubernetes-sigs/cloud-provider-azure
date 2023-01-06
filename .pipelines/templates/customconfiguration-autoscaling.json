@@ -18,7 +18,11 @@
     },
     "cluster-autoscaler": {
       "config": {
-        "--skip-nodes-with-system-pods": "false"
+        "--skip-nodes-with-system-pods": "false",
+        "--scale-down-delay-after-add": "1m",
+        "--scale-down-unneeded-time": "1m",
+        "--scale-down-unready-time": "2m",
+        "--v": "4"
       }
     }
   }
