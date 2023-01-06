@@ -80,7 +80,11 @@ if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   fi
 fi
 
-CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
+if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
+  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration-autoscaling.json}"
+else
+  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
+fi
 
 rm -rf kubetest2-aks
 git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
