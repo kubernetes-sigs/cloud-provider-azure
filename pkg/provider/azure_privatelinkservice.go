@@ -29,6 +29,7 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -44,6 +45,17 @@ func (az *Cloud) reconcilePrivateLinkService(
 	serviceName := getServiceName(service)
 	fipConfigID := fipConfig.ID
 	klog.V(2).Infof("reconcilePrivateLinkService for service(%s) - LB fipConfigID(%s) - wantPLS(%t) - createPLS(%t)", serviceName, to.String(fipConfig.Name), wantPLS, createPLS)
+
+	request := "ensure_privatelinkservice"
+	if !wantPLS {
+		request = "ensure_privatelinkservice_deleted"
+	}
+	mc := metrics.NewMetricContext("services", request, az.ResourceGroup, az.getNetworkResourceSubscriptionID(), serviceName)
+
+	isOperationSucceeded := false
+	defer func() {
+		mc.ObserveOperationWithResult(isOperationSucceeded)
+	}()
 
 	if createPLS {
 		// Firstly, make sure it's internal service
@@ -142,6 +154,7 @@ func (az *Cloud) reconcilePrivateLinkService(
 		}
 	}
 
+	isOperationSucceeded = true
 	klog.V(2).Infof("reconcilePrivateLinkService for service(%s) finished", serviceName)
 	return nil
 }
