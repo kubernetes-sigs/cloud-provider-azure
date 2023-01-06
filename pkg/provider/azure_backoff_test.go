@@ -25,10 +25,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -102,14 +102,14 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 
 	expectedVM := compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: to.StringPtr("availability-set")},
+			AvailabilitySet: &compute.SubResource{ID: pointer.String("availability-set")},
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
 						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-							Primary: to.BoolPtr(true),
+							Primary: pointer.Bool(true),
 						},
-						ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
+						ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -121,7 +121,7 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						PrivateIPAddress: to.StringPtr("1.2.3.4"),
+						PrivateIPAddress: pointer.String("1.2.3.4"),
 					},
 				},
 			},
@@ -164,14 +164,14 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 
 	expectedVM := compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: to.StringPtr("availability-set")},
+			AvailabilitySet: &compute.SubResource{ID: pointer.String("availability-set")},
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
 						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-							Primary: to.BoolPtr(true),
+							Primary: pointer.Bool(true),
 						},
-						ID: to.StringPtr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
+						ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -183,9 +183,9 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						PrivateIPAddress: to.StringPtr("1.2.3.4"),
+						PrivateIPAddress: pointer.String("1.2.3.4"),
 						PublicIPAddress: &network.PublicIPAddress{
-							ID: to.StringPtr("test/pip"),
+							ID: pointer.String("test/pip"),
 						},
 					},
 				},
@@ -195,7 +195,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 
 	expectedPIP := network.PublicIPAddress{
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: to.StringPtr("5.6.7.8"),
+			IPAddress: pointer.String("5.6.7.8"),
 		},
 	}
 
@@ -230,7 +230,7 @@ func TestCreateOrUpdateSecurityGroupCanceled(t *testing.T) {
 	})
 	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "sg", gomock.Any()).Return(network.SecurityGroup{}, nil)
 
-	err := az.CreateOrUpdateSecurityGroup(network.SecurityGroup{Name: to.StringPtr("sg")})
+	err := az.CreateOrUpdateSecurityGroup(network.SecurityGroup{Name: pointer.String("sg")})
 	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")), err.Error())
 
 	// security group should be removed from cache if the operation is canceled
@@ -274,15 +274,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).AnyTimes()
 		mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(network.PublicIPAddress{
-			Name: to.StringPtr("pip"),
+			Name: pointer.String("pip"),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 				ProvisioningState: network.ProvisioningStateSucceeded,
 			},
 		}, nil).AnyTimes()
 
 		err := az.CreateOrUpdateLB(&v1.Service{}, network.LoadBalancer{
-			Name: to.StringPtr("lb"),
-			Etag: to.StringPtr("etag"),
+			Name: pointer.String("lb"),
+			Etag: pointer.String("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
@@ -318,18 +318,18 @@ func TestListAgentPoolLBs(t *testing.T) {
 		},
 		{
 			existingLBs: []network.LoadBalancer{
-				{Name: to.StringPtr("kubernetes")},
-				{Name: to.StringPtr("kubernetes-internal")},
-				{Name: to.StringPtr("vmas-1")},
-				{Name: to.StringPtr("vmas-1-internal")},
-				{Name: to.StringPtr("unmanaged")},
-				{Name: to.StringPtr("unmanaged-internal")},
+				{Name: pointer.String("kubernetes")},
+				{Name: pointer.String("kubernetes-internal")},
+				{Name: pointer.String("vmas-1")},
+				{Name: pointer.String("vmas-1-internal")},
+				{Name: pointer.String("unmanaged")},
+				{Name: pointer.String("unmanaged-internal")},
 			},
 			expectedLBs: []network.LoadBalancer{
-				{Name: to.StringPtr("kubernetes")},
-				{Name: to.StringPtr("kubernetes-internal")},
-				{Name: to.StringPtr("vmas-1")},
-				{Name: to.StringPtr("vmas-1-internal")},
+				{Name: pointer.String("kubernetes")},
+				{Name: pointer.String("kubernetes-internal")},
+				{Name: pointer.String("vmas-1")},
+				{Name: pointer.String("vmas-1-internal")},
 			},
 			callTimes: 1,
 		},
@@ -414,7 +414,7 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 			mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(network.PublicIPAddress{}, nil)
 		}
 
-		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: to.StringPtr("nic")})
+		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: pointer.String("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
 		cachedPIP, err := az.pipCache.GetWithDeepCopy(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
@@ -435,7 +435,7 @@ func TestCreateOrUpdateInterface(t *testing.T) {
 	mockInterfaceClient := az.InterfacesClient.(*mockinterfaceclient.MockInterface)
 	mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
 
-	err := az.CreateOrUpdateInterface(&v1.Service{}, network.Interface{Name: to.StringPtr("nic")})
+	err := az.CreateOrUpdateInterface(&v1.Service{}, network.Interface{Name: pointer.String("nic")})
 	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), err.Error())
 }
 
@@ -490,8 +490,8 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 		mockRTClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "rt", gomock.Any()).Return(network.RouteTable{}, nil)
 
 		err := az.CreateOrUpdateRouteTable(network.RouteTable{
-			Name: to.StringPtr("rt"),
-			Etag: to.StringPtr("etag"),
+			Name: pointer.String("rt"),
+			Etag: pointer.String("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
@@ -535,8 +535,8 @@ func TestCreateOrUpdateRoute(t *testing.T) {
 		mockRTableClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "rt", gomock.Any()).Return(network.RouteTable{}, nil)
 
 		err := az.CreateOrUpdateRoute(network.Route{
-			Name: to.StringPtr("rt"),
-			Etag: to.StringPtr("etag"),
+			Name: pointer.String("rt"),
+			Etag: pointer.String("etag"),
 		})
 		if test.expectedErr != nil {
 			assert.EqualError(t, test.expectedErr, err.Error())
@@ -603,7 +603,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		{
 			vmss: compute.VirtualMachineScaleSet{
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					ProvisioningState: to.StringPtr(consts.VirtualMachineScaleSetsDeallocating),
+					ProvisioningState: pointer.String(consts.VirtualMachineScaleSetsDeallocating),
 				},
 			},
 		},

@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/stretchr/testify/assert"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -103,75 +103,75 @@ func TestReconcileTags(t *testing.T) {
 		{
 			description: "reconcileTags should add missing tags and update existing tags",
 			currentTagsOnResource: map[string]*string{
-				"a": to.StringPtr("b"),
+				"a": pointer.String("b"),
 			},
 			newTags: map[string]*string{
-				"a": to.StringPtr("c"),
-				"b": to.StringPtr("d"),
+				"a": pointer.String("c"),
+				"b": pointer.String("d"),
 			},
 			expectedTags: map[string]*string{
-				"a": to.StringPtr("c"),
-				"b": to.StringPtr("d"),
+				"a": pointer.String("c"),
+				"b": pointer.String("d"),
 			},
 			expectedChanged: true,
 		},
 		{
 			description: "reconcileTags should remove the tags that are not included in systemTags",
 			currentTagsOnResource: map[string]*string{
-				"a": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 			newTags: map[string]*string{
-				"a": to.StringPtr("c"),
+				"a": pointer.String("c"),
 			},
 			systemTags: "a, b",
 			expectedTags: map[string]*string{
-				"a": to.StringPtr("c"),
+				"a": pointer.String("c"),
 			},
 			expectedChanged: true,
 		},
 		{
 			description: "reconcileTags should ignore the case of keys when comparing",
 			currentTagsOnResource: map[string]*string{
-				"A": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"A": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 			newTags: map[string]*string{
-				"a": to.StringPtr("b"),
-				"C": to.StringPtr("d"),
+				"a": pointer.String("b"),
+				"C": pointer.String("d"),
 			},
 			expectedTags: map[string]*string{
-				"A": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"A": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 		},
 		{
 			description: "reconcileTags should ignore the case of values when comparing",
 			currentTagsOnResource: map[string]*string{
-				"A": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"A": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 			newTags: map[string]*string{
-				"a": to.StringPtr("B"),
-				"C": to.StringPtr("D"),
+				"a": pointer.String("B"),
+				"C": pointer.String("D"),
 			},
 			expectedTags: map[string]*string{
-				"A": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"A": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 		},
 		{
 			description: "reconcileTags should ignore the case of keys when checking systemTags",
 			currentTagsOnResource: map[string]*string{
-				"a": to.StringPtr("b"),
-				"c": to.StringPtr("d"),
+				"a": pointer.String("b"),
+				"c": pointer.String("d"),
 			},
 			newTags: map[string]*string{
-				"a": to.StringPtr("c"),
+				"a": pointer.String("c"),
 			},
 			systemTags: "A, b",
 			expectedTags: map[string]*string{
-				"a": to.StringPtr("c"),
+				"a": pointer.String("c"),
 			},
 			expectedChanged: true,
 		},
@@ -271,18 +271,18 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 			description: "no duplicated rules",
 			rules: []network.SecurityRule{
 				{
-					Name: to.StringPtr("rule1"),
+					Name: pointer.String("rule1"),
 				},
 				{
-					Name: to.StringPtr("rule2"),
+					Name: pointer.String("rule2"),
 				},
 			},
 			expected: []network.SecurityRule{
 				{
-					Name: to.StringPtr("rule1"),
+					Name: pointer.String("rule1"),
 				},
 				{
-					Name: to.StringPtr("rule2"),
+					Name: pointer.String("rule2"),
 				},
 			},
 		},
@@ -290,21 +290,21 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 			description: "duplicated rules",
 			rules: []network.SecurityRule{
 				{
-					Name: to.StringPtr("rule1"),
+					Name: pointer.String("rule1"),
 				},
 				{
-					Name: to.StringPtr("rule2"),
+					Name: pointer.String("rule2"),
 				},
 				{
-					Name: to.StringPtr("rule1"),
+					Name: pointer.String("rule1"),
 				},
 			},
 			expected: []network.SecurityRule{
 				{
-					Name: to.StringPtr("rule2"),
+					Name: pointer.String("rule2"),
 				},
 				{
-					Name: to.StringPtr("rule1"),
+					Name: pointer.String("rule1"),
 				},
 			},
 		},

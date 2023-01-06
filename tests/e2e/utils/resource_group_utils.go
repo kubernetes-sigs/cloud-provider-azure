@@ -21,17 +21,17 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
-	"github.com/Azure/go-autorest/autorest/to"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/utils/pointer"
 )
 
 // CreateTestResourceGroup create a test rg
 func CreateTestResourceGroup(tc *AzureTestClient) (*resources.Group, func(string)) {
 	gc := tc.createResourceGroupClient()
-	rgName := to.StringPtr("e2e-" + string(uuid.NewUUID())[0:4])
+	rgName := pointer.String("e2e-" + string(uuid.NewUUID())[0:4])
 	rg, err := gc.CreateOrUpdate(context.Background(), *rgName, createTestTemplate(tc, rgName))
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("resource group %s created", *rgName))
@@ -59,6 +59,6 @@ func WaitForDeleteResourceGroupCompletion(gc *resources.GroupsClient, future res
 func createTestTemplate(tc *AzureTestClient, name *string) resources.Group {
 	return resources.Group{
 		Name:     name,
-		Location: to.StringPtr(tc.location),
+		Location: pointer.String(tc.location),
 	}
 }

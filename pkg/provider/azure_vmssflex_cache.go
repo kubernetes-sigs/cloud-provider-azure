@@ -25,10 +25,10 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -186,11 +186,11 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(nodeName string) (string, error) {
 		vmssFlexes.Range(func(key, value interface{}) bool {
 			vmssFlexID := key.(string)
 			vmssFlex := value.(*compute.VirtualMachineScaleSet)
-			vmssPrefix := to.String(vmssFlex.Name)
+			vmssPrefix := pointer.StringDeref(vmssFlex.Name, "")
 			if vmssFlex.VirtualMachineProfile != nil &&
 				vmssFlex.VirtualMachineProfile.OsProfile != nil &&
 				vmssFlex.VirtualMachineProfile.OsProfile.ComputerNamePrefix != nil {
-				vmssPrefix = to.String(vmssFlex.VirtualMachineProfile.OsProfile.ComputerNamePrefix)
+				vmssPrefix = pointer.StringDeref(vmssFlex.VirtualMachineProfile.OsProfile.ComputerNamePrefix, "")
 			}
 			if strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
 				// we should check this vmss first since nodeName and vmssFlex.Name or

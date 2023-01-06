@@ -35,9 +35,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	armcontainerservicev2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"github.com/Azure/go-autorest/autorest/to"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/kubetest2/pkg/exec"
 )
@@ -151,10 +151,10 @@ func (d *deployer) createResourceGroup(subscriptionID string) (armresources.Reso
 	now := time.Now()
 	timestamp := now.Unix()
 	param := armresources.ResourceGroup{
-		Location: to.StringPtr(d.Location),
+		Location: pointer.String(d.Location),
 		Tags: map[string]*string{
-			"creation_date": to.StringPtr(fmt.Sprintf("%d", timestamp)),
-			"usage":         to.StringPtr(usageTag),
+			"creation_date": pointer.String(fmt.Sprintf("%d", timestamp)),
+			"usage":         pointer.String(usageTag),
 		},
 	}
 

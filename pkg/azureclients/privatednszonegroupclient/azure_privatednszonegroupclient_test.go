@@ -27,11 +27,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -80,7 +80,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pzg.ID), pzg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pzg.ID, ""), pzg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pzgClient := getTestPrivateDNSZoneGroupClient(armClient)
@@ -134,7 +134,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	pzg := getTestPrivateDNSZoneGroup(pzg0)
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pzg.ID), pzg, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pzg.ID, ""), pzg, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pzgClient := getTestPrivateDNSZoneGroupClient(armClient)
@@ -153,7 +153,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pzg.ID), pzg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pzg.ID, ""), pzg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	pzgClient := getTestPrivateDNSZoneGroupClient(armClient)
@@ -163,8 +163,8 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 
 func getTestPrivateDNSZoneGroup(name string) network.PrivateDNSZoneGroup {
 	return network.PrivateDNSZoneGroup{
-		ID:   to.StringPtr(fmt.Sprintf("%s/%s", testResourcePrefix, name)),
-		Name: to.StringPtr(name),
+		ID:   pointer.String(fmt.Sprintf("%s/%s", testResourcePrefix, name)),
+		Name: pointer.String(name),
 	}
 }
 

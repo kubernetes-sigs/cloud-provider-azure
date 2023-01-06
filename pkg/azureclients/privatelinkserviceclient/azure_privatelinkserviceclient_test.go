@@ -29,9 +29,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -192,7 +192,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	plsList := []network.PrivateLinkService{getTestPrivateLinkService("pls1"), getTestPrivateLinkService("pls2"), getTestPrivateLinkService("pls3")}
-	partialResponse, err := json.Marshal(network.PrivateLinkServiceListResult{Value: &plsList, NextLink: to.StringPtr("nextLink")})
+	partialResponse, err := json.Marshal(network.PrivateLinkServiceListResult{Value: &plsList, NextLink: pointer.String("nextLink")})
 	assert.NoError(t, err)
 	_, err = json.Marshal(network.PrivateLinkServiceListResult{Value: &plsList})
 	assert.NoError(t, err)
@@ -230,7 +230,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := network.PrivateLinkServiceListResult{
-		NextLink: to.StringPtr("next"),
+		NextLink: pointer.String("next"),
 	}
 
 	for _, test := range tests {
@@ -272,7 +272,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(pls.ID), pls, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pls.ID, ""), pls, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	plsClient := getTestPrivateLinkServiceClient(armClient)
@@ -303,7 +303,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(pls.ID)).Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(pls.ID, "")).Return(test.armClientErr)
 
 		plsClient := getTestPrivateLinkServiceClient(armClient)
 		rerr := plsClient.Delete(context.TODO(), "rg", "pls1")
@@ -334,7 +334,7 @@ func TestDeletePEConnection(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), to.String(peConn.ID)).Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(peConn.ID, "")).Return(test.armClientErr)
 
 		plsClient := getTestPrivateLinkServiceClient(armClient)
 		rerr := plsClient.DeletePEConnection(context.TODO(), "rg", "pls1", "peconn")
@@ -344,16 +344,16 @@ func TestDeletePEConnection(t *testing.T) {
 
 func getTestPrivateLinkService(name string) network.PrivateLinkService {
 	return network.PrivateLinkService{
-		ID:       to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s", PLSResourceType, name)),
-		Name:     to.StringPtr(name),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s", PLSResourceType, name)),
+		Name:     pointer.String(name),
+		Location: pointer.String("eastus"),
 	}
 }
 
 func getTestPrivateEndpointConnection(PLSName string, PEConnName string) network.PrivateEndpointConnection {
 	return network.PrivateEndpointConnection{
-		ID:   to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s/%s/%s", PLSResourceType, PLSName, PEConnResourceType, PEConnName)),
-		Name: to.StringPtr(PEConnName),
+		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/%s/%s/%s/%s", PLSResourceType, PLSName, PEConnResourceType, PEConnName)),
+		Name: pointer.String(PEConnName),
 	}
 }
 

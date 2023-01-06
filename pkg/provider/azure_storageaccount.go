@@ -25,9 +25,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -314,8 +314,8 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				RequireInfrastructureEncryption: accountOptions.RequireInfrastructureEncryption,
 				KeySource:                       storage.KeySourceMicrosoftStorage,
 				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
-					Blob: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+					File: &storage.EncryptionService{Enabled: pointer.Bool(true)},
+					Blob: &storage.EncryptionService{Enabled: pointer.Bool(true)},
 				},
 			}
 		}
@@ -333,8 +333,8 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				},
 				KeySource: storage.KeySourceMicrosoftKeyvault,
 				Services: &storage.EncryptionServices{
-					File: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
-					Blob: &storage.EncryptionService{Enabled: to.BoolPtr(true)},
+					File: &storage.EncryptionService{Enabled: pointer.Bool(true)},
+					Blob: &storage.EncryptionService{Enabled: pointer.Bool(true)},
 				},
 			}
 		}
@@ -346,7 +346,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 		}
 
-		if accountOptions.DisableFileServiceDeleteRetentionPolicy || to.Bool(accountOptions.IsMultichannelEnabled) {
+		if accountOptions.DisableFileServiceDeleteRetentionPolicy || pointer.BoolDeref(accountOptions.IsMultichannelEnabled, false) {
 			prop, err := az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, accountName)
 			if err != nil {
 				return "", "", err
@@ -358,11 +358,11 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			prop.FileServicePropertiesProperties.Cors = nil
 			if accountOptions.DisableFileServiceDeleteRetentionPolicy {
 				klog.V(2).Infof("disable FileServiceDeleteRetentionPolicy on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
-				prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
+				prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: pointer.Bool(false)}
 			}
-			if to.Bool(accountOptions.IsMultichannelEnabled) {
+			if pointer.BoolDeref(accountOptions.IsMultichannelEnabled, false) {
 				klog.V(2).Infof("enable SMB Multichannel setting on account(%s), subscription(%s), resource group(%s)", accountName, subsID, resourceGroup)
-				prop.FileServicePropertiesProperties.ProtocolSettings = &storage.ProtocolSettings{Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: to.BoolPtr(true)}}}
+				prop.FileServicePropertiesProperties.ProtocolSettings = &storage.ProtocolSettings{Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: pointer.Bool(true)}}}
 			}
 			if _, err := az.FileClient.WithSubscriptionID(subsID).SetServiceProperties(ctx, resourceGroup, accountName, prop); err != nil {
 				return "", "", err
@@ -470,7 +470,7 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceG
 		Location: &location,
 		VirtualNetworkLinkProperties: &privatedns.VirtualNetworkLinkProperties{
 			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
-			RegistrationEnabled: to.BoolPtr(false)},
+			RegistrationEnabled: pointer.Bool(false)},
 	}
 	return az.virtualNetworkLinksClient.CreateOrUpdate(ctx, vnetResourceGroup, privateDNSZoneName, vNetLinkName, parameters, "", false).Error()
 }
@@ -570,7 +570,7 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 		found := false
 		for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
 			for _, rule := range *account.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
-				if strings.EqualFold(to.String(rule.VirtualNetworkResourceID), subnetID) && rule.Action == storage.ActionAllow {
+				if strings.EqualFold(pointer.StringDeref(rule.VirtualNetworkResourceID, ""), subnetID) && rule.Action == storage.ActionAllow {
 					found = true
 					break
 				}
@@ -627,11 +627,11 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 }
 
 func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return to.Bool(account.IsHnsEnabled) == to.Bool(accountOptions.IsHnsEnabled)
+	return pointer.BoolDeref(account.IsHnsEnabled, false) == pointer.BoolDeref(accountOptions.IsHnsEnabled, false)
 }
 
 func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return to.Bool(account.EnableNfsV3) == to.Bool(accountOptions.EnableNfsV3)
+	return pointer.BoolDeref(account.EnableNfsV3, false) == pointer.BoolDeref(accountOptions.EnableNfsV3, false)
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
