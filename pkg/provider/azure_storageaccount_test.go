@@ -662,3 +662,350 @@ func TestIsTagsEqual(t *testing.T) {
 		assert.Equal(t, result, test.expectedResult)
 	}
 }
+
+func TestIsHnsPropertyEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					IsHnsEnabled: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsHnsEnabled: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					IsHnsEnabled: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				IsHnsEnabled: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsHnsEnabled: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					IsHnsEnabled: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				IsHnsEnabled: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isHnsPropertyEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableNfsV3: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableNfsV3: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableNfsV3: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableNfsV3: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableNfsV3: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableNfsV3: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableNfsV3: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isEnableNfsV3PropertyEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowBlobPublicAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AllowBlobPublicAccess: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowBlobPublicAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowBlobPublicAccess: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AllowBlobPublicAccess: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowBlobPublicAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowBlobPublicAccess: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isAllowBlobPublicAccessEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowSharedKeyAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AllowSharedKeyAccess: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowSharedKeyAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowSharedKeyAccess: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AllowSharedKeyAccess: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AllowSharedKeyAccess: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				AllowSharedKeyAccess: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isAllowSharedKeyAccessEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					Encryption: &storage.Encryption{
+						RequireInfrastructureEncryption: pointer.Bool(true),
+					},
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					Encryption: &storage.Encryption{
+						RequireInfrastructureEncryption: pointer.Bool(true),
+					},
+				},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					Encryption: &storage.Encryption{
+						RequireInfrastructureEncryption: pointer.Bool(false),
+					},
+				},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					Encryption: &storage.Encryption{
+						RequireInfrastructureEncryption: pointer.Bool(true),
+					},
+				},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					Encryption: &storage.Encryption{
+						RequireInfrastructureEncryption: pointer.Bool(false),
+					},
+				},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				RequireInfrastructureEncryption: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isRequireInfrastructureEncryptionEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
