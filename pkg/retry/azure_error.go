@@ -131,23 +131,59 @@ func GetRetriableError(err error) *Error {
 	}
 }
 
-// GetRateLimitError creates a new error for rate limiting.
-func GetRateLimitError(isWrite bool, opName string) *Error {
+type ErrClientRateLimited struct {
+	IsWrite bool
+	OpName  string
+}
+
+func (e ErrClientRateLimited) Error() string {
 	opType := "read"
-	if isWrite {
+	if e.IsWrite {
 		opType = "write"
 	}
-	return GetRetriableError(fmt.Errorf("azure cloud provider %s(%s) for operation %q", RateLimited, opType, opName))
+	return fmt.Sprintf("azure cloud provider client rate limited (%s) for operation %q", opType, e.OpName)
+}
+
+type ErrClientThrottled struct {
+	Operation  string
+	Reason     string
+	RetryAfter time.Time
+}
+
+func (e ErrClientThrottled) Error() string {
+	return fmt.Sprintf("azure cloud provider client throttled for operation %s with reason %q", e.Operation, e.Reason)
+}
+
+// GetRateLimitError creates a new error for rate limiting.
+func GetRateLimitError(isWrite bool, opName string) *Error {
+	return GetRetriableError(ErrClientRateLimited{IsWrite: isWrite, OpName: opName})
 }
 
 // GetThrottlingError creates a new error for throttling.
 func GetThrottlingError(operation, reason string, retryAfter time.Time) *Error {
-	rawError := fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", operation, reason)
 	return &Error{
 		Retriable:  true,
-		RawError:   rawError,
+		RawError:   ErrClientThrottled{Operation: operation, Reason: reason, RetryAfter: retryAfter},
 		RetryAfter: retryAfter,
 	}
+}
+
+func IsClientRateLimited(rerr *Error) bool {
+	if rerr == nil {
+		return false
+	}
+
+	_, ok := rerr.RawError.(ErrClientRateLimited)
+	return ok
+}
+
+func IsClientThrottled(rerr *Error) bool {
+	if rerr == nil {
+		return false
+	}
+
+	_, ok := rerr.RawError.(ErrClientThrottled)
+	return ok
 }
 
 // GetError gets a new Error based on resp and error.
@@ -159,6 +195,14 @@ func GetError(resp *http.Response, err error) *Error {
 	if err == nil && resp != nil && isSuccessHTTPResponse(resp) {
 		// HTTP 2xx suggests a successful response
 		return nil
+	}
+
+	if e, ok := err.(ErrClientRateLimited); ok {
+		return GetRateLimitError(e.IsWrite, e.OpName)
+	}
+
+	if e, ok := err.(ErrClientThrottled); ok {
+		return GetThrottlingError(e.Operation, e.Reason, e.RetryAfter)
 	}
 
 	retryAfter := time.Time{}

@@ -41,14 +41,7 @@ func TestNew(t *testing.T) {
 		SubscriptionID:          "sub",
 		ResourceManagerEndpoint: "endpoint",
 		Location:                "eastus",
-		RateLimitConfig: &azclients.RateLimitConfig{
-			CloudProviderRateLimit:            true,
-			CloudProviderRateLimitQPS:         0.5,
-			CloudProviderRateLimitBucket:      1,
-			CloudProviderRateLimitQPSWrite:    0.5,
-			CloudProviderRateLimitBucketWrite: 1,
-		},
-		Backoff: &retry.Backoff{Steps: 1},
+		Backoff:                 &retry.Backoff{Steps: 1},
 	}
 
 	blobclient := New(config)
@@ -89,23 +82,6 @@ func TestCreateContainer(t *testing.T) {
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = blobClient.CreateContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName", storage.BlobContainer{})
 	assert.Equal(t, throttleErr, rerr)
-
-	// test throttle error from client
-	rerr = blobClient.CreateContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName", storage.BlobContainer{})
-	throttleErr = &retry.Error{
-		Retriable:  true,
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "CreateBlobContainer", "client throttled"),
-		RetryAfter: time.Unix(100, 0),
-	}
-	assert.Equal(t, throttleErr, rerr)
-
-	// test rate limit
-	rerr = blobClient.CreateContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName", storage.BlobContainer{})
-	rateLimitedErr := &retry.Error{
-		Retriable: true,
-		RawError:  fmt.Errorf("azure cloud provider %s(%s) for operation %q", retry.RateLimited, "write", "CreateBlobContainer"),
-	}
-	assert.Equal(t, rateLimitedErr, rerr)
 }
 
 func TestDeleteContainer(t *testing.T) {
@@ -131,23 +107,6 @@ func TestDeleteContainer(t *testing.T) {
 	armClient.EXPECT().DeleteResource(gomock.Any(), gomock.Any()).Return(throttleErr).Times(1)
 	rerr = blobClient.DeleteContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
 	assert.Equal(t, throttleErr, rerr)
-
-	// test throttle error from client
-	rerr = blobClient.DeleteContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
-	throttleErr = &retry.Error{
-		Retriable:  true,
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "BlobContainerDelete", "client throttled"),
-		RetryAfter: time.Unix(100, 0),
-	}
-	assert.Equal(t, throttleErr, rerr)
-
-	// test rate limit
-	rerr = blobClient.DeleteContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
-	rateLimitedErr := &retry.Error{
-		Retriable: true,
-		RawError:  fmt.Errorf("azure cloud provider %s(%s) for operation %q", retry.RateLimited, "write", "BlobContainerDelete"),
-	}
-	assert.Equal(t, rateLimitedErr, rerr)
 }
 
 func TestGetContainer(t *testing.T) {
@@ -192,41 +151,11 @@ func TestGetContainer(t *testing.T) {
 	container, rerr = blobClient.GetContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
 	assert.Empty(t, container)
 	assert.Equal(t, throttleErr, rerr)
-
-	// test throttle error from client
-	container, rerr = blobClient.GetContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
-	throttleErr = &retry.Error{
-		Retriable:  true,
-		RawError:   fmt.Errorf("azure cloud provider throttled for operation %s with reason %q", "GetBlobContainer", "client throttled"),
-		RetryAfter: time.Unix(100, 0),
-	}
-	assert.Empty(t, container)
-	assert.Equal(t, throttleErr, rerr)
-
-	// test rate limit
-	container, rerr = blobClient.GetContainer(context.Background(), "", "resourceGroupName", "accountName", "containerName")
-	assert.Empty(t, container)
-	rateLimitedErr := &retry.Error{
-		Retriable: true,
-		RawError:  fmt.Errorf("azure cloud provider %s(%s) for operation %q", retry.RateLimited, "read", "GetBlobContainer"),
-	}
-	assert.Equal(t, rateLimitedErr, rerr)
 }
 
 func getTestBlobClient(armClient armclient.Interface) *Client {
-	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(
-		&azclients.RateLimitConfig{
-			CloudProviderRateLimit:            true,
-			CloudProviderRateLimitQPS:         3,
-			CloudProviderRateLimitBucket:      3,
-			CloudProviderRateLimitQPSWrite:    3,
-			CloudProviderRateLimitBucketWrite: 3,
-		})
 	return &Client{
-		armClient:         armClient,
-		subscriptionID:    "subscriptionID",
-		rateLimiterReader: rateLimiterReader,
-		rateLimiterWriter: rateLimiterWriter,
-		now:               func() time.Time { return time.Unix(99, 0) },
+		armClient:      armClient,
+		subscriptionID: "subscriptionID",
 	}
 }

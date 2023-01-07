@@ -20,12 +20,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog/v2"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
@@ -41,17 +39,6 @@ type Client struct {
 	armClient      armclient.Interface
 	subscriptionID string
 	cloudName      string
-
-	// Rate limiting configures.
-	rateLimiterReader flowcontrol.RateLimiter
-	rateLimiterWriter flowcontrol.RateLimiter
-
-	// ARM throttling configures.
-	RetryAfterReader time.Time
-	RetryAfterWriter time.Time
-
-	// now allows for injecting fake or real now time into code
-	now func() time.Time
 }
 
 // New creates a blobContainersClient
@@ -66,24 +53,11 @@ func New(config *azclients.ClientConfig) *Client {
 
 	klog.V(2).Infof("Azure BlobClient using API version: %s", apiVersion)
 	armClient := armclient.New(authorizer, *config, baseURI, apiVersion)
-	rateLimiterReader, rateLimiterWriter := azclients.NewRateLimiter(config.RateLimitConfig)
-
-	if azclients.RateLimitEnabled(config.RateLimitConfig) {
-		klog.V(2).Infof("Azure BlobClient (read ops) using rate limit config: QPS=%g, bucket=%d",
-			config.RateLimitConfig.CloudProviderRateLimitQPS,
-			config.RateLimitConfig.CloudProviderRateLimitBucket)
-		klog.V(2).Infof("Azure BlobClient (write ops) using rate limit config: QPS=%g, bucket=%d",
-			config.RateLimitConfig.CloudProviderRateLimitQPSWrite,
-			config.RateLimitConfig.CloudProviderRateLimitBucketWrite)
-	}
 
 	client := &Client{
-		armClient:         armClient,
-		rateLimiterReader: rateLimiterReader,
-		rateLimiterWriter: rateLimiterWriter,
-		subscriptionID:    config.SubscriptionID,
-		cloudName:         config.CloudName,
-		now:               time.Now,
+		armClient:      armClient,
+		subscriptionID: config.SubscriptionID,
+		cloudName:      config.CloudName,
 	}
 
 	return client
@@ -97,31 +71,16 @@ func (c *Client) CreateContainer(ctx context.Context, subsID, resourceGroupName,
 
 	mc := metrics.NewMetricContext("blob_container", "create", resourceGroupName, subsID, "")
 
-	// Report errors if the client is rate limited.
-	if !c.rateLimiterWriter.TryAccept() {
-		mc.RateLimitedCount()
-		return retry.GetRateLimitError(true, "CreateBlobContainer")
-	}
-
-	// Report errors if the client is throttled.
-	if c.RetryAfterWriter.After(c.now()) {
-		mc.ThrottledCount()
-		rerr := retry.GetThrottlingError("CreateBlobContainer", "client throttled", c.RetryAfterWriter)
-		return rerr
-	}
-
 	rerr := c.createContainer(ctx, subsID, resourceGroupName, accountName, containerName, parameters)
 	mc.Observe(rerr)
-	if rerr != nil {
-		if rerr.IsThrottled() {
-			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
-			c.RetryAfterWriter = rerr.RetryAfter
-		}
-
-		return rerr
+	if retry.IsClientRateLimited(rerr) {
+		mc.RateLimitedCount()
+	}
+	if retry.IsClientThrottled(rerr) {
+		mc.ThrottledCount()
 	}
 
-	return nil
+	return rerr
 }
 
 func (c *Client) createContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string, parameters storage.BlobContainer) *retry.Error {
@@ -160,31 +119,16 @@ func (c *Client) DeleteContainer(ctx context.Context, subsID, resourceGroupName,
 
 	mc := metrics.NewMetricContext("blob_container", "delete", resourceGroupName, subsID, "")
 
-	// Report errors if the client is rate limited.
-	if !c.rateLimiterWriter.TryAccept() {
-		mc.RateLimitedCount()
-		return retry.GetRateLimitError(true, "BlobContainerDelete")
-	}
-
-	// Report errors if the client is throttled.
-	if c.RetryAfterWriter.After(c.now()) {
-		mc.ThrottledCount()
-		rerr := retry.GetThrottlingError("BlobContainerDelete", "client throttled", c.RetryAfterWriter)
-		return rerr
-	}
-
 	rerr := c.deleteContainer(ctx, subsID, resourceGroupName, accountName, containerName)
 	mc.Observe(rerr)
-	if rerr != nil {
-		if rerr.IsThrottled() {
-			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
-			c.RetryAfterWriter = rerr.RetryAfter
-		}
-
-		return rerr
+	if retry.IsClientRateLimited(rerr) {
+		mc.RateLimitedCount()
+	}
+	if retry.IsClientThrottled(rerr) {
+		mc.ThrottledCount()
 	}
 
-	return nil
+	return rerr
 }
 
 func (c *Client) deleteContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) *retry.Error {
@@ -209,31 +153,16 @@ func (c *Client) GetContainer(ctx context.Context, subsID, resourceGroupName, ac
 
 	mc := metrics.NewMetricContext("blob_container", "get", resourceGroupName, subsID, "")
 
-	// Report errors if the client is rate limited.
-	if !c.rateLimiterReader.TryAccept() {
-		mc.RateLimitedCount()
-		return storage.BlobContainer{}, retry.GetRateLimitError(false, "GetBlobContainer")
-	}
-
-	// Report errors if the client is throttled.
-	if c.RetryAfterReader.After(c.now()) {
-		mc.ThrottledCount()
-		rerr := retry.GetThrottlingError("GetBlobContainer", "client throttled", c.RetryAfterReader)
-		return storage.BlobContainer{}, rerr
-	}
-
 	container, rerr := c.getContainer(ctx, subsID, resourceGroupName, accountName, containerName)
 	mc.Observe(rerr)
-	if rerr != nil {
-		if rerr.IsThrottled() {
-			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
-			c.RetryAfterReader = rerr.RetryAfter
-		}
-
-		return container, rerr
+	if retry.IsClientRateLimited(rerr) {
+		mc.RateLimitedCount()
+	}
+	if retry.IsClientThrottled(rerr) {
+		mc.ThrottledCount()
 	}
 
-	return container, nil
+	return container, rerr
 }
 
 func (c *Client) getContainer(ctx context.Context, subsID, resourceGroupName, accountName, containerName string) (storage.BlobContainer, *retry.Error) {

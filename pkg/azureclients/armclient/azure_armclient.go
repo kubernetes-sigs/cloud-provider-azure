@@ -147,6 +147,16 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		backoff.Steps = 1
 	}
 
+	rateLimiterReader, rateLimiterWriter := azureclients.NewRateLimiter(clientConfig.RateLimitConfig)
+	if azureclients.RateLimitEnabled(clientConfig.RateLimitConfig) {
+		klog.V(2).Infof("ARM Client (read ops) using rate limit config: QPS=%g, bucket=%d",
+			clientConfig.RateLimitConfig.CloudProviderRateLimitQPS,
+			clientConfig.RateLimitConfig.CloudProviderRateLimitBucket)
+		klog.V(2).Infof("ARM Client (write ops) using rate limit config: QPS=%g, bucket=%d",
+			clientConfig.RateLimitConfig.CloudProviderRateLimitQPSWrite,
+			clientConfig.RateLimitConfig.CloudProviderRateLimitBucketWrite)
+	}
+
 	url, _ := url.Parse(baseURI)
 
 	client := &Client{
@@ -155,10 +165,15 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		apiVersion:       apiVersion,
 		regionalEndpoint: fmt.Sprintf("%s.%s", clientConfig.Location, url.Host),
 	}
+
+	readRetryAfter, writeRetryAfter := new(time.Time), new(time.Time)
+
 	client.client.Sender = autorest.DecorateSender(client.client,
 		autorest.DoCloseIfError(),
 		retry.DoExponentialBackoffRetry(backoff),
 		DoDumpRequest(10),
+		WithClientRateLimiter(rateLimiterReader, rateLimiterWriter),
+		WithClientThrottle(readRetryAfter, writeRetryAfter),
 	)
 
 	client.client.Sender = autorest.DecorateSender(client.client.Sender, sendDecoraters...)

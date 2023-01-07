@@ -194,3 +194,58 @@ func DoHackRegionalRetryForGET(c *Client) autorest.SendDecorator {
 		})
 	}
 }
+
+func WithClientRateLimiter(readRateLimiter, writeRateLimiter flowcontrol.RateLimiter) autorest.SendDecorator {
+	return func(s autorest.Sender) autorest.Sender {
+		return autorest.SenderFunc(func(r *http.Request) (resp *http.Response, err error) {
+			var rateLimiter flowcontrol.RateLimiter
+			if r.Method == http.MethodGet {
+				rateLimiter = readRateLimiter
+			} else {
+				rateLimiter = writeRateLimiter
+			}
+
+			if !rateLimiter.TryAccept() {
+				return nil, retry.ErrClientRateLimited{
+					IsWrite: r.Method != http.MethodGet,
+					OpName:  r.Method + " " + r.URL.Path,
+				}
+			}
+			return s.Do(r)
+		})
+	}
+}
+
+func WithClientThrottle(readRetryAfter, writeRetryAfter *time.Time) autorest.SendDecorator {
+	return func(s autorest.Sender) autorest.Sender {
+		return autorest.SenderFunc(func(r *http.Request) (resp *http.Response, err error) {
+			var retryAfter *time.Time
+			if r.Method == http.MethodGet {
+				retryAfter = readRetryAfter
+			} else {
+				retryAfter = writeRetryAfter
+			}
+
+			if retryAfter != nil && retryAfter.After(time.Now()) {
+				return nil, retry.ErrClientThrottled{
+					Operation:  r.Method + " " + r.URL.Path,
+					Reason:     "client throttled",
+					RetryAfter: *retryAfter,
+				}
+			}
+
+			resp, err = s.Do(r)
+
+			rerr := retry.GetError(resp, err)
+			if rerr != nil && rerr.HTTPStatusCode == http.StatusTooManyRequests && !rerr.RetryAfter.IsZero() {
+				if r.Method == http.MethodGet {
+					*readRetryAfter = rerr.RetryAfter
+				} else {
+					*writeRetryAfter = rerr.RetryAfter
+				}
+			}
+
+			return resp, err
+		})
+	}
+}

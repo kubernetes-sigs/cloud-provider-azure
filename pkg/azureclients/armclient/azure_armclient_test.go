@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,6 +161,119 @@ func TestSendFailure(t *testing.T) {
 	assert.NotNil(t, rerr)
 	assert.Equal(t, 3, count)
 	assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
+}
+
+func TestClientRateLimited(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	azConfig := azureclients.ClientConfig{
+		UserAgent: "test",
+		Location:  "eastus",
+		RateLimitConfig: &azureclients.RateLimitConfig{
+			CloudProviderRateLimit:            true,
+			CloudProviderRateLimitQPS:         1,
+			CloudProviderRateLimitBucket:      1,
+			CloudProviderRateLimitQPSWrite:    2,
+			CloudProviderRateLimitBucketWrite: 2,
+		},
+	}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", "testgroup"),
+		"subscriptionId":    autorest.Encode("path", "testid"),
+		"resourceName":      autorest.Encode("path", "testname"),
+	}
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithPathParameters(
+			"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/vNets/{resourceName}", pathParameters),
+	}
+
+	ctx := context.Background()
+	request, err := armClient.PrepareGetRequest(ctx, decorators...)
+	assert.NoError(t, err)
+
+	response, rerr := armClient.Send(ctx, request)
+	assert.Nil(t, rerr)
+	assert.NotNil(t, response)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.Nil(t, response)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client rate limited"))
+
+	// write request
+	request, err = armClient.PreparePutRequest(ctx, decorators...)
+	assert.NoError(t, err)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.Nil(t, rerr)
+	assert.NotNil(t, response)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.Nil(t, rerr)
+	assert.NotNil(t, response)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.Nil(t, response)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client rate limited"))
+}
+
+func TestClientThrottled(t *testing.T) {
+	count := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(consts.RetryAfterHeaderKey, "1")
+		http.Error(w, "failed", http.StatusTooManyRequests)
+		count++
+	}))
+
+	azConfig := azureclients.ClientConfig{UserAgent: "test", Location: "eastus"}
+	armClient := New(nil, azConfig, server.URL, "2019-01-01")
+	pathParameters := map[string]interface{}{
+		"resourceGroupName": autorest.Encode("path", "testgroup"),
+		"subscriptionId":    autorest.Encode("path", "testid"),
+		"resourceName":      autorest.Encode("path", "testname"),
+	}
+	decorators := []autorest.PrepareDecorator{
+		autorest.WithPathParameters(
+			"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/vNets/{resourceName}", pathParameters),
+	}
+
+	ctx := context.Background()
+	request, err := armClient.PrepareGetRequest(ctx, decorators...)
+	assert.NoError(t, err)
+
+	response, rerr := armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client throttled"))
+
+	//write request
+	request, err = armClient.PreparePutRequest(ctx, decorators...)
+	assert.NoError(t, err)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
+
+	response, rerr = armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client throttled"))
+
+	time.Sleep(2 * time.Second)
+	response, rerr = armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 3, count)
+	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
 }
 
 func TestSendThrottled(t *testing.T) {
