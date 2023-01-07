@@ -1306,6 +1306,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	loadBalancerName := match[1]
 	Expect(loadBalancerName).NotTo(Equal(""))
 	utils.Logf("Got loadBalancerName %q", loadBalancerName)
+	utils.Logf("test")
 
 	//Get backendpools list
 	By("Getting loadBalancer")
