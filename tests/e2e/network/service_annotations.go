@@ -84,6 +84,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Creating Azure clients")
+		utils.Logf("Test")
 		tc, err = utils.CreateAzureTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
