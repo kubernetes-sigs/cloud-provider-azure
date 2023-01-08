@@ -201,7 +201,11 @@ func TestClientRateLimited(t *testing.T) {
 	response, rerr = armClient.Send(ctx, request)
 	assert.Nil(t, response)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client rate limited"))
+	assert.Equal(t, true, rerr.Retriable)
+	assert.Equal(t, true, rerr.RetryAfter.IsZero())
+	assert.Equal(t, true, rerr.HTTPStatusCode == 0)
+	assert.Equal(t, true, strings.EqualFold(rerr.RawError.Error(),
+		"azure cloud provider rate limited (read) for operation \"GET /subscriptions/testid/resourceGroups/testgroup/providers/Microsoft.Network/vNets/testname\""))
 
 	// write request
 	request, err = armClient.PreparePutRequest(ctx, decorators...)
@@ -218,7 +222,11 @@ func TestClientRateLimited(t *testing.T) {
 	response, rerr = armClient.Send(ctx, request)
 	assert.Nil(t, response)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client rate limited"))
+	assert.Equal(t, true, rerr.Retriable)
+	assert.Equal(t, true, rerr.RetryAfter.IsZero())
+	assert.Equal(t, true, rerr.HTTPStatusCode == 0)
+	assert.Equal(t, true, strings.EqualFold(rerr.RawError.Error(),
+		"azure cloud provider rate limited (write) for operation \"PUT /subscriptions/testid/resourceGroups/testgroup/providers/Microsoft.Network/vNets/testname\""))
 }
 
 func TestClientThrottled(t *testing.T) {
@@ -229,7 +237,10 @@ func TestClientThrottled(t *testing.T) {
 		count++
 	}))
 
-	azConfig := azureclients.ClientConfig{UserAgent: "test", Location: "eastus"}
+	timeAfter := new(time.Duration)
+
+	retry.Now = func() time.Time { return time.Time{} }
+	azConfig := azureclients.ClientConfig{UserAgent: "test", Location: "eastus", Now: func() time.Time { return time.Time{}.Add(*timeAfter) }}
 	armClient := New(nil, azConfig, server.URL, "2019-01-01")
 	pathParameters := map[string]interface{}{
 		"resourceGroupName": autorest.Encode("path", "testgroup"),
@@ -253,26 +264,41 @@ func TestClientThrottled(t *testing.T) {
 	response, rerr = armClient.Send(ctx, request)
 	assert.NotNil(t, rerr)
 	assert.Equal(t, 1, count)
-	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client throttled"))
+	assert.Equal(t, true, rerr.Retriable)
+	assert.Equal(t, true, rerr.RetryAfter.Equal(time.Time{}.Add(time.Second)))
+	assert.Equal(t, true, rerr.HTTPStatusCode == 0)
+	assert.Equal(t, true, strings.EqualFold(rerr.RawError.Error(),
+		"azure cloud provider throttled for operation GET /subscriptions/testid/resourceGroups/testgroup/providers/Microsoft.Network/vNets/testname with reason \"client throttled\""))
 
+	*timeAfter = 2 * time.Second
+	response, rerr = armClient.Send(ctx, request)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
+
+	*timeAfter = 0 * time.Second
 	//write request
 	request, err = armClient.PreparePutRequest(ctx, decorators...)
 	assert.NoError(t, err)
 
 	response, rerr = armClient.Send(ctx, request)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, 2, count)
+	assert.Equal(t, 3, count)
 	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
 
 	response, rerr = armClient.Send(ctx, request)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, 2, count)
-	assert.Equal(t, true, strings.Contains(rerr.Error().Error(), "client throttled"))
+	assert.Equal(t, 3, count)
+	assert.Equal(t, true, rerr.Retriable)
+	assert.Equal(t, true, rerr.RetryAfter.Equal(time.Time{}.Add(time.Second)))
+	assert.Equal(t, true, rerr.HTTPStatusCode == 0)
+	assert.Equal(t, true, strings.EqualFold(rerr.RawError.Error(),
+		"azure cloud provider throttled for operation PUT /subscriptions/testid/resourceGroups/testgroup/providers/Microsoft.Network/vNets/testname with reason \"client throttled\""))
 
-	time.Sleep(2 * time.Second)
+	*timeAfter = 2 * time.Second
 	response, rerr = armClient.Send(ctx, request)
 	assert.NotNil(t, rerr)
-	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, count)
 	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
 }
 

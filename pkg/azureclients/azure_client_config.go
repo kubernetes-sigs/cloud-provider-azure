@@ -38,6 +38,8 @@ type ClientConfig struct {
 	Backoff                 *retry.Backoff
 	UserAgent               string
 	DisableAzureStackCloud  bool
+
+	Now func() time.Time // To mock out time.Now() for testing.
 }
 
 // WithRateLimiter returns a new ClientConfig with rateLimitConfig set.

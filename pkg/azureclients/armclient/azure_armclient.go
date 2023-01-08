@@ -147,6 +147,10 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		backoff.Steps = 1
 	}
 
+	if clientConfig.Now == nil {
+		clientConfig.Now = time.Now
+	}
+
 	rateLimiterReader, rateLimiterWriter := azureclients.NewRateLimiter(clientConfig.RateLimitConfig)
 	if azureclients.RateLimitEnabled(clientConfig.RateLimitConfig) {
 		klog.V(2).Infof("ARM Client (read ops) using rate limit config: QPS=%g, bucket=%d",
@@ -173,7 +177,7 @@ func New(authorizer autorest.Authorizer, clientConfig azureclients.ClientConfig,
 		retry.DoExponentialBackoffRetry(backoff),
 		DoDumpRequest(10),
 		WithClientRateLimiter(rateLimiterReader, rateLimiterWriter),
-		WithClientThrottle(readRetryAfter, writeRetryAfter),
+		WithClientThrottle(readRetryAfter, writeRetryAfter, clientConfig.Now),
 	)
 
 	client.client.Sender = autorest.DecorateSender(client.client.Sender, sendDecoraters...)

@@ -893,6 +893,7 @@ func (az *Cloud) getAzureClientConfig(servicePrincipalToken *adal.ServicePrincip
 		Backoff:                 &retry.Backoff{Steps: 1},
 		DisableAzureStackCloud:  az.Config.DisableAzureStackCloud,
 		UserAgent:               az.Config.UserAgent,
+		Now:                     time.Now,
 	}
 
 	if az.Config.CloudProviderBackoff {

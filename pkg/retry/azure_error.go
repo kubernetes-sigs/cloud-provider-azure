@@ -39,7 +39,7 @@ const RateLimited = "rate limited"
 
 var (
 	// The function to get current time.
-	now = time.Now
+	Now = time.Now
 
 	// StatusCodesForRetry are a defined group of status code for which the client will retry.
 	StatusCodesForRetry = []int{
@@ -80,7 +80,7 @@ func (err *Error) Error() error {
 
 	// Convert time to seconds for better logging.
 	retryAfterSeconds := 0
-	curTime := now()
+	curTime := Now()
 	if err.RetryAfter.After(curTime) {
 		retryAfterSeconds = int(err.RetryAfter.Sub(curTime) / time.Second)
 	}
@@ -95,7 +95,7 @@ func (err *Error) IsThrottled() bool {
 		return false
 	}
 
-	return err.HTTPStatusCode == http.StatusTooManyRequests || err.RetryAfter.After(now())
+	return err.HTTPStatusCode == http.StatusTooManyRequests || err.RetryAfter.After(Now())
 }
 
 // IsNotFound returns true the if the requested object wasn't found
@@ -141,7 +141,7 @@ func (e ErrClientRateLimited) Error() string {
 	if e.IsWrite {
 		opType = "write"
 	}
-	return fmt.Sprintf("azure cloud provider client rate limited (%s) for operation %q", opType, e.OpName)
+	return fmt.Sprintf("azure cloud provider rate limited (%s) for operation %q", opType, e.OpName)
 }
 
 type ErrClientThrottled struct {
@@ -151,7 +151,7 @@ type ErrClientThrottled struct {
 }
 
 func (e ErrClientThrottled) Error() string {
-	return fmt.Sprintf("azure cloud provider client throttled for operation %s with reason %q", e.Operation, e.Reason)
+	return fmt.Sprintf("azure cloud provider throttled for operation %s with reason %q", e.Operation, e.Reason)
 }
 
 // GetRateLimitError creates a new error for rate limiting.
@@ -207,7 +207,7 @@ func GetError(resp *http.Response, err error) *Error {
 
 	retryAfter := time.Time{}
 	if retryAfterDuration := getRetryAfter(resp); retryAfterDuration != 0 {
-		retryAfter = now().Add(retryAfterDuration)
+		retryAfter = Now().Add(retryAfterDuration)
 	}
 	return &Error{
 		RawError:       getRawError(resp, err),
@@ -301,7 +301,7 @@ func getRetryAfter(resp *http.Response) time.Duration {
 	if retryAfter, _ := strconv.Atoi(ra); retryAfter > 0 {
 		dur = time.Duration(retryAfter) * time.Second
 	} else if t, err := time.Parse(time.RFC1123, ra); err == nil {
-		dur = t.Sub(now())
+		dur = t.Sub(Now())
 	}
 	return dur
 }

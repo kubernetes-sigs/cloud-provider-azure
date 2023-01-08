@@ -216,7 +216,7 @@ func WithClientRateLimiter(readRateLimiter, writeRateLimiter flowcontrol.RateLim
 	}
 }
 
-func WithClientThrottle(readRetryAfter, writeRetryAfter *time.Time) autorest.SendDecorator {
+func WithClientThrottle(readRetryAfter, writeRetryAfter *time.Time, now func() time.Time) autorest.SendDecorator {
 	return func(s autorest.Sender) autorest.Sender {
 		return autorest.SenderFunc(func(r *http.Request) (resp *http.Response, err error) {
 			var retryAfter *time.Time
@@ -226,7 +226,7 @@ func WithClientThrottle(readRetryAfter, writeRetryAfter *time.Time) autorest.Sen
 				retryAfter = writeRetryAfter
 			}
 
-			if retryAfter != nil && retryAfter.After(time.Now()) {
+			if retryAfter != nil && retryAfter.After(now()) {
 				return nil, retry.ErrClientThrottled{
 					Operation:  r.Method + " " + r.URL.Path,
 					Reason:     "client throttled",

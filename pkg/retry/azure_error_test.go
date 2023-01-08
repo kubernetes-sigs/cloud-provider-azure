@@ -71,7 +71,7 @@ func TestGetThrottlingError(t *testing.T) {
 }
 
 func TestGetError(t *testing.T) {
-	now = func() time.Time {
+	Now = func() time.Time {
 		return time.Time{}
 	}
 
@@ -125,7 +125,7 @@ func TestGetError(t *testing.T) {
 			expected: &Error{
 				Retriable:      false,
 				HTTPStatusCode: http.StatusTooManyRequests,
-				RetryAfter:     now().Add(100 * time.Second),
+				RetryAfter:     Now().Add(100 * time.Second),
 				RawError:       fmt.Errorf("some error"),
 			},
 		},
@@ -159,7 +159,7 @@ func TestGetErrorNil(t *testing.T) {
 }
 
 func TestGetStatusNotFoundAndForbiddenIgnoredError(t *testing.T) {
-	now = func() time.Time {
+	Now = func() time.Time {
 		return time.Time{}
 	}
 
@@ -221,7 +221,7 @@ func TestGetStatusNotFoundAndForbiddenIgnoredError(t *testing.T) {
 			expected: &Error{
 				Retriable:      false,
 				HTTPStatusCode: http.StatusTooManyRequests,
-				RetryAfter:     now().Add(100 * time.Second),
+				RetryAfter:     Now().Add(100 * time.Second),
 				RawError:       fmt.Errorf("some error"),
 			},
 		},
@@ -388,7 +388,7 @@ func TestGetVMSSNameByRawError(t *testing.T) {
 }
 
 func TestServiceServiceErrorMessage(t *testing.T) {
-	now = func() time.Time {
+	Now = func() time.Time {
 		return time.Time{}
 	}
 
@@ -428,7 +428,7 @@ func TestServiceServiceErrorMessage(t *testing.T) {
 }
 
 func TestServiceErrorCode(t *testing.T) {
-	now = func() time.Time {
+	Now = func() time.Time {
 		return time.Time{}
 	}
 
