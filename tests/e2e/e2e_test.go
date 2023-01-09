@@ -32,6 +32,7 @@ import (
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/autoscaling"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/network"
 	_ "sigs.k8s.io/cloud-provider-azure/tests/e2e/node"
+	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
 const (
@@ -73,5 +74,14 @@ func TestAzureTest(t *testing.T) {
 
 	reporterConfig.Verbose = true
 	reporterConfig.JUnitReport = path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", GinkgoParallelProcess()))
-	RunSpecs(t, "Cloud provider Azure e2e suite", suiteConfig, reporterConfig)
+	passed := RunSpecs(t, "Cloud provider Azure e2e suite", suiteConfig, reporterConfig)
+
+	// If it is the test result of the upstream AKS pipeline, it should be ingested to kusto.
+	if !strings.EqualFold(os.Getenv(utils.IngestTestResult), utils.TrueValue) {
+		return
+	}
+	klog.Infof("Ingesting test result to kusto")
+	if err := utils.KustoIngest(passed, suiteConfig.LabelFilter, os.Getenv(utils.AKSClusterType), reporterConfig.JUnitReport); err != nil {
+		klog.Error(err)
+	}
 }
