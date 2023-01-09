@@ -1009,3 +1009,131 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 		assert.Equal(t, result, test.expectedResult)
 	}
 }
+
+func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableLargeFileShare: pointer.Bool(false),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableLargeFileShare: pointer.Bool(true),
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableLargeFileShare: pointer.Bool(true),
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					LargeFileSharesState: storage.LargeFileSharesStateEnabled,
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableLargeFileShare: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isLargeFileSharesPropertyEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}
+
+func TestIsAccessTierEqual(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AccessTier: storage.AccessTierCool,
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AccessTier: storage.AccessTierHot,
+				},
+			},
+			accountOptions: &AccountOptions{
+				AccessTier: "Hot",
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AccessTier: storage.AccessTierPremium,
+				},
+			},
+			accountOptions: &AccountOptions{
+				AccessTier: "Premium",
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				AccessTier: "Hot",
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					AccessTier: storage.AccessTierPremium,
+				},
+			},
+			accountOptions: &AccountOptions{
+				AccessTier: "Hot",
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isAccessTierEqual(test.account, test.accountOptions)
+		assert.Equal(t, result, test.expectedResult)
+	}
+}

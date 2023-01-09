@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
@@ -52,11 +51,11 @@ type AccountOptions struct {
 	EnableHTTPSTrafficOnly                    bool
 	// indicate whether create new account when Name is empty or when account does not exists
 	CreateAccount                           bool
-	EnableLargeFileShare                    bool
 	CreatePrivateEndpoint                   bool
 	StorageType                             StorageType
 	StorageEndpointSuffix                   string
 	DisableFileServiceDeleteRetentionPolicy bool
+	EnableLargeFileShare                    *bool
 	IsHnsEnabled                            *bool
 	EnableNfsV3                             *bool
 	AllowBlobPublicAccess                   *bool
@@ -104,6 +103,7 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				isAllowBlobPublicAccessEqual(acct, accountOptions) &&
 				isRequireInfrastructureEncryptionEqual(acct, accountOptions) &&
 				isAllowSharedKeyAccessEqual(acct, accountOptions) &&
+				isAccessTierEqual(acct, accountOptions) &&
 				isPrivateEndpointAsExpected(acct, accountOptions)) {
 				continue
 			}
@@ -303,9 +303,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			Tags:     tags,
 			Location: &location}
 
-		if accountOptions.EnableLargeFileShare {
-			klog.V(2).Infof("Enabling LargeFileShare for storage account(%s)", accountName)
-			cp.AccountPropertiesCreateParameters.LargeFileSharesState = storage.LargeFileSharesStateEnabled
+		if accountOptions.EnableLargeFileShare != nil {
+			state := storage.LargeFileSharesStateDisabled
+			if *accountOptions.EnableLargeFileShare {
+				state = storage.LargeFileSharesStateEnabled
+			}
+			klog.V(2).Infof("enable LargeFileShare(%s) for storage account(%s)", state, accountName)
+			cp.AccountPropertiesCreateParameters.LargeFileSharesState = state
 		}
 		if accountOptions.AllowBlobPublicAccess != nil {
 			klog.V(2).Infof("set AllowBlobPublicAccess(%v) for storage account(%s)", *accountOptions.AllowBlobPublicAccess, accountName)
@@ -587,10 +591,13 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 }
 
 func isLargeFileSharesPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if account.Sku.Tier != storage.SkuTier(compute.StorageAccountTypesPremiumLRS) && accountOptions.EnableLargeFileShare && (len(account.LargeFileSharesState) == 0 || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled) {
-		return false
+	if accountOptions.EnableLargeFileShare == nil {
+		return true
 	}
-	return true
+	if *accountOptions.EnableLargeFileShare {
+		return account.LargeFileSharesState == storage.LargeFileSharesStateEnabled
+	}
+	return account.LargeFileSharesState == "" || account.LargeFileSharesState == storage.LargeFileSharesStateDisabled
 }
 
 func isTaggedWithSkip(account storage.Account) bool {
@@ -675,4 +682,11 @@ func isAllowSharedKeyAccessEqual(account storage.Account, accountOptions *Accoun
 		return true
 	}
 	return pointer.BoolDeref(account.AllowSharedKeyAccess, false) == pointer.BoolDeref(accountOptions.AllowSharedKeyAccess, false)
+}
+
+func isAccessTierEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.AccessTier == "" {
+		return true
+	}
+	return accountOptions.AccessTier == string(account.AccessTier)
 }
