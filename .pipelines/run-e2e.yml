@@ -12,10 +12,12 @@ steps:
       export AZURE_CLIENT_ID=$SP_CLIENT_ID
       export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
       export ARTIFACT_DIR=$BUILD_ARTIFACT_STAGING_DIRECTORY
+      export KUSTO_INGESTION_URI=$KUSTO_INGESTION_URI
 
       export RESOURCE_GROUP=$(RESOURCE_GROUP)
       export CLUSTER_NAME=$(CLUSTER_NAME)
       export CLUSTER_TYPE=$(CLUSTER_TYPE)
+      export INGEST_TEST_RESULT="true"
 
       .pipelines/scripts/run-e2e.sh
     displayName: create an aks cluster and run e2e
@@ -27,6 +29,7 @@ steps:
       SP_CLIENT_SECRET: $(sp.client_secret)
       BUILD_ARTIFACT_STAGING_DIRECTORY: $(Build.ArtifactStagingDirectory)
       BUILD_SOURCE_BRANCH_NAME: $(Build.SourceBranchName)
+      KUSTO_INGESTION_URI: $(kusto.ingestion_uri)
 
   - task: PublishBuildArtifacts@1
     inputs:
