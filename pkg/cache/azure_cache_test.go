@@ -17,12 +17,15 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -33,17 +36,24 @@ const (
 type fakeDataObj struct{ Data string }
 
 type fakeDataSource struct {
-	called int
-	data   map[string]*fakeDataObj
-	lock   sync.Mutex
+	sem        semaphore.Weighted
+	wait       sync.WaitGroup
+	called     int
+	concurrent bool
+	data       sync.Map
 }
 
 func (fake *fakeDataSource) get(key string) (interface{}, error) {
-	fake.lock.Lock()
-	defer fake.lock.Unlock()
+	if !fake.sem.TryAcquire(1) {
+		_ = fake.sem.Acquire(context.TODO(), 1)
+		fake.concurrent = true
+	}
+	defer fake.sem.Release(1)
+
+	fake.wait.Wait()
 
 	fake.called = fake.called + 1
-	if v, ok := fake.data[key]; ok {
+	if v, ok := fake.data.Load(key); ok {
 		return v, nil
 	}
 
@@ -51,16 +61,24 @@ func (fake *fakeDataSource) get(key string) (interface{}, error) {
 }
 
 func (fake *fakeDataSource) set(data map[string]*fakeDataObj) {
-	fake.lock.Lock()
-	defer fake.lock.Unlock()
+	_ = fake.sem.Acquire(context.TODO(), 1)
+	defer fake.sem.Release(1)
 
-	fake.data = data
+	fake.data = sync.Map{}
+	for k, v := range data {
+		fake.data.Store(k, v)
+	}
 	fake.called = 0
+	fake.concurrent = false
+}
+
+func (fake *fakeDataSource) update(key string, val *fakeDataObj) {
+	fake.data.Store(key, val)
 }
 
 func newFakeCache(t *testing.T) (*fakeDataSource, *TimedCache) {
 	dataSource := &fakeDataSource{
-		data: make(map[string]*fakeDataObj),
+		sem: *semaphore.NewWeighted(1),
 	}
 	getter := dataSource.get
 	cache, err := NewTimedcache(fakeCacheTTL, getter)
@@ -234,6 +252,45 @@ func TestCacheNoConcurrentGet(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, dataSource.called)
 	assert.Equal(t, val, v, "cache should get correct data")
+}
+
+func TestCacheNoConcurrentGetWithUpdate(t *testing.T) {
+	val := &fakeDataObj{Data: "original"}
+	data := map[string]*fakeDataObj{
+		testKey: val,
+	}
+	expectedVal := &fakeDataObj{Data: "update"}
+	dataSource, cache := newFakeCache(t)
+	dataSource.set(data)
+
+	var wg sync.WaitGroup
+	goGet := func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = cache.Get(testKey, CacheReadTypeForceRefresh)
+		}()
+	}
+	goUpdate := func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dataSource.update(testKey, expectedVal)
+			cache.Update(testKey, expectedVal)
+		}()
+	}
+
+	dataSource.wait.Add(1)
+	goGet()
+	goUpdate()
+	goGet()
+	time.Sleep(100 * time.Millisecond)
+	dataSource.wait.Done()
+
+	wg.Wait()
+
+	assert.Falsef(t, dataSource.concurrent, "cache should not call getter concurrently")
+	assert.Equal(t, 2, dataSource.called)
 }
 
 func TestCacheForceRefresh(t *testing.T) {
