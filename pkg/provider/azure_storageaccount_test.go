@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/mockfileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient/mockprivatednsclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privateendpointclient/mockprivateendpointclient"
@@ -566,7 +567,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 
 	for _, test := range tests {
 		result := isPrivateEndpointAsExpected(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -659,7 +660,7 @@ func TestIsTagsEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isTagsEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -722,7 +723,7 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isHnsPropertyEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -785,7 +786,7 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isEnableNfsV3PropertyEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -848,7 +849,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isAllowBlobPublicAccessEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -911,7 +912,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isAllowSharedKeyAccessEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -1006,7 +1007,7 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isRequireInfrastructureEncryptionEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -1069,7 +1070,7 @@ func TestIsLargeFileSharesPropertyEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isLargeFileSharesPropertyEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }
 
@@ -1134,6 +1135,299 @@ func TestIsAccessTierEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isAccessTierEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
+	}
+}
+
+func TestIsMultichannelEnabledEqual(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	accountName := "account2"
+
+	cloud := GetTestCloud(ctrl)
+
+	multichannelEnabled := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
+			ProtocolSettings: &storage.ProtocolSettings{
+				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: pointer.BoolPtr(true)}},
+			},
+		},
+	}
+
+	multichannelDisabled := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
+			ProtocolSettings: &storage.ProtocolSettings{
+				Smb: &storage.SmbSetting{Multichannel: &storage.Multichannel{Enabled: pointer.BoolPtr(false)}},
+			},
+		},
+	}
+
+	incompleteServiceProperties := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
+			ProtocolSettings: &storage.ProtocolSettings{},
+		},
+	}
+
+	mockFileClient := mockfileclient.NewMockInterface(ctrl)
+	cloud.FileClient = mockFileClient
+	mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
+
+	tests := []struct {
+		desc                      string
+		account                   storage.Account
+		accountOptions            *AccountOptions
+		serviceProperties         *storage.FileServiceProperties
+		servicePropertiesRetError error
+		expectedResult            bool
+	}{
+		{
+			desc: "IsMultichannelEnabled is nil",
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "account.Name is nil",
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+		{
+			desc: "IsMultichannelEnabled not equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(false),
+			},
+			serviceProperties: &multichannelEnabled,
+			expectedResult:    false,
+		},
+		{
+			desc: "GetServiceProperties return error",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(false),
+			},
+			serviceProperties:         &multichannelEnabled,
+			servicePropertiesRetError: fmt.Errorf("GetServiceProperties return error"),
+			expectedResult:            false,
+		},
+		{
+			desc: "IsMultichannelEnabled not equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(true),
+			},
+			serviceProperties: &multichannelDisabled,
+			expectedResult:    false,
+		},
+		{
+			desc: "IsMultichannelEnabled is equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(true),
+			},
+			serviceProperties: &multichannelEnabled,
+			expectedResult:    true,
+		},
+		{
+			desc: "IsMultichannelEnabled is equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(false),
+			},
+			serviceProperties: &multichannelDisabled,
+			expectedResult:    true,
+		},
+		{
+			desc: "incompleteServiceProperties should be regarded as IsMultichannelDisabled",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				IsMultichannelEnabled: pointer.Bool(false),
+			},
+			serviceProperties: &incompleteServiceProperties,
+			expectedResult:    true,
+		},
+	}
+
+	for _, test := range tests {
+		if test.serviceProperties != nil {
+			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
+		}
+
+		result := cloud.isMultichannelEnabledEqual(ctx, test.account, test.accountOptions)
+		assert.Equal(t, test.expectedResult, result, test.desc)
+	}
+}
+
+func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	accountName := "account"
+	cloud := GetTestCloud(ctrl)
+
+	deleteRetentionPolicyEnabled := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
+			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				Enabled: pointer.BoolPtr(true),
+			},
+		},
+	}
+
+	deleteRetentionPolicyDisabled := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
+			ShareDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+				Enabled: pointer.BoolPtr(false),
+			},
+		},
+	}
+
+	incompleteServiceProperties := storage.FileServiceProperties{
+		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{},
+	}
+
+	mockFileClient := mockfileclient.NewMockInterface(ctrl)
+	cloud.FileClient = mockFileClient
+	mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
+
+	tests := []struct {
+		desc                      string
+		account                   storage.Account
+		accountOptions            *AccountOptions
+		serviceProperties         *storage.FileServiceProperties
+		servicePropertiesRetError error
+		expectedResult            bool
+	}{
+		{
+			desc: "DisableFileServiceDeleteRetentionPolicy is nil",
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: true,
+		},
+		{
+			desc: "account.Name is nil",
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(false),
+			},
+			expectedResult: false,
+		},
+		{
+			desc: "DisableFileServiceDeleteRetentionPolicy not equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(true),
+			},
+			serviceProperties: &deleteRetentionPolicyEnabled,
+			expectedResult:    false,
+		},
+		{
+			desc: "GetServiceProperties return error",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(false),
+			},
+			serviceProperties:         &deleteRetentionPolicyEnabled,
+			servicePropertiesRetError: fmt.Errorf("GetServiceProperties return error"),
+			expectedResult:            false,
+		},
+		{
+			desc: "DisableFileServiceDeleteRetentionPolicy not equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(false),
+			},
+			serviceProperties: &deleteRetentionPolicyDisabled,
+			expectedResult:    false,
+		},
+		{
+			desc: "DisableFileServiceDeleteRetentionPolicy is equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(true),
+			},
+			serviceProperties: &deleteRetentionPolicyDisabled,
+			expectedResult:    true,
+		},
+		{
+			desc: "DisableFileServiceDeleteRetentionPolicy is equal",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(false),
+			},
+			serviceProperties: &deleteRetentionPolicyEnabled,
+			expectedResult:    true,
+		},
+		{
+			desc: "incompleteServiceProperties should be regarded as not DisableFileServiceDeleteRetentionPolicy",
+			account: storage.Account{
+				Name:              &accountName,
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				DisableFileServiceDeleteRetentionPolicy: pointer.Bool(false),
+			},
+			serviceProperties: &incompleteServiceProperties,
+			expectedResult:    true,
+		},
+	}
+
+	for _, test := range tests {
+		if test.serviceProperties != nil {
+			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
+		}
+
+		result := cloud.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
+		assert.Equal(t, test.expectedResult, result, test.desc)
 	}
 }
