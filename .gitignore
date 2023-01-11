@@ -8,6 +8,7 @@ _output/
 translations/
 node_modules/
 public/
+!vendor/github.com/AzureAD/microsoft-authentication-library-for-go/apps/public
 site/public/
 
 # bazel
