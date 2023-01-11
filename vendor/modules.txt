@@ -25,7 +25,7 @@ github.com/Azure/azure-kusto-go/kusto/utils
 # github.com/Azure/azure-pipeline-go v0.1.8
 ## explicit
 github.com/Azure/azure-pipeline-go/pipeline
-# github.com/Azure/azure-sdk-for-go v67.2.0+incompatible
+# github.com/Azure/azure-sdk-for-go v67.3.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute
