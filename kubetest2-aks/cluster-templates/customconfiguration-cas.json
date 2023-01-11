@@ -1,9 +1,29 @@
 {
   "kubernetesConfigurations": {
+    "kube-cloud-controller-manager": {
+      "image": "{CUSTOM_CCM_IMAGE}",
+      "config": {
+        "--min-resync-period": "10h0m0s",
+        "--profiling": "false",
+        "--v": "6"
+      }
+    },
+    "kube-cloud-node-manager": {
+      "image": "{CUSTOM_CNM_IMAGE}",
+      "config": {
+        "--node-name": "$(NODE_NAME)",
+        "kube-api-burst": "50",
+        "kube-api-qps": "50"
+      }
+    },
     "cluster-autoscaler": {
       "image": "{CUSTOM_CAS_IMAGE}",
       "config": {
-        "--scan-interval": "5s"
+        "--skip-nodes-with-system-pods": "false",
+        "--scale-down-delay-after-add": "1m",
+        "--scale-down-unneeded-time": "1m",
+        "--scale-down-unready-time": "2m",
+        "--v": "4"
       }
     }
   }

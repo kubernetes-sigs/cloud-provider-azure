@@ -81,13 +81,13 @@ if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
 fi
 
 if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
-  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration-autoscaling.json}"
+  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/kubetest2-aks/cluster-templates/customconfiguration-cas.json}"
 else
   CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
 fi
 
 rm -rf kubetest2-aks
-git clone --single-branch --branch "cas_config_setup" https://github.com/aagusuab/cloud-provider-azure.git
+git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/kubetest2-aks .
 rm -rf cloud-provider-azure
 git config --global --add safe.directory "$(pwd)" || true
