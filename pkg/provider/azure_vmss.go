@@ -171,7 +171,7 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 
 		virtualMachines := cached.(*sync.Map)
 		if vm, ok := virtualMachines.Load(nodeName); ok {
-			result := vm.(*VMSSVirtualMachinesEntry)
+			result := vm.(*VMSSVirtualMachineEntry)
 			found = true
 			return result.VMSSName, result.InstanceID, result.VirtualMachine, found, nil
 		}
@@ -300,7 +300,7 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 
 		virtualMachines := cached.(*sync.Map)
 		virtualMachines.Range(func(key, value interface{}) bool {
-			vmEntry := value.(*VMSSVirtualMachinesEntry)
+			vmEntry := value.(*VMSSVirtualMachineEntry)
 			if strings.EqualFold(vmEntry.ResourceGroup, resourceGroup) &&
 				strings.EqualFold(vmEntry.VMSSName, scaleSetName) &&
 				strings.EqualFold(vmEntry.InstanceID, instanceID) {
