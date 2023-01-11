@@ -958,7 +958,7 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			assert.Nil(t, err)
 			virtualMachines := cached.(*sync.Map)
 			for _, vm := range test.goneVMList {
-				entry := VMSSVirtualMachinesEntry{
+				entry := VMSSVirtualMachineEntry{
 					ResourceGroup: ss.ResourceGroup,
 					VMSSName:      testVMSSName,
 				}

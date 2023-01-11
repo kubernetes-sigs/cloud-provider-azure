@@ -122,8 +122,13 @@ func (t *TimedCache) getInternal(key string) (*AzureCacheEntry, error) {
 	return newEntry, nil
 }
 
-// Get returns the requested item by key with deep copy.
+// Get returns the requested item by key.
 func (t *TimedCache) Get(key string, crt AzureCacheReadType) (interface{}, error) {
+	return t.get(key, crt)
+}
+
+// Get returns the requested item by key with deep copy.
+func (t *TimedCache) GetWithDeepCopy(key string, crt AzureCacheReadType) (interface{}, error) {
 	data, err := t.get(key, crt)
 	copied := deepcopy.Copy(data)
 	return copied, err

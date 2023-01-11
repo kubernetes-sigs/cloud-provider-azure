@@ -172,7 +172,7 @@ func (ss *ScaleSet) getVmssVMByNodeIdentity(node *nodeIdentity, crt azcache.Azur
 
 		virtualMachines := cached.(*sync.Map)
 		if entry, ok := virtualMachines.Load(nodeName); ok {
-			result := entry.(*VMSSVirtualMachinesEntry)
+			result := entry.(*VMSSVirtualMachineEntry)
 			if result.VirtualMachine == nil {
 				klog.Warningf("VM is nil on Node %q, VM is in deleting state", nodeName)
 				return nil, true, nil
@@ -309,7 +309,7 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 
 		virtualMachines := cached.(*sync.Map)
 		virtualMachines.Range(func(key, value interface{}) bool {
-			vmEntry := value.(*VMSSVirtualMachinesEntry)
+			vmEntry := value.(*VMSSVirtualMachineEntry)
 			if strings.EqualFold(vmEntry.ResourceGroup, resourceGroup) &&
 				strings.EqualFold(vmEntry.VMSSName, scaleSetName) &&
 				strings.EqualFold(vmEntry.InstanceID, instanceID) {
