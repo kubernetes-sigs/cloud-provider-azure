@@ -87,7 +87,7 @@ else
 fi
 
 rm -rf kubetest2-aks
-git clone --single-branch --branch "cas_config_setup" "https://github.com/aagusuab/cloud-provider-azure"
+git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
 cp -r cloud-provider-azure/kubetest2-aks .
 rm -rf cloud-provider-azure
 git config --global --add safe.directory "$(pwd)" || true
@@ -146,6 +146,7 @@ fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
-  export LABEL_FILTER=${LABEL_FILTER:-"Feature:Autoscaling || \!Serial && \!Slow"}
+  export LABEL_FILTER=${LABEL_FILTER:-Feature:Autoscaling || !Serial && !Slow}
+  export SKIP_ARGS=${SKIP_ARGS:-""}
 fi
 make test-ccm-e2e

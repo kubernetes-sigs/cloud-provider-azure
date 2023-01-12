@@ -193,7 +193,7 @@ func (d *deployer) prepareCustomConfig() ([]byte, error) {
 	}
 	imageMap["{CUSTOM_CCM_IMAGE}"] = fmt.Sprintf("%s/azure-cloud-controller-manager:%s", prefix, d.CCMImageTag)
 	imageMap["{CUSTOM_CNM_IMAGE}"] = fmt.Sprintf("%s/azure-cloud-node-manager:%s-linux-amd64", prefix, d.CNMImageTag)
-	imageMap["{CUSTOM_CAS_IMAGE}"] = fmt.Sprintf("%s/autoscaler:%s", prefix, d.CASImageTag)
+	imageMap["{CUSTOM_CAS_IMAGE}"] = fmt.Sprintf("%s/autoscaler/cluster-autoscaler:%s", prefix, d.CASImageTag)
 	imageMap["{CUSTOM_AZURE_DISK_IMAGE}"] = fmt.Sprintf("%s/azuredisk-csi:%s", prefix, d.AzureDiskImageTag)
 	imageMap["{CUSTOM_AZURE_FILE_IMAGE}"] = fmt.Sprintf("%s/azurefile-csi:%s", prefix, d.AzureFileImageTag)
 	imageMap["{CUSTOM_KUBE_APISERVER_IMAGE}"] = fmt.Sprintf("%s/kube-apiserver:%s", prefix, d.KubernetesImageTag)
