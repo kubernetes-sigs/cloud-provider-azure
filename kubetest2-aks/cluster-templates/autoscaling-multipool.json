@@ -37,10 +37,6 @@
         "minCount": 1
       }
     ],
-    "servicePrincipalProfile": {
-      "clientId": "{AZURE_CLIENT_ID}",
-      "secret": "{AZURE_CLIENT_SECRET}"
-    },
     "encodedCustomConfiguration": "{CUSTOM_CONFIG}"
   }
 }
