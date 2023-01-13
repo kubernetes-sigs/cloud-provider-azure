@@ -117,6 +117,7 @@ kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
 --ccmImageTag "${IMAGE_TAG:-}" \
+--casImageTag "${CUSTOM_CAS_IMAGE:-}" \
 --kubernetesImageTag "${IMAGE_TAG:-}" \
 --kubeletURL "${KUBELET_URL:-}" \
 --k8sVersion "${AKS_KUBERNETES_VERSION:-}"
@@ -145,6 +146,7 @@ fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
-  export LABEL_FILTER="Feature:Autoscaling || !Serial && !Slow"
+  export LABEL_FILTER=${LABEL_FILTER:-Feature:Autoscaling || !Serial && !Slow}
+  export SKIP_ARGS=${SKIP_ARGS:-""}
 fi
 make test-ccm-e2e
