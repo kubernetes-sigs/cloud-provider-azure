@@ -642,17 +642,11 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 }
 
 func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.IsHnsEnabled == nil {
-		return true
-	}
-	return *accountOptions.IsHnsEnabled == pointer.BoolDeref(account.IsHnsEnabled, false)
+	return pointer.BoolDeref(accountOptions.IsHnsEnabled, false) == pointer.BoolDeref(account.IsHnsEnabled, false)
 }
 
 func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.EnableNfsV3 == nil {
-		return true
-	}
-	return *accountOptions.EnableNfsV3 == pointer.BoolDeref(account.EnableNfsV3, false)
+	return pointer.BoolDeref(accountOptions.EnableNfsV3, false) == pointer.BoolDeref(account.EnableNfsV3, false)
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
@@ -666,27 +660,19 @@ func isPrivateEndpointAsExpected(account storage.Account, accountOptions *Accoun
 }
 
 func isAllowBlobPublicAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.AllowBlobPublicAccess == nil {
-		return true
-	}
-	return *accountOptions.AllowBlobPublicAccess == pointer.BoolDeref(account.AllowBlobPublicAccess, false)
+	return pointer.BoolDeref(accountOptions.AllowBlobPublicAccess, false) == pointer.BoolDeref(account.AllowBlobPublicAccess, false)
 }
 
 func isRequireInfrastructureEncryptionEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.RequireInfrastructureEncryption == nil {
-		return true
-	}
+	requireInfraEncryption := pointer.BoolDeref(accountOptions.RequireInfrastructureEncryption, false)
 	if account.Encryption == nil {
-		return !*accountOptions.RequireInfrastructureEncryption
+		return !requireInfraEncryption
 	}
-	return *accountOptions.RequireInfrastructureEncryption == pointer.BoolDeref(account.Encryption.RequireInfrastructureEncryption, false)
+	return requireInfraEncryption == pointer.BoolDeref(account.Encryption.RequireInfrastructureEncryption, false)
 }
 
 func isAllowSharedKeyAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.AllowSharedKeyAccess == nil {
-		return true
-	}
-	return *accountOptions.AllowSharedKeyAccess == pointer.BoolDeref(account.AllowSharedKeyAccess, false)
+	return pointer.BoolDeref(accountOptions.AllowSharedKeyAccess, false) == pointer.BoolDeref(account.AllowSharedKeyAccess, false)
 }
 
 func isAccessTierEqual(account storage.Account, accountOptions *AccountOptions) bool {
