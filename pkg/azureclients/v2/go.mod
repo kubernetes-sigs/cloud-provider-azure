@@ -17,12 +17,12 @@ require (
 	gopkg.in/dnaeon/go-vcr.v2 v2.3.0
 	k8s.io/client-go v0.26.0
 	k8s.io/klog/v2 v2.80.1
-	sigs.k8s.io/cloud-provider-azure v1.26.2
+	sigs.k8s.io/cloud-provider-azure v1.26.3
 	sigs.k8s.io/controller-tools v0.11.1
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go v67.2.0+incompatible // indirect
+	github.com/Azure/azure-sdk-for-go v67.3.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.1.1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.28 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
+	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -45,7 +45,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4 // indirect
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/mod v0.7.0 // indirect
