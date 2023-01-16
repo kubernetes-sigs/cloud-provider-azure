@@ -34,6 +34,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
 type BackendPool interface {
@@ -141,9 +142,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 		newBackendPools = *lb.BackendAddressPools
 	}
 
-	foundBackendPool := false
-	changed := false
-	shouldRefreshLB := false
+	var foundBackendPool, changed, shouldRefreshLB, isOperationSucceeded, isMigration bool
 	lbName := *lb.Name
 
 	serviceName := getServiceName(service)
@@ -151,6 +150,8 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	lbBackendPoolID := bc.getBackendPoolID(lbName, bc.getLoadBalancerResourceGroup(), lbBackendPoolName)
 	vmSetName := bc.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	isBackendPoolPreConfigured := bc.isBackendPoolPreConfigured(service)
+
+	mc := metrics.NewMetricContext("services", "migrate_to_ip_based_backend_pool", bc.ResourceGroup, bc.getNetworkResourceSubscriptionID(), serviceName)
 
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
 		bp := newBackendPools[i]
@@ -169,6 +170,8 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 			if bp.BackendAddressPoolPropertiesFormat != nil &&
 				bp.LoadBalancerBackendAddresses != nil &&
 				len(*bp.LoadBalancerBackendAddresses) > 0 {
+				isMigration = true
+
 				if removeNodeIPAddressesFromBackendPool(bp, []string{}, true) {
 					if err := bc.CreateOrUpdateLBBackendPool(lbName, bp); err != nil {
 						klog.Errorf("bc.ReconcileBackendPools for service (%s): failed to cleanup IP based backend pool %s: %s", serviceName, lbBackendPoolName, err.Error())
@@ -246,6 +249,13 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 		changed = true
 	}
 
+	if isMigration {
+		defer func() {
+			mc.ObserveOperationWithResult(isOperationSucceeded)
+		}()
+	}
+
+	isOperationSucceeded = true
 	return isBackendPoolPreConfigured, changed, err
 }
 
@@ -449,15 +459,15 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		newBackendPools = *lb.BackendAddressPools
 	}
 
-	foundBackendPool := false
-	changed := false
-	shouldRefreshLB := false
+	var foundBackendPool, changed, shouldRefreshLB, isOperationSucceeded, isMigration bool
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	vmSetName := bi.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	lbBackendPoolID := bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), bi.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
 	isBackendPoolPreConfigured := bi.isBackendPoolPreConfigured(service)
+
+	mc := metrics.NewMetricContext("services", "migrate_to_nic_based_backend_pool", bi.ResourceGroup, bi.getNetworkResourceSubscriptionID(), serviceName)
 
 	var err error
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
@@ -489,6 +499,8 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 				}
 			}
 			if len(nodeIPAddressesToBeDeleted) > 0 {
+				isMigration = true
+
 				updated := removeNodeIPAddressesFromBackendPool(bp, nodeIPAddressesToBeDeleted, false)
 				if updated {
 					(*lb.BackendAddressPools)[i] = bp
@@ -516,6 +528,13 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		changed = true
 	}
 
+	if isMigration {
+		defer func() {
+			mc.ObserveOperationWithResult(isOperationSucceeded)
+		}()
+	}
+
+	isOperationSucceeded = true
 	return isBackendPoolPreConfigured, changed, nil
 }
 
