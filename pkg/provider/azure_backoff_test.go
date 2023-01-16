@@ -194,6 +194,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 	}
 
 	expectedPIP := network.PublicIPAddress{
+		Name: pointer.String("pip"),
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			IPAddress: pointer.String("5.6.7.8"),
 		},
@@ -208,7 +209,7 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 		mockInterfaceClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(expectedInterface, nil).MaxTimes(1)
 
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(expectedPIP, nil).MaxTimes(1)
+		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{expectedPIP}, nil).MaxTimes(1)
 
 		privateIP, publicIP, err := az.GetIPForMachineWithRetry("vm")
 		assert.Equal(t, test.expectedErr, err)
@@ -272,13 +273,13 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "lb", gomock.Any()).Return(network.LoadBalancer{}, nil)
 
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).AnyTimes()
-		mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(network.PublicIPAddress{
+		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).MaxTimes(1)
+		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{{
 			Name: pointer.String("pip"),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 				ProvisioningState: network.ProvisioningStateSucceeded,
 			},
-		}, nil).AnyTimes()
+		}}, nil).MaxTimes(2)
 
 		err := az.CreateOrUpdateLB(&v1.Service{}, network.LoadBalancer{
 			Name: pointer.String("lb"),
@@ -292,7 +293,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		assert.Empty(t, shouldBeEmpty)
 
 		// public ip cache should be populated since there's GetPIP
-		shouldNotBeEmpty, err := az.pipCache.GetWithDeepCopy(az.getPIPCacheKey(az.ResourceGroup, "pip"), cache.CacheReadTypeDefault)
+		shouldNotBeEmpty, err := az.pipCache.Get(az.ResourceGroup, cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, shouldNotBeEmpty)
 	}
@@ -350,34 +351,6 @@ func TestListAgentPoolLBs(t *testing.T) {
 	}
 }
 
-func TestListPIP(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	tests := []struct {
-		clientErr   *retry.Error
-		expectedErr error
-	}{
-		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)),
-		},
-		{
-			clientErr:   &retry.Error{HTTPStatusCode: http.StatusNotFound},
-			expectedErr: nil,
-		},
-	}
-	for _, test := range tests {
-		az := GetTestCloud(ctrl)
-		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(nil, test.clientErr)
-
-		pips, err := az.ListPIP(&v1.Service{}, az.ResourceGroup)
-		assert.Equal(t, test.expectedErr, err)
-		assert.Empty(t, pips)
-	}
-}
-
 func TestCreateOrUpdatePIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -406,18 +379,17 @@ func TestCreateOrUpdatePIP(t *testing.T) {
 
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
-		cacheKey := az.getPIPCacheKey(az.ResourceGroup, "nic")
-		az.pipCache.Set(cacheKey, "test")
+		az.pipCache.Set(az.ResourceGroup, []network.PublicIPAddress{{Name: pointer.String("test")}})
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(test.clientErr)
 		if test.cacheExpectedEmpty {
-			mockPIPClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "nic", gomock.Any()).Return(network.PublicIPAddress{}, nil)
+			mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{}, nil)
 		}
 
 		err := az.CreateOrUpdatePIP(&v1.Service{}, az.ResourceGroup, network.PublicIPAddress{Name: pointer.String("nic")})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
-		cachedPIP, err := az.pipCache.GetWithDeepCopy(az.getPIPCacheKey(az.ResourceGroup, "nic"), cache.CacheReadTypeDefault)
+		cachedPIP, err := az.pipCache.GetWithDeepCopy(az.ResourceGroup, cache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		if test.cacheExpectedEmpty {
 			assert.Empty(t, cachedPIP)

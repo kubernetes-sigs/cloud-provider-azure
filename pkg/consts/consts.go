@@ -360,9 +360,6 @@ const (
 	// LoadBalancerBackendPoolConfigurationTypePODIP is the lb backend pool config type pod ip
 	// TODO (nilo19): support pod IP in the future
 	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
-
-	// To get pip, we need both resource group name and pip name, key in cache has format: pip_rg:pip_name
-	PIPCacheKeySeparator = ":"
 )
 
 // error messages
