@@ -14,8 +14,8 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/logr v1.2.3
 	github.com/golang/mock v1.6.0
-	github.com/onsi/ginkgo/v2 v2.3.1
-	github.com/onsi/gomega v1.22.1
+	github.com/onsi/ginkgo/v2 v2.7.0
+	github.com/onsi/gomega v1.25.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
@@ -69,7 +69,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
