@@ -923,7 +923,7 @@ func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalance
 		// this should not happen
 		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: nil pip list passed")
 	} else if *pips == nil {
-		pipList, err := az.ListPIP(service, pipResourceGroup)
+		pipList, err := az.listPIP(pipResourceGroup)
 		if err != nil {
 			return nil, err
 		}
@@ -3032,7 +3032,7 @@ func (az *Cloud) reconcilePublicIP(clusterName string, service *v1.Service, lbNa
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 
-	pips, err := az.ListPIP(service, pipResourceGroup)
+	pips, err := az.listPIP(pipResourceGroup)
 	if err != nil {
 		return nil, err
 	}
