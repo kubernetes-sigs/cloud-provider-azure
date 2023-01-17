@@ -357,7 +357,7 @@ func TestDeleteManagedDisk(t *testing.T) {
 			diskState:      "attaching",
 			existedDisk:    compute.Disk{Name: pointer.String(disk1Name)},
 			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("failed to delete disk(/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1) since it's in attaching or detaching state"),
+			expectedErrMsg: fmt.Errorf("failed to delete disk(/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/disks/disk1) since it's in attaching state"),
 		},
 		{
 			desc:        "no error shall be returned if everything is good",
