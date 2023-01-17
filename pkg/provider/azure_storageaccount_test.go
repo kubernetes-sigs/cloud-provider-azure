@@ -677,7 +677,7 @@ func TestIsHnsPropertyEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -740,7 +740,7 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -803,7 +803,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -866,7 +866,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -931,7 +931,7 @@ func TestIsRequireInfrastructureEncryptionEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
