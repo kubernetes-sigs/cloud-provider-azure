@@ -171,11 +171,7 @@ spec:
         node-role.kubernetes.io/master: ""
   {{- end }}
       serviceAccountName: cloud-controller-manager
-      tolerations:
-        - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-        - key: node-role.kubernetes.io/control-plane
-          effect: NoSchedule
+      tolerations: {{ toYaml .Values.cloudControllerManager.tolerations | nindent 8 }}
       topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
