@@ -364,6 +364,8 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			accountOptions.SoftDeleteBlobs > 0 ||
 			accountOptions.SoftDeleteContainers > 0 {
 			var blobPolicy, containerPolicy *storage.DeleteRetentionPolicy
+			var enableBlobVersioning *bool
+
 			if accountOptions.SoftDeleteContainers > 0 {
 				containerPolicy = &storage.DeleteRetentionPolicy{
 					Enabled: pointer.Bool(accountOptions.SoftDeleteContainers > 0),
@@ -377,9 +379,13 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				}
 			}
 
+			if accountOptions.EnableBlobVersioning != nil {
+				enableBlobVersioning = pointer.Bool(*accountOptions.EnableBlobVersioning)
+			}
+
 			property := storage.BlobServiceProperties{
 				BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-					IsVersioningEnabled:            pointer.Bool(pointer.BoolDeref(accountOptions.EnableBlobVersioning, false)),
+					IsVersioningEnabled:            enableBlobVersioning,
 					ContainerDeleteRetentionPolicy: containerPolicy,
 					DeleteRetentionPolicy:          blobPolicy,
 				},
