@@ -48,6 +48,8 @@ cloudControllerManager:
     effect: NoSchedule
   - key: node-role.kubernetes.io/etcd
     effect: NoExecute
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
 cloudNodeManager:
   enabled: true
   imageRepository: "mcr.microsoft.com/oss/kubernetes"
