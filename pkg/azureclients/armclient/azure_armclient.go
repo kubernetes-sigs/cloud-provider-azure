@@ -33,7 +33,6 @@ import (
 	"github.com/Azure/go-armbalancer"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/Azure/go-autorest/tracing"
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
@@ -76,7 +75,7 @@ func sender() autorest.Sender {
 				Timeout:   30 * time.Second, // the same as default transport
 				KeepAlive: 30 * time.Second, // the same as default transport
 			}).DialContext,
-			ForceAttemptHTTP2:     false,            // respect custom dialer (default is true)
+			ForceAttemptHTTP2:     true,            // respect custom dialer (default is true)
 			MaxIdleConns:          100,              // Zero means no limit, the same as default transport
 			MaxIdleConnsPerHost:   100,              // Default is 2, ref:https://cs.opensource.google/go/go/+/go1.18.4:src/net/http/transport.go;l=58
 			IdleConnTimeout:       90 * time.Second, // the same as default transport
@@ -87,11 +86,7 @@ func sender() autorest.Sender {
 				Renegotiation: tls.RenegotiateNever, // the same as default transport https://pkg.go.dev/crypto/tls#RenegotiationSupport
 			},
 		}
-		transport = armbalancer.New(armbalancer.Options{})
-		var roundTripper http.RoundTripper = transport
-		if tracing.IsEnabled() {
-			roundTripper = tracing.NewTransport(transport)
-		}
+		roundTripper := armbalancer.New(armbalancer.Options{Transport: transport})
 		j, _ := cookiejar.New(nil)
 		defaultSenders.sender = &http.Client{Jar: j, Transport: roundTripper}
 
