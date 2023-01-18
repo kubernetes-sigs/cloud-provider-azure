@@ -206,10 +206,6 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 		vmssList, _ := ListVMSSes(tc)
 		capMatch := true
 		for _, vmss := range vmssList {
-			cap, ok := expectedCap[*vmss.Name]
-			if !ok {
-				continue
-			}
 			vms, err := ListVMSSVMs(tc, *vmss.Name)
 			if err != nil {
 				return false, err
@@ -224,10 +220,15 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 				vmssInstanceSet.Insert(strings.ToLower(nodeName))
 				instanceSet.Insert(strings.ToLower(nodeName))
 			}
+			cap, ok := expectedCap[*vmss.Name]
+			if !ok {
+				continue
+			}
 
 			actualCap[*vmss.Name] = *vmss.Sku.Capacity
 			if cap != *vmss.Sku.Capacity {
 				if !strings.Contains(os.Getenv(AKSClusterType), "autoscaling") {
+					Logf("It is not an autoscaling cluster and vmss SKU capacity does not equal expectedCap")
 					capMatch = false
 					break
 				}
@@ -238,9 +239,6 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 					capMatch = false
 					break
 				}
-			} else if int64(len(nodeSet)) != cap {
-				capMatch = false
-				break
 			}
 		}
 
