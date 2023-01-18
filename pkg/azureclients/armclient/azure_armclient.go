@@ -30,6 +30,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Azure/go-armbalancer"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/tracing"
@@ -86,6 +87,7 @@ func sender() autorest.Sender {
 				Renegotiation: tls.RenegotiateNever, // the same as default transport https://pkg.go.dev/crypto/tls#RenegotiationSupport
 			},
 		}
+		transport = armbalancer.New(armbalancer.Options{})
 		var roundTripper http.RoundTripper = transport
 		if tracing.IsEnabled() {
 			roundTripper = tracing.NewTransport(transport)
