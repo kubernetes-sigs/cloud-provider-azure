@@ -360,7 +360,9 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
 		}
 
-		if pointer.BoolDeref(accountOptions.EnableBlobVersioning, false) || accountOptions.SoftDeleteBlobs > 0 || accountOptions.SoftDeleteContainers > 0 {
+		if pointer.BoolDeref(accountOptions.EnableBlobVersioning, false) ||
+			accountOptions.SoftDeleteBlobs > 0 ||
+			accountOptions.SoftDeleteContainers > 0 {
 			var blobPolicy, containerPolicy *storage.DeleteRetentionPolicy
 			if accountOptions.SoftDeleteContainers > 0 {
 				containerPolicy = &storage.DeleteRetentionPolicy{
@@ -377,7 +379,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 			property := storage.BlobServiceProperties{
 				BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
-					IsVersioningEnabled:            accountOptions.EnableBlobVersioning,
+					IsVersioningEnabled:            pointer.Bool(pointer.BoolDeref(accountOptions.EnableBlobVersioning, false)),
 					ContainerDeleteRetentionPolicy: containerPolicy,
 					DeleteRetentionPolicy:          blobPolicy,
 				},
