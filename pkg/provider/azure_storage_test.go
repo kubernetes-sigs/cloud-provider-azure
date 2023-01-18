@@ -24,6 +24,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/golang/mock/gomock"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient/mockblobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/mockfileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
@@ -167,6 +168,12 @@ func TestCreateFileShare(t *testing.T) {
 		mockStorageAccountsClient.EXPECT().ListKeys(gomock.Any(), "", "rg", gomock.Any()).Return(test.keys, nil).AnyTimes()
 		mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), "rg").Return(test.accounts, nil).AnyTimes()
 		mockStorageAccountsClient.EXPECT().Create(gomock.Any(), "", "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		mockBlobClient := mockblobclient.NewMockInterface(ctrl)
+		cloud.BlobClient = mockBlobClient
+		mockBlobClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{
+			BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{}}, nil).AnyTimes()
+		mockBlobClient.EXPECT().SetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{}, nil).AnyTimes()
 
 		mockAccount := &AccountOptions{
 			Name:          test.acct,

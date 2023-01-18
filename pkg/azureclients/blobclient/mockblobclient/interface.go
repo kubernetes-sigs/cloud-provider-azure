@@ -95,3 +95,33 @@ func (mr *MockInterfaceMockRecorder) GetContainer(ctx, subsID, resourceGroupName
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainer", reflect.TypeOf((*MockInterface)(nil).GetContainer), ctx, subsID, resourceGroupName, accountName, containerName)
 }
+
+// GetServiceProperties mocks base method.
+func (m *MockInterface) GetServiceProperties(ctx context.Context, subsID, resourceGroupName, accountName string) (storage.BlobServiceProperties, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetServiceProperties", ctx, subsID, resourceGroupName, accountName)
+	ret0, _ := ret[0].(storage.BlobServiceProperties)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetServiceProperties indicates an expected call of GetServiceProperties.
+func (mr *MockInterfaceMockRecorder) GetServiceProperties(ctx, subsID, resourceGroupName, accountName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceProperties", reflect.TypeOf((*MockInterface)(nil).GetServiceProperties), ctx, subsID, resourceGroupName, accountName)
+}
+
+// SetServiceProperties mocks base method.
+func (m *MockInterface) SetServiceProperties(ctx context.Context, subsID, resourceGroupName, accountName string, parameters storage.BlobServiceProperties) (storage.BlobServiceProperties, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetServiceProperties", ctx, subsID, resourceGroupName, accountName, parameters)
+	ret0, _ := ret[0].(storage.BlobServiceProperties)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetServiceProperties indicates an expected call of SetServiceProperties.
+func (mr *MockInterfaceMockRecorder) SetServiceProperties(ctx, subsID, resourceGroupName, accountName, parameters interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetServiceProperties", reflect.TypeOf((*MockInterface)(nil).SetServiceProperties), ctx, subsID, resourceGroupName, accountName, parameters)
+}

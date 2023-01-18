@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient/mockblobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/fileclient/mockfileclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednsclient/mockprivatednsclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatednszonegroupclient/mockprivatednszonegroupclient"
@@ -447,6 +448,12 @@ func TestEnsureStorageAccount(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		mockBlobClient := mockblobclient.NewMockInterface(ctrl)
+		cloud.BlobClient = mockBlobClient
+		mockBlobClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{
+			BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{}}, nil).AnyTimes()
+		mockBlobClient.EXPECT().SetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.BlobServiceProperties{}, nil).AnyTimes()
+
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		if test.mockStorageAccountsClient {
 			cloud.StorageAccountClient = mockStorageAccountsClient
@@ -502,6 +509,9 @@ func TestEnsureStorageAccount(t *testing.T) {
 				SubscriptionID:        test.subscriptionID,
 				AccessTier:            test.accessTier,
 				StorageType:           test.storageType,
+				EnableBlobVersioning:  pointer.BoolPtr(true),
+				SoftDeleteBlobs:       7,
+				SoftDeleteContainers:  7,
 			}
 		}
 
@@ -1429,5 +1439,210 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 
 		result := cloud.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result, test.desc)
+	}
+}
+
+func Test_isSoftDeleteBlobsEqual(t *testing.T) {
+	type args struct {
+		property       storage.BlobServiceProperties
+		accountOptions *AccountOptions
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "not equal for property nil",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteBlobs: 7,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not equal for property not enable",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(false),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteBlobs: 7,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not equal for accountOptions nil",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(true),
+							Days:    pointer.Int32(7),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{},
+			},
+			want: false,
+		},
+		{
+			name: "qual",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						DeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(true),
+							Days:    pointer.Int32(7),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteBlobs: 7,
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSoftDeleteBlobsEqual(tt.args.property, tt.args.accountOptions); got != tt.want {
+				t.Errorf("isSoftDeleteBlobsEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_isSoftDeleteContainersEqual(t *testing.T) {
+	type args struct {
+		property       storage.BlobServiceProperties
+		accountOptions *AccountOptions
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "not equal for property nil",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteContainers: 7,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not equal for property not enable",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(false),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteContainers: 7,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not equal for accountOptions nil",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(true),
+							Days:    pointer.Int32(7),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{},
+			},
+			want: false,
+		},
+		{
+			name: "qual",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						ContainerDeleteRetentionPolicy: &storage.DeleteRetentionPolicy{
+							Enabled: pointer.Bool(true),
+							Days:    pointer.Int32(7),
+						},
+					},
+				},
+				accountOptions: &AccountOptions{
+					SoftDeleteContainers: 7,
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSoftDeleteContainersEqual(tt.args.property, tt.args.accountOptions); got != tt.want {
+				t.Errorf("isSoftDeleteContainersEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_isEnableBlobVersioningEqual(t *testing.T) {
+	type args struct {
+		property       storage.BlobServiceProperties
+		accountOptions *AccountOptions
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "equal",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{},
+				},
+				accountOptions: &AccountOptions{
+					EnableBlobVersioning: pointer.Bool(false),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "not equal",
+			args: args{
+				property: storage.BlobServiceProperties{
+					BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+						IsVersioningEnabled: pointer.Bool(true),
+					},
+				},
+				accountOptions: &AccountOptions{
+					EnableBlobVersioning: pointer.Bool(false),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isEnableBlobVersioningEqual(tt.args.property, tt.args.accountOptions); got != tt.want {
+				t.Errorf("isEnableBlobVersioningEqual() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
