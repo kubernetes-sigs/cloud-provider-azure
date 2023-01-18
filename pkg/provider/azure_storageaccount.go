@@ -72,6 +72,9 @@ type AccountOptions struct {
 	SubnetName                              string
 	AccessTier                              string
 	MatchTags                               bool
+	EnableBlobVersioning                    *bool
+	SoftDeleteBlobs                         int32
+	SoftDeleteContainers                    int32
 }
 
 type accountWithLocation struct {
@@ -106,9 +109,11 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				isAccessTierEqual(acct, accountOptions) &&
 				az.isMultichannelEnabledEqual(ctx, acct, accountOptions) &&
 				az.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, acct, accountOptions) &&
+				az.isEnableBlobDataProtectionEqual(ctx, acct, accountOptions) &&
 				isPrivateEndpointAsExpected(acct, accountOptions)) {
 				continue
 			}
+
 			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: string((*acct.Sku).Name), Location: *acct.Location})
 		}
 	}
@@ -353,6 +358,42 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 		if rerr := az.StorageAccountClient.Create(ctx, subsID, resourceGroup, accountName, cp); rerr != nil {
 			return "", "", fmt.Errorf("failed to create storage account %s, error: %v", accountName, rerr)
+		}
+
+		if pointer.BoolDeref(accountOptions.EnableBlobVersioning, false) ||
+			accountOptions.SoftDeleteBlobs > 0 ||
+			accountOptions.SoftDeleteContainers > 0 {
+			var blobPolicy, containerPolicy *storage.DeleteRetentionPolicy
+			var enableBlobVersioning *bool
+
+			if accountOptions.SoftDeleteContainers > 0 {
+				containerPolicy = &storage.DeleteRetentionPolicy{
+					Enabled: pointer.Bool(accountOptions.SoftDeleteContainers > 0),
+					Days:    pointer.Int32(accountOptions.SoftDeleteContainers),
+				}
+			}
+			if accountOptions.SoftDeleteBlobs > 0 {
+				blobPolicy = &storage.DeleteRetentionPolicy{
+					Enabled: pointer.Bool(accountOptions.SoftDeleteBlobs > 0),
+					Days:    pointer.Int32(accountOptions.SoftDeleteBlobs),
+				}
+			}
+
+			if accountOptions.EnableBlobVersioning != nil {
+				enableBlobVersioning = pointer.Bool(*accountOptions.EnableBlobVersioning)
+			}
+
+			property := storage.BlobServiceProperties{
+				BlobServicePropertiesProperties: &storage.BlobServicePropertiesProperties{
+					IsVersioningEnabled:            enableBlobVersioning,
+					ContainerDeleteRetentionPolicy: containerPolicy,
+					DeleteRetentionPolicy:          blobPolicy,
+				},
+			}
+
+			if _, err := az.BlobClient.SetServiceProperties(ctx, subsID, resourceGroup, accountName, property); err != nil {
+				return "", "", fmt.Errorf("failed to set blob service properties for storage account %s, error: %w", accountName, err)
+			}
 		}
 
 		if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil || accountOptions.IsMultichannelEnabled != nil {
@@ -732,4 +773,54 @@ func (az *Cloud) isDisableFileServiceDeleteRetentionPolicyEqual(ctx context.Cont
 	}
 
 	return *accountOptions.DisableFileServiceDeleteRetentionPolicy != *prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy.Enabled
+}
+
+func (az *Cloud) isEnableBlobDataProtectionEqual(ctx context.Context, account storage.Account, accountOptions *AccountOptions) bool {
+	if accountOptions.SoftDeleteBlobs == 0 &&
+		accountOptions.SoftDeleteContainers == 0 &&
+		accountOptions.EnableBlobVersioning == nil {
+		return true
+	}
+
+	property, err := az.BlobClient.GetServiceProperties(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, *account.Name)
+	if err != nil {
+		klog.Warningf("GetServiceProperties failed for account %s, err: %v", *account.Name, err)
+		return false
+	}
+
+	return isSoftDeleteBlobsEqual(property, accountOptions) &&
+		isSoftDeleteContainersEqual(property, accountOptions) &&
+		isEnableBlobVersioningEqual(property, accountOptions)
+}
+
+func isSoftDeleteBlobsEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+	wantEnable := accountOptions.SoftDeleteBlobs > 0
+	actualEnable := property.DeleteRetentionPolicy != nil &&
+		pointer.BoolDeref(property.DeleteRetentionPolicy.Enabled, false)
+	if wantEnable != actualEnable {
+		return false
+	}
+	if !actualEnable {
+		return true
+	}
+
+	return accountOptions.SoftDeleteBlobs == pointer.Int32Deref(property.DeleteRetentionPolicy.Days, 0)
+}
+
+func isSoftDeleteContainersEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+	wantEnable := accountOptions.SoftDeleteContainers > 0
+	actualEnable := property.ContainerDeleteRetentionPolicy != nil &&
+		pointer.BoolDeref(property.ContainerDeleteRetentionPolicy.Enabled, false)
+	if wantEnable != actualEnable {
+		return false
+	}
+	if !actualEnable {
+		return true
+	}
+
+	return accountOptions.SoftDeleteContainers == pointer.Int32Deref(property.ContainerDeleteRetentionPolicy.Days, 0)
+}
+
+func isEnableBlobVersioningEqual(property storage.BlobServiceProperties, accountOptions *AccountOptions) bool {
+	return pointer.BoolDeref(accountOptions.EnableBlobVersioning, false) == pointer.BoolDeref(property.IsVersioningEnabled, false)
 }
