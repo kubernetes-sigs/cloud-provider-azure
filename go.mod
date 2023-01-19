@@ -22,12 +22,12 @@ require (
 	golang.org/x/crypto v0.5.0
 	golang.org/x/sys v0.4.0
 	golang.org/x/text v0.6.0
-	k8s.io/api v0.23.15
-	k8s.io/apimachinery v0.23.15
+	k8s.io/api v0.23.16
+	k8s.io/apimachinery v0.23.16
 	k8s.io/apiserver v0.23.15
-	k8s.io/client-go v0.23.15
+	k8s.io/client-go v0.23.16
 	k8s.io/cloud-provider v0.23.15
-	k8s.io/component-base v0.23.15
+	k8s.io/component-base v0.23.16
 	k8s.io/component-helpers v0.23.15
 	k8s.io/controller-manager v0.23.15
 	k8s.io/klog/v2 v2.80.1
@@ -115,7 +115,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/term v0.4.0 // indirect
-	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
+	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	google.golang.org/grpc v1.42.0 // indirect
