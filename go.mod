@@ -22,8 +22,8 @@ require (
 	golang.org/x/crypto v0.5.0
 	golang.org/x/sys v0.4.0
 	golang.org/x/text v0.6.0
-	k8s.io/api v0.23.15
-	k8s.io/apimachinery v0.23.15
+	k8s.io/api v0.23.16
+	k8s.io/apimachinery v0.23.16
 	k8s.io/apiserver v0.23.15
 	k8s.io/client-go v0.23.15
 	k8s.io/cloud-provider v0.23.15
