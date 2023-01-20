@@ -3,7 +3,6 @@ kind: Cluster
 metadata:
   labels:
     ccm: external
-    cni: ${CLUSTER_NAME}-calico
   name: ${CLUSTER_NAME}
   namespace: default
 spec:
