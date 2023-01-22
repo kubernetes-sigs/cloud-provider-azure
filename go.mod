@@ -23,7 +23,7 @@ require (
 	golang.org/x/sys v0.4.0
 	golang.org/x/text v0.6.0
 	k8s.io/api v0.24.9
-	k8s.io/apimachinery v0.24.9
+	k8s.io/apimachinery v0.24.10
 	k8s.io/apiserver v0.24.9
 	k8s.io/client-go v0.24.9
 	k8s.io/cloud-provider v0.24.9
@@ -127,5 +127,5 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.33 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
