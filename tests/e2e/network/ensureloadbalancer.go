@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -1035,20 +1035,20 @@ func defaultPublicIPAddress(ipName string, isIPv6 bool) aznetwork.PublicIPAddres
 			Name: skuName,
 		},
 		PublicIPAddressPropertiesFormat: &aznetwork.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: aznetwork.IPAllocationMethodStatic,
+			PublicIPAllocationMethod: aznetwork.Static,
 		},
 	}
 	if isIPv6 {
-		pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPVersionIPv6
+		pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPv6
 	}
 	return pip
 }
 
 func defaultPublicIPPrefix(name string, isIPv6 bool) aznetwork.PublicIPPrefix {
-	pipAddrVersion := aznetwork.IPVersionIPv4
+	pipAddrVersion := aznetwork.IPv4
 	var prefixLen int32 = 28
 	if isIPv6 {
-		pipAddrVersion = aznetwork.IPVersionIPv6
+		pipAddrVersion = aznetwork.IPv6
 		prefixLen = 124
 	}
 	return aznetwork.PublicIPPrefix{

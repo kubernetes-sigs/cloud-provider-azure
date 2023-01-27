@@ -21,7 +21,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -355,7 +355,7 @@ func (az *Cloud) reconcilePLSIpConfigs(
 		if !strings.EqualFold(pointer.StringDeref(subnet.ID, ""), pointer.StringDeref(ipConfig.Subnet.ID, "")) {
 			changed = true
 		}
-		if strings.EqualFold(string(ipConfig.PrivateIPAllocationMethod), string(network.IPAllocationMethodStatic)) {
+		if strings.EqualFold(string(ipConfig.PrivateIPAllocationMethod), string(network.Static)) {
 			klog.V(10).Infof("Found static IP: %s", pointer.StringDeref(ipConfig.PrivateIPAddress, ""))
 			if _, found := staticIps[pointer.StringDeref(ipConfig.PrivateIPAddress, "")]; !found {
 				changed = true
@@ -363,7 +363,7 @@ func (az *Cloud) reconcilePLSIpConfigs(
 			existingStaticIps = append(existingStaticIps, pointer.StringDeref(ipConfig.PrivateIPAddress, ""))
 		}
 		if *ipConfig.Primary {
-			if strings.EqualFold(string(ipConfig.PrivateIPAllocationMethod), string(network.IPAllocationMethodStatic)) {
+			if strings.EqualFold(string(ipConfig.PrivateIPAllocationMethod), string(network.Static)) {
 				if !strings.EqualFold(primaryIP, pointer.StringDeref(ipConfig.PrivateIPAddress, "")) {
 					changed = true
 				}
@@ -389,12 +389,12 @@ func (az *Cloud) reconcilePLSIpConfigs(
 				Name: &configName,
 				PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
 					PrivateIPAddress:          &ip,
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 					Subnet: &network.Subnet{
 						ID: subnet.ID,
 					},
 					Primary:                 &isPrimary,
-					PrivateIPAddressVersion: network.IPVersionIPv4,
+					PrivateIPAddressVersion: network.IPv4,
 				},
 			})
 		}
@@ -404,12 +404,12 @@ func (az *Cloud) reconcilePLSIpConfigs(
 			ipConfigs = append(ipConfigs, network.PrivateLinkServiceIPConfiguration{
 				Name: &configName,
 				PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-					PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+					PrivateIPAllocationMethod: network.Dynamic,
 					Subnet: &network.Subnet{
 						ID: subnet.ID,
 					},
 					Primary:                 &isPrimary,
-					PrivateIPAddressVersion: network.IPVersionIPv4,
+					PrivateIPAddressVersion: network.IPv4,
 				},
 			})
 		}

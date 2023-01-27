@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -110,7 +110,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
 		Expect(pls.IPConfigurations).NotTo(BeNil())
 		Expect(len(*pls.IPConfigurations)).To(Equal(1))
-		Expect((*pls.IPConfigurations)[0].PrivateIPAllocationMethod).To(Equal(network.IPAllocationMethodDynamic))
+		Expect((*pls.IPConfigurations)[0].PrivateIPAllocationMethod).To(Equal(network.Dynamic))
 		Expect(pls.Fqdns == nil || len(*pls.Fqdns) == 0).To(BeTrue())
 		Expect(pls.EnableProxyProtocol == nil || !*pls.EnableProxyProtocol).To(BeTrue())
 		Expect(pls.Visibility == nil || len(*pls.Visibility.Subscriptions) == 0).To(BeTrue())
@@ -234,7 +234,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
 			return pls.IPConfigurations != nil &&
 				len(*pls.IPConfigurations) == 1 &&
-				(*pls.IPConfigurations)[0].PrivateIPAllocationMethod == network.IPAllocationMethodStatic &&
+				(*pls.IPConfigurations)[0].PrivateIPAllocationMethod == network.Static &&
 				*(*pls.IPConfigurations)[0].PrivateIPAddress == selectedip, nil
 		})
 		Expect(err).NotTo(HaveOccurred())

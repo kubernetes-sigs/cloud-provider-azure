@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -151,7 +151,7 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 	vmSetName := bc.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	isBackendPoolPreConfigured := bc.isBackendPoolPreConfigured(service)
 
-	mc := metrics.NewMetricContext("services", "migrate_to_ip_based_backend_pool", bc.ResourceGroup, bc.getNetworkResourceSubscriptionID(), serviceName)
+	mc := metrics.NewMetricContext("services", "migrate_to_nic_based_backend_pool", bc.ResourceGroup, bc.getNetworkResourceSubscriptionID(), serviceName)
 
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
 		bp := newBackendPools[i]
@@ -170,9 +170,9 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 			if bp.BackendAddressPoolPropertiesFormat != nil &&
 				bp.LoadBalancerBackendAddresses != nil &&
 				len(*bp.LoadBalancerBackendAddresses) > 0 {
-				isMigration = true
-
 				if removeNodeIPAddressesFromBackendPool(bp, []string{}, true) {
+					isMigration = true
+					bp.VirtualNetwork = nil
 					if err := bc.CreateOrUpdateLBBackendPool(lbName, bp); err != nil {
 						klog.Errorf("bc.ReconcileBackendPools for service (%s): failed to cleanup IP based backend pool %s: %s", serviceName, lbBackendPoolName, err.Error())
 						return false, false, fmt.Errorf("bc.ReconcileBackendPools for service (%s): failed to cleanup IP based backend pool %s: %w", serviceName, lbBackendPoolName, err)
@@ -321,6 +321,10 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
 	if strings.EqualFold(pointer.StringDeref(backendPool.Name, ""), lbBackendPoolName) &&
 		backendPool.BackendAddressPoolPropertiesFormat != nil {
+		backendPool.VirtualNetwork = &network.SubResource{
+			ID: &vnetID,
+		}
+
 		if backendPool.LoadBalancerBackendAddresses == nil {
 			lbBackendPoolAddresses := make([]network.LoadBalancerBackendAddress, 0)
 			backendPool.LoadBalancerBackendAddresses = &lbBackendPoolAddresses
@@ -379,8 +383,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 				*backendPool.LoadBalancerBackendAddresses = append(*backendPool.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
 					Name: pointer.String(name),
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress:      pointer.String(privateIP),
-						VirtualNetwork: &network.SubResource{ID: pointer.String(vnetID)},
+						IPAddress: pointer.String(privateIP),
 					},
 				})
 				numOfAdd++
@@ -459,7 +462,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		newBackendPools = *lb.BackendAddressPools
 	}
 
-	var foundBackendPool, changed, shouldRefreshLB, isOperationSucceeded, isMigration bool
+	var foundBackendPool, changed, shouldRefreshLB, isOperationSucceeded, isMigration, updated bool
 	lbName := *lb.Name
 	serviceName := getServiceName(service)
 	lbBackendPoolName := getBackendPoolName(clusterName, service)
@@ -467,7 +470,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 	lbBackendPoolID := bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), bi.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, service))
 	isBackendPoolPreConfigured := bi.isBackendPoolPreConfigured(service)
 
-	mc := metrics.NewMetricContext("services", "migrate_to_nic_based_backend_pool", bi.ResourceGroup, bi.getNetworkResourceSubscriptionID(), serviceName)
+	mc := metrics.NewMetricContext("services", "migrate_to_ip_based_backend_pool", bi.ResourceGroup, bi.getNetworkResourceSubscriptionID(), serviceName)
 
 	var err error
 	for i := len(newBackendPools) - 1; i >= 0; i-- {
@@ -490,6 +493,9 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 				klog.Errorf("bi.ReconcileBackendPools for service (%s): failed to EnsureBackendPoolDeleted: %s", serviceName, err.Error())
 				return false, false, err
 			}
+			if shouldRefreshLB {
+				isMigration = true
+			}
 
 			var nodeIPAddressesToBeDeleted []string
 			for nodeName := range bi.excludeLoadBalancerNodes {
@@ -499,16 +505,42 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 				}
 			}
 			if len(nodeIPAddressesToBeDeleted) > 0 {
-				isMigration = true
-
-				updated := removeNodeIPAddressesFromBackendPool(bp, nodeIPAddressesToBeDeleted, false)
-				if updated {
-					(*lb.BackendAddressPools)[i] = bp
-					if err := bi.CreateOrUpdateLBBackendPool(lbName, bp); err != nil {
-						return false, false, fmt.Errorf("bi.ReconcileBackendPools for service (%s): lb backendpool - failed to update backend pool %s for load balancer %s: %w", serviceName, lbBackendPoolName, lbName, err)
-					}
-					shouldRefreshLB = true
+				if removeNodeIPAddressesFromBackendPool(bp, nodeIPAddressesToBeDeleted, false) {
+					updated = true
 				}
+			}
+
+			// delete the vnet in LoadBalancerBackendAddresses and ensure it is in the backend pool level
+			var vnet string
+			if bp.BackendAddressPoolPropertiesFormat != nil {
+				if bp.VirtualNetwork == nil ||
+					pointer.StringDeref(bp.VirtualNetwork.ID, "") == "" {
+					if bp.LoadBalancerBackendAddresses != nil {
+						for _, a := range *bp.LoadBalancerBackendAddresses {
+							if a.LoadBalancerBackendAddressPropertiesFormat != nil &&
+								a.VirtualNetwork != nil {
+								if vnet == "" {
+									vnet = pointer.StringDeref(a.VirtualNetwork.ID, "")
+								}
+								a.VirtualNetwork = nil
+							}
+						}
+					}
+					if vnet != "" {
+						bp.VirtualNetwork = &network.SubResource{
+							ID: pointer.String(vnet),
+						}
+						updated = true
+					}
+				}
+			}
+
+			if updated {
+				(*lb.BackendAddressPools)[i] = bp
+				if err := bi.CreateOrUpdateLBBackendPool(lbName, bp); err != nil {
+					return false, false, fmt.Errorf("bi.ReconcileBackendPools for service (%s): lb backendpool - failed to update backend pool %s for load balancer %s: %w", serviceName, lbBackendPoolName, lbName, err)
+				}
+				shouldRefreshLB = true
 			}
 			break
 		} else {

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -168,8 +168,8 @@ func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
 		Name:     pointer.String("testCluster-aservicea"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-			PublicIPAddressVersion:   network.IPVersionIPv4,
+			PublicIPAllocationMethod: network.Static,
+			PublicIPAddressVersion:   network.IPv4,
 			IPAddress:                pointer.String("1.2.3.4"),
 		},
 		Tags: map[string]*string{
@@ -1072,8 +1072,8 @@ func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
 		Name:     pointer.String("testCluster-aservicesaomitted1"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-			PublicIPAddressVersion:   network.IPVersionIPv4,
+			PublicIPAllocationMethod: network.Static,
+			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  pointer.String("aservicesaomitted1"),
@@ -1126,8 +1126,8 @@ func TestServiceRespectsNoSessionAffinity(t *testing.T) {
 		Name:     pointer.String("testCluster-aservicesanone"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-			PublicIPAddressVersion:   network.IPVersionIPv4,
+			PublicIPAllocationMethod: network.Static,
+			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  pointer.String("aservicesanone"),
@@ -1187,8 +1187,8 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 		Name:     pointer.String("testCluster-aservicesaclientip"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-			PublicIPAddressVersion:   network.IPVersionIPv4,
+			PublicIPAllocationMethod: network.Static,
+			PublicIPAddressVersion:   network.IPv4,
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  pointer.String("aservicesaclientip"),

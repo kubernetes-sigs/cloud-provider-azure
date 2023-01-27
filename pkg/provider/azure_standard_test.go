@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -816,14 +816,14 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 	ipv4IPconfig := network.InterfaceIPConfiguration{
 		Name: pointer.String("ipconfig1"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPVersionIPv4,
+			PrivateIPAddressVersion: network.IPv4,
 			PrivateIPAddress:        pointer.String("10.10.0.12"),
 		},
 	}
 	ipv6IPconfig := network.InterfaceIPConfiguration{
 		Name: pointer.String("ipconfig2"),
 		InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-			PrivateIPAddressVersion: network.IPVersionIPv6,
+			PrivateIPAddressVersion: network.IPv6,
 			PrivateIPAddress:        pointer.String("1111:11111:00:00:1111:1111:000:111"),
 		},
 	}
@@ -879,7 +879,7 @@ func TestGetIPConfigByIPFamily(t *testing.T) {
 						{
 							Name: pointer.String("ipconfig1"),
 							InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-								PrivateIPAddressVersion: network.IPVersionIPv4,
+								PrivateIPAddressVersion: network.IPv4,
 							},
 						},
 					},
