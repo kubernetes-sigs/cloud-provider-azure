@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -62,6 +62,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	expectedBackendPool := network.BackendAddressPool{
 		Name: to.StringPtr("kubernetes"),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+			VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 				{
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
@@ -71,8 +72,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 				{
 					Name: to.StringPtr("vmss-0"),
 					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress:      to.StringPtr("10.0.0.2"),
-						VirtualNetwork: &network.SubResource{ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+						IPAddress: to.StringPtr("10.0.0.2"),
 					},
 				},
 			},
@@ -414,6 +414,22 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 		},
 	}
 
+	bp := network.BackendAddressPool{
+		Name: to.StringPtr("kubernetes"),
+		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+			VirtualNetwork: &network.SubResource{
+				ID: to.StringPtr("vnet"),
+			},
+			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+				{
+					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+						IPAddress: to.StringPtr("10.0.0.2"),
+					},
+				},
+			},
+		},
+	}
+
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
 	az.KubeClient = fake.NewSimpleClientset(nodes[0], nodes[1])
@@ -421,7 +437,7 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 	az.nodePrivateIPs["vmss-0"] = sets.NewString("10.0.0.1")
 
 	lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-	lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), bp, gomock.Any()).Return(nil)
 	lbClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(network.LoadBalancer{}, nil)
 	az.LoadBalancerClient = lbClient
 

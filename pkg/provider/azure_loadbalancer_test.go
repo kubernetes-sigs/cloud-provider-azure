@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -1013,8 +1013,8 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 		ID:   to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 		Name: to.StringPtr("testPIP"),
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAddressVersion:   network.IPVersionIPv4,
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+			PublicIPAddressVersion:   network.IPv4,
+			PublicIPAllocationMethod: network.Static,
 			IPTags: &[]network.IPTag{
 				{
 					IPTagType: to.StringPtr("tag1"),
@@ -1770,7 +1770,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 		Location: to.StringPtr("westus"),
 		ExtendedLocation: &network.ExtendedLocation{
 			Name: to.StringPtr("microsoftlosangeles1"),
-			Type: network.ExtendedLocationTypesEdgeZone,
+			Type: network.EdgeZone,
 		},
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 	}
@@ -1791,7 +1791,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 		Location: to.StringPtr("westus"),
 		ExtendedLocation: &network.ExtendedLocation{
 			Name: to.StringPtr("microsoftlosangeles1"),
-			Type: network.ExtendedLocationTypesEdgeZone,
+			Type: network.EdgeZone,
 		},
 		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
 		Sku: &network.LoadBalancerSku{
@@ -1851,7 +1851,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 				},
 			},
 			lbFrontendIPConfigName: "btest1-name",
@@ -1865,7 +1865,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+					PrivateIPAllocationMethod: network.Dynamic,
 				},
 			},
 			lbFrontendIPConfigName: "btest1-name",
@@ -1895,7 +1895,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+					PrivateIPAllocationMethod: network.Dynamic,
 					PrivateIPAddress:          to.StringPtr("1.1.1.1"),
 				},
 			},
@@ -1911,7 +1911,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 					PrivateIPAddress:          to.StringPtr("1.1.1.1"),
 				},
 			},
@@ -1927,7 +1927,7 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			config: network.FrontendIPConfiguration{
 				Name: to.StringPtr("btest1-name"),
 				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 					PrivateIPAddress:          to.StringPtr("1.1.1.2"),
 				},
 			},
@@ -3852,7 +3852,7 @@ func TestReconcilePublicIP(t *testing.T) {
 				Name: to.StringPtr("testPIP"),
 				Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 					IPAddress:              to.StringPtr("1.2.3.4"),
 				},
 			},
@@ -3891,7 +3891,7 @@ func TestReconcilePublicIP(t *testing.T) {
 				Name: to.StringPtr("testPIP"),
 				Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 					IPAddress:              to.StringPtr("1.2.3.4"),
 				},
 			},
@@ -3933,8 +3933,8 @@ func TestReconcilePublicIP(t *testing.T) {
 				Name: to.StringPtr("testPIP"),
 				Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv4,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv4,
+					PublicIPAllocationMethod: network.Static,
 					IPTags: &[]network.IPTag{
 						{
 							IPTagType: to.StringPtr("tag1"),
@@ -3958,8 +3958,8 @@ func TestReconcilePublicIP(t *testing.T) {
 					Name: to.StringPtr("testPIP"),
 					Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1")},
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion:   network.IPVersionIPv4,
-						PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+						PublicIPAddressVersion:   network.IPv4,
+						PublicIPAllocationMethod: network.Static,
 						IPTags: &[]network.IPTag{
 							{
 								IPTagType: to.StringPtr("tag1"),
@@ -3975,8 +3975,8 @@ func TestReconcilePublicIP(t *testing.T) {
 				Name: to.StringPtr("testPIP"),
 				Tags: map[string]*string{consts.ServiceTagKey: to.StringPtr("default/test1")},
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv4,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv4,
+					PublicIPAllocationMethod: network.Static,
 					IPTags: &[]network.IPTag{
 						{
 							IPTagType: to.StringPtr("tag1"),
@@ -4018,7 +4018,7 @@ func TestReconcilePublicIP(t *testing.T) {
 				ID:   to.StringPtr("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
 				Name: to.StringPtr("testPIP"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 					IPAddress:              to.StringPtr("1.2.3.4"),
 				},
 			},
@@ -4165,8 +4165,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv4,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv4,
+					PublicIPAllocationMethod: network.Static,
 				},
 				Tags: map[string]*string{},
 			},
@@ -4194,7 +4194,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("newdns"),
 					},
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 				},
 				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
@@ -4217,7 +4217,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings:            nil,
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 				},
 				Tags: map[string]*string{},
 			},
@@ -4242,7 +4242,7 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("previousdns"),
 					},
-					PublicIPAddressVersion: network.IPVersionIPv4,
+					PublicIPAddressVersion: network.IPv4,
 				},
 			},
 		},
@@ -4263,8 +4263,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("newdns"),
 					},
-					PublicIPAllocationMethod: network.IPAllocationMethodDynamic,
-					PublicIPAddressVersion:   network.IPVersionIPv6,
+					PublicIPAllocationMethod: network.Dynamic,
+					PublicIPAddressVersion:   network.IPv6,
 				},
 				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
@@ -4282,8 +4282,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("previousdns"),
 					},
-					PublicIPAllocationMethod: network.IPAllocationMethodDynamic,
-					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.Dynamic,
+					PublicIPAddressVersion:   network.IPv4,
 				},
 			}},
 			expectedPIP: &network.PublicIPAddress{
@@ -4294,8 +4294,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("newdns"),
 					},
-					PublicIPAllocationMethod: network.IPAllocationMethodDynamic,
-					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.Dynamic,
+					PublicIPAddressVersion:   network.IPv4,
 				},
 				Tags: map[string]*string{consts.ServiceUsingDNSKey: to.StringPtr("default/test1")},
 			},
@@ -4332,8 +4332,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 						DNSSettings: &network.PublicIPAddressDNSSettings{
 							DomainNameLabel: to.StringPtr("test"),
 						},
-						PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-						PublicIPAddressVersion:   network.IPVersionIPv4,
+						PublicIPAllocationMethod: network.Static,
+						PublicIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -4349,8 +4349,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: to.StringPtr("test"),
 					},
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-					PublicIPAddressVersion:   network.IPVersionIPv4,
+					PublicIPAllocationMethod: network.Static,
+					PublicIPAddressVersion:   network.IPv4,
 				},
 			},
 		},
@@ -4364,8 +4364,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv4,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv4,
+					PublicIPAllocationMethod: network.Static,
 				},
 				Tags: map[string]*string{},
 			},
@@ -4379,8 +4379,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				{
 					Name: to.StringPtr("pip1"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion:   network.IPVersionIPv6,
-						PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+						PublicIPAddressVersion:   network.IPv6,
+						PublicIPAllocationMethod: network.Static,
 					},
 				},
 			},
@@ -4389,8 +4389,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv6,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv6,
+					PublicIPAllocationMethod: network.Static,
 				},
 				Tags: map[string]*string{},
 			},
@@ -4405,8 +4405,8 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				ID: to.StringPtr("/subscriptions/subscription/resourceGroups/rg" +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   network.IPVersionIPv4,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+					PublicIPAddressVersion:   network.IPv4,
+					PublicIPAllocationMethod: network.Static,
 				},
 			},
 			additionalAnnotations: map[string]string{
@@ -4457,10 +4457,10 @@ func TestEnsurePublicIPExists(t *testing.T) {
 				}
 
 				if test.isIPv6 {
-					basicPIP.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPVersionIPv6
-					basicPIP.PublicIPAllocationMethod = network.IPAllocationMethodDynamic
+					basicPIP.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPv6
+					basicPIP.PublicIPAllocationMethod = network.Dynamic
 				} else {
-					basicPIP.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPVersionIPv4
+					basicPIP.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPv4
 				}
 
 				return []network.PublicIPAddress{*basicPIP}, nil
@@ -4490,11 +4490,11 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 		Location: &az.location,
 		ExtendedLocation: &network.ExtendedLocation{
 			Name: to.StringPtr("microsoftlosangeles1"),
-			Type: network.ExtendedLocationTypesEdgeZone,
+			Type: network.EdgeZone,
 		},
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-			PublicIPAddressVersion:   network.IPVersionIPv4,
+			PublicIPAllocationMethod: network.Static,
+			PublicIPAddressVersion:   network.IPv4,
 			ProvisioningState:        "",
 		},
 		Tags: map[string]*string{
@@ -4511,7 +4511,7 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 			assert.NotNil(t, publicIPAddressParameters)
 			assert.NotNil(t, publicIPAddressParameters.ExtendedLocation)
 			assert.Equal(t, *publicIPAddressParameters.ExtendedLocation.Name, exLocName)
-			assert.Equal(t, publicIPAddressParameters.ExtendedLocation.Type, network.ExtendedLocationTypesEdgeZone)
+			assert.Equal(t, publicIPAddressParameters.ExtendedLocation.Type, network.EdgeZone)
 			// Edge zones don't support availability zones.
 			assert.Nil(t, publicIPAddressParameters.Zones)
 			return nil
@@ -5031,6 +5031,9 @@ func buildLBWithVMIPs(clusterName string, vmIPs []string) *network.LoadBalancer 
 		*(*lb.BackendAddressPools)[0].LoadBalancerBackendAddresses = append(*(*lb.BackendAddressPools)[0].LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
 			LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
 				IPAddress: &vmIP,
+				VirtualNetwork: &network.SubResource{
+					ID: pointer.String("vnet"),
+				},
 			},
 		})
 	}
@@ -5469,9 +5472,9 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			if tc.expectedIP != nil {
 				assert.Equal(t, *tc.expectedIP, to.String((*lb.FrontendIPConfigurations)[0].PrivateIPAddress))
 				if *tc.expectedIP != "" {
-					assert.Equal(t, network.IPAllocationMethodStatic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
+					assert.Equal(t, network.Static, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
 				} else {
-					assert.Equal(t, network.IPAllocationMethodDynamic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
+					assert.Equal(t, network.Dynamic, (*lb.FrontendIPConfigurations)[0].PrivateIPAllocationMethod)
 				}
 			}
 		})
