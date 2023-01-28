@@ -408,4 +408,4 @@ LINTER_VERSION = v1.50.1
 .PHONY: golangci-lint
 golangci-lint:  ## Download golangci-lint locally if necessary.
 	@echo "Installing golangci-lint"
-	@test -s $(LINTER) || curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/$(LINTER_VERSION)/install.sh | sh -s -- -b $(shell pwd)/bin $(LINTER_VERSION)
+	@test -s $(LINTER) || curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell pwd)/bin $(LINTER_VERSION)
