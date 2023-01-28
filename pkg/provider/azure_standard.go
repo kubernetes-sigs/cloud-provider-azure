@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -235,9 +235,9 @@ func getIPConfigByIPFamily(nic network.Interface, IPv6 bool) (*network.Interface
 
 	var ipVersion network.IPVersion
 	if IPv6 {
-		ipVersion = network.IPVersionIPv6
+		ipVersion = network.IPv6
 	} else {
-		ipVersion = network.IPVersionIPv4
+		ipVersion = network.IPv4
 	}
 	for _, ref := range *nic.IPConfigurations {
 		if ref.PrivateIPAddress != nil && ref.PrivateIPAddressVersion == ipVersion {

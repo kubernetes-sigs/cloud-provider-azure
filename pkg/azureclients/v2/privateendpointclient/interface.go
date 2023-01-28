@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/v2/utils"
 )
 
-// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2,packageAlias=armnetwork,clientName=PrivateEndpointsClient,apiVersion="2021-08-01",expand=true
+// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2,packageAlias=armnetwork,clientName=PrivateEndpointsClient,apiVersion="2022-07-01",expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PrivateEndpoint]
 
