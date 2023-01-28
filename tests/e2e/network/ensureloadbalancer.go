@@ -605,7 +605,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		By("Labeling node")
 		node, err := utils.LabelNode(cs, &nodes[0], label, false)
 		Expect(err).NotTo(HaveOccurred())
-		err = waitForNodesInLBBackendPool(tc, publicIP, len(nodes)-1)
+		var expectedCount int
+		if len(nodes) == 1 {
+			expectedCount = 1
+		} else {
+			expectedCount = len(nodes) - 1
+		}
+		err = waitForNodesInLBBackendPool(tc, publicIP, expectedCount)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Unlabeling node")

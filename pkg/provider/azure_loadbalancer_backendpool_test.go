@@ -521,51 +521,59 @@ func TestReconcileBackendPoolsNodeIPConfigToIP(t *testing.T) {
 	assert.Empty(t, (*lb.BackendAddressPools)[0].LoadBalancerBackendAddresses)
 }
 
-func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
-	nodeIPAddresses := []string{"1.2.3.4", "4.3.2.1"}
+func buildTestLoadBalancerBackendPoolWithIPs(name string, ips []string) network.BackendAddressPool {
 	backendPool := network.BackendAddressPool{
-		Name: pointer.String("kubernetes"),
+		Name: &name,
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("1.2.3.4"),
-					},
-				},
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("5.6.7.8"),
-					},
-				},
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("4.3.2.1"),
-					},
-				},
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{},
-				},
-			},
+			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 		},
 	}
-	expectedBackendPool := network.BackendAddressPool{
-		Name: pointer.String("kubernetes"),
-		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("5.6.7.8"),
-					},
-				},
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{},
-				},
+	for _, ip := range ips {
+		ip := ip
+		*backendPool.LoadBalancerBackendAddresses = append(*backendPool.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
+			LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+				IPAddress: &ip,
 			},
-		},
+		})
 	}
 
-	removeNodeIPAddressesFromBackendPool(backendPool, nodeIPAddresses, false)
-	assert.Equal(t, expectedBackendPool, backendPool)
+	return backendPool
+}
+
+func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
+	for _, tc := range []struct {
+		description                           string
+		removeAll                             bool
+		unwantedIPs, existingIPs, expectedIPs []string
+	}{
+		{
+			description: "removeNodeIPAddressFromBackendPool should remove the unwanted IP addresses from the backend pool",
+			unwantedIPs: []string{"1.2.3.4", "4.3.2.1"},
+			existingIPs: []string{"1.2.3.4", "5.6.7.8", "4.3.2.1", ""},
+			expectedIPs: []string{"5.6.7.8", ""},
+		},
+		{
+			description: "removeNodeIPAddressFromBackendPool should not make the backend pool empty",
+			unwantedIPs: []string{"1.2.3.4", "4.3.2.1"},
+			existingIPs: []string{"1.2.3.4", "4.3.2.1"},
+			expectedIPs: []string{"1.2.3.4", "4.3.2.1"},
+		},
+		{
+			description: "removeNodeIPAddressFromBackendPool should remove all the IP addresses from the backend pool",
+			removeAll:   true,
+			unwantedIPs: []string{"1.2.3.4", "4.3.2.1"},
+			existingIPs: []string{"1.2.3.4", "4.3.2.1", ""},
+			expectedIPs: []string{""},
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			backendPool := buildTestLoadBalancerBackendPoolWithIPs("kubernetes", tc.existingIPs)
+			expectedBackendPool := buildTestLoadBalancerBackendPoolWithIPs("kubernetes", tc.expectedIPs)
+
+			removeNodeIPAddressesFromBackendPool(backendPool, tc.unwantedIPs, tc.removeAll)
+			assert.Equal(t, expectedBackendPool, backendPool)
+		})
+	}
 }
 
 func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
@@ -587,4 +595,73 @@ func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	ipv4, ipv6 := bc.GetBackendPrivateIPs(testClusterName, &svc, &lb)
 	assert.Equal(t, []string{"1.2.3.4"}, ipv4)
 	assert.Equal(t, []string{"fe80::1"}, ipv6)
+}
+
+func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {
+	for _, tc := range []struct {
+		description                         string
+		bipConfigNotFound, bipConfigExclude []network.InterfaceIPConfiguration
+		expected                            map[string]bool
+	}{
+		{
+			description: "should ignore excluded IP configurations if the backend pool will be empty after removing IP configurations of not found vms",
+			bipConfigNotFound: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig1")},
+				{ID: pointer.String("ipconfig2")},
+			},
+			bipConfigExclude: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig3")},
+			},
+			expected: map[string]bool{
+				"ipconfig1": true,
+				"ipconfig2": true,
+			},
+		},
+		{
+			description: "should remove both not found and excluded vms",
+			bipConfigNotFound: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig1")},
+			},
+			bipConfigExclude: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig3")},
+			},
+			expected: map[string]bool{
+				"ipconfig1": true,
+				"ipconfig3": true,
+			},
+		},
+		{
+			description: "should remove all not found vms even if the backend pool will be empty",
+			bipConfigNotFound: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig1")},
+				{ID: pointer.String("ipconfig2")},
+				{ID: pointer.String("ipconfig3")},
+			},
+			bipConfigExclude: []network.InterfaceIPConfiguration{
+				{ID: pointer.String("ipconfig4")},
+			},
+			expected: map[string]bool{
+				"ipconfig1": true,
+				"ipconfig2": true,
+				"ipconfig3": true,
+			},
+		},
+	} {
+		bp := network.BackendAddressPool{
+			BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+				BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+					{ID: pointer.String("ipconfig1")},
+					{ID: pointer.String("ipconfig2")},
+					{ID: pointer.String("ipconfig3")},
+				},
+			},
+		}
+
+		ipConfigs := getBackendIPConfigurationsToBeDeleted(bp, tc.bipConfigNotFound, tc.bipConfigExclude)
+		actual := make(map[string]bool)
+		for _, ipConfig := range ipConfigs {
+			actual[*ipConfig.ID] = true
+		}
+		assert.Equal(t, tc.expected, actual)
+	}
 }
