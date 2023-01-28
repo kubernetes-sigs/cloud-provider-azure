@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/net"
 )
 
 // IsK8sServiceHasHAModeEnabled return if HA Mode is enabled in kubernetes service annotations
@@ -34,10 +33,6 @@ func IsK8sServiceHasHAModeEnabled(service *v1.Service) bool {
 // IsK8sServiceUsingInternalLoadBalancer return if service is using an internal load balancer.
 func IsK8sServiceUsingInternalLoadBalancer(service *v1.Service) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationLoadBalancerInternal, TrueAnnotationValue)
-}
-
-func IsK8sServiceInternalIPv6(service *v1.Service) bool {
-	return IsK8sServiceUsingInternalLoadBalancer(service) && net.IsIPv6String(service.Spec.ClusterIP)
 }
 
 // IsK8sServiceDisableLoadBalancerFloatingIP return if floating IP in load balancer is disabled in kubernetes service annotations

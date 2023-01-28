@@ -201,12 +201,18 @@ var (
 		false: "service.beta.kubernetes.io/azure-load-balancer-ipv4",
 		true:  "service.beta.kubernetes.io/azure-load-balancer-ipv6",
 	}
+	ServiceAnnotationPIPNameDualStack = map[bool]string{
+		false: "service.beta.kubernetes.io/azure-pip-name-ipv4",
+		true:  "service.beta.kubernetes.io/azure-pip-name-ipv6",
+	}
+	ServiceAnnotationPIPPrefixIDDualStack = map[bool]string{
+		false: "service.beta.kubernetes.io/azure-pip-prefix-id-ipv4",
+		true:  "service.beta.kubernetes.io/azure-pip-prefix-id-ipv6",
+	}
 )
 
 // load balancer
 const (
-	// PreConfiguredBackendPoolLoadBalancerTypesNone means that the load balancers are not pre-configured
-	PreConfiguredBackendPoolLoadBalancerTypesNone = ""
 	// PreConfiguredBackendPoolLoadBalancerTypesInternal means that the `internal` load balancers are pre-configured
 	PreConfiguredBackendPoolLoadBalancerTypesInternal = "internal"
 	// PreConfiguredBackendPoolLoadBalancerTypesExternal means that the `external` load balancers are pre-configured
@@ -352,6 +358,8 @@ const (
 	FrontendIPConfigNameMaxLength = 80
 	// LoadBalancerRuleNameMaxLength is the max length of the load balancing rule
 	LoadBalancerRuleNameMaxLength = 80
+	// IPFamilySuffixLength is the length of suffix length of IP family ("-IPv4", "-IPv6")
+	IPFamilySuffixLength = 5
 
 	// LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration is the lb backend pool config type node IP configuration
 	LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration = "nodeIPConfiguration"

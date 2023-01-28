@@ -146,12 +146,12 @@ func (tc *AzureTestClient) CreateSecurityGroupsClient() *aznetwork.SecurityGroup
 	return &aznetwork.SecurityGroupsClient{BaseClient: tc.networkClient}
 }
 
-// createPublicIPAddressesClient generates virtual network client with the same baseclient as azure test client
+// createPublicIPAddressesClient generates public IP addresses client with the same baseclient as azure test client
 func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAddressesClient {
 	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
 }
 
-// createPublicIPPrefixesClient generates virtual network client with the same baseclient as azure test client
+// createPublicIPPrefixesClient generates public IP prefixes client with the same baseclient as azure test client
 func (tc *AzureTestClient) createPublicIPPrefixesClient() *aznetwork.PublicIPPrefixesClient {
 	return &aznetwork.PublicIPPrefixesClient{BaseClient: tc.networkClient}
 }

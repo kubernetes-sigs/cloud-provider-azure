@@ -38,9 +38,17 @@ import (
 type IPFamily string
 
 var (
-	IPv4      IPFamily = "ipv4"
-	IPv6      IPFamily = "ipv6"
-	DualStack IPFamily = "dualstack"
+	IPv4      IPFamily = "IPv4"
+	IPv6      IPFamily = "IPv6"
+	DualStack IPFamily = "DualStack"
+
+	Suffixes = map[bool]string{
+		false: "-IPv4",
+		true:  "-IPv6",
+	}
+
+	// TODO: After dual-stack implementation finished, update here.
+	DualstackSupported = false
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -53,6 +61,7 @@ func (azureTestClient *AzureTestClient) getVirtualNetworkList() (result aznetwor
 			if !IsRetryableAPIError(err) {
 				return false, err
 			}
+			Logf("error when listing virtual network list: %w", err)
 			return false, nil
 		}
 		return true, nil
@@ -81,11 +90,11 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 }
 
 // CreateSubnet creates a new subnet in the specified virtual network.
-func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefix *string, waitUntilComplete bool) (network.Subnet, error) {
-	Logf("creating a new subnet %s, %s", *subnetName, *prefix)
+func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefixes *[]string, waitUntilComplete bool) (network.Subnet, error) {
+	Logf("creating a new subnet %s, %v", *subnetName, *prefixes)
 	subnetParameter := (*vnet.Subnets)[0]
 	subnetParameter.Name = subnetName
-	subnetParameter.AddressPrefix = prefix
+	subnetParameter.AddressPrefixes = prefixes
 	subnetsClient := azureTestClient.createSubnetsClient()
 	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
 	var subnet network.Subnet
@@ -132,15 +141,15 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 	})
 }
 
-// GetNextSubnetCIDR obtains a new ip address which has no overlap with existing subnets.
-func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) (*net.IPNet, error) {
+// GetNextSubnetCIDRs obtains a new ip address which has no overlap with existing subnets.
+func GetNextSubnetCIDRs(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) ([]*net.IPNet, error) {
 	if len(*vnet.AddressSpace.AddressPrefixes) == 0 {
 		return nil, fmt.Errorf("vNet has no prefix")
 	}
 	// Because of Azure vNet limitation, underlying vNet is dual-stack for
 	// those single stack IPv6 clusters. Pods and Services are single stack
 	// IPv6 while Nodes and routes are dual-stack.
-	vnetCIDR := (*vnet.AddressSpace.AddressPrefixes)[0]
+	vnetCIDRs := []string{}
 	if ipFamily == IPv6 {
 		for i := range *vnet.AddressSpace.AddressPrefixes {
 			addrPrefix := (*vnet.AddressSpace.AddressPrefixes)[i]
@@ -149,9 +158,16 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) (*net.I
 				return nil, fmt.Errorf("failed to parse address prefix CIDR: %w", err)
 			}
 			if ip.To4() == nil {
-				vnetCIDR = addrPrefix
+				vnetCIDRs = append(vnetCIDRs, addrPrefix)
 				break
 			}
+		}
+	} else if ipFamily == IPv4 {
+		vnetCIDRs = append(vnetCIDRs, (*vnet.AddressSpace.AddressPrefixes)[0])
+	} else {
+		for i := range *vnet.AddressSpace.AddressPrefixes {
+			addrPrefix := (*vnet.AddressSpace.AddressPrefixes)[i]
+			vnetCIDRs = append(vnetCIDRs, addrPrefix)
 		}
 	}
 
@@ -166,7 +182,15 @@ func GetNextSubnetCIDR(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) (*net.I
 		}
 		existSubnets = append(existSubnets, *subnet.AddressPrefixes...)
 	}
-	return getNextSubnet(vnetCIDR, existSubnets)
+	var nextSubnets []*net.IPNet
+	for _, vnetCIDR := range vnetCIDRs {
+		nextSubnet, err := getNextSubnet(vnetCIDR, existSubnets)
+		if err != nil {
+			return nextSubnets, err
+		}
+		nextSubnets = append(nextSubnets, nextSubnet)
+	}
+	return nextSubnets, nil
 }
 
 // isCIDRIPv6 checks if the provided CIDR is an IPv6 one.
@@ -231,7 +255,7 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 			Selector:       labels,
 			Ports:          ports,
 			Type:           "LoadBalancer",
-			IPFamilyPolicy: &ipFamilyPreferDS,
+			IPFamilyPolicy: &ipFamilyPreferDS, // TODO: This should be updated if there're single stack Service tests in dual-stack setup.
 		},
 	}
 }
@@ -394,34 +418,34 @@ func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (pip aznetwork.
 	return
 }
 
-// SelectAvailablePrivateIP selects a private IP address in Azure subnet.
-func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
+// SelectAvailablePrivateIPs selects private IP addresses in Azure subnet.
+func SelectAvailablePrivateIPs(tc *AzureTestClient, ipFamily IPFamily) ([]string, error) {
 	vNet, err := tc.GetClusterVirtualNetwork()
 	vNetClient := tc.createVirtualNetworksClient()
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
 	if vNet.Subnets == nil || len(*vNet.Subnets) == 0 {
-		return "", fmt.Errorf("failed to find a subnet in vNet %s", pointer.StringDeref(vNet.Name, ""))
+		return []string{}, fmt.Errorf("failed to find a subnet in vNet %s", pointer.StringDeref(vNet.Name, ""))
 	}
-	subnet := pointer.StringDeref((*vNet.Subnets)[0].AddressPrefix, "")
+	subnets := []string{pointer.StringDeref((*vNet.Subnets)[0].AddressPrefix, "")}
 	if len(*vNet.Subnets) > 1 {
 		for _, sn := range *vNet.Subnets {
 			// if there is more than one subnet, select the first one we find.
 			if !strings.Contains(*sn.Name, "controlplane") && !strings.Contains(*sn.Name, "control-plane") {
 				if tc.IPFamily == DualStack {
-					subnet = (*sn.AddressPrefixes)[0]
+					subnets = []string{(*sn.AddressPrefixes)[0], (*sn.AddressPrefixes)[1]}
 				} else if tc.IPFamily == IPv4 {
-					subnet = *sn.AddressPrefix
+					subnets = []string{*sn.AddressPrefix}
 				} else {
 					for i := range *sn.AddressPrefixes {
 						addrPrefix := (*sn.AddressPrefixes)[i]
 						isIPv6, err := isCIDRIPv6(addrPrefix)
 						if err != nil {
-							return "", err
+							return []string{}, err
 						}
 						if isIPv6 {
-							subnet = addrPrefix
+							subnets = []string{addrPrefix}
 							break
 						}
 					}
@@ -430,30 +454,43 @@ func SelectAvailablePrivateIP(tc *AzureTestClient) (string, error) {
 			}
 		}
 	}
-	ip, _, err := net.ParseCIDR(subnet)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", pointer.StringDeref(vNet.Name, ""), err)
-	}
 
-	baseIP := ip.To4()
-	pos := 3
-	if tc.IPFamily == IPv6 {
-		baseIP = ip.To16()
-		pos = 15
-	}
-	for i := 0; i <= 254; i++ {
-		baseIP[pos]++
-		IP := baseIP.String()
-		ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), pointer.StringDeref(vNet.Name, ""), IP)
+	privateIPs := []string{}
+	for _, subnet := range subnets {
+		Logf("Handling subnet %s", subnet)
+		ip, _, err := net.ParseCIDR(subnet)
 		if err != nil {
-			// just ignore
-			continue
+			return []string{}, fmt.Errorf("failed to parse subnet CIDR in vNet %s: %w", pointer.StringDeref(vNet.Name, ""), err)
 		}
-		if ret.Available != nil && *ret.Available {
-			return IP, nil
+
+		baseIP := ip.To4()
+		pos := 3
+		if ip.To4() == nil {
+			baseIP = ip.To16()
+			pos = 15
+		}
+		for i := 0; i <= 254; i++ {
+			baseIP[pos]++
+			IP := baseIP.String()
+			ret, err := vNetClient.CheckIPAddressAvailability(context.Background(), tc.GetResourceGroup(), pointer.StringDeref(vNet.Name, ""), IP)
+			if err != nil {
+				// just ignore
+				continue
+			}
+			if ret.Available != nil && *ret.Available {
+				privateIPs = append(privateIPs, IP)
+				break
+			}
 		}
 	}
-	return "", fmt.Errorf("find no availabePrivateIP in subnet CIDR %s", subnet)
+	expectedPrivateIPCount := 1
+	if tc.IPFamily == DualStack {
+		expectedPrivateIPCount = 2
+	}
+	if len(privateIPs) != expectedPrivateIPCount {
+		return []string{}, fmt.Errorf("failed to find all availabePrivateIPs in subnet CIDRs %v, got privateIPs %v", subnets, privateIPs)
+	}
+	return privateIPs, nil
 }
 
 // GetPublicIPFromAddress finds public ip according to ip address
@@ -603,4 +640,23 @@ func GetClusterServiceIPFamily() (IPFamily, error) {
 		return IPv6, nil
 	}
 	return DualStack, nil
+}
+
+func IfIPFamiliesEnabled(ipFamily IPFamily) (v4Enabled bool, v6Enabled bool) {
+	if ipFamily == DualStack || ipFamily == IPv4 {
+		v4Enabled = true
+	}
+	if ipFamily == DualStack || ipFamily == IPv6 {
+		v6Enabled = true
+	}
+	return
+}
+
+// GetNameWithSuffix returns resource name with IP family suffix.
+// After dual-stack implementation is finished, this function returns name + suffix for all IP families.
+func GetNameWithSuffix(name, suffix string) string {
+	if DualstackSupported {
+		return name + suffix
+	}
+	return name
 }
