@@ -259,3 +259,165 @@ spec:
       - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
         /etc/resolv.conf
       - systemctl restart systemd-resolved
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}-md-win
+  namespace: default
+spec:
+  clusterName: ${CLUSTER_NAME}
+  replicas: ${WINDOWS_WORKER_MACHINE_COUNT:-0}
+  selector: {}
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-md-win
+      clusterName: ${CLUSTER_NAME}
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: AzureMachineTemplate
+        name: ${CLUSTER_NAME}-md-win
+      version: ${KUBERNETES_VERSION}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: AzureMachineTemplate
+metadata:
+  annotations:
+    runtime: containerd
+  name: ${CLUSTER_NAME}-md-win
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        runtime: containerd
+        windowsServerVersion: ${WINDOWS_SERVER_VERSION:=""}
+    spec:
+      image:
+        marketplace:
+          offer: capi-windows
+          publisher: cncf-upstream
+          sku: ${WINDOWS_SERVER_VERSION:=windows-2019}-containerd-gen1
+          version: latest
+      osDisk:
+        diskSizeGB: 128
+        managedDisk:
+          storageAccountType: Premium_LRS
+        osType: Windows
+      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+      vmSize: ${AZURE_NODE_MACHINE_TYPE}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: ${CLUSTER_NAME}-md-win
+  namespace: default
+spec:
+  template:
+    spec:
+      files:
+      - contentFrom:
+          secret:
+            key: worker-node-azure.json
+            name: ${CLUSTER_NAME}-md-win-azure-json
+        owner: root:root
+        path: c:/k/azure.json
+        permissions: "0644"
+      - content: |-
+          Add-MpPreference -ExclusionProcess C:/opt/cni/bin/calico.exe
+          Add-MpPreference -ExclusionProcess C:/opt/cni/bin/calico-ipam.exe
+        path: C:/defender-exclude-calico.ps1
+        permissions: "0744"
+      - content: |
+          # /tmp is assumed created and required for upstream e2e tests to pass
+          New-Item -ItemType Directory -Force -Path C:\tmp\
+        path: C:/create-temp-folder.ps1
+        permissions: "0744"
+      - content: |
+          $ErrorActionPreference = 'Stop'
+
+          $$CONTAINERD_URL="${WINDOWS_CONTAINERD_URL}"
+          if($$CONTAINERD_URL -ne ""){
+            # Kubelet service depends on contianerd service so make a best effort attempt to stop it
+            Stop-Service kubelet -Force -ErrorAction SilentlyContinue
+            Stop-Service containerd -Force
+            echo "downloading containerd: $$CONTAINERD_URL"
+            curl.exe --retry 10 --retry-delay 5 -L "$$CONTAINERD_URL" --output "c:/k/containerd.tar.gz"
+            tar.exe -zxvf c:/k/containerd.tar.gz -C "c:/Program Files/containerd" --strip-components 1
+
+            Start-Service containerd
+          }
+
+          containerd.exe --version
+          containerd-shim-runhcs-v1.exe --version
+        path: C:/replace-containerd.ps1
+        permissions: "0744"
+      - content: |
+          mkdir -Force c:/localdumps
+          reg.exe add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /V DumpCount /t REG_DWORD /d 50 /f
+          reg.exe add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /V DumpType /t REG_DWORD /d 2 /f
+          reg.exe add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /V DumpFolder /t REG_EXPAND_SZ /d "c:/LocalDumps" /f
+          # Enable sftp so we can copy crash dump files during log collection of stfp
+          $sshd_config = "$env:ProgramData\ssh\sshd_config"
+          if (-not (Test-Path $sshd_config)) { mkdir -Force $sshd_config }
+          Add-Content -Path $sshd_config "Subsystem sftp              sftp-server.exe"
+          sc.exe stop sshd
+          sc.exe start sshd
+        path: C:/collect-hns-crashes.ps1
+        permissions: "0744"
+      - content: |
+          $ErrorActionPreference = 'Stop'
+
+          Stop-Service kubelet -Force
+
+          $$CI_VERSION="${CI_VERSION}"
+          if($$CI_VERSION -ne "")
+          {
+            $$binaries=@("kubeadm", "kubectl", "kubelet", "kube-proxy")
+            $$ci_url="https://storage.googleapis.com/k8s-release-dev/ci/$$CI_VERSION/bin/windows/amd64"
+            foreach ( $$binary in $$binaries )
+            {
+              echo "downloading binary: $$ci_url/$$binary.exe"
+              curl.exe --retry 10 --retry-delay 5 "$$ci_url/$$binary.exe" --output "c:/k/$$binary.exe"
+            }
+          }
+
+          # Tag it to the ci version.  The image knows how to use the copy locally with the configmap
+          # that is applied at at this stage (windows-kubeproxy-ci.yaml)
+          ctr.exe -n k8s.io images pull docker.io/sigwindowstools/kube-proxy:v1.23.1-calico-hostprocess
+          ctr.exe -n k8s.io images tag docker.io/sigwindowstools/kube-proxy:v1.23.1-calico-hostprocess "docker.io/sigwindowstools/kube-proxy:${CI_VERSION/+/_}-calico-hostprocess"
+
+          kubeadm.exe version -o=short
+          kubectl.exe version --client=true --short=true
+          kubelet.exe --version
+          kube-proxy.exe --version
+        path: C:/replace-ci-binaries.ps1
+        permissions: "0744"
+      joinConfiguration:
+        nodeRegistration:
+          criSocket: npipe:////./pipe/containerd-containerd
+          kubeletExtraArgs:
+            azure-container-registry-config: c:/k/azure.json
+            cloud-config: c:/k/azure.json
+            cloud-provider: azure
+            feature-gates: WindowsHostProcessContainers=true
+            v: "2"
+            windows-priorityclass: ABOVE_NORMAL_PRIORITY_CLASS
+          name: '{{ ds.meta_data["local_hostname"] }}'
+      postKubeadmCommands:
+      - nssm set kubelet start SERVICE_AUTO_START
+      - powershell C:/defender-exclude-calico.ps1
+      preKubeadmCommands:
+      - powershell C:/create-temp-folder.ps1
+      - powershell C:/replace-containerd.ps1
+      - powershell C:/collect-hns-crashes.ps1
+      - powershell C:/replace-ci-binaries.ps1
+      users:
+      - groups: Administrators
+        name: capi
+        sshAuthorizedKeys:
+        - ${AZURE_SSH_PUBLIC_KEY:=""}
