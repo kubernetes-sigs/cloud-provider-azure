@@ -155,7 +155,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 
 	if !bFoundDisk {
 		// only log here, next action is to update VM status with original meta data
-		klog.Errorf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
+		klog.Warningf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
 	} else {
 		if strings.EqualFold(fs.cloud.Environment.Name, consts.AzureStackCloudName) && !fs.Config.DisableAzureStackCloud {
 			// Azure stack does not support ToBeDetached flag, use original way to detach disk

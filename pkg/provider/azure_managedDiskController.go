@@ -288,8 +288,8 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 		return err
 	}
 
-	if _, ok := c.common.diskStateMap.Load(strings.ToLower(diskURI)); ok {
-		return fmt.Errorf("failed to delete disk(%s) since it's in attaching or detaching state", diskURI)
+	if state, ok := c.common.diskStateMap.Load(strings.ToLower(diskURI)); ok {
+		return fmt.Errorf("failed to delete disk(%s) since it's in %s state", diskURI, state.(string))
 	}
 
 	diskName := path.Base(diskURI)
