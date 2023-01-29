@@ -90,7 +90,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		}
 
 		rgName := tc.GetResourceGroup()
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, map[string]string{}, ports)
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		nodeList, err := utils.GetAgentNodes(cs)
@@ -170,7 +172,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		}
 
 		rgName := tc.GetResourceGroup()
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, map[string]string{}, ports)
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
 		Expect(lb.OutboundRules).NotTo(BeNil())
