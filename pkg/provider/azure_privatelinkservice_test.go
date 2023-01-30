@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -121,10 +121,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 						IPConfigurations: &[]network.PrivateLinkServiceIPConfiguration{
 							{
 								PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-									PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+									PrivateIPAllocationMethod: network.Dynamic,
 									Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 									Primary:                   to.BoolPtr(true),
-									PrivateIPAddressVersion:   network.IPVersionIPv4,
+									PrivateIPAddressVersion:   network.IPv4,
 								},
 							},
 						},
@@ -150,10 +150,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 						IPConfigurations: &[]network.PrivateLinkServiceIPConfiguration{
 							{
 								PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-									PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+									PrivateIPAllocationMethod: network.Dynamic,
 									Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 									Primary:                   to.BoolPtr(true),
-									PrivateIPAddressVersion:   network.IPVersionIPv4,
+									PrivateIPAddressVersion:   network.IPv4,
 								},
 							},
 						},
@@ -182,11 +182,11 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 						IPConfigurations: &[]network.PrivateLinkServiceIPConfiguration{
 							{
 								PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-									PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+									PrivateIPAllocationMethod: network.Static,
 									PrivateIPAddress:          to.StringPtr("10.2.0.4"),
 									Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 									Primary:                   to.BoolPtr(true),
-									PrivateIPAddressVersion:   network.IPVersionIPv4,
+									PrivateIPAddressVersion:   network.IPv4,
 								},
 							},
 						},
@@ -223,10 +223,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 						IPConfigurations: &[]network.PrivateLinkServiceIPConfiguration{
 							{
 								PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-									PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+									PrivateIPAllocationMethod: network.Dynamic,
 									Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 									Primary:                   to.BoolPtr(true),
-									PrivateIPAddressVersion:   network.IPVersionIPv4,
+									PrivateIPAddressVersion:   network.IPv4,
 								},
 							},
 						},
@@ -264,10 +264,10 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 						IPConfigurations: &[]network.PrivateLinkServiceIPConfiguration{
 							{
 								PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-									PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+									PrivateIPAllocationMethod: network.Dynamic,
 									Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 									Primary:                   to.BoolPtr(true),
-									PrivateIPAddressVersion:   network.IPVersionIPv4,
+									PrivateIPAddressVersion:   network.IPv4,
 								},
 							},
 						},
@@ -542,30 +542,30 @@ func TestGetExpectedPrivateLinkService(t *testing.T) {
 			{
 				Name: to.StringPtr("subnet-testPLS-static-10.2.0.4"),
 				PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 					PrivateIPAddress:          to.StringPtr("10.2.0.4"),
 					Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 					Primary:                   to.BoolPtr(true),
-					PrivateIPAddressVersion:   network.IPVersionIPv4,
+					PrivateIPAddressVersion:   network.IPv4,
 				},
 			},
 			{
 				Name: to.StringPtr("subnet-testPLS-static-10.2.0.5"),
 				PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-					PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+					PrivateIPAllocationMethod: network.Static,
 					PrivateIPAddress:          to.StringPtr("10.2.0.5"),
 					Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 					Primary:                   to.BoolPtr(false),
-					PrivateIPAddressVersion:   network.IPVersionIPv4,
+					PrivateIPAddressVersion:   network.IPv4,
 				},
 			},
 			{
 				Name: to.StringPtr("subnet-testPLS-dynamic-0"),
 				PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-					PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+					PrivateIPAllocationMethod: network.Dynamic,
 					Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 					Primary:                   to.BoolPtr(false),
-					PrivateIPAddressVersion:   network.IPVersionIPv4,
+					PrivateIPAddressVersion:   network.IPv4,
 				},
 			},
 		}
@@ -621,10 +621,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -639,10 +639,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -650,19 +650,19 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-1"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(false),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -674,10 +674,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID1")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -685,10 +685,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -704,10 +704,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -715,20 +715,20 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.4"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.4"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(false),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -740,11 +740,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.4"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.4"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -752,10 +752,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -770,11 +770,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.4"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.4"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -782,11 +782,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.5"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.5"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -798,10 +798,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -809,10 +809,10 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-dynamic-0"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodDynamic,
+						PrivateIPAllocationMethod: network.Dynamic,
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -826,11 +826,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.5"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.5"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
@@ -838,11 +838,11 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 				{
 					Name: to.StringPtr("subnet-testpls-static-10.2.0.5"),
 					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
-						PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
+						PrivateIPAllocationMethod: network.Static,
 						PrivateIPAddress:          to.StringPtr("10.2.0.5"),
 						Subnet:                    &network.Subnet{ID: to.StringPtr("subnetID")},
 						Primary:                   to.BoolPtr(true),
-						PrivateIPAddressVersion:   network.IPVersionIPv4,
+						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
 			},
