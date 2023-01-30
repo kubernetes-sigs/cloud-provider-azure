@@ -188,8 +188,8 @@ k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 h1:KTgPnR10d5zhztWptI952TNtt/4u5
 k8s.io/utils v0.0.0-20221128185143-99ec85e7a448/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cloud-provider-azure v1.26.3 h1:Lj34J6vvpCcjhXSboIsgRFPwHdPjk/rJTq87sbVswqw=
 sigs.k8s.io/cloud-provider-azure v1.26.3/go.mod h1:IAg3rzBPov091oGL/jr479hOFnFxS1yWytQuwZ78NIM=
-sigs.k8s.io/controller-tools v0.11.1 h1:blfU7DbmXuACWHfpZR645KCq8cLOc6nfkipGSGnH+Wk=
-sigs.k8s.io/controller-tools v0.11.1/go.mod h1:dm4bN3Yp1ZP+hbbeSLF8zOEHsI1/bf15u3JNcgRv2TM=
+sigs.k8s.io/controller-tools v0.11.2 h1:3GOMW8Ha4P0v1wt2bXbWOGKl186y2ijsjNFv+Rmi3Yw=
+sigs.k8s.io/controller-tools v0.11.2/go.mod h1:qcfX7jfcfYD/b7lAhvqAyTbt/px4GpvN88WKLFFv7p8=
 sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 h1:iXTIw73aPyC+oRdyqqvVJuloN1p0AC/kzH07hu3NE+k=
 sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/structured-merge-diff/v4 v4.2.3 h1:PRbqxJClWWYMNV1dhaG4NsibJbArud9kFxnAMREiWFE=
