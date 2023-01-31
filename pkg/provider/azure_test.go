@@ -39,6 +39,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
@@ -727,7 +728,8 @@ func TestReconcileSecurityGroupFromAnyDestinationAddressPrefixToLoadBalancerIP(t
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -1662,6 +1664,12 @@ func getBackendPort(port int32) int32 {
 	return port + 10000
 }
 
+// TODO: This function should be merged into getTestService()
+func makeTestServiceDualStack(svc *v1.Service) {
+	svc.Spec.ClusterIPs = []string{"10.0.0.2", "fd00::1907"}
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+}
+
 func getTestService(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, requestedPorts ...int32) v1.Service {
 	ports := []v1.ServicePort{}
 	for _, port := range requestedPorts {
@@ -1689,8 +1697,10 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 	}
 
 	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
 	if isIPv6 {
 		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
 	}
 
 	return svc
@@ -1740,7 +1750,8 @@ func getTestSecurityGroup(az *Cloud, services ...v1.Service) *network.SecurityGr
 		for _, port := range service.Spec.Ports {
 			sources := getServiceSourceRanges(&services[i])
 			for _, src := range sources {
-				ruleName := az.getSecurityRuleName(&services[i], port, src)
+				isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
+				ruleName := az.getSecurityRuleName(&services[i], port, src, isIPv6)
 				rules = append(rules, network.SecurityRule{
 					Name: pointer.String(ruleName),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
@@ -1790,7 +1801,8 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 		}
 		for _, wantedRule := range svc.Spec.Ports {
 			expectedRuleCount++
-			wantedRuleName := az.getLoadBalancerRuleName(&services[i], wantedRule.Protocol, wantedRule.Port)
+			isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
+			wantedRuleName := az.getLoadBalancerRuleName(&services[i], wantedRule.Protocol, wantedRule.Port, isIPv6)
 			foundRule := false
 			for _, actualRule := range *loadBalancer.LoadBalancingRules {
 				if strings.EqualFold(*actualRule.Name, wantedRuleName) &&
@@ -1813,7 +1825,8 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 			foundProbe := false
 			if servicehelpers.NeedsHealthCheck(&services[i]) {
 				path, port := servicehelpers.GetServiceHealthCheckPathPort(&services[i])
-				wantedRuleName := az.getLoadBalancerRuleName(&services[i], v1.ProtocolTCP, port)
+				isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
+				wantedRuleName := az.getLoadBalancerRuleName(&services[i], v1.ProtocolTCP, port, isIPv6)
 				for _, actualProbe := range *loadBalancer.Probes {
 					if strings.EqualFold(*actualProbe.Name, wantedRuleName) &&
 						*actualProbe.Port == port &&
@@ -2001,12 +2014,13 @@ func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, s
 		for _, wantedRule := range svc.Spec.Ports {
 			sources := getServiceSourceRanges(&services[i])
 			for _, source := range sources {
-				wantedRuleName := az.getSecurityRuleName(&services[i], wantedRule, source)
+				isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
+				wantedRuleName := az.getSecurityRuleName(&services[i], wantedRule, source, isIPv6)
 				seenRules[wantedRuleName] = wantedRuleName
 				foundRule := false
 				for _, actualRule := range *securityGroup.SecurityRules {
 					if strings.EqualFold(*actualRule.Name, wantedRuleName) {
-						err := securityRuleMatches(source, wantedRule, getServiceLoadBalancerIP(&svc), actualRule)
+						err := securityRuleMatches(source, wantedRule, getServiceLoadBalancerIP(&svc, isIPv6), actualRule)
 						if err != nil {
 							t.Errorf("Found matching security rule %q but properties were incorrect: %v", wantedRuleName, err)
 						}
@@ -2452,7 +2466,8 @@ func TestIfServiceSpecifiesSharedRuleAndRuleDoesNotExistItIsCreated(t *testing.T
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -2511,7 +2526,8 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 	}
 	setMockSecurityGroup(az, ctrl, sg)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -2555,13 +2571,15 @@ func TestIfServicesSpecifySharedRuleButDifferentPortsThenSeparateRulesAreCreated
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2628,13 +2646,15 @@ func TestIfServicesSpecifySharedRuleButDifferentProtocolsThenSeparateRulesAreCre
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2701,13 +2721,15 @@ func TestIfServicesSpecifySharedRuleButDifferentSourceAddressesThenSeparateRules
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2776,19 +2798,22 @@ func TestIfServicesSpecifySharedRuleButSomeAreOnDifferentPortsThenRulesAreSepara
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
@@ -2876,13 +2901,15 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
@@ -2890,7 +2917,8 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 	validateSecurityGroup(t, sg, svc1, svc2)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
@@ -2939,19 +2967,22 @@ func TestIfSomeServicesShareARuleAndOneIsDeletedItIsRemovedFromTheRightRule(t *t
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
@@ -2959,7 +2990,8 @@ func TestIfSomeServicesShareARuleAndOneIsDeletedItIsRemovedFromTheRightRule(t *t
 	validateSecurityGroup(t, sg, svc1, svc2, svc3)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
@@ -3050,19 +3082,22 @@ func TestIfServiceSpecifiesSharedRuleAndLastServiceIsDeletedThenRuleIsDeleted(t 
 	sg := getTestSecurityGroup(az)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, true)
+	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3)), nil, true)
+	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
@@ -3070,13 +3105,15 @@ func TestIfServiceSpecifiesSharedRuleAndLastServiceIsDeletedThenRuleIsDeleted(t 
 	validateSecurityGroup(t, sg, svc1, svc2, svc3)
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc3: %q", err)
 	}
@@ -3143,15 +3180,18 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	testServices := []v1.Service{svc1, svc2, svc3, svc4, svc5}
 
 	testRuleName23 := testRuleName2
-	expectedRuleName4 := az.getSecurityRuleName(&svc4, v1.ServicePort{Port: 4444, Protocol: v1.ProtocolTCP}, "Internet")
-	expectedRuleName5 := az.getSecurityRuleName(&svc5, v1.ServicePort{Port: 8888, Protocol: v1.ProtocolTCP}, "Internet")
+	isIPv6 := utilnet.IsIPv6String(svc4.Spec.ClusterIP)
+	expectedRuleName4 := az.getSecurityRuleName(&svc4, v1.ServicePort{Port: 4444, Protocol: v1.ProtocolTCP}, "Internet", isIPv6)
+	isIPv6 = utilnet.IsIPv6String(svc5.Spec.ClusterIP)
+	expectedRuleName5 := az.getSecurityRuleName(&svc5, v1.ServicePort{Port: 8888, Protocol: v1.ProtocolTCP}, "Internet", isIPv6)
 
 	sg := getTestSecurityGroup(az)
 
 	for i, svc := range testServices {
 		svc := svc
 		setMockSecurityGroup(az, ctrl, sg)
-		sg, err = az.reconcileSecurityGroup(testClusterName, &testServices[i], pointer.String(getServiceLoadBalancerIP(&svc)), nil, true)
+		isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
+		sg, err = az.reconcileSecurityGroup(testClusterName, &testServices[i], pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
 		if err != nil {
 			t.Errorf("Unexpected error adding svc%d: %q", i+1, err)
 		}
@@ -3226,8 +3266,9 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	if securityRule4.DestinationAddressPrefix == nil {
 		t.Errorf("Expected unshared rule %s to have a destination IP address", expectedRuleName4)
 	} else {
-		if !strings.EqualFold(*securityRule4.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc4)) {
-			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName4, getServiceLoadBalancerIP(&svc4), *securityRule4.DestinationAddressPrefix)
+		isIPv6 := utilnet.IsIPv6String(svc4.Spec.ClusterIP)
+		if !strings.EqualFold(*securityRule4.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc4, isIPv6)) {
+			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName4, getServiceLoadBalancerIP(&svc4, isIPv6), *securityRule4.DestinationAddressPrefix)
 		}
 	}
 
@@ -3238,19 +3279,22 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 	if securityRule5.DestinationAddressPrefix == nil {
 		t.Errorf("Expected unshared rule %s to have a destination IP address", expectedRuleName5)
 	} else {
-		if !strings.EqualFold(*securityRule5.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc5)) {
-			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName5, getServiceLoadBalancerIP(&svc5), *securityRule5.DestinationAddressPrefix)
+		isIPv6 := utilnet.IsIPv6String(svc5.Spec.ClusterIP)
+		if !strings.EqualFold(*securityRule5.DestinationAddressPrefix, getServiceLoadBalancerIP(&svc5, isIPv6)) {
+			t.Errorf("Expected unshared rule %s to have a destination %s but had %s", expectedRuleName5, getServiceLoadBalancerIP(&svc5, isIPv6), *securityRule5.DestinationAddressPrefix)
 		}
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, pointer.String(getServiceLoadBalancerIP(&svc5)), nil, false)
+	isIPv6 = utilnet.IsIPv6String(svc5.Spec.ClusterIP)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, pointer.String(getServiceLoadBalancerIP(&svc5, isIPv6)), nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc5: %q", err)
 	}

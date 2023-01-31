@@ -213,6 +213,9 @@ var (
 
 // load balancer
 const (
+	// TODO: After dual-stack is supported, all references should be updated and this variable is not needed.
+	DualstackSupported = false
+
 	// PreConfiguredBackendPoolLoadBalancerTypesInternal means that the `internal` load balancers are pre-configured
 	PreConfiguredBackendPoolLoadBalancerTypesInternal = "internal"
 	// PreConfiguredBackendPoolLoadBalancerTypesExternal means that the `external` load balancers are pre-configured
