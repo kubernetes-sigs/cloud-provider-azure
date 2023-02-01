@@ -21,20 +21,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/kubelet/pkg/apis/credentialprovider/v1alpha1"
-	"sigs.k8s.io/yaml"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
@@ -57,7 +55,7 @@ type CredentialProvider interface {
 
 // acrProvider implements the credential provider interface for Azure Container Registry.
 type acrProvider struct {
-	config                *auth.AzureAuthConfig
+	config                *providerconfig.AzureAuthConfig
 	environment           *azure.Environment
 	servicePrincipalToken *adal.ServicePrincipalToken
 }
@@ -78,12 +76,12 @@ func NewAcrProvider(configFile string) (CredentialProvider, error) {
 }
 
 func newAcrProviderFromConfigReader(configReader io.Reader) (*acrProvider, error) {
-	config, env, err := parseConfig(configReader)
+	config, env, err := providerconfig.ParseAzureAuthConfig(configReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	servicePrincipalToken, err := auth.GetServicePrincipalToken(config, env, env.ServiceManagementEndpoint)
+	servicePrincipalToken, err := providerconfig.GetServicePrincipalToken(config, env, env.ServiceManagementEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service principal token: %w", err)
 	}
@@ -162,35 +160,6 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []s
 	}
 
 	return response, nil
-}
-
-// ParseConfig returns a parsed configuration for an Azure cloudprovider config file
-func parseConfig(configReader io.Reader) (*auth.AzureAuthConfig, *azure.Environment, error) {
-	var config auth.AzureAuthConfig
-
-	if configReader == nil {
-		return nil, nil, errors.New("nil config is provided")
-	}
-
-	limitedReader := &io.LimitedReader{R: configReader, N: maxReadLength}
-	configContents, err := ioutil.ReadAll(limitedReader)
-	if err != nil {
-		return nil, nil, err
-	}
-	if limitedReader.N <= 0 {
-		return nil, nil, errors.New("the read limit is reached")
-	}
-	err = yaml.Unmarshal(configContents, &config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	environment, err := auth.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &config, environment, nil
 }
 
 // getFromACR gets credentials from ACR.
