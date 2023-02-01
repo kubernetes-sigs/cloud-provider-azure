@@ -102,14 +102,19 @@ else
   sudo GOPATH="/home/vsts/go" make install
 fi
 popd
-if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
-  rm -rf kubetest2-aks
-  go mod tidy
-  go mod vendor
-fi
 
 get_k8s_version
 echo "AKS Kubernetes version is: ${AKS_KUBERNETES_VERSION:-}"
+
+if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
+  rm -rf kubetest2-aks
+  if [[ "${AKS_KUBERNETES_VERSION:-}" < "1.24" ]]; then
+    go mod tidy -compat=1.17
+  else
+    go mod tidy
+  fi
+  go mod vendor
+fi
 
 kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --location "${AZURE_LOCATION:-}" \
