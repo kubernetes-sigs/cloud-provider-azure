@@ -33,7 +33,6 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"golang.org/x/time/rate"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -1002,24 +1001,6 @@ func (az *Cloud) ProviderName() string {
 }
 
 func initDiskControllers(az *Cloud) error {
-	// Common controller contains the function
-	// needed by both blob disk and managed disk controllers
-
-	enableAttachDetachDiskRateLimiter := true
-	qps := rate.Limit(ratelimitconfig.DefaultAttachDetachDiskQPS)
-	bucket := ratelimitconfig.DefaultAttachDetachDiskBucket
-
-	if az.Config.AttachDetachDiskRateLimit != nil {
-		enableAttachDetachDiskRateLimiter = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimit
-		qps = rate.Limit(az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite)
-		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
-	}
-	klog.V(2).Infof(
-		"attach/detach disk operation rate limiter configuration - Enabled: %t QPS: %f, Bucket: %d",
-		enableAttachDetachDiskRateLimiter,
-		qps,
-		bucket)
-
 	common := &controllerCommon{
 		cloud:   az,
 		lockMap: newLockMap(),
@@ -1032,11 +1013,6 @@ func initDiskControllers(az *Cloud) error {
 	processorOptions := []batch.ProcessorOption{
 		batch.WithVerboseLogLevel(3),
 		batch.WithDelayBeforeStart(delayBeforeStart),
-	}
-
-	if enableAttachDetachDiskRateLimiter {
-		attachDetachRateLimiter := rate.NewLimiter(qps, bucket)
-		processorOptions = append(processorOptions, batch.WithGlobalLimiter(attachDetachRateLimiter))
 	}
 
 	attachBatchFn := func(ctx context.Context, key string, values []interface{}) ([]interface{}, error) {
