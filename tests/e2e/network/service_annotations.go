@@ -147,7 +147,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			consts.ServiceAnnotationDNSLabelName: serviceDomainNamePrefix,
 		}
 		// create service with given annotation and wait it to expose
-		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		_ = createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -191,7 +191,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Create a Service which will be deleted with the PIP")
 		oldServiceName := fmt.Sprintf("%s-old", serviceName)
 		service := utils.CreateLoadBalancerServiceManifest(oldServiceName, annotation, labels, nsName, ports)
-		service = updateServiceLBIP(service, false, targetIP)
+		service = updateServiceLBIPs(service, false, []string{targetIP})
 
 		// create service with given annotation and wait it to expose
 		_, err = cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -201,7 +201,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, nsName, oldServiceName, targetIP)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, nsName, oldServiceName, []string{targetIP})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Delete the old Service")
@@ -245,7 +245,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		// create service with given annotation and wait it to expose
-		_ = createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		_ = createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -298,17 +298,21 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		if newSubnetCIDR == nil {
 			By("Test subnet doesn't exist. Creating a new one...")
-			newSubnetCIDR, err = utils.GetNextSubnetCIDR(vNet, tc.IPFamily)
+			newSubnetCIDRs, err := utils.GetNextSubnetCIDRs(vNet, tc.IPFamily)
 			Expect(err).NotTo(HaveOccurred())
-			newSubnetCIDRStr := newSubnetCIDR.String()
-			By(fmt.Sprintf("Creating a subnet %q", newSubnetCIDRStr))
-			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDRStr, false)
+			newSubnetCIDRStrs := []string{}
+			for _, newSubnetCIDR := range newSubnetCIDRs {
+				newSubnetCIDRStrs = append(newSubnetCIDRStrs, newSubnetCIDR.String())
+			}
+			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDRStrs, false)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
 				err = tc.DeleteSubnet(*vNet.Name, subnetName)
 				Expect(err).NotTo(HaveOccurred())
 			}()
+			Expect(len(newSubnetCIDRs)).NotTo(BeZero())
+			newSubnetCIDR = newSubnetCIDRs[0]
 		}
 
 		annotation := map[string]string{
@@ -317,12 +321,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get External IP: %s", ip)
 
 		By("Validating external ip in target subnet")
@@ -340,12 +346,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			consts.ServiceAnnotationLoadBalancerInternal:                    "true",
 		}
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 
 		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ip, "")
 
@@ -361,12 +369,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		// create service with given annotation and wait it to expose
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up service")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 
 		// get lb from azure client
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
@@ -405,14 +415,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		service = updateServiceLBIP(service, false, *pip.IPAddress)
+		service = updateServiceLBIPs(service, false, []string{*pip.IPAddress})
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
 		//wait and get service's public IP Address
 		By("Waiting service to expose...")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip.IPAddress, ""))
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{pointer.StringDeref(pip.IPAddress, "")})
 		Expect(err).NotTo(HaveOccurred())
 
 		lb := getAzureLoadBalancerFromPIP(tc, *pip.IPAddress, *rg.Name, "")
@@ -432,7 +442,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		annotation := map[string]string{
 			consts.ServiceAnnotationAdditionalPublicIPs: additionalPIP,
 		}
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("cleaning up")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -440,6 +450,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err = utils.DeletePIPWithRetry(tc, ipName, "")
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 
 		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
 			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
@@ -486,8 +498,10 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting service to expose...")
-		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 		Expect(err).NotTo(HaveOccurred())
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 
 		defer func() {
 			By("Cleaning up test service")
@@ -564,9 +578,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{pointer.StringDeref(pip1.IPAddress, "")})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ip).To(Equal(pointer.StringDeref(pip1.IPAddress, "")))
 
 		By("Updating the service to refer to the second service")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
@@ -576,7 +589,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for service IP to be updated")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip2.IPAddress, ""))
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{pointer.StringDeref(pip2.IPAddress, "")})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -621,8 +634,10 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Waiting for the service to expose")
 		{
-			ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+			ip := ips[0]
 
 			pip, err := utils.WaitGetPIPByPrefix(tc, prefix1Name, true)
 			Expect(err).NotTo(HaveOccurred())
@@ -652,7 +667,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
 
-			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip.IPAddress, ""))
+			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{pointer.StringDeref(pip.IPAddress, "")})
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -669,12 +684,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		// create service with given annotation and wait it to expose
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up service")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
 		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
@@ -738,12 +755,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		})
 
 		// create service with given annotation and wait it to expose
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up service")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
 		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
@@ -813,12 +832,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		By("Creating a Service")
-		publicIP := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up service")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(publicIPs)).NotTo(BeZero())
+		publicIP := publicIPs[0]
 
 		By("Check if the Service has the correct address")
 		Expect(publicIP).To(Equal(pipAddr))
@@ -1002,8 +1023,10 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			//wait and get service's public IP Address
 			utils.Logf("Waiting service to expose...")
-			publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(len(publicIPs)).NotTo(BeZero())
+			publicIP := publicIPs[0]
 			// create service with given annotation and wait it to expose
 
 			defer func() {
@@ -1192,7 +1215,7 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGrou
 	return &lb
 }
 
-func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) string {
+func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamily utils.IPFamily, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort) []string {
 	utils.Logf("Creating service " + serviceName + " in namespace " + nsName)
 	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, nsName, ports)
 	_, err := cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -1201,10 +1224,10 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, service
 
 	//wait and get service's IP Address
 	utils.Logf("Waiting service to expose...")
-	publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, nsName, serviceName, "")
+	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ipFamily, nsName, serviceName, []string{})
 	Expect(err).NotTo(HaveOccurred())
 
-	return publicIP
+	return publicIPs
 }
 
 // createNginxDeploymentManifest returns a default deployment
@@ -1277,8 +1300,10 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 
 	//wait and get service's public IP Address
 	By("Waiting for service exposure")
-	publicIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns, serviceName, "")
+	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns, serviceName, []string{})
 	Expect(err).NotTo(HaveOccurred())
+	Expect(len(publicIPs)).NotTo(BeZero())
+	publicIP := publicIPs[0]
 
 	// Invoking azure network client to get list of public IP Addresses
 	By("Getting public IPs in the resourceGroup " + resourceGroupName)

@@ -90,12 +90,14 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 	It("should add the rule when expose a service", func() {
 		By("Creating a service and expose it")
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, map[string]string{}, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, map[string]string{}, ports)
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 
 		By("Validating ip exists in Security Group")
 		port := fmt.Sprintf("%d", serverPort)
@@ -140,7 +142,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		annotation := map[string]string{
 			consts.ServiceAnnotationSharedSecurityRule: "true",
 		}
-		ip1 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips1 := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 
 		defer func() {
 			err := utils.DeleteService(cs, ns.Name, serviceName)
@@ -148,7 +150,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		}()
 
 		serviceName2 := serviceName + "-share"
-		ip2 := createAndExposeDefaultServiceWithAnnotation(cs, serviceName2, ns.Name, labels, annotation, ports)
+		ips2 := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName2, ns.Name, labels, annotation, ports)
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, serviceName2)
@@ -160,12 +162,12 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 
-		ipList := []string{ip1, ip2}
+		ipList := append(ips1, ips2...)
 		Expect(validateSharedSecurityRuleExists(nsgs, ipList, port)).To(BeTrue(), "Security rule for service %s not exists", serviceName)
 
 		By("Validate automatically adjust or delete the rule, when service is deleted")
 		Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
-		ipList = []string{ip2}
+		ipList = ips2
 		Expect(validateSharedSecurityRuleExists(nsgs, ipList, port)).To(BeTrue(), "Security rule should be modified to only contain service %s", serviceName2)
 
 		Expect(utils.DeleteService(cs, ns.Name, serviceName2)).NotTo(HaveOccurred())
@@ -195,7 +197,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
 		By("Waiting for the service to be exposed")
-		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, "")
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []string{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating if the corresponding IP prefix existing in nsg")
@@ -232,8 +234,10 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIP, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		internalIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 		Expect(err).NotTo(HaveOccurred())
+		Expect(len(internalIPs)).NotTo(BeZero())
+		internalIP := internalIPs[0]
 
 		By("Checking if there is a deny_all rule")
 		nsgs, err := tc.GetClusterSecurityGroups()
@@ -270,7 +274,9 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 		// Check Service connectivity with the deny-all-except-lb-range ExecAgnhostPod
 		By("Waiting for the service to expose")
-		internalIP, err = utils.WaitServiceExposureAndGetIP(cs, ns.Name, serviceName)
+		internalIPs, err = utils.WaitServiceExposureAndGetIPs(cs, ns.Name, serviceName)
+		Expect(len(internalIPs)).NotTo(BeZero())
+		internalIP = internalIPs[0]
 		for _, port := range service.Spec.Ports {
 			utils.Logf("checking the connectivity of addr %s:%d with protocol %v", internalIP, int(port.Port), port.Protocol)
 			err := utils.ValidateServiceConnectivity(ns.Name, agnhostPod, internalIP, int(port.Port), port.Protocol)
@@ -302,12 +308,11 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true",
 		}
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		service = updateServiceLBIP(service, false, targetIP)
+		service = updateServiceLBIPs(service, false, []string{targetIP})
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{targetIP})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ip).To(Equal(targetIP))
 
 		defer func() {
 			By("cleaning up")

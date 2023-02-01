@@ -98,12 +98,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -126,12 +128,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -161,12 +165,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -185,12 +191,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -206,18 +214,22 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
-		selectedip, err := utils.SelectAvailablePrivateIP(tc)
+		selectedIPs, err := utils.SelectAvailablePrivateIPs(tc)
 		Expect(err).NotTo(HaveOccurred())
-		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = selectedip
-		utils.Logf("Now update private link service's static ip to %s", selectedip)
+		Expect(len(selectedIPs)).NotTo(BeZero())
+		selectedIP := selectedIPs[0]
+		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = selectedIP
+		utils.Logf("Now update private link service's static ip to %s", selectedIP)
 
 		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -226,8 +238,10 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		ip, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+		ips, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
 		Expect(err).NotTo(HaveOccurred())
+		Expect(len(ips)).NotTo(BeZero())
+		ip = ips[0]
 
 		// wait and check pls is updated also
 		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
@@ -235,7 +249,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			return pls.IPConfigurations != nil &&
 				len(*pls.IPConfigurations) == 1 &&
 				(*pls.IPConfigurations)[0].PrivateIPAllocationMethod == network.Static &&
-				*(*pls.IPConfigurations)[0].PrivateIPAddress == selectedip, nil
+				*(*pls.IPConfigurations)[0].PrivateIPAddress == selectedIP, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -253,12 +267,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -279,12 +295,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -306,12 +324,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -339,12 +359,14 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}
 
 		// create service with given annotation and wait it to expose
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, serviceName, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
 		defer func() {
 			utils.Logf("cleaning up test service %s", serviceName)
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Get Internal IP: %s", ip)
 
 		// get pls from azure client
@@ -366,11 +388,13 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: strconv.Itoa(ipAddrCount),
 		}
 		svc1 := "service1"
-		ip := createAndExposeDefaultServiceWithAnnotation(cs, svc1, ns.Name, labels, annotation, ports)
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, svc1, ns.Name, labels, annotation, ports)
 		defer func() {
 			err := utils.DeleteService(cs, ns.Name, svc1)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
 		utils.Logf("Successfully created %s in namespace %s with IP %s", svc1, ns.Name, ip)
 
 		deployName0 := "pls-deploy0"
@@ -398,12 +422,12 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 			err = utils.DeleteService(cs, ns.Name, svc2)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		service2 = updateServiceLBIP(service2, true, ip)
+		service2 = updateServiceLBIPs(service2, true, ips)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, svc2, ip)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svc2, ips)
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created %s in namespace %s with IP %s", svc2, ns.Name, ip)
+		utils.Logf("Successfully created %s in namespace %s with IPs %q", svc2, ns.Name, ips)
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
