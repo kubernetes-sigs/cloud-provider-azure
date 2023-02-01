@@ -57,8 +57,8 @@ var (
 		CloudProviderRateLimit:            true,
 		CloudProviderRateLimitQPS:         0,
 		CloudProviderRateLimitBucket:      0,
-		CloudProviderRateLimitQPSWrite:    DefaultAtachDetachDiskQPS,
-		CloudProviderRateLimitBucketWrite: DefaultAtachDetachDiskBucket,
+		CloudProviderRateLimitQPSWrite:    DefaultAttachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: DefaultAttachDetachDiskBucket,
 	}
 )
 

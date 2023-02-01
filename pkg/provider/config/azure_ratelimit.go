@@ -17,13 +17,16 @@ limitations under the License.
 package config
 
 import (
+	"time"
+
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 const (
-	DefaultAtachDetachDiskQPS    = 6.0
-	DefaultAtachDetachDiskBucket = 10
+	DefaultAttachDetachDiskQPS           = (240.0 / 180.0)                        // Default compute QPS limit is 240 queries / 3 minutes
+	DefaultAttachDetachDiskBucket        = int(DefaultAttachDetachDiskQPS * 60.0) // Allow for a burst of a minutes worth of quota
+	DefaultAttachDetachBatchInitialDelay = 1 * time.Second                        // The initial delay before processing a batch of attach or detach disk requests
 )
 
 // CloudProviderRateLimitConfig indicates the rate limit config for each clients.
@@ -94,8 +97,8 @@ func InitializeCloudProviderRateLimitConfig(config *CloudProviderRateLimitConfig
 
 	atachDetachDiskRateLimitConfig := azclients.RateLimitConfig{
 		CloudProviderRateLimit:            true,
-		CloudProviderRateLimitQPSWrite:    DefaultAtachDetachDiskQPS,
-		CloudProviderRateLimitBucketWrite: DefaultAtachDetachDiskBucket,
+		CloudProviderRateLimitQPSWrite:    DefaultAttachDetachDiskQPS,
+		CloudProviderRateLimitBucketWrite: DefaultAttachDetachDiskBucket,
 	}
 	config.AttachDetachDiskRateLimit = overrideDefaultRateLimitConfig(&atachDetachDiskRateLimitConfig, config.AttachDetachDiskRateLimit)
 }

@@ -45,8 +45,10 @@ var (
 type apiCallMetrics struct {
 	latency          *metrics.HistogramVec
 	errors           *metrics.CounterVec
+	rateLimitDelay   *metrics.HistogramVec
 	rateLimitedCount *metrics.CounterVec
 	throttledCount   *metrics.CounterVec
+	batchSize        *metrics.HistogramVec
 }
 
 // operationCallMetrics is the metrics measuring the performance of a whole operation
@@ -142,6 +144,16 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 			},
 			append(attributes, "code"),
 		),
+		rateLimitDelay: metrics.NewHistogramVec(
+			&metrics.HistogramOpts{
+				Namespace:      consts.AzureMetricsNamespace,
+				Name:           "api_request_ratelimited_delays",
+				Help:           "Client-side throttling delay on Azure API calls",
+				Buckets:        metrics.ExponentialBuckets(0.050, 2, 10),
+				StabilityLevel: metrics.ALPHA,
+			},
+			attributes,
+		),
 		rateLimitedCount: metrics.NewCounterVec(
 			&metrics.CounterOpts{
 				Namespace:      consts.AzureMetricsNamespace,
@@ -160,12 +172,24 @@ func registerAPIMetrics(attributes ...string) *apiCallMetrics {
 			},
 			attributes,
 		),
+		batchSize: metrics.NewHistogramVec(
+			&metrics.HistogramOpts{
+				Namespace:      consts.AzureMetricsNamespace,
+				Name:           "api_request_batch_sizes",
+				Help:           "Batch sizes for batch processing requests.",
+				Buckets:        metrics.ExponentialBuckets(1.0, 2.0, 7),
+				StabilityLevel: metrics.ALPHA,
+			},
+			attributes,
+		),
 	}
 
 	legacyregistry.MustRegister(metrics.latency)
 	legacyregistry.MustRegister(metrics.errors)
+	legacyregistry.MustRegister(metrics.rateLimitDelay)
 	legacyregistry.MustRegister(metrics.rateLimitedCount)
 	legacyregistry.MustRegister(metrics.throttledCount)
+	legacyregistry.MustRegister(metrics.batchSize)
 
 	return metrics
 }
