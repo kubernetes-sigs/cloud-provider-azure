@@ -254,7 +254,6 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	diskToAttach := &AttachDiskParams{
 		diskURI: diskURI,
 		options: options,
-		async:   async,
 	}
 
 	resourceGroup, err := c.cloud.GetNodeResourceGroup(string(nodeName))
@@ -283,7 +282,6 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 type AttachDiskParams struct {
 	diskURI string
 	options *AttachDiskOptions
-	async   bool
 }
 
 func (a *AttachDiskParams) CleanUp() {
@@ -300,7 +298,6 @@ type attachDiskResult struct {
 func (c *controllerCommon) attachDiskBatchToNode(ctx context.Context, subscriptionID, resourceGroup string, nodeName types.NodeName, disksToAttach []*AttachDiskParams) ([]chan (attachDiskResult), error) {
 	diskMap := make(map[string]*AttachDiskOptions, len(disksToAttach))
 	lunChans := make([]chan (attachDiskResult), len(disksToAttach))
-	async := false
 
 	for i, disk := range disksToAttach {
 		lunChans[i] = make(chan (attachDiskResult), 1)
@@ -310,8 +307,6 @@ func (c *controllerCommon) attachDiskBatchToNode(ctx context.Context, subscripti
 		diskURI := strings.ToLower(disk.diskURI)
 		c.diskStateMap.Store(diskURI, "attaching")
 		defer c.diskStateMap.Delete(diskURI)
-
-		async = async || disk.async
 	}
 
 	err := c.cloud.SetDiskLun(nodeName, diskMap)
@@ -345,21 +340,6 @@ func (c *controllerCommon) attachDiskBatchToNode(ctx context.Context, subscripti
 		klog.V(2).Infof("azuredisk - trying to attach disks to node %s, diskMap len:%d, %s", nodeName, len(diskMap), diskMap)
 
 		resultCtx := ctx
-
-		if async {
-			// The context, ctx, passed to attachDiskBatchToNode is owned by batch.Processor which will
-			// cancel it when we return. Since we're asynchronously waiting for the attach disk result,
-			// we must create an independent context passed to WaitForUpdateResult with the deadline
-			// provided in ctx. This avoids an earlier return due to ctx being canceled while still
-			// respecting the deadline for the overall attach operation.
-			resultCtx = context.Background()
-			if deadline, ok := ctx.Deadline(); ok {
-				var cancel func()
-				resultCtx, cancel = context.WithDeadline(resultCtx, deadline)
-				defer cancel()
-			}
-		}
-
 		err = c.waitForUpdateResult(resultCtx, vmset, nodeName, future, err)
 
 		for i, disk := range disksToAttach {
@@ -367,12 +347,7 @@ func (c *controllerCommon) attachDiskBatchToNode(ctx context.Context, subscripti
 		}
 	}
 
-	if async {
-		go attachFn()
-	} else {
-		attachFn()
-	}
-
+	attachFn()
 	return lunChans, nil
 }
 
