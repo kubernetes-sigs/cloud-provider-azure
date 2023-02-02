@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	"github.com/golang/mock/gomock"
@@ -34,13 +36,11 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 
 	"sigs.k8s.io/yaml"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 )
 
 func getTestConfig() *Config {
 	return &Config{
-		AzureAuthConfig: auth.AzureAuthConfig{
+		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:        "TenantID",
 			SubscriptionID:  "SubscriptionID",
 			AADClientID:     "AADClientID",
@@ -61,7 +61,7 @@ func getTestConfig() *Config {
 
 func getTestCloudConfigTypeSecretConfig() *Config {
 	return &Config{
-		AzureAuthConfig: auth.AzureAuthConfig{
+		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:       "TenantID",
 			SubscriptionID: "SubscriptionID",
 		},
@@ -75,7 +75,7 @@ func getTestCloudConfigTypeSecretConfig() *Config {
 
 func getTestCloudConfigTypeMergeConfig() *Config {
 	return &Config{
-		AzureAuthConfig: auth.AzureAuthConfig{
+		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:       "TenantID",
 			SubscriptionID: "SubscriptionID",
 		},

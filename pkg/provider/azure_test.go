@@ -42,7 +42,6 @@ import (
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/auth"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
@@ -52,6 +51,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -3618,7 +3618,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 
 	config = Config{
-		AzureAuthConfig: auth.AzureAuthConfig{
+		AzureAuthConfig: providerconfig.AzureAuthConfig{
 			Cloud: "AZUREPUBLICCLOUD",
 		},
 		CloudConfigType: cloudConfigTypeFile,
