@@ -230,7 +230,8 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 	}
 	node := strings.ToLower(string(nodeName))
 	diskuri := strings.ToLower(diskURI)
-	if err := c.insertAttachDiskRequest(diskuri, node, &options); err != nil {
+	err, requestNum := c.insertAttachDiskRequest(diskuri, node, &options)
+	if err != nil {
 		return -1, err
 	}
 
@@ -241,6 +242,11 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 			c.lockMap.UnlockEntry(node)
 		}
 	}()
+
+	if requestNum == 1 {
+		klog.V(2).Infof("waiting for more requests on node %s, current disk attach: %s", node, disk)
+		time.Sleep(time.Second)
+	}
 
 	diskMap, err := c.cleanAttachDiskRequests(node)
 	if err != nil {
@@ -321,7 +327,7 @@ func (c *controllerCommon) waitForUpdateResult(ctx context.Context, vmset VMSet,
 	return
 }
 
-func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) error {
+func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, options *AttachDiskOptions) (error, int) {
 	var diskMap map[string]*AttachDiskOptions
 	attachDiskMapKey := nodeName + attachDiskMapKeySuffix
 	c.lockMap.LockEntry(attachDiskMapKey)
@@ -329,7 +335,7 @@ func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, opt
 	v, ok := c.attachDiskMap.Load(nodeName)
 	if ok {
 		if diskMap, ok = v.(map[string]*AttachDiskOptions); !ok {
-			return fmt.Errorf("convert attachDiskMap failure on node(%s)", nodeName)
+			return fmt.Errorf("convert attachDiskMap failure on node(%s)", nodeName), -1
 		}
 	} else {
 		diskMap = make(map[string]*AttachDiskOptions)
@@ -342,7 +348,7 @@ func (c *controllerCommon) insertAttachDiskRequest(diskURI, nodeName string, opt
 	} else {
 		diskMap[diskURI] = options
 	}
-	return nil
+	return nil, len(diskMap)
 }
 
 // clean up attach disk requests
@@ -384,12 +390,18 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 
 	node := strings.ToLower(string(nodeName))
 	disk := strings.ToLower(diskURI)
-	if err := c.insertDetachDiskRequest(diskName, disk, node); err != nil {
+	err, requestNum := c.insertDetachDiskRequest(diskName, disk, node)
+	if err != nil {
 		return err
 	}
 
 	c.lockMap.LockEntry(node)
 	defer c.lockMap.UnlockEntry(node)
+
+	if requestNum == 1 {
+		klog.V(2).Infof("waiting for more requests on node %s, current disk detach: %s", node, disk)
+		time.Sleep(time.Second)
+	}
 	diskMap, err := c.cleanDetachDiskRequests(node)
 	if err != nil {
 		return err
@@ -441,7 +453,7 @@ func (c *controllerCommon) UpdateVM(ctx context.Context, nodeName types.NodeName
 	return vmset.UpdateVM(ctx, nodeName)
 }
 
-func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName string) error {
+func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName string) (error, int) {
 	var diskMap map[string]string
 	detachDiskMapKey := nodeName + detachDiskMapKeySuffix
 	c.lockMap.LockEntry(detachDiskMapKey)
@@ -449,7 +461,7 @@ func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName s
 	v, ok := c.detachDiskMap.Load(nodeName)
 	if ok {
 		if diskMap, ok = v.(map[string]string); !ok {
-			return fmt.Errorf("convert detachDiskMap failure on node(%s)", nodeName)
+			return fmt.Errorf("convert detachDiskMap failure on node(%s)", nodeName), -1
 		}
 	} else {
 		diskMap = make(map[string]string)
@@ -462,7 +474,7 @@ func (c *controllerCommon) insertDetachDiskRequest(diskName, diskURI, nodeName s
 	} else {
 		diskMap[diskURI] = diskName
 	}
-	return nil
+	return nil, len(diskMap)
 }
 
 // clean up detach disk requests
