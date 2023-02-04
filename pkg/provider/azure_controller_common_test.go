@@ -1199,10 +1199,10 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
 			diskName := fmt.Sprintf("%s%d", test.diskName, i)
 			attachDiskOptions := &AttachDiskOptions{diskName: diskName}
-			err, _ := common.insertAttachDiskRequest(diskURI, test.nodeName, attachDiskOptions)
+			_, err := common.insertAttachDiskRequest(diskURI, test.nodeName, attachDiskOptions)
 			assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 			if test.duplicateDiskRequest {
-				err, _ := common.insertAttachDiskRequest(diskURI, test.nodeName, attachDiskOptions)
+				_, err := common.insertAttachDiskRequest(diskURI, test.nodeName, attachDiskOptions)
 				assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 			}
 		}
@@ -1275,10 +1275,10 @@ func TestDetachDiskRequestFuncs(t *testing.T) {
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
 			diskName := fmt.Sprintf("%s%d", test.diskName, i)
-			err, _ := common.insertDetachDiskRequest(diskName, diskURI, test.nodeName)
+			_, err := common.insertDetachDiskRequest(diskName, diskURI, test.nodeName)
 			assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 			if test.duplicateDiskRequest {
-				err, _ := common.insertDetachDiskRequest(diskName, diskURI, test.nodeName)
+				_, err := common.insertDetachDiskRequest(diskName, diskURI, test.nodeName)
 				assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 			}
 		}
