@@ -580,7 +580,7 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		return existingLBs, nil
 	}
 
-	lbNamesToBeDeleted := sets.NewString()
+	lbNamesToBeDeleted := sets.New[string]()
 	// delete unwanted LBs
 	for _, lb := range existingLBs {
 		klog.V(4).Infof("reconcileSharedLoadBalancer: checking LB %s", pointer.StringDeref(lb.Name, ""))
@@ -3203,7 +3203,7 @@ func (az *Cloud) safeDeletePublicIP(service *v1.Service, pipResourceGroup string
 
 		// Check whether there are still load balancer rules referring to it.
 		if len(referencedLBRules) > 0 {
-			referencedLBRuleIDs := sets.NewString()
+			referencedLBRuleIDs := sets.New[string]()
 			for _, refer := range referencedLBRules {
 				referencedLBRuleIDs.Insert(pointer.StringDeref(refer.ID, ""))
 			}

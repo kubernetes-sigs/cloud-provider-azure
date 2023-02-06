@@ -2327,11 +2327,11 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	assert.NoError(t, err)
 
 	az := &Cloud{
-		nodeNames:                sets.NewString(),
-		nodeZones:                map[string]sets.String{},
+		nodeNames:                sets.New[string](),
+		nodeZones:                map[string]sets.Set[string]{},
 		nodeResourceGroups:       map[string]string{},
-		unmanagedNodes:           sets.NewString(),
-		excludeLoadBalancerNodes: sets.NewString(),
+		unmanagedNodes:           sets.New[string](),
+		excludeLoadBalancerNodes: sets.New[string](),
 		routeCIDRs:               map[string]string{},
 		ZoneClient:               mockzoneclient.NewMockInterface(ctrl),
 	}
@@ -3332,7 +3332,7 @@ func TestGetResourceGroups(t *testing.T) {
 	tests := []struct {
 		name               string
 		nodeResourceGroups map[string]string
-		expected           sets.String
+		expected           sets.Set[string]
 		informerSynced     bool
 		expectError        bool
 	}{
@@ -3340,13 +3340,13 @@ func TestGetResourceGroups(t *testing.T) {
 			name:               "cloud provider configured RG should be returned by default",
 			nodeResourceGroups: map[string]string{},
 			informerSynced:     true,
-			expected:           sets.NewString("rg"),
+			expected:           sets.New("rg"),
 		},
 		{
 			name:               "cloud provider configured RG and node RGs should be returned",
 			nodeResourceGroups: map[string]string{"node1": "rg1", "node2": "rg2"},
 			informerSynced:     true,
-			expected:           sets.NewString("rg", "rg1", "rg2"),
+			expected:           sets.New("rg", "rg1", "rg2"),
 		},
 		{
 			name:               "error should be returned if informer hasn't synced yet",
@@ -3446,12 +3446,12 @@ func TestUpdateNodeCaches(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	// delete node appearing in unmanagedNodes and excludeLoadBalancerNodes
 	zone := fmt.Sprintf("%s-0", az.Location)
-	nodesInZone := sets.NewString("prevNode")
-	az.nodeZones = map[string]sets.String{zone: nodesInZone}
+	nodesInZone := sets.New("prevNode")
+	az.nodeZones = map[string]sets.Set[string]{zone: nodesInZone}
 	az.nodeResourceGroups = map[string]string{"prevNode": "rg"}
-	az.unmanagedNodes = sets.NewString("prevNode")
-	az.excludeLoadBalancerNodes = sets.NewString("prevNode")
-	az.nodeNames = sets.NewString("prevNode")
+	az.unmanagedNodes = sets.New("prevNode")
+	az.excludeLoadBalancerNodes = sets.New("prevNode")
+	az.nodeNames = sets.New("prevNode")
 
 	prevNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -3498,14 +3498,14 @@ func TestUpdateNodeCacheExcludeLoadBalancer(t *testing.T) {
 	az := GetTestCloud(ctrl)
 
 	zone := fmt.Sprintf("%s-0", az.Location)
-	nodesInZone := sets.NewString("aNode")
-	az.nodeZones = map[string]sets.String{zone: nodesInZone}
+	nodesInZone := sets.New("aNode")
+	az.nodeZones = map[string]sets.Set[string]{zone: nodesInZone}
 	az.nodeResourceGroups = map[string]string{"aNode": "rg"}
 
 	// a non-ready node should be excluded
-	az.unmanagedNodes = sets.NewString()
-	az.excludeLoadBalancerNodes = sets.NewString()
-	az.nodeNames = sets.NewString()
+	az.unmanagedNodes = sets.New[string]()
+	az.excludeLoadBalancerNodes = sets.New[string]()
+	az.nodeNames = sets.New[string]()
 	nonReadyNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -3592,10 +3592,10 @@ func TestGetActiveZones(t *testing.T) {
 
 	az.nodeInformerSynced = func() bool { return true }
 	zone := fmt.Sprintf("%s-0", az.Location)
-	nodesInZone := sets.NewString("node1")
-	az.nodeZones = map[string]sets.String{zone: nodesInZone}
+	nodesInZone := sets.New("node1")
+	az.nodeZones = map[string]sets.Set[string]{zone: nodesInZone}
 
-	expectedZones := sets.NewString(zone)
+	expectedZones := sets.New(zone)
 	zones, err = az.GetActiveZones()
 	assert.Equal(t, expectedZones, zones)
 	assert.NoError(t, err)

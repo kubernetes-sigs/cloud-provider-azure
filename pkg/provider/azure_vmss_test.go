@@ -1533,7 +1533,7 @@ func TestGetAgentPoolScaleSets(t *testing.T) {
 	for _, test := range testCases {
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
-		ss.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
+		ss.excludeLoadBalancerNodes = sets.New(test.excludeLBNodes...)
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
 		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)

@@ -19,7 +19,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"k8s.io/klog/v2"
@@ -187,7 +187,7 @@ func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMe
 		return nil, fmt.Errorf("failure of getting instance metadata with response %q", resp.Status)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 		return nil, fmt.Errorf("failure of getting loadbalancer metadata with response %q", resp.Status)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
