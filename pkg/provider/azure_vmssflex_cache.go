@@ -43,7 +43,7 @@ func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (*azcache.TimedCac
 			return nil, err
 		}
 
-		for _, resourceGroup := range allResourceGroups.List() {
+		for _, resourceGroup := range allResourceGroups.UnsortedList() {
 			allScaleSets, rerr := fs.VirtualMachineScaleSetsClient.List(ctx, resourceGroup)
 			if rerr != nil {
 				if rerr.IsNotFound() {

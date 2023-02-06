@@ -454,7 +454,7 @@ func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
 			return nil, err
 		}
 
-		for _, resourceGroup := range allResourceGroups.List() {
+		for _, resourceGroup := range allResourceGroups.UnsortedList() {
 			allAvailabilitySets, rerr := as.AvailabilitySetsClient.List(context.Background(), resourceGroup)
 			if rerr != nil {
 				klog.Errorf("AvailabilitySetsClient.List failed: %v", rerr)

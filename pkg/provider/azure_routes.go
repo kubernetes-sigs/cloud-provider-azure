@@ -287,7 +287,7 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 	}
 	az.routeCIDRsLock.Lock()
 	defer az.routeCIDRsLock.Unlock()
-	for _, nodeName := range unmanagedNodes.List() {
+	for _, nodeName := range unmanagedNodes.UnsortedList() {
 		if cidr, ok := az.routeCIDRs[nodeName]; ok {
 			routes = append(routes, &cloudprovider.Route{
 				Name:            nodeName,
