@@ -10,133 +10,31 @@ permissions:
   contents: read
 
 jobs:
-  build-cloud-controller-manager:
+  build-kubetest2-aks:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm
-          - os: linux
-            arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Get Go version
+        run: echo "GO_VERSION=$(grep -Eo '^go ([0-9]+\.[0-9]+)$' go.mod | cut -d ' ' -f 2)" >> $GITHUB_ENV
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - name: Build binary
         run: |
-          rm -rf ./bin
-          ARCH=${{ matrix.arch }} make bin/azure-cloud-controller-manager
-          mv bin/azure-cloud-controller-manager bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
+          cd kubetest2-aks
+          make deployer
       - uses: actions/upload-artifact@v3
         with:
-          name: cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
-          if-no-files-found: error
-
-  build-cloud-node-manager:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm
-          - os: linux
-            arch: arm64
-          - os: windows
-            arch: amd64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: go.mod
-      - name: Build binary for linux
-        if: matrix.os == 'linux'
-        run: |
-          rm -rf ./bin
-          ARCH=${{ matrix.arch }} make bin/azure-cloud-node-manager
-          mv bin/azure-cloud-node-manager bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
-      - name: Build binary for windows
-        if: matrix.os == 'windows'
-        run: |
-          rm -rf ./bin
-          ARCH=${{ matrix.arch }} make bin/azure-cloud-node-manager.exe
-          mv bin/azure-cloud-node-manager-${{ matrix.arch }}.exe bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
-      - name: Upload artifact for linux
-        if: matrix.os == 'linux'
-        uses: actions/upload-artifact@v3
-        with:
-          name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
-      - name: Upload artifact for windows
-        if: matrix.os == 'windows'
-        uses: actions/upload-artifact@v3
-        with:
-          name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
-          if-no-files-found: error
-
-  build-acr-credential-provider:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm
-          - os: linux
-            arch: arm64
-          - os: windows
-            arch: amd64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: go.mod
-      - name: Build binary for linux
-        if: matrix.os == 'linux'
-        run: |
-          rm -rf ./bin
-          ARCH=${{ matrix.arch }} make bin/azure-acr-credential-provider
-          mv bin/azure-acr-credential-provider bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
-      - name: Build binary for windows
-        if: matrix.os == 'windows'
-        run: |
-          rm -rf ./bin
-          ARCH=${{ matrix.arch }} make bin/azure-acr-credential-provider.exe
-          mv bin/azure-acr-credential-provider.exe bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
-      - name: Upload artifact for linux
-        if: matrix.os == 'linux'
-        uses: actions/upload-artifact@v3
-        with:
-          name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
-      - name: Upload artifact for windows
-        if: matrix.os == 'windows'
-        uses: actions/upload-artifact@v3
-        with:
-          name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
+          name: kubetest2-aks
+          path: kubetest2-aks/bin/kubetest2-aks
           if-no-files-found: error
 
   publish:
     runs-on: ubuntu-latest
     needs:
-      - build-cloud-controller-manager
-      - build-cloud-node-manager
-      - build-acr-credential-provider
+      - build-kubetest2-aks
     permissions:
       contents: write
       pull-requests: write
@@ -150,53 +48,6 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version-file: go.mod
-      - name: Generate release note
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#[vV]}"
-          VERSION_MAJOR="${VERSION%%\.*}"
-          VERSION_MINOR="${VERSION#*.}"
-          VERSION_MINOR="${VERSION_MINOR%.*}"
-          VERSION_PATCH="${VERSION##*.}"
-
-          BRANCH=release-${VERSION_MAJOR}.${VERSION_MINOR}
-          if [[ ! `git show-ref ${BRANCH}` ]]; then
-            BRANCH=master
-          fi
-
-          if [[ "${VERSION_PATCH}" = "0" ]]; then
-            # when release a new minor version, generate release note from the last minor version
-            START_TAG=v${VERSION_MAJOR}.$((VERSION_MINOR-1)).0
-          else
-            START_TAG=v${VERSION_MAJOR}.${VERSION_MINOR}.$((VERSION_PATCH-1))
-          fi
-          START_SHA=$(git rev-parse ${START_TAG})
-          END_TAG=${GITHUB_REF_NAME}
-          END_SHA=$(git rev-parse ${END_TAG})
-
-          echo "BRANCH=${BRANCH}"
-          echo "START_TAG=${START_TAG} START_SHA=${START_SHA}"
-          echo "END_TAG=${END_TAG} END_SHA=${END_SHA}"
-
-          GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
-
-
-          release-notes --repo=cloud-provider-azure \
-          	--org=kubernetes-sigs \
-          	--branch=${BRANCH} \
-          	--start-sha=${START_SHA} \
-          	--end-sha=${END_SHA} \
-          	--markdown-links=true \
-          	--required-author='' \
-          	--output=release-notes.md
-
-          # Generate release note for site
-          # Prepend site header
-          SITE_RELEASE_NOTE=site/content/en/blog/releases/${{github.ref_name}}.md
-          SITE_HEAD="---\ntitle: "v${VERSION}"\nlinkTitle: "v${VERSION}"\ndate: $(date '+%Y-%m-%d')\ndescription: Cloud Provider Azure v${VERSION}\n---\n\n"
-          cp release-notes.md ${SITE_RELEASE_NOTE}
-          sed -i "1i${SITE_HEAD}" ${SITE_RELEASE_NOTE}
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
@@ -207,32 +58,4 @@ jobs:
           body_path: release-notes.md
           draft: true
           files: |
-            ./artifacts/cloud-node-manager-*-*/*
-            ./artifacts/cloud-controller-manager-*-*/*
-            ./artifacts/acr-credential-provider-*-*/*
-      - name: Update site release note
-        uses: peter-evans/create-pull-request@v4
-        with:
-          branch: doc/release-note-${{github.ref_name}}
-          delete-branch: true
-          base: master
-          commit-message: Update release notes for ${{github.ref_name}}
-          add-paths: |
-            ./site/content/en/blog/releases/*.md
-          title: Update release notes for ${{github.ref_name}}
-          labels: |
-            lgtm
-            approved
-          body: |
-            Auto-generated by GitHub Action [Release](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}})
-
-            #### What type of PR is this?
-            /kind documentation
-
-            #### What this PR does / why we need it:
-            New release published.
-
-            #### Does this PR introduce a user-facing change?
-            ```release-note
-            None
-            ```
+            ./artifacts/kubetest2-aks/*
