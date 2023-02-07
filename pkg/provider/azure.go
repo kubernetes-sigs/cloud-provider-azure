@@ -1010,9 +1010,10 @@ func initDiskControllers(az *Cloud) error {
 	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
 
 	common := &controllerCommon{
-		cloud:             az,
-		lockMap:           newLockMap(),
-		diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
+		cloud:                        az,
+		lockMap:                      newLockMap(),
+		diskOpRateLimiter:            flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
+		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
 	}
 
 	az.ManagedDiskController = &ManagedDiskController{common: common}
