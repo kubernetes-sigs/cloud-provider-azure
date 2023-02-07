@@ -292,11 +292,11 @@ func (az *Cloud) getloadbalancerHAmodeRuleName(service *v1.Service) string {
 }
 
 func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, sourceAddrPrefix string) string {
+	safePrefix := strings.Replace(sourceAddrPrefix, "/", "_", -1)
+	safePrefix = strings.Replace(safePrefix, ":", ".", -1) // Consider IPv6 address
 	if useSharedSecurityRule(service) {
-		safePrefix := strings.Replace(sourceAddrPrefix, "/", "_", -1)
 		return fmt.Sprintf("shared-%s-%d-%s", port.Protocol, port.Port, safePrefix)
 	}
-	safePrefix := strings.Replace(sourceAddrPrefix, "/", "_", -1)
 	rulePrefix := az.getRulePrefix(service)
 	return fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
 }
