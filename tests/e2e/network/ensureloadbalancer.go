@@ -356,7 +356,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		}
 
 		By("Updating service to bound to specific public IP")
-		utils.Logf("will update IP to %q", targetIPs)
+		utils.Logf("will update IPs to %q", targetIPs)
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		service = updateServiceLBIPs(service, false, targetIPs)
 
@@ -436,7 +436,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			if utils.CompareStrings(targetIPs, ingressIPs) {
 				return false, nil
 			}
-			utils.Logf("External IP changed unexpectedly to: %q", ingressIPs)
+			utils.Logf("External IPs changed unexpectedly to: %q", ingressIPs)
 			return true, nil
 		})
 		Expect(err).To(Equal(wait.ErrWaitTimeout))

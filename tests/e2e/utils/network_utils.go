@@ -390,6 +390,9 @@ func DeletePIPPrefixWithRetry(cli *AzureTestClient, name string) error {
 
 // DeletePIPWithRetry tries to delete a public ip resource
 func DeletePIPWithRetry(azureTestClient *AzureTestClient, ipName, rgName string) error {
+	if ipName == "" {
+		return nil
+	}
 	if rgName == "" {
 		rgName = azureTestClient.GetResourceGroup()
 	}
