@@ -267,11 +267,13 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		allowCIDRs, ipRangesSuffixes := []string{}, []string{}
 		if v4Enabled {
 			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIP, maskV4))
-			ipRangesSuffixes = append(ipRangesSuffixes, fmt.Sprintf("%s_%d", hostExecPodIP, maskV4))
+			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIP, maskV4), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
+			ipRangesSuffixes = append(ipRangesSuffixes, ipRangesSuffix)
 		}
 		if v6Enabled {
 			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIP, maskV6))
-			ipRangesSuffixes = append(ipRangesSuffixes, fmt.Sprintf("%s_%d", hostExecPodIP, maskV6))
+			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIP, maskV6), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
+			ipRangesSuffixes = append(ipRangesSuffixes, ipRangesSuffix)
 		}
 		service.Spec.LoadBalancerSourceRanges = allowCIDRs
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -291,7 +293,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 		nsgs, err = tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		By("Checking if there is a LoadBalancerSourceRanges rule")
+		By("Checking if there are LoadBalancerSourceRanges rules")
 		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIPs, allowCIDRs, ipRangesSuffixes)
 		Expect(found).To(BeTrue())
 
