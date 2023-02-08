@@ -147,7 +147,27 @@ func (ss *ScaleSet) getVMSSVMCache(resourceGroup, vmssName string) (string, *azc
 
 // gcVMSSVMCache delete stale VMSS VMs caches from deleted VMSSes.
 func (ss *ScaleSet) gcVMSSVMCache() error {
-	return ss.vmssCache.Delete(consts.VMSSKey)
+	cached, err := ss.vmssCache.Get(consts.VMSSKey, azcache.CacheReadTypeUnsafe)
+	if err != nil {
+		return err
+	}
+
+	vmsses := cached.(*sync.Map)
+	removed := map[string]bool{}
+	ss.vmssVMCache.Range(func(key, value interface{}) bool {
+		cacheKey := key.(string)
+		vlistIdx := cacheKey[strings.LastIndex(cacheKey, "/")+1:]
+		if _, ok := vmsses.Load(vlistIdx); !ok {
+			removed[cacheKey] = true
+		}
+		return true
+	})
+
+	for key := range removed {
+		ss.vmssVMCache.Delete(key)
+	}
+
+	return nil
 }
 
 // newVMSSVirtualMachinesCache instantiates a new VMs cache for VMs belonging to the provided VMSS.
