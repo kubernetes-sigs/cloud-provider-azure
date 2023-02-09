@@ -346,7 +346,7 @@ func (az *Cloud) ListManagedLBs(service *v1.Service, nodes []*v1.Node, clusterNa
 		return nil, fmt.Errorf("ListManagedLBs: failed to get agent pool vmSet names: %w", err)
 	}
 
-	agentPoolVMSetNamesSet := sets.NewString()
+	agentPoolVMSetNamesSet := sets.New[string]()
 	if agentPoolVMSetNames != nil && len(*agentPoolVMSetNames) > 0 {
 		for _, vmSetName := range *agentPoolVMSetNames {
 			klog.V(6).Infof("ListManagedLBs: found agent pool vmSet name %s", vmSetName)

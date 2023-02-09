@@ -182,7 +182,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	return currentTagsOnResource, changed
 }
 
-func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.String {
+func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.Set[string] {
 	vmSetNames := make([]string, 0)
 	if az.NodePoolsWithoutDedicatedSLB != "" {
 		vmSetNames = strings.Split(az.Config.NodePoolsWithoutDedicatedSLB, consts.VMSetNamesSharingPrimarySLBDelimiter)
@@ -191,7 +191,7 @@ func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.String {
 		}
 	}
 
-	return sets.NewString(vmSetNames...)
+	return sets.New(vmSetNames...)
 }
 
 func getExtendedLocationTypeFromString(extendedLocationType string) network.ExtendedLocationTypes {

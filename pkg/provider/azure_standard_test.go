@@ -1602,7 +1602,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	for _, test := range testCases {
 		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
-		cloud.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
+		cloud.excludeLoadBalancerNodes = sets.New(test.excludeLBNodes...)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
