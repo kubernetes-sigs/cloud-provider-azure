@@ -152,11 +152,6 @@ func (ss *ScaleSet) getVMSSVMsFromCache(resourceGroup, vmssName string, crt azca
 	return virtualMachines, nil
 }
 
-// gcVMSSVMCache delete stale VMSS VMs caches from deleted VMSSes.
-func (ss *ScaleSet) gcVMSSVMCache() error {
-	return ss.vmssCache.Delete(consts.VMSSKey)
-}
-
 // newVMSSVirtualMachinesCache instantiates a new VMs cache for VMs belonging to the provided VMSS.
 func (ss *ScaleSet) newVMSSVirtualMachinesCache() (*azcache.TimedCache, error) {
 	vmssVirtualMachinesCacheTTL := time.Duration(ss.Config.VmssVirtualMachinesCacheTTLInSeconds) * time.Second
@@ -280,16 +275,20 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 		return err
 	}
 
-	err = ss.vmssVMCache.Delete(getVMSSVMCacheKey(node.resourceGroup, node.vmssName))
+	// get sync.Map cache and remove the node from the cache
+	cacheKey := getVMSSVMCacheKey(node.resourceGroup, node.vmssName)
+	ss.lockMap.LockEntry(cacheKey)
+	defer ss.lockMap.UnlockEntry(cacheKey)
+
+	virtualMachines, err := ss.getVMSSVMsFromCache(node.resourceGroup, node.vmssName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
-		klog.Errorf("DeleteCacheForNode(%s) failed to remove from vmssVMCache with error: %v", nodeName, err)
+		klog.Errorf("DeleteCacheForNode(%s, %s) failed to getVMSSVMsFromCache: %v", node.resourceGroup, node.vmssName, err)
 		return err
 	}
 
-	if err := ss.gcVMSSVMCache(); err != nil {
-		klog.Errorf("DeleteCacheForNode(%s) failed to gc stale vmss caches: %v", nodeName, err)
-	}
-
+	virtualMachines.Delete(nodeName)
+	ss.vmssVMCache.Update(cacheKey, virtualMachines)
+	klog.V(2).Infof("DeleteCacheForNode(%s, %s, %s) successfully", node.resourceGroup, node.vmssName, nodeName)
 	return nil
 }
 
