@@ -428,6 +428,23 @@ spec:
               cpu: {{ .Values.cloudNodeManager.containerResourceManagement.limitsCPU }}
               memory: {{ .Values.cloudNodeManager.containerResourceManagement.limitsMem }}
 ---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cloud-provider-azure-scripts
+  namespace: kube-system
+  labels:
+    app: cloud-provider-azure-windows
+data:
+  # This is a workaround for https://github.com/kubernetes/kubernetes/issues/104562.
+  # TODO: remove this once containerd v1.7 is available.
+  start.ps1: |
+    $cm = "$env:CONTAINER_SANDBOX_MOUNT_POINT/cloud-node-manager.exe"
+
+    ((Get-Content -path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf -Raw) -replace '/var',"$($env:CONTAINER_SANDBOX_MOUNT_POINT)/var") | Set-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf
+
+    Invoke-Expression "$cm --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -449,6 +466,11 @@ spec:
     spec:
       priorityClassName: system-node-critical
       serviceAccountName: cloud-node-manager
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\system"
+      hostNetwork: true
       nodeSelector:
         kubernetes.io/os: windows
       tolerations:
@@ -458,6 +480,13 @@ spec:
         effect: NoExecute
       - operator: "Exists"
         effect: NoSchedule
+      volumes:
+      - configMap:
+          name: kube-proxy
+        name: kube-proxy
+      - configMap:
+          name: cloud-provider-azure-scripts
+        name: cloud-provider-azure-scripts
       containers:
       - name: cloud-node-manager
         image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
@@ -500,6 +529,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        volumeMounts:
+        - mountPath: /var/lib/cpaw
+          name: kube-proxy
+        - mountPath: /scripts
+          name: cloud-provider-azure-scripts
         resources:
           requests:
             cpu: {{ .Values.cloudNodeManager.containerResourceManagement.requestsCPUWin }}
