@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-apiserver
-      image: k8s.gcr.io/kube-apiserver:v1.22.1
+      image: registry.k8s.io/kube-apiserver:v1.22.1
       imagePullPolicy: IfNotPresent
       command: ["kube-apiserver"]
       args:
