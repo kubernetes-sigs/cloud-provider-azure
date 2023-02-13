@@ -27,9 +27,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -157,7 +157,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(disk.ID), disk).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(disk.ID, ""), disk).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
@@ -175,7 +175,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		RetryAfter:     time.Unix(100, 0),
 	}
 
-	armClient.EXPECT().PutResource(gomock.Any(), to.String(disk.ID), disk).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(disk.ID, ""), disk).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 	rerr = diskClient.CreateOrUpdate(context.TODO(), "", "rg", "disk1", disk)
 	assert.Equal(t, throttleErr, rerr)
@@ -218,7 +218,7 @@ func TestUpdate(t *testing.T) {
 func getTestDiskUpdate() compute.DiskUpdate {
 	return compute.DiskUpdate{
 		DiskUpdateProperties: &compute.DiskUpdateProperties{
-			DiskSizeGB: to.Int32Ptr(100),
+			DiskSizeGB: pointer.Int32(100),
 		},
 	}
 }
@@ -229,7 +229,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestDisk("disk1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
 
 	diskClient := getTestDiskClient(armClient)
 	rerr := diskClient.Delete(context.TODO(), "", "rg", "disk1")
@@ -241,16 +241,16 @@ func TestDelete(t *testing.T) {
 		Retriable:      true,
 		RetryAfter:     time.Unix(100, 0),
 	}
-	armClient.EXPECT().DeleteResource(gomock.Any(), to.String(r.ID)).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(throttleErr).Times(1)
 	rerr = diskClient.Delete(context.TODO(), "", "rg", "disk1")
 	assert.Equal(t, throttleErr, rerr)
 }
 
 func getTestDisk(name string) compute.Disk {
 	return compute.Disk{
-		ID:       to.StringPtr(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/%s", name)),
-		Name:     to.StringPtr(name),
-		Location: to.StringPtr("eastus"),
+		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/disks/%s", name)),
+		Name:     pointer.String(name),
+		Location: pointer.String("eastus"),
 	}
 }
 

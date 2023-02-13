@@ -26,7 +26,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
@@ -55,7 +54,7 @@ func TestCommonAttachDisk(t *testing.T) {
 	goodInstanceID := fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", "vm1")
 	diskEncryptionSetID := fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/diskEncryptionSets/%s", "diskEncryptionSet-name")
 	testTags := make(map[string]*string)
-	testTags[WriteAcceleratorEnabled] = to.StringPtr("true")
+	testTags[WriteAcceleratorEnabled] = pointer.String("true")
 	testCases := []struct {
 		desc            string
 		diskName        string
@@ -81,7 +80,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			desc:        "LUN -1 and error shall be returned if there's no such instance corresponding to given nodeName",
 			nodeName:    "vm1",
 			diskName:    "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name")},
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name")},
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -91,7 +90,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			nodeName:        "vm1",
 			isDataDisksFull: true,
 			diskName:        "disk-name",
-			existedDisk:     &compute.Disk{Name: to.StringPtr("disk-name")},
+			existedDisk:     &compute.Disk{Name: pointer.String("disk-name")},
 			expectedLun:     -1,
 			expectedErr:     true,
 		},
@@ -100,10 +99,10 @@ func TestCommonAttachDisk(t *testing.T) {
 			vmList:   map[string]string{"vm1": "PowerState/Running"},
 			nodeName: "vm1",
 			diskName: "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name"),
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name"),
 				DiskProperties: &compute.DiskProperties{
 					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
-					DiskSizeGB: to.Int32Ptr(4096),
+					DiskSizeGB: pointer.Int32(4096),
 					DiskState:  compute.Unattached,
 				},
 				Tags: testTags},
@@ -115,10 +114,10 @@ func TestCommonAttachDisk(t *testing.T) {
 			vmList:   map[string]string{"vm1": "PowerState/Running"},
 			nodeName: "vm1",
 			diskName: "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name"),
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name"),
 				DiskProperties: &compute.DiskProperties{
 					Encryption: &compute.Encryption{DiskEncryptionSetID: &diskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey},
-					DiskSizeGB: to.Int32Ptr(4096),
+					DiskSizeGB: pointer.Int32(4096),
 					DiskState:  compute.Attached,
 				},
 				Tags: testTags},
@@ -130,7 +129,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			vmList:      map[string]string{"vm1": "PowerState/Running"},
 			nodeName:    "vm1",
 			diskName:    "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name"), ManagedBy: to.StringPtr(goodInstanceID), DiskProperties: &compute.DiskProperties{MaxShares: &maxShare}},
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name"), ManagedBy: pointer.String(goodInstanceID), DiskProperties: &compute.DiskProperties{MaxShares: &maxShare}},
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -139,7 +138,7 @@ func TestCommonAttachDisk(t *testing.T) {
 			vmList:      map[string]string{"vm1": "PowerState/Running"},
 			nodeName:    "vm1",
 			diskName:    "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name"), ManagedBy: to.StringPtr("test"), DiskProperties: &compute.DiskProperties{MaxShares: &maxShare}},
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name"), ManagedBy: pointer.String("test"), DiskProperties: &compute.DiskProperties{MaxShares: &maxShare}},
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -211,7 +210,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			isVMSS:      false,
 			isManagedBy: false,
 			diskName:    "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name")},
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name")},
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -222,7 +221,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			isVMSS:      true,
 			isManagedBy: false,
 			diskName:    "disk-name",
-			existedDisk: &compute.Disk{Name: to.StringPtr("disk-name")},
+			existedDisk: &compute.Disk{Name: pointer.String("disk-name")},
 			expectedLun: -1,
 			expectedErr: true,
 		},
@@ -234,7 +233,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 		if test.isVMSS {
 			if test.isManagedBy {
 				testCloud.DisableAvailabilitySetNodes = false
-				expectedVMSS := compute.VirtualMachineScaleSet{Name: to.StringPtr(testVMSSName)}
+				expectedVMSS := compute.VirtualMachineScaleSet{Name: pointer.String(testVMSSName)}
 				mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testCloud.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 

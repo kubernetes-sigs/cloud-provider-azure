@@ -22,9 +22,9 @@ import (
 	"os/exec"
 
 	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/utils/pointer"
 )
 
 // CreateContainerRegistry creates a test acr
@@ -37,8 +37,8 @@ func (tc *AzureTestClient) CreateContainerRegistry() (registry acr.Registry, err
 			Name: "Basic",
 			Tier: "SkuTierBasic",
 		},
-		Name:     to.StringPtr(acrName),
-		Location: to.StringPtr(location),
+		Name:     pointer.String(acrName),
+		Location: pointer.String(location),
 	}
 
 	Logf("Creating acr %s in resource group %s.", acrName, rgName)

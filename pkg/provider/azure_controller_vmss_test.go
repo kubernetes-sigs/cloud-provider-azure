@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -107,11 +107,11 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		for _, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: to.StringPtr("osdisk1"),
+					Name: pointer.String("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: to.StringPtr("ManagedID"),
+						ID: pointer.String("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: to.StringPtr("DiskEncryptionSetID"),
+							ID: pointer.String("DiskEncryptionSetID"),
 						},
 					},
 				},
@@ -121,7 +121,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 					testCloud.SubscriptionID, testCloud.ResourceGroup, diskname)
 				vmssvm.StorageProfile.DataDisks = &[]compute.DataDisk{
-					{Lun: to.Int32Ptr(0), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+					{Lun: pointer.Int32(0), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
 				}
 			}
 		}
@@ -235,26 +235,26 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		for itr, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: to.StringPtr("osdisk1"),
+					Name: pointer.String("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: to.StringPtr("ManagedID"),
+						ID: pointer.String("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: to.StringPtr("DiskEncryptionSetID"),
+							ID: pointer.String("DiskEncryptionSetID"),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{
 					{
-						Lun:  to.Int32Ptr(0),
-						Name: to.StringPtr(diskName),
+						Lun:  pointer.Int32(0),
+						Name: pointer.String(diskName),
 					},
 					{
-						Lun:  to.Int32Ptr(1),
-						Name: to.StringPtr("disk2"),
+						Lun:  pointer.Int32(1),
+						Name: pointer.String("disk2"),
 					},
 					{
-						Lun:  to.Int32Ptr(2),
-						Name: to.StringPtr("disk3"),
+						Lun:  pointer.Int32(2),
+						Name: pointer.String("disk3"),
 					},
 				},
 			}
@@ -317,7 +317,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss-vm-000001"},
 			vmssName:       "vm1",
 			vmssvmName:     "vm1",
-			existedDisk:    compute.Disk{Name: to.StringPtr(diskName)},
+			existedDisk:    compute.Disk{Name: pointer.String(diskName)},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("not a vmss instance"),
 		},
@@ -326,7 +326,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: to.StringPtr(diskName)},
+			existedDisk: compute.Disk{Name: pointer.String(diskName)},
 			expectedErr: false,
 		},
 		{
@@ -334,7 +334,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:       fakeStatusNotFoundVMSSName,
 			vmssvmName:     "vmss00-vm-000000",
-			existedDisk:    compute.Disk{Name: to.StringPtr(diskName)},
+			existedDisk:    compute.Disk{Name: pointer.String(diskName)},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
@@ -343,7 +343,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: to.StringPtr("disk-name-err")},
+			existedDisk: compute.Disk{Name: pointer.String("disk-name-err")},
 			expectedErr: false,
 		},
 	}
@@ -366,17 +366,17 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		for itr, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: to.StringPtr("osdisk1"),
+					Name: pointer.String("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: to.StringPtr("ManagedID"),
+						ID: pointer.String("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: to.StringPtr("DiskEncryptionSetID"),
+							ID: pointer.String("DiskEncryptionSetID"),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{{
-					Lun:  to.Int32Ptr(0),
-					Name: to.StringPtr(diskName),
+					Lun:  pointer.Int32(0),
+					Name: pointer.String(diskName),
 				}},
 			}
 
@@ -434,8 +434,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			nodeName: "vmss00-vm-000000",
 			expectedDataDisks: []compute.DataDisk{
 				{
-					Lun:  to.Int32Ptr(0),
-					Name: to.StringPtr("disk1"),
+					Lun:  pointer.Int32(0),
+					Name: pointer.String("disk1"),
 				},
 			},
 			expectedErr: false,
@@ -446,8 +446,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			nodeName: "vmss00-vm-000000",
 			expectedDataDisks: []compute.DataDisk{
 				{
-					Lun:  to.Int32Ptr(0),
-					Name: to.StringPtr("disk1"),
+					Lun:  pointer.Int32(0),
+					Name: pointer.String("disk1"),
 				},
 			},
 			expectedErr: false,
@@ -479,8 +479,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			for _, vmssvm := range expectedVMSSVMs {
 				vmssvm.StorageProfile = &compute.StorageProfile{
 					DataDisks: &[]compute.DataDisk{{
-						Lun:  to.Int32Ptr(0),
-						Name: to.StringPtr("disk1"),
+						Lun:  pointer.Int32(0),
+						Name: pointer.String("disk1"),
 					}},
 				}
 			}
