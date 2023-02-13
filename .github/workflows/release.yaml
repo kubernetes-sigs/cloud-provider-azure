@@ -154,49 +154,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#[vV]}"
-          VERSION_MAJOR="${VERSION%%\.*}"
-          VERSION_MINOR="${VERSION#*.}"
-          VERSION_MINOR="${VERSION_MINOR%.*}"
-          VERSION_PATCH="${VERSION##*.}"
-
-          BRANCH=release-${VERSION_MAJOR}.${VERSION_MINOR}
-          if [[ ! `git show-ref ${BRANCH}` ]]; then
-            BRANCH=master
-          fi
-
-          if [[ "${VERSION_PATCH}" = "0" ]]; then
-            # when release a new minor version, generate release note from the last minor version
-            START_TAG=v${VERSION_MAJOR}.$((VERSION_MINOR-1)).0
-          else
-            START_TAG=v${VERSION_MAJOR}.${VERSION_MINOR}.$((VERSION_PATCH-1))
-          fi
-          START_SHA=$(git rev-parse ${START_TAG})
-          END_TAG=${GITHUB_REF_NAME}
-          END_SHA=$(git rev-parse ${END_TAG})
-
-          echo "BRANCH=${BRANCH}"
-          echo "START_TAG=${START_TAG} START_SHA=${START_SHA}"
-          echo "END_TAG=${END_TAG} END_SHA=${END_SHA}"
-
-          GO111MODULE=on go install k8s.io/release/cmd/release-notes@latest
-
-
-          release-notes --repo=cloud-provider-azure \
-          	--org=kubernetes-sigs \
-          	--branch=${BRANCH} \
-          	--start-sha=${START_SHA} \
-          	--end-sha=${END_SHA} \
-          	--markdown-links=true \
-          	--required-author='' \
-          	--output=release-notes.md
-
-          # Generate release note for site
-          # Prepend site header
-          SITE_RELEASE_NOTE=site/content/en/blog/releases/${{github.ref_name}}.md
-          SITE_HEAD="---\ntitle: "v${VERSION}"\nlinkTitle: "v${VERSION}"\ndate: $(date '+%Y-%m-%d')\ndescription: Cloud Provider Azure v${VERSION}\n---\n\n"
-          cp release-notes.md ${SITE_RELEASE_NOTE}
-          sed -i "1i${SITE_HEAD}" ${SITE_RELEASE_NOTE}
+          ./hack/generate-release-note.sh ${GITHUB_REF_NAME} release-notes.md true
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
