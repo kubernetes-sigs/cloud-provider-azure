@@ -2173,7 +2173,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 				}
 			}
 		} else {
-			if port >= 0 || port <= 65535 {
+			if port >= 0 && port <= 65535 {
 				for _, item := range serviceManifest.Spec.Ports {
 					//nolint:gosec
 					if item.Port == int32(port) {
