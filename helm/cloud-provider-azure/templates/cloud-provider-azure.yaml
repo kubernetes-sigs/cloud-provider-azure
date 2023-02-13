@@ -443,7 +443,16 @@ data:
 
     ((Get-Content -path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf -Raw) -replace '/var',"$($env:CONTAINER_SANDBOX_MOUNT_POINT)/var") | Set-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf
 
-    Invoke-Expression "$cm --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
+    $argList = @()
+
+    foreach ($var in @("CLOUD_CONFIG", "KUBE_API_BURST", "KUBE_API_CONTENT_TYPE", "KUBE_API_QPS", "MASTER", "MIN_RESYNC_PERIOD", "NODE_STATUS_UPDATE_FREQUENCY", "WAIT_ROUTES")) {
+      if ([System.Environment]::GetEnvironmentVariable($var) -NE $null) {
+        $argList += [System.Environment]::GetEnvironmentVariable($var)
+      }
+    }
+    
+    Write-Host "Running $cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
+    Invoke-Expression "$cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -491,44 +500,45 @@ spec:
       - name: cloud-node-manager
         image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
         imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
-        command: ["/cloud-node-manager.exe"]
-        args:
-          - --node-name=$(NODE_NAME)
-          {{- if hasKey .Values.cloudNodeManager "cloudConfig" }}
-          - "--cloud-config={{ .Values.cloudNodeManager.cloudConfig }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "kubeAPIBurst" }}
-          - "--kube-api-burst={{ .Values.cloudNodeManager.kubeAPIBurst }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "kubeAPIContentType" }}
-          - "--kube-api-content-type={{ .Values.cloudNodeManager.kubeAPIContentType }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "kubeAPIQPS" }}
-          - "--kube-api-qps={{ .Values.cloudNodeManager.kubeAPIQPS }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "kubeconfig" }}
-          - "--kubeconfig={{ .Values.cloudNodeManager.kubeconfig }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "master" }}
-          - "--master={{ .Values.cloudNodeManager.master }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "minResyncPeriod" }}
-          - "--min-resync-period={{ .Values.cloudNodeManager.minResyncPeriod }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "nodeStatusUpdateFrequency" }}
-          - "--node-status-update-frequency={{ .Values.cloudNodeManager.nodeStatusUpdateFrequency }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "useInstanceMetadata" }}
-          - "--use-instance-metadata={{ .Values.cloudNodeManager.useInstanceMetadata }}"
-          {{- end }}
-          {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
-          - "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
-          {{- end }}
+        command: ["powershell.exe"]
+        args: ["$env:CONTAINER_SANDBOX_MOUNT_POINT/scripts/start.ps1"]
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        {{- if hasKey .Values.cloudNodeManager "cloudConfig" }}
+        - name: CLOUD_CONFIG
+          value: "--cloud-config={{ .Values.cloudNodeManager.cloudConfig }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "kubeAPIBurst" }}
+        - name: KUBE_API_BURST
+          value: "--kube-api-burst={{ .Values.cloudNodeManager.kubeAPIBurst }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "kubeAPIContentType" }}
+        - name: KUBE_API_CONTENT_TYPE
+          value: "--kube-api-content-type={{ .Values.cloudNodeManager.kubeAPIContentType }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "kubeAPIQPS" }}
+        - name: KUBE_API_QPS
+          value: "--kube-api-qps={{ .Values.cloudNodeManager.kubeAPIQPS }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "master" }}
+        - name: MASTER
+          value: "--master={{ .Values.cloudNodeManager.master }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "minResyncPeriod" }}
+        - name: MIN_RESYNC_PERIOD
+          value: "--min-resync-period={{ .Values.cloudNodeManager.minResyncPeriod }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "nodeStatusUpdateFrequency" }}
+        - name: NODE_STATUS_UPDATE_FREQUENCY
+          value: "--node-status-update-frequency={{ .Values.cloudNodeManager.nodeStatusUpdateFrequency }}"
+        {{- end }}
+        {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
+        - name: WAIT_ROUTES
+          value: "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
+        {{- end }}
         volumeMounts:
         - mountPath: /var/lib/cpaw
           name: kube-proxy
