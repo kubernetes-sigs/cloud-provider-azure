@@ -18,6 +18,7 @@ package retry
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -82,8 +83,8 @@ func TestJitterWithNegativeMaxFactor(t *testing.T) {
 	res := jitter(duration, maxFactor)
 	defaultMaxFactor := 1.0
 	expected := jitter(duration, defaultMaxFactor)
-	assert.Equal(t, expected-res >= time.Duration(0.0*float64(duration)), true)
-	assert.Equal(t, expected-res < time.Duration(1.0*float64(duration)), true)
+	gap := expected - res
+	assert.Lessf(t, math.Abs(float64(gap)), 1.0*float64(duration), "expected %v, result %v", expected, res)
 }
 
 func TestDoExponentialBackoffRetry(t *testing.T) {
