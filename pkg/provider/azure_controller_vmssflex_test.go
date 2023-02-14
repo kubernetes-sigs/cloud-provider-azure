@@ -22,11 +22,11 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -272,8 +272,8 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			expectedDataDisks: []compute.DataDisk{
 				{
-					Lun:  to.Int32Ptr(1),
-					Name: to.StringPtr("dataDisktestvm1"),
+					Lun:  pointer.Int32(1),
+					Name: pointer.String("dataDisktestvm1"),
 				},
 			},
 			expectedErr: nil,

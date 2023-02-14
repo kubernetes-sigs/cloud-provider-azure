@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -39,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -184,8 +184,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(err).NotTo(HaveOccurred())
-		targetIP := to.String(pip.IPAddress)
-		pipName := to.String(pip.Name)
+		targetIP := pointer.StringDeref(pip.IPAddress, "")
+		pipName := pointer.StringDeref(pip.Name, "")
 		utils.Logf("PIP %q to %q", pipName, targetIP)
 
 		By("Create a Service which will be deleted with the PIP")
@@ -356,7 +356,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
-		defer cleanup(to.String(rg.Name))
+		defer cleanup(pointer.StringDeref(rg.Name, ""))
 
 		By("creating test PIP in the test resource group")
 		testPIPName := "testPIP-" + string(uuid.NewUUID())[0:4]
@@ -371,7 +371,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 
 		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerResourceGroup: to.String(rg.Name),
+			consts.ServiceAnnotationLoadBalancerResourceGroup: pointer.StringDeref(rg.Name, ""),
 		}
 		By("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -382,7 +382,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		//wait and get service's public IP Address
 		By("Waiting service to expose...")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip.IPAddress, ""))
 		Expect(err).NotTo(HaveOccurred())
 
 		lb := getAzureLoadBalancerFromPIP(tc, *pip.IPAddress, *rg.Name, "")
@@ -411,17 +411,17 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Checking tags on the corresponding public IP")
 		expectedTags := map[string]*string{
-			"a": to.StringPtr("b"),
-			"c": to.StringPtr("d"),
-			"e": to.StringPtr(""),
+			"a": pointer.String("b"),
+			"c": pointer.String("d"),
+			"e": pointer.String(""),
 		}
 		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
 		var targetPIP network.PublicIPAddress
 		for _, pip := range pips {
-			if strings.EqualFold(to.String(pip.IPAddress), ip) {
+			if strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), ip) {
 				targetPIP = pip
-				err := waitComparePIPTags(tc, expectedTags, to.String(pip.Name))
+				err := waitComparePIPTags(tc, expectedTags, pointer.StringDeref(pip.Name, ""))
 				Expect(err).NotTo(HaveOccurred())
 				break
 			}
@@ -436,12 +436,12 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectedTags = map[string]*string{
-			"a": to.StringPtr("c"),
-			"c": to.StringPtr("d"),
-			"e": to.StringPtr(""),
-			"x": to.StringPtr("y"),
+			"a": pointer.String("c"),
+			"c": pointer.String("d"),
+			"e": pointer.String(""),
+			"x": pointer.String("y"),
 		}
-		err = waitComparePIPTags(tc, expectedTags, to.String(targetPIP.Name))
+		err = waitComparePIPTags(tc, expectedTags, pointer.StringDeref(targetPIP.Name, ""))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -480,7 +480,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Waiting for the service to expose")
 		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ip).To(Equal(to.String(pip1.IPAddress)))
+		Expect(ip).To(Equal(pointer.StringDeref(pip1.IPAddress, "")))
 
 		By("Updating the service to refer to the second service")
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
@@ -490,7 +490,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for service IP to be updated")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip2.IPAddress))
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip2.IPAddress, ""))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -521,7 +521,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Creating a service referring to the prefix")
 		{
 			annotation := map[string]string{
-				consts.ServiceAnnotationPIPPrefixID: to.String(prefix1.ID),
+				consts.ServiceAnnotationPIPPrefixID: pointer.StringDeref(prefix1.ID, ""),
 			}
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
@@ -543,14 +543,14 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix1.ID))
-			Expect(ip).To(Equal(to.String(pip.IPAddress)))
+			Expect(ip).To(Equal(pointer.StringDeref(pip.IPAddress, "")))
 		}
 
 		By("Updating the service to refer to the second prefix")
 		{
 			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			service.Annotations[consts.ServiceAnnotationPIPPrefixID] = to.String(prefix2.ID)
+			service.Annotations[consts.ServiceAnnotationPIPPrefixID] = pointer.StringDeref(prefix2.ID, "")
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -566,7 +566,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(pip.IPAddress).NotTo(BeNil())
 			Expect(pip.PublicIPPrefix.ID).To(Equal(prefix2.ID))
 
-			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, to.String(pip.IPAddress))
+			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, pointer.StringDeref(pip.IPAddress, ""))
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -746,7 +746,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err = utils.DeletePIPWithRetry(tc, pipName, rg)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		pipAddr := to.String(pip.IPAddress)
+		pipAddr := pointer.StringDeref(pip.IPAddress, "")
 		utils.Logf("Created pip with address %s", pipAddr)
 
 		annotation := map[string]string{}
@@ -870,7 +870,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		"app": serviceName,
 	}
 	ports := []v1.ServicePort{{
-		AppProtocol: to.StringPtr("Tcp"),
+		AppProtocol: pointer.String("Tcp"),
 		Port:        serverPort,
 		Name:        "port1",
 		TargetPort:  intstr.FromInt(serverPort),
@@ -878,7 +878,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		Port:        serverPort + 1,
 		Name:        "port2",
 		TargetPort:  intstr.FromInt(serverPort),
-		AppProtocol: to.StringPtr("Tcp"),
+		AppProtocol: pointer.String("Tcp"),
 	},
 	}
 
