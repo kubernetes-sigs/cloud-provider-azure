@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -107,18 +107,18 @@ func TestVMSSVMCache(t *testing.T) {
 	// validate getting VMSS VM via cache.
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := to.String(vm.OsProfile.ComputerName)
+		vmName := pointer.StringDeref(vm.OsProfile.ComputerName, "")
 		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 		assert.NoError(t, err)
 		assert.NotNil(t, realVM)
 		assert.Equal(t, "vmss", realVM.VMSSName)
-		assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
+		assert.Equal(t, pointer.StringDeref(vm.InstanceID, ""), realVM.InstanceID)
 		assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 	}
 
 	// validate DeleteCacheForNode().
 	vm := expectedVMs[0]
-	vmName := to.String(vm.OsProfile.ComputerName)
+	vmName := pointer.StringDeref(vm.OsProfile.ComputerName, "")
 	err = ss.DeleteCacheForNode(vmName)
 	assert.NoError(t, err)
 
@@ -126,7 +126,7 @@ func TestVMSSVMCache(t *testing.T) {
 	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
-	assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
+	assert.Equal(t, pointer.StringDeref(vm.InstanceID, ""), realVM.InstanceID)
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 }
 
@@ -141,7 +141,7 @@ func TestDeleteCacheForAvailabilitySetNodeInVMSS(t *testing.T) {
 	ss.cloud.VirtualMachinesClient = mockVMClient
 
 	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{
-		{Name: to.StringPtr("vm1")},
+		{Name: pointer.String("vm1")},
 	}, nil)
 	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachine{}, nil).AnyTimes()
 	ss.cloud.nodeNames = sets.NewString("vm1")
@@ -172,7 +172,7 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 	ss.cloud.VirtualMachineScaleSetVMsClient = mockVMSSVMClient
 
 	expectedScaleSet := compute.VirtualMachineScaleSet{
-		Name:                             to.StringPtr(testVMSSName),
+		Name:                             pointer.String(testVMSSName),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{},
 	}
 	mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
@@ -182,8 +182,8 @@ func TestVMSSVMCacheWithDeletingNodes(t *testing.T) {
 
 	for i := range expectedVMs {
 		vm := expectedVMs[i]
-		vmName := to.String(vm.OsProfile.ComputerName)
-		assert.Equal(t, vm.ProvisioningState, to.StringPtr(string(compute.ProvisioningStateDeleting)))
+		vmName := pointer.StringDeref(vm.OsProfile.ComputerName, "")
+		assert.Equal(t, vm.ProvisioningState, pointer.String(string(compute.ProvisioningStateDeleting)))
 
 		realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 		assert.Nil(t, realVM)
@@ -212,11 +212,11 @@ func TestVMSSVMCacheClearedWhenRGDeleted(t *testing.T) {
 
 	// validate getting VMSS VM via cache.
 	vm := expectedVMs[0]
-	vmName := to.String(vm.OsProfile.ComputerName)
+	vmName := pointer.StringDeref(vm.OsProfile.ComputerName, "")
 	realVM, err := ss.getVmssVM(vmName, azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "vmss", realVM.VMSSName)
-	assert.Equal(t, to.String(vm.InstanceID), realVM.InstanceID)
+	assert.Equal(t, pointer.StringDeref(vm.InstanceID, ""), realVM.InstanceID)
 	assert.Equal(t, &vm, realVM.AsVirtualMachineScaleSetVM())
 
 	// verify cache has test vmss.
