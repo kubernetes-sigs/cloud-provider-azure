@@ -25,9 +25,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-02-01/storage"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -255,7 +255,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			if prop.FileServicePropertiesProperties == nil {
 				return "", "", fmt.Errorf("FileServicePropertiesProperties of account(%s), resource group(%s) is nil", accountName, resourceGroup)
 			}
-			prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: to.BoolPtr(false)}
+			prop.FileServicePropertiesProperties.ShareDeleteRetentionPolicy = &storage.DeleteRetentionPolicy{Enabled: pointer.Bool(false)}
 			if _, err := az.FileClient.SetServiceProperties(resourceGroup, accountName, prop); err != nil {
 				return "", "", err
 			}
@@ -350,7 +350,7 @@ func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceG
 		Location: &location,
 		VirtualNetworkLinkProperties: &privatedns.VirtualNetworkLinkProperties{
 			VirtualNetwork:      &privatedns.SubResource{ID: &vnetID},
-			RegistrationEnabled: to.BoolPtr(true)},
+			RegistrationEnabled: pointer.Bool(true)},
 	}
 	return az.virtualNetworkLinksClient.CreateOrUpdate(ctx, vnetResourceGroup, PrivateDNSZoneName, vNetLinkName, parameters, "", false).Error()
 }
@@ -455,7 +455,7 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 		found := false
 		for _, subnetID := range accountOptions.VirtualNetworkResourceIDs {
 			for _, rule := range *account.AccountProperties.NetworkRuleSet.VirtualNetworkRules {
-				if strings.EqualFold(to.String(rule.VirtualNetworkResourceID), subnetID) && rule.Action == storage.ActionAllow {
+				if strings.EqualFold(pointer.StringDeref(rule.VirtualNetworkResourceID, ""), subnetID) && rule.Action == storage.ActionAllow {
 					found = true
 					break
 				}
@@ -487,11 +487,11 @@ func isTaggedWithSkip(account storage.Account) bool {
 }
 
 func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return to.Bool(account.IsHnsEnabled) == to.Bool(accountOptions.IsHnsEnabled)
+	return pointer.BoolDeref(account.IsHnsEnabled, false) == pointer.BoolDeref(accountOptions.IsHnsEnabled, false)
 }
 
 func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return to.Bool(account.EnableNfsV3) == to.Bool(accountOptions.EnableNfsV3)
+	return pointer.BoolDeref(account.EnableNfsV3, false) == pointer.BoolDeref(accountOptions.EnableNfsV3, false)
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {

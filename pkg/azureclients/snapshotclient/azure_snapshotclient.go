@@ -25,10 +25,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -314,7 +314,7 @@ func (c *Client) listSnapshotsByResourceGroup(ctx context.Context, resourceGroup
 		result = append(result, page.Values()...)
 
 		// Abort the loop when there's no nextLink in the response.
-		if to.String(page.Response().NextLink) == "" {
+		if pointer.StringDeref(page.Response().NextLink, "") == "" {
 			break
 		}
 
@@ -340,12 +340,12 @@ func (c *Client) listResponder(resp *http.Response) (result compute.SnapshotList
 // SnapshotListResultPreparer prepares a request to retrieve the next set of results.
 // It returns nil if no more results exist.
 func (c *Client) SnapshotListResultPreparer(ctx context.Context, lr compute.SnapshotList) (*http.Request, error) {
-	if lr.NextLink == nil || len(to.String(lr.NextLink)) < 1 {
+	if lr.NextLink == nil || len(pointer.StringDeref(lr.NextLink, "")) < 1 {
 		return nil, nil
 	}
 
 	decorators := []autorest.PrepareDecorator{
-		autorest.WithBaseURL(to.String(lr.NextLink)),
+		autorest.WithBaseURL(pointer.StringDeref(lr.NextLink, "")),
 	}
 	return c.armClient.PrepareGetRequest(ctx, decorators...)
 }

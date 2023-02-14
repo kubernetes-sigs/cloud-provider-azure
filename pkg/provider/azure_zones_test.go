@@ -27,12 +27,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -270,7 +270,7 @@ func TestGetZoneByProviderID(t *testing.T) {
 	mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm-0", gomock.Any()).Return(compute.VirtualMachine{
 		Zones:    &[]string{"1"},
-		Location: to.StringPtr("eastus"),
+		Location: pointer.String("eastus"),
 	}, nil)
 	zone, err = az.GetZoneByProviderID(context.Background(), testAvailabilitySetNodeProviderID)
 	assert.NoError(t, err)

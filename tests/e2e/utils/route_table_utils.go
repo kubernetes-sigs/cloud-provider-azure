@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"github.com/Azure/go-autorest/autorest/to"
+	"k8s.io/utils/pointer"
 
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
@@ -47,7 +47,7 @@ func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface
 
 	routeSet := make(map[string]interface{})
 	for _, route := range *routeTable.Routes {
-		routeSet[string(providerazure.MapRouteNameToNodeName(true, to.String(route.Name)))] = true
+		routeSet[string(providerazure.MapRouteNameToNodeName(true, pointer.StringDeref(route.Name, "")))] = true
 	}
 
 	return routeSet, nil

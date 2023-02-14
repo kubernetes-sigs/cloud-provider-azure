@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
-	"github.com/Azure/go-autorest/autorest/to"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -33,6 +32,7 @@ import (
 	cloudvolume "k8s.io/cloud-provider/volume"
 	volumehelpers "k8s.io/cloud-provider/volume/helpers"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -144,7 +144,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 			}
 			diskIOPSReadWrite = int64(v)
 		}
-		diskProperties.DiskIOPSReadWrite = to.Int64Ptr(diskIOPSReadWrite)
+		diskProperties.DiskIOPSReadWrite = pointer.Int64(diskIOPSReadWrite)
 
 		diskMBpsReadWrite := int64(consts.DefaultDiskMBpsReadWrite)
 		if options.DiskMBpsReadWrite != "" {
@@ -154,11 +154,11 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 			}
 			diskMBpsReadWrite = int64(v)
 		}
-		diskProperties.DiskMBpsReadWrite = to.Int64Ptr(diskMBpsReadWrite)
+		diskProperties.DiskMBpsReadWrite = pointer.Int64(diskMBpsReadWrite)
 
 		if options.LogicalSectorSize != 0 {
 			klog.V(2).Infof("AzureDisk - requested LogicalSectorSize: %v", options.LogicalSectorSize)
-			diskProperties.CreationData.LogicalSectorSize = to.Int32Ptr(options.LogicalSectorSize)
+			diskProperties.CreationData.LogicalSectorSize = pointer.Int32(options.LogicalSectorSize)
 		}
 	} else {
 		if options.DiskIOPSReadWrite != "" {
@@ -197,7 +197,7 @@ func (c *ManagedDiskController) CreateManagedDisk(options *ManagedDiskOptions) (
 
 	if el := c.common.extendedLocation; el != nil {
 		model.ExtendedLocation = &compute.ExtendedLocation{
-			Name: to.StringPtr(el.Name),
+			Name: pointer.String(el.Name),
 			Type: compute.ExtendedLocationTypes(el.Type),
 		}
 	}
@@ -340,7 +340,7 @@ func (c *ManagedDiskController) ResizeDisk(diskURI string, oldSize resource.Quan
 	}
 
 	if !supportOnlineResize && result.DiskProperties.DiskState != compute.Unattached {
-		return oldSize, fmt.Errorf("azureDisk - disk resize is only supported on Unattached disk, current disk state: %s, already attached to %s", result.DiskProperties.DiskState, to.String(result.ManagedBy))
+		return oldSize, fmt.Errorf("azureDisk - disk resize is only supported on Unattached disk, current disk state: %s, already attached to %s", result.DiskProperties.DiskState, pointer.StringDeref(result.ManagedBy, ""))
 	}
 
 	diskParameter := compute.DiskUpdate{
