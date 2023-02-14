@@ -783,6 +783,34 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
 	})
 
+	It("should return error with invalid health probe config", func() {
+		By("Creating a service with health probe annotations")
+		invalidPort := 65536
+		annotation := map[string]string{
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsPort): strconv.Itoa(invalidPort),
+		}
+
+		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		defer func() {
+			By("Cleaning up Service")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Check if correct error message are presented")
+		err = wait.PollImmediate(time.Second, 2*time.Minute, func() (bool, error) {
+			output, err := utils.RunKubectl(ns.Name, "describe", "service", serviceName)
+			if err != nil {
+				return false, err
+			}
+			errMsg := fmt.Sprintf("port_%d_health-probe_port: port %d is out of range", serverPort, invalidPort)
+			return strings.Contains(output, errMsg), nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	// Check if the following annotations are correctly set with Service LB IP
 	// service.beta.kubernetes.io/azure-load-balancer-ipv4 or service.beta.kubernetes.io/azure-load-balancer-ipv6
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-ip'", func() {
