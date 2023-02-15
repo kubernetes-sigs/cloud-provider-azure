@@ -280,7 +280,8 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		By("Checking if there is a LoadBalancerSourceRanges rule")
 		nsgs, err = tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
-		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, allowCIDR, fmt.Sprintf("%s_%d", hostExecPodIP, mask))
+		ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIP, mask), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
+		found = validateLoadBalancerSourceRangesRuleExists(nsgs, internalIP, allowCIDR, ipRangesSuffix)
 		Expect(found).To(BeTrue())
 
 		By("Checking if there is a deny_all rule")
