@@ -643,6 +643,6 @@ func TestIsTagsEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isTagsEqual(test.account, test.accountOptions)
-		assert.Equal(t, result, test.expectedResult)
+		assert.Equal(t, test.expectedResult, result)
 	}
 }

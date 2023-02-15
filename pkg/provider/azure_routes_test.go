@@ -49,7 +49,7 @@ func TestDeleteRoute(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.NewString(),
+		unmanagedNodes:     sets.New[string](),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -121,7 +121,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:       sets.NewString(),
+		unmanagedNodes:       sets.New[string](),
 		nodeInformerSynced:   func() bool { return true },
 		ipv6DualStackEnabled: true,
 	}
@@ -194,7 +194,7 @@ func TestCreateRoute(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.NewString(),
+		unmanagedNodes:     sets.New[string](),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -237,7 +237,7 @@ func TestCreateRoute(t *testing.T) {
 		{
 			name:           "CreateRoute should report an error if route table name is not configured",
 			routeTableName: "",
-			expectedErrMsg: fmt.Errorf("Route table name is not configured"),
+			expectedErrMsg: fmt.Errorf("route table name is not configured"),
 		},
 		{
 			name:           "CreateRoute should create route if route doesn't exist",
@@ -353,7 +353,7 @@ func TestCreateRoute(t *testing.T) {
 			cloud.unmanagedNodes.Insert(test.unmanagedNodeName)
 			cloud.routeCIDRs = test.routeCIDRs
 		} else {
-			cloud.unmanagedNodes = sets.NewString()
+			cloud.unmanagedNodes = sets.New[string]()
 			cloud.routeCIDRs = nil
 		}
 		if test.nodeInformerNotSynced {
@@ -601,7 +601,7 @@ func TestListRoutes(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.NewString(),
+		unmanagedNodes:     sets.New[string](),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -713,7 +713,7 @@ func TestListRoutes(t *testing.T) {
 			cloud.unmanagedNodes.Insert(test.unmanagedNodeName)
 			cloud.routeCIDRs = test.routeCIDRs
 		} else {
-			cloud.unmanagedNodes = sets.NewString()
+			cloud.unmanagedNodes = sets.New[string]()
 			cloud.routeCIDRs = nil
 		}
 
@@ -741,7 +741,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 	for _, testCase := range []struct {
 		description                          string
 		existingRoutes, expectedRoutes       []network.Route
-		existingNodeNames                    sets.String
+		existingNodeNames                    sets.Set[string]
 		expectedChanged, enableIPV6DualStack bool
 	}{
 		{
@@ -753,7 +753,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 			expectedRoutes: []network.Route{
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 			},
-			existingNodeNames:   sets.NewString("aks-node1-vmss000000"),
+			existingNodeNames:   sets.New("aks-node1-vmss000000"),
 			enableIPV6DualStack: true,
 			expectedChanged:     true,
 		},
@@ -766,7 +766,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 			expectedRoutes: []network.Route{
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames: sets.NewString("aks-node1-vmss000000"),
+			existingNodeNames: sets.New("aks-node1-vmss000000"),
 			expectedChanged:   true,
 		},
 		{
@@ -779,7 +779,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames:   sets.NewString("aks-node1-vmss000001"),
+			existingNodeNames:   sets.New("aks-node1-vmss000001"),
 			enableIPV6DualStack: true,
 		},
 		{
@@ -792,7 +792,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames: sets.NewString("aks-node1-vmss000001"),
+			existingNodeNames: sets.New("aks-node1-vmss000001"),
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
