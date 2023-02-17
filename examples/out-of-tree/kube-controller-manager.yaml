@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: kube-controller-manager
-      image: k8s.gcr.io/kube-controller-manager:v1.22.1
+      image: registry.k8s.io/kube-controller-manager:v1.22.1
       imagePullPolicy: IfNotPresent
       command: ["kube-controller-manager"]
       args:
