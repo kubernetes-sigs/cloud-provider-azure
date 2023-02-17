@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	v1 "k8s.io/api/core/v1"
@@ -261,6 +262,105 @@ func TestGetServiceAdditionalPublicIPs(t *testing.T) {
 	}
 }
 
+func TestGetNodePrivateIPAddress(t *testing.T) {
+	testcases := []struct {
+		desc       string
+		node       *v1.Node
+		isIPv6     bool
+		expectedIP string
+	}{
+		{
+			"IPv4",
+			&v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeExternalIP,
+							Address: "10.244.0.1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "10.0.0.1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "2001::1",
+						},
+					},
+				},
+			},
+			false,
+			"10.0.0.1",
+		},
+		{
+			"IPv6",
+			&v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeExternalIP,
+							Address: "2f00::1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "10.0.0.1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "2001::1",
+						},
+					},
+				},
+			},
+			true,
+			"2001::1",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ip := getNodePrivateIPAddress(tc.node, tc.isIPv6)
+			assert.Equal(t, tc.expectedIP, ip)
+		})
+	}
+}
+
+func TestGetNodePrivateIPAddresses(t *testing.T) {
+	testcases := []struct {
+		desc       string
+		node       *v1.Node
+		expetedIPs []string
+	}{
+		{
+			"default",
+			&v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeExternalIP,
+							Address: "2f00::1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "10.0.0.1",
+						},
+						{
+							Type:    v1.NodeInternalIP,
+							Address: "2001::1",
+						},
+					},
+				},
+			},
+			[]string{"10.0.0.1", "2001::1"},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ips := getNodePrivateIPAddresses(tc.node)
+			assert.Equal(t, tc.expetedIPs, ips)
+		})
+	}
+}
+
 func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 	for _, testCase := range []struct {
 		description string
@@ -446,5 +546,296 @@ func TestExtractVmssVMName(t *testing.T) {
 
 		assert.Equal(t, c.expectedScaleSet, ssName, c.description)
 		assert.Equal(t, c.expectedInstanceID, instanceID, c.description)
+	}
+}
+
+func TestGetIPFamiliesEnabled(t *testing.T) {
+	testcases := []struct {
+		desc              string
+		svc               *v1.Service
+		ExpectedV4Enabled bool
+		ExpectedV6Enabled bool
+	}{
+		{
+			"IPv4",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv4Protocol}},
+			},
+			true,
+			false,
+		},
+		{
+			"DualStack",
+			&v1.Service{
+				Spec: v1.ServiceSpec{IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}},
+			},
+			true,
+			true,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			v4Enabled, v6Enabled := getIPFamiliesEnabled(tc.svc)
+			assert.Equal(t, tc.ExpectedV4Enabled, v4Enabled)
+			assert.Equal(t, tc.ExpectedV6Enabled, v6Enabled)
+		})
+	}
+}
+
+func TestGetServiceLoadBalancerIP(t *testing.T) {
+	testcases := []struct {
+		desc       string
+		svc        *v1.Service
+		isIPv6     bool
+		expectedIP string
+	}{
+		{
+			"IPv6",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2001::1",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					LoadBalancerIP: "10.0.0.2",
+				},
+			},
+			true,
+			"2001::1",
+		},
+		{
+			"IPv4 but from LoadBalancerIP",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{},
+				},
+				Spec: v1.ServiceSpec{
+					LoadBalancerIP: "10.0.0.2",
+				},
+			},
+			false,
+			"10.0.0.2",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ip := getServiceLoadBalancerIP(tc.svc, tc.isIPv6)
+			assert.Equal(t, tc.expectedIP, ip)
+		})
+	}
+}
+
+func TestGetServiceLoadBalancerIPs(t *testing.T) {
+	testcases := []struct {
+		desc        string
+		svc         *v1.Service
+		expectedIPs []string
+	}{
+		{
+			"Get IPv4 and IPv6 IPs",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "10.0.0.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2001::1",
+					},
+				},
+			},
+			[]string{"10.0.0.1", "2001::1"},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ips := getServiceLoadBalancerIPs(tc.svc)
+			assert.Equal(t, tc.expectedIPs, ips)
+		})
+	}
+}
+
+func TestSetServiceLoadBalancerIP(t *testing.T) {
+	testcases := []struct {
+		desc        string
+		ip          string
+		svc         *v1.Service
+		expectedSvc *v1.Service
+	}{
+		{
+			"IPv6",
+			"2001::1",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001::1",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			setServiceLoadBalancerIP(tc.svc, tc.ip)
+			assert.Equal(t, tc.expectedSvc, tc.svc)
+		})
+	}
+}
+
+func TestGetServicePIPName(t *testing.T) {
+	testcases := []struct {
+		desc         string
+		svc          *v1.Service
+		isIPv6       bool
+		expectedName string
+	}{
+		// TODO: Add new after DualStack finishes
+		{
+			"From ServiceAnnotationPIPName",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPName: "pip-name",
+					},
+				},
+			},
+			false,
+			"pip-name",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			name := getServicePIPName(tc.svc, tc.isIPv6)
+			assert.Equal(t, tc.expectedName, name)
+		})
+	}
+}
+
+func TestGetServicePIPPrefixID(t *testing.T) {
+	testcases := []struct {
+		desc       string
+		svc        *v1.Service
+		isIPv6     bool
+		expectedID string
+	}{
+		// TODO: Add new after DualStack finishes
+		{
+			"From ServiceAnnotationPIPName",
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixID: "pip-prefix-id",
+					},
+				},
+			},
+			false,
+			"pip-prefix-id",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			id := getServicePIPPrefixID(tc.svc, tc.isIPv6)
+			assert.Equal(t, tc.expectedID, id)
+		})
+	}
+}
+
+func TestGetResourceByIPFamily(t *testing.T) {
+	testcases := []struct {
+		desc             string
+		resource         string
+		isIPv6           bool
+		expectedResource string
+	}{
+		// TODO: Add new test after DualStack finishes
+		{
+			"Direct",
+			"resource0",
+			false,
+			"resource0",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			resource := getResourceByIPFamily(tc.resource, tc.isIPv6)
+			assert.Equal(t, tc.expectedResource, resource)
+		})
+	}
+}
+
+func TestIsFIPIPv6(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testcases := []struct {
+		desc           string
+		fip            *network.FrontendIPConfiguration
+		pips           *[]network.PublicIPAddress
+		isInternal     bool
+		expectedIsIPv6 bool
+	}{
+		{
+			"Internal IPv4",
+			&network.FrontendIPConfiguration{
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddressVersion: network.IPv4,
+					PrivateIPAddress:        pointer.String("10.0.0.1"),
+				},
+			},
+			&[]network.PublicIPAddress{},
+			true,
+			false,
+		},
+		{
+			"External IPv6",
+			&network.FrontendIPConfiguration{
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip-id0")},
+				},
+			},
+			&[]network.PublicIPAddress{
+				{
+					ID: pointer.String("pip-id0"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("2001::1"),
+					},
+				},
+				{
+					ID: pointer.String("pip-id1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("10.0.0.1"),
+					},
+				},
+			},
+			false,
+			true,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			isIPv6, err := az.isFIPIPv6(tc.fip, tc.pips, tc.isInternal)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expectedIsIPv6, isIPv6)
+		})
+	}
+}
+
+func TestGetResourceIDPrefix(t *testing.T) {
+	testcases := []struct {
+		desc           string
+		id             string
+		expectedPrefix string
+	}{
+		{"normal", "a/b/c", "a/b"},
+		{"no-slash", "ab", "ab"},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			prefix := getResourceIDPrefix(tc.id)
+			assert.Equal(t, tc.expectedPrefix, prefix)
+		})
 	}
 }

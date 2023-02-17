@@ -47,47 +47,6 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	az.EnableMultipleStandardLoadBalancers = true
 	bi := newBackendPoolTypeNodeIP(az)
 
-	backendPool := network.BackendAddressPool{
-		Name: pointer.String("kubernetes"),
-		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("10.0.0.1"),
-					},
-				},
-			},
-		},
-	}
-	expectedBackendPool := network.BackendAddressPool{
-		Name: pointer.String("kubernetes"),
-		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
-			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
-				{
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("10.0.0.1"),
-					},
-				},
-				{
-					Name: pointer.String("vmss-0"),
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String("10.0.0.2"),
-					},
-				},
-			},
-		},
-	}
-
-	mockVMSet := NewMockVMSet(ctrl)
-	mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).Return("vmss-0", nil)
-	mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss-0")
-	az.VMSet = mockVMSet
-
-	lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-	lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	az.LoadBalancerClient = lbClient
-
 	nodes := []*v1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -105,15 +64,156 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 						Type:    v1.NodeInternalIP,
 						Address: "10.0.0.2",
 					},
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "2001::2",
+					},
 				},
 			},
 		},
 	}
 
-	service := getTestService("svc-1", v1.ProtocolTCP, nil, false, 80)
-	err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", backendPool)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedBackendPool, backendPool)
+	testcases := []struct {
+		desc                string
+		backendPool         network.BackendAddressPool
+		expectedBackendPool network.BackendAddressPool
+	}{
+		{
+			desc: "IPv4",
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+					},
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+						{
+							Name: pointer.String("vmss-0"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.2"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "IPv6",
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes-IPv6"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("2001::1"),
+							},
+						},
+					},
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes-IPv6"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("2001::1"),
+							},
+						},
+						{
+							Name: pointer.String("vmss-0-IPv6"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("2001::2"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).Return("vmss-0", nil)
+			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss-0")
+			az.VMSet = mockVMSet
+
+			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			az.LoadBalancerClient = lbClient
+
+			service := getTestService("svc-1", v1.ProtocolTCP, nil, false, 80)
+			makeTestServiceDualStack(&service)
+			err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedBackendPool, tc.backendPool)
+		})
+	}
+}
+
+func TestIsLBBackendPoolsExisting(t *testing.T) {
+	testcases := []struct {
+		desc               string
+		lbBackendPoolNames map[bool]string
+		bpName             *string
+		expectedFound      bool
+		expectedIsIPv6     bool
+	}{
+		{
+			desc: "IPv4 backendpool exists",
+			lbBackendPoolNames: map[bool]string{
+				false: "bp",
+				true:  "bp-IPv6",
+			},
+			bpName:         pointer.String("bp"),
+			expectedFound:  true,
+			expectedIsIPv6: false,
+		},
+		{
+			desc: "IPv6 backendpool exists",
+			lbBackendPoolNames: map[bool]string{
+				false: "bp",
+				true:  "bp-IPv6",
+			},
+			bpName:         pointer.String("bp-IPv6"),
+			expectedFound:  true,
+			expectedIsIPv6: true,
+		},
+		{
+			desc: "backendpool not exists",
+			lbBackendPoolNames: map[bool]string{
+				false: "bp",
+				true:  "bp-IPv6",
+			},
+			bpName:         pointer.String("bp0"),
+			expectedFound:  false,
+			expectedIsIPv6: false,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			found, isIPv6 := isLBBackendPoolsExisting(tc.lbBackendPoolNames, tc.bpName)
+			assert.Equal(t, tc.expectedFound, found)
+			assert.Equal(t, tc.expectedIsIPv6, isIPv6)
+		})
+	}
 }
 
 func TestCleanupVMSetFromBackendPoolByConditionNodeIPConfig(t *testing.T) {
@@ -611,6 +711,48 @@ func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	ipv4, ipv6 := bc.GetBackendPrivateIPs(testClusterName, &svc, &lb)
 	assert.Equal(t, []string{"1.2.3.4"}, ipv4)
 	assert.Equal(t, []string{"fe80::1"}, ipv6)
+}
+
+func TestGetBackendPrivateIPsNodeIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := getTestService("svc1", "TCP", nil, false) // isIPv6 doesn't matter.
+	testcases := []struct {
+		desc         string
+		lb           *network.LoadBalancer
+		expectedIPv4 []string
+		expectedIPv6 []string
+	}{
+		{
+			"normal",
+			buildLBWithVMIPs(testClusterName, []string{"1.2.3.4", "fe80::1"}),
+			[]string{"1.2.3.4"},
+			[]string{"fe80::1"},
+		},
+		{
+			"some invalid IPs",
+			buildLBWithVMIPs(testClusterName, []string{"1.2.3.4.5", "fe80::1"}),
+			[]string{},
+			[]string{"fe80::1"},
+		},
+		{
+			"no IPs",
+			buildLBWithVMIPs(testClusterName, []string{}),
+			[]string{},
+			[]string{},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			az.VMSet = NewMockVMSet(ctrl)
+			bi := newBackendPoolTypeNodeIP(az)
+			ipv4, ipv6 := bi.GetBackendPrivateIPs(testClusterName, &svc, tc.lb)
+			assert.Equal(t, tc.expectedIPv4, ipv4)
+			assert.Equal(t, tc.expectedIPv6, ipv6)
+		})
+	}
 }
 
 func TestGetBackendIPConfigurationsToBeDeleted(t *testing.T) {

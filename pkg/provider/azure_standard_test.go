@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
@@ -376,22 +377,22 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			expected:      "a257b965551374ad2b091ef3f07043ad-shortsubnet-TCP-9000",
 		},
 		{
-			description:   "internal standard lb should have subnet name on the rule name but truncated to 80 characters",
+			description:   "internal standard lb should have subnet name on the rule name but truncated to 80 (-5) characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
 			useStandardLB: true,
 			protocol:      v1.ProtocolTCP,
 			port:          9000,
-			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngg-TCP-9000",
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000",
 		},
 		{
-			description:   "internal basic lb should have subnet name on the rule name but truncated to 80 characters",
+			description:   "internal basic lb should have subnet name on the rule name but truncated to 80 (-5) characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
 			useStandardLB: false,
 			protocol:      v1.ProtocolTCP,
 			port:          9000,
-			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngg-TCP-9000",
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000",
 		},
 		{
 			description:   "external standard lb should not have subnet name on the rule name",
@@ -422,7 +423,8 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
 		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
-		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port)
+		isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
+		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port, isIPv6)
 		assert.Equal(t, c.expected, loadbalancerRuleName, c.description)
 	}
 }
@@ -462,21 +464,21 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 			subnetName:    "a--------------------------------------------------z",
 			isInternal:    true,
 			useStandardLB: true,
-			expected:      "a257b965551374ad2b091ef3f07043ad-a---------------------------------------------_",
+			expected:      "a257b965551374ad2b091ef3f07043ad-a----------------------------------------_",
 		},
 		{
 			description:   "internal standard lb should have subnet name on the frontend ip configuration name but truncated to 80 characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
 			useStandardLB: true,
-			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnnggggggggggg",
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggg",
 		},
 		{
 			description:   "internal basic lb should have subnet name on the frontend ip configuration name but truncated to 80 characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
 			useStandardLB: false,
-			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnnggggggggggg",
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggg",
 		},
 		{
 			description:   "external standard lb should not have subnet name on the frontend ip configuration name",
@@ -902,23 +904,42 @@ func TestGetBackendPoolName(t *testing.T) {
 		service          v1.Service
 		clusterName      string
 		expectedPoolName string
+		isIPv6           bool
 	}{
 		{
 			name:             "GetBackendPoolName should return <clusterName>-IPv6",
 			service:          getTestService("test1", v1.ProtocolTCP, nil, true, 80),
 			clusterName:      "azure",
 			expectedPoolName: "azure-IPv6",
+			isIPv6:           true,
 		},
 		{
 			name:             "GetBackendPoolName should return <clusterName>",
 			service:          getTestService("test1", v1.ProtocolTCP, nil, false, 80),
 			clusterName:      "azure",
 			expectedPoolName: "azure",
+			isIPv6:           false,
 		},
 	}
 	for _, test := range testcases {
-		backPoolName := getBackendPoolName(test.clusterName, &test.service)
+		backPoolName := getBackendPoolName(test.clusterName, test.isIPv6)
 		assert.Equal(t, test.expectedPoolName, backPoolName, test.name)
+	}
+}
+
+func TestIsBackendPoolIPv6(t *testing.T) {
+	testcases := []struct {
+		name           string
+		expectedIsIPv6 bool
+	}{
+		{"bp-IPv6", true},
+		{"bp-IPv4", false},
+		{"bp", false},
+		{"bp-ipv6", false},
+	}
+	for _, test := range testcases {
+		isIPv6 := isBackendPoolIPv6(test.name)
+		assert.Equal(t, test.expectedIsIPv6, isIPv6)
 	}
 }
 
@@ -1404,15 +1425,6 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			vmSetName:         "myAvailabilitySet",
 		},
 		{
-			name:           "EnsureHostInPool should report error if service.Spec.ClusterIP is ipv6 but node don't have IPv6 address",
-			service:        &v1.Service{Spec: v1.ServiceSpec{ClusterIP: "2001:0db8:85a3:0000:0000:8a2e:0370:7334"}},
-			nodeName:       "vm4",
-			nicName:        "nic4",
-			nicID:          "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic4",
-			vmSetName:      "myAvailabilitySet",
-			expectedErrMsg: fmt.Errorf("failed to determine the ipconfig(IPv6=true). nicname=%q", "nic4"),
-		},
-		{
 			name:          "EnsureHostInPool should return nil if there is matched backend pool",
 			service:       &v1.Service{},
 			backendPoolID: backendAddressPoolID,
@@ -1571,64 +1583,39 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 			nicID:     "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic4",
 			vmSetName: "availabilityset-1",
 		},
-		{
-			name: "EnsureHostsInPool should report error if service.Spec.ClusterIP is ipv6 but node don't have IPv6 address",
-			service: &v1.Service{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "svc",
-					Namespace: "default",
-				},
-				Spec: v1.ServiceSpec{
-					ClusterIP: "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-				},
-			},
-			nodeName: "vm5",
-			nodes: []*v1.Node{
-				{
-					ObjectMeta: meta.ObjectMeta{
-						Name: "vm5",
-					},
-				},
-			},
-			nicName:        "nic5",
-			backendPoolID:  backendAddressPoolID,
-			nicID:          "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic5",
-			vmSetName:      "myAvailabilitySet",
-			expectedErr:    true,
-			expectedErrMsg: fmt.Errorf("ensure(default/svc): backendPoolID(%s) - failed to ensure host in pool: %w", backendAddressPoolID, fmt.Errorf("failed to determine the ipconfig(IPv6=true). nicname=%q", "nic5")),
-		},
 	}
 
 	for _, test := range testCases {
-		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
-		cloud.excludeLoadBalancerNodes = sets.New(test.excludeLBNodes...)
+		t.Run(test.name, func(t *testing.T) {
+			cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
+			cloud.excludeLoadBalancerNodes = sets.New(test.excludeLBNodes...)
 
-		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
-		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
-		testNIC.Name = pointer.String(test.nicName)
-		testNIC.ID = pointer.String(test.nicID)
+			testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
+			testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
+			testNIC.Name = pointer.String(test.nicName)
+			testNIC.ID = pointer.String(test.nicID)
 
-		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(testVM, nil).AnyTimes()
+			mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+			mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nodeName, gomock.Any()).Return(testVM, nil).AnyTimes()
 
-		mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
-		mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
-		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockInterfaceClient := cloud.InterfacesClient.(*mockinterfaceclient.MockInterface)
+			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, test.nicName, gomock.Any()).Return(testNIC, nil).AnyTimes()
+			mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-		err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName)
-		if test.expectedErr {
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
-		} else {
-			assert.Nil(t, err, test.name)
-		}
+			err := cloud.VMSet.EnsureHostsInPool(test.service, test.nodes, test.backendPoolID, test.vmSetName)
+			if test.expectedErr {
+				assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+			} else {
+				assert.Nil(t, err, test.name)
+			}
+		})
 	}
 }
 
 func TestServiceOwnsFrontendIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	cloud := GetTestCloud(ctrl)
 
 	testCases := []struct {
 		desc         string
@@ -1735,8 +1722,10 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID:         types.UID("secondary"),
-					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+					},
 				},
 			},
 		},
@@ -1760,11 +1749,55 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			service: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
-					UID:         types.UID("secondary"),
-					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
 				},
 			},
 			isOwned: true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary external service dual-stack",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("4.3.2.1"),
+					},
+				},
+				{
+					ID: pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("fd00::eef0"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+							PublicIPAddressVersion: network.IPv6,
+						},
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			isOwned:   true,
+			isPrimary: false,
 		},
 		{
 			desc: "serviceOwnsFrontendIP should detect the secondary internal service",
@@ -1785,13 +1818,36 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			isOwned: true,
 		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary internal service - dualstack",
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress: pointer.String("fd00::eef0"),
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerInternal:           "true",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			isOwned: true,
+		},
 	}
 
 	for _, test := range testCases {
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
-		assert.Equal(t, test.expectedErr, err, test.desc)
-		assert.Equal(t, test.isOwned, isOwned, test.desc)
-		assert.Equal(t, test.isPrimary, isPrimary, test.desc)
+		t.Run(test.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
+			assert.Equal(t, test.expectedErr, err)
+			assert.Equal(t, test.isOwned, isOwned)
+			assert.Equal(t, test.isPrimary, isPrimary)
+		})
 	}
 }
 
@@ -1844,7 +1900,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 		mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		cloud.InterfacesClient = mockNICClient
 
-		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(&service, backendPoolID, vmSetName, test.backendAddressPools, true)
+		nicUpdated, err := cloud.VMSet.EnsureBackendPoolDeleted(&service, []string{backendPoolID}, vmSetName, test.backendAddressPools, true)
 		assert.NoError(t, err, test.desc)
 		assert.True(t, nicUpdated)
 	}
@@ -2187,6 +2243,7 @@ func TestGetSecurityRuleName(t *testing.T) {
 		svc              *v1.Service
 		port             v1.ServicePort
 		sourceAddrPrefix string
+		isIPv6           bool
 		expectedRuleName string
 	}{
 		{
@@ -2201,6 +2258,7 @@ func TestGetSecurityRuleName(t *testing.T) {
 				Port:     80,
 			},
 			"10.0.0.1/24",
+			false,
 			"a257b965551374ad2b091ef3f07043ad-TCP-80-10.0.0.1_24",
 		},
 		{
@@ -2216,6 +2274,7 @@ func TestGetSecurityRuleName(t *testing.T) {
 				Port:     80,
 			},
 			"10.0.0.1/24",
+			false,
 			"shared-TCP-80-10.0.0.1_24",
 		},
 		{
@@ -2230,6 +2289,7 @@ func TestGetSecurityRuleName(t *testing.T) {
 				Port:     80,
 			},
 			"2001:0:0::1/64",
+			true,
 			"a257b965551374ad2b091ef3f07043ad-TCP-80-2001.0.0..1_64",
 		},
 	}
@@ -2239,7 +2299,7 @@ func TestGetSecurityRuleName(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
-			ruleName := az.getSecurityRuleName(tc.svc, tc.port, tc.sourceAddrPrefix)
+			ruleName := az.getSecurityRuleName(tc.svc, tc.port, tc.sourceAddrPrefix, tc.isIPv6)
 			assert.Equal(t, tc.expectedRuleName, ruleName)
 		})
 	}

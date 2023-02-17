@@ -227,11 +227,10 @@ func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
 	return result, nil
 }
 
-func getNodePrivateIPAddress(service *v1.Service, node *v1.Node) string {
-	isIPV6SVC := utilnet.IsIPv6String(service.Spec.ClusterIP)
+func getNodePrivateIPAddress(node *v1.Node, isIPv6 bool) string {
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
-			utilnet.IsIPv6String(nodeAddress.Address) == isIPV6SVC {
+			utilnet.IsIPv6String(nodeAddress.Address) == isIPv6 {
 			klog.V(6).Infof("getNodePrivateIPAddress: node %s, ip %s", node.Name, nodeAddress.Address)
 			return nodeAddress.Address
 		}
@@ -341,4 +340,153 @@ func extractVmssVMName(name string) (string, string, error) {
 	ssName = ssName[:len(ssName)-1]
 	instanceID := split[len(split)-1]
 	return ssName, instanceID, nil
+}
+
+// getIPFamiliesEnabled checks if IPv4, IPv6 are enabled according to svc.Spec.IPFamilies.
+func getIPFamiliesEnabled(svc *v1.Service) (v4Enabled bool, v6Enabled bool) {
+	for _, ipFamily := range svc.Spec.IPFamilies {
+		if ipFamily == v1.IPv4Protocol {
+			v4Enabled = true
+		} else if ipFamily == v1.IPv6Protocol {
+			v6Enabled = true
+		}
+	}
+	return
+}
+
+// getServiceLoadBalancerIP retrieves LB IP from IPv4 annotation, then IPv6 annotation, then service.Spec.LoadBalancerIP.
+func getServiceLoadBalancerIP(service *v1.Service, isIPv6 bool) string {
+	if service == nil {
+		return ""
+	}
+
+	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]]; ok && ip != "" {
+		return ip
+	}
+
+	// Retrieve LB IP from service.Spec.LoadBalancerIP (will be deprecated)
+	svcLBIP := service.Spec.LoadBalancerIP
+	if (net.ParseIP(svcLBIP).To4() != nil && !isIPv6) ||
+		(net.ParseIP(svcLBIP).To4() == nil && isIPv6) {
+		return svcLBIP
+	}
+	return ""
+}
+
+func getServiceLoadBalancerIPs(service *v1.Service) []string {
+	if service == nil {
+		return []string{}
+	}
+
+	ips := []string{}
+	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[false]]; ok && ip != "" {
+		ips = append(ips, ip)
+	}
+	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[true]]; ok && ip != "" {
+		ips = append(ips, ip)
+	}
+	if len(ips) != 0 {
+		return ips
+	}
+
+	lbIP := service.Spec.LoadBalancerIP
+	if lbIP != "" {
+		ips = append(ips, lbIP)
+	}
+
+	return ips
+}
+
+// setServiceLoadBalancerIP sets LB IP to a Service
+func setServiceLoadBalancerIP(service *v1.Service, ip string) {
+	if service.Annotations == nil {
+		service.Annotations = map[string]string{}
+	}
+	isIPv6 := net.ParseIP(ip).To4() == nil
+	service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]] = ip
+}
+
+func getServicePIPName(service *v1.Service, isIPv6 bool) string {
+	if service == nil {
+		return ""
+	}
+
+	if consts.DualstackSupported {
+		if name, ok := service.Annotations[consts.ServiceAnnotationPIPNameDualStack[isIPv6]]; ok && name != "" {
+			return name
+		}
+	}
+	return service.Annotations[consts.ServiceAnnotationPIPName]
+}
+
+func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
+	if service == nil {
+		return ""
+	}
+
+	if consts.DualstackSupported {
+		if name, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]]; ok && name != "" {
+			return name
+		}
+	}
+	return service.Annotations[consts.ServiceAnnotationPIPPrefixID]
+}
+
+func getResourceByIPFamily(resource string, isIPv6 bool) string {
+	if !consts.DualstackSupported {
+		return resource
+	}
+
+	if isIPv6 {
+		return fmt.Sprintf("%s-%s", resource, v6Suffix)
+	}
+	return fmt.Sprintf("%s-%s", resource, v4Suffix)
+}
+
+// isFIPIPv6 checks if the frontend IP configuration is of IPv6.
+func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pips *[]network.PublicIPAddress, isInternal bool) (isIPv6 bool, err error) {
+	if err := az.safeListPIP(az.ResourceGroup, pips); err != nil {
+		return false, fmt.Errorf("failed to ensure PIP is refreshed: %w", err)
+	}
+	if isInternal {
+		if fip.FrontendIPConfigurationPropertiesFormat != nil {
+			if fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion != "" {
+				return fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion == network.IPv6, nil
+			}
+			return net.ParseIP(pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress, "")).To4() == nil, nil
+		}
+		klog.Errorf("Checking IP Family of frontend IP configuration %q of internal Service but its"+
+			" FrontendIPConfigurationPropertiesFormat is nil. It's considered to be IPv4",
+			pointer.StringDeref(fip.Name, ""))
+		return
+	}
+	var fipPIPID string
+	if fip.FrontendIPConfigurationPropertiesFormat != nil && fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
+		fipPIPID = pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress.ID, "")
+	}
+	for _, pip := range *pips {
+		id := pointer.StringDeref(pip.ID, "")
+		if !strings.EqualFold(fipPIPID, id) {
+			continue
+		}
+		if pip.PublicIPAddressPropertiesFormat != nil {
+			// First check PublicIPAddressVersion, then IPAddress
+			if pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion == network.IPv6 ||
+				net.ParseIP(pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, "")).To4() == nil {
+				isIPv6 = true
+				break
+			}
+		}
+		break
+	}
+	return isIPv6, nil
+}
+
+// getResourceIDPrefix returns a substring from the provided one between beginning and the last "/".
+func getResourceIDPrefix(id string) string {
+	idx := strings.LastIndexByte(id, '/')
+	if idx == -1 {
+		return id // Should not happen
+	}
+	return id[:idx]
 }
