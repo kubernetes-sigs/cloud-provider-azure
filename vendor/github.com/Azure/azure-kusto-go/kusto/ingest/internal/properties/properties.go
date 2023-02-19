@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/Azure/azure-kusto-go/kusto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -172,6 +173,14 @@ func (d DataFormat) CamelCase() string {
 	}
 
 	return ""
+}
+
+func (d DataFormat) KnownOrDefault() kusto.DataFormatForStreaming {
+	if d == DFUnknown {
+		return CSV
+	}
+
+	return d
 }
 
 // MarshalJSON implements json.Marshaler.MarshalJSON.
