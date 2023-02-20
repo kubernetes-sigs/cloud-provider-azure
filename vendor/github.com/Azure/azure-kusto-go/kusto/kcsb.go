@@ -28,9 +28,10 @@ type ConnectionStringBuilder struct {
 	RedirectURL                      string
 	DefaultAuth                      bool
 	ClientOptions                    *azcore.ClientOptions
+	ApplicationForTracing            string
+	UserForTracing                   string
 }
 
-// params mapping
 const (
 	dataSource                       string = "DataSource"
 	aadUserId                        string = "AADUserID"
@@ -43,9 +44,6 @@ const (
 	userToken                        string = "UserToken"
 	applicationCertificateThumbprint string = "ApplicationCertificateThumbprint"
 	sendCertificateChain             string = "SendCertificateChain"
-	msiAuth                          string = "MSIAuthentication"
-	managedServiceIdentity           string = "ManagedServiceIdentity"
-	azCli                            string = "AZCLI"
 	interactiveLogin                 string = "InteractiveLogin"
 	domainHint                       string = "RedirectURL"
 )
@@ -142,6 +140,7 @@ func NewConnectionStringBuilder(connStr string) *ConnectionStringBuilder {
 			panic(err)
 		}
 	}
+
 	return &kcsb
 }
 
@@ -429,4 +428,10 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 
 func isEmpty(str string) bool {
 	return strings.TrimSpace(str) == ""
+}
+
+func (kcsb *ConnectionStringBuilder) SetConnectorDetails(name, version, appName, appVersion string, sendUser bool, overrideUser string, additionalFields ...StringPair) {
+	app, user := setConnectorDetails(name, version, appName, appVersion, sendUser, overrideUser, additionalFields...)
+	kcsb.ApplicationForTracing = app
+	kcsb.UserForTracing = user
 }

@@ -3,10 +3,11 @@ package kusto
 import (
 	"context"
 	"fmt"
-	"github.com/Azure/azure-kusto-go/kusto/utils"
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"github.com/Azure/azure-kusto-go/kusto/utils"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
