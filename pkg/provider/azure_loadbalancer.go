@@ -2640,6 +2640,7 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup, service *v1.Se
 				}
 				if sharedRule.DestinationAddressPrefixes == nil {
 					klog.V(4).Infof("Didn't find DestinationAddressPrefixes in shared rule for service %s", service.Name)
+					updatedRules = append(updatedRules[:sharedIndex], updatedRules[sharedIndex+1:]...)
 					continue
 				}
 				existingPrefixes := *sharedRule.DestinationAddressPrefixes
@@ -2683,10 +2684,14 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup, service *v1.Se
 		}
 		if foundRule && allowsConsolidation(expectedRule) {
 			index, _ := findConsolidationCandidate(updatedRules, expectedRule)
-			updatedRules[index] = consolidate(updatedRules[index], expectedRule)
+			if updatedRules[index].DestinationAddressPrefixes != nil {
+				updatedRules[index] = consolidate(updatedRules[index], expectedRule)
+			} else {
+				updatedRules = append(updatedRules[:index], updatedRules[index+1:]...)
+			}
 			dirtySg = true
 		}
-		if !foundRule {
+		if !foundRule && wantLb {
 			klog.V(10).Infof("reconcile(%s)(%t): sg rule(%s) - adding", serviceName, wantLb, *expectedRule.Name)
 
 			nextAvailablePriority, err := getNextAvailablePriority(updatedRules)
