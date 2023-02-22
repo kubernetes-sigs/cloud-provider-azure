@@ -135,7 +135,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).To(BeNil(), "Fail to automatically delete the rule")
 	})
 
-	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func() {
+	It("should support service annotation `service.beta.kubernetes.io/azure-shared-securityrule`", func(ctx SpecContext) {
 		By("Exposing two services with shared security rule")
 		annotation := map[string]string{
 			consts.ServiceAnnotationSharedSecurityRule: "true",
@@ -166,21 +166,23 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		By("Validate automatically adjust or delete the rule, when service is deleted")
 		Expect(utils.DeleteService(cs, ns.Name, serviceName)).NotTo(HaveOccurred())
 		ipList = []string{ip2}
-		Expect(validateSharedSecurityRuleExists(nsgs, ipList, port)).To(BeTrue(), "Security rule should be modified to only contain service %s", serviceName2)
+
+		Eventually(func() (bool, error) {
+			nsgs, err = tc.GetClusterSecurityGroups()
+			if err != nil {
+				return false, err
+			}
+			return validateSharedSecurityRuleExists(nsgs, []string{ip2}, port) && !validateSharedSecurityRuleExists(nsgs, []string{ip1}, port), nil
+		}).WithContext(ctx).Should(BeTrue(), "Security rule should be modified to only contain service %s", serviceName2)
 
 		Expect(utils.DeleteService(cs, ns.Name, serviceName2)).NotTo(HaveOccurred())
-		isDeleted := false
-		for i := 1; i <= 30; i++ {
+		Eventually(func() (bool, error) {
 			nsgs, err := tc.GetClusterSecurityGroups()
-			Expect(err).NotTo(HaveOccurred())
-			if !validateSharedSecurityRuleExists(nsgs, ipList, port) {
-				utils.Logf("Target rule successfully deleted")
-				isDeleted = true
-				break
+			if err != nil {
+				return false, err
 			}
-			time.Sleep(20 * time.Second)
-		}
-		Expect(isDeleted).To(BeTrue(), "Fail to automatically delete the shared security rule")
+			return validateSharedSecurityRuleExists(nsgs, ipList, port), nil
+		}).WithContext(ctx).Should(BeFalse(), "Fail to automatically delete the shared security rule")
 	})
 
 	It("can set source IP prefixes automatically according to corresponding service tag", func() {
