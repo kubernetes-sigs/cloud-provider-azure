@@ -112,9 +112,29 @@ func newRecyclableTransport(id int, parent *http.Transport, host string, recycle
 	return r
 }
 
+// return retrue if transport host matched with request host
+func (t *recyclableTransport) compareHost(reqHost string) bool {
+	idx := strings.Index(reqHost, ":")
+	idx1 := strings.Index(t.host, ":")
+
+	// both host have ":" or not, directly compare reqest host name with transport host
+	if idx == idx1 {
+		return reqHost == t.host
+	}
+
+	// reqHost has ":", but transportHost doesn't, compare reqHost with port-appened transport host
+	if idx != -1 {
+		return reqHost == t.host+reqHost[idx:]
+	}
+
+	// reqHost doesn't have ":", but transportHost does, compare reqHost with non-port transport host
+	return reqHost == t.host[:idx1]
+}
+
 func (t *recyclableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Host != t.host {
-		return nil, fmt.Errorf("host %q is not supported by the configured ARM balancer", req.URL.Host)
+	matched := t.compareHost(req.URL.Host)
+	if !matched {
+		return nil, fmt.Errorf("host %q is not supported by the configured ARM balancer, supported host name is %q", req.URL.Host, t.host)
 	}
 
 	t.lock.Lock()

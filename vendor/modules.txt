@@ -87,7 +87,7 @@ github.com/Azure/azure-storage-queue-go/azqueue
 ## explicit; go 1.16
 github.com/Azure/go-ansiterm
 github.com/Azure/go-ansiterm/winterm
-# github.com/Azure/go-armbalancer v0.0.0-20230118203505-a342585b4df2
+# github.com/Azure/go-armbalancer v0.0.0-20230221221418-7ca7b78349b4
 ## explicit; go 1.18
 github.com/Azure/go-armbalancer
 # github.com/Azure/go-autorest v14.2.0+incompatible

@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Azure/azure-kusto-go v0.10.2
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
-	github.com/Azure/go-armbalancer v0.0.0-20230118203505-a342585b4df2
+	github.com/Azure/go-armbalancer v0.0.0-20230221221418-7ca7b78349b4
 	github.com/Azure/go-autorest/autorest v0.11.28
 	github.com/Azure/go-autorest/autorest/adal v0.9.22
 	github.com/Azure/go-autorest/autorest/mocks v0.4.2

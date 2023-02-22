@@ -50,8 +50,8 @@ github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd h1:b3
 github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd/go.mod h1:K6am8mT+5iFXgingS9LUc7TmbsW6XBw3nxaRyaMyWc8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOElx5B5HZ4hJQsoJ/PvUvKRhJHDQXO8P8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
-github.com/Azure/go-armbalancer v0.0.0-20230118203505-a342585b4df2 h1:44FZlkxA7snWkf+krBM4W1a/f0xfGZEv0F5Fv6V2qc4=
-github.com/Azure/go-armbalancer v0.0.0-20230118203505-a342585b4df2/go.mod h1:yTg7MA/8YnfKQc9o97tzAJ7fbdVkod1xGsIvKmhYPRE=
+github.com/Azure/go-armbalancer v0.0.0-20230221221418-7ca7b78349b4 h1:/MTitsHIAixkEG7Rxccj+6u+40JTA/rtO4iXedgzSzU=
+github.com/Azure/go-armbalancer v0.0.0-20230221221418-7ca7b78349b4/go.mod h1:yTg7MA/8YnfKQc9o97tzAJ7fbdVkod1xGsIvKmhYPRE=
 github.com/Azure/go-autorest v14.2.0+incompatible h1:V5VMDjClD3GiElqLWO7mz2MxNAK/vTfRHdAubSIPRgs=
 github.com/Azure/go-autorest v14.2.0+incompatible/go.mod h1:r+4oMnoxhatjLLJ6zxSWATqVooLgysK6ZNox3g/xq24=
 github.com/Azure/go-autorest/autorest v0.11.28 h1:ndAExarwr5Y+GaHE6VCaY1kyS/HwwGGyuimVhWsHOEM=
