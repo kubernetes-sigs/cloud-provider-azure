@@ -64,13 +64,6 @@ type Error struct {
 	RawError error
 }
 
-// RawErrorContainer is the container of the Error.RawError
-type RawErrorContainer struct {
-	Code    string   `json:"code"`
-	Message string   `json:"message"`
-	Details []string `json:"details"`
-}
-
 // Error returns the error.
 // Note that Error doesn't implement error interface because (nil *Error) != (nil error).
 func (err *Error) Error() error {
