@@ -86,7 +86,7 @@ func sender() autorest.Sender {
 				Renegotiation: tls.RenegotiateNever, // the same as default transport https://pkg.go.dev/crypto/tls#RenegotiationSupport
 			},
 		}
-		roundTripper := armbalancer.New(armbalancer.Options{Transport: transport})
+		roundTripper := armbalancer.New(armbalancer.Options{Transport: transport, PoolSize: 100})
 		j, _ := cookiejar.New(nil)
 		defaultSenders.sender = &http.Client{Jar: j, Transport: roundTripper}
 
