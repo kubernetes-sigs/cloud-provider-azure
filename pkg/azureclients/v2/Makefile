@@ -68,7 +68,7 @@ build: fmt vet ## Build manager binary.
 	CGO_ENABLED=0 go build -o bin/typescaffold ./client-gen/cmd/typescaffold/
 
 .PHONY: generate
-generate: build generatecode generateimpl fmt-all vet-all
+generate: install-dependencies build generatecode generateimpl fmt-all vet-all
 
 .PHONY: generatecode
 generatecode: build ## Generate client
@@ -108,7 +108,7 @@ endif
 ##@ Build Dependencies
 
 .PHONY: install-dependencies
-install-dependencies: golangci-lint goimports mockgen## Install all build dependencies.
+install-dependencies: golangci-lint goimports mockgen ginkgo## Install all build dependencies.
 	export PATH=$$PATH:$(LOCALBIN)
 
 
@@ -129,3 +129,9 @@ MOCKGEN ?= $(LOCALBIN)/mockgen
 mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
 $(MOCKGEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/mockgen || GOBIN=$(LOCALBIN)  go install github.com/golang/mock/mockgen@v1.6.0
+
+GINKGO ?= $(LOCALBIN)/ginkgo
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	test -s $(LOCALBIN)/ginkgo || GOBIN=$(LOCALBIN)  go install github.com/onsi/ginkgo/v2/ginkgo@latest

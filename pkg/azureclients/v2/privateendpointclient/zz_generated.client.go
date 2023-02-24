@@ -64,5 +64,8 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.PrivateEndpoint, nil
+	if resp != nil {
+		return &resp.PrivateEndpoint, nil
+	}
+	return nil, nil
 }

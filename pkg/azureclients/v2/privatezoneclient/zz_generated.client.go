@@ -61,5 +61,8 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.PrivateZone, nil
+	if resp != nil {
+		return &resp.PrivateZone, nil
+	}
+	return nil, nil
 }

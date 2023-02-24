@@ -64,7 +64,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.PublicIPAddress, nil
+	if resp != nil {
+		return &resp.PublicIPAddress, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a PublicIPAddress by name.

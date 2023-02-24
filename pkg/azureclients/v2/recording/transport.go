@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/dnaeon/go-vcr.v2/cassette"
-	"gopkg.in/dnaeon/go-vcr.v2/recorder"
+	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
 func translateErrors(r *recorder.Recorder, cassetteName string) http.RoundTripper {
@@ -75,7 +75,7 @@ func (w errorTranslation) RoundTrip(req *http.Request) (*http.Response, error) {
 	matchingBodies := w.findMatchingBodies(req)
 
 	if len(matchingBodies) == 0 {
-		return nil, fmt.Errorf("cannot find go-vcr recording for request (cassette: %q) (no responses recorded for this method/URL): %s %s (attempt: %s)\n\n",
+		return nil, fmt.Errorf("cannot find go-vcr recording for request (cassette: %q) (no responses recorded for this method/URL): %s %s (attempt: %s)",
 			w.cassetteName,
 			req.Method,
 			req.URL.String(),
@@ -91,7 +91,7 @@ func (w errorTranslation) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("cannot find go-vcr recording for request (cassette: %q) (body mismatch): %s %s\nShortest body diff: %s\n\n",
+	return nil, fmt.Errorf("cannot find go-vcr recording for request (cassette: %q) (body mismatch): %s %s\nShortest body diff: %s",
 		w.cassetteName,
 		req.Method,
 		req.URL.String(),

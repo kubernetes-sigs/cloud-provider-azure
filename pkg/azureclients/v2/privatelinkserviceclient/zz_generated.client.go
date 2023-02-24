@@ -64,7 +64,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.PrivateLinkService, nil
+	if resp != nil {
+		return &resp.PrivateLinkService, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a PrivateLinkService by name.

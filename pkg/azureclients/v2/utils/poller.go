@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ type PollerWrapper[ResponseType interface{}] struct {
 // assume that the poller will ends
 func (handler *PollerWrapper[ResponseType]) WaitforPollerResp(ctx context.Context) (result *ResponseType, err error) {
 	if handler.err != nil {
-		return nil, err
+		return nil, handler.err
 	}
 	if handler.poller == nil {
 		return nil, errors.New("poller is nil")

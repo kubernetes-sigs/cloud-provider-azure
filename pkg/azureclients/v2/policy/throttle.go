@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
@@ -64,7 +62,7 @@ func (p *ThrottlingPolicy) processThrottlePolicy(timer *time.Time, req *policy.R
 		// in v1 client, throttle policy will be triggered when the retry-after header is set
 		// according to https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/async-operations
 		// the retry-after header will be set when the response status code is 202
-		duration := resp.Header.Get(consts.RetryAfterHeaderKey)
+		duration := resp.Header.Get(HeaderRetryAfter)
 		if duration == "" {
 			*timer = time.Now()
 		}

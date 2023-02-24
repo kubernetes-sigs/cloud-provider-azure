@@ -49,7 +49,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.RouteTable, nil
+	if resp != nil {
+		return &resp.RouteTable, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a RouteTable by name.

@@ -64,7 +64,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.LoadBalancer, nil
+	if resp != nil {
+		return &resp.LoadBalancer, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a LoadBalancer by name.

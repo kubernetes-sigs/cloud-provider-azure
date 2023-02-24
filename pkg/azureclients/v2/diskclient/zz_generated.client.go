@@ -61,7 +61,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.Disk, nil
+	if resp != nil {
+		return &resp.Disk, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a Disk by name.
