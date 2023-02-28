@@ -1178,7 +1178,7 @@ func createDeploymentManifest(name string, labels map[string]string, tcpPort, ud
 					Containers: []v1.Container{
 						{
 							Name:            "test-app",
-							Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.36",
+							Image:           "registry.k8s.io/e2e-test-images/agnhost:2.36",
 							ImagePullPolicy: "Always",
 							Args:            args,
 							Ports:           ports,
