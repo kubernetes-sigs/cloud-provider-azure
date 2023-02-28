@@ -158,20 +158,51 @@ func setMockEnv(az *Cloud, ctrl *gomock.Controller, expectedInterfaces []network
 		mockVirtualMachinesClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("vm-%d", i), gomock.Any()).Return(expectedVirtualMachines[i], nil).AnyTimes()
 	}
 
-	setMockPublicIPs(az, ctrl, serviceCount)
+	if len(services) > 0 {
+		v4Enabled, v6Enabled := getIPFamiliesEnabled(&services[0])
+		setMockPublicIPs(az, ctrl, serviceCount, v4Enabled, v6Enabled)
+	} else {
+		// Default is IPv4 only.
+		setMockPublicIPs(az, ctrl, serviceCount, true, false)
+	}
 
 	sg := getTestSecurityGroup(az, services...)
 	setMockSecurityGroup(az, ctrl, sg)
 }
 
-func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
+func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int, v4Enabled, v6Enabled bool) {
+	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
+
+	if v4Enabled {
+		setMockPublicIP(az, mockPIPsClient, serviceCount, false)
+	}
+	if v6Enabled {
+		setMockPublicIP(az, mockPIPsClient, serviceCount, true)
+	}
+
+	az.PublicIPAddressesClient = mockPIPsClient
+	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockPIPsClient.EXPECT().List(gomock.Any(), gomock.Not(az.ResourceGroup)).Return(nil, nil).AnyTimes()
+	mockPIPsClient.EXPECT().Get(gomock.Any(), gomock.Not(az.ResourceGroup), gomock.Any(), gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
+}
+
+func setMockPublicIP(az *Cloud, mockPIPsClient *mockpublicipclient.MockInterface, serviceCount int, isIPv6 bool) {
+	suffix := ""
+	ipVer := network.IPv4
+	ipAddr := "1.2.3.4"
+	if isIPv6 {
+		suffix = "-" + v6Suffix
+		ipVer = network.IPv6
+		ipAddr = "fd00::eef0"
+	}
+
 	expectedPIP := network.PublicIPAddress{
 		Name:     pointer.String("testCluster-aservicea"),
 		Location: &az.Location,
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: network.Static,
-			PublicIPAddressVersion:   network.IPv4,
-			IPAddress:                pointer.String("1.2.3.4"),
+			PublicIPAddressVersion:   ipVer,
+			IPAddress:                pointer.String(ipAddr),
 		},
 		Tags: map[string]*string{
 			consts.ServiceTagKey:  pointer.String("default/servicea"),
@@ -183,24 +214,18 @@ func setMockPublicIPs(az *Cloud, ctrl *gomock.Controller, serviceCount int) {
 		ID: pointer.String("testCluster-aservice1"),
 	}
 
-	mockPIPsClient := mockpublicipclient.NewMockInterface(ctrl)
-	az.PublicIPAddressesClient = mockPIPsClient
-	mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockPIPsClient.EXPECT().List(gomock.Any(), gomock.Not(az.ResourceGroup)).Return(nil, nil).AnyTimes()
-	mockPIPsClient.EXPECT().Get(gomock.Any(), gomock.Not(az.ResourceGroup), gomock.Any(), gomock.Any()).Return(network.PublicIPAddress{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
-
 	a := 'a'
 	var expectedPIPs []network.PublicIPAddress
 	for i := 1; i <= serviceCount; i++ {
-		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%d", i))
+		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%d%s", i, suffix))
 		expectedPIP.Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%d", i))
-		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
-		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d", i)).Return(nil).AnyTimes()
+		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d%s", i, suffix), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%d%s", i, suffix)).Return(nil).AnyTimes()
 		expectedPIPs = append(expectedPIPs, expectedPIP)
-		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%c", a))
+		expectedPIP.Name = pointer.String(fmt.Sprintf("testCluster-aservice%c%s", a, suffix))
 		expectedPIP.Tags[consts.ServiceTagKey] = pointer.String(fmt.Sprintf("default/service%c", a))
-		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
-		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c", a)).Return(nil).AnyTimes()
+		mockPIPsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c%s", a, suffix), gomock.Any()).Return(expectedPIP, nil).AnyTimes()
+		mockPIPsClient.EXPECT().Delete(gomock.Any(), az.ResourceGroup, fmt.Sprintf("testCluster-aservice%c%s", a, suffix)).Return(nil).AnyTimes()
 		expectedPIPs = append(expectedPIPs, expectedPIP)
 		a++
 	}
@@ -1441,103 +1466,115 @@ func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
 	assert.Equal(t, expectedError.Error(), err)
 }
 
-func TestReconcilePublicIPWithNewService(t *testing.T) {
+func TestReconcilePublicIPsWithNewService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	svc := getTestService("servicea", v1.ProtocolTCP, nil, false, 80, 443)
+	svc := getTestServiceDualStack("servicea", v1.ProtocolTCP, nil, 80, 443)
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
 
-	setMockPublicIPs(az, ctrl, 1)
+	setMockPublicIPs(az, ctrl, 1, v4Enabled, v6Enabled)
 
-	pip, err := az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb*/)
+	pips, err := az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip, &svc, true)
+	validatePublicIPs(t, pips, &svc, true)
 
-	pip2, err := az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb */)
+	pips2, err := az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip2, &svc, true)
-	if pip.Name != pip2.Name ||
-		pip.PublicIPAddressPropertiesFormat.IPAddress != pip2.PublicIPAddressPropertiesFormat.IPAddress {
-		t.Errorf("We should get the exact same public ip resource after a second reconcile")
+	validatePublicIPs(t, pips2, &svc, true)
+
+	pipsNames1, pipsNames2 := []string{}, []string{}
+	pipsAddrs1, pipsAddrs2 := []string{}, []string{}
+	for _, pip := range pips {
+		pipsNames1 = append(pipsNames1, pointer.StringDeref(pip.Name, ""))
+		pipsAddrs1 = append(pipsAddrs1, pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
 	}
+	for _, pip := range pips2 {
+		pipsNames2 = append(pipsNames2, pointer.StringDeref(pip.Name, ""))
+		pipsAddrs2 = append(pipsAddrs2, pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, ""))
+	}
+	assert.Truef(t, compareStrings(pipsNames1, pipsNames2) && compareStrings(pipsAddrs1, pipsAddrs2),
+		"We should get the exact same public ip resource after a second reconcile")
 }
 
-func TestReconcilePublicIPRemoveService(t *testing.T) {
+func TestReconcilePublicIPsRemoveService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	svc := getTestService("servicea", v1.ProtocolTCP, nil, false, 80, 443)
+	svc := getTestServiceDualStack("servicea", v1.ProtocolTCP, nil, 80, 443)
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
 
-	setMockPublicIPs(az, ctrl, 1)
+	setMockPublicIPs(az, ctrl, 1, v4Enabled, v6Enabled)
 
-	pip, err := az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb*/)
+	pips, err := az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validatePublicIP(t, pip, &svc, true)
+	validatePublicIPs(t, pips, &svc, true)
 
 	// Remove the service
-	pip, err = az.reconcilePublicIP(testClusterName, &svc, "", false /* wantLb */)
+	pips, err = az.reconcilePublicIPs(testClusterName, &svc, "", false /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip, &svc, false)
-
+	validatePublicIPs(t, pips, &svc, false)
 }
 
-func TestReconcilePublicIPWithInternalService(t *testing.T) {
+func TestReconcilePublicIPsWithInternalService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	svc := getInternalTestService("servicea", 80, 443)
+	svc := getInternalTestServiceDualStack("servicea", 80, 443)
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
 
-	setMockPublicIPs(az, ctrl, 1)
+	setMockPublicIPs(az, ctrl, 1, v4Enabled, v6Enabled)
 
-	pip, err := az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb*/)
+	pips, err := az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validatePublicIP(t, pip, &svc, true)
+	validatePublicIPs(t, pips, &svc, true)
 }
 
-func TestReconcilePublicIPWithExternalAndInternalSwitch(t *testing.T) {
+func TestReconcilePublicIPsWithExternalAndInternalSwitch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	svc := getInternalTestService("servicea", 80, 443)
+	svc := getInternalTestServiceDualStack("servicea", 80, 443)
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
 
-	setMockPublicIPs(az, ctrl, 1)
+	setMockPublicIPs(az, ctrl, 1, v4Enabled, v6Enabled)
 
-	pip, err := az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb*/)
+	pips, err := az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip, &svc, true)
+	validatePublicIPs(t, pips, &svc, true)
 
 	// Update to external service
 	svcUpdated := getTestService("servicea", v1.ProtocolTCP, nil, false, 80)
-	pip, err = az.reconcilePublicIP(testClusterName, &svcUpdated, "", true /* wantLb*/)
+	pips, err = az.reconcilePublicIPs(testClusterName, &svcUpdated, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip, &svcUpdated, true)
+	validatePublicIPs(t, pips, &svcUpdated, true)
 
 	// Update to internal service again
-	pip, err = az.reconcilePublicIP(testClusterName, &svc, "", true /* wantLb*/)
+	pips, err = az.reconcilePublicIPs(testClusterName, &svc, "", true /* wantLb*/)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validatePublicIP(t, pip, &svc, true)
+	validatePublicIPs(t, pips, &svc, true)
 }
 
 const networkInterfacesIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkInterfaces/%s"
@@ -1665,12 +1702,27 @@ func getBackendPort(port int32) int32 {
 }
 
 // TODO: This function should be merged into getTestService()
-func makeTestServiceDualStack(svc *v1.Service) {
+func getTestServiceDualStack(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
 	svc.Spec.ClusterIPs = []string{"10.0.0.2", "fd00::1907"}
 	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+
+	return svc
 }
 
 func getTestService(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
+	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+	if isIPv6 {
+		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	}
+
+	return svc
+}
+
+func getTestServiceCommon(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
 	ports := []v1.ServicePort{}
 	for _, port := range requestedPorts {
 		ports = append(ports, v1.ServicePort{
@@ -1696,22 +1748,25 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 		svc.Annotations = annotations
 	}
 
-	svc.Spec.ClusterIP = "10.0.0.2"
-	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
-	if isIPv6 {
-		svc.Spec.ClusterIP = "fd00::1907"
-		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
-	}
-
 	return svc
 }
 
 func getInternalTestService(identifier string, requestedPorts ...int32) v1.Service {
-	return getTestServiceWithAnnotation(identifier, map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, requestedPorts...)
+	return getTestServiceWithAnnotation(identifier, map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, false, requestedPorts...)
 }
 
-func getTestServiceWithAnnotation(identifier string, annotations map[string]string, requestedPorts ...int32) v1.Service {
-	svc := getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
+// getInternalTestServiceDualStack() should be merged into getInternalTestService()
+func getInternalTestServiceDualStack(identifier string, requestedPorts ...int32) v1.Service {
+	return getTestServiceWithAnnotation(identifier, map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}, true, requestedPorts...)
+}
+
+func getTestServiceWithAnnotation(identifier string, annotations map[string]string, isDualStack bool, requestedPorts ...int32) v1.Service {
+	var svc v1.Service
+	if isDualStack {
+		svc = getTestServiceDualStack(identifier, v1.ProtocolTCP, nil, requestedPorts...)
+	} else {
+		svc = getTestService(identifier, v1.ProtocolTCP, nil, false, requestedPorts...)
+	}
 	for k, v := range annotations {
 		svc.Annotations[k] = v
 	}
@@ -1913,6 +1968,12 @@ func describeFIPs(frontendIPs []network.FrontendIPConfiguration) string {
 		description = description + actualFIPText
 	}
 	return description
+}
+
+func validatePublicIPs(t *testing.T, pips []*network.PublicIPAddress, service *v1.Service, wantLb bool) {
+	for _, pip := range pips {
+		validatePublicIP(t, pip, service, wantLb)
+	}
 }
 
 func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *v1.Service, wantLb bool) {
