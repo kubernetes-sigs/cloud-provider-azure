@@ -8,21 +8,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto"
-	kustoErrors "github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
-	"github.com/cenkalti/backoff/v4"
-)
-
-const (
-	defaultInitialInterval = 1 * time.Second
-	defaultMultiplier      = 2
-	retryCount             = 4
-	fetchInterval          = 1 * time.Hour
 )
 
 // mgmter is a private interface that allows us to write hermetic tests against the kusto.Client.Mgmt() method.
@@ -45,8 +35,8 @@ type URI struct {
 
 // parse parses a string representing a Kutso resource URI.
 func parse(uri string) (*URI, error) {
-	// Example for a valid url:
-	// https://fkjsalfdks.blob.core.windows.com/sdsadsadsa?sas=asdasdasd
+	// Regex representing URI that is expected:
+	// https://(\w+).(queue|blob|table).core.windows.net/([\w,-]+)\?(.*)
 
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -57,9 +47,13 @@ func parse(uri string) (*URI, error) {
 		return nil, fmt.Errorf("URI scheme must be 'https', was '%s'", u.Scheme)
 	}
 
+	if !strings.HasSuffix(u.Hostname(), ".core.windows.net") {
+		return nil, fmt.Errorf("URI hostname does not end with '.core.windows.net'")
+	}
+
 	hostSplit := strings.Split(u.Hostname(), ".")
-	if len(hostSplit) < 5 {
-		return nil, fmt.Errorf("error: Storage URI (%s) is invalid'", uri)
+	if len(hostSplit) != 5 {
+		return nil, fmt.Errorf("URI(%s) is invalid: had incorrect URL path before '.core.windows.net'", uri)
 	}
 
 	v := &URI{
@@ -132,23 +126,21 @@ type token struct {
 
 // Manager manages Kusto resources.
 type Manager struct {
-	client                   mgmter
-	done                     chan struct{}
-	resources                atomic.Value // Stores Ingestion
-	lastFetchTime            atomic.Value // Stores time.Time
-	kustoToken               token
-	authTokenCacheExpiration time.Time
-	authLock                 sync.Mutex
-	fetchLock                sync.Mutex
+	client                    mgmter
+	done                      chan struct{}
+	resources                 atomic.Value // Stores Ingestion
+	kustoToken                token
+	kustoTokenCacheExpiration time.Time
 }
 
 // New is the constructor for Manager.
 func New(client mgmter) (*Manager, error) {
 	m := &Manager{client: client, done: make(chan struct{})}
-	m.authLock = sync.Mutex{}
-	m.fetchLock = sync.Mutex{}
+	if err := m.fetch(context.Background()); err != nil {
+		return nil, err
+	}
 
-	m.authTokenCacheExpiration = time.Now().UTC()
+	m.kustoTokenCacheExpiration = time.Now().UTC()
 	go m.renewResources()
 
 	return m, nil
@@ -156,31 +148,15 @@ func New(client mgmter) (*Manager, error) {
 
 // Close closes the manager. This stops any token refreshes.
 func (m *Manager) Close() {
-	for {
-		select {
-		case <-m.done:
-			return
-		default:
-			close(m.done)
-			return
-		}
-	}
+	close(m.done)
 }
 
 func (m *Manager) renewResources() {
-	tickDuration := 30 * time.Second
-
-	tick := time.NewTicker(tickDuration)
-	count := fetchInterval // Start with a fetch immediately.
-
+	tick := time.NewTicker(1 * time.Hour)
 	for {
 		select {
 		case <-tick.C:
-			count += tickDuration
-			if count >= fetchInterval {
-				count = 0 * time.Second
-				m.fetchRetry(context.Background())
-			}
+			m.fetchRetry(context.Background())
 		case <-m.done:
 			tick.Stop()
 			return
@@ -191,40 +167,19 @@ func (m *Manager) renewResources() {
 // AuthContext returns a string representing the authorization context. This auth token is a temporary token
 // that can be used to write a message via ingestion.  This is different than the ADAL token.
 func (m *Manager) AuthContext(ctx context.Context) (string, error) {
-	m.authLock.Lock()
-	defer m.authLock.Unlock()
-	if m.authTokenCacheExpiration.After(time.Now().UTC()) {
+	if m.kustoTokenCacheExpiration.After(time.Now().UTC()) {
 		return m.kustoToken.AuthContext, nil
 	}
 
-	var rows *kusto.RowIterator
-	retryCtx := backoff.WithContext(InitBackoff(), ctx)
-	err := backoff.Retry(func() error {
-		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get kusto identity token"), kusto.IngestionEndpoint())
-		if err == nil {
-			return nil
-		}
-		if httpErr, ok := err.(*kustoErrors.HttpError); ok {
-			// only retry in case of throttling
-			if httpErr.IsThrottled() {
-				return err
-			}
-		}
-		return backoff.Permanent(err)
-	}, retryCtx)
-
+	rows, err := m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get kusto identity token"), kusto.IngestionEndpoint())
 	if err != nil {
 		return "", fmt.Errorf("problem getting authorization context from Kusto via Mgmt: %s", err)
 	}
 
 	count := 0
 	token := token{}
-	err = rows.DoOnRowOrError(
-		func(r *table.Row, e *kustoErrors.Error) error {
-			if e != nil {
-				return e
-			}
+	err = rows.Do(
+		func(r *table.Row) error {
 			if count != 0 {
 				return fmt.Errorf("call for AuthContext returned more than 1 Row")
 			}
@@ -237,7 +192,7 @@ func (m *Manager) AuthContext(ctx context.Context) (string, error) {
 	}
 
 	m.kustoToken = token
-	m.authTokenCacheExpiration = time.Now().UTC().Add(time.Hour)
+	m.kustoTokenCacheExpiration = time.Now().UTC().Add(time.Hour)
 	return token.AuthContext, nil
 }
 
@@ -282,36 +237,14 @@ func (i *Ingestion) importRec(rec ingestResc) error {
 
 // fetch makes a kusto.Client.Mgmt() call to retrieve the resources used for Ingestion.
 func (m *Manager) fetch(ctx context.Context) error {
-	m.fetchLock.Lock()
-	defer m.fetchLock.Unlock()
-
-	var rows *kusto.RowIterator
-	retryCtx := backoff.WithContext(InitBackoff(), ctx)
-	err := backoff.Retry(func() error {
-		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get ingestion resources"), kusto.IngestionEndpoint())
-		if err == nil {
-			return nil
-		}
-		if httpErr, ok := err.(*kustoErrors.HttpError); ok {
-			// only retry in case of throttling
-			if httpErr.IsThrottled() {
-				return err
-			}
-		}
-		return backoff.Permanent(err)
-	}, retryCtx)
-
+	rows, err := m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get ingestion resources"), kusto.IngestionEndpoint())
 	if err != nil {
 		return fmt.Errorf("problem getting ingestion resources from Kusto: %s", err)
 	}
 
 	ingest := Ingestion{}
-	err = rows.DoOnRowOrError(
-		func(r *table.Row, e *kustoErrors.Error) error {
-			if e != nil {
-				return e
-			}
+	err = rows.Do(
+		func(r *table.Row) error {
 			rec := ingestResc{}
 			if err := r.ToStruct(&rec); err != nil {
 				return err
@@ -328,18 +261,15 @@ func (m *Manager) fetch(ctx context.Context) error {
 
 	m.resources.Store(ingest)
 
-	m.lastFetchTime.Store(time.Now().UTC())
-
 	return nil
 }
 
-func (m *Manager) fetchRetry(ctx context.Context) error {
+func (m *Manager) fetchRetry(ctx context.Context) {
 	attempts := 0
 	for {
-
 		select {
 		case <-m.done:
-			return nil
+			return
 		default:
 		}
 
@@ -348,37 +278,20 @@ func (m *Manager) fetchRetry(ctx context.Context) error {
 		cancel()
 		if err != nil {
 			attempts++
-			if attempts > retryCount {
-				return fmt.Errorf("failed to fetch ingestion resources")
-			}
+			//log.Printf("problem fetching the resources from Kusto Mgmt(attempt %d): %s", attempts, err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		return nil
+		return
 	}
 }
 
 // Resources returns information about the ingestion resources. This will used cached information instead
 // of fetching from source.
 func (m *Manager) Resources() (Ingestion, error) {
-	lastFetchTime, ok := m.lastFetchTime.Load().(time.Time)
-	if !ok || lastFetchTime.Add(2*fetchInterval).Before(time.Now().UTC()) {
-		err := m.fetchRetry(context.Background())
-		if err != nil {
-			return Ingestion{}, err
-		}
-	}
-
 	i, ok := m.resources.Load().(Ingestion)
 	if !ok {
 		return Ingestion{}, fmt.Errorf("manager has not retrieved an Ingestion object yet")
 	}
 	return i, nil
-}
-
-func InitBackoff() backoff.BackOff {
-	exp := backoff.NewExponentialBackOff()
-	exp.InitialInterval = defaultInitialInterval
-	exp.Multiplier = defaultMultiplier
-	return backoff.WithMaxRetries(exp, retryCount)
 }

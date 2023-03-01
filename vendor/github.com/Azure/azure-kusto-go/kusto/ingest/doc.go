@@ -3,7 +3,8 @@ Package ingest provides data ingestion from various external sources into Kusto.
 
 For more information on Kusto Data Ingestion, please see: https://docs.microsoft.com/en-us/azure/kusto/management/data-ingestion/
 
-# Create a client
+
+Create a client
 
 Creating a client simply requires a *kusto.Client, the name of the database and the name of the table to be ingested into.
 
@@ -12,7 +13,8 @@ Creating a client simply requires a *kusto.Client, the name of the database and 
 		panic("add error handling")
 	}
 
-# Ingestion from a local file
+
+Ingestion from a local file
 
 Ingesting a local file requires simply passing the path to the file to be ingested:
 
@@ -23,7 +25,8 @@ Ingesting a local file requires simply passing the path to the file to be ingest
 FromFile() will accept Unix path names on Unix platforms and Windows path names on Windows platforms.
 The file will not be deleted after upload (there is an option that will allow that though).
 
-# Ingestion from an Azure Blob Storage file
+
+Ingestion from an Azure Blob Storage file
 
 This package will also accept ingestion from an Azure Blob Storage file:
 
@@ -33,7 +36,7 @@ This package will also accept ingestion from an Azure Blob Storage file:
 
 This will ingest a file from Azure Blob Storage. We only support https:// paths and your domain name may differ than what is here.
 
-# Ingestion from an io.Reader
+Ingestion from an io.Reader
 
 Sometimes you want to ingest a stream of data that you have in memory without writing to disk.  You can do this simply by chunking the
 data via an io.Reader.
@@ -57,7 +60,7 @@ data via an io.Reader.
 It is important to remember that FromReader() will terminate when it receives an io.EOF from the io.Reader.  Use io.Readers that won't
 return io.EOF until the io.Writer is closed (such as io.Pipe).
 
-# Ingestion from a Stream
+Ingestion from a Stream
 
 Instestion from a stream commits blocks of fully formed data encodes (JSON, AVRO, ...) into Kusto:
 
@@ -65,7 +68,7 @@ Instestion from a stream commits blocks of fully formed data encodes (JSON, AVRO
 		panic("add error handling")
 	}
 
-# Ingestion with Status Reporting
+Ingestion with Status Reporting
 
 You can use Kusto Go SDK to get table-based status reporting of ingestion operations.
 Ingestion commands run using FromFile() and FromReader() return an error and a channel that can be waited upon for a final status.
