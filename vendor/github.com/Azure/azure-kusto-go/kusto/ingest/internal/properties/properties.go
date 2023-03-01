@@ -7,13 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto/data/errors"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 )
 
@@ -103,28 +100,29 @@ type dfDescriptor struct {
 	camelName        string
 	jsonName         string
 	detectableExt    string
+	MappingReq       bool
 	validMappingKind bool
 }
 
 var dfDescriptions = []dfDescriptor{
-	{"", "", "", false},
-	{"Avro", "avro", ".avro", true},
-	{"ApacheAvro", "avro", "", false},
-	{"Csv", "csv", ".csv", true},
-	{"Json", "json", ".json", true},
-	{"MultiJson", "multijson", "", false},
-	{"Orc", "orc", ".orc", true},
-	{"Parquet", "parquet", ".parquet", true},
-	{"Psv", "psv", ".psv", false},
-	{"Raw", "raw", ".raw", false},
-	{"Scsv", "scsv", ".scsv", false},
-	{"Sohsv", "sohsv", ".sohsv", false},
-	{"SStream", "sstream", ".ss", false},
-	{"Tsv", "tsv", ".tsv", false},
-	{"Tsve", "tsve", ".tsve", false},
-	{"Txt", "txt", ".txt", false},
-	{"W3cLogFile", "w3clogfile", ".w3clogfile", false},
-	{"SingleJson", "singlejson", "", false},
+	{"", "", "", false, false},
+	{"Avro", "avro", ".avro", true, true},
+	{"ApacheAvro", "avro", "", true, false},
+	{"Csv", "csv", ".csv", false, true},
+	{"Json", "json", ".json", true, true},
+	{"MultiJson", "multijson", "", true, false},
+	{"Orc", "orc", ".orc", false, true},
+	{"Parquet", "parquet", ".parquet", false, true},
+	{"Psv", "psv", ".psv", false, false},
+	{"Raw", "raw", ".raw", false, false},
+	{"Scsv", "scsv", ".scsv", false, false},
+	{"Sohsv", "sohsv", ".sohsv", false, false},
+	{"SStream", "sstream", ".ss", false, false},
+	{"Tsv", "tsv", ".tsv", false, false},
+	{"Tsve", "tsve", ".tsve", false, false},
+	{"Txt", "txt", ".txt", false, false},
+	{"W3cLogFile", "w3clogfile", ".w3clogfile", false, false},
+	{"SingleJson", "singlejson", "", true, false},
 }
 
 // IngestionReportLevel defines which ingestion statuses are reported by the DM.
@@ -183,6 +181,15 @@ func (d DataFormat) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("%q", d.String())), nil
 }
 
+// RequiresMapping indicates whether a data format must be provided with valid mapping file information.
+func (d DataFormat) RequiresMapping() bool {
+	if d > 0 && int(d) < len(dfDescriptions) {
+		return dfDescriptions[d].MappingReq
+	}
+
+	return false
+}
+
 // IsValidMappingKind returns true if a dataformat can be used as a MappingKind.
 func (d DataFormat) IsValidMappingKind() bool {
 	if d > 0 && int(d) < len(dfDescriptions) {
@@ -220,24 +227,8 @@ func DataFormatDiscovery(fName string) DataFormat {
 type All struct {
 	// Ingestion is a set of properties that are used across all ingestion methods.
 	Ingestion Ingestion
-	// Source provides options that are used when doing an ingestion on a filesystem.
+	// Source provides options that are used are used when doing an ingestion on a filesystem.
 	Source SourceOptions
-	// Streaming provides options that are used when doing an ingestion from a stream.
-	Streaming Streaming
-	// ManagedStreaming provides options that are used when doing an ingestion from a ManagedStreaming client.
-	ManagedStreaming ManagedStreaming
-}
-
-// ManagedStreaming provides options that are used when doing an ingestion from a ManagedStreaming client.
-type ManagedStreaming struct {
-	// Backoff is the backoff strategy to use when retrying a transiently failed ingestion.
-	Backoff backoff.BackOff
-}
-
-// Streaming provides options that are used when doing an ingestion from a stream.
-type Streaming struct {
-	// ClientRequestID is the client request ID to use for the ingestion.
-	ClientRequestId string
 }
 
 // SourceOptions are options that the user provides about the source file that is going to be uploaded.
@@ -248,12 +239,6 @@ type SourceOptions struct {
 
 	// DeleteLocalSource indicates to delete the local file after it has been consumed.
 	DeleteLocalSource bool
-
-	// DontCompress indicates to not compress the file.
-	DontCompress bool
-
-	// OriginalSource is the path to the original source file, used for deletion.
-	OriginalSource string
 }
 
 // Ingestion is a JSON serializable set of options that must be provided to the service.
@@ -322,16 +307,6 @@ type StatusTableDescription struct {
 	PartitionKey string `json:",omitempty"`
 	// RowKey is the row key of the table entry.
 	RowKey string `json:",omitempty"`
-}
-
-func (p *All) ApplyDeleteLocalSourceOption() error {
-	if p.Source.DeleteLocalSource && p.Source.OriginalSource != "" {
-		if err := os.Remove(p.Source.OriginalSource); err != nil {
-			return errors.ES(errors.OpFileIngest, errors.KLocalFileSystem, "file was uploaded successfully, but we could not delete the local file: %s",
-				err).SetNoRetry()
-		}
-	}
-	return nil
 }
 
 // MarshalJSON implements json.Marshaller. This is for use only by the SDK and may be removed at any time.
