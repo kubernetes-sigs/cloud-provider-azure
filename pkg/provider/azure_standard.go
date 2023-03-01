@@ -1142,7 +1142,8 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			ipconfigPrefixToNicMap[ipConfigIDPrefix] = nic
 		}
 	}
-	for _, nic := range ipconfigPrefixToNicMap {
+	for k := range ipconfigPrefixToNicMap {
+		nic := ipconfigPrefixToNicMap[k]
 		newIPConfigs := *nic.IPConfigurations
 		for j, ipConf := range newIPConfigs {
 			if !pointer.BoolDeref(ipConf.Primary, false) {
