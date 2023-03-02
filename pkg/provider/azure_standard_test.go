@@ -1843,7 +1843,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
-			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
+			existingPIPs := test.existingPIPs
+			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &existingPIPs)
 			assert.Equal(t, test.expectedErr, err)
 			assert.Equal(t, test.isOwned, isOwned)
 			assert.Equal(t, test.isPrimary, isPrimary)
