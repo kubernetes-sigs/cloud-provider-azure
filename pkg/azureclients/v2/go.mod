@@ -17,7 +17,7 @@ require (
 	github.com/spf13/cobra v1.6.1
 	gopkg.in/dnaeon/go-vcr.v2 v2.3.0
 	k8s.io/client-go v0.26.2
-	k8s.io/klog/v2 v2.90.0
+	k8s.io/klog/v2 v2.90.1
 	sigs.k8s.io/cloud-provider-azure v1.26.5
 	sigs.k8s.io/controller-tools v0.11.3
 )
