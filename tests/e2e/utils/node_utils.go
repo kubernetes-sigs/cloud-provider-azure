@@ -122,8 +122,9 @@ func GetMaster(cs clientset.Interface) (*v1.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	for i, node := range nodesList.Items {
-		if IsControlPlaneNode(&nodesList.Items[i]) {
+	for _, node := range nodesList.Items {
+		node := node
+		if IsControlPlaneNode(&node) {
 			return &node, nil
 		}
 	}

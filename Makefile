@@ -312,7 +312,7 @@ test-check: test-boilerplate verify-vendor-licenses ## Run all static checks.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint against code.
-	$(LINTER) run -v
+	$(LINTER) run -v -E exportloopref
 
 .PHONY: test-boilerplate
 test-boilerplate: ## Run boilerplate test.
