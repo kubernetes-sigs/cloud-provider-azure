@@ -18,3 +18,5 @@ jobs:
       - name: Lint
         run: |
           make lint
+          GO111MODULE=off go get github.com/kyoh86/looppointer/cmd/looppointer
+          $(go env GOPATH)/bin/looppointer ./...
