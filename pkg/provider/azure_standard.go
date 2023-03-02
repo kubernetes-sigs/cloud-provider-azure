@@ -228,6 +228,7 @@ func getPrimaryIPConfig(nic network.Interface) (*network.InterfaceIPConfiguratio
 	}
 
 	for _, ref := range *nic.IPConfigurations {
+		ref := ref
 		if *ref.Primary {
 			return &ref, nil
 		}
@@ -249,6 +250,7 @@ func getIPConfigByIPFamily(nic network.Interface, IPv6 bool) (*network.Interface
 		ipVersion = network.IPv4
 	}
 	for _, ref := range *nic.IPConfigurations {
+		ref := ref
 		if ref.PrivateIPAddress != nil && ref.PrivateIPAddressVersion == ipVersion {
 			return &ref, nil
 		}
