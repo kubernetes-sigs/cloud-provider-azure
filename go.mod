@@ -28,7 +28,7 @@ require (
 	k8s.io/cloud-provider v0.23.16
 	k8s.io/component-base v0.23.17
 	k8s.io/component-helpers v0.23.16
-	k8s.io/controller-manager v0.23.16
+	k8s.io/controller-manager v0.23.17
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kubelet v0.23.16
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
