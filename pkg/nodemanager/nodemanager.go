@@ -488,6 +488,7 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 
 func GetCloudTaint(taints []v1.Taint) *v1.Taint {
 	for _, taint := range taints {
+		taint := taint
 		if taint.Key == cloudproviderapi.TaintExternalCloudProvider {
 			return &taint
 		}

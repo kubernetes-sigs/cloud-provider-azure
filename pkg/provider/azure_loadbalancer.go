@@ -802,6 +802,7 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
 	for _, ipConfiguration := range *lb.FrontendIPConfigurations {
+		ipConfiguration := ipConfiguration
 		owns, isPrimaryService, err := az.serviceOwnsFrontendIP(ipConfiguration, service, pips)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get(%s): lb(%s) - failed to filter frontend IP configs with error: %w", serviceName, pointer.StringDeref(lb.Name, ""), err)
@@ -909,6 +910,7 @@ func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalance
 		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to ensurePIP: %w", err)
 	}
 	for _, pip := range *pips {
+		pip := pip
 		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
 			*pip.PublicIPAddressPropertiesFormat.IPAddress == loadBalancerIP {
 			return &pip, nil
@@ -1492,6 +1494,7 @@ func (az *Cloud) findFrontendIPConfigOfService(
 	pips *[]network.PublicIPAddress,
 ) (*network.FrontendIPConfiguration, error) {
 	for _, config := range *fipConfigs {
+		config := config
 		owns, _, err := az.serviceOwnsFrontendIP(config, service, pips)
 		if err != nil {
 			return nil, err

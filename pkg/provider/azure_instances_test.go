@@ -50,6 +50,7 @@ func setTestVirtualMachines(c *Cloud, vmList map[string]string, isDataDisksFull 
 	expectedVMs := make([]compute.VirtualMachine, 0)
 
 	for nodeName, powerState := range vmList {
+		nodeName := nodeName
 		instanceID := fmt.Sprintf("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", nodeName)
 		vm := compute.VirtualMachine{
 			Name:     &nodeName,
