@@ -425,16 +425,17 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 				return nil
 			}
 		}
-	} else {
-		lun, _, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
-		if errGetLun == nil || !strings.Contains(errGetLun.Error(), consts.CannotFindDiskLUN) {
-			return fmt.Errorf("disk(%s) is still attached to node(%s) on lun(%d), error: %w", diskURI, nodeName, lun, errGetLun)
-		}
 	}
 
 	if err != nil {
 		klog.Errorf("azureDisk - detach disk(%s, %s) failed, err: %v", diskName, diskURI, err)
 		return err
+	}
+
+	// always check disk lun after disk detach complete
+	lun, _, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
+	if errGetLun == nil || !strings.Contains(errGetLun.Error(), consts.CannotFindDiskLUN) {
+		return fmt.Errorf("disk(%s) is still attached to node(%s) on lun(%d), error: %w", diskURI, nodeName, lun, errGetLun)
 	}
 
 	klog.V(2).Infof("azureDisk - detach disk(%s, %s) succeeded", diskName, diskURI)
