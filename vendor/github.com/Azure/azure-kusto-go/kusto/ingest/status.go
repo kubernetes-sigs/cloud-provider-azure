@@ -201,13 +201,6 @@ func (r *statusRecord) FromMap(data map[string]interface{}) {
 	}
 }
 
-// StatusFromMapForTests converts an ingestion status record to a key value map. This is useful for comparison in tests.
-func StatusFromMapForTests(data map[string]interface{}) error {
-	r := newStatusRecord()
-	r.FromMap(data)
-	return r
-}
-
 // ToMap converts an ingestion status record to a key value map.
 func (r *statusRecord) ToMap() map[string]interface{} {
 	data := make(map[string]interface{})
@@ -248,12 +241,12 @@ func (r statusRecord) Error() string {
 }
 
 func getTimeFromInterface(x interface{}) (time.Time, error) {
-	switch x := x.(type) {
+	switch x.(type) {
 	case string:
-		return time.Parse(time.RFC3339Nano, x)
+		return time.Parse(time.RFC3339Nano, x.(string))
 
 	case time.Time:
-		return x, nil
+		return x.(time.Time), nil
 
 	default:
 		return time.Now(), fmt.Errorf("getTimeFromInterface: Unexpected format %T", x)
@@ -267,12 +260,12 @@ func getGoogleUUIDFromInterface(data map[string]interface{}, key string) uuid.UU
 		return uuid.Nil
 	}
 
-	switch x := x.(type) {
+	switch x.(type) {
 	case uuid.UUID:
-		return x
+		return x.(uuid.UUID)
 
 	case string:
-		uid, err := uuid.Parse(x)
+		uid, err := uuid.Parse(x.(string))
 		if err != nil {
 			return uuid.Nil
 		}
@@ -280,7 +273,7 @@ func getGoogleUUIDFromInterface(data map[string]interface{}, key string) uuid.UU
 		return uid
 
 	case storageuid.UUID:
-		uid, err := uuid.ParseBytes(x.Bytes())
+		uid, err := uuid.ParseBytes(x.(storageuid.UUID).Bytes())
 		if err != nil {
 			return uuid.Nil
 		}
