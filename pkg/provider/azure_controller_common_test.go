@@ -267,6 +267,7 @@ func TestCommonAttachDisk(t *testing.T) {
 		tt := test
 		t.Run(tt.desc, func(t *testing.T) {
 			testCloud := GetTestCloud(ctrl)
+			testCloud.DisableDiskLunCheck = true
 			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 				testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
 			if tt.isBadDiskURI {
@@ -293,7 +294,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				}()
 			}
 
-			lun, err := testCloud.AttachDisk(ctx, true, "", diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk)
+			lun, err := testCloud.AttachDisk(ctx, true, test.diskName, diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk)
 
 			assert.Equal(t, tt.expectedLun, lun, "TestCase[%d]: %s", i, tt.desc)
 			assert.Equal(t, tt.expectErr, err != nil, "TestCase[%d]: %s, return error: %v", i, tt.desc, err)
