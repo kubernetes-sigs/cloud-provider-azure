@@ -1091,11 +1091,12 @@ func TestGetPrimaryInterfaceID(t *testing.T) {
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
+		existedInterfaces := test.existedInterfaces
 		vm := compute.VirtualMachineScaleSetVM{
 			Name: pointer.String("vm"),
 			VirtualMachineScaleSetVMProperties: &compute.VirtualMachineScaleSetVMProperties{
 				NetworkProfile: &compute.NetworkProfile{
-					NetworkInterfaces: &test.existedInterfaces,
+					NetworkInterfaces: &existedInterfaces,
 				},
 			},
 		}
