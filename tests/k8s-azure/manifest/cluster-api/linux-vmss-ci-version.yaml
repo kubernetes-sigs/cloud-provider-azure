@@ -259,6 +259,7 @@ metadata:
   namespace: default
 spec:
   location: ${AZURE_LOCATION}
+  orchestrationMode: ${ORCHESTRATION_MODE:=Uniform}
   strategy:
     rollingUpdate:
       deletePolicy: Oldest
