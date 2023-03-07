@@ -36,6 +36,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	volerr "k8s.io/cloud-provider/volume/errors"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -105,6 +106,8 @@ type controllerCommon struct {
 	diskOpRateLimiter flowcontrol.RateLimiter
 	// DisableUpdateCache whether disable update cache in disk attach/detach
 	DisableUpdateCache bool
+	// DisableDiskLunCheck whether disable disk lun check after disk attach/detach
+	DisableDiskLunCheck bool
 	// AttachDetachInitialDelayInMs determines initial delay in milliseconds for batch disk attach/detach
 	AttachDetachInitialDelayInMs int
 }
@@ -265,6 +268,14 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 
 	klog.V(2).Infof("Trying to attach volume %s lun %d to node %s, diskMap len:%d, %s", diskURI, lun, nodeName, len(diskMap), diskMap)
 	if len(diskMap) == 0 {
+		if !c.DisableDiskLunCheck {
+			// always check disk lun after disk attach complete
+			diskLun, vmState, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
+			if errGetLun != nil {
+				return -1, fmt.Errorf("disk(%s) could not be found on node(%s), vmState: %s, error: %w", diskURI, nodeName, pointer.StringDeref(vmState, ""), errGetLun)
+			}
+			lun = diskLun
+		}
 		return lun, nil
 	}
 
@@ -301,6 +312,15 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 
 	if err = c.waitForUpdateResult(ctx, vmset, nodeName, future, err); err != nil {
 		return -1, err
+	}
+
+	if !c.DisableDiskLunCheck {
+		// always check disk lun after disk attach complete
+		diskLun, vmState, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
+		if errGetLun != nil {
+			return -1, fmt.Errorf("disk(%s) could not be found on node(%s), vmState: %s, error: %w", diskURI, nodeName, pointer.StringDeref(vmState, ""), errGetLun)
+		}
+		lun = diskLun
 	}
 	return lun, nil
 }
@@ -425,16 +445,19 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 				return nil
 			}
 		}
-	} else {
-		lun, _, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
-		if errGetLun == nil || !strings.Contains(errGetLun.Error(), consts.CannotFindDiskLUN) {
-			return fmt.Errorf("disk(%s) is still attached to node(%s) on lun(%d), error: %w", diskURI, nodeName, lun, errGetLun)
-		}
 	}
 
 	if err != nil {
 		klog.Errorf("azureDisk - detach disk(%s, %s) failed, err: %v", diskName, diskURI, err)
 		return err
+	}
+
+	if !c.DisableDiskLunCheck {
+		// always check disk lun after disk detach complete
+		lun, vmState, errGetLun := c.GetDiskLun(diskName, diskURI, nodeName)
+		if errGetLun == nil || !strings.Contains(errGetLun.Error(), consts.CannotFindDiskLUN) {
+			return fmt.Errorf("disk(%s) is still attached to node(%s) on lun(%d), vmState: %s, error: %w", diskURI, nodeName, lun, pointer.StringDeref(vmState, ""), errGetLun)
+		}
 	}
 
 	klog.V(2).Infof("azureDisk - detach disk(%s, %s) succeeded", diskName, diskURI)
