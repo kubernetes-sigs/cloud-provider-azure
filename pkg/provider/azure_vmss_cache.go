@@ -294,10 +294,17 @@ func (ss *ScaleSet) DeleteCacheForNode(nodeName string) error {
 		return err
 	}
 
-	err = timedcache.Delete(cacheKey)
+	entry, exists, err := timedcache.Store.GetByKey(cacheKey)
 	if err != nil {
-		klog.Errorf("DeleteCacheForNode(%s) failed with error: %v", nodeName, err)
 		return err
+	}
+	if exists {
+		cached := entry.(*azcache.AzureCacheEntry).Data
+		if cached != nil {
+			virtualMachines := cached.(*sync.Map)
+			virtualMachines.Delete(nodeName)
+			entry.(*azcache.AzureCacheEntry).Data = virtualMachines
+		}
 	}
 
 	if err := ss.gcVMSSVMCache(); err != nil {
