@@ -917,7 +917,8 @@ func TestGetBackendPoolName(t *testing.T) {
 		},
 	}
 	for _, test := range testcases {
-		backPoolName := getBackendPoolName(test.clusterName, &test.service)
+		service := test.service
+		backPoolName := getBackendPoolName(test.clusterName, &service)
 		assert.Equal(t, test.expectedPoolName, backPoolName, test.name)
 	}
 }
@@ -1788,7 +1789,8 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &test.existingPIPs)
+		existingPIPs := test.existingPIPs
+		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &existingPIPs)
 		assert.Equal(t, test.expectedErr, err, test.desc)
 		assert.Equal(t, test.isOwned, isOwned, test.desc)
 		assert.Equal(t, test.isPrimary, isPrimary, test.desc)
