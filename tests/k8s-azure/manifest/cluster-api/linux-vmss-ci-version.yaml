@@ -414,6 +414,7 @@ metadata:
   namespace: default
 spec:
   location: ${AZURE_LOCATION}
+  orchestrationMode: ${ORCHESTRATION_MODE:=Uniform}
   template:
     image:
       marketplace:
