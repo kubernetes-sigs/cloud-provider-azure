@@ -400,9 +400,6 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-resource-group'", func() {
-		if os.Getenv(utils.AKSTestCCM) != utils.TrueValue {
-			Skip("Skip this test because ARM is not working properly on testgrid testbeds")
-		}
 		By("creating a test resource group")
 		rg, cleanup := utils.CreateTestResourceGroup(tc)
 		defer cleanup(pointer.StringDeref(rg.Name, ""))
@@ -411,19 +408,19 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		pips := []string{}
 		testPIPNames := []string{}
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
-		if v4Enabled {
-			testPIPName := "testPIP-" + utils.GetNameWithSuffix(string(uuid.NewUUID())[0:4], utils.Suffixes[false])
-			pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, false))
+		createPIPInRG := func(isIPv6 bool) {
+			testPIPName := "testPIP-" + utils.GetNameWithSuffix(string(uuid.NewUUID())[0:4], utils.Suffixes[isIPv6])
+			pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, isIPv6))
 			Expect(err).NotTo(HaveOccurred())
 			testPIPNames = append(testPIPNames, testPIPName)
-			pips = append(pips, pointer.StringDeref(pip.Name, ""))
+			Expect(pip.PublicIPAddressPropertiesFormat).NotTo(BeNil())
+			pips = append(pips, pointer.StringDeref(pip.IPAddress, ""))
+		}
+		if v4Enabled {
+			createPIPInRG(false)
 		}
 		if v6Enabled {
-			testPIPName := "testPIP-" + utils.GetNameWithSuffix(string(uuid.NewUUID())[0:4], utils.Suffixes[true])
-			pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, true))
-			Expect(err).NotTo(HaveOccurred())
-			testPIPNames = append(testPIPNames, testPIPName)
-			pips = append(pips, pointer.StringDeref(pip.Name, ""))
+			createPIPInRG(true)
 		}
 		defer func() {
 			utils.Logf("Cleaning up service and public IP")
