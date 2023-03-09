@@ -134,7 +134,8 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 					Callbacks: leaderelection.LeaderCallbacks{
 						OnStartedLeading: RunWrapper(s, c, healthHandler),
 						OnStoppedLeading: func() {
-							panic("leaderelection lost")
+							klog.ErrorS(nil, "leaderelection lost")
+							klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 						},
 					},
 					WatchDog: electionChecker,
