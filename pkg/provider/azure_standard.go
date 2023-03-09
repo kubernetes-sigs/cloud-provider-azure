@@ -56,7 +56,6 @@ var (
 )
 
 const (
-	v4Suffix = "IPv4"
 	v6Suffix = "IPv6"
 )
 
@@ -285,7 +284,8 @@ func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protoc
 	ruleName := fmt.Sprintf("%s-%s-%d", prefix, protocol, port)
 	subnet := subnet(service)
 	if subnet == nil {
-		return getResourceByIPFamily(ruleName, isIPv6)
+		// TODO: Use getResourceByIPFamily()
+		return ruleName
 	}
 
 	// Load balancer rule name must be less or equal to 80 characters, so excluding the hyphen two segments cannot exceed 79
@@ -295,7 +295,8 @@ func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protoc
 		subnetSegment = subnetSegment[:maxLength-len(ruleName)-1]
 	}
 
-	return getResourceByIPFamily(fmt.Sprintf("%s-%s-%s-%d", prefix, subnetSegment, protocol, port), isIPv6)
+	// TODO: Use getResourceByIPFamily()
+	return fmt.Sprintf("%s-%s-%s-%d", prefix, subnetSegment, protocol, port)
 }
 
 func (az *Cloud) getloadbalancerHAmodeRuleName(service *v1.Service, isIPv6 bool) string {
@@ -310,7 +311,8 @@ func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, s
 	}
 	rulePrefix := az.getRulePrefix(service)
 	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	return getResourceByIPFamily(name, isIPv6)
+	// TODO: Use getResourceByIPFamily
+	return name
 }
 
 // This returns a human-readable version of the Service used to tag some resources.
@@ -326,17 +328,16 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 
 func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6 bool) string {
 	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
-	pipName = getResourceByIPFamily(pipName, isIPv6)
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
 		id, err := getLastSegment(id, "/")
-		if err != nil {
-			return pipName
+		if err == nil {
+			pipName = fmt.Sprintf("%s-%s", pipName, id)
 		}
-		pipName = fmt.Sprintf("%s-%s", pipName, id)
 	}
-	return pipName
+	return getResourceByIPFamily(pipName, isIPv6)
 }
 
+// TODO: UT
 func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 	prefix := az.getRulePrefix(service)
 	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))

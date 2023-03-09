@@ -43,7 +43,7 @@ var (
 	DualStack IPFamily = "DualStack"
 
 	Suffixes = map[bool]string{
-		false: "-IPv4",
+		false: "",
 		true:  "-IPv6",
 	}
 

@@ -870,16 +870,11 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			customHealthProbeConfigPrefix + "num-of-probe":                "6",
 			customHealthProbeConfigPrefix + "request-path":                "/healthtz",
 		}
-		// TODO: After dual-stack implementation finished, update here.
-		if utils.DualstackSupported {
-			if v4Enabled {
-				annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[false])
-			}
-			if v6Enabled {
-				annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[true])
-			}
+		if tc.IPFamily == utils.DualStack {
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[false])
+			annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[true])
 		} else {
-			annotation[consts.ServiceAnnotationPIPName] = ipNameBase
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = ipNameBase
 		}
 
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
@@ -930,11 +925,10 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			}
 			Expect(err).NotTo(HaveOccurred())
 
-			// TODO: After dual-stack implementation finished, update here.
-			if utils.DualstackSupported {
+			if tc.IPFamily == utils.DualStack {
 				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = pointer.StringDeref(prefix.ID, "")
 			} else {
-				annotation[consts.ServiceAnnotationPIPPrefixID] = pointer.StringDeref(prefix.ID, "")
+				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = pointer.StringDeref(prefix.ID, "")
 			}
 			return deleteFunc
 		}
