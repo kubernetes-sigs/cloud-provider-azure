@@ -4453,6 +4453,31 @@ func TestEnsurePublicIPExists(t *testing.T) {
 			},
 			shouldPutPIP: true,
 		},
+		{
+			desc: "should not tag the user-assigned pip",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("1.2.3.4"),
+					},
+					Tags: map[string]*string{"a": pointer.String("b")},
+				},
+			},
+			expectedPIP: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
+				Tags: map[string]*string{"a": pointer.String("b")},
+				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
+					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					PublicIPAddressVersion: network.IPv4,
+					IPAddress:              pointer.String("1.2.3.4"),
+				},
+			},
+			additionalAnnotations: map[string]string{
+				consts.ServiceAnnotationAzurePIPTags: "a=c",
+			},
+		},
 	}
 
 	for _, test := range testCases {
