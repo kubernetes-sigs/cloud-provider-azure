@@ -721,7 +721,6 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		serviceDomainNamePrefix := testServiceName + string(uuid.NewUUID())
 		annotation := map[string]string{
 			consts.ServiceAnnotationDNSLabelName:                       serviceDomainNamePrefix,
-			consts.ServiceAnnotationAzurePIPTags:                       "Tag_1=t1, Tag_2=t2",
 			consts.ServiceAnnotationLoadBalancerIdleTimeout:            "20",
 			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:    "HTTP",
 			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/healthtz",
