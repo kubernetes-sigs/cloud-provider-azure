@@ -1097,10 +1097,10 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 
 	serviceName := getServiceName(service)
 
-	var changed bool
+	var changed, owns, isUserAssignedPIP bool
 	if existsPip {
 		// ensure that the service tag is good for managed pips
-		owns, isUserAssignedPIP := serviceOwnsPublicIP(service, &pip, clusterName)
+		owns, isUserAssignedPIP = serviceOwnsPublicIP(service, &pip, clusterName)
 		if owns && !isUserAssignedPIP {
 			changed, err = bindServicesToPIP(&pip, []string{serviceName}, false)
 			if err != nil {
@@ -1195,7 +1195,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 		}
 		klog.V(2).Infof("ensurePublicIPExists for service(%s): pip(%s) - creating", serviceName, *pip.Name)
 	}
-	if az.ensurePIPTagged(service, &pip) {
+	if !isUserAssignedPIP && az.ensurePIPTagged(service, &pip) {
 		changed = true
 	}
 
