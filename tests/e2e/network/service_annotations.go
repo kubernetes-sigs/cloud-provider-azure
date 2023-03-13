@@ -366,59 +366,31 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
-		By("Creating a service with custom tags")
-		annotation := map[string]string{
-			consts.ServiceAnnotationAzurePIPTags: "a=b,c= d,e =, =f",
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			Skip("Skip this test case for AKS test")
 		}
-		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
-		service.GetAnnotations()
-		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
 
-		By("Waiting service to expose...")
-		ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
-		Expect(err).NotTo(HaveOccurred())
-
-		defer func() {
-			By("Cleaning up test service")
-			err := utils.DeleteService(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-
-		By("Checking tags on the corresponding public IP")
 		expectedTags := map[string]*string{
-			"a": pointer.String("b"),
-			"c": pointer.String("d"),
-			"e": pointer.String(""),
-		}
-		pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
-		Expect(err).NotTo(HaveOccurred())
-		var targetPIP network.PublicIPAddress
-		for _, pip := range pips {
-			if strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), ip) {
-				targetPIP = pip
-				err := waitComparePIPTags(tc, expectedTags, pointer.StringDeref(pip.Name, ""))
-				Expect(err).NotTo(HaveOccurred())
-				break
-			}
-		}
-
-		By("Updating annotation and check tags again")
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		service.Annotations = map[string]string{
-			consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
-		}
-		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		expectedTags = map[string]*string{
 			"a": pointer.String("c"),
 			"c": pointer.String("d"),
 			"e": pointer.String(""),
 			"x": pointer.String("y"),
 		}
-		err = waitComparePIPTags(tc, expectedTags, pointer.StringDeref(targetPIP.Name, ""))
-		Expect(err).NotTo(HaveOccurred())
+
+		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
+	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags` on aks clusters with systemTags set", func() {
+		if os.Getenv(utils.AKSTestCCM) == "" {
+			Skip("Skip this test case for non-AKS test")
+		}
+
+		expectedTags := map[string]*string{
+			"a": pointer.String("c"),
+			"x": pointer.String("y"),
+		}
+
+		testPIPTagAnnotationWithTags(cs, tc, ns, serviceName, labels, ports, expectedTags)
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-name`", func() {
@@ -1183,4 +1155,62 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 			Expect(matches[1]).To(Equal(vmssName))
 		}
 	}
+}
+
+func testPIPTagAnnotationWithTags(
+	cs clientset.Interface,
+	tc *utils.AzureTestClient,
+	ns *v1.Namespace,
+	serviceName string,
+	labels map[string]string,
+	ports []v1.ServicePort,
+	expectedTagsAfterUpdate map[string]*string,
+) {
+	By("Creating a service with custom tags")
+	annotation := map[string]string{
+		consts.ServiceAnnotationAzurePIPTags: "a=b,c= d,e =, =f",
+	}
+	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
+	service.GetAnnotations()
+	_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Waiting service to expose...")
+	ip, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ns.Name, serviceName, "")
+	Expect(err).NotTo(HaveOccurred())
+
+	defer func() {
+		By("Cleaning up test service")
+		err := utils.DeleteService(cs, ns.Name, serviceName)
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	By("Checking tags on the corresponding public IP")
+	expectedTags := map[string]*string{
+		"a": pointer.String("b"),
+		"c": pointer.String("d"),
+		"e": pointer.String(""),
+	}
+	pips, err := tc.ListPublicIPs(tc.GetResourceGroup())
+	Expect(err).NotTo(HaveOccurred())
+	var targetPIP network.PublicIPAddress
+	for _, pip := range pips {
+		if strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), ip) {
+			targetPIP = pip
+			err := waitComparePIPTags(tc, expectedTags, pointer.StringDeref(pip.Name, ""))
+			Expect(err).NotTo(HaveOccurred())
+			break
+		}
+	}
+
+	By("Updating annotation and check tags again")
+	service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	service.Annotations = map[string]string{
+		consts.ServiceAnnotationAzurePIPTags: "a=c,x=y",
+	}
+	_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	err = waitComparePIPTags(tc, expectedTagsAfterUpdate, pointer.StringDeref(targetPIP.Name, ""))
+	Expect(err).NotTo(HaveOccurred())
 }
