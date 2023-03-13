@@ -1,4 +1,16 @@
 trigger:
+- task: EmailReport@1
+  inputs:
+    sendMailConditionConfig: 'On Failure'
+    subject: '[{environmentStatus}] {passPercentage} tests passed in $(Release.EnvironmentName) stage for $(Build.BuildNumber)'
+    toAddress: 'zhechengli@microsoft.com'
+    ccAddress: 'pengfei.ni@microsoft.com'
+    defaultDomain: 'microsoft.com'
+    groupTestResultsBy: 'run'
+    includeCommits: true
+    maxTestFailuresToShow: '15'
+    includeOthersInTotal: false
+    usePreviousEnvironment: false
   branches:
     include:
     - master
