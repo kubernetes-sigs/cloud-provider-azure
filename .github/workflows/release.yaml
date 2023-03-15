@@ -26,7 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Build binary
@@ -57,7 +57,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Build binary for linux
@@ -103,7 +103,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Build binary for linux
@@ -148,7 +148,7 @@ jobs:
           ref: master
           fetch-depth: 0
       - name: Setup Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Generate release note
