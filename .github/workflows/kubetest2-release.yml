@@ -22,7 +22,7 @@ jobs:
           ref: master
           fetch-depth: 0
       - name: Setup Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: kubetest2-aks/go.mod
       - name: Build binary
