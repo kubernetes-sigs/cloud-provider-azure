@@ -273,7 +273,8 @@ func (i *Ingestion) upstreamContainer() (*azblob.Client, string, error) {
 	}
 
 	storageURI := mgrResources.Containers[rand.Intn(len(mgrResources.Containers))]
-	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net?%s", storageURI.Account(), storageURI.SAS().Encode())
+	storageUrl := storageURI.URL()
+	serviceURL := fmt.Sprintf("%s://%s?%s", storageUrl.Scheme, storageUrl.Host, storageURI.SAS().Encode())
 
 	client, err := azblob.NewClientWithNoCredential(serviceURL, &azblob.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
@@ -303,7 +304,8 @@ func (i *Ingestion) upstreamQueue() (azqueue.MessagesURL, error) {
 	}
 
 	queue := mgrResources.Queues[rand.Intn(len(mgrResources.Queues))]
-	service, _ := url.Parse(fmt.Sprintf("https://%s.queue.core.windows.net?%s", queue.Account(), queue.SAS().Encode()))
+	queueUrl := queue.URL()
+	service, _ := url.Parse(fmt.Sprintf("%s://%s?%s", queueUrl.Scheme, queueUrl.Host, queue.SAS().Encode()))
 
 	p := createPipeline(i.http)
 
