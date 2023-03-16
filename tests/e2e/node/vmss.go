@@ -47,8 +47,10 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 	})
 
 	AfterEach(func() {
-		err := utils.DeleteNamespace(k8sCli, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+		if k8sCli != nil && ns != nil {
+			err := utils.DeleteNamespace(k8sCli, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		k8sCli = nil
 		ns = nil

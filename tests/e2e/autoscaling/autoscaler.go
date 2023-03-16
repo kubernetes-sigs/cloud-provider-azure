@@ -103,37 +103,39 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 	})
 
 	AfterEach(func() {
-		err := utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
 
-		//delete extra nodes
-		nodes, err := utils.GetAgentNodes(cs)
-		Expect(err).NotTo(HaveOccurred())
+			//delete extra nodes
+			nodes, err := utils.GetAgentNodes(cs)
+			Expect(err).NotTo(HaveOccurred())
 
-		nodesNotToBeDeleted := make([]string, 0)
-		for _, nodes := range initNodepoolNodeMap {
-			nodesNotToBeDeleted = append(nodesNotToBeDeleted, nodes...)
-		}
-
-		nodesToBeDeleted := make([]string, 0)
-		nodeToBeDeletedCount := 0
-		if len(nodes)-initNodeCount > 0 {
-			nodeToBeDeletedCount = len(nodes) - initNodeCount
-		}
-
-		for _, node := range nodes {
-			if nodeToBeDeletedCount == 0 {
-				break
+			nodesNotToBeDeleted := make([]string, 0)
+			for _, nodes := range initNodepoolNodeMap {
+				nodesNotToBeDeleted = append(nodesNotToBeDeleted, nodes...)
 			}
 
-			if !utils.StringInSlice(node.Name, nodesNotToBeDeleted) {
-				nodesToBeDeleted = append(nodesToBeDeleted, node.Name)
-				nodeToBeDeletedCount--
+			nodesToBeDeleted := make([]string, 0)
+			nodeToBeDeletedCount := 0
+			if len(nodes)-initNodeCount > 0 {
+				nodeToBeDeletedCount = len(nodes) - initNodeCount
 			}
-		}
 
-		err = utils.DeleteNodes(cs, nodesToBeDeleted)
-		Expect(err).NotTo(HaveOccurred())
+			for _, node := range nodes {
+				if nodeToBeDeletedCount == 0 {
+					break
+				}
+
+				if !utils.StringInSlice(node.Name, nodesNotToBeDeleted) {
+					nodesToBeDeleted = append(nodesToBeDeleted, node.Name)
+					nodeToBeDeletedCount--
+				}
+			}
+
+			err = utils.DeleteNodes(cs, nodesToBeDeleted)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		// clean up
 		cs = nil
