@@ -372,6 +372,9 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 		}
 	}
 	if !found || vm == nil {
+		// There is a corner case that the VM is deleted but the ip configuration is not deleted from the load balancer.
+		// In this case the cloud provider will keep refreshing the cache to search the VM, and will introduce
+		// a lot of unnecessary requests to ARM.
 		return nil, cloudprovider.InstanceNotFound
 	}
 
