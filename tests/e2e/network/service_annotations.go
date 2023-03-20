@@ -122,11 +122,13 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			}
 		}
 
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil
@@ -804,11 +806,13 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil
@@ -922,11 +926,13 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			}
 		}
 
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil

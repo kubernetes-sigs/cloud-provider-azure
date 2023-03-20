@@ -48,8 +48,10 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 	})
 
 	AfterEach(func() {
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+		if ns != nil && cs != nil {
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil
