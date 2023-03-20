@@ -97,11 +97,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), testDeploymentName, metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), testDeploymentName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil
@@ -794,11 +796,13 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 	})
 
 	AfterEach(func() {
-		err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), testDeploymentName, metav1.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		if cs != nil && ns != nil {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), testDeploymentName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		err = utils.DeleteNamespace(cs, ns.Name)
-		Expect(err).NotTo(HaveOccurred())
+			err = utils.DeleteNamespace(cs, ns.Name)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		cs = nil
 		ns = nil
