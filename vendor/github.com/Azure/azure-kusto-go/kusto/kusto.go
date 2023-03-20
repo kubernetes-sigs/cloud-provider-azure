@@ -35,6 +35,7 @@ type Client struct {
 	auth             Authorization
 	mgmtConnMu       sync.Mutex
 	http             *http.Client
+	clientDetails    *ClientDetails
 }
 
 // Option is an optional argument type for New().
@@ -63,7 +64,7 @@ func New(kcsb *ConnectionStringBuilder, options ...Option) (*Client, error) {
 		)
 	}
 
-	client := &Client{auth: *auth, endpoint: endpoint}
+	client := &Client{auth: *auth, endpoint: endpoint, clientDetails: NewClientDetails(kcsb.ApplicationForTracing, kcsb.UserForTracing)}
 	for _, o := range options {
 		o(client)
 	}
@@ -72,7 +73,7 @@ func New(kcsb *ConnectionStringBuilder, options ...Option) (*Client, error) {
 		client.http = &http.Client{}
 	}
 
-	conn, err := newConn(endpoint, *auth, client.http)
+	conn, err := NewConn(endpoint, *auth, client.http, client.clientDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +341,12 @@ func (c *Client) getConn(callType callType, options connOptions) (queryer, error
 			u, _ := url.Parse(c.endpoint) // Don't care about the error
 			u.Host = "ingest-" + u.Host
 			auth := c.auth
-			iconn, err := newConn(u.String(), auth, c.http)
+			var details *ClientDetails
+			if innerConn, ok := c.conn.(*Conn); ok {
+				details = innerConn.clientDetails
+			}
+
+			iconn, err := NewConn(u.String(), auth, c.http, details)
 			if err != nil {
 				return nil, err
 			}
@@ -379,6 +385,10 @@ func contextSetup(ctx context.Context, mgmtCall bool) (context.Context, context.
 
 func (c *Client) HttpClient() *http.Client {
 	return c.http
+}
+
+func (c *Client) ClientDetails() *ClientDetails {
+	return c.clientDetails
 }
 
 func (c *Client) Close() error {
