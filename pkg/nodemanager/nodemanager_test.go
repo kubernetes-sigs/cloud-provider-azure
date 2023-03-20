@@ -786,133 +786,155 @@ func Test_reconcileNodeLabels(t *testing.T) {
 
 // Tests that node address changes are detected correctly
 func TestNodeAddressesChangeDetected(t *testing.T) {
-	addressSet1 := []v1.NodeAddress{
+	testcases := []struct {
+		desc            string
+		addrSet1        []v1.NodeAddress
+		addrSet2        []v1.NodeAddress
+		expectedChanged bool
+	}{
 		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
+			desc: "IPs not changed",
+			addrSet1: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "fe::1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.163",
+				},
+			},
+			addrSet2: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "fe::1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.163",
+				},
+			},
+			expectedChanged: false,
 		},
 		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
+			desc: "IPs changed",
+			addrSet1: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.164",
+				},
+			},
+			addrSet2: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.163",
+				},
+			},
+			expectedChanged: true,
 		},
-	}
-	addressSet2 := []v1.NodeAddress{
 		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
+			desc: "IPs and hostname changed set1",
+			addrSet1: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.164",
+				},
+				{
+					Type:    v1.NodeHostName,
+					Address: "hostname.aks.test",
+				},
+			},
+			addrSet2: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.164",
+				},
+			},
+			expectedChanged: true,
 		},
 		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
+			desc: "IPs and hostname changed set2",
+			addrSet1: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.164",
+				},
+			},
+			addrSet2: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.164",
+				},
+				{
+					Type:    v1.NodeHostName,
+					Address: "hostname.aks.test",
+				},
+			},
+			expectedChanged: true,
+		},
+		{
+			desc: "IPs exchanged",
+			addrSet1: []v1.NodeAddress{
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "132.143.154.163",
+				},
+			},
+			addrSet2: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "132.143.154.163",
+				},
+			},
+			expectedChanged: true,
 		},
 	}
 
-	assert.False(t, nodeAddressesChangeDetected(addressSet1, addressSet2),
-		"Node address changes are not detected correctly")
-
-	addressSet1 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.164",
-		},
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expectedChanged, nodeAddressesChangeDetected(tc.addrSet1, tc.addrSet2))
+		})
 	}
-	addressSet2 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
-		},
-	}
-
-	assert.True(t, nodeAddressesChangeDetected(addressSet1, addressSet2),
-		"Node address changes are not detected correctly")
-
-	addressSet1 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.164",
-		},
-		{
-			Type:    v1.NodeHostName,
-			Address: "hostname.zone.region.aws.test",
-		},
-	}
-	addressSet2 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.164",
-		},
-	}
-
-	assert.True(t, nodeAddressesChangeDetected(addressSet1, addressSet2),
-		"Node address changes are not detected correctly")
-
-	addressSet1 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.164",
-		},
-	}
-	addressSet2 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.164",
-		},
-		{
-			Type:    v1.NodeHostName,
-			Address: "hostname.zone.region.aws.test",
-		},
-	}
-
-	assert.True(t, nodeAddressesChangeDetected(addressSet1, addressSet2),
-		"Node address changes are not detected correctly")
-
-	addressSet1 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "132.143.154.163",
-		},
-	}
-	addressSet2 = []v1.NodeAddress{
-		{
-			Type:    v1.NodeInternalIP,
-			Address: "10.0.0.1",
-		},
-		{
-			Type:    v1.NodeExternalIP,
-			Address: "132.143.154.163",
-		},
-	}
-
-	assert.True(t, nodeAddressesChangeDetected(addressSet1, addressSet2),
-		"Node address changes are not detected correctly")
 }
 
 // This test checks that a node with the external cloud provider taint is cloudprovider initialized
