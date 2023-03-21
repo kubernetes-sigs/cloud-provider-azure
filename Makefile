@@ -138,7 +138,9 @@ build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-mana
 		--build-arg ARCH="$(ARCH)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file Dockerfile \
-		--tag $(IMAGE) .
+		--tag $(IMAGE) . \
+		--provenance=false \
+		--sbom=false
 
 .PHONY: build-node-image-linux
 build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-manager image.
@@ -150,7 +152,9 @@ build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-man
 		--build-arg ARCH="$(ARCH)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file cloud-node-manager.Dockerfile \
-		--tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) .
+		--tag $(NODE_MANAGER_LINUX_FULL_IMAGE_PREFIX)-$(ARCH) . \
+		--provenance=false \
+		--sbom=false
 
 # TODO(mainred): When using ACR, `az acr login` impacts the authentication of `docker buildx build --push` when the
 # ACR, capz in our case, has anonymous pull enabled.
@@ -171,7 +175,9 @@ build-node-image-windows: buildx-setup $(BIN_DIR)/azure-cloud-node-manager.exe d
 		-t $(NODE_MANAGER_WINDOWS_FULL_IMAGE_PREFIX)-$(WINDOWS_OSVERSION)-$(ARCH) \
 		--build-arg OSVERSION=$(WINDOWS_OSVERSION) \
 		--build-arg ARCH=$(ARCH) \
-		-f cloud-node-manager-windows.Dockerfile .
+		-f cloud-node-manager-windows.Dockerfile . \
+		--provenance=false \
+		--sbom=false
 
 .PHONY: build-ccm-e2e-test-image
 build-ccm-e2e-test-image: ## Build e2e test image.
