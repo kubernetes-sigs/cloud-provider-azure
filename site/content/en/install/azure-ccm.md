@@ -46,7 +46,7 @@ azure-cloud-controller-manager should be run as Deployment with multiple replica
 |Flag|Value|Remark|
 |---|---|---|
 |`--cloud-provider`|azure|cloud-provider should be set azure|
-|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json|Path for [cloud provider config](../configs.md)|
+|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json|Path for [cloud provider config](./configs.md)|
 |`--controllers`|*,-cloud-node | cloud node controller should be disabled|
 |`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters |
 
