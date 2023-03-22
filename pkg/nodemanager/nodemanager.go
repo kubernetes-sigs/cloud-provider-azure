@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -86,6 +87,11 @@ var updateNetworkConditionBackoff = wait.Backoff{
 	Duration: 100 * time.Millisecond,
 	Jitter:   1.0,
 }
+
+const (
+	v4Suffix = "IPv4"
+	v6Suffix = "IPv6"
+)
 
 // CloudNodeController reconciles node information.
 type CloudNodeController struct {
@@ -542,14 +548,24 @@ func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool
 	if len(addressSet1) != len(addressSet2) {
 		return true
 	}
-	addressMap1 := map[v1.NodeAddressType]string{}
+	addressMap1 := map[string]string{}
 
 	for i := range addressSet1 {
-		addressMap1[addressSet1[i].Type] = addressSet1[i].Address
+		suffix := v4Suffix
+		if net.ParseIP(addressSet1[i].Address).To4() == nil {
+			suffix = v6Suffix
+		}
+		addrType := fmt.Sprintf("%s/%s", addressSet1[i].Type, suffix)
+		addressMap1[addrType] = addressSet1[i].Address
 	}
 
 	for _, v := range addressSet2 {
-		if addressMap1[v.Type] != v.Address {
+		suffix := v4Suffix
+		if net.ParseIP(v.Address).To4() == nil {
+			suffix = v6Suffix
+		}
+		addrType := fmt.Sprintf("%s/%s", v.Type, suffix)
+		if addressMap1[addrType] != v.Address {
 			return true
 		}
 	}
