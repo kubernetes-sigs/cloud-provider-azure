@@ -47,6 +47,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 	s, err := options.NewCloudNodeManagerOptions()
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
+		return nil
 	}
 
 	cmd := &cobra.Command{
