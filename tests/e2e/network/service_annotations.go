@@ -563,8 +563,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Validating health probe configs")
 		var numberOfProbes *int32
 		for _, probe := range targetProbes {
-			if probe.NumberOfProbes != nil {
-				numberOfProbes = probe.NumberOfProbes
+			if probe.ProbeThreshold != nil {
+				numberOfProbes = probe.ProbeThreshold
 			}
 		}
 		Expect(*numberOfProbes).To(Equal(int32(3)))
@@ -607,8 +607,25 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 		// get lb from azure client
 		By("Validating health probe configs")
+		var probeThreshold *int32
+		var intervalInSeconds *int32
+		for _, probe := range targetProbes {
+			if probe.ProbeThreshold != nil {
+				probeThreshold = probe.ProbeThreshold
+			}
+			if probe.IntervalInSeconds != nil {
+				intervalInSeconds = probe.IntervalInSeconds
+			}
+		}
+		utils.Logf("Validating health probe config probeThreshold")
+		Expect(*probeThreshold).To(Equal(int32(2)))
+		utils.Logf("Validating health probe config intervalInSeconds")
+		Expect(*intervalInSeconds).To(Equal(int32(5)))
+		utils.Logf("Validating health probe config protocol")
 		Expect((len(targetProbes))).To(Equal(1))
-		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
+		for _, targetProbe := range targetProbes {
+			Expect(targetProbe.Protocol).To(Equal(network.ProbeProtocolHTTP))
+		}
 	})
 
 	// Check if the following annotations are correctly set with Service LB IP
