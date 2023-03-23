@@ -588,8 +588,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Validating health probe configs")
 		var numberOfProbes *int32
 		for _, probe := range targetProbes {
-			if probe.NumberOfProbes != nil {
-				numberOfProbes = probe.NumberOfProbes
+			if probe.ProbeThreshold != nil {
+				numberOfProbes = probe.ProbeThreshold
 			}
 		}
 		Expect(*numberOfProbes).To(Equal(int32(3)))
@@ -686,8 +686,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		var numberOfProbes *int32
 		var intervalInSeconds *int32
 		for _, probe := range targetProbes {
-			if probe.NumberOfProbes != nil {
-				numberOfProbes = probe.NumberOfProbes
+			if probe.ProbeThreshold != nil {
+				numberOfProbes = probe.ProbeThreshold
 			}
 			if probe.IntervalInSeconds != nil {
 				intervalInSeconds = probe.IntervalInSeconds
