@@ -859,11 +859,11 @@ func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.L
 
 // pips: a non-nil pointer to a slice of existing PIPs, if the slice being pointed to is nil, listPIP would be called when needed and the slice would be filled
 func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, pips *[]network.PublicIPAddress) (string, bool, error) {
-	if name, found := service.Annotations[consts.ServiceAnnotationPIPName]; found && name != "" {
+	if name, found := service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]; found && name != "" {
 		return name, true, nil
 	}
 	isIPv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
-	if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && ipPrefix != "" {
+	if ipPrefix, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]; ok && ipPrefix != "" {
 		return az.getPublicIPName(clusterName, service, isIPv6), false, nil
 	}
 
@@ -1059,7 +1059,7 @@ func (az *Cloud) ensurePublicIPExists(service *v1.Service, pipName string, domai
 			pip.Sku = &network.PublicIPAddressSku{
 				Name: network.PublicIPAddressSkuNameStandard,
 			}
-			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixID]; ok && pipPrefixName != "" {
+			if pipPrefixName, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]; ok && pipPrefixName != "" {
 				pip.PublicIPPrefix = &network.SubResource{ID: pointer.String(pipPrefixName)}
 			}
 

@@ -622,7 +622,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				annotation[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames1[true]
 			}
 		} else {
-			annotation[consts.ServiceAnnotationPIPName] = pipNames1[tc.IPFamily == utils.IPv6]
+			annotation[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames1[tc.IPFamily == utils.IPv6]
 		}
 
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -649,7 +649,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipNames2[true]
 			}
 		} else {
-			service.Annotations[consts.ServiceAnnotationPIPName] = pipNames2[tc.IPFamily == utils.IPv6]
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipNames2[tc.IPFamily == utils.IPv6]
 		}
 
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
@@ -714,7 +714,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				if utils.DualstackSupported {
 					annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = id
 				} else {
-					annotation[consts.ServiceAnnotationPIPPrefixID] = id
+					annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = id
 				}
 			}
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -751,7 +751,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				if utils.DualstackSupported {
 					service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = id
 				} else {
-					service.Annotations[consts.ServiceAnnotationPIPPrefixID] = id
+					service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = id
 				}
 			}
 			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})

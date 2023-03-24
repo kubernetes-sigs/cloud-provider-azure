@@ -3944,7 +3944,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall report error if the given PIP name doesn't exist in the resource group",
 			wantLb:      true,
-			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: pointer.String("pip1"),
@@ -3962,7 +3962,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall delete unwanted PIP when given the name of desired PIP",
 			wantLb:      true,
-			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: pointer.String("pip1"),
@@ -4001,7 +4001,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall not delete unwanted PIP when there are other service references",
 			wantLb:      true,
-			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: pointer.String("pip1"),
@@ -4041,8 +4041,8 @@ func TestReconcilePublicIP(t *testing.T) {
 			desc:   "reconcilePublicIP shall delete unwanted pips and existing pips, when the existing pips IP tags do not match",
 			wantLb: true,
 			annotations: map[string]string{
-				consts.ServiceAnnotationPIPName:           "testPIP",
-				consts.ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
+				consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP",
+				consts.ServiceAnnotationIPTagsForPublicIP:       "tag1=tag1value",
 			},
 			existingPIPs: []network.PublicIPAddress{
 				{
@@ -4089,8 +4089,8 @@ func TestReconcilePublicIP(t *testing.T) {
 			desc:   "reconcilePublicIP shall preserve existing pips, when the existing pips IP tags do match",
 			wantLb: true,
 			annotations: map[string]string{
-				consts.ServiceAnnotationPIPName:           "testPIP",
-				consts.ServiceAnnotationIPTagsForPublicIP: "tag1=tag1value",
+				consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP",
+				consts.ServiceAnnotationIPTagsForPublicIP:       "tag1=tag1value",
 			},
 			existingPIPs: []network.PublicIPAddress{
 				{
@@ -4131,7 +4131,7 @@ func TestReconcilePublicIP(t *testing.T) {
 		{
 			desc:        "reconcilePublicIP shall find the PIP by given name and shall not delete the PIP which is not owned by service",
 			wantLb:      true,
-			annotations: map[string]string{consts.ServiceAnnotationPIPName: "testPIP"},
+			annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "testPIP"},
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: pointer.String("pip1"),

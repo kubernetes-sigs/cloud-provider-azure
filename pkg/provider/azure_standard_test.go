@@ -2305,3 +2305,85 @@ func TestGetSecurityRuleName(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPublicIPName(t *testing.T) {
+	testcases := []struct {
+		desc            string
+		svc             *v1.Service
+		isIPv6          bool
+		expectedPIPName string
+	}{
+		{
+			desc: "common",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{UID: types.UID("uid")},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			isIPv6:          false,
+			expectedPIPName: "azure-auid",
+		},
+		{
+			desc: "Service PIP prefix id",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			isIPv6:          false,
+			expectedPIPName: "azure-auid-prefix-id",
+		},
+		{
+			desc: "Service PIP prefix id dualstack IPv4",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
+						consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  "prefix-id-ipv6",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				},
+			},
+			isIPv6:          false,
+			expectedPIPName: "azure-auid-prefix-id",
+		},
+		{
+			desc: "Service PIP prefix id dualstack IPv6",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
+						consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  "prefix-id-ipv6",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				},
+			},
+			isIPv6:          true,
+			expectedPIPName: "azure-auid-prefix-id-ipv6-IPv6",
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			name := az.getPublicIPName("azure", tc.svc, tc.isIPv6)
+			assert.Equal(t, tc.expectedPIPName, name)
+		})
+	}
+
+}

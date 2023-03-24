@@ -342,6 +342,11 @@ func extractVmssVMName(name string) (string, string, error) {
 	return ssName, instanceID, nil
 }
 
+// isServiceDualStack checks if a Service is dual-stack or not.
+func isServiceDualStack(svc *v1.Service) bool {
+	return len(svc.Spec.IPFamilies) == 2
+}
+
 // getIPFamiliesEnabled checks if IPv4, IPv6 are enabled according to svc.Spec.IPFamilies.
 func getIPFamiliesEnabled(svc *v1.Service) (v4Enabled bool, v6Enabled bool) {
 	for _, ipFamily := range svc.Spec.IPFamilies {
@@ -411,12 +416,11 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 		return ""
 	}
 
-	if consts.DualstackSupported {
-		if name, ok := service.Annotations[consts.ServiceAnnotationPIPNameDualStack[isIPv6]]; ok && name != "" {
-			return name
-		}
+	if !isServiceDualStack(service) {
+		return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]
 	}
-	return service.Annotations[consts.ServiceAnnotationPIPName]
+
+	return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[isIPv6]]
 }
 
 func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
@@ -424,23 +428,18 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 		return ""
 	}
 
-	if consts.DualstackSupported {
-		if name, ok := service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]]; ok && name != "" {
-			return name
-		}
+	if !isServiceDualStack(service) {
+		return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]]
 	}
-	return service.Annotations[consts.ServiceAnnotationPIPPrefixID]
+
+	return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]]
 }
 
 func getResourceByIPFamily(resource string, isIPv6 bool) string {
-	if !consts.DualstackSupported {
-		return resource
-	}
-
 	if isIPv6 {
 		return fmt.Sprintf("%s-%s", resource, v6Suffix)
 	}
-	return fmt.Sprintf("%s-%s", resource, v4Suffix)
+	return resource
 }
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
