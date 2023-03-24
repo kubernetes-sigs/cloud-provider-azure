@@ -212,7 +212,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 	var nodes []v1.Node
 	var err error
 	poll := 60 * time.Second
-	autoScaleTimeOut := 60 * time.Minute
+	autoScaleTimeOut := 90 * time.Minute
 	if err = wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {
