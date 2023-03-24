@@ -280,13 +280,52 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	}
 
 	newNode := node.DeepCopy()
-	newNode.Status.Addresses = nodeAddresses
+	newNode.Status.Addresses = ensureNodeInternalAddressesOrder(node.Status.Addresses, nodeAddresses)
 	_, _, err = PatchNodeStatus(cnc.kubeClient.CoreV1(), types.NodeName(node.Name), node, newNode)
 	if err != nil {
 		return fmt.Errorf("patching node with cloud ip addresses: %w", err)
 	}
 
 	return nil
+}
+
+// ensureNodeInternalAddressesOrder ensures Node internal addresses are consistent in terms of order.
+func ensureNodeInternalAddressesOrder(old, new []v1.NodeAddress) []v1.NodeAddress {
+	ordered := []v1.NodeAddress{}
+	ipv6First := false
+	for _, addr := range old {
+		if addr.Type != v1.NodeInternalIP {
+			continue
+		}
+		if net.ParseIP(addr.Address).To4() == nil {
+			ipv6First = true
+		}
+		break
+	}
+	newInternalIPs := []v1.NodeAddress{}
+	for _, addr := range new {
+		if addr.Type != v1.NodeInternalIP {
+			ordered = append(ordered, addr)
+		} else {
+			newInternalIPs = append(newInternalIPs, addr)
+		}
+	}
+
+	if len(newInternalIPs) == 1 {
+		ordered = append(ordered, newInternalIPs[0])
+	} else if len(newInternalIPs) == 2 {
+		if (ipv6First && net.ParseIP(newInternalIPs[0].Address).To4() == nil) ||
+			(!ipv6First && net.ParseIP(newInternalIPs[0].Address).To4() != nil) {
+			ordered = append(ordered, newInternalIPs[0], newInternalIPs[1])
+		} else {
+			ordered = append(ordered, newInternalIPs[1], newInternalIPs[0])
+		}
+	} else {
+		klog.Warningf("incorrect number of internal IPs to update: %v", newInternalIPs)
+		ordered = append(ordered, newInternalIPs...)
+	}
+
+	return ordered
 }
 
 // nodeModifier is used to carry changes to node objects across multiple attempts to update them

@@ -122,6 +122,8 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []NetworkInterface,
 	addresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: nodeName},
 	}
+	// Notice: IPv4 addresses are always before IPv6 ones regardless of the
+	// current addresses of the Node.
 	if len(netInterface.IPV4.IPAddress) > 0 && len(netInterface.IPV4.IPAddress[0].PrivateIP) > 0 {
 		address := netInterface.IPV4.IPAddress[0]
 		addresses = append(addresses, v1.NodeAddress{

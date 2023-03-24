@@ -662,7 +662,8 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 	cloudNodeController.UpdateNodeStatus(context.TODO())
 	updatedNodes := fnh.GetUpdatedNodesCopy()
 	assert.Equal(t, 3, len(updatedNodes[0].Status.Addresses), "Node Addresses not correctly updated")
-	assert.Equal(t, "10.0.0.1", updatedNodes[0].Status.Addresses[0].Address, "Node Addresses not correctly updated")
+	// Because of order issue #3401, internal addresses are at the end.
+	assert.Equal(t, "10.0.0.1", updatedNodes[0].Status.Addresses[2].Address, "Node Addresses not correctly updated")
 }
 
 // Tests that node address changes are detected correctly
@@ -877,6 +878,139 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 
 	if len(fnh.UpdatedNodes) != 0 {
 		t.Errorf("Node was not correctly updated, the updated len(nodes) got: %v, wanted=0", len(fnh.UpdatedNodes))
+	}
+}
+
+// TestEnsureNodeAddressesOrder verifies if ensureNodeAddressesOrder() can ensure
+// the order of Node internal addresses is correct.
+func TestEnsureNodeAddressesOrder(t *testing.T) {
+	testcases := []struct {
+		desc          string
+		oldAddrs      []v1.NodeAddress
+		newAddrs      []v1.NodeAddress
+		expectedAddrs []v1.NodeAddress
+	}{
+		{
+			"IPv4 no internal IPs",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+		},
+		{
+			"IPv6 no internal IPs",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+		},
+		{
+			"IPv6 add second IPv4 internal IP",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+		},
+		{
+			"IPv6 add second IPv4 internal IP with reverse order",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "fe::1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+		},
+		{
+			"Dual-stack add second IPv6 internal IP",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+		},
+		{
+			"Dual-stack add second IPv6 internal IP with reverse order",
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+			},
+			[]v1.NodeAddress{
+				{Type: v1.NodeHostName, Address: "hostname0"},
+				{Type: v1.NodeExternalIP, Address: "20.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+				{Type: v1.NodeInternalIP, Address: "2001::1"},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			res := ensureNodeInternalAddressesOrder(tc.oldAddrs, tc.newAddrs)
+			assert.Equal(t, tc.expectedAddrs, res)
+		})
 	}
 }
 
