@@ -2260,7 +2260,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 		return nil, fmt.Errorf("total probe should be less than 120, please adjust interval and number of probe accordingly")
 	}
 	properties.IntervalInSeconds = probeInterval
-	properties.NumberOfProbes = numberOfProbes
+	properties.ProbeThreshold = numberOfProbes
 	probe := &network.Probe{
 		Name:                  &lbrule,
 		ProbePropertiesFormat: properties,
@@ -2296,7 +2296,7 @@ func (az *Cloud) getExpectedLBRules(
 				Protocol:          network.ProbeProtocolHTTP,
 				Port:              pointer.Int32(podPresencePort),
 				IntervalInSeconds: pointer.Int32(consts.HealthProbeDefaultProbeInterval),
-				NumberOfProbes:    pointer.Int32(consts.HealthProbeDefaultNumOfProbe),
+				ProbeThreshold:    pointer.Int32(consts.HealthProbeDefaultNumOfProbe),
 			},
 		}
 		expectedProbes = append(expectedProbes, *nodeEndpointHealthprobe)
@@ -3259,7 +3259,7 @@ func findProbe(probes []network.Probe, probe network.Probe) bool {
 			strings.EqualFold(string(existingProbe.Protocol), string(probe.Protocol)) &&
 			strings.EqualFold(pointer.StringDeref(existingProbe.RequestPath, ""), pointer.StringDeref(probe.RequestPath, "")) &&
 			pointer.Int32Deref(existingProbe.IntervalInSeconds, 0) == pointer.Int32Deref(probe.IntervalInSeconds, 0) &&
-			pointer.Int32Deref(existingProbe.NumberOfProbes, 0) == pointer.Int32Deref(probe.NumberOfProbes, 0) {
+			pointer.Int32Deref(existingProbe.ProbeThreshold, 0) == pointer.Int32Deref(probe.ProbeThreshold, 0) {
 			return true
 		}
 	}
