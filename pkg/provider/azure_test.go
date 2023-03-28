@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -717,23 +720,24 @@ func TestReconcileSecurityGroupFromAnyDestinationAddressPrefixToLoadBalancerIP(t
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	svc1 := getTestService("serviceea", v1.ProtocolTCP, nil, false, 80)
+	svc1 := getTestServiceDualStack("serviceea", v1.ProtocolTCP, nil, 80)
 	setServiceLoadBalancerIP(&svc1, "192.168.0.0")
+	setServiceLoadBalancerIP(&svc1, "fdf8:f535:82e4::53")
 
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
 	// Simulate a pre-Kubernetes 1.8 NSG, where we do not specify the destination address prefix
-	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(""), nil, true)
+	_, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{""}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	lbIPs := []string{getServiceLoadBalancerIP(&svc1, false), getServiceLoadBalancerIP(&svc1, true)}
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, &lbIPs, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
-	validateSecurityGroup(t, sg, svc1)
+	validateSecurityGroup(t, az, sg, svc1)
 }
 
 func TestReconcileSecurityGroupDynamicLoadBalancerIP(t *testing.T) {
@@ -747,12 +751,12 @@ func TestReconcileSecurityGroupDynamicLoadBalancerIP(t *testing.T) {
 	sg := getTestSecurityGroup(az)
 	setMockSecurityGroup(az, ctrl, sg)
 
-	dynamicallyAssignedIP := "192.168.0.0"
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(dynamicallyAssignedIP), nil, true)
+	dynamicallyAssignedIPs := []string{"192.168.0.0", "fdf8:f535:82e4::53"}
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &dynamicallyAssignedIPs, nil, true)
 	if err != nil {
 		t.Errorf("unexpected error: %q", err)
 	}
-	validateSecurityGroup(t, sg, svc1)
+	validateSecurityGroup(t, az, sg, svc1)
 }
 
 // Test addition of services on an internal LB using both default and explicit subnets.
@@ -1233,6 +1237,7 @@ func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
 	}
 }
 
+// TODO: Dualstack after reconcileFrontendIPConfiguration() finishes.
 func TestReconcileSecurityGroupNewServiceAddsPort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1248,14 +1253,13 @@ func TestReconcileSecurityGroupNewServiceAddsPort(t *testing.T) {
 	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
+	lbStatus, _, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &lbStatus.Ingress[0].IP, nil, true /* wantLb */)
-	if err != nil {
-		t.Errorf("Unexpected error: %q", err)
-	}
+	lbIPs := []string{lbStatus.Ingress[0].IP}
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &lbIPs, nil, true /* wantLb */)
+	assert.NoError(t, err)
 
-	validateSecurityGroup(t, sg, svc1)
+	validateSecurityGroup(t, az, sg, svc1)
 }
 
 func TestReconcileSecurityGroupNewInternalServiceAddsPort(t *testing.T) {
@@ -1277,22 +1281,23 @@ func TestReconcileSecurityGroupNewInternalServiceAddsPort(t *testing.T) {
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &lbStatus.Ingress[0].IP, nil, true /* wantLb */)
+	lbStatus, _, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{lbStatus.Ingress[0].IP}, nil, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1)
+	validateSecurityGroup(t, az, sg, svc1)
 }
 
+// TestReconcileSecurityGroupRemoveService keeps service1 but removes service2.
 func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	service1 := getTestService("service1", v1.ProtocolTCP, nil, false, 81)
-	service2 := getTestService("service2", v1.ProtocolTCP, nil, false, 82)
+	service1 := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 81)
+	service2 := getTestServiceDualStack("service2", v1.ProtocolTCP, nil, 82)
 	clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 1, 1)
 	setMockEnv(az, ctrl, expectedInterfaces, expectedVirtualMachines, 2, service1, service2)
 
@@ -1300,7 +1305,7 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, true)
 	mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 	mockLBClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "testCluster", gomock.Any()).Return(
-		getTestLoadBalancer(pointer.String(testClusterName),
+		getTestLoadBalancerDualStack(pointer.String(testClusterName),
 			pointer.String(az.ResourceGroup),
 			pointer.String(testClusterName),
 			pointer.String("aservice1"),
@@ -1314,17 +1319,18 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &service1, clusterResources.nodes, true)
 	_, _ = az.reconcileLoadBalancer(testClusterName, &service2, clusterResources.nodes, true)
 
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&service1, lb, nil)
+	lbStatus, _, _, err := az.getServiceLoadBalancerStatus(&service1, lb, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, lbStatus)
 
 	sg := getTestSecurityGroup(az, service1, service2)
-	validateSecurityGroup(t, sg, service1, service2)
+	validateSecurityGroup(t, az, sg, service1, service2)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &service1, &lbStatus.Ingress[0].IP, nil, false /* wantLb */)
-	if err != nil {
-		t.Errorf("Unexpected error: %q", err)
-	}
+	assert.Equal(t, 2, len(lbStatus.Ingress))
+	sg, err = az.reconcileSecurityGroup(testClusterName, &service1, &[]string{lbStatus.Ingress[0].IP, lbStatus.Ingress[1].IP}, nil, false /* wantLb */)
+	assert.NoError(t, err)
 
-	validateSecurityGroup(t, sg, service2)
+	validateSecurityGroup(t, az, sg, service2)
 }
 
 func TestReconcileSecurityGroupRemoveServiceRemovesPort(t *testing.T) {
@@ -1353,17 +1359,17 @@ func TestReconcileSecurityGroupRemoveServiceRemovesPort(t *testing.T) {
 			svc,
 			"Standard"), nil).AnyTimes()
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true)
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc, lb, nil)
+	lbStatus, _, _, _ := az.getServiceLoadBalancerStatus(&svc, lb, nil)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svcUpdated, &lbStatus.Ingress[0].IP, nil, true /* wantLb */)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svcUpdated, &[]string{lbStatus.Ingress[0].IP}, nil, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svcUpdated)
+	validateSecurityGroup(t, az, sg, svcUpdated)
 }
 
-func TestReconcileSecurityWithSourceRanges(t *testing.T) {
+func TestReconcileSecurityGroupWithSourceRanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1384,14 +1390,14 @@ func TestReconcileSecurityWithSourceRanges(t *testing.T) {
 	expectedLBs := make([]network.LoadBalancer, 0)
 	setMockLBs(az, ctrl, &expectedLBs, "service", 1, 1, false)
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc, clusterResources.nodes, true)
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc, lb, nil)
+	lbStatus, _, _, _ := az.getServiceLoadBalancerStatus(&svc, lb, nil)
 
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, &lbStatus.Ingress[0].IP, nil, true /* wantLb */)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, &[]string{lbStatus.Ingress[0].IP}, nil, true /* wantLb */)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc)
+	validateSecurityGroup(t, az, sg, svc)
 }
 
 func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
@@ -1432,9 +1438,9 @@ func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	lb, _ := az.reconcileLoadBalancer(testClusterName, &svc1, clusterResources.nodes, true)
-	lbStatus, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
+	lbStatus, _, _, _ := az.getServiceLoadBalancerStatus(&svc1, lb, nil)
 
-	newSG, err := az.reconcileSecurityGroup(testClusterName, &svc1, &lbStatus.Ingress[0].IP, nil, true /* wantLb */)
+	newSG, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{lbStatus.Ingress[0].IP}, nil, true /* wantLb */)
 	assert.Nil(t, newSG)
 	assert.Error(t, err)
 
@@ -1664,13 +1670,27 @@ func getBackendPort(port int32) int32 {
 	return port + 10000
 }
 
-// TODO: This function should be merged into getTestService()
-func makeTestServiceDualStack(svc *v1.Service) {
+func getTestServiceDualStack(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
 	svc.Spec.ClusterIPs = []string{"10.0.0.2", "fd00::1907"}
 	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+
+	return svc
 }
 
 func getTestService(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
+	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+	if isIPv6 {
+		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	}
+
+	return svc
+}
+
+func getTestServiceCommon(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
 	ports := []v1.ServicePort{}
 	for _, port := range requestedPorts {
 		ports = append(ports, v1.ServicePort{
@@ -1694,13 +1714,6 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 		svc.Annotations = make(map[string]string)
 	} else {
 		svc.Annotations = annotations
-	}
-
-	svc.Spec.ClusterIP = "10.0.0.2"
-	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
-	if isIPv6 {
-		svc.Spec.ClusterIP = "fd00::1907"
-		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
 	}
 
 	return svc
@@ -1744,21 +1757,32 @@ func getServiceSourceRanges(service *v1.Service) []string {
 }
 
 func getTestSecurityGroup(az *Cloud, services ...v1.Service) *network.SecurityGroup {
-	rules := []network.SecurityRule{}
+	getRule := func(svc *v1.Service, port v1.ServicePort, src string, isIPv6 bool) network.SecurityRule {
+		ruleName := az.getSecurityRuleName(svc, port, src, isIPv6)
+		return network.SecurityRule{
+			Name: pointer.String(ruleName),
+			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+				SourceAddressPrefix:  pointer.String(src),
+				DestinationPortRange: pointer.String(fmt.Sprintf("%d", port.Port)),
+			},
+		}
+	}
 
-	for i, service := range services {
-		for _, port := range service.Spec.Ports {
-			sources := getServiceSourceRanges(&services[i])
+	rules := []network.SecurityRule{}
+	for _, svc := range services {
+		svc := svc
+		v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
+		for _, port := range svc.Spec.Ports {
+			sources := getServiceSourceRanges(&svc)
 			for _, src := range sources {
-				isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
-				ruleName := az.getSecurityRuleName(&services[i], port, src, isIPv6)
-				rules = append(rules, network.SecurityRule{
-					Name: pointer.String(ruleName),
-					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-						SourceAddressPrefix:  pointer.String(src),
-						DestinationPortRange: pointer.String(fmt.Sprintf("%d", port.Port)),
-					},
-				})
+				if v4Enabled {
+					rule := getRule(&svc, port, src, false)
+					rules = append(rules, rule)
+				}
+				if v6Enabled {
+					rule := getRule(&svc, port, src, true)
+					rules = append(rules, rule)
+				}
 			}
 		}
 	}
@@ -2003,43 +2027,51 @@ func securityRuleMatches(serviceSourceRange string, servicePort v1.ServicePort, 
 	return nil
 }
 
-func validateSecurityGroup(t *testing.T, securityGroup *network.SecurityGroup, services ...v1.Service) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func validateSecurityGroup(t *testing.T, az *Cloud, securityGroup *network.SecurityGroup, services ...v1.Service) {
+	if len(services) == 0 {
+		t.Errorf("Services input of validateSecurityGroup() cannot be empty")
+	}
 
-	az := GetTestCloud(ctrl)
 	seenRules := make(map[string]string)
-	for i, svc := range services {
+	for _, svc := range services {
 		svc := svc
+		v4Enabled, v6Enabled := getIPFamiliesEnabled(&svc)
 		for _, wantedRule := range svc.Spec.Ports {
-			sources := getServiceSourceRanges(&services[i])
+			sources := getServiceSourceRanges(&svc)
 			for _, source := range sources {
-				isIPv6 := utilnet.IsIPv6String(services[i].Spec.ClusterIP)
-				wantedRuleName := az.getSecurityRuleName(&services[i], wantedRule, source, isIPv6)
-				seenRules[wantedRuleName] = wantedRuleName
-				foundRule := false
-				for _, actualRule := range *securityGroup.SecurityRules {
-					if strings.EqualFold(*actualRule.Name, wantedRuleName) {
-						err := securityRuleMatches(source, wantedRule, getServiceLoadBalancerIP(&svc, isIPv6), actualRule)
-						if err != nil {
-							t.Errorf("Found matching security rule %q but properties were incorrect: %v", wantedRuleName, err)
+				checkRule := func(svc *v1.Service, wantedRule v1.ServicePort, source string, isIPv6 bool) {
+					wantedRuleName := az.getSecurityRuleName(svc, wantedRule, source, isIPv6)
+					seenRules[wantedRuleName] = wantedRuleName
+
+					foundRule := false
+					for _, actualRule := range *securityGroup.SecurityRules {
+						if strings.EqualFold(*actualRule.Name, wantedRuleName) {
+							if err := securityRuleMatches(source, wantedRule, getServiceLoadBalancerIP(svc, isIPv6), actualRule); err != nil {
+								t.Errorf("Found matching security rule %q but properties were incorrect: %v", wantedRuleName, err)
+							}
+							foundRule = true
+							break
 						}
-						foundRule = true
-						break
+					}
+					if !foundRule {
+						t.Errorf("Expected security group rule but didn't find it: %q", wantedRuleName)
 					}
 				}
-				if !foundRule {
-					t.Errorf("Expected security group rule but didn't find it: %q", wantedRuleName)
+
+				if v4Enabled {
+					checkRule(&svc, wantedRule, source, false)
+				}
+				if v6Enabled {
+					checkRule(&svc, wantedRule, source, true)
 				}
 			}
 		}
 	}
 
+	assert.NotNil(t, securityGroup.SecurityRules)
 	lenRules := len(*securityGroup.SecurityRules)
 	expectedRuleCount := len(seenRules)
-	if lenRules != expectedRuleCount {
-		t.Errorf("Expected the loadbalancer to have %d rules. Found %d.\n", expectedRuleCount, lenRules)
-	}
+	assert.Equalf(t, expectedRuleCount, lenRules, "Expected rules: %v", seenRules)
 }
 
 func TestSecurityRulePriorityPicksNextAvailablePriority(t *testing.T) {
@@ -2467,12 +2499,12 @@ func TestIfServiceSpecifiesSharedRuleAndRuleDoesNotExistItIsCreated(t *testing.T
 	setMockSecurityGroup(az, ctrl, sg)
 
 	isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, &[]string{getServiceLoadBalancerIP(&svc, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc)
+	validateSecurityGroup(t, az, sg, svc)
 
 	expectedRuleName := testRuleName
 	_, securityRule, ruleFound := findSecurityRuleByName(*sg.SecurityRules, expectedRuleName)
@@ -2527,12 +2559,12 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 	setMockSecurityGroup(az, ctrl, sg)
 
 	isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc, &[]string{getServiceLoadBalancerIP(&svc, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc)
+	validateSecurityGroup(t, az, sg, svc)
 
 	_, securityRule, ruleFound := findSecurityRuleByName(*sg.SecurityRules, expectedRuleName)
 	if !ruleFound {
@@ -2572,19 +2604,19 @@ func TestIfServicesSpecifySharedRuleButDifferentPortsThenSeparateRulesAreCreated
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2)
+	validateSecurityGroup(t, az, sg, svc1, svc2)
 
 	_, securityRule1, rule1Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName2)
 	if !rule1Found {
@@ -2647,19 +2679,19 @@ func TestIfServicesSpecifySharedRuleButDifferentProtocolsThenSeparateRulesAreCre
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2)
+	validateSecurityGroup(t, az, sg, svc1, svc2)
 
 	_, securityRule1, rule1Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName2)
 	if !rule1Found {
@@ -2722,19 +2754,19 @@ func TestIfServicesSpecifySharedRuleButDifferentSourceAddressesThenSeparateRules
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2)
+	validateSecurityGroup(t, az, sg, svc1, svc2)
 
 	_, securityRule1, rule1Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName2)
 	if !rule1Found {
@@ -2799,26 +2831,26 @@ func TestIfServicesSpecifySharedRuleButSomeAreOnDifferentPortsThenRulesAreSepara
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, &[]string{getServiceLoadBalancerIP(&svc3, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2, svc3)
+	validateSecurityGroup(t, az, sg, svc1, svc2, svc3)
 
 	_, securityRule13, rule13Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName23)
 	if !rule13Found {
@@ -2902,28 +2934,28 @@ func TestIfServiceSpecifiesSharedRuleAndServiceIsDeletedThenTheServicesPortAndAd
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2)
+	validateSecurityGroup(t, az, sg, svc1, svc2)
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc2)
+	validateSecurityGroup(t, az, sg, svc2)
 
 	_, securityRule, ruleFound := findSecurityRuleByName(*sg.SecurityRules, expectedRuleName)
 	if !ruleFound {
@@ -2968,35 +3000,35 @@ func TestIfSomeServicesShareARuleAndOneIsDeletedItIsRemovedFromTheRightRule(t *t
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, &[]string{getServiceLoadBalancerIP(&svc3, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2, svc3)
+	validateSecurityGroup(t, az, sg, svc1, svc2, svc3)
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc2, svc3)
+	validateSecurityGroup(t, az, sg, svc2, svc3)
 
 	_, securityRule13, rule13Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName23)
 	if !rule13Found {
@@ -3083,42 +3115,42 @@ func TestIfServiceSpecifiesSharedRuleAndLastServiceIsDeletedThenRuleIsDeleted(t 
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 := utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, true)
+	sg, err := az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc2.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, pointer.String(getServiceLoadBalancerIP(&svc2, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc2, &[]string{getServiceLoadBalancerIP(&svc2, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc2: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, true)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, &[]string{getServiceLoadBalancerIP(&svc3, isIPv6)}, nil, true)
 	if err != nil {
 		t.Errorf("Unexpected error adding svc3: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2, svc3)
+	validateSecurityGroup(t, az, sg, svc1, svc2, svc3)
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc3.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, pointer.String(getServiceLoadBalancerIP(&svc3, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc3, &[]string{getServiceLoadBalancerIP(&svc3, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc3: %q", err)
 	}
 
-	validateSecurityGroup(t, sg, svc2)
+	validateSecurityGroup(t, az, sg, svc2)
 
 	_, _, rule13Found := findSecurityRuleByName(*sg.SecurityRules, testRuleName23)
 	if rule13Found {
@@ -3191,13 +3223,13 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 		svc := svc
 		setMockSecurityGroup(az, ctrl, sg)
 		isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
-		sg, err = az.reconcileSecurityGroup(testClusterName, &testServices[i], pointer.String(getServiceLoadBalancerIP(&svc, isIPv6)), nil, true)
+		sg, err = az.reconcileSecurityGroup(testClusterName, &testServices[i], &[]string{getServiceLoadBalancerIP(&svc, isIPv6)}, nil, true)
 		if err != nil {
 			t.Errorf("Unexpected error adding svc%d: %q", i+1, err)
 		}
 	}
 
-	validateSecurityGroup(t, sg, svc1, svc2, svc3, svc4, svc5)
+	validateSecurityGroup(t, az, sg, svc1, svc2, svc3, svc4, svc5)
 
 	expectedRuleCount := 4
 	if len(*sg.SecurityRules) != expectedRuleCount {
@@ -3287,14 +3319,14 @@ func TestCanCombineSharedAndPrivateRulesInSameGroup(t *testing.T) {
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc1.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, pointer.String(getServiceLoadBalancerIP(&svc1, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc1, &[]string{getServiceLoadBalancerIP(&svc1, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc1: %q", err)
 	}
 
 	setMockSecurityGroup(az, ctrl, sg)
 	isIPv6 = utilnet.IsIPv6String(svc5.Spec.ClusterIP)
-	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, pointer.String(getServiceLoadBalancerIP(&svc5, isIPv6)), nil, false)
+	sg, err = az.reconcileSecurityGroup(testClusterName, &svc5, &[]string{getServiceLoadBalancerIP(&svc5, isIPv6)}, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error removing svc5: %q", err)
 	}
@@ -3855,4 +3887,113 @@ func TestFindSecurityRule(t *testing.T) {
 		found := findSecurityRule([]network.SecurityRule{sg}, testCases[i].testRule)
 		assert.Equal(t, testCases[i].expected, found, testCases[i].desc)
 	}
+}
+
+func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string, service v1.Service, lbSku string) network.LoadBalancer {
+	caser := cases.Title(language.English)
+	lb := network.LoadBalancer{
+		Name: name,
+		Sku: &network.LoadBalancerSku{
+			Name: network.LoadBalancerSkuName(lbSku),
+		},
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+				{
+					Name: pointer.String(*identifier + "-IPv4"),
+					ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+						"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier + "-IPv4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("testCluster-aservice1-IPv4")},
+					},
+				},
+				{
+					Name: pointer.String(*identifier + "-IPv6"),
+					ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+						"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier + "-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("testCluster-aservice1-IPv6")},
+					},
+				},
+			},
+			BackendAddressPools: &[]network.BackendAddressPool{
+				{Name: clusterName},
+				{Name: pointer.String(*clusterName + "-IPv6")},
+			},
+			Probes: &[]network.Probe{
+				{
+					Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
+						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv4"),
+					ProbePropertiesFormat: &network.ProbePropertiesFormat{
+						Port:              pointer.Int32(10080),
+						Protocol:          network.ProbeProtocolTCP,
+						IntervalInSeconds: pointer.Int32(5),
+						NumberOfProbes:    pointer.Int32(2),
+					},
+				},
+				{
+					Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
+						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv6"),
+					ProbePropertiesFormat: &network.ProbePropertiesFormat{
+						Port:              pointer.Int32(10080),
+						Protocol:          network.ProbeProtocolTCP,
+						IntervalInSeconds: pointer.Int32(5),
+						NumberOfProbes:    pointer.Int32(2),
+					},
+				},
+			},
+			LoadBalancingRules: &[]network.LoadBalancingRule{
+				{
+					Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
+						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv4"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						Protocol: network.TransportProtocol(caser.String((strings.ToLower(string(service.Spec.Ports[0].Protocol))))),
+						FrontendIPConfiguration: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+								"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/aservice1-IPv4"),
+						},
+						BackendAddressPool: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+								"Microsoft.Network/loadBalancers/" + *name + "/backendAddressPools/" + *clusterName + "-IPv4"),
+						},
+						LoadDistribution:     network.LoadDistribution("Default"),
+						FrontendPort:         pointer.Int32(service.Spec.Ports[0].Port),
+						BackendPort:          pointer.Int32(service.Spec.Ports[0].Port),
+						EnableFloatingIP:     pointer.Bool(true),
+						EnableTCPReset:       pointer.Bool(strings.EqualFold(lbSku, "standard")),
+						DisableOutboundSnat:  pointer.Bool(false),
+						IdleTimeoutInMinutes: pointer.Int32(4),
+						Probe: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/testCluster/probes/aservice1-TCP-80-IPv4"),
+						},
+					},
+				},
+				{
+					Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
+						"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv6"),
+					LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
+						Protocol: network.TransportProtocol(caser.String((strings.ToLower(string(service.Spec.Ports[0].Protocol))))),
+						FrontendIPConfiguration: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+								"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/aservice1-IPv6"),
+						},
+						BackendAddressPool: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
+								"Microsoft.Network/loadBalancers/" + *name + "/backendAddressPools/" + *clusterName + "-IPv6"),
+						},
+						LoadDistribution:     network.LoadDistribution("Default"),
+						FrontendPort:         pointer.Int32(service.Spec.Ports[0].Port),
+						BackendPort:          pointer.Int32(service.Spec.Ports[0].Port),
+						EnableFloatingIP:     pointer.Bool(true),
+						EnableTCPReset:       pointer.Bool(strings.EqualFold(lbSku, "standard")),
+						DisableOutboundSnat:  pointer.Bool(false),
+						IdleTimeoutInMinutes: pointer.Int32(4),
+						Probe: &network.SubResource{
+							ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/Microsoft.Network/loadBalancers/testCluster/probes/aservice1-TCP-80-IPv6"),
+						},
+					},
+				},
+			},
+		},
+	}
+	return lb
 }

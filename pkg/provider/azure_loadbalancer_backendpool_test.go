@@ -159,8 +159,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			az.LoadBalancerClient = lbClient
 
-			service := getTestService("svc-1", v1.ProtocolTCP, nil, false, 80)
-			makeTestServiceDualStack(&service)
+			service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
 			err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedBackendPool, tc.backendPool)

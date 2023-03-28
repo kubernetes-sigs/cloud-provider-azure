@@ -311,8 +311,7 @@ func (az *Cloud) getSecurityRuleName(service *v1.Service, port v1.ServicePort, s
 	}
 	rulePrefix := az.getRulePrefix(service)
 	name := fmt.Sprintf("%s-%s-%d-%s", rulePrefix, port.Protocol, port.Port, safePrefix)
-	// TODO: Use getResourceByIPFamily
-	return name
+	return getResourceByIPFamily(name, isIPv6)
 }
 
 // This returns a human-readable version of the Service used to tag some resources.
