@@ -2554,7 +2554,7 @@ func getTestProbe(protocol, path string, interval, port, numOfProbe *int32) netw
 			Protocol:          network.ProbeProtocol(protocol),
 			Port:              port,
 			IntervalInSeconds: interval,
-			NumberOfProbes:    numOfProbe,
+			ProbeThreshold:    numOfProbe,
 		},
 	}
 	if (strings.EqualFold(protocol, "Http") || strings.EqualFold(protocol, "Https")) && len(strings.TrimSpace(path)) > 0 {
@@ -2699,7 +2699,7 @@ func getTestLoadBalancer(name, rgName, clusterName, identifier *string, service 
 						Port:              pointer.Int32(10080),
 						Protocol:          network.ProbeProtocolTCP,
 						IntervalInSeconds: pointer.Int32(5),
-						NumberOfProbes:    pointer.Int32(2),
+						ProbeThreshold:    pointer.Int32(2),
 					},
 				},
 			},
@@ -2972,7 +2972,7 @@ func TestReconcileLoadBalancer(t *testing.T) {
 				RequestPath:       pointer.String("/healthz"),
 				Protocol:          network.ProbeProtocolHTTP,
 				IntervalInSeconds: pointer.Int32(5),
-				NumberOfProbes:    pointer.Int32(2),
+				ProbeThreshold:    pointer.Int32(2),
 			},
 		},
 	}
@@ -3000,7 +3000,7 @@ func TestReconcileLoadBalancer(t *testing.T) {
 				Port:              pointer.Int32(10080),
 				Protocol:          network.ProbeProtocolTCP,
 				IntervalInSeconds: pointer.Int32(5),
-				NumberOfProbes:    pointer.Int32(2),
+				ProbeThreshold:    pointer.Int32(2),
 			},
 		},
 	}
