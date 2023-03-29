@@ -32,17 +32,17 @@ TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 
 ALL_ARCH.linux = amd64 arm arm64
 # as windows server core does not support arm64 windows image, trakced by the following link,
-# and only 1809/ltsc2019 has arm64 nanoserver support, we support here only amd64 windows image
+# and only 1809 has arm64 nanoserver support, we support here only amd64 windows image
 # https://github.com/microsoft/Windows-Containers/issues/195
 ALL_ARCH.windows = amd64
-ALL_OSVERSIONS.windows := ltsc2019 ltsc2022
+ALL_OSVERSIONS.windows := 1809 2004 20H2 ltsc2022
 ALL_OS_ARCH.windows = $(foreach arch, $(ALL_ARCH.windows), $(foreach osversion, ${ALL_OSVERSIONS.windows}, ${osversion}-${arch}))
 
 # The current context of image building
 # The architecture of the image
 ARCH ?= amd64
-# OS Version for the Windows images: ltsc2019, ltsc2022
-WINDOWS_OSVERSION ?= ltsc2019
+# OS Version for the Windows images: 1809, 2004, 20H2, ltsc2022
+WINDOWS_OSVERSION ?= 1809
 # The output type for `docker buildx build` could either be docker (local), or registry.
 OUTPUT_TYPE ?= docker
 
