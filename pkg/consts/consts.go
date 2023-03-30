@@ -461,8 +461,10 @@ const (
 	HealthProbeParamsProtocol HealthProbeParams = "protocol"
 
 	// HealthProbeParamsPort determines the probe port for the health probe params.
-	// It always takes priority over the NodePort of the spec.ports in a Service
-	HealthProbeParamsPort HealthProbeParams = "port"
+	// It always takes priority over the NodePort of the spec.ports in a Service.
+	// If not set, the kube-proxy health port (10256) will be configured by default.
+	HealthProbeParamsPort         HealthProbeParams = "port"
+	HealthProbeDefaultRequestPort int32             = 10256
 
 	// HealthProbeParamsProbeInterval determines the probe interval of the load balancer health probe.
 	// The minimum probe interval is 5 seconds and the default value is 5. The total duration of all intervals cannot exceed 120 seconds.
@@ -478,7 +480,7 @@ const (
 	// This is only useful for the HTTP and HTTPS, and would be ignored when using TCP. If not set,
 	// `/healthz` would be configured by default.
 	HealthProbeParamsRequestPath  HealthProbeParams = "request-path"
-	HealthProbeDefaultRequestPath string            = "/"
+	HealthProbeDefaultRequestPath string            = "/healthz"
 )
 
 type HealthProbeParams string

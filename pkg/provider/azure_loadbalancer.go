@@ -2212,20 +2212,22 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 		}
 	}
 
-	// 4. Finally, if protocol is still nil, default to TCP
+	// 4. Finally, if protocol is still nil, default to HTTP
 	if protocol == nil {
-		protocol = pointer.String(string(network.ProtocolTCP))
+		protocol = pointer.String(string(network.ProtocolHTTP))
 	}
 
 	*protocol = strings.TrimSpace(*protocol)
 	switch {
 	case strings.EqualFold(*protocol, string(network.ProtocolTCP)):
 		properties.Protocol = network.ProbeProtocolTCP
+		properties.Port = &port.NodePort
 	case strings.EqualFold(*protocol, string(network.ProtocolHTTPS)):
 		//HTTPS probe is only supported in standard loadbalancer
 		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
 		if !az.useStandardLoadBalancer() {
 			properties.Protocol = network.ProbeProtocolTCP
+			properties.Port = &port.NodePort
 		} else {
 			properties.Protocol = network.ProbeProtocolHTTPS
 		}
@@ -2234,10 +2236,13 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 	default:
 		//For backward compatibility,when unsupported protocol is used, fall back to tcp protocol in basic lb mode instead
 		properties.Protocol = network.ProbeProtocolTCP
+		properties.Port = &port.NodePort
 	}
 
 	// Lookup or Override Health Probe Port
-	properties.Port = &port.NodePort
+	if properties.Port == nil {
+		properties.Port = pointer.Int32Ptr(consts.HealthProbeDefaultRequestPort)
+	}
 
 	probePort, err := consts.GetHealthProbeConfigOfPortFromK8sSvcAnnotation(serviceManifest.Annotations, port.Port, consts.HealthProbeParamsPort, func(s *string) error {
 		if s == nil {

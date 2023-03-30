@@ -2050,7 +2050,7 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 				} else {
 					for _, actualProbe := range *loadBalancer.Probes {
 						if strings.EqualFold(*actualProbe.Name, wantedRuleNameMap[isIPv6]) &&
-							*actualProbe.Port == wantedRule.NodePort {
+							*actualProbe.Port == consts.HealthProbeDefaultRequestPort {
 							foundProbe = true
 							break
 						}
