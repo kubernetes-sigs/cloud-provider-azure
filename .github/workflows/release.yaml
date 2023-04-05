@@ -169,7 +169,7 @@ jobs:
             ./artifacts/cloud-controller-manager-*-*/*
             ./artifacts/acr-credential-provider-*-*/*
       - name: Update site release note
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v5
         with:
           branch: doc/release-note-${{github.ref_name}}
           delete-branch: true
