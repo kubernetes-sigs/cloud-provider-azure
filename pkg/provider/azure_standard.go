@@ -56,6 +56,10 @@ var (
 	vmasIDRE           = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/availabilitySets/(.+)`)
 )
 
+const (
+	v6Suffix = "IPv6"
+)
+
 // getStandardMachineID returns the full identifier of a virtual machine.
 func (az *Cloud) getStandardMachineID(subscriptionID, resourceGroup, machineName string) string {
 	return fmt.Sprintf(
@@ -279,6 +283,11 @@ func getBackendPoolName(clusterName string, service *v1.Service) string {
 	}
 
 	return clusterName
+}
+
+// ifBackendPoolIPv6 checks if a backend pool is of IPv6 according to name/ID.
+func isBackendPoolIPv6(name string) bool {
+	return strings.HasSuffix(name, fmt.Sprintf("-%s", v6Suffix))
 }
 
 func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protocol, port int32) string {
