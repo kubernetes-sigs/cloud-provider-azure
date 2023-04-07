@@ -66,6 +66,7 @@ cloudNodeManager:
   # nodeStatusUpdateFrequency: "10m"
   # waitRoutes: "false"
   # useInstanceMetadata: "true"
+  logVerbosity: "2"
   containerResourceManagement:
     requestsCPU: "50m"
     requestsMem: "50Mi"

@@ -406,6 +406,7 @@ spec:
             {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
             - "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
             {{- end }}
+            - "--v={{ .Values.cloudNodeManager.logVerbosity }}"
           env:
             - name: NODE_NAME
               valueFrom:
@@ -492,7 +493,9 @@ spec:
         image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
         imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
         command: ["powershell.exe"]
-        args: ["$env:CONTAINER_SANDBOX_MOUNT_POINT/scripts/start.ps1"]
+        args:
+          - "$env:CONTAINER_SANDBOX_MOUNT_POINT/scripts/start.ps1"
+          - "--v={{ .Values.cloudNodeManager.logVerbosity }}"
         env:
         - name: NODE_NAME
           valueFrom:
