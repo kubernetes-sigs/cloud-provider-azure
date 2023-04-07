@@ -128,6 +128,7 @@ func genreteTestVmssFlex() compute.VirtualMachineScaleSet {
 													ID: pointer.String(testBackendPoolID0),
 												},
 											},
+											Primary: pointer.Bool(true),
 										},
 									},
 								},
