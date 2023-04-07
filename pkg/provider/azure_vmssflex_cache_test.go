@@ -129,6 +129,7 @@ func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.Vir
 													ID: pointer.String(testBackendPoolID0),
 												},
 											},
+											Primary: pointer.Bool(true),
 										},
 									},
 								},
