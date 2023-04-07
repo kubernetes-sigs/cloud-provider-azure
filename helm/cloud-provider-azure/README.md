@@ -87,6 +87,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | `cloudNodeManager.imageRepository` | `"mcr.microsoft.com/oss/kubernetes"` | container image repository (including any image project directories) location where the Azure `cloud-node-manager` container image is hosted |
 | `cloudNodeManager.imageName` | `"azure-cloud-node-manager"` | container image name for the Azure `cloud-node-manager` runtime |
 | `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
+| `cloudNodeManager.logVerbosity`                            | `"2"`                                | set to a higher number when debugging the azure-cloud-node-manager runtime                                                                                                 |
 | `cloudNodeManager.containerResourceManagement.requestsCPU` | `"50m"` | CPU requests configuration for the azure-cloud-node-manager pod running on Linux nodes |
 | `cloudNodeManager.containerResourceManagement.requestsMem` | `"50Mi"` | Memory requests configuration for the azure-cloud-node-manager pod running on Linux nodes |
 | `cloudNodeManager.containerResourceManagement.limitsCPU` | `"2"` | CPU limits configuration for the azure-cloud-node-manager pod running on Linux nodes |
