@@ -2310,6 +2310,7 @@ func TestGetPublicIPName(t *testing.T) {
 	testcases := []struct {
 		desc            string
 		svc             *v1.Service
+		pips            *[]network.PublicIPAddress
 		isIPv6          bool
 		expectedPIPName string
 	}{
@@ -2321,6 +2322,7 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
 				},
 			},
+			pips:            &[]network.PublicIPAddress{},
 			isIPv6:          false,
 			expectedPIPName: "azure-auid",
 		},
@@ -2337,6 +2339,7 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
 				},
 			},
+			pips:            &[]network.PublicIPAddress{},
 			isIPv6:          false,
 			expectedPIPName: "azure-auid-prefix-id",
 		},
@@ -2354,6 +2357,7 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
+			pips:            &[]network.PublicIPAddress{},
 			isIPv6:          false,
 			expectedPIPName: "azure-auid-prefix-id",
 		},
@@ -2371,19 +2375,42 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
+			pips:            &[]network.PublicIPAddress{},
 			isIPv6:          true,
 			expectedPIPName: "azure-auid-prefix-id-ipv6-IPv6",
+		},
+		{
+			desc: "Service PIP IPv6 only with existing PIP",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+				},
+			},
+			pips: &[]network.PublicIPAddress{
+				{
+					Name: pointer.String("auid"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+					},
+				},
+			},
+			isIPv6:          true,
+			expectedPIPName: "auid",
 		},
 	}
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
+	rg := "rg0"
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
-			name := az.getPublicIPName("azure", tc.svc, tc.isIPv6)
+			name, err := az.getPublicIPName("azure", tc.svc, rg, tc.pips, tc.isIPv6)
+			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedPIPName, name)
 		})
 	}
-
 }

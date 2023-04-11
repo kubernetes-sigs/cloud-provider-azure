@@ -319,7 +319,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 	}
 	for i, test := range testCases {
 		az := GetTestCloud(ctrl)
-		service := getTestServiceWithAnnotation("test", test.annotations, 80)
+		service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
 		fipConfig := &network.FrontendIPConfiguration{
 			Name: pointer.String("fipConfig"),
 			ID:   pointer.String("fipConfigID"),
