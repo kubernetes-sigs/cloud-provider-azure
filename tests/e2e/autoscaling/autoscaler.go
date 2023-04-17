@@ -87,7 +87,11 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(err).NotTo(HaveOccurred())
 
 		initNodeCount = len(nodes)
-		utils.Logf("Initial number of schedulable nodes: %v", initNodeCount)
+		nodeNames := []string{}
+		for _, node := range nodes {
+			nodeNames = append(nodeNames, node.Name)
+		}
+		utils.Logf("Initial schedulable nodes (%d): %q", initNodeCount, nodeNames)
 
 		initNodepoolNodeMap = utils.GetNodepoolNodeMap(&nodes)
 		utils.Logf("found %d node pools", len(initNodepoolNodeMap))
@@ -107,6 +111,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 			err := utils.DeleteNamespace(cs, ns.Name)
 			Expect(err).NotTo(HaveOccurred())
 
+			// TODO: Should not delete because old Nodes may be replaced by new ones
 			//delete extra nodes
 			nodes, err := utils.GetAgentNodes(cs)
 			Expect(err).NotTo(HaveOccurred())

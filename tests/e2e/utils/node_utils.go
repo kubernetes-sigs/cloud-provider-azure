@@ -213,6 +213,7 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 	var err error
 	poll := 60 * time.Second
 	autoScaleTimeOut := 90 * time.Minute
+	nodeConditions := map[string][]v1.NodeCondition{}
 	if err = wait.PollImmediate(poll, autoScaleTimeOut, func() (bool, error) {
 		nodes, err = GetAgentNodes(cs)
 		if err != nil {
@@ -225,16 +226,22 @@ func WaitAutoScaleNodes(cs clientset.Interface, targetNodeCount int, isScaleDown
 			err = fmt.Errorf("Unexpected nil node list")
 			return false, err
 		}
+		nodeConditions = map[string][]v1.NodeCondition{}
+		for _, node := range nodes {
+			nodeConditions[node.Name] = node.Status.Conditions
+		}
 		Logf("Detect %v nodes, target %v", len(nodes), targetNodeCount)
 		if len(nodes) > targetNodeCount && !isScaleDown {
-			Logf("error: more nodes than expected")
+			Logf("error: more nodes than expected, Node conditions: %v", nodeConditions)
 			err = fmt.Errorf("there are more nodes than expected")
 			return false, err
 		}
 		return (targetNodeCount > len(nodes) && isScaleDown) || targetNodeCount == len(nodes), nil
 	}); errors.Is(err, wait.ErrWaitTimeout) {
+		Logf("Node conditions: %v", nodeConditions)
 		return fmt.Errorf("Fail to get target node count in limited time")
 	}
+	Logf("Node conditions: %v", nodeConditions)
 	return err
 }
 
