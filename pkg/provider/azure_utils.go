@@ -447,26 +447,29 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 }
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
-func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pipResourceGroup string, isInternal bool) (isIPv6 bool, err error) {
-	pips, err := az.listPIP(pipResourceGroup)
-	if err != nil {
-		return false, fmt.Errorf("isFIPIPv6: failed to list pip: %w", err)
-	}
+func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfiguration, isInternal bool) (bool, error) {
 	if isInternal {
 		if fip.FrontendIPConfigurationPropertiesFormat != nil {
 			if fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion != "" {
 				return fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion == network.IPv6, nil
 			}
-			return net.ParseIP(pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress, "")).To4() == nil, nil
+			if fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress != nil {
+				return net.ParseIP(*fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress).To4() == nil, nil
+			}
 		}
-		klog.Errorf("Checking IP Family of frontend IP configuration %q of internal Service but its"+
-			" FrontendIPConfigurationPropertiesFormat is nil. It's considered to be IPv4",
+		klog.Errorf("Checking IP Family of frontend IP configuration %q of internal Service but "+
+			"it is not clear. It's considered to be IPv4",
 			pointer.StringDeref(fip.Name, ""))
-		return
+		return false, nil
 	}
 	var fipPIPID string
 	if fip.FrontendIPConfigurationPropertiesFormat != nil && fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
 		fipPIPID = pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress.ID, "")
+	}
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+	pips, err := az.listPIP(pipResourceGroup)
+	if err != nil {
+		return false, err
 	}
 	for _, pip := range pips {
 		id := pointer.StringDeref(pip.ID, "")
@@ -475,15 +478,19 @@ func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pipResourceGrou
 		}
 		if pip.PublicIPAddressPropertiesFormat != nil {
 			// First check PublicIPAddressVersion, then IPAddress
-			if pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion == network.IPv6 ||
-				net.ParseIP(pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, "")).To4() == nil {
-				isIPv6 = true
-				break
+			if pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion != "" {
+				return pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion == network.IPv6, nil
+			}
+			if pip.PublicIPAddressPropertiesFormat.IPAddress != nil {
+				return net.ParseIP(pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, "")).To4() == nil, nil
 			}
 		}
+		klog.Errorf("Checking IP Family of PIP %q of corresponding frontend IP configuration %q of external Service but "+
+			"it is not clear. It's considered to be IPv4",
+			pointer.StringDeref(pip.Name, ""), pointer.StringDeref(fip.Name, ""))
 		break
 	}
-	return isIPv6, nil
+	return false, nil
 }
 
 // getResourceIDPrefix returns a substring from the provided one between beginning and the last "/".
@@ -493,4 +500,22 @@ func getResourceIDPrefix(id string) string {
 		return id // Should not happen
 	}
 	return id[:idx]
+}
+
+// fillSubnet fills subnet value into the variable.
+func (az *Cloud) fillSubnet(subnet *network.Subnet, subnetName string) error {
+	if subnet == nil {
+		return fmt.Errorf("subnet is nil, should not happen")
+	}
+	if subnet.ID == nil {
+		curSubnet, existsSubnet, err := az.getSubnet(az.VnetName, subnetName)
+		if err != nil {
+			return err
+		}
+		if !existsSubnet {
+			return fmt.Errorf("failed to get subnet: %s/%s", az.VnetName, subnetName)
+		}
+		*subnet = curSubnet
+	}
+	return nil
 }
