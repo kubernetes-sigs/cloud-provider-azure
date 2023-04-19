@@ -21,18 +21,17 @@ In order to switch the kubelet credential provider to out-of-tree, you'll have t
 ```yaml
 # cat /var/lib/kubelet/credential-provider-config.yaml
 kind: CredentialProviderConfig
-apiVersion: kubelet.config.k8s.io/v1alpha1
+apiVersion: kubelet.config.k8s.io/v1
 providers:
 - name: acr-credential-provider
-  apiVersion: credentialprovider.kubelet.k8s.io/v1alpha1
+  apiVersion: credentialprovider.kubelet.k8s.io/v1
   defaultCacheDuration: 10m
   matchImages:
   - "*.azurecr.io"
   - "*.azurecr.cn"
   - "*.azurecr.de"
   - "*.azurecr.us"
-  - "*.azurecr.*" # Only required for custom Azure cloud.
   args:
-  - /etc/kubernetes/cloud-config/azure.json
+  - /etc/kubernetes/azure.json
 ```
 
