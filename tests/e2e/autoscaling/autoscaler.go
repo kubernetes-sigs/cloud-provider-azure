@@ -111,34 +111,9 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 			err := utils.DeleteNamespace(cs, ns.Name)
 			Expect(err).NotTo(HaveOccurred())
 
-			// TODO: Should not delete because old Nodes may be replaced by new ones
-			//delete extra nodes
-			nodes, err := utils.GetAgentNodes(cs)
-			Expect(err).NotTo(HaveOccurred())
-
-			nodesNotToBeDeleted := make([]string, 0)
-			for _, nodes := range initNodepoolNodeMap {
-				nodesNotToBeDeleted = append(nodesNotToBeDeleted, nodes...)
-			}
-
-			nodesToBeDeleted := make([]string, 0)
-			nodeToBeDeletedCount := 0
-			if len(nodes)-initNodeCount > 0 {
-				nodeToBeDeletedCount = len(nodes) - initNodeCount
-			}
-
-			for _, node := range nodes {
-				if nodeToBeDeletedCount == 0 {
-					break
-				}
-
-				if !utils.StringInSlice(node.Name, nodesNotToBeDeleted) {
-					nodesToBeDeleted = append(nodesToBeDeleted, node.Name)
-					nodeToBeDeletedCount--
-				}
-			}
-
-			err = utils.DeleteNodes(cs, nodesToBeDeleted)
+			// NOTICE: When scaling up and down, CAS creates a new instance and deletes an old one.
+			// So it is enough to just ensure the Node count equals VMSS VMs.
+			err = utils.WaitVMSSVMCountToEqualNodeCount(tc)
 			Expect(err).NotTo(HaveOccurred())
 		}
 

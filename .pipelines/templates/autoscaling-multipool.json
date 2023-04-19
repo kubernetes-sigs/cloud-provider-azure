@@ -9,7 +9,7 @@
     "agentPoolProfiles": [
       {
         "name": "agentpool1",
-        "count": 1,
+        "count": 3,
         "mode" : "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
@@ -20,7 +20,7 @@
       },
       {
         "name": "agentpool2",
-        "count": 1,
+        "count": 3,
         "mode" : "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
