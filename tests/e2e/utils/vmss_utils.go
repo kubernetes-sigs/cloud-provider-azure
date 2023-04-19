@@ -161,6 +161,46 @@ func waitVMSSVMCountToEqual(tc *AzureTestClient, expected int, vmssName string) 
 	return err
 }
 
+// WaitVMSSVMCountToEqualNodeCount waits until the number of VMSS VMs equals the number of Nodes.
+func WaitVMSSVMCountToEqualNodeCount(tc *AzureTestClient) error {
+	cs, err := CreateKubeClientSet()
+	if err != nil {
+		return err
+	}
+
+	vmssList, _ := ListUniformVMSSes(tc)
+	vmssNames := []string{}
+	for _, vmss := range vmssList {
+		if vmss.Name == nil {
+			return fmt.Errorf("VMSS name is nil, VMSS: %v", vmss)
+		}
+		vmssNames = append(vmssNames, *vmss.Name)
+	}
+
+	err = wait.PollImmediate(vmssOperationInterval, vmssOperationTimeout, func() (bool, error) {
+		nodes, err := GetAgentNodes(cs)
+		if err != nil {
+			return false, err
+		}
+
+		vmssVMCount := 0
+		for _, vmssName := range vmssNames {
+			vms, err := ListVMSSVMs(tc, vmssName)
+			if err != nil {
+				return false, err
+			}
+			vmssVMCount += len(vms)
+		}
+		if vmssVMCount == len(nodes) {
+			return true, nil
+		}
+
+		Logf("Number of VMSS instances %d doesn't equal number of Nodes %d (will retry)", vmssVMCount, len(nodes))
+		return false, nil
+	})
+	return err
+}
+
 func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map[string]int64, originalNodes []v1.Node) error {
 	k8sCli, err := CreateKubeClientSet()
 	if err != nil {
