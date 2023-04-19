@@ -30,6 +30,7 @@ updates:
       - "approved"
   - package-ecosystem: "gomod"
     directory: "/pkg/azureclients/v2/"
+    open-pull-requests-limit: 1
     schedule:
       interval: daily
       time: "01:00"
@@ -97,6 +98,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.24"
     target-branch: "release-1.24"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -116,6 +118,8 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+      - "release-1.24"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -130,6 +134,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.24"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -144,6 +149,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.23"
     target-branch: "release-1.23"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -162,6 +168,7 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+      - "release-1.23"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -176,6 +183,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.23"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -190,6 +198,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.25"
     target-branch: "release-1.25"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -209,6 +218,7 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+      - "release-1.25"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -223,6 +233,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.25"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
@@ -237,6 +248,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.26"
     target-branch: "release-1.26"
     ignore:
       - dependency-name: "k8s.io/*"
@@ -256,6 +268,7 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+      - "release-1.26"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -270,4 +283,6 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+      - "release-1.26"
+
 
