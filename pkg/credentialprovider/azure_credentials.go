@@ -32,7 +32,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/kubelet/pkg/apis/credentialprovider/v1alpha1"
+	v1 "k8s.io/kubelet/pkg/apis/credentialprovider/v1"
 )
 
 // Refer: https://github.com/kubernetes/kubernetes/blob/master/pkg/credentialprovider/azure/azure_credentials.go
@@ -50,7 +50,7 @@ var (
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
 // the username/password based on the provided image name.
 type CredentialProvider interface {
-	GetCredentials(ctx context.Context, image string, args []string) (response *v1alpha1.CredentialProviderResponse, err error)
+	GetCredentials(ctx context.Context, image string, args []string) (response *v1.CredentialProviderResponse, err error)
 }
 
 // acrProvider implements the credential provider interface for Azure Container Registry.
@@ -93,21 +93,21 @@ func newAcrProviderFromConfigReader(configReader io.Reader) (*acrProvider, error
 	}, nil
 }
 
-func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []string) (*v1alpha1.CredentialProviderResponse, error) {
+func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []string) (*v1.CredentialProviderResponse, error) {
 	loginServer := a.parseACRLoginServerFromImage(image)
 	if loginServer == "" {
 		klog.V(2).Infof("image(%s) is not from ACR, return empty authentication", image)
-		return &v1alpha1.CredentialProviderResponse{
-			CacheKeyType:  v1alpha1.RegistryPluginCacheKeyType,
+		return &v1.CredentialProviderResponse{
+			CacheKeyType:  v1.RegistryPluginCacheKeyType,
 			CacheDuration: &metav1.Duration{Duration: 0},
-			Auth:          map[string]v1alpha1.AuthConfig{},
+			Auth:          map[string]v1.AuthConfig{},
 		}, nil
 	}
 
-	response := &v1alpha1.CredentialProviderResponse{
-		CacheKeyType:  v1alpha1.RegistryPluginCacheKeyType,
+	response := &v1.CredentialProviderResponse{
+		CacheKeyType:  v1.RegistryPluginCacheKeyType,
 		CacheDuration: &metav1.Duration{Duration: defaultCacheTTL},
-		Auth: map[string]v1alpha1.AuthConfig{
+		Auth: map[string]v1.AuthConfig{
 			// empty username and password for anonymous ACR access
 			"*.azurecr.*": {
 				Username: "",
@@ -123,14 +123,14 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []s
 			return nil, err
 		}
 
-		response.Auth[loginServer] = v1alpha1.AuthConfig{
+		response.Auth[loginServer] = v1.AuthConfig{
 			Username: username,
 			Password: password,
 		}
 	} else {
 		// Add our entry for each of the supported container registry URLs
 		for _, url := range containerRegistryUrls {
-			cred := v1alpha1.AuthConfig{
+			cred := v1.AuthConfig{
 				Username: a.config.AADClientID,
 				Password: a.config.AADClientSecret,
 			}
@@ -150,7 +150,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []s
 			}
 
 			if !hasBeenAdded {
-				cred := v1alpha1.AuthConfig{
+				cred := v1.AuthConfig{
 					Username: a.config.AADClientID,
 					Password: a.config.AADClientSecret,
 				}
