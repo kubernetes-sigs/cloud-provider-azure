@@ -3917,3 +3917,13 @@ func TestFindSecurityRule(t *testing.T) {
 		assert.Equal(t, testCases[i].expected, found, testCases[i].desc)
 	}
 }
+
+func TestSetLBDefaults(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+
+	config := &Config{}
+	_ = az.setLBDefaults(config)
+	assert.Equal(t, config.LoadBalancerSku, consts.LoadBalancerSkuStandard)
+}

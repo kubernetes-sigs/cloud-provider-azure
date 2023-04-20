@@ -706,6 +706,10 @@ func (az *Cloud) initCaches() (err error) {
 }
 
 func (az *Cloud) setLBDefaults(config *Config) error {
+	if config.LoadBalancerSku == "" {
+		config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+	}
+
 	if strings.EqualFold(config.LoadBalancerSku, consts.LoadBalancerSkuStandard) {
 		// Do not add master nodes to standard LB by default.
 		if config.ExcludeMasterFromStandardLB == nil {
