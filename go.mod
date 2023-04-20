@@ -21,12 +21,12 @@ require (
 	golang.org/x/crypto v0.7.0
 	golang.org/x/sys v0.7.0
 	golang.org/x/text v0.9.0
-	k8s.io/api v0.26.3
-	k8s.io/apimachinery v0.26.3
-	k8s.io/apiserver v0.26.3
-	k8s.io/client-go v0.26.3
+	k8s.io/api v0.26.4
+	k8s.io/apimachinery v0.26.4
+	k8s.io/apiserver v0.26.4
+	k8s.io/client-go v0.26.4
 	k8s.io/cloud-provider v0.26.3
-	k8s.io/component-base v0.26.3
+	k8s.io/component-base v0.26.4
 	k8s.io/component-helpers v0.26.3
 	k8s.io/controller-manager v0.26.3
 	k8s.io/klog/v2 v2.80.1
@@ -124,7 +124,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.26.3 // indirect
+	k8s.io/kms v0.26.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.36 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
