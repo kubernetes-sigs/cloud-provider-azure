@@ -443,9 +443,10 @@ func getResourceByIPFamily(resource string, isIPv6 bool) string {
 }
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
-func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pips *[]network.PublicIPAddress, isInternal bool) (isIPv6 bool, err error) {
-	if err := az.safeListPIP(az.ResourceGroup, pips); err != nil {
-		return false, fmt.Errorf("failed to ensure PIP is refreshed: %w", err)
+func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pipResourceGroup string, isInternal bool) (isIPv6 bool, err error) {
+	pips, err := az.listPIP(pipResourceGroup)
+	if err != nil {
+		return false, fmt.Errorf("isFIPIPv6: failed to list pip: %w", err)
 	}
 	if isInternal {
 		if fip.FrontendIPConfigurationPropertiesFormat != nil {
@@ -463,7 +464,7 @@ func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pips *[]network
 	if fip.FrontendIPConfigurationPropertiesFormat != nil && fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
 		fipPIPID = pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress.ID, "")
 	}
-	for _, pip := range *pips {
+	for _, pip := range pips {
 		id := pointer.StringDeref(pip.ID, "")
 		if !strings.EqualFold(fipPIPID, id) {
 			continue
