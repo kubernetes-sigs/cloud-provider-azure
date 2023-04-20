@@ -9,25 +9,25 @@
     "agentPoolProfiles": [
       {
         "name": "agentpool1",
-        "count": 3,
+        "count": 5,
         "mode" : "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
         "enableAutoScaling": true,
         "maxCount": 1000,
-        "minCount": 1
+        "minCount": 3
       },
       {
         "name": "agentpool2",
-        "count": 3,
+        "count": 5,
         "mode" : "System",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
         "enableAutoScaling": true,
         "maxCount": 1000,
-        "minCount": 1
+        "minCount": 3
       }
     ],
     "servicePrincipalProfile": {
