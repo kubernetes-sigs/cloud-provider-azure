@@ -17,7 +17,6 @@ limitations under the License.
 package config
 
 import (
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -261,7 +260,7 @@ func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
 
 	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
 	assert.NoError(t, err)
-	pfxContent, err := ioutil.ReadFile("./testdata/test.pfx")
+	pfxContent, err := os.ReadFile("./testdata/test.pfx")
 	assert.NoError(t, err)
 	certificate, privateKey, err := decodePkcs12(pfxContent, "id")
 	assert.NoError(t, err)

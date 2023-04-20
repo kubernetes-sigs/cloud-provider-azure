@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"os"
@@ -235,7 +234,7 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 }
 
 func shouldDisableCloudProvider(configFilePath string) (bool, error) {
-	configBytes, err := ioutil.ReadFile(configFilePath)
+	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
 		klog.Errorf("shouldDisableCloudProvider: failed to read %s  %s", configFilePath, err.Error())
 		return false, err

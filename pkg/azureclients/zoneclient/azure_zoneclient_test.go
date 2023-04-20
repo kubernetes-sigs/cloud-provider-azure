@@ -19,7 +19,7 @@ package zoneclient
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -120,7 +120,7 @@ func TestGetZones(t *testing.T) {
 
 	response := &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte(responseString))),
+		Body:       io.NopCloser(bytes.NewReader([]byte(responseString))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
@@ -146,7 +146,7 @@ func TestGetNotFound(t *testing.T) {
 
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
@@ -165,7 +165,7 @@ func TestGetInternalError(t *testing.T) {
 
 	response := &http.Response{
 		StatusCode: http.StatusInternalServerError,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	armClient.EXPECT().GetResource(gomock.Any(), testProviderResourcesListID).Return(response, nil).Times(1)
