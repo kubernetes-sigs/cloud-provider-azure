@@ -24,10 +24,10 @@ require (
 	k8s.io/api v0.24.13
 	k8s.io/apimachinery v0.24.13
 	k8s.io/apiserver v0.24.12
-	k8s.io/client-go v0.24.12
+	k8s.io/client-go v0.24.13
 	k8s.io/cloud-provider v0.24.12
 	k8s.io/component-base v0.24.12
-	k8s.io/component-helpers v0.24.12
+	k8s.io/component-helpers v0.24.13
 	k8s.io/controller-manager v0.24.12
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/kubelet v0.24.12
