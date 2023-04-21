@@ -130,6 +130,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		replicas := podCount + 1
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
@@ -141,12 +145,20 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		replicas := podCount + 1
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
 
 		By("Deploying a StatefulSet")
 		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(2), map[string]string{"app": basename + "-statefulset"})
 		statefulSet, err := cs.AppsV1().StatefulSets(ns.Name).Create(context.TODO(), statefulSetManifest, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().StatefulSets(ns.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the StatefulSet to become ready")
@@ -210,6 +222,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -219,6 +235,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 10, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), scaleUpDeployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		waitForScaleUpToComplete(cs, ns, len(nodes)+10)
 
@@ -241,6 +261,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -250,6 +274,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), scaleUpDeployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		targetNodeCount := initNodeCount
@@ -280,6 +308,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		By("Saturating the free space")
 		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -289,6 +321,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
 		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 0, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), scaleUpDeployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		targetNodeCount := initNodeCount
@@ -335,6 +371,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		replicas := podCount + 1
 		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
@@ -360,6 +400,10 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		replicas := initNodeCount + 1
 		deployment := createDeploymentManifest(basename+"-deployment", int32(replicas), map[string]string{"app": basename}, gpuCap, true)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
+		defer func() {
+			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
@@ -377,7 +421,7 @@ func waitForScaleUpToComplete(cs clientset.Interface, ns *v1.Namespace, targetNo
 
 func waitForScaleDownToComplete(cs clientset.Interface, ns *v1.Namespace, initNodeCount int, deployment *appsv1.Deployment) {
 	By("Waiting for a scale down operation to happen")
-	utils.Logf("Delete pods by setting the number of replicas in the deployment to 0")
+	utils.Logf("Delete pods by setting the number of replicas in the deployment %q to 0", deployment.Name)
 	replicas := int32(0)
 	deployment.Spec.Replicas = &replicas
 	_, err := cs.AppsV1().Deployments(ns.Name).Update(context.TODO(), deployment, metav1.UpdateOptions{})
@@ -396,6 +440,10 @@ func createPodSpec(requestCPU int64) (result v1.PodSpec) {
 				Name:  "container",
 				Image: "nginx:1.15",
 			},
+		},
+		NodeSelector: map[string]string{
+			// Use userpool only
+			utils.NodeModeLabel: utils.NodeModeUser,
 		},
 	}
 	if requestCPU != 0 {
@@ -417,6 +465,10 @@ func createGPUPodSpec(requestGPU int64) (result v1.PodSpec) {
 				Image: "nginx:1.15",
 			},
 		},
+		NodeSelector: map[string]string{
+			// Use userpool only
+			utils.NodeModeLabel: utils.NodeModeUser,
+		},
 	}
 	if requestGPU != 0 {
 		result.Containers[0].Resources = v1.ResourceRequirements{
@@ -433,6 +485,7 @@ func createGPUPodSpec(requestGPU int64) (result v1.PodSpec) {
 	return
 }
 
+// createDeploymentManifest creates Deployment for userpool only.
 func createDeploymentManifest(name string, replicas int32, label map[string]string, podSize int64, requestGPU bool) (result *appsv1.Deployment) {
 	var spec v1.PodSpec
 	if requestGPU {

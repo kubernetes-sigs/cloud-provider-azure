@@ -39,6 +39,11 @@ const (
 	typeLabel                 = "type"
 	agentpoolLabelKey         = "agentpool"
 
+	NodeModeLabel  = "kubernetes.azure.com/mode"
+	NodeModeSystem = "system"
+	NodeModeUser   = "user"
+	systemPool     = "systempool"
+
 	// GPUResourceKey is the key of the GPU in the resource map of a node
 	GPUResourceKey = "nvidia.com/gpu"
 )
@@ -63,7 +68,7 @@ func GetNode(cs clientset.Interface, nodeName string) (*v1.Node, error) {
 	return node, nil
 }
 
-// GetAgentNodes obtains the list of agent nodes
+// GetAgentNodes obtains the list of agent nodes excluding system pool Nodes.
 func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	nodesList, err := getNodeList(cs)
 	if err != nil {
@@ -71,7 +76,8 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	}
 	ret := make([]v1.Node, 0)
 	for i, node := range nodesList.Items {
-		if !IsControlPlaneNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) {
+		if !IsControlPlaneNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) &&
+			!isSystemPoolNode(&nodesList.Items[i]) {
 			ret = append(ret, node)
 		}
 	}
@@ -269,6 +275,13 @@ func isVirtualKubeletNode(node *v1.Node) bool {
 	return false
 }
 
+func isSystemPoolNode(node *v1.Node) bool {
+	if val, ok := node.Labels[NodeModeLabel]; ok && val == NodeModeSystem {
+		return true
+	}
+	return false
+}
+
 func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete bool) (*v1.Node, error) {
 	if _, ok := node.Labels[label]; ok {
 		if isDelete {
@@ -286,8 +299,12 @@ func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete boo
 
 func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
 	nodepoolNodeMap := make(map[string][]string)
-	for _, node := range *nodes {
+	for i := range *nodes {
+		node := (*nodes)[i]
 		labels := node.ObjectMeta.Labels
+		if isSystemPoolNode(&node) {
+			continue
+		}
 		if nodepool, ok := labels[agentpoolLabelKey]; ok {
 			if nodepoolNodeMap[nodepool] == nil {
 				nodepoolNodeMap[nodepool] = make([]string, 0)
