@@ -17,7 +17,6 @@ limitations under the License.
 package app
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -33,7 +32,7 @@ func TestShouldDisableCloudProvider(t *testing.T) {
   "disableCloudProvider": true
 }
 `
-	err := ioutil.WriteFile(fileName, []byte(content), 0600)
+	err := os.WriteFile(fileName, []byte(content), 0600)
 	assert.NoError(t, err)
 
 	defer func() {

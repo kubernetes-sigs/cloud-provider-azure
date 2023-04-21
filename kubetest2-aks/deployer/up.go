@@ -22,7 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -94,7 +94,7 @@ func (p addCustomConfigPolicy) Do(req *policy.Request) (*http.Response, error) {
 		return req.Next()
 	}
 
-	body, err := ioutil.ReadAll(req.Raw().Body)
+	body, err := io.ReadAll(req.Raw().Body)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (d *deployer) createResourceGroup(subscriptionID string) (armresources.Reso
 
 func openPath(path string) ([]byte, error) {
 	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
-		return ioutil.ReadFile(path)
+		return os.ReadFile(path)
 	}
 	resp, err := http.Get(path)
 	if err != nil {
@@ -176,7 +176,7 @@ func openPath(path string) ([]byte, error) {
 		return []byte{}, fmt.Errorf("failed to http get url with StatusCode: %d", resp.StatusCode)
 	}
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 func (d *deployer) prepareCustomConfig() ([]byte, error) {
@@ -343,7 +343,7 @@ func (d *deployer) getAKSKubeconfig() error {
 	if err := os.MkdirAll(defaultKubeconfigDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to mkdir the default kubeconfig dir: %v", err)
 	}
-	if err := ioutil.WriteFile(destPath, kubeconfig.Value, 0666); err != nil {
+	if err := os.WriteFile(destPath, kubeconfig.Value, 0666); err != nil {
 		return fmt.Errorf("failed to write kubeconfig to %s", destPath)
 	}
 

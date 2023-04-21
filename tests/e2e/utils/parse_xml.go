@@ -19,7 +19,7 @@ package utils
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 )
@@ -55,7 +55,7 @@ func parseXML(junitReportPath string) (string, error) {
 		return "", fmt.Errorf("failed to open file %q: %w", junitReportPath, err)
 	}
 	defer file.Close()
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}

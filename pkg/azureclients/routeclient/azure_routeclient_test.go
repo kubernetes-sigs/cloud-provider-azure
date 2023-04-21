@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -93,7 +93,7 @@ func TestCreateOrUpdate(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
 	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(r.ID, ""), r, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
@@ -138,7 +138,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	response := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte("{}"))),
+		Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
 	}
 	throttleErr := &retry.Error{
 		HTTPStatusCode: http.StatusTooManyRequests,
@@ -165,7 +165,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
 		StatusCode: http.StatusNotFound,
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte(""))),
+		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
 
 	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(r.ID, ""), r, gomock.Any()).Return(response, nil).Times(1)

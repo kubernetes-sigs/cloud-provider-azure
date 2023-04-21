@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -107,9 +107,9 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 	if req.Raw().Method != http.MethodGet || req.Raw().Method != http.MethodHead {
 		return response, err
 	}
-	bodyBytes, _ := ioutil.ReadAll(response.Body)
+	bodyBytes, _ := io.ReadAll(response.Body)
 	defer func() {
-		response.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}()
 
 	bodyString := string(bodyBytes)
@@ -170,9 +170,9 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 	}
 
 	// Do the same check on regional response just like the global one
-	bodyBytes, _ = ioutil.ReadAll(regionalResponse.Body)
+	bodyBytes, _ = io.ReadAll(regionalResponse.Body)
 	defer func() {
-		regionalResponse.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		regionalResponse.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}()
 	bodyString = string(bodyBytes)
 	trimmed = strings.TrimSpace(bodyString)
