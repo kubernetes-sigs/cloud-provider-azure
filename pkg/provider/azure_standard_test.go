@@ -923,6 +923,22 @@ func TestGetBackendPoolName(t *testing.T) {
 	}
 }
 
+func TestIsBackendPoolIPv6(t *testing.T) {
+	testcases := []struct {
+		name           string
+		expectedIsIPv6 bool
+	}{
+		{"bp-IPv6", true},
+		{"bp-IPv4", false},
+		{"bp", false},
+		{"bp-ipv6", false},
+	}
+	for _, test := range testcases {
+		isIPv6 := isBackendPoolIPv6(test.name)
+		assert.Equal(t, test.expectedIsIPv6, isIPv6)
+	}
+}
+
 func TestGetStandardInstanceIDByNodeName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

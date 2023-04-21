@@ -48,13 +48,15 @@ import (
 )
 
 const (
-	fakePrivateIP        = "10.240.0.10"
-	fakePublicIP         = "10.10.10.10"
-	testVMSSName         = "vmss"
-	testVMPowerState     = "PowerState/Running"
-	testLBBackendpoolID0 = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"
-	testLBBackendpoolID1 = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1"
-	testLBBackendpoolID2 = "/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-2"
+	fakePrivateIP          = "10.240.0.10"
+	fakePublicIP           = "10.10.10.10"
+	testVMSSName           = "vmss"
+	testVMPowerState       = "PowerState/Running"
+	testLBBackendpoolID0   = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0"
+	testLBBackendpoolID0v6 = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-0" + "-" + v6Suffix
+	testLBBackendpoolID1   = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1"
+	testLBBackendpoolID1v6 = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-1" + "-" + v6Suffix
+	testLBBackendpoolID2   = "/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Network/loadBalancers/lb/backendAddressPools/backendpool-2"
 )
 
 func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv6 bool) compute.VirtualMachineScaleSet {
@@ -144,35 +146,29 @@ func buildTestVirtualMachineEnv(ss *Cloud, scaleSetName, zone string, faultDomai
 				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 					Primary:                         pointer.Bool(true),
 					LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: pointer.String(testLBBackendpoolID0)}},
-				},
-			},
-		}
-		networkConfigurations := []compute.VirtualMachineScaleSetNetworkConfiguration{
-			{
-				Name: pointer.String("ipconfig1"),
-				ID:   pointer.String("fakeNetworkConfiguration"),
-				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-					IPConfigurations: &ipConfigurations,
+					PrivateIPAddressVersion:         compute.IPv4,
 				},
 			},
 		}
 		if isIPv6 {
-			networkConfigurations = append(networkConfigurations, compute.VirtualMachineScaleSetNetworkConfiguration{
-				Name: pointer.String("ipconfig1v6"),
-				ID:   pointer.String("fakeNetworkConfigurationIPv6"),
-				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-						{
-							Name: pointer.String("ipconfig1"),
-							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-								Primary:                         pointer.Bool(false),
-								LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: pointer.String(testLBBackendpoolID0)}},
-								PrivateIPAddressVersion:         compute.IPv6,
-							},
-						},
-					},
+			ipConfigurations = append(ipConfigurations, compute.VirtualMachineScaleSetIPConfiguration{
+				Name: pointer.String("ipconfigv6"),
+				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+					Primary:                         pointer.Bool(false),
+					LoadBalancerBackendAddressPools: &[]compute.SubResource{{ID: pointer.String(testLBBackendpoolID0v6)}},
+					PrivateIPAddressVersion:         compute.IPv6,
 				},
 			})
+		}
+		networkConfigurations := []compute.VirtualMachineScaleSetNetworkConfiguration{
+			{
+				Name: pointer.String("vmss-nic"),
+				ID:   pointer.String("fakeNetworkConfiguration"),
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &ipConfigurations,
+					Primary:          pointer.Bool(true),
+				},
+			},
 		}
 
 		vmssVM := compute.VirtualMachineScaleSetVM{
@@ -1720,19 +1716,16 @@ func TestGetVMSetNames(t *testing.T) {
 	}
 }
 
-func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
+func TestGetPrimaryNetworkInterfaceConfiguration(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 	networkConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{Name: pointer.String("config-0")},
 	}
-	config, err := ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
-	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
-	assert.Equal(t, &networkConfigs[0], config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
+	config, err := getPrimaryNetworkInterfaceConfiguration(networkConfigs, testVMSSName)
+	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfiguration should return the correct network config")
+	assert.Equal(t, &networkConfigs[0], config, "getPrimaryNetworkInterfaceConfiguration should return the correct network config")
 
 	networkConfigs = []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{
@@ -1748,9 +1741,9 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 			},
 		},
 	}
-	config, err = ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
-	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
-	assert.Equal(t, &networkConfigs[1], config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should return the correct network config")
+	config, err = getPrimaryNetworkInterfaceConfiguration(networkConfigs, testVMSSName)
+	assert.Nil(t, err, "getPrimaryNetworkInterfaceConfiguration should return the correct network config")
+	assert.Equal(t, &networkConfigs[1], config, "getPrimaryNetworkInterfaceConfiguration should return the correct network config")
 
 	networkConfigs = []compute.VirtualMachineScaleSetNetworkConfiguration{
 		{
@@ -1766,106 +1759,403 @@ func TestGetPrimaryNetworkInterfaceConfigurationForScaleSet(t *testing.T) {
 			},
 		},
 	}
-	config, err = ss.getPrimaryNetworkInterfaceConfigurationForScaleSet(networkConfigs, testVMSSName)
-	assert.Equal(t, fmt.Errorf("failed to find a primary network configuration for the scale set \"vmss\""), err, "getPrimaryNetworkInterfaceConfigurationForScaleSet should report an error if there is no primary nic")
-	assert.Nil(t, config, "getPrimaryNetworkInterfaceConfigurationForScaleSet should report an error if there is no primary nic")
+	config, err = getPrimaryNetworkInterfaceConfiguration(networkConfigs, testVMSSName)
+	assert.Equal(t, fmt.Errorf("failed to find a primary network configuration for the VMSS VM or VMSS \"vmss\""), err, "getPrimaryNetworkInterfaceConfiguration should report an error if there is no primary nic")
+	assert.Nil(t, config, "getPrimaryNetworkInterfaceConfiguration should report an error if there is no primary nic")
 }
 
 func TestGetPrimaryIPConfigFromVMSSNetworkConfig(t *testing.T) {
-	config := &compute.VirtualMachineScaleSetNetworkConfiguration{
-		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-				{
-					Name: pointer.String("config-0"),
+	testcases := []struct {
+		desc             string
+		netConfig        *compute.VirtualMachineScaleSetNetworkConfiguration
+		backendPoolID    string
+		expectedIPConfig *compute.VirtualMachineScaleSetIPConfiguration
+		expectedErr      error
+	}{
+		{
+			desc: "only one IPv4 without primary (should not exist)",
+			netConfig: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+						},
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID0,
+			expectedIPConfig: &compute.VirtualMachineScaleSetIPConfiguration{
+				Name: pointer.String("config-0"),
+			},
+		},
+		{
+			desc: "two IPv4 but one with primary",
+			netConfig: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+							},
+						},
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID0,
+			expectedIPConfig: &compute.VirtualMachineScaleSetIPConfiguration{
+				Name: pointer.String("config-1"),
+				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+					Primary: pointer.Bool(true),
+				},
+			},
+		},
+		{
+			desc: "multiple IPv4 without primary",
+			netConfig: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID0,
+			expectedErr:   fmt.Errorf("failed to find a primary IP configuration (IPv6=false) for the VMSS VM or VMSS \"vmss-config-0\""),
+		},
+		{
+			desc: "dualstack for IPv4",
+			netConfig: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								PrivateIPAddressVersion: compute.IPv4,
+								Primary:                 pointer.Bool(true),
+							},
+						},
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								PrivateIPAddressVersion: compute.IPv6,
+							},
+						},
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID0,
+			expectedIPConfig: &compute.VirtualMachineScaleSetIPConfiguration{
+				Name: pointer.String("config-0"),
+				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+					PrivateIPAddressVersion: compute.IPv4,
+					Primary:                 pointer.Bool(true),
+				},
+			},
+		},
+		{
+			desc: "dualstack for IPv6",
+			netConfig: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								PrivateIPAddressVersion: compute.IPv4,
+								Primary:                 pointer.Bool(true),
+							},
+						},
+						{
+							Name: pointer.String("config-0-IPv6"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								PrivateIPAddressVersion: compute.IPv6,
+							},
+						},
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID0v6,
+			expectedIPConfig: &compute.VirtualMachineScaleSetIPConfiguration{
+				Name: pointer.String("config-0-IPv6"),
+				VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+					PrivateIPAddressVersion: compute.IPv6,
 				},
 			},
 		},
 	}
 
-	ipConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(config)
-	assert.Nil(t, err, "getPrimaryIPConfigFromVMSSNetworkConfig should return the correct IP config")
-	assert.Equal(t, (*config.IPConfigurations)[0], *ipConfig, "getPrimaryIPConfigFromVMSSNetworkConfig should return the correct IP config")
-
-	config = &compute.VirtualMachineScaleSetNetworkConfiguration{
-		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-				{
-					Name: pointer.String("config-0"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: pointer.Bool(false),
-					},
-				},
-				{
-					Name: pointer.String("config-1"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: pointer.Bool(true),
-					},
-				},
-			},
-		},
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ipConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(tc.netConfig, tc.backendPoolID, "vmss-config-0")
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedIPConfig, ipConfig)
+		})
 	}
-
-	ipConfig, err = getPrimaryIPConfigFromVMSSNetworkConfig(config)
-	assert.Nil(t, err, "getPrimaryIPConfigFromVMSSNetworkConfig should return the correct IP config")
-	assert.Equal(t, (*config.IPConfigurations)[1], *ipConfig, "getPrimaryIPConfigFromVMSSNetworkConfig should return the correct IP config")
-
-	config = &compute.VirtualMachineScaleSetNetworkConfiguration{
-		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-				{
-					Name: pointer.String("config-0"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: pointer.Bool(false),
-					},
-				},
-				{
-					Name: pointer.String("config-1"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						Primary: pointer.Bool(false),
-					},
-				},
-			},
-		},
-	}
-
-	ipConfig, err = getPrimaryIPConfigFromVMSSNetworkConfig(config)
-	assert.Equal(t, err, fmt.Errorf("failed to find a primary IP configuration"), "getPrimaryIPConfigFromVMSSNetworkConfig should report an error if there is no primary IP config")
-	assert.Nil(t, ipConfig, "getPrimaryIPConfigFromVMSSNetworkConfig should report an error if there is no primary IP config")
 }
 
-func TestGetConfigForScaleSetByIPFamily(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ss, err := NewTestScaleSet(ctrl)
-	assert.NoError(t, err, "unexpected error when creating test VMSS")
-
-	config := &compute.VirtualMachineScaleSetNetworkConfiguration{
-		VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-			IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-				{
-					Name: pointer.String("config-0"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPv4,
-					},
-				},
-				{
-					Name: pointer.String("config-0"),
-					VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-						PrivateIPAddressVersion: compute.IPv6,
+func TestDeleteBackendPoolFromIPConfig(t *testing.T) {
+	testcases := []struct {
+		desc               string
+		backendPoolID      string
+		primaryNIC         *compute.VirtualMachineScaleSetNetworkConfiguration
+		expectedPrimaryNIC *compute.VirtualMachineScaleSetNetworkConfiguration
+		expectedFound      bool
+		expectedErr        error
+	}{
+		{
+			desc:          "delete backend pool from ip config",
+			backendPoolID: "backendpool-0",
+			primaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-0"),
+									},
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
 					},
 				},
 			},
+			expectedPrimaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedFound: true,
+		},
+		{
+			desc:          "backend pool not found",
+			backendPoolID: "backendpool-0",
+			primaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPrimaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedFound: false,
+		},
+		{
+			desc:          "delete backend pool from ip config IPv6",
+			backendPoolID: "backendpool-0-IPv6",
+			primaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-0-IPv6"),
+									},
+								},
+								PrivateIPAddressVersion: compute.IPv6,
+							},
+						},
+					},
+				},
+			},
+			expectedPrimaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(true),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{
+									{
+										ID: pointer.String("backendpool-1"),
+									},
+								},
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary:                         pointer.Bool(false),
+								LoadBalancerBackendAddressPools: &[]compute.SubResource{},
+								PrivateIPAddressVersion:         compute.IPv6,
+							},
+						},
+					},
+				},
+			},
+			expectedFound: true,
+		},
+		{
+			desc:          "primary IP config not found IPv4",
+			backendPoolID: "backendpool-0",
+			primaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+					},
+				},
+			},
+			expectedPrimaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary: pointer.Bool(false),
+							},
+						},
+					},
+				},
+			},
+			expectedFound: false,
+			expectedErr:   fmt.Errorf("failed to find a primary IP configuration (IPv6=false) for the VMSS VM or VMSS \"test-resource\""),
+		},
+		{
+			desc:          "primary IP config not found IPv6",
+			backendPoolID: "backendpool-0-IPv6",
+			primaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary:                 pointer.Bool(true),
+								PrivateIPAddressVersion: compute.IPv4,
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary:                 pointer.Bool(false),
+								PrivateIPAddressVersion: compute.IPv4,
+							},
+						},
+					},
+				},
+			},
+			expectedPrimaryNIC: &compute.VirtualMachineScaleSetNetworkConfiguration{
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: pointer.String("config-0"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary:                 pointer.Bool(true),
+								PrivateIPAddressVersion: compute.IPv4,
+							},
+						},
+						{
+							Name: pointer.String("config-1"),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Primary:                 pointer.Bool(false),
+								PrivateIPAddressVersion: compute.IPv4,
+							},
+						},
+					},
+				},
+			},
+			expectedFound: false,
+			expectedErr:   fmt.Errorf("failed to find a primary IP configuration (IPv6=true) for the VMSS VM or VMSS \"test-resource\""),
 		},
 	}
 
-	ipConfig, err := ss.getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", true)
-	assert.Nil(t, err, "getConfigForScaleSetByIPFamily should find the IPV6 config")
-	assert.Equal(t, (*config.IPConfigurations)[1], *ipConfig, "getConfigForScaleSetByIPFamily should find the IPV6 config")
-
-	ipConfig, err = ss.getConfigForScaleSetByIPFamily(config, "vmss-vm-000000", false)
-	assert.Nil(t, err, "getConfigForScaleSetByIPFamily should find the IPV4 config")
-	assert.Equal(t, (*config.IPConfigurations)[0], *ipConfig, "getConfigForScaleSetByIPFamily should find the IPV4 config")
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			found, err := deleteBackendPoolFromIPConfig("test", tc.backendPoolID, "test-resource", tc.primaryNIC)
+			assert.Equal(t, tc.expectedFound, found)
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedPrimaryNIC, tc.primaryNIC)
+		})
+	}
 }
 
 func TestEnsureHostInPool(t *testing.T) {
@@ -1943,7 +2233,7 @@ func TestEnsureHostInPool(t *testing.T) {
 					NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
 							{
-								Name: pointer.String("ipconfig1"),
+								Name: pointer.String("vmss-nic"),
 								ID:   pointer.String("fakeNetworkConfiguration"),
 								VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 									IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
@@ -1959,9 +2249,11 @@ func TestEnsureHostInPool(t *testing.T) {
 														ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1"),
 													},
 												},
+												PrivateIPAddressVersion: compute.IPv4,
 											},
 										},
 									},
+									Primary: pointer.Bool(true),
 								},
 							},
 						},
@@ -2141,10 +2433,10 @@ func TestEnsureVMSSInPool(t *testing.T) {
 				},
 			},
 			isBasicLB:       false,
-			backendPoolID:   testLBBackendpoolID1,
+			backendPoolID:   testLBBackendpoolID1v6,
 			clusterIP:       "fd00::e68b",
 			expectedPutVMSS: false,
-			expectedErr:     fmt.Errorf("failed to find a IPconfiguration(IPv6=true) for the scale set VM \"\""),
+			expectedErr:     fmt.Errorf("failed to find a primary IP configuration (IPv6=true) for the VMSS VM or VMSS \"vmss\""),
 		},
 		{
 			description: "ensureVMSSInPool should update the VMSS correctly for IPv6",
@@ -2156,7 +2448,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 				},
 			},
 			isBasicLB:       false,
-			backendPoolID:   testLBBackendpoolID1,
+			backendPoolID:   testLBBackendpoolID1v6,
 			setIPv6Config:   true,
 			clusterIP:       "fd00::e68b",
 			expectedPutVMSS: true,
@@ -2209,7 +2501,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			expectedGetInstanceID: "invalid",
 		},
 		{
-			description: "ensureVMSSInPool should report an error if failed to get instsance ID",
+			description: "ensureVMSSInPool should report an error if failed to get instance ID",
 			nodes: []*v1.Node{
 				{},
 			},
@@ -2222,41 +2514,43 @@ func TestEnsureVMSSInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, test.description)
+		t.Run(test.description, func(t *testing.T) {
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
 
-		if !test.isBasicLB {
-			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		}
+			if !test.isBasicLB {
+				ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			}
 
-		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
-		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
-		}
-		if test.isVMSSNilNICConfig {
-			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
-		}
-		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		vmssPutTimes := 0
-		if test.expectedPutVMSS {
-			vmssPutTimes = 1
-			mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSS, nil)
-		}
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil).Times(vmssPutTimes)
+			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
+			if test.isVMSSDeallocating {
+				expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+			}
+			if test.isVMSSNilNICConfig {
+				expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
+			}
+			mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			vmssPutTimes := 0
+			if test.expectedPutVMSS {
+				vmssPutTimes = 1
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSS, nil)
+			}
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil).Times(vmssPutTimes)
 
-		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", test.setIPv6Config)
-		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", test.setIPv6Config)
+			mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		if test.expectedGetInstanceID != "" {
-			mockVMSet := NewMockVMSet(ctrl)
-			mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
-			ss.VMSet = mockVMSet
-		}
+			if test.expectedGetInstanceID != "" {
+				mockVMSet := NewMockVMSet(ctrl)
+				mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
+				ss.VMSet = mockVMSet
+			}
 
-		err = ss.ensureVMSSInPool(&v1.Service{Spec: v1.ServiceSpec{ClusterIP: test.clusterIP}}, test.nodes, test.backendPoolID, test.vmSetName)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+			err = ss.ensureVMSSInPool(&v1.Service{Spec: v1.ServiceSpec{ClusterIP: test.clusterIP}}, test.nodes, test.backendPoolID, test.vmSetName)
+			assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
+		})
 	}
 }
 
@@ -2351,7 +2645,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 	}
 }
 
-func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
+func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2393,7 +2687,7 @@ func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
 					NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 						NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
 							{
-								Name: pointer.String("ipconfig1"),
+								Name: pointer.String("vmss-nic"),
 								ID:   pointer.String("fakeNetworkConfiguration"),
 								VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 									IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
@@ -2402,9 +2696,11 @@ func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
 											VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 												Primary:                         pointer.Bool(true),
 												LoadBalancerBackendAddressPools: &[]compute.SubResource{},
+												PrivateIPAddressVersion:         compute.IPv4,
 											},
 										},
 									},
+									Primary: pointer.Bool(true),
 								},
 							},
 						},
@@ -2415,26 +2711,28 @@ func TestEnsureBackendPoolDeletedFromNode(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, test.description)
+		t.Run(test.description, func(t *testing.T) {
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
 
-		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
-		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+			expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
+			mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 
-		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
-		if test.isNilVMNetworkConfigs {
-			expectedVMSSVMs[0].NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
-		}
-		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", false)
+			if test.isNilVMNetworkConfigs {
+				expectedVMSSVMs[0].NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
+			}
+			mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
 
-		nodeResourceGroup, ssName, instanceID, vm, err := ss.ensureBackendPoolDeletedFromNode(test.nodeName, test.backendpoolID)
-		assert.Equal(t, test.expectedErr, err, test.description+", but an error occurs")
-		assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup, test.description)
-		assert.Equal(t, test.expectedVMSSName, ssName, test.description)
-		assert.Equal(t, test.expectedInstanceID, instanceID, test.description)
-		assert.Equal(t, test.expectedVMSSVM, vm, test.description)
+			nodeResourceGroup, ssName, instanceID, vm, err := ss.ensureBackendPoolDeletedFromNode(test.nodeName, test.backendpoolID)
+			assert.Equal(t, test.expectedErr, err)
+			assert.Equal(t, test.expectedNodeResourceGroup, nodeResourceGroup)
+			assert.Equal(t, test.expectedVMSSName, ssName)
+			assert.Equal(t, test.expectedInstanceID, instanceID)
+			assert.Equal(t, test.expectedVMSSVM, vm)
+		})
 	}
 }
 
