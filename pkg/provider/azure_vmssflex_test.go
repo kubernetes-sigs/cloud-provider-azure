@@ -1610,7 +1610,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			isVMSSDeallocating:  false,
 			hasDefaultVMProfile: true,
 			isNicConfigEmpty:    true,
-			expectedErr:         fmt.Errorf("failed to find a primary network configuration for the scale set \"vmssflex1\""),
+			expectedErr:         fmt.Errorf("failed to find a primary network configuration for the VMSS VM or VMSS \"vmssflex1\""),
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss does not have default VM profile",
@@ -1622,7 +1622,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			hasDefaultVMProfile: true,
 			isNicConfigEmpty:    false,
 			isIPConfigEmpty:     true,
-			expectedErr:         fmt.Errorf("failed to find a primary IP configuration"),
+			expectedErr:         fmt.Errorf("failed to find a primary IP configuration (IPv6=false) for the VMSS VM or VMSS \"vmssflex1\""),
 		},
 		{
 			description: "EnsureBackendPoolDeletedFromVMSets should skip the vmss if the backend pool is not in the vmss's backend pool list",
@@ -1646,40 +1646,41 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		fs, err := NewTestFlexScaleSet(ctrl)
-		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+		t.Run(tc.description, func(t *testing.T) {
+			fs, err := NewTestFlexScaleSet(ctrl)
+			assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		testVmssFlex := genreteTestVmssFlex()
+			testVmssFlex := genreteTestVmssFlex()
 
-		if tc.isVMSSDeallocating {
-			testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
-		}
-		if !tc.hasDefaultVMProfile {
-			testVmssFlex.VirtualMachineProfile = nil
-		}
-		if tc.isNicConfigEmpty {
-			testVmssFlex.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &[]compute.VirtualMachineScaleSetNetworkConfiguration{}
-		}
-		if tc.isIPConfigEmpty {
-			(*testVmssFlex.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].IPConfigurations = &[]compute.VirtualMachineScaleSetIPConfiguration{}
-		}
+			if tc.isVMSSDeallocating {
+				testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+			}
+			if !tc.hasDefaultVMProfile {
+				testVmssFlex.VirtualMachineProfile = nil
+			}
+			if tc.isNicConfigEmpty {
+				testVmssFlex.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &[]compute.VirtualMachineScaleSetNetworkConfiguration{}
+			}
+			if tc.isIPConfigEmpty {
+				(*testVmssFlex.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations)[0].IPConfigurations = &[]compute.VirtualMachineScaleSetIPConfiguration{}
+			}
 
-		vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
+			vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
+			mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()
+			mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
+			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
 
-		err = fs.EnsureBackendPoolDeletedFromVMSets(tc.vmssNamesMap, tc.backendPoolID)
+			err = fs.EnsureBackendPoolDeletedFromVMSets(tc.vmssNamesMap, tc.backendPoolID)
 
-		if tc.expectedErr != nil {
-			assert.EqualError(t, err, tc.expectedErr.Error(), tc.description)
-		} else {
-			assert.NoError(t, err, tc.description)
-		}
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
-
 }
 
 func TestEnsureBackendPoolDeletedFromNodeVmssFlex(t *testing.T) {
