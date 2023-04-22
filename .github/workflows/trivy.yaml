@@ -21,9 +21,15 @@ on:
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'
-
+  schedule:
+    - cron: '35 12 * * 4'
+permissions:
+  contents: read
 jobs:
   build:
+    permissions:
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -33,29 +39,51 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
+          cache: true
         id: go
       - name: Build images
         run: |
-          export TAG=trivy
+          export TAG=${{ github.sha }}
           make build-ccm-image
           make build-node-image-linux-amd64
 
       - name: Run Trivy scanner CCM
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'local/azure-cloud-controller-manager:trivy'
-          format: 'table'
+          image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-ccm-results.sarif'
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-ccm-results.sarif'
+          category: azure-cloud-controller-manager-image
       - name: Run Trivy scanner CNM
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'local/azure-cloud-node-manager:trivy-linux-amd64'
-          format: 'table'
+          image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
+          format: 'sarif'
+          output: 'trivy-cnm-linux-results.sarif'
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-cnm-linux-results.sarif'
+          category: azure-cloud-node-manager-linux-image
+
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'github'
+          output: 'dependency-results.sbom.json'
+          image-ref: '.'
+          github-pat: ${{ secrets.GITHUB_TOKEN }}

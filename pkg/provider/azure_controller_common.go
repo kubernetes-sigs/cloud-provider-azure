@@ -333,7 +333,7 @@ func (c *controllerCommon) waitForUpdateResult(ctx context.Context, vmset VMSet,
 	}
 
 	if vmUpdateRequired(future, err) {
-		if derr := kwait.ExponentialBackoffWithContext(ctx, updateVMBackoff, func() (bool, error) {
+		if derr := kwait.ExponentialBackoffWithContext(ctx, updateVMBackoff, func(ctx context.Context) (bool, error) {
 			klog.Errorf("Retry VM Update on node (%s) due to error (%v)", nodeName, err)
 			future, err = vmset.UpdateVMAsync(ctx, nodeName)
 			if err == nil {

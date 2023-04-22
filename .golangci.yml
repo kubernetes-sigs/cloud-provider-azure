@@ -1,6 +1,6 @@
 run:
   timeout: 30m
-  go: '1.18'
+  go: '1.20'
   tests: true
   skip-dirs:
     - vendor

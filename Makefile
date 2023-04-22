@@ -124,8 +124,8 @@ $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-c
 
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisite images.
-	docker pull docker/dockerfile:1.3.1
-	docker pull docker.io/library/golang:1.18-buster
+	docker pull docker/dockerfile:1
+	docker pull docker.io/library/golang:buster
 	docker pull gcr.io/distroless/static:latest
 
 buildx-setup:
