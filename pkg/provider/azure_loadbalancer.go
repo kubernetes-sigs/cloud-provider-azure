@@ -2634,28 +2634,35 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup, service *v1.Se
 					klog.V(4).Infof("Didn't find shared rule %s for service %s", sharedRuleName, service.Name)
 					continue
 				}
-				if sharedRule.DestinationAddressPrefixes == nil {
-					klog.V(4).Infof("Didn't find DestinationAddressPrefixes in shared rule for service %s", service.Name)
-					updatedRules = append(updatedRules[:sharedIndex], updatedRules[sharedIndex+1:]...)
-					continue
-				}
-				existingPrefixes := *sharedRule.DestinationAddressPrefixes
-				for _, destinationIPAddress := range destinationIPAddresses {
-					addressIndex, found := findIndex(existingPrefixes, destinationIPAddress)
-					if !found {
-						klog.Warningf("Didn't find destination address %v in shared rule %s for service %s", destinationIPAddress, sharedRuleName, service.Name)
-						continue
+				shouldDeleteNSGRule := false
+				if sharedRule.DestinationAddressPrefixes == nil || len(*sharedRule.DestinationAddressPrefixes) == 0 {
+					shouldDeleteNSGRule = true
+				} else {
+					existingPrefixes := *sharedRule.DestinationAddressPrefixes
+					for _, destinationIPAddress := range destinationIPAddresses {
+						addressIndex, found := findIndex(existingPrefixes, destinationIPAddress)
+						if !found {
+							klog.Warningf("Didn't find destination address %v in shared rule %s for service %s", destinationIPAddress, sharedRuleName, service.Name)
+							continue
+						}
+						if len(existingPrefixes) == 1 {
+							shouldDeleteNSGRule = true
+							break //shared nsg rule has only one entry and entry owned by deleted svc has been found. skip the rest of the entries
+						} else {
+							newDestinations := append(existingPrefixes[:addressIndex], existingPrefixes[addressIndex+1:]...)
+							sharedRule.DestinationAddressPrefixes = &newDestinations
+							updatedRules[sharedIndex] = sharedRule
+						}
+						dirtySg = true
 					}
-					if len(existingPrefixes) == 1 {
-						updatedRules = append(updatedRules[:sharedIndex], updatedRules[sharedIndex+1:]...)
-					} else {
-						newDestinations := append(existingPrefixes[:addressIndex], existingPrefixes[addressIndex+1:]...)
-						sharedRule.DestinationAddressPrefixes = &newDestinations
-						updatedRules[sharedIndex] = sharedRule
-					}
-					dirtySg = true
 				}
 
+				if shouldDeleteNSGRule {
+					klog.V(4).Infof("shared rule will be deleted because last service %s which refers this rule is deleted.", service.Name)
+					updatedRules = append(updatedRules[:sharedIndex], updatedRules[sharedIndex+1:]...)
+					dirtySg = true
+					continue
+				}
 			}
 		}
 	}
