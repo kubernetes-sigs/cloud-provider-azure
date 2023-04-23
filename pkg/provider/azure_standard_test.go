@@ -36,6 +36,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmasclient/mockvmasclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -1645,7 +1646,6 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 func TestServiceOwnsFrontendIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	cloud := GetTestCloud(ctrl)
 
 	testCases := []struct {
 		desc         string
@@ -1805,11 +1805,17 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		existingPIPs := test.existingPIPs
-		isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service, &existingPIPs)
-		assert.Equal(t, test.expectedErr, err, test.desc)
-		assert.Equal(t, test.isOwned, isOwned, test.desc)
-		assert.Equal(t, test.isPrimary, isPrimary, test.desc)
+		t.Run(test.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			if test.existingPIPs != nil {
+				mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil)
+			}
+			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service)
+			assert.Equal(t, test.expectedErr, err)
+			assert.Equal(t, test.isOwned, isOwned)
+			assert.Equal(t, test.isPrimary, isPrimary)
+		})
 	}
 }
 
