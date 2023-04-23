@@ -65,6 +65,7 @@ func TestCreateManagedDisk(t *testing.T) {
 		diskEncryptionType  string
 		subscriptionID      string
 		resouceGroup        string
+		publicNetworkAccess compute.PublicNetworkAccess
 		networkAccessPolicy compute.NetworkAccessPolicy
 		diskAccessID        *string
 		expectedDiskID      string
@@ -204,6 +205,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			storageAccountType:  compute.StandardLRS,
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			networkAccessPolicy: compute.DenyAll,
+			publicNetworkAccess: compute.Disabled,
 			expectedDiskID:      disk1ID,
 			existedDisk:         compute.Disk{ID: pointer.String(disk1ID), Name: pointer.String(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: pointer.String("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
@@ -216,6 +218,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			diskEncryptionSetID: goodDiskEncryptionSetID,
 			diskEncryptionType:  "EncryptionAtRestWithCustomerKey",
 			networkAccessPolicy: compute.AllowAll,
+			publicNetworkAccess: compute.Enabled,
 			expectedDiskID:      disk1ID,
 			existedDisk:         compute.Disk{ID: pointer.String(disk1ID), Name: pointer.String(disk1Name), DiskProperties: &compute.DiskProperties{Encryption: &compute.Encryption{DiskEncryptionSetID: &goodDiskEncryptionSetID, Type: compute.EncryptionTypeEncryptionAtRestWithCustomerKey}, ProvisioningState: pointer.String("Succeeded")}, Tags: testTags},
 			expectedErr:         false,
@@ -274,6 +277,7 @@ func TestCreateManagedDisk(t *testing.T) {
 			DiskEncryptionType:  test.diskEncryptionType,
 			MaxShares:           maxShare,
 			NetworkAccessPolicy: test.networkAccessPolicy,
+			PublicNetworkAccess: test.publicNetworkAccess,
 			DiskAccessID:        test.diskAccessID,
 			SubscriptionID:      test.subscriptionID,
 		}
