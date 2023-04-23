@@ -18,8 +18,9 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -218,8 +219,12 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 				index := 0
 				if accountOptions.PickRandomMatchingAccount {
 					// randomly pick one matching account
+					n, err := rand.Int(rand.Reader, big.NewInt(int64(len(accounts))))
+					if err != nil || n == nil {
+						return "", "", err
+					}
+					index = int(n.Int64())
 					klog.V(4).Infof("randomly pick one matching account, index: %d", index)
-					index = rand.Intn(len(accounts))
 				}
 				accountName = accounts[index].Name
 				createNewAccount = false
