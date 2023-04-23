@@ -326,10 +326,10 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 	return az.GetLoadBalancerName(context.TODO(), "", service)
 }
 
-func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, pipResourceGroup string, pips *[]network.PublicIPAddress, isIPv6 bool) (string, error) {
+func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, pipResourceGroup string, isIPv6 bool) (string, error) {
 	// For IPv6, the PIP may not have IPv6 suffix because it may be one created before dual-stack support.
 	if isIPv6 {
-		pip, err := az.findMatchedPIPByIPFamilyAndServiceName(clusterName, service, pipResourceGroup, pips)
+		pip, err := az.findMatchedPIPByIPFamilyAndServiceName(clusterName, service, pipResourceGroup)
 		if err != nil {
 			return "", err
 		}
@@ -359,7 +359,7 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 // This means the name of the config can be tracked by the service UID.
 // 2. The secondary services must have their loadBalancer IP set if they want to share the same config as the primary
 // service. Hence, it can be tracked by the loadBalancer IP.
-func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service, pips *[]network.PublicIPAddress) (bool, bool, error) {
+func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) (bool, bool, error) {
 	var isPrimaryService bool
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
 	if strings.HasPrefix(pointer.StringDeref(fip.Name, ""), baseName) {
@@ -378,7 +378,7 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 	if !requiresInternalLoadBalancer(service) {
 		pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 		for _, loadBalancerIP := range loadBalancerIPs {
-			pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup, pips)
+			pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
 			if err != nil {
 				klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerIP %s: %v", service.Name, loadBalancerIP, err)
 				return false, isPrimaryService, nil

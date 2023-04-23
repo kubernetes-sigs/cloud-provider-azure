@@ -2143,9 +2143,8 @@ func TestIsFrontendIPChanged(t *testing.T) {
 			service := test.service
 			setServiceLoadBalancerIP(&service, test.loadBalancerIP)
 			test.service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = test.annotations
-			existingPIPs := test.existingPIPs
 			flag, rerr := az.isFrontendIPChanged("testCluster", test.config,
-				&service, test.lbFrontendIPConfigName, &existingPIPs)
+				&service, test.lbFrontendIPConfigName)
 			if rerr != nil {
 				fmt.Println(rerr.Error())
 			}
@@ -2165,34 +2164,21 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 			IPAddress: pointer.String("1.2.3.4"),
 		},
 	}
-	var nilPIPs []network.PublicIPAddress
 	testCases := []struct {
 		desc          string
-		pips          *[]network.PublicIPAddress
-		pipListResult []network.PublicIPAddress
-		expectedPIPs  *[]network.PublicIPAddress
+		pips          []network.PublicIPAddress
+		expectedPIP   *network.PublicIPAddress
 		expectedError bool
 	}{
 		{
-			desc:          "findMatchedPIPByLoadBalancerIP shall return error if pip slice passed in is nil",
+			desc:        "findMatchedPIPByLoadBalancerIP shall return the matched ip",
+			pips:        []network.PublicIPAddress{testPIP},
+			expectedPIP: &testPIP,
+		},
+		{
+			desc:          "findMatchedPIPByLoadBalancerIP shall return error if ip is not found",
+			pips:          []network.PublicIPAddress{},
 			expectedError: true,
-		},
-		{
-			desc:          "findMatchedPIPByLoadBalancerIP shall list pips if pip slice passed in is nil",
-			pips:          &nilPIPs,
-			pipListResult: []network.PublicIPAddress{testPIP},
-			expectedPIPs:  &[]network.PublicIPAddress{testPIP},
-		},
-		{
-			desc:          "findMatchedPIPByLoadBalancerIP shall not list pip again if pip slice is empty",
-			pips:          &[]network.PublicIPAddress{},
-			expectedPIPs:  &[]network.PublicIPAddress{},
-			expectedError: true, // pip not found
-		},
-		{
-			desc:         "findMatchedPIPByLoadBalancerIP shall not list pip again if pip slice already has pips",
-			pips:         &[]network.PublicIPAddress{testPIP},
-			expectedPIPs: &[]network.PublicIPAddress{testPIP},
 		},
 	}
 	for _, test := range testCases {
@@ -2202,11 +2188,9 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 			setServiceLoadBalancerIP(&service, "1.2.3.4")
 
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-			if test.pipListResult != nil {
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipListResult, nil)
-			}
-			_, err := az.findMatchedPIPByLoadBalancerIP(&service, "1.2.3.4", "rg", test.pips)
-			assert.Equal(t, test.expectedPIPs, test.pips)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pips, nil)
+			pip, err := az.findMatchedPIPByLoadBalancerIP(&service, "1.2.3.4", "rg")
+			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectedError, err != nil)
 		})
 	}
@@ -2267,8 +2251,7 @@ func TestDeterminePublicIPName(t *testing.T) {
 				err := az.PublicIPAddressesClient.CreateOrUpdate(context.TODO(), "rg", *existingPIP.Name, existingPIP)
 				assert.NoError(t, err.Error())
 			}
-			var pips []network.PublicIPAddress
-			pipName, _, err := az.determinePublicIPName("testCluster", &service, &pips, test.isIPv6)
+			pipName, _, err := az.determinePublicIPName("testCluster", &service, test.isIPv6)
 			assert.Equal(t, test.expectedPIPName, pipName)
 			assert.Equal(t, test.expectedError, err != nil)
 		})
@@ -3502,7 +3485,7 @@ func TestGetServiceLoadBalancerStatus(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
-			status, _, err := az.getServiceLoadBalancerStatus(test.service, test.lb, nil)
+			status, _, err := az.getServiceLoadBalancerStatus(test.service, test.lb)
 			assert.Equal(t, test.expectedStatus, status)
 			assert.Equal(t, test.expectedError, err != nil)
 		})

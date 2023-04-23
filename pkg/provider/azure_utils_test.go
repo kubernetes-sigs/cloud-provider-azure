@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -885,7 +886,7 @@ func TestIsFIPIPv6(t *testing.T) {
 	testcases := []struct {
 		desc           string
 		fip            *network.FrontendIPConfiguration
-		pips           *[]network.PublicIPAddress
+		pips           []network.PublicIPAddress
 		isInternal     bool
 		expectedIsIPv6 bool
 	}{
@@ -897,7 +898,7 @@ func TestIsFIPIPv6(t *testing.T) {
 					PrivateIPAddress:        pointer.String("10.0.0.1"),
 				},
 			},
-			&[]network.PublicIPAddress{},
+			[]network.PublicIPAddress{},
 			true,
 			false,
 		},
@@ -908,16 +909,18 @@ func TestIsFIPIPv6(t *testing.T) {
 					PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip-id0")},
 				},
 			},
-			&[]network.PublicIPAddress{
+			[]network.PublicIPAddress{
 				{
-					ID: pointer.String("pip-id0"),
+					Name: pointer.String("pip0"),
+					ID:   pointer.String("pip-id0"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv6,
 						IPAddress:              pointer.String("2001::1"),
 					},
 				},
 				{
-					ID: pointer.String("pip-id1"),
+					Name: pointer.String("pip1"),
+					ID:   pointer.String("pip-id1"),
 					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 						PublicIPAddressVersion: network.IPv4,
 						IPAddress:              pointer.String("10.0.0.1"),
@@ -931,7 +934,9 @@ func TestIsFIPIPv6(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			isIPv6, err := az.isFIPIPv6(tc.fip, tc.pips, tc.isInternal)
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pips, nil)
+			isIPv6, err := az.isFIPIPv6(tc.fip, "rg", tc.isInternal)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedIsIPv6, isIPv6)
 		})
