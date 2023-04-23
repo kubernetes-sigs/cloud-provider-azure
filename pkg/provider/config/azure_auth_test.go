@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -203,6 +204,38 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 		assert.Equal(t, token, spt)
 	}
 
+}
+
+func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
+	config := &AzureAuthConfig{
+		TenantID:                              "TenantID",
+		AADClientID:                           "AADClientID",
+		AADFederatedTokenFile:                 "/tmp/federated-token",
+		UseFederatedWorkloadIdentityExtension: true,
+	}
+	env := &azure.PublicCloud
+
+	token, err := GetServicePrincipalToken(config, env, "")
+	assert.NoError(t, err)
+	marshalToken, _ := token.MarshalJSON()
+
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+	assert.NoError(t, err)
+
+	jwtCallback := func() (string, error) {
+		jwt, err := os.ReadFile(config.AADFederatedTokenFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read a file with a federated token: %w", err)
+		}
+		return string(jwt), nil
+	}
+
+	spt, err := adal.NewServicePrincipalTokenFromFederatedTokenCallback(*oauthConfig, config.AADClientID, jwtCallback, env.ResourceManagerEndpoint)
+	assert.NoError(t, err)
+
+	marshalSpt, _ := spt.MarshalJSON()
+
+	assert.Equal(t, marshalToken, marshalSpt)
 }
 
 func TestGetServicePrincipalToken(t *testing.T) {
