@@ -150,11 +150,12 @@ func NewMockClient() *Client {
 	tkp, _ := kcsb.newTokenProvider()
 
 	return &Client{
-		conn:       mockConn{},
-		ingestConn: mockConn{},
-		endpoint:   "https://sdkse2etest.eastus.kusto.windows.net",
-		auth:       Authorization{TokenProvider: tkp},
-		mgmtConnMu: sync.Mutex{},
-		http:       &http.Client{},
+		conn:          mockConn{},
+		ingestConn:    mockConn{},
+		endpoint:      "https://sdkse2etest.eastus.kusto.windows.net",
+		auth:          Authorization{TokenProvider: tkp},
+		mgmtConnMu:    sync.Mutex{},
+		http:          &http.Client{},
+		clientDetails: NewClientDetails("test", "test"),
 	}
 }
