@@ -19,7 +19,7 @@ require (
 	k8s.io/client-go v0.27.1
 	k8s.io/klog/v2 v2.90.1
 	sigs.k8s.io/cloud-provider-azure v1.27.0
-	sigs.k8s.io/controller-tools v0.11.3
+	sigs.k8s.io/controller-tools v0.11.4
 )
 
 require (
