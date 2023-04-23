@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -2214,6 +2215,10 @@ func TestNewCloudFromJSON(t *testing.T) {
 		"vmType": "vmss",
 		"disableAvailabilitySetNodes": true
 	}`
+	os.Setenv("AZURE_FEDERATED_TOKEN_FILE", "--aad-federated-token-file--")
+	defer func() {
+		os.Unsetenv("AZURE_FEDERATED_TOKEN_FILE")
+	}()
 	validateConfig(t, config)
 }
 
@@ -2277,6 +2282,10 @@ plsCacheTTLInSeconds: 100
 vmType: vmss
 disableAvailabilitySetNodes: true
 `
+	os.Setenv("AZURE_FEDERATED_TOKEN_FILE", "--aad-federated-token-file--")
+	defer func() {
+		os.Unsetenv("AZURE_FEDERATED_TOKEN_FILE")
+	}()
 	validateConfig(t, config)
 }
 
@@ -2390,6 +2399,12 @@ func validateConfig(t *testing.T, config string) { //nolint
 	}
 	if !azureCloud.DisableAvailabilitySetNodes {
 		t.Errorf("got incorrect value for disableAvailabilitySetNodes")
+	}
+	if azureCloud.AADFederatedTokenFile != "--aad-federated-token-file--" {
+		t.Errorf("got incorrect value for AADFederatedTokenFile")
+	}
+	if !azureCloud.UseFederatedWorkloadIdentityExtension {
+		t.Errorf("got incorrect value for UseFederatedWorkloadIdentityExtension")
 	}
 }
 
