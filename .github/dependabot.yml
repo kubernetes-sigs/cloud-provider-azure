@@ -149,55 +149,6 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-      - "release-1.23"
-    target-branch: "release-1.23"
-    ignore:
-      - dependency-name: "k8s.io/*"
-        versions: [">=0.24.0"]
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "release-1.23"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/testing"
-      - "lgtm"
-      - "approved"
-      - "release-1.23"
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    target-branch: "release-1.23"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
-      - "release-1.23"
-  - package-ecosystem: "gomod"
-    directory: "/"
-    open-pull-requests-limit: 1
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
       - "release-1.25"
     target-branch: "release-1.25"
     ignore:
@@ -284,5 +235,53 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.26"
-
+  - package-ecosystem: "gomod"
+    directory: "/"
+    open-pull-requests-limit: 1
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.27"
+    target-branch: "release-1.27"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.24.0"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.27"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
+      - "release-1.27"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.27"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.27"
 
