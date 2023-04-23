@@ -8,9 +8,20 @@
     "dnsPrefix": "aks",
     "agentPoolProfiles": [
       {
-        "name": "agentpool1",
-        "count": 5,
+        "name": "systempool",
+        "count": 3,
         "mode" : "System",
+        "vmSize": "Standard_DS2_v2",
+        "osType": "Linux",
+        "availabilityProfile": "VirtualMachineScaleSets",
+        "enableAutoScaling": true,
+        "maxCount": 1000,
+        "minCount": 3
+      },
+      {
+        "name": "userpool",
+        "count": 3,
+        "mode" : "User",
         "vmSize": "Standard_DS2_v2",
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",

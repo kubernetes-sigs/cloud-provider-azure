@@ -47,11 +47,14 @@ func FindTestVMSS(tc *AzureTestClient, rgName string) (*azcompute.VirtualMachine
 	}
 
 	vmssList := list.Values()
-	if len(vmssList) == 0 {
-		return nil, nil
+	for i := range vmssList {
+		vmss := vmssList[i]
+		if vmss.Name != nil && strings.Contains(*vmss.Name, systemPool) {
+			continue
+		}
+		return &vmss, nil
 	}
-
-	return &vmssList[0], nil
+	return nil, nil
 }
 
 func Scale(tc *AzureTestClient, vmssName string, instanceCount int64) error {
@@ -195,7 +198,7 @@ func WaitVMSSVMCountToEqualNodeCount(tc *AzureTestClient) error {
 			return true, nil
 		}
 
-		Logf("Number of VMSS instances %d doesn't equal number of Nodes %d (will retry)", vmssVMCount, len(nodes))
+		Logf("Number of VMSS instances %d of VMSSes (%q) doesn't equal number of Nodes %d (will retry)", vmssVMCount, vmssNames, len(nodes))
 		return false, nil
 	})
 	return err
@@ -353,6 +356,9 @@ func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet,
 	vmssUniforms := make([]azcompute.VirtualMachineScaleSet, 0)
 	for i := range res {
 		vmssUniform := res[i]
+		if vmssUniform.Name != nil && strings.Contains(*vmssUniform.Name, systemPool) {
+			continue
+		}
 		if vmssUniform.OrchestrationMode == "" || vmssUniform.OrchestrationMode == azcompute.Uniform {
 			vmssUniforms = append(vmssUniforms, vmssUniform)
 		}
