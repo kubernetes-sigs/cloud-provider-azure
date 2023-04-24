@@ -378,6 +378,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		SubnetPropertiesFormatNil       bool
 		mockStorageAccountsClient       bool
 		setAccountOptions               bool
+		pickRandomMatchingAccount       bool
 		accessTier                      string
 		storageType                     StorageType
 		requireInfrastructureEncryption *bool
@@ -393,6 +394,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			createPrivateEndpoint:           true,
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
+			pickRandomMatchingAccount:       true,
 			storageType:                     StorageTypeBlob,
 			requireInfrastructureEncryption: pointer.Bool(true),
 			keyVaultURL:                     pointer.String("keyVaultURL"),
@@ -502,16 +504,17 @@ func TestEnsureStorageAccount(t *testing.T) {
 		var testAccountOptions *AccountOptions
 		if test.setAccountOptions {
 			testAccountOptions = &AccountOptions{
-				ResourceGroup:         test.resourceGroup,
-				CreatePrivateEndpoint: test.createPrivateEndpoint,
-				Name:                  test.accountName,
-				CreateAccount:         test.createAccount,
-				SubscriptionID:        test.subscriptionID,
-				AccessTier:            test.accessTier,
-				StorageType:           test.storageType,
-				EnableBlobVersioning:  pointer.Bool(true),
-				SoftDeleteBlobs:       7,
-				SoftDeleteContainers:  7,
+				ResourceGroup:             test.resourceGroup,
+				CreatePrivateEndpoint:     test.createPrivateEndpoint,
+				Name:                      test.accountName,
+				CreateAccount:             test.createAccount,
+				SubscriptionID:            test.subscriptionID,
+				AccessTier:                test.accessTier,
+				StorageType:               test.storageType,
+				EnableBlobVersioning:      pointer.Bool(true),
+				SoftDeleteBlobs:           7,
+				SoftDeleteContainers:      7,
+				PickRandomMatchingAccount: test.pickRandomMatchingAccount,
 			}
 		}
 

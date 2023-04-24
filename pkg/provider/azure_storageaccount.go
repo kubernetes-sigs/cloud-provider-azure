@@ -18,7 +18,9 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -75,6 +77,8 @@ type AccountOptions struct {
 	EnableBlobVersioning                    *bool
 	SoftDeleteBlobs                         int32
 	SoftDeleteContainers                    int32
+	// indicate whether to get a random matching account, if false, will get the first matching account
+	PickRandomMatchingAccount bool
 }
 
 type accountWithLocation struct {
@@ -212,7 +216,17 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			}
 
 			if len(accounts) > 0 {
-				accountName = accounts[0].Name
+				index := 0
+				if accountOptions.PickRandomMatchingAccount {
+					// randomly pick one matching account
+					n, err := rand.Int(rand.Reader, big.NewInt(int64(len(accounts))))
+					if err != nil || n == nil {
+						return "", "", err
+					}
+					index = int(n.Int64())
+					klog.V(4).Infof("randomly pick one matching account, index: %d", index)
+				}
+				accountName = accounts[index].Name
 				createNewAccount = false
 				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
 			}
