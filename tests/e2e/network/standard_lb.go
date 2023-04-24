@@ -110,6 +110,9 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			}
 			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
 				if ipc.ID != nil {
+					if utils.IsAutoscalingAKSCluster() && strings.Contains(*ipc.ID, utils.SystemPool) {
+						continue
+					}
 					ipcIDs = append(ipcIDs, *ipc.ID)
 				}
 			}

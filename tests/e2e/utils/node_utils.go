@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ const (
 	NodeModeLabel  = "kubernetes.azure.com/mode"
 	NodeModeSystem = "system"
 	NodeModeUser   = "user"
-	systemPool     = "systempool"
+	SystemPool     = "systempool"
 
 	// GPUResourceKey is the key of the GPU in the resource map of a node
 	GPUResourceKey = "nvidia.com/gpu"
@@ -77,7 +78,7 @@ func GetAgentNodes(cs clientset.Interface) ([]v1.Node, error) {
 	ret := make([]v1.Node, 0)
 	for i, node := range nodesList.Items {
 		if !IsControlPlaneNode(&nodesList.Items[i]) && !isVirtualKubeletNode(&nodesList.Items[i]) &&
-			!isSystemPoolNode(&nodesList.Items[i]) {
+			!IsSystemPoolNode(&nodesList.Items[i]) {
 			ret = append(ret, node)
 		}
 	}
@@ -275,11 +276,20 @@ func isVirtualKubeletNode(node *v1.Node) bool {
 	return false
 }
 
-func isSystemPoolNode(node *v1.Node) bool {
+// IsSystemPoolNode checks if the Node is of system pool when running tests in an AKS autoscaling cluster.
+func IsSystemPoolNode(node *v1.Node) bool {
+	if !IsAutoscalingAKSCluster() {
+		return false
+	}
 	if val, ok := node.Labels[NodeModeLabel]; ok && val == NodeModeSystem {
 		return true
 	}
 	return false
+}
+
+// IsAutoscalingAKSCluster checks if the cluster is an autoscaling AKS one.
+func IsAutoscalingAKSCluster() bool {
+	return os.Getenv(AKSTestCCM) != "" && strings.Contains(os.Getenv(AKSClusterType), "autoscaling")
 }
 
 func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete bool) (*v1.Node, error) {
@@ -302,7 +312,7 @@ func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
 	for i := range *nodes {
 		node := (*nodes)[i]
 		labels := node.ObjectMeta.Labels
-		if isSystemPoolNode(&node) {
+		if IsSystemPoolNode(&node) {
 			continue
 		}
 		if nodepool, ok := labels[agentpoolLabelKey]; ok {

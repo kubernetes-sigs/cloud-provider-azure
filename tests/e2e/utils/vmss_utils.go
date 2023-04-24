@@ -49,7 +49,7 @@ func FindTestVMSS(tc *AzureTestClient, rgName string) (*azcompute.VirtualMachine
 	vmssList := list.Values()
 	for i := range vmssList {
 		vmss := vmssList[i]
-		if vmss.Name != nil && strings.Contains(*vmss.Name, systemPool) {
+		if IsAutoscalingAKSCluster() && vmss.Name != nil && strings.Contains(*vmss.Name, SystemPool) {
 			continue
 		}
 		return &vmss, nil
@@ -356,7 +356,7 @@ func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet,
 	vmssUniforms := make([]azcompute.VirtualMachineScaleSet, 0)
 	for i := range res {
 		vmssUniform := res[i]
-		if vmssUniform.Name != nil && strings.Contains(*vmssUniform.Name, systemPool) {
+		if IsAutoscalingAKSCluster() && vmssUniform.Name != nil && strings.Contains(*vmssUniform.Name, SystemPool) {
 			continue
 		}
 		if vmssUniform.OrchestrationMode == "" || vmssUniform.OrchestrationMode == azcompute.Uniform {
