@@ -670,10 +670,19 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
+		lbBackendPoolIPConfigsCount := 0
+		if utils.IsAutoscalingAKSCluster() {
+			for _, ipconfig := range *(*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations {
+				if !strings.Contains(*ipconfig.ID, utils.SystemPool) {
+					lbBackendPoolIPConfigsCount++
+				}
+			}
+		} else {
+			lbBackendPoolIPConfigsCount = len(*(*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations)
+		}
 		nodes, err = utils.GetAgentNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(*lbBackendPoolIPConfigs)).To(Equal(len(nodes)))
+		Expect(lbBackendPoolIPConfigsCount).To(Equal(len(nodes)))
 
 		By("Labeling node")
 		node, err := utils.LabelNode(cs, &nodes[0], label, false)
@@ -1124,12 +1133,20 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 		lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
 		ipConfigNum := 0
 		if lbBackendPoolIPConfigs != nil {
-			ipConfigNum = len(*lbBackendPoolIPConfigs)
+			if utils.IsAutoscalingAKSCluster() {
+				for _, ipconfig := range *lbBackendPoolIPConfigs {
+					if !strings.Contains(*ipconfig.ID, utils.SystemPool) {
+						ipConfigNum++
+					}
+				}
+			} else {
+				ipConfigNum = len(*lbBackendPoolIPConfigs)
+			}
 		}
 		if expectedNum == ipConfigNum {
 			return true, nil
 		}
-		utils.Logf("Number of IP configs: %d in the LB backend pool, will retry soon", ipConfigNum)
+		utils.Logf("Number of IP configs: %d in the LB backend pool, expected %d, will retry soon", ipConfigNum, expectedNum)
 		return false, nil
 	})
 }
