@@ -100,7 +100,7 @@ func TestExistsPip(t *testing.T) {
 			func(client *mockpublicipclient.MockInterface) {
 				pips := []network.PublicIPAddress{
 					{
-						Name: pointer.String("testCluster-aservice-IPv6"),
+						Name: pointer.String("testCluster-aservice"),
 						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 							IPAddress: pointer.String("fe::1"),
 						},
@@ -109,6 +109,22 @@ func TestExistsPip(t *testing.T) {
 				client.EXPECT().List(gomock.Any(), "rg").Return(pips, nil)
 			},
 			true,
+		},
+		{
+			"IPv6 not exists - should not have suffix",
+			getTestService("service", v1.ProtocolTCP, nil, true, 80),
+			func(client *mockpublicipclient.MockInterface) {
+				pips := []network.PublicIPAddress{
+					{
+						Name: pointer.String("testCluster-aservice-IPv6"),
+						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+							IPAddress: pointer.String("fe::1"),
+						},
+					},
+				}
+				client.EXPECT().List(gomock.Any(), "rg").Return(pips, nil).MaxTimes(2)
+			},
+			false,
 		},
 		{
 			"DualStack exists",
@@ -1129,6 +1145,8 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			},
 		},
 	}
+	existingPipWithTagIPv6Suffix := existingPipWithTag
+	existingPipWithTagIPv6Suffix.Name = pointer.String("testPIP-IPv6")
 
 	existingPipWithNoPublicIPAddressFormatProperties := network.PublicIPAddress{
 		ID:                              pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP"),
@@ -1238,6 +1256,25 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 			expectedShouldRelease: true,
 		},
 		{
+			// This test is for IPv6 PIP created with CCM v1.27.1 and CCM gets upgraded.
+			// Such PIP should be recreated.
+			desc:           "matching except PIP name (with IPv6 suffix), expect release",
+			existingPip:    existingPipWithTagIPv6Suffix,
+			lbShouldExist:  true,
+			lbIsInternal:   false,
+			desiredPipName: *existingPipWithTag.Name,
+			ipTagRequest: serviceIPTagRequest{
+				IPTagsRequestedByAnnotation: true,
+				IPTags: &[]network.IPTag{
+					{
+						IPTagType: pointer.String("tag1"),
+						Tag:       pointer.String("tag1value"),
+					},
+				},
+			},
+			expectedShouldRelease: true,
+		},
+		{
 			desc:           "should delete orphaned managed public IP",
 			existingPip:    existingPipWithTag,
 			lbShouldExist:  false,
@@ -1277,13 +1314,15 @@ func TestShouldReleaseExistingOwnedPublicIP(t *testing.T) {
 		},
 	}
 
-	for i, c := range tests {
-		if c.tags != nil {
-			c.existingPip.Tags = c.tags
-		}
-		existingPip := c.existingPip
-		actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest)
-		assert.Equal(t, c.expectedShouldRelease, actualShouldRelease, "TestCase[%d]: %s", i, c.desc)
+	for _, c := range tests {
+		t.Run(c.desc, func(t *testing.T) {
+			if c.tags != nil {
+				c.existingPip.Tags = c.tags
+			}
+			existingPip := c.existingPip
+			actualShouldRelease := shouldReleaseExistingOwnedPublicIP(&existingPip, c.lbShouldExist, c.lbIsInternal, c.isUserAssignedPIP, c.desiredPipName, c.ipTagRequest)
+			assert.Equal(t, c.expectedShouldRelease, actualShouldRelease)
+		})
 	}
 }
 
