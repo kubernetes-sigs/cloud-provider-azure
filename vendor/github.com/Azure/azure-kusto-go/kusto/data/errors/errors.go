@@ -39,7 +39,7 @@ const (
 	OpIngestStream  Op = 4 // OpIngestStream indicates the client is making a streaming ingestion call.
 	OpFileIngest    Op = 5 // OpFileIngest indicates the client is making a file ingestion call.
 	OpCloudInfo     Op = 6 // OpCloudInfo indicates an error fetching data from the cloud metadata.
-	OpTokenProvider Op = 7 // OpCloudInfo indicates an error creating a token provider.
+	OpTokenProvider Op = 7 // OpTokenProvider indicates an error creating a token provider.
 )
 
 // Kind field classifies the error as one of a set of standard conditions.

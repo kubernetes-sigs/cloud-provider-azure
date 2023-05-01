@@ -70,7 +70,7 @@ func (f *FakeMgmt) SetMgmtErr() *FakeMgmt {
 	return f
 }
 
-func (f *FakeMgmt) Mgmt(_ context.Context, db string, query kusto.Stmt, _ ...kusto.MgmtOption) (*kusto.RowIterator, error) {
+func (f *FakeMgmt) Mgmt(_ context.Context, db string, query kusto.Statement, _ ...kusto.MgmtOption) (*kusto.RowIterator, error) {
 	if f.DBEqual != "" {
 		if db != f.DBEqual {
 			panic(fmt.Sprintf("expected db to be %q, was %q", f.DBEqual, db))
