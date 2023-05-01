@@ -30,6 +30,7 @@ type ConnectionStringBuilder struct {
 	ClientOptions                    *azcore.ClientOptions
 	ApplicationForTracing            string
 	UserForTracing                   string
+	TokenCredential                  azcore.TokenCredential
 }
 
 const (
@@ -162,6 +163,7 @@ func (kcsb *ConnectionStringBuilder) resetConnectionString() {
 	kcsb.RedirectURL = ""
 	kcsb.ClientOptions = nil
 	kcsb.DefaultAuth = false
+	kcsb.TokenCredential = nil
 }
 
 // WithAadUserPassAuth Creates a Kusto Connection string builder that will authenticate with AAD user name and password.
@@ -276,6 +278,12 @@ func (kcsb *ConnectionStringBuilder) AttachPolicyClientOptions(options *azcore.C
 func (kcsb *ConnectionStringBuilder) WithDefaultAzureCredential() *ConnectionStringBuilder {
 	kcsb.resetConnectionString()
 	kcsb.DefaultAuth = true
+	return kcsb
+}
+
+func (kcsb *ConnectionStringBuilder) WithTokenCredential(tokenCredential azcore.TokenCredential) *ConnectionStringBuilder {
+	kcsb.resetConnectionString()
+	kcsb.TokenCredential = tokenCredential
 	return kcsb
 }
 
@@ -401,8 +409,9 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 		init = func(ci *CloudInfo, cliOpts *azcore.ClientOptions, appClientId string) (azcore.TokenCredential, error) {
 			//Default Azure authentication
 			opts := &azidentity.DefaultAzureCredentialOptions{}
+			opts.ClientOptions = *cliOpts
 			if kcsb.ClientOptions != nil {
-				opts.ClientOptions = *cliOpts
+				opts.ClientOptions = *kcsb.ClientOptions
 			}
 			if !isEmpty(kcsb.AuthorityId) {
 				opts.TenantID = kcsb.AuthorityId
@@ -417,6 +426,11 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 
 			return cred, nil
 		}
+	case kcsb.TokenCredential != nil:
+		init = func(ci *CloudInfo, cliOpts *azcore.ClientOptions, appClientId string) (azcore.TokenCredential, error) {
+			return kcsb.TokenCredential, nil
+		}
+
 	}
 
 	if init != nil {

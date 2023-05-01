@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.20
 
 require (
-	github.com/Azure/azure-kusto-go v0.11.3
+	github.com/Azure/azure-kusto-go v0.12.1
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.29
 	github.com/Azure/go-autorest/autorest/adal v0.9.23
@@ -100,6 +100,7 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/samber/lo v1.37.0 // indirect
+	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.7 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7 // indirect

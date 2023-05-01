@@ -120,5 +120,6 @@ func getCommonCloudInfo(kcsb *ConnectionStringBuilder, http func() *http.Client)
 	if isEmpty(appClientId) {
 		appClientId = cloud.KustoClientAppID
 	}
+	cliOpts.Transport = utils.Transporter{Http: client}
 	return &cloud, cliOpts, appClientId, nil
 }
