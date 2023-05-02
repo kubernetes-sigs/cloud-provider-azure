@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Azure/azure-kusto-go/kusto/kql"
 	"net/url"
 	"strings"
 	"sync"
@@ -27,7 +28,7 @@ const (
 
 // mgmter is a private interface that allows us to write hermetic tests against the kusto.Client.Mgmt() method.
 type mgmter interface {
-	Mgmt(ctx context.Context, db string, query kusto.Stmt, options ...kusto.MgmtOption) (*kusto.RowIterator, error)
+	Mgmt(ctx context.Context, db string, query kusto.Statement, options ...kusto.MgmtOption) (*kusto.RowIterator, error)
 }
 
 var objectTypes = map[string]bool{
@@ -201,7 +202,7 @@ func (m *Manager) AuthContext(ctx context.Context) (string, error) {
 	retryCtx := backoff.WithContext(InitBackoff(), ctx)
 	err := backoff.Retry(func() error {
 		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get kusto identity token"), kusto.IngestionEndpoint())
+		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kql.New(".get kusto identity token"), kusto.IngestionEndpoint())
 		if err == nil {
 			return nil
 		}
@@ -289,7 +290,7 @@ func (m *Manager) fetch(ctx context.Context) error {
 	retryCtx := backoff.WithContext(InitBackoff(), ctx)
 	err := backoff.Retry(func() error {
 		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get ingestion resources"), kusto.IngestionEndpoint())
+		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kql.New(".get ingestion resources"), kusto.IngestionEndpoint())
 		if err == nil {
 			return nil
 		}
