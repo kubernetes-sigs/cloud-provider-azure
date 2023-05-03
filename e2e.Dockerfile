@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.20.3-buster
+FROM golang:1.20.4-buster
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 
