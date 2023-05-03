@@ -1,4 +1,4 @@
-FROM golang:1.20.3-buster
+FROM golang:1.20.4-buster
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 
