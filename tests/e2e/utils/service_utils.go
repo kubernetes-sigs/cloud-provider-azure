@@ -71,40 +71,48 @@ func GetServiceDomainName(prefix string) (ret string) {
 	return
 }
 
-// WaitServiceExposureAndGetIP returns IP of the Service.
-func WaitServiceExposureAndGetIP(cs clientset.Interface, namespace string, name string) (string, error) {
+// WaitServiceExposureAndGetIPs returns IPs of the Service.
+func WaitServiceExposureAndGetIPs(cs clientset.Interface, namespace string, name string) ([]string, error) {
 	var service *v1.Service
 	var err error
-	var ip string
+	ips := []string{}
 
-	service, err = WaitServiceExposure(cs, namespace, name, "")
+	service, err = WaitServiceExposure(cs, namespace, name, []string{})
 	if err != nil {
-		return "", err
+		return ips, err
 	}
 	if service == nil {
-		return "", errors.New("the service is nil")
+		return ips, errors.New("the service is nil")
 	}
 
-	ip = service.Status.LoadBalancer.Ingress[0].IP
+	for _, ingress := range service.Status.LoadBalancer.Ingress {
+		ips = append(ips, ingress.IP)
+	}
 
-	return ip, nil
+	return ips, nil
 }
 
-// WaitServiceExposureAndValidateConnectivity returns ip of the service and check the connectivity if it is a public IP
-func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespace string, name string, targetIP string) (string, error) {
+// WaitServiceExposureAndValidateConnectivity returns IPs of the service and check the connectivity if they are public IPs.
+func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily IPFamily, namespace string, name string, targetIPs []string) ([]string, error) {
 	var service *v1.Service
 	var err error
-	var ip string
+	var ips []string
 
-	service, err = WaitServiceExposure(cs, namespace, name, targetIP)
+	service, err = WaitServiceExposure(cs, namespace, name, targetIPs)
 	if err != nil {
-		return "", err
+		return ips, err
 	}
 	if service == nil {
-		return "", errors.New("the service is nil")
+		return ips, errors.New("the service is nil")
 	}
 
-	ip = service.Status.LoadBalancer.Ingress[0].IP
+	if len(service.Status.LoadBalancer.Ingress) == 0 {
+		return ips, errors.New("service.Status.LoadBalancer.Ingress is empty")
+	}
+	ips = append(ips, service.Status.LoadBalancer.Ingress[0].IP)
+	if len(service.Status.LoadBalancer.Ingress) > 1 {
+		ips = append(ips, service.Status.LoadBalancer.Ingress[1].IP)
+	}
 
 	// Create host exec Pod
 	result, err := CreateHostExecPod(cs, namespace, ExecAgnhostPod)
@@ -115,26 +123,28 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespac
 		}
 	}()
 	if !result || err != nil {
-		return "", fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %w", result, err)
+		return ips, fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %w", result, err)
 	}
 
 	// TODO: Check if other WaitServiceExposureAndValidateConnectivity() callers with internal Service
 	// should test connectivity as well.
 	for _, port := range service.Spec.Ports {
-		Logf("checking the connectivity of addr %s:%d with protocol %v", ip, int(port.Port), port.Protocol)
-		if err := ValidateServiceConnectivity(namespace, ExecAgnhostPod, ip, int(port.Port), port.Protocol); err != nil {
-			return ip, err
+		for _, ip := range ips {
+			Logf("checking the connectivity of address %s %d with protocol %v", ip, int(port.Port), port.Protocol)
+			if err := ValidateServiceConnectivity(namespace, ExecAgnhostPod, ip, int(port.Port), port.Protocol); err != nil {
+				return ips, err
+			}
 		}
 	}
 
-	return ip, nil
+	return ips, nil
 }
 
 // WaitServiceExposure waits for the exposure of the external IP of the service
-func WaitServiceExposure(cs clientset.Interface, namespace string, name string, targetIP string) (*v1.Service, error) {
+func WaitServiceExposure(cs clientset.Interface, namespace string, name string, targetIPs []string) (*v1.Service, error) {
 	var service *v1.Service
 	var err error
-	var ip string
+	var externalIPs []string
 
 	timeout := serviceTimeout
 	if skuEnv := os.Getenv(LoadBalancerSkuEnv); skuEnv != "" {
@@ -153,16 +163,22 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		}
 
 		IngressList := service.Status.LoadBalancer.Ingress
-		if len(IngressList) == 0 {
-			err = fmt.Errorf("Cannot find Ingress in limited time")
+		if (len(targetIPs) != 0 && len(IngressList) < len(targetIPs)) ||
+			(len(targetIPs) == 0 && len(IngressList) == 0) {
+			err = fmt.Errorf("cannot find Ingress in limited time")
 			Logf("Fail to find ingress, retry in 10 seconds")
 			return false, nil
 		}
 
-		ip = service.Status.LoadBalancer.Ingress[0].IP
-		if targetIP != "" && !strings.EqualFold(ip, targetIP) {
-			Logf("expected IP is %s, current IP is %s, retry in 10 seconds", targetIP, ip)
-			return false, nil
+		externalIPs = []string{}
+		for _, ingress := range IngressList {
+			externalIPs = append(externalIPs, ingress.IP)
+		}
+		if len(targetIPs) != 0 {
+			if !CompareStrings(externalIPs, targetIPs) {
+				Logf("expected IPs are %v, current IPs are %v, retry in 10 seconds", targetIPs, externalIPs)
+				return false, nil
+			}
 		}
 
 		return true, nil
@@ -170,7 +186,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		return nil, err
 	}
 
-	Logf("Exposure successfully, get external ip: %s", ip)
+	Logf("Exposure successfully, get external ip: %s", externalIPs)
 	return service, nil
 }
 
