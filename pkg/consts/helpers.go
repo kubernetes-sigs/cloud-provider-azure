@@ -90,10 +90,10 @@ type Int32BusinessValidator func(*int32) error
 // getInt32FromAnnotations parse integer value from annotation and return an reference to int32 object
 func extractInt32FromString(val string, businessValidator ...Int32BusinessValidator) (*int32, error) {
 	val = strings.TrimSpace(val)
-	errKey := fmt.Errorf("%s value must be a whole number", val)
+	errKey := fmt.Sprintf("%s value must be a whole number", val)
 	toInt, err := strconv.ParseInt(val, 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("error value: %w: %v", err, errKey)
+		return nil, fmt.Errorf("error value: %w: %s", err, errKey)
 	}
 	parsedInt := int32(toInt)
 	for _, validator := range businessValidator {
