@@ -177,10 +177,7 @@ func GetNextSubnetCIDRs(vnet aznetwork.VirtualNetwork, ipFamily IPFamily) ([]*ne
 	} else if ipFamily == IPv4 {
 		vnetCIDRs = append(vnetCIDRs, (*vnet.AddressSpace.AddressPrefixes)[0])
 	} else {
-		for i := range *vnet.AddressSpace.AddressPrefixes {
-			addrPrefix := (*vnet.AddressSpace.AddressPrefixes)[i]
-			vnetCIDRs = append(vnetCIDRs, addrPrefix)
-		}
+		vnetCIDRs = append(vnetCIDRs, *vnet.AddressSpace.AddressPrefixes...)
 	}
 
 	var existSubnets []string

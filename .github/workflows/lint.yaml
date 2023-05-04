@@ -15,8 +15,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
-      - name: Lint
-        run: |
-          make lint
-          GO111MODULE=off go get github.com/kyoh86/looppointer/cmd/looppointer
-          $(go env GOPATH)/bin/looppointer ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: v1.51.2
