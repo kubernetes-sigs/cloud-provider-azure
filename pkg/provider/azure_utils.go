@@ -435,8 +435,12 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 	return service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]]
 }
 
-func getResourceByIPFamily(resource string, isIPv6 bool) string {
-	if isIPv6 {
+// getResourceByIPFamily returns the resource name of with IPv6 suffix when
+// it is a dual-stack Service and the resource is of IPv6.
+// NOTICE: For PIPs of IPv6 Services created with CCM v1.27.1, after the CCM is upgraded,
+// the old PIPs will be recreated.
+func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
+	if isDualStack && isIPv6 {
 		return fmt.Sprintf("%s-%s", resource, v6Suffix)
 	}
 	return resource

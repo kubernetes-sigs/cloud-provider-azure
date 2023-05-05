@@ -326,18 +326,8 @@ func (az *Cloud) getRulePrefix(service *v1.Service) string {
 	return az.GetLoadBalancerName(context.TODO(), "", service)
 }
 
-func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, pipResourceGroup string, isIPv6 bool) (string, error) {
-	// For IPv6, the PIP may not have IPv6 suffix because it may be one created before dual-stack support.
-	if isIPv6 {
-		pip, err := az.findMatchedPIPByIPFamilyAndServiceName(clusterName, service, pipResourceGroup)
-		if err != nil {
-			return "", err
-		}
-		if pip != nil {
-			return pointer.StringDeref(pip.Name, ""), nil
-		}
-	}
-
+func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6 bool) (string, error) {
+	isDualStack := isServiceDualStack(service)
 	pipName := fmt.Sprintf("%s-%s", clusterName, az.GetLoadBalancerName(context.TODO(), clusterName, service))
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
 		id, err := getLastSegment(id, "/")
@@ -345,7 +335,7 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, pipRes
 			pipName = fmt.Sprintf("%s-%s", pipName, id)
 		}
 	}
-	return getResourceByIPFamily(pipName, isIPv6), nil
+	return getResourceByIPFamily(pipName, isDualStack, isIPv6), nil
 }
 
 // TODO: UT
