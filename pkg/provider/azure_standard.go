@@ -74,7 +74,11 @@ func (az *Cloud) getAvailabilitySetID(resourceGroup, availabilitySetName string)
 }
 
 // returns the full identifier of a loadbalancer frontendipconfiguration.
-func (az *Cloud) getFrontendIPConfigID(lbName, rgName, fipConfigName string) string {
+func (az *Cloud) getFrontendIPConfigID(lbName, fipConfigName string) string {
+	return az.getFrontendIPConfigIDWithRG(lbName, az.getLoadBalancerResourceGroup(), fipConfigName)
+}
+
+func (az *Cloud) getFrontendIPConfigIDWithRG(lbName, rgName, fipConfigName string) string {
 	return fmt.Sprintf(
 		consts.FrontendIPConfigIDTemplate,
 		az.getNetworkResourceSubscriptionID(),
@@ -84,7 +88,11 @@ func (az *Cloud) getFrontendIPConfigID(lbName, rgName, fipConfigName string) str
 }
 
 // returns the full identifier of a loadbalancer backendpool.
-func (az *Cloud) getBackendPoolID(lbName, rgName, backendPoolName string) string {
+func (az *Cloud) getBackendPoolID(lbName, backendPoolName string) string {
+	return az.getBackendPoolIDWithRG(lbName, az.getLoadBalancerResourceGroup(), backendPoolName)
+}
+
+func (az *Cloud) getBackendPoolIDWithRG(lbName, rgName, backendPoolName string) string {
 	return fmt.Sprintf(
 		consts.BackendPoolIDTemplate,
 		az.getNetworkResourceSubscriptionID(),
@@ -94,7 +102,11 @@ func (az *Cloud) getBackendPoolID(lbName, rgName, backendPoolName string) string
 }
 
 // returns the full identifier of a loadbalancer probe.
-func (az *Cloud) getLoadBalancerProbeID(lbName, rgName, lbRuleName string) string {
+func (az *Cloud) getLoadBalancerProbeID(lbName, lbRuleName string) string {
+	return az.getLoadBalancerProbeIDWithRG(lbName, az.getLoadBalancerResourceGroup(), lbRuleName)
+}
+
+func (az *Cloud) getLoadBalancerProbeIDWithRG(lbName, rgName, lbRuleName string) string {
 	return fmt.Sprintf(
 		consts.LoadBalancerProbeIDTemplate,
 		az.getNetworkResourceSubscriptionID(),

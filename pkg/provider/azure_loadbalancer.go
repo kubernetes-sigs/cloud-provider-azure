@@ -432,10 +432,9 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, existingLBs
 	lbName := pointer.StringDeref(lb.Name, "")
 	serviceName := getServiceName(service)
 	isBackendPoolPreConfigured := az.isBackendPoolPreConfigured(service)
-	lbResourceGroup := az.getLoadBalancerResourceGroup()
 	isIPv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
 	lbBackendPoolName := getBackendPoolName(clusterName, isIPv6)
-	lbBackendPoolID := az.getBackendPoolID(lbName, lbResourceGroup, lbBackendPoolName)
+	lbBackendPoolID := az.getBackendPoolID(lbName, lbBackendPoolName)
 	if isBackendPoolPreConfigured {
 		klog.V(2).Infof("cleanOrphanedLoadBalancer(%s, %s, %s): ignore cleanup of dirty lb because the lb is pre-configured", lbName, serviceName, clusterName)
 	} else {
@@ -507,7 +506,7 @@ func (az *Cloud) cleanOrphanedLoadBalancer(lb *network.LoadBalancer, existingLBs
 // safeDeleteLoadBalancer deletes the load balancer after decoupling it from the vmSet
 func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vmSetName string, service *v1.Service) *retry.Error {
 	isIPv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
-	lbBackendPoolID := az.getBackendPoolID(pointer.StringDeref(lb.Name, ""), az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, isIPv6))
+	lbBackendPoolID := az.getBackendPoolID(pointer.StringDeref(lb.Name, ""), getBackendPoolName(clusterName, isIPv6))
 	_, err := az.VMSet.EnsureBackendPoolDeleted(service, []string{lbBackendPoolID}, vmSetName, lb.BackendAddressPools, true)
 	if err != nil {
 		return retry.NewError(false, fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", err))
@@ -1588,12 +1587,12 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 	}
 
 	lbName := *lb.Name
-	lbResourceGroup := az.getLoadBalancerResourceGroup()
 	isIPv6 := utilnet.IsIPv6String(service.Spec.ClusterIP)
-	lbBackendPoolID := az.getBackendPoolID(lbName, az.getLoadBalancerResourceGroup(), getBackendPoolName(clusterName, isIPv6))
-	klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s/%s) wantLb(%t) resolved load balancer name", serviceName, lbResourceGroup, lbName, wantLb)
+	lbBackendPoolID := az.getBackendPoolID(lbName, getBackendPoolName(clusterName, isIPv6))
+	klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s/%s) wantLb(%t) resolved load balancer name",
+		serviceName, az.getLoadBalancerResourceGroup(), lbName, wantLb)
 	defaultLBFrontendIPConfigName := az.getDefaultFrontendIPConfigName(service)
-	defaultLBFrontendIPConfigID := az.getFrontendIPConfigID(lbName, lbResourceGroup, defaultLBFrontendIPConfigName)
+	defaultLBFrontendIPConfigID := az.getFrontendIPConfigID(lbName, defaultLBFrontendIPConfigName)
 	dirtyLb := false
 
 	// reconcile the load balancer's backend pool configuration.
@@ -2179,7 +2178,7 @@ func (az *Cloud) getExpectedLBRules(
 				}
 				if portprobe != nil {
 					props.Probe = &network.SubResource{
-						ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+						ID: pointer.String(az.getLoadBalancerProbeID(lbName, *portprobe.Name)),
 					}
 					expectedProbes = append(expectedProbes, *portprobe)
 					break
@@ -2187,7 +2186,7 @@ func (az *Cloud) getExpectedLBRules(
 			}
 		} else {
 			props.Probe = &network.SubResource{
-				ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
+				ID: pointer.String(az.getLoadBalancerProbeID(lbName, *nodeEndpointHealthprobe.Name)),
 			}
 		}
 
@@ -2241,13 +2240,13 @@ func (az *Cloud) getExpectedLBRules(
 					}
 					if portprobe != nil {
 						props.Probe = &network.SubResource{
-							ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
+							ID: pointer.String(az.getLoadBalancerProbeID(lbName, *portprobe.Name)),
 						}
 						expectedProbes = append(expectedProbes, *portprobe)
 					}
 				} else {
 					props.Probe = &network.SubResource{
-						ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
+						ID: pointer.String(az.getLoadBalancerProbeID(lbName, *nodeEndpointHealthprobe.Name)),
 					}
 				}
 			}

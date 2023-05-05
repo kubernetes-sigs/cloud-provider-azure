@@ -89,10 +89,9 @@ func (bc *backendPoolTypeNodeIPConfig) CleanupVMSetFromBackendPoolByCondition(sl
 		consts.IPVersionIPv4: getBackendPoolName(clusterName, consts.IPVersionIPv4),
 		consts.IPVersionIPv6: getBackendPoolName(clusterName, consts.IPVersionIPv6),
 	}
-	lbResourceGroup := bc.getLoadBalancerResourceGroup()
 	lbBackendPoolIDs := map[bool]string{
-		consts.IPVersionIPv4: bc.getBackendPoolID(pointer.StringDeref(slb.Name, ""), lbResourceGroup, lbBackendPoolNames[consts.IPVersionIPv4]),
-		consts.IPVersionIPv6: bc.getBackendPoolID(pointer.StringDeref(slb.Name, ""), lbResourceGroup, lbBackendPoolNames[consts.IPVersionIPv6]),
+		consts.IPVersionIPv4: bc.getBackendPoolID(pointer.StringDeref(slb.Name, ""), lbBackendPoolNames[consts.IPVersionIPv4]),
+		consts.IPVersionIPv6: bc.getBackendPoolID(pointer.StringDeref(slb.Name, ""), lbBackendPoolNames[consts.IPVersionIPv6]),
 	}
 	newBackendPools := make([]network.BackendAddressPool, 0)
 	if slb.LoadBalancerPropertiesFormat != nil && slb.BackendAddressPools != nil {
@@ -181,8 +180,8 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 		true:  getBackendPoolName(clusterName, true),
 	}
 	lbBackendPoolIDs := map[bool]string{
-		false: bc.getBackendPoolID(lbName, bc.getLoadBalancerResourceGroup(), lbBackendPoolNames[false]),
-		true:  bc.getBackendPoolID(lbName, bc.getLoadBalancerResourceGroup(), lbBackendPoolNames[true]),
+		false: bc.getBackendPoolID(lbName, lbBackendPoolNames[false]),
+		true:  bc.getBackendPoolID(lbName, lbBackendPoolNames[true]),
 	}
 	vmSetName := bc.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	isBackendPoolPreConfigured := bc.isBackendPoolPreConfigured(service)
@@ -587,8 +586,8 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 	}
 	vmSetName := bi.mapLoadBalancerNameToVMSet(lbName, clusterName)
 	lbBackendPoolIDs := map[bool]string{
-		false: bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), bi.getLoadBalancerResourceGroup(), lbBackendPoolNames[false]),
-		true:  bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), bi.getLoadBalancerResourceGroup(), lbBackendPoolNames[true]),
+		false: bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), lbBackendPoolNames[false]),
+		true:  bi.getBackendPoolID(pointer.StringDeref(lb.Name, ""), lbBackendPoolNames[true]),
 	}
 	isBackendPoolPreConfigured := bi.isBackendPoolPreConfigured(service)
 
