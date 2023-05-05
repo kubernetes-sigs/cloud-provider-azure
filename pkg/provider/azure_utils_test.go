@@ -856,24 +856,41 @@ func TestGetResourceByIPFamily(t *testing.T) {
 		desc             string
 		resource         string
 		isIPv6           bool
+		isDualStack      bool
 		expectedResource string
 	}{
 		{
-			"IPv4",
+			"DualStack - IPv4",
 			"resource0",
+			false,
+			true,
+			"resource0",
+		},
+		{
+			"DualStack - IPv6",
+			"resource0",
+			true,
+			true,
+			"resource0-IPv6",
+		},
+		{
+			"SingleStack - IPv4",
+			"resource0",
+			false,
 			false,
 			"resource0",
 		},
 		{
-			"IPv6",
+			"SingleStack - IPv6",
 			"resource0",
 			true,
-			"resource0-IPv6",
+			false,
+			"resource0",
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
-			resource := getResourceByIPFamily(tc.resource, tc.isIPv6)
+			resource := getResourceByIPFamily(tc.resource, tc.isDualStack, tc.isIPv6)
 			assert.Equal(t, tc.expectedResource, resource)
 		})
 	}

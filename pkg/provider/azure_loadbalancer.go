@@ -869,7 +869,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
-		pipName, err := az.getPublicIPName(clusterName, service, pipResourceGroup, isIPv6)
+		pipName, err := az.getPublicIPName(clusterName, service, isIPv6)
 		return pipName, false, err
 	}
 
@@ -878,7 +878,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	// Assume that the service without loadBalancerIP set is a primary service.
 	// If a secondary service doesn't set the loadBalancerIP, it is not allowed to share the IP.
 	if len(loadBalancerIP) == 0 {
-		pipName, err := az.getPublicIPName(clusterName, service, pipResourceGroup, isIPv6)
+		pipName, err := az.getPublicIPName(clusterName, service, isIPv6)
 		return pipName, false, err
 	}
 
@@ -894,24 +894,6 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	}
 
 	return "", false, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
-}
-
-// findMatchedPIPByIPFamilyAndServiceName is for IPv6. It tries to find a matching PIP whose name doesn't have IPv6 suffix.
-// Such PIP comes from old CCM without dual-stack support.
-func (az *Cloud) findMatchedPIPByIPFamilyAndServiceName(clusterName string, service *v1.Service, pipResourceGroup string) (*network.PublicIPAddress, error) {
-	pips, err := az.listPIP(pipResourceGroup)
-	if err != nil {
-		return nil, fmt.Errorf("findMatchedPIPByIPFamilyAndServiceName: failed to listPIP: %w", err)
-	}
-	baseName := az.GetLoadBalancerName(context.TODO(), clusterName, service)
-	for _, pip := range pips {
-		pip := pip
-		if pointer.StringDeref(pip.Name, "") == baseName && pip.PublicIPAddressPropertiesFormat != nil &&
-			pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion == network.IPv6 {
-			return &pip, nil
-		}
-	}
-	return nil, nil
 }
 
 func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
@@ -2984,6 +2966,8 @@ func shouldReleaseExistingOwnedPublicIP(existingPip *network.PublicIPAddress, lb
 		// #2 - If the load balancer is internal, and thus doesn't require public exposure
 		lbIsInternal ||
 		// #3 - If the name of this public ip does not match the desired name,
+		// NOTICE: For IPv6 Service created with CCM v1.27.1, the created PIP has IPv6 suffix.
+		// We need to recreate such PIP and current logic to delete needs no change.
 		(pipName != desiredPipName) ||
 		// #4 If the service annotations have specified the ip tags that the public ip must have, but they do not match the ip tags of the existing instance
 		(ipTagRequest.IPTagsRequestedByAnnotation && !areIPTagsEquivalent(currentIPTags, ipTagRequest.IPTags))

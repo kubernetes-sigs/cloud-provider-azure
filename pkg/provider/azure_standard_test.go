@@ -2378,7 +2378,6 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
-			pips:            []network.PublicIPAddress{},
 			isIPv6:          true,
 			expectedPIPName: "azure-auid-prefix-id-ipv6-IPv6",
 		},
@@ -2392,30 +2391,30 @@ func TestGetPublicIPName(t *testing.T) {
 					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
 				},
 			},
-			pips: []network.PublicIPAddress{
-				{
-					Name: pointer.String("auid"),
-					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion: network.IPv6,
-					},
+			isIPv6:          true,
+			expectedPIPName: "azure-auid",
+		},
+		{
+			desc: "Service PIP IPv6 only with existing PIP - dualstack",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
 			isIPv6:          true,
-			expectedPIPName: "auid",
+			expectedPIPName: "azure-auid-IPv6",
 		},
 	}
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	rg := "rg0"
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			if tc.isIPv6 {
-				mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-				mockPIPsClient.EXPECT().List(gomock.Any(), rg).Return(tc.pips, nil)
-			}
-			name, err := az.getPublicIPName("azure", tc.svc, rg, tc.isIPv6)
+			name, err := az.getPublicIPName("azure", tc.svc, tc.isIPv6)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedPIPName, name)
 		})
