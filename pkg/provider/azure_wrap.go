@@ -231,7 +231,7 @@ func (az *Cloud) newVMCache() (*azcache.TimedCache, error) {
 		}
 
 		if vm.VirtualMachineProperties != nil &&
-			strings.EqualFold(pointer.StringDeref(vm.VirtualMachineProperties.ProvisioningState, ""), string(compute.ProvisioningStateDeleting)) {
+			strings.EqualFold(pointer.StringDeref(vm.VirtualMachineProperties.ProvisioningState, ""), string(consts.ProvisioningStateDeleting)) {
 			klog.V(2).Infof("Virtual machine %q is under deleting", key)
 			return nil, nil
 		}

@@ -67,7 +67,7 @@ func setTestVirtualMachines(c *Cloud, vmList map[string]string, isDataDisksFull 
 			},
 		}
 		vm.VirtualMachineProperties = &compute.VirtualMachineProperties{
-			ProvisioningState: pointer.String(string(compute.ProvisioningStateSucceeded)),
+			ProvisioningState: pointer.String(string(consts.ProvisioningStateSucceeded)),
 			HardwareProfile: &compute.HardwareProfile{
 				VMSize: compute.StandardA0,
 			},
