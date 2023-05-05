@@ -85,6 +85,10 @@ type ManagedDiskOptions struct {
 	BurstingEnabled *bool
 	// SubscriptionID - specify a different SubscriptionID
 	SubscriptionID string
+	// Location - specify a different location
+	Location string
+	// PerformancePlus - Set this flag to true to get a boost on the performance target of the disk deployed
+	PerformancePlus *bool
 }
 
 // CreateManagedDisk: create managed disk
@@ -128,7 +132,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		subsID = options.SubscriptionID
 	}
 
-	creationData, err := getValidCreationData(subsID, rg, options.SourceResourceID, options.SourceType)
+	creationData, err := getValidCreationData(subsID, rg, options)
 	if err != nil {
 		return "", err
 	}
