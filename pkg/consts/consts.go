@@ -130,6 +130,10 @@ const (
 	VMSetNamesSharingPrimarySLBDelimiter = ","
 	// PremiumV2_LRS type for Azure Disk
 	PremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
+	// ProvisioningStateDeleting ...
+	ProvisioningStateDeleting = "Deleting"
+	// ProvisioningStateSucceeded ...
+	ProvisioningStateSucceeded = "Succeeded"
 )
 
 // cache
