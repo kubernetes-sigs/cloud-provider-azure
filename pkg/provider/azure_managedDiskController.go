@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -88,6 +88,8 @@ type ManagedDiskOptions struct {
 	SubscriptionID string
 	// Location - specify a different location
 	Location string
+	// PerformancePlus - Set this flag to true to get a boost on the performance target of the disk deployed
+	PerformancePlus *bool
 }
 
 // CreateManagedDisk: create managed disk
@@ -131,7 +133,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		subsID = options.SubscriptionID
 	}
 
-	creationData, err := getValidCreationData(subsID, rg, options.SourceResourceID, options.SourceType)
+	creationData, err := getValidCreationData(subsID, rg, options)
 	if err != nil {
 		return "", err
 	}

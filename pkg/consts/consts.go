@@ -19,7 +19,7 @@ package consts
 import (
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 )
 
@@ -130,6 +130,10 @@ const (
 	VMSetNamesSharingPrimarySLBDelimiter = ","
 	// PremiumV2_LRS type for Azure Disk
 	PremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
+	// ProvisioningStateDeleting ...
+	ProvisioningStateDeleting = "Deleting"
+	// ProvisioningStateSucceeded ...
+	ProvisioningStateSucceeded = "Succeeded"
 )
 
 // cache
