@@ -518,7 +518,7 @@ func TestGetFrontendIPConfigID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getFrontendIPConfigID, consts.FrontendIPConfigIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getFrontendIPConfigID, az.getFrontendIPConfigIDWithRG, consts.FrontendIPConfigIDTemplate)
 }
 
 func TestGetBackendPoolID(t *testing.T) {
@@ -526,7 +526,7 @@ func TestGetBackendPoolID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getBackendPoolID, consts.BackendPoolIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getBackendPoolID, az.getBackendPoolIDWithRG, consts.BackendPoolIDTemplate)
 }
 
 func TestGetLoadBalancerProbeID(t *testing.T) {
@@ -534,70 +534,66 @@ func TestGetLoadBalancerProbeID(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	testGetLoadBalancerSubResourceID(t, az, az.getLoadBalancerProbeID, consts.LoadBalancerProbeIDTemplate)
+	testGetLoadBalancerSubResourceID(t, az, az.getLoadBalancerProbeID, az.getLoadBalancerProbeIDWithRG, consts.LoadBalancerProbeIDTemplate)
 }
 
 func testGetLoadBalancerSubResourceID(
 	t *testing.T,
 	az *Cloud,
-	getLoadBalancerSubResourceID func(string, string, string) string,
+	getLoadBalancerSubResourceID func(string, string) string,
+	getLoadBalancerSubResourceIDWithRG func(string, string, string) string,
 	expectedResourceIDTemplate string) {
 	cases := []struct {
 		description                         string
-		loadBalancerName                    string
-		resourceGroupName                   string
-		subResourceName                     string
 		useNetworkResourceInDifferentTenant bool
 		useNetworkResourceInDifferentSub    bool
-		expected                            string
 	}{
 		{
 			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different tenant and subscription",
-			loadBalancerName:                    "lbName",
-			resourceGroupName:                   "rgName",
-			subResourceName:                     "subResourceName",
 			useNetworkResourceInDifferentTenant: true,
 			useNetworkResourceInDifferentSub:    true,
 		},
 		{
 			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different subscription",
-			loadBalancerName:                    "lbName",
-			resourceGroupName:                   "rgName",
-			subResourceName:                     "subResourceName",
 			useNetworkResourceInDifferentTenant: false,
 			useNetworkResourceInDifferentSub:    true,
 		},
 		{
 			description:                         "resource id should contain SubscriptionID when not using network resources in different subscription",
-			loadBalancerName:                    "lbName",
-			resourceGroupName:                   "rgName",
-			subResourceName:                     "subResourceName",
 			useNetworkResourceInDifferentTenant: false,
 			useNetworkResourceInDifferentSub:    false,
 		},
 	}
 
 	for _, c := range cases {
-		subscriptionID := az.SubscriptionID
-		if c.useNetworkResourceInDifferentTenant {
-			az.NetworkResourceTenantID = networkResourceTenantID
-		} else {
-			az.NetworkResourceTenantID = ""
-		}
-		if c.useNetworkResourceInDifferentSub {
-			az.NetworkResourceSubscriptionID = networkResourceSubscriptionID
-			subscriptionID = networkResourceSubscriptionID
-		} else {
-			az.NetworkResourceSubscriptionID = ""
-		}
-		c.expected = fmt.Sprintf(
-			expectedResourceIDTemplate,
-			subscriptionID,
-			c.resourceGroupName,
-			c.loadBalancerName,
-			c.subResourceName)
-		subResourceID := getLoadBalancerSubResourceID(c.loadBalancerName, c.resourceGroupName, c.subResourceName)
-		assert.Equal(t, c.expected, subResourceID, c.description)
+		t.Run(c.description, func(t *testing.T) {
+			subscriptionID := az.SubscriptionID
+			rgName := "rgName"
+			lbName := "lbName"
+			subResourceName := "subResourceName"
+			az.ResourceGroup = rgName
+			if c.useNetworkResourceInDifferentTenant {
+				az.NetworkResourceTenantID = networkResourceTenantID
+			} else {
+				az.NetworkResourceTenantID = ""
+			}
+			if c.useNetworkResourceInDifferentSub {
+				az.NetworkResourceSubscriptionID = networkResourceSubscriptionID
+				subscriptionID = networkResourceSubscriptionID
+			} else {
+				az.NetworkResourceSubscriptionID = ""
+			}
+			expected := fmt.Sprintf(
+				expectedResourceIDTemplate,
+				subscriptionID,
+				rgName,
+				lbName,
+				subResourceName)
+			subResourceID := getLoadBalancerSubResourceID(lbName, subResourceName)
+			assert.Equal(t, expected, subResourceID)
+			subResourceIDWithRG := getLoadBalancerSubResourceIDWithRG(lbName, rgName, subResourceName)
+			assert.Equal(t, expected, subResourceIDWithRG)
+		})
 	}
 }
 
