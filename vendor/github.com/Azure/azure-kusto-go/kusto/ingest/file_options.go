@@ -206,6 +206,11 @@ const (
 	SingleJSON DataFormat = properties.SingleJSON
 )
 
+// InferFormatFromFileName  looks at the file name and tries to discern what the file format is
+func InferFormatFromFileName(fName string) DataFormat {
+	return properties.DataFormatDiscovery(fName)
+}
+
 // IngestionMapping provides runtime mapping of the data being imported to the fields in the table.
 // "ref" will be JSON encoded, so it can be any type that can be JSON marshalled. If you pass a string
 // or []byte, it will be interpreted as already being JSON encoded.
