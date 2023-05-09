@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package recording
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -26,10 +27,13 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/google/uuid"
-	"gopkg.in/dnaeon/go-vcr.v2/cassette"
-	"gopkg.in/dnaeon/go-vcr.v2/recorder"
+	"gopkg.in/dnaeon/go-vcr.v3/cassette"
+	gorecorder "gopkg.in/dnaeon/go-vcr.v3/recorder"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/v2/utils"
 )
 
 var (
@@ -94,38 +98,50 @@ func hideRecordingData(s string) string {
 type Recorder struct {
 	cassetteName   string
 	credential     azcore.TokenCredential
-	rec            *recorder.Recorder
+	rec            *gorecorder.Recorder
 	subscriptionID string
 
 	httpClient *http.Client
 }
 
+type DummyTokenCredential func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error)
+
+func (d DummyTokenCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return d(ctx, opts)
+}
+
 func NewRecorder(cassetteName string) (*Recorder, error) {
-	rec, err := recorder.New(cassetteName)
+	rec, err := gorecorder.NewWithOptions(&gorecorder.Options{
+		CassetteName:       cassetteName,
+		Mode:               gorecorder.ModeRecordOnce,
+		SkipRequestLatency: true,
+		RealTransport:      http.DefaultTransport,
+	})
 	if err != nil {
 		return nil, err
 	}
-	rec.SkipRequestLatency = true
 
+	rec.SetRealTransport(utils.DefaultTransport)
+	rec.SetReplayableInteractions(true)
 	var tokenCredential azcore.TokenCredential
 	var subscriptionID string
 
-	if rec.Mode() == recorder.ModeRecording ||
-		rec.Mode() == recorder.ModeDisabled {
-		tokenCredential, err = azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return nil, err
-		}
-
+	if rec.IsRecording() {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
 		if subscriptionID == "" {
 			return nil, errors.New("required environment variable AZURE_SUBSCRIPTION_ID was not supplied")
+		}
+		tokenCredential, err = azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, err
 		}
 	} else {
 		// if we are replaying, we won't need auth
 		// and we use a dummy subscription ID
 		subscriptionID = uuid.Nil.String()
-		tokenCredential = nil
+		tokenCredential = DummyTokenCredential(func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+			return azcore.AccessToken{}, nil
+		})
 	}
 
 	// check body as well as URL/Method (copied from go-vcr documentation)
@@ -152,7 +168,7 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		return b.String() == "" || hideRecordingData(b.String()) == i.Body
 	})
 
-	rec.AddSaveFilter(func(i *cassette.Interaction) error {
+	hook := func(i *cassette.Interaction) error {
 		// rewrite all request/response fields to hide the real subscription ID
 		// this is *not* a security measure but intended to make the tests updateable from
 		// any subscription, so a contributor can update the tests against their own sub.
@@ -185,7 +201,8 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		}
 
 		return nil
-	})
+	}
+	rec.AddHook(hook, gorecorder.BeforeSaveHook)
 
 	return &Recorder{
 		cassetteName:   cassetteName,

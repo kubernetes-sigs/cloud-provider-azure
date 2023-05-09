@@ -61,7 +61,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.ManagedCluster, nil
+	if resp != nil {
+		return &resp.ManagedCluster, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a ManagedCluster by name.

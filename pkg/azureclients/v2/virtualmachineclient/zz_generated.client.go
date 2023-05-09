@@ -49,7 +49,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.VirtualMachine, nil
+	if resp != nil {
+		return &resp.VirtualMachine, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a VirtualMachine by name.

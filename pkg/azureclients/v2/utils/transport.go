@@ -18,16 +18,18 @@ package utils
 
 import (
 	"crypto/tls"
-	"github.com/Azure/go-armbalancer"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/Azure/go-armbalancer"
 )
 
 var defaultHTTPClient *http.Client
+var DefaultTransport *http.Transport
 
 func init() {
-	defaultTransport := &http.Transport{
+	DefaultTransport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
@@ -45,7 +47,7 @@ func init() {
 	}
 	defaultHTTPClient = &http.Client{
 		Transport: armbalancer.New(armbalancer.Options{
-			Transport: defaultTransport,
+			Transport: DefaultTransport,
 			PoolSize:  100,
 		}),
 	}

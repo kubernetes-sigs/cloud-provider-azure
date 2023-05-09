@@ -64,7 +64,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	if err != nil {
 		return nil, err
 	}
-	return &resp.Interface, nil
+	if resp != nil {
+		return &resp.Interface, nil
+	}
+	return nil, nil
 }
 
 // Delete deletes a Interface by name.
