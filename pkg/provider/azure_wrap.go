@@ -158,9 +158,7 @@ func (az *Cloud) getSubnet(virtualNetworkName string, subnetName string) (networ
 
 	if !exists {
 		klog.V(2).Infof("Subnet %q not found", subnetName)
-		return subnet, false, nil
 	}
-
 	return subnet, exists, nil
 }
 

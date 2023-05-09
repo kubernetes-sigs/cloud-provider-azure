@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
-	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
@@ -357,6 +356,9 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			Annotations: map[string]string{},
 			UID:         "257b9655-5137-4ad2-b091-ef3f07043ad3",
 		},
+		Spec: v1.ServiceSpec{
+			IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+		},
 	}
 
 	cases := []struct {
@@ -365,6 +367,7 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 		expected      string
 		protocol      v1.Protocol
 		isInternal    bool
+		isIPv6        bool
 		useStandardLB bool
 		port          int32
 	}{
@@ -378,6 +381,16 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			expected:      "a257b965551374ad2b091ef3f07043ad-shortsubnet-TCP-9000",
 		},
 		{
+			description:   "internal lb should have subnet name on the rule name IPv6",
+			subnetName:    "shortsubnet",
+			isInternal:    true,
+			isIPv6:        true,
+			useStandardLB: true,
+			protocol:      v1.ProtocolTCP,
+			port:          9000,
+			expected:      "a257b965551374ad2b091ef3f07043ad-shortsubnet-TCP-9000-IPv6",
+		},
+		{
 			description:   "internal standard lb should have subnet name on the rule name but truncated to 80 (-5) characters",
 			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
 			isInternal:    true,
@@ -385,6 +398,16 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			protocol:      v1.ProtocolTCP,
 			port:          9000,
 			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000",
+		},
+		{
+			description:   "internal standard lb should have subnet name on the rule name but truncated to 80 (-5) characters IPv6",
+			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
+			isInternal:    true,
+			isIPv6:        true,
+			useStandardLB: true,
+			protocol:      v1.ProtocolTCP,
+			port:          9000,
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000-IPv6",
 		},
 		{
 			description:   "internal basic lb should have subnet name on the rule name but truncated to 80 (-5) characters",
@@ -396,6 +419,16 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000",
 		},
 		{
+			description:   "internal basic lb should have subnet name on the rule name but truncated to 80 (-5) characters IPv6",
+			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
+			isInternal:    true,
+			isIPv6:        true,
+			useStandardLB: false,
+			protocol:      v1.ProtocolTCP,
+			port:          9000,
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnn-TCP-9000-IPv6",
+		},
+		{
 			description:   "external standard lb should not have subnet name on the rule name",
 			subnetName:    "shortsubnet",
 			isInternal:    false,
@@ -403,6 +436,16 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			protocol:      v1.ProtocolTCP,
 			port:          9000,
 			expected:      "a257b965551374ad2b091ef3f07043ad-TCP-9000",
+		},
+		{
+			description:   "external standard lb should not have subnet name on the rule name IPv6",
+			subnetName:    "shortsubnet",
+			isInternal:    false,
+			isIPv6:        true,
+			useStandardLB: true,
+			protocol:      v1.ProtocolTCP,
+			port:          9000,
+			expected:      "a257b965551374ad2b091ef3f07043ad-TCP-9000-IPv6",
 		},
 		{
 			description:   "external basic lb should not have subnet name on the rule name",
@@ -413,20 +456,80 @@ func TestGetLoadBalancingRuleName(t *testing.T) {
 			port:          9000,
 			expected:      "a257b965551374ad2b091ef3f07043ad-TCP-9000",
 		},
+		{
+			description:   "external basic lb should not have subnet name on the rule name IPv6",
+			subnetName:    "shortsubnet",
+			isInternal:    false,
+			isIPv6:        true,
+			useStandardLB: false,
+			protocol:      v1.ProtocolTCP,
+			port:          9000,
+			expected:      "a257b965551374ad2b091ef3f07043ad-TCP-9000-IPv6",
+		},
 	}
 
 	for _, c := range cases {
-		if c.useStandardLB {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		} else {
-			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
-		}
-		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
-		svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
-		isIPv6 := utilnet.IsIPv6String(svc.Spec.ClusterIP)
-		loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port, isIPv6)
-		assert.Equal(t, c.expected, loadbalancerRuleName, c.description)
+			loadbalancerRuleName := az.getLoadBalancerRuleName(svc, c.protocol, c.port, c.isIPv6)
+			assert.Equal(t, c.expected, loadbalancerRuleName)
+		})
+	}
+}
+
+func TestGetloadbalancerHAmodeRuleName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.PrimaryAvailabilitySetName = primary
+
+	svc := &v1.Service{
+		ObjectMeta: meta.ObjectMeta{
+			UID: "257b9655-5137-4ad2-b091-ef3f07043ad3",
+			Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "shortsubnet",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Port:     9000,
+					Protocol: v1.ProtocolTCP,
+				},
+			},
+			IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+		},
+	}
+
+	cases := []struct {
+		description string
+		expected    string
+		isIPv6      bool
+	}{
+		{
+			description: "IPv4",
+			expected:    "a257b965551374ad2b091ef3f07043ad-shortsubnet-TCP-9000",
+		},
+		{
+			description: "IPv6",
+			isIPv6:      true,
+			expected:    "a257b965551374ad2b091ef3f07043ad-shortsubnet-TCP-9000-IPv6",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			lbHAModeRuleName := az.getloadbalancerHAmodeRuleName(svc, c.isIPv6)
+			assert.Equal(t, c.expected, lbHAModeRuleName)
+		})
 	}
 }
 
@@ -508,7 +611,61 @@ func TestGetFrontendIPConfigName(t *testing.T) {
 			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
 
 			ipconfigName := az.getDefaultFrontendIPConfigName(svc)
-			assert.Equal(t, c.expected, ipconfigName, c)
+			assert.Equal(t, c.expected, ipconfigName)
+		})
+	}
+}
+
+func TestGetFrontendIPConfigNames(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.PrimaryAvailabilitySetName = primary
+
+	svc := &v1.Service{
+		ObjectMeta: meta.ObjectMeta{
+			Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+			},
+			UID: "257b9655-5137-4ad2-b091-ef3f07043ad3",
+		},
+		Spec: v1.ServiceSpec{
+			IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+		},
+	}
+
+	cases := []struct {
+		description   string
+		subnetName    string
+		isInternal    bool
+		useStandardLB bool
+		expectedV4    string
+		expectedV6    string
+	}{
+		{
+			description:   "internal lb should have subnet name on the frontend ip configuration name",
+			subnetName:    "shortsubnet",
+			isInternal:    true,
+			useStandardLB: true,
+			expectedV4:    "a257b965551374ad2b091ef3f07043ad-shortsubnet",
+			expectedV6:    "a257b965551374ad2b091ef3f07043ad-shortsubnet-IPv6",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+
+			ipconfigNames := az.getFrontendIPConfigNames(svc)
+			assert.Equal(t, c.expectedV4, ipconfigNames[false])
+			assert.Equal(t, c.expectedV6, ipconfigNames[true])
 		})
 	}
 }
@@ -593,6 +750,83 @@ func testGetLoadBalancerSubResourceID(
 			assert.Equal(t, expected, subResourceID)
 			subResourceIDWithRG := getLoadBalancerSubResourceIDWithRG(lbName, rgName, subResourceName)
 			assert.Equal(t, expected, subResourceIDWithRG)
+		})
+	}
+}
+
+func TestGetBackendPoolIDs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+
+	testGetLoadBalancerSubResourceIDs(t, az, az.getBackendPoolIDs, consts.BackendPoolIDTemplate)
+}
+
+func testGetLoadBalancerSubResourceIDs(
+	t *testing.T,
+	az *Cloud,
+	getLoadBalancerSubResourceIDs func(string, string) map[bool]string,
+	expectedResourceIDTemplate string) {
+	clusterName := "azure"
+	rgName := "rgName"
+
+	cases := []struct {
+		description                         string
+		loadBalancerName                    string
+		resourceGroupName                   string
+		useNetworkResourceInDifferentTenant bool
+		useNetworkResourceInDifferentSub    bool
+	}{
+		{
+			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different tenant and subscription",
+			loadBalancerName:                    "lbName",
+			useNetworkResourceInDifferentTenant: true,
+			useNetworkResourceInDifferentSub:    true,
+		},
+		{
+			description:                         "resource id should contain NetworkResourceSubscriptionID when using network resources in different subscription",
+			loadBalancerName:                    "lbName",
+			useNetworkResourceInDifferentTenant: false,
+			useNetworkResourceInDifferentSub:    true,
+		},
+		{
+			description:                         "resource id should contain SubscriptionID when not using network resources in different subscription",
+			loadBalancerName:                    "lbName",
+			useNetworkResourceInDifferentTenant: false,
+			useNetworkResourceInDifferentSub:    false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			az.ResourceGroup = rgName
+			subscriptionID := az.SubscriptionID
+			if c.useNetworkResourceInDifferentTenant {
+				az.NetworkResourceTenantID = networkResourceTenantID
+			} else {
+				az.NetworkResourceTenantID = ""
+			}
+			if c.useNetworkResourceInDifferentSub {
+				az.NetworkResourceSubscriptionID = networkResourceSubscriptionID
+				subscriptionID = networkResourceSubscriptionID
+			} else {
+				az.NetworkResourceSubscriptionID = ""
+			}
+			expectedV4 := fmt.Sprintf(
+				expectedResourceIDTemplate,
+				subscriptionID,
+				rgName,
+				c.loadBalancerName,
+				clusterName)
+			expectedV6 := fmt.Sprintf(
+				expectedResourceIDTemplate,
+				subscriptionID,
+				rgName,
+				c.loadBalancerName,
+				clusterName) + "-" + v6Suffix
+			subResourceIDs := getLoadBalancerSubResourceIDs(clusterName, c.loadBalancerName)
+			assert.Equal(t, expectedV4, subResourceIDs[false])
+			assert.Equal(t, expectedV6, subResourceIDs[true])
 		})
 	}
 }
@@ -921,6 +1155,26 @@ func TestGetBackendPoolName(t *testing.T) {
 	for _, test := range testcases {
 		backPoolName := getBackendPoolName(test.clusterName, test.isIPv6)
 		assert.Equal(t, test.expectedPoolName, backPoolName, test.name)
+	}
+}
+
+func TestGetBackendPoolNames(t *testing.T) {
+	testcases := []struct {
+		name              string
+		service           v1.Service
+		clusterName       string
+		expectedPoolNames map[bool]string
+	}{
+		{
+			name:              "GetBackendPoolNames should return 2 backend pool names",
+			service:           getTestService("test1", v1.ProtocolTCP, nil, true, 80),
+			clusterName:       "azure",
+			expectedPoolNames: map[bool]string{false: "azure", true: "azure-IPv6"},
+		},
+	}
+	for _, test := range testcases {
+		backPoolNames := getBackendPoolNames(test.clusterName)
+		assert.Equal(t, test.expectedPoolNames, backPoolNames)
 	}
 }
 
