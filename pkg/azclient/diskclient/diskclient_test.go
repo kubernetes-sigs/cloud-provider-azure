@@ -25,14 +25,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var diskClient Interface
-
 var _ = Describe("Diskclient", func() {
 
 	When("requests are raised", func() {
 		It("should not return error", func(ctx context.Context) {
 
-			diskResource, err := diskClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armcompute.Disk{
+			diskResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armcompute.Disk{
 				Location: to.Ptr(location),
 				Properties: &armcompute.DiskProperties{
 					CreationData: &armcompute.CreationData{
@@ -45,34 +43,34 @@ var _ = Describe("Diskclient", func() {
 			Expect(diskResource).NotTo(BeNil())
 			Expect(*diskResource.Name).To(Equal(resourceName))
 
-			diskResource, err = diskClient.Get(ctx, resourceGroupName, resourceName)
+			diskResource, err = realClient.Get(ctx, resourceGroupName, resourceName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(diskResource).NotTo(BeNil())
 
-			diskList, err := diskClient.List(ctx, resourceGroupName)
+			diskList, err := realClient.List(ctx, resourceGroupName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(diskList).NotTo(BeNil())
 			Expect(len(diskList)).To(Equal(1))
 			Expect(*diskList[0].Name).To(Equal(resourceName))
 
-			err = diskClient.Delete(ctx, resourceGroupName, resourceName)
+			err = realClient.Delete(ctx, resourceGroupName, resourceName)
 			Expect(err).NotTo(HaveOccurred())
 
 		})
 	})
 	When("raise requests against non-existing resources", func() {
 		It("should return error", func(ctx context.Context) {
-			diskResource, err := diskClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armcompute.Disk{
+			diskResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armcompute.Disk{
 				Location: to.Ptr(location),
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(diskResource).To(BeNil())
 
-			diskResource, err = diskClient.Get(ctx, resourceGroupName, resourceName+"notfound")
+			diskResource, err = realClient.Get(ctx, resourceGroupName, resourceName+"notfound")
 			Expect(err).To(HaveOccurred())
 			Expect(diskResource).To(BeNil())
 
-			diskList, err := diskClient.List(ctx, resourceGroupName+"notfound")
+			diskList, err := realClient.List(ctx, resourceGroupName+"notfound")
 			Expect(err).To(HaveOccurred())
 			Expect(diskList).To(BeNil())
 		})

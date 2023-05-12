@@ -51,7 +51,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 3.254101101s
+        duration: 2.640252121s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -87,7 +87,7 @@ interactions:
         body: "{\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"provisioningState\": \"Updating\"\r\n  }\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/a9899e5c-ae90-4b72-93f6-e1f9e024583b?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/5b40bbd0-cb76-493d-8e3d-cc444b9fa207?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -97,7 +97,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/a9899e5c-ae90-4b72-93f6-e1f9e024583b?p=75f6570f-3039-4f38-a9f4-507eba1684c0&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/5b40bbd0-cb76-493d-8e3d-cc444b9fa207?p=75f6570f-3039-4f38-a9f4-507eba1684c0&monitor=true&api-version=2022-07-02
             Pragma:
                 - no-cache
             Server:
@@ -108,12 +108,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/CreateUpdateDisks3Min;2999,Microsoft.Compute/CreateUpdateDisks30Min;24995
+                - Microsoft.Compute/CreateUpdateDisks3Min;2999,Microsoft.Compute/CreateUpdateDisks30Min;24999
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 202 Accepted
         code: 202
-        duration: 4.52384481s
+        duration: 3.95939954s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -130,7 +130,7 @@ interactions:
         headers:
             Test-Request-Attempt:
                 - "0"
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/a9899e5c-ae90-4b72-93f6-e1f9e024583b?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/5b40bbd0-cb76-493d-8e3d-cc444b9fa207?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
         method: GET
       response:
         proto: HTTP/1.1
@@ -141,7 +141,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"startTime\": \"2023-03-28T04:26:35.2126013+00:00\",\r\n  \"endTime\": \"2023-03-28T04:26:35.3063503+00:00\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\"name\":\"testdisk\",\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\"type\":\"Microsoft.Compute/disks\",\"location\":\"eastus\",\"sku\":{\"name\":\"Standard_LRS\",\"tier\":\"Standard\"},\"properties\":{\"creationData\":{\"createOption\":\"Empty\"},\"diskSizeGB\":200,\"diskIOPSReadWrite\":500,\"diskMBpsReadWrite\":60,\"encryption\":{\"type\":\"EncryptionAtRestWithPlatformKey\"},\"networkAccessPolicy\":\"AllowAll\",\"publicNetworkAccess\":\"Enabled\",\"timeCreated\":\"2023-03-28T04:26:35.2126013+00:00\",\"provisioningState\":\"Succeeded\",\"diskState\":\"Unattached\",\"diskSizeBytes\":214748364800,\"uniqueId\":\"bb4e337f-0a3d-4715-b663-d702b0ac4e29\"}}\r\n  },\r\n  \"name\": \"a9899e5c-ae90-4b72-93f6-e1f9e024583b\"\r\n}"
+        body: "{\r\n  \"startTime\": \"2023-05-15T08:27:53.208707+00:00\",\r\n  \"endTime\": \"2023-05-15T08:27:53.3337068+00:00\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2023-05-15T08:27:53.2243334+00:00\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"eb6fb600-c11e-4489-80be-1ac36aa57e1f\"\r\n  }\r\n}\r\n  },\r\n  \"name\": \"5b40bbd0-cb76-493d-8e3d-cc444b9fa207\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -161,12 +161,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49998,Microsoft.Compute/GetOperation30Min;399987
+                - Microsoft.Compute/GetOperation3Min;49999,Microsoft.Compute/GetOperation30Min;399999
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 200 OK
         code: 200
-        duration: 2.427411007s
+        duration: 810.634425ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -194,7 +194,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2023-03-28T04:26:35.2126013+00:00\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"bb4e337f-0a3d-4715-b663-d702b0ac4e29\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2023-05-15T08:27:53.2243334+00:00\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"eb6fb600-c11e-4489-80be-1ac36aa57e1f\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -214,12 +214,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14997,Microsoft.Compute/LowCostGet30Min;119967
+                - Microsoft.Compute/LowCostGet3Min;14999,Microsoft.Compute/LowCostGet30Min;119972
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 200 OK
         code: 200
-        duration: 607.347377ms
+        duration: 458.749233ms
     - id: 4
       request:
         proto: HTTP/1.1
@@ -249,7 +249,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2023-03-28T04:26:35.2126013+00:00\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"bb4e337f-0a3d-4715-b663-d702b0ac4e29\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testdisk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 200,\r\n    \"diskIOPSReadWrite\": 500,\r\n    \"diskMBpsReadWrite\": 60,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2023-05-15T08:27:53.2243334+00:00\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 214748364800,\r\n    \"uniqueId\": \"eb6fb600-c11e-4489-80be-1ac36aa57e1f\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -269,12 +269,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14996,Microsoft.Compute/LowCostGet30Min;119966
+                - Microsoft.Compute/LowCostGet3Min;14998,Microsoft.Compute/LowCostGet30Min;119971
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 200 OK
         code: 200
-        duration: 1.271801491s
+        duration: 444.621037ms
     - id: 5
       request:
         proto: HTTP/1.1
@@ -304,7 +304,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testdisk\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n      \"type\": \"Microsoft.Compute/disks\",\r\n      \"location\": \"eastus\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_LRS\",\r\n        \"tier\": \"Standard\"\r\n      },\r\n      \"properties\": {\r\n        \"creationData\": {\r\n          \"createOption\": \"Empty\"\r\n        },\r\n        \"diskSizeGB\": 200,\r\n        \"diskIOPSReadWrite\": 500,\r\n        \"diskMBpsReadWrite\": 60,\r\n        \"encryption\": {\r\n          \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n        },\r\n        \"networkAccessPolicy\": \"AllowAll\",\r\n        \"publicNetworkAccess\": \"Enabled\",\r\n        \"timeCreated\": \"2023-03-28T04:26:35.2126013+00:00\",\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"diskState\": \"Unattached\",\r\n        \"diskSizeBytes\": 214748364800,\r\n        \"uniqueId\": \"bb4e337f-0a3d-4715-b663-d702b0ac4e29\"\r\n      }\r\n    }\r\n  ]\r\n}"
+        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testdisk\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit/providers/Microsoft.Compute/disks/testdisk\",\r\n      \"type\": \"Microsoft.Compute/disks\",\r\n      \"location\": \"eastus\",\r\n      \"sku\": {\r\n        \"name\": \"Standard_LRS\",\r\n        \"tier\": \"Standard\"\r\n      },\r\n      \"properties\": {\r\n        \"creationData\": {\r\n          \"createOption\": \"Empty\"\r\n        },\r\n        \"diskSizeGB\": 200,\r\n        \"diskIOPSReadWrite\": 500,\r\n        \"diskMBpsReadWrite\": 60,\r\n        \"encryption\": {\r\n          \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n        },\r\n        \"networkAccessPolicy\": \"AllowAll\",\r\n        \"publicNetworkAccess\": \"Enabled\",\r\n        \"timeCreated\": \"2023-05-15T08:27:53.2243334+00:00\",\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"diskState\": \"Unattached\",\r\n        \"diskSizeBytes\": 214748364800,\r\n        \"uniqueId\": \"eb6fb600-c11e-4489-80be-1ac36aa57e1f\"\r\n      }\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -324,12 +324,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/HighCostGet3Min;239,Microsoft.Compute/HighCostGet30Min;1918
+                - Microsoft.Compute/HighCostGet3Min;239,Microsoft.Compute/HighCostGet30Min;1919
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 200 OK
         code: 200
-        duration: 597.663396ms
+        duration: 978.641681ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -359,7 +359,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/b812e0ba-cb6f-4356-b365-90b75e24ef21?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/29a78112-0a36-4f50-be83-ea48620dc2cf?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -367,7 +367,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/b812e0ba-cb6f-4356-b365-90b75e24ef21?p=75f6570f-3039-4f38-a9f4-507eba1684c0&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/29a78112-0a36-4f50-be83-ea48620dc2cf?p=75f6570f-3039-4f38-a9f4-507eba1684c0&monitor=true&api-version=2022-07-02
             Pragma:
                 - no-cache
             Server:
@@ -378,12 +378,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/DeleteDisks3Min;2999,Microsoft.Compute/DeleteDisks30Min;23972
+                - Microsoft.Compute/DeleteDisks3Min;2999,Microsoft.Compute/DeleteDisks30Min;23975
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 202 Accepted
         code: 202
-        duration: 1.015571693s
+        duration: 729.141108ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -400,7 +400,7 @@ interactions:
         headers:
             Test-Request-Attempt:
                 - "0"
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/b812e0ba-cb6f-4356-b365-90b75e24ef21?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/29a78112-0a36-4f50-be83-ea48620dc2cf?p=75f6570f-3039-4f38-a9f4-507eba1684c0&api-version=2022-07-02
         method: GET
       response:
         proto: HTTP/1.1
@@ -411,7 +411,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"startTime\": \"2023-03-28T04:26:52.7125176+00:00\",\r\n  \"endTime\": \"2023-03-28T04:26:52.8062691+00:00\",\r\n  \"status\": \"Succeeded\",\r\n  \"name\": \"b812e0ba-cb6f-4356-b365-90b75e24ef21\"\r\n}"
+        body: "{\r\n  \"startTime\": \"2023-05-15T08:27:58.224329+00:00\",\r\n  \"endTime\": \"2023-05-15T08:27:58.3805787+00:00\",\r\n  \"status\": \"Succeeded\",\r\n  \"name\": \"29a78112-0a36-4f50-be83-ea48620dc2cf\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -431,12 +431,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49997,Microsoft.Compute/GetOperation30Min;399986
+                - Microsoft.Compute/GetOperation3Min;49998,Microsoft.Compute/GetOperation30Min;399998
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 200 OK
         code: 200
-        duration: 390.305897ms
+        duration: 264.725498ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -489,12 +489,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/CreateUpdateDisks3Min;2998,Microsoft.Compute/CreateUpdateDisks30Min;24994
+                - Microsoft.Compute/CreateUpdateDisks3Min;2998,Microsoft.Compute/CreateUpdateDisks30Min;24998
             X-Ms-Served-By:
-                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133119752591600054
+                - 75f6570f-3039-4f38-a9f4-507eba1684c0_133284967024492923
         status: 400 Bad Request
         code: 400
-        duration: 656.432595ms
+        duration: 525.096443ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -543,7 +543,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 346.1639ms
+        duration: 266.356727ms
     - id: 10
       request:
         proto: HTTP/1.1
@@ -592,7 +592,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 124.2059ms
+        duration: 94.768363ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -639,7 +639,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 4.190411402s
+        duration: 3.071871808s
     - id: 12
       request:
         proto: HTTP/1.1
@@ -684,7 +684,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 819.3435ms
+        duration: 420.948854ms
     - id: 13
       request:
         proto: HTTP/1.1
@@ -729,7 +729,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 566.70429ms
+        duration: 420.706602ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -774,7 +774,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 653.521166ms
+        duration: 434.081166ms
     - id: 15
       request:
         proto: HTTP/1.1
@@ -809,6 +809,51 @@ interactions:
                 - "0"
             Expires:
                 - "-1"
+            Location:
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+        status: 202 Accepted
+        code: 202
+        duration: 433.436575ms
+    - id: 16
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Test-Request-Attempt:
+                - "4"
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01
+        method: GET
+      response:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -817,4 +862,4 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 575.44989ms
+        duration: 430.058764ms

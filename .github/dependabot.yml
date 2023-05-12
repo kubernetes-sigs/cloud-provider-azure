@@ -29,7 +29,7 @@ updates:
       - "lgtm"
       - "approved"
   - package-ecosystem: "gomod"
-    directory: "/pkg/azclient"
+    directory: "/pkg/azclient/"
     open-pull-requests-limit: 1
     schedule:
       interval: daily

@@ -68,7 +68,7 @@ build: fmt vet ## Build manager binary.
 	CGO_ENABLED=0 go build -o bin/typescaffold ./client-gen/cmd/typescaffold/
 
 .PHONY: generate
-generate: install-dependencies build generatecode generateimpl fmt-all vet-all
+generate: install-dependencies build generatecode generateimpl vet-all
 
 .PHONY: generatecode
 generatecode: build ## Generate client
@@ -91,11 +91,7 @@ generatecode: build ## Generate client
 
 .PHONY: generateimpl
 generateimpl: build ## Generate client
-	PATH=$PATH:$(LOCALBIN) $(CLIENTGEN) clientgen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./...
-
-.PHONY: fmt-all
-fmt-all: goimports ## Run go fmt against code.
-	$(GOIMPORTS) -w -local sigs.k8s.io/cloud-provider-azure/pkg/azclient .
+	$(CLIENTGEN) clientgen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./...
 
 .PHONY: vet-all
 vet-all: golangci-lint ## Run go vet against code.
@@ -109,8 +105,6 @@ endif
 
 .PHONY: install-dependencies
 install-dependencies: golangci-lint goimports mockgen ginkgo## Install all build dependencies.
-	export PATH=$$PATH:$(LOCALBIN)
-
 
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 .PHONY: golangci-lint
