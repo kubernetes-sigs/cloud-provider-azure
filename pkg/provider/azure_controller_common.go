@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/go-autorest/autorest/azure"
 
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -613,11 +612,6 @@ func (c *controllerCommon) checkDiskExists(ctx context.Context, diskURI string) 
 	}
 
 	return true, nil
-}
-
-func vmUpdateRequired(future *azure.Future, err error) bool {
-	errCode := getAzureErrorCode(err)
-	return configAccepted(future) && errCode == consts.OperationPreemptedErrorCode
 }
 
 func getValidCreationData(subscriptionID, resourceGroup string, options *ManagedDiskOptions) (compute.CreationData, error) {

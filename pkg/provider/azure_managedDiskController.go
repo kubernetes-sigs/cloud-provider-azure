@@ -156,9 +156,9 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 	}
 
-	if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS || diskSku == consts.PremiumV2LRS {
+	if diskSku == compute.UltraSSDLRS || diskSku == compute.PremiumV2LRS {
 		if options.DiskIOPSReadWrite == "" {
-			if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS {
+			if diskSku == compute.UltraSSDLRS {
 				diskIOPSReadWrite := int64(consts.DefaultDiskIOPSReadWrite)
 				diskProperties.DiskIOPSReadWrite = to.Int64Ptr(diskIOPSReadWrite)
 			}
@@ -172,7 +172,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 
 		if options.DiskMBpsReadWrite == "" {
-			if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS {
+			if diskSku == compute.UltraSSDLRS {
 				diskMBpsReadWrite := int64(consts.DefaultDiskMBpsReadWrite)
 				diskProperties.DiskMBpsReadWrite = to.Int64Ptr(diskMBpsReadWrite)
 			}
