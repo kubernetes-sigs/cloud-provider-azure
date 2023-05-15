@@ -45,6 +45,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	var cs clientset.Interface
 	var ns *v1.Namespace
 	var tc *utils.AzureTestClient
+	var isDeploymentCreated bool
 
 	labels := map[string]string{
 		"app": serviceName,
@@ -77,14 +78,17 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		deployment := createServerDeploymentManifest(serviceName, labels)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		isDeploymentCreated = true
 	})
 
 	AfterEach(func() {
 		if ns != nil && cs != nil {
-			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			if isDeploymentCreated {
+				err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
 
-			err = utils.DeleteNamespace(cs, ns.Name)
+			err := utils.DeleteNamespace(cs, ns.Name)
 			Expect(err).NotTo(HaveOccurred())
 		}
 

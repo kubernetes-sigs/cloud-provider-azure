@@ -19,6 +19,7 @@ package network
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -261,22 +262,30 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(result).To(BeTrue())
+
 		Expect(err).NotTo(HaveOccurred())
 		hostExecPod, err := utils.GetPod(cs, ns.Name, agnhostPod)
 		Expect(err).NotTo(HaveOccurred())
-		hostExecPodIP := hostExecPod.Status.PodIP
+		hostExecPodIPv4, hostExecPodIPv6 := hostExecPod.Status.PodIP, hostExecPod.Status.PodIP
+		for _, ip := range hostExecPod.Status.PodIPs {
+			if net.ParseIP(ip.IP).To4() != nil {
+				hostExecPodIPv4 = ip.IP
+			} else {
+				hostExecPodIPv6 = ip.IP
+			}
+		}
 
-		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		maskV4, maskV6 := 32, 128
 		allowCIDRs, ipRangesSuffixes := []string{}, []string{}
+		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		if v4Enabled {
-			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIP, maskV4))
-			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIP, maskV4), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
+			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIPv4, maskV4))
+			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIPv4, maskV4), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
 			ipRangesSuffixes = append(ipRangesSuffixes, ipRangesSuffix)
 		}
 		if v6Enabled {
-			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIP, maskV6))
-			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIP, maskV6), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
+			allowCIDRs = append(allowCIDRs, fmt.Sprintf("%s/%d", hostExecPodIPv6, maskV6))
+			ipRangesSuffix := strings.Replace(fmt.Sprintf("%s_%d", hostExecPodIPv6, maskV6), ":", ".", -1) // Handled in pkg/provider/getSecurityRuleName()
 			ipRangesSuffixes = append(ipRangesSuffixes, ipRangesSuffix)
 		}
 		service.Spec.LoadBalancerSourceRanges = allowCIDRs
