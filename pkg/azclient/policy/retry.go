@@ -35,7 +35,6 @@ import (
 func GetRetriableStatusCode() []int {
 	return []int{
 		http.StatusRequestTimeout,      // 408
-		http.StatusTooManyRequests,     // 429
 		http.StatusInternalServerError, // 500
 		http.StatusBadGateway,          // 502
 		http.StatusServiceUnavailable,  // 503
@@ -46,8 +45,8 @@ func GetRetriableStatusCode() []int {
 const (
 	DefaultMaxRetries    = 3
 	DefaultMaxRetryDelay = math.MaxInt64
-	DefaultRetryDelay    = 800 * time.Millisecond
-	DefaultTryTimeout    = 5 * time.Second
+	DefaultRetryDelay    = 5 * time.Second
+	DefaultTryTimeout    = 1 * time.Second
 )
 
 type RetryConfig struct {
