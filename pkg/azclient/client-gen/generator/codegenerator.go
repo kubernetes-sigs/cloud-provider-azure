@@ -18,8 +18,8 @@ limitations under the License.
 package generator
 
 import (
-	"fmt"
 	"go/ast"
+	"os/exec"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
@@ -72,8 +72,6 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 			continue
 		}
 
-		fmt.Printf("found marker")
-
 		//check for syntax error
 		ctx.Checker.Check(root)
 
@@ -85,6 +83,16 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 			return err
 		}
 		if err := generateMock(ctx, root, headerText); err != nil {
+			root.AddError(err)
+			return err
+		}
+		if err := generateTest(ctx, root, headerText); err != nil {
+			root.AddError(err)
+			return err
+		}
+
+		//nolint:gosec // G204 ignore this!
+		if err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", root.Name).Run(); err != nil {
 			root.AddError(err)
 			return err
 		}
