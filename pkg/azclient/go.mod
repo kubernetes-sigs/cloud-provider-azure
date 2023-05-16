@@ -17,7 +17,6 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.6
 	github.com/spf13/cobra v1.7.0
-	gopkg.in/dnaeon/go-vcr.v2 v2.3.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/client-go v0.27.1
 	k8s.io/klog/v2 v2.100.1

@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
-	"gopkg.in/dnaeon/go-vcr.v2/cassette"
+	"gopkg.in/dnaeon/go-vcr.v3/cassette"
 	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
@@ -103,7 +103,7 @@ func (w errorTranslation) findMatchingBodies(r *http.Request) []string {
 	urlString := r.URL.String()
 	var result []string
 	for _, interaction := range w.ensureCassette().Interactions {
-		if urlString == interaction.URL && r.Method == interaction.Request.Method &&
+		if urlString == interaction.Request.URL && r.Method == interaction.Request.Method &&
 			r.Header.Get(countHeader) == interaction.Request.Headers.Get(countHeader) {
 			result = append(result, interaction.Request.Body)
 		}
