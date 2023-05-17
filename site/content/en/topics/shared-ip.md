@@ -35,7 +35,8 @@ kind: Service
 metadata:
   name: https
   namespace: default
-  service.beta.kubernetes.io/azure-load-balancer-ipv4: 1.2.3.4 # the IP address could be the same as it is of `nginx` service
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: 1.2.3.4 # the IP address could be the same as it is of `nginx` service
 spec:
   ports:
     - port: 443
@@ -50,9 +51,9 @@ Note that if you specify the annotations `service.beta.kubernetes.io/azure-load-
 
 ## DNS
 
-Even if multiple services can refer to one public IP, the DNS label cannot be re-used. The public IP would have the label `kubernetes-dns-label-service: <svcName>` to indicate which service is binding to the DNS label. In this case if there is another service sharing this specific IP address trying to refer to the DNS label, an error would be reported.
+Even if multiple services can refer to one public IP, the DNS label cannot be re-used. The public IP would have the label `kubernetes-dns-label-service: <svcName>` to indicate which service is binding to the DNS label. In this case if there is another service sharing this specific IP address trying to refer to the DNS label, an error would be reported. For managed public IPs, this label will be added automatically by the cloud provider. For static public IPs, this label should be added manually.
 
-> The DNS name on the public IP won't be deleted after the service with the DNS annotation being deleted, because the cloud provider don't know if the DNS was set by the user or not.
+```yaml
 
 ## Restrictions
 

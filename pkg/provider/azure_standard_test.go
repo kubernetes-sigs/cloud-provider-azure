@@ -2098,7 +2098,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			if test.existingPIPs != nil {
 				mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
 			}
 			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service)
 			assert.Equal(t, test.expectedErr, err)
