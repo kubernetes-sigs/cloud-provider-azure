@@ -448,7 +448,7 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
 func (az *Cloud) isFIPIPv6(fip *network.FrontendIPConfiguration, pipResourceGroup string, isInternal bool) (isIPv6 bool, err error) {
-	pips, err := az.listPIP(pipResourceGroup)
+	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return false, fmt.Errorf("isFIPIPv6: failed to list pip: %w", err)
 	}
