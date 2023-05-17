@@ -191,7 +191,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		err = utils.DeleteService(cs, ns.Name, oldServiceName)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Check if PIP DNS label is deleted")
+		By("Check if PIP DNS label is not tagged onto the user-assigned pip")
 		deleted, err := ifPIPDNSLabelDeleted(tc, pipName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(deleted).To(BeTrue())

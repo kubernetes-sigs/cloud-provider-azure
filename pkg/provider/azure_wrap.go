@@ -125,8 +125,8 @@ func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt
 	return *(deepcopy.Copy(pip).(*network.PublicIPAddress)), true, nil
 }
 
-func (az *Cloud) listPIP(pipResourceGroup string) ([]network.PublicIPAddress, error) {
-	cached, err := az.pipCache.Get(pipResourceGroup, azcache.CacheReadTypeDefault)
+func (az *Cloud) listPIP(pipResourceGroup string, crt azcache.AzureCacheReadType) ([]network.PublicIPAddress, error) {
+	cached, err := az.pipCache.Get(pipResourceGroup, crt)
 	if err != nil {
 		return nil, err
 	}
