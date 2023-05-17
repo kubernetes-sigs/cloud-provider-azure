@@ -396,7 +396,7 @@ func TestListPIP(t *testing.T) {
 			if test.expectPIPList {
 				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
 			}
-			pips, err := az.listPIP(az.ResourceGroup)
+			pips, err := az.listPIP(az.ResourceGroup, azcache.CacheReadTypeDefault)
 			if test.expectPIPList {
 				assert.ElementsMatch(t, test.existingPIPs, pips)
 			} else {
