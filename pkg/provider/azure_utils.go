@@ -467,7 +467,7 @@ func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfigura
 		fipPIPID = pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress.ID, "")
 	}
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-	pips, err := az.listPIP(pipResourceGroup)
+	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return false, err
 	}
