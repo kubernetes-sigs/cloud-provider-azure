@@ -19,6 +19,7 @@ package utils
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 
 	custompolicy "sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy"
 )
@@ -38,6 +39,9 @@ func GetDefaultOption(apiVersion string) *arm.ClientOptions {
 			},
 			APIVersion: apiVersion,
 			Transport:  defaultHTTPClient,
+			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {
+				return tracing.NewTracer(NewOtlpSpan, nil)
+			}, nil),
 		},
 	}
 }
