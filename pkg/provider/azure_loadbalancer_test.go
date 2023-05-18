@@ -959,6 +959,17 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			serviceLBIP:  "1.1.1.1",
 			expectedOwns: true,
 		},
+		{
+			desc: "should be user-assigned pip if it has no tags",
+			pip: &network.PublicIPAddress{
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: pointer.String("1.2.3.4"),
+				},
+			},
+			serviceLBIP:             "1.2.3.4",
+			expectedOwns:            true,
+			expectedUserAssignedPIP: true,
+		},
 	}
 
 	for i, c := range tests {
@@ -2059,10 +2070,11 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 		},
 	}
 	testCases := []struct {
-		desc          string
-		pips          []network.PublicIPAddress
-		expectedPIP   *network.PublicIPAddress
-		expectedError bool
+		desc               string
+		pips               []network.PublicIPAddress
+		shouldRefreshCache bool
+		expectedPIP        *network.PublicIPAddress
+		expectedError      bool
 	}{
 		{
 			desc:        "findMatchedPIPByLoadBalancerIP shall return the matched ip",
@@ -2070,9 +2082,16 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 			expectedPIP: &testPIP,
 		},
 		{
-			desc:          "findMatchedPIPByLoadBalancerIP shall return error if ip is not found",
-			pips:          []network.PublicIPAddress{},
-			expectedError: true,
+			desc:               "findMatchedPIPByLoadBalancerIP shall return error if ip is not found",
+			pips:               []network.PublicIPAddress{},
+			shouldRefreshCache: true,
+			expectedError:      true,
+		},
+		{
+			desc:               "findMatchedPIPByLoadBalancerIP should refresh cache if no matched ip is found",
+			pips:               []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			expectedPIP:        &testPIP,
 		},
 	}
 	for _, test := range testCases {
@@ -2082,6 +2101,9 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 			setServiceLoadBalancerIP(&service, "1.2.3.4")
 
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			if test.shouldRefreshCache {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return([]network.PublicIPAddress{}, nil)
+			}
 			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pips, nil)
 			pip, err := az.findMatchedPIPByLoadBalancerIP(&service, "1.2.3.4", "rg")
 			assert.Equal(t, test.expectedPIP, pip)
@@ -2137,7 +2159,7 @@ func TestDeterminePublicIPName(t *testing.T) {
 			setServiceLoadBalancerIP(&service, test.loadBalancerIP)
 
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(1)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
 			mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			for _, existingPIP := range test.existingPIPs {
 				mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", *existingPIP.Name, gomock.Any()).Return(existingPIP, nil).AnyTimes()
@@ -3859,7 +3881,8 @@ func TestSafeDeletePublicIP(t *testing.T) {
 		desc          string
 		pip           *network.PublicIPAddress
 		lb            *network.LoadBalancer
-		expectedError bool
+		listError     *retry.Error
+		expectedError error
 	}{
 		{
 			desc: "safeDeletePublicIP shall delete corresponding ip configurations and lb rules",
@@ -3886,12 +3909,30 @@ func TestSafeDeletePublicIP(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "safeDeletePublicIP should return error if failed to list pip",
+			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPConfiguration: &network.IPConfiguration{
+						ID: pointer.String("id1"),
+					},
+				},
+			},
+			listError:     retry.NewError(false, errors.New("error")),
+			expectedError: retry.NewError(false, errors.New("error")).Error(),
+		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			if test.pip != nil &&
+				test.pip.PublicIPAddressPropertiesFormat != nil &&
+				test.pip.IPConfiguration != nil {
+				mockPIPsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]network.PublicIPAddress{*test.pip}, test.listError)
+			}
 			mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).Return(nil).AnyTimes()
 			mockPIPsClient.EXPECT().Delete(gomock.Any(), "rg", "pip1").Return(nil).AnyTimes()
 			err := az.PublicIPAddressesClient.CreateOrUpdate(context.TODO(), "rg", "pip1", network.PublicIPAddress{
@@ -3904,13 +3945,19 @@ func TestSafeDeletePublicIP(t *testing.T) {
 			})
 			assert.NoError(t, err.Error())
 			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
-			mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
-			mockLBsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-			az.LoadBalancerClient = mockLBsClient
+			if test.listError == nil {
+				mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
+				mockLBsClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				az.LoadBalancerClient = mockLBsClient
+			}
 			rerr := az.safeDeletePublicIP(&service, "rg", test.pip, test.lb)
-			assert.Equal(t, 0, len(*test.lb.FrontendIPConfigurations))
-			assert.Equal(t, 0, len(*test.lb.LoadBalancingRules))
-			assert.Equal(t, test.expectedError, rerr != nil)
+			if test.expectedError == nil {
+				assert.Equal(t, 0, len(*test.lb.FrontendIPConfigurations))
+				assert.Equal(t, 0, len(*test.lb.LoadBalancingRules))
+				assert.NoError(t, rerr)
+			} else {
+				assert.Equal(t, rerr.Error(), test.listError.Error().Error())
+			}
 		})
 	}
 }
