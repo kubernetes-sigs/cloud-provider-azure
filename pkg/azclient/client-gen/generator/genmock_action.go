@@ -27,19 +27,19 @@ import (
 )
 
 func generateMock(ctx *genall.GenerationContext, pkg *loader.Package, headerText string) error {
-	if err := exec.Command("go", "get", "github.com/golang/mock/mockgen/model").Run(); err != nil {
-		return err
-	}
 	var mockCache bytes.Buffer
 	//nolint:gosec // G204 ignore this!
-	cmd := exec.Command("mockgen", "-package", pkg.Name+"_test", pkg.PkgPath, "Interface")
+	cmd := exec.Command("mockgen", "-package", "mock_"+pkg.Name, pkg.PkgPath, "Interface")
 	cmd.Stdout = &mockCache
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
 		return err
 	}
-	mockFile, err := ctx.Open(pkg, "mock_test.go")
+	if err := os.MkdirAll(pkg.Name+"/mock_"+pkg.Name, 0755); err != nil {
+		return err
+	}
+	mockFile, err := ctx.Open(pkg, "mock_"+pkg.Name+"/interface.go")
 	if err != nil {
 		return err
 	}
