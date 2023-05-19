@@ -6425,17 +6425,6 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
 		existingLBs := []network.LoadBalancer{{Name: pointer.String("lb")}}
-		// external Service
-		existingPIPS := []network.PublicIPAddress{
-			{
-				ID: pointer.String("pipID"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPv4,
-				},
-			},
-		}
-		mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(existingPIPS, nil).Times(1)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, fip, "testCluster", &service)
 		assert.NoError(t, err)
 	})
@@ -6467,17 +6456,6 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		expectedPLS := make([]network.PrivateLinkService, 0)
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
-		// external Service
-		existingPIPS := []network.PublicIPAddress{
-			{
-				ID: pointer.String("pipID"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPv4,
-				},
-			},
-		}
-		mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(existingPIPS, nil).Times(1)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, fip, "testCluster", &service)
 		assert.NoError(t, err)
 	})
@@ -6711,219 +6689,270 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 	}
 }
 
-func TestReconcileSharedLoadBalancer(t *testing.T) {
+func TestReconcileFrontendIPConfigs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	for _, tc := range []struct {
-		description, vmSetsSharingPrimarySLB                                                                  string
-		nodes                                                                                                 []*v1.Node
-		useMultipleSLBs, useBasicLB, useVMIP                                                                  bool
-		existingLBs                                                                                           []network.LoadBalancer
-		listLBErr                                                                                             *retry.Error
-		expectedListCount, expectedDeleteCount, expectedGetNamesCount, expectedCreateOrUpdateBackendPoolCount int
-		expectedLBs                                                                                           []network.LoadBalancer
-		expectedErr                                                                                           error
+	testcases := []struct {
+		desc          string
+		service       v1.Service
+		existingFIPs  []network.FrontendIPConfiguration
+		existingPIPs  []network.PublicIPAddress
+		status        *v1.LoadBalancerStatus
+		wantLB        bool
+		expectedDirty bool
+		expectedFIPs  []network.FrontendIPConfiguration
+		expectedErr   error
 	}{
 		{
-			description:             "reconcileSharedLoadBalancer should decouple the vmSet from its dedicated lb if the vmSet is sharing the primary slb",
-			useMultipleSLBs:         true,
-			vmSetsSharingPrimarySLB: "vmss1,vmss2",
-			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "kubernetes"}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "vmss1"}},
-			},
-			existingLBs: []network.LoadBalancer{
+			desc:    "DualStack Service reconciles existing FIPs and does not touch others, not dirty",
+			service: getTestServiceDualStack("test", v1.ProtocolTCP, nil, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
 				{
-					Name: pointer.String("kubernetes"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss2-nic-1"),
-										},
-									},
-								},
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
 							},
 						},
 					},
 				},
 				{
-					Name: pointer.String("kubernetes-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss2-nic-1"),
-										},
-									},
-								},
+					Name: pointer.String("fipV6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV6"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv6,
+								IPAddress:              pointer.String("fe::1"),
 							},
 						},
 					},
 				},
 				{
-					Name: pointer.String("vmss1"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss1-nic-1"),
-										},
-									},
-								},
-							},
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
 						},
 					},
 				},
 				{
-					Name: pointer.String("vmss1-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss1-nic-1"),
-										},
-									},
-								},
-							},
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
 						},
 					},
 				},
 			},
-			expectedLBs: []network.LoadBalancer{
+			existingPIPs: []network.PublicIPAddress{
 				{
-					Name: pointer.String("kubernetes"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss2-nic-1"),
-										},
-									},
-								},
+					Name: pointer.String("testCluster-atest"),
+					ID:   pointer.String("testCluster-atest-id"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv4,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("1.2.3.5"),
+					},
+				},
+				{
+					Name: pointer.String("testCluster-atest-IPv6"),
+					ID:   pointer.String("testCluster-atest-id-IPv6"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv6,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("fe::2"),
+					},
+				},
+				{
+					Name: pointer.String("pipV4"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("1.2.3.4"),
+					},
+				},
+				{
+					Name: pointer.String("pipV6"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("fe::1"),
+					},
+				},
+			},
+			status:        nil,
+			wantLB:        true,
+			expectedDirty: false,
+			expectedFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
 							},
 						},
 					},
 				},
 				{
-					Name: pointer.String("kubernetes-internal"),
-					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
-						BackendAddressPools: &[]network.BackendAddressPool{
-							{
-								Name: pointer.String("kubernetes"),
-								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-									BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
-										{
-											ID: pointer.String("vmss2-nic-1"),
-										},
-									},
-								},
+					Name: pointer.String("fipV6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV6"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv6,
+								IPAddress:              pointer.String("fe::1"),
 							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
 						},
 					},
 				},
 			},
-			expectedListCount:     1,
-			expectedGetNamesCount: 1,
-			expectedDeleteCount:   1,
 		},
 		{
-			description:       "reconcileSharedLoadBalancer should do nothing if the basic load balancer is used",
-			useBasicLB:        true,
-			expectedListCount: 1,
+			desc:    "DualStack Service reconciles existing FIPs, wantLB == false, but an FIP ID is empty, should return error",
+			service: getTestServiceDualStack("test", v1.ProtocolTCP, nil, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
+						},
+					},
+				},
+			},
+			status:      nil,
+			wantLB:      false,
+			expectedErr: fmt.Errorf("isFrontendIPConfigUnsafeToDelete: incorrect parameters"),
 		},
 		{
-			description:       "reconcileSharedLoadBalancer should do nothing if `nodes` is nil",
-			expectedListCount: 1,
+			desc:    "IPv6 Service with existing IPv4 FIP",
+			service: getTestService("test", v1.ProtocolTCP, nil, true, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("testCluster-atest"),
+					ID:   pointer.String("testCluster-atest-id"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv6,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("fe::1"),
+					},
+				},
+				{
+					Name: pointer.String("pipV4"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("1.2.3.4"),
+					},
+				},
+			},
+			status:        nil,
+			wantLB:        true,
+			expectedDirty: true,
+			expectedFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+			},
 		},
-		{
-			description:     "reconcileSharedLoadBalancer should do nothing if the vmSet is not sharing the primary slb",
-			useMultipleSLBs: true,
-			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "kubernetes"}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "vmss1"}},
-			},
-			existingLBs: []network.LoadBalancer{
-				{
-					Name: pointer.String("kubernetes"),
-				},
-				{
-					Name: pointer.String("vmss1"),
-				},
-			},
-			expectedLBs: []network.LoadBalancer{
-				{
-					Name: pointer.String("kubernetes"),
-				},
-				{
-					Name: pointer.String("vmss1"),
-				},
-			},
-			expectedListCount:     1,
-			expectedGetNamesCount: 1,
-		},
-		{
-			description: "reconcileSharedLoadBalancer should report an error if failed to list managed load balancers",
-			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "kubernetes"}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "vmss1"}},
-			},
-			expectedListCount: 1,
-			listLBErr:         retry.NewError(false, errors.New("error")),
-			expectedErr:       errors.New("reconcileSharedLoadBalancer: failed to list managed LB: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"),
-		},
-	} {
-		t.Run(tc.description, func(t *testing.T) {
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerSku = string(network.LoadBalancerSkuNameStandard)
 
-			cloud.NodePoolsWithoutDedicatedSLB = tc.vmSetsSharingPrimarySLB
+			lb := getTestLoadBalancer(pointer.String("lb"), pointer.String("rg"), pointer.String("testCluster"), pointer.String("testCluster"), tc.service, "standard")
+			existingFIPs := tc.existingFIPs
+			lb.FrontendIPConfigurations = &existingFIPs
 
-			cloud.LoadBalancerSku = consts.VMTypeStandard
-			if tc.useMultipleSLBs {
-				cloud.EnableMultipleStandardLoadBalancers = true
-			} else if tc.useBasicLB {
-				cloud.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			mockPIPClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPClient.EXPECT().List(gomock.Any(), "rg").Return(tc.existingPIPs, nil).MaxTimes(2)
+			for _, pip := range tc.existingPIPs {
+				mockPIPClient.EXPECT().Get(gomock.Any(), "rg", *pip.Name, gomock.Any()).Return(pip, nil).MaxTimes(1)
 			}
 
-			mockLBClient := cloud.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-			mockLBClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return(tc.existingLBs, tc.listLBErr).Times(tc.expectedListCount)
-			mockLBClient.EXPECT().Delete(gomock.Any(), cloud.ResourceGroup, "vmss1").Return(nil).Times(tc.expectedDeleteCount)
-			mockLBClient.EXPECT().Delete(gomock.Any(), cloud.ResourceGroup, "vmss1-internal").Return(nil).Times(tc.expectedDeleteCount)
-
-			if tc.useVMIP {
-				cloud.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
-				tc.expectedDeleteCount = 0
+			service := tc.service
+			isDualStack := isServiceDualStack(&service)
+			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&service)
+			lbFrontendIPConfigNames := map[bool]string{
+				false: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, false),
+				true:  getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, true),
 			}
-
-			mockVMSet := NewMockVMSet(ctrl)
-			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1/backendAddressPools/kubernetes"}, "vmss1", gomock.Any(), gomock.Any()).Return(false, nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/vmss1-internal/backendAddressPools/kubernetes"}, "vmss1", gomock.Any(), gomock.Any()).Return(false, nil).Times(tc.expectedDeleteCount)
-			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmss1", "vmss2"}, nil).MaxTimes(tc.expectedGetNamesCount)
-			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss2").AnyTimes()
-			cloud.VMSet = mockVMSet
-
-			service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
-			lbs, err := cloud.reconcileSharedLoadBalancer(&service, "kubernetes", tc.nodes)
+			_, _, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &service, &lb, tc.status, tc.wantLB, lbFrontendIPConfigNames)
 			if tc.expectedErr != nil {
-				assert.Equal(t, tc.expectedErr.Error(), err.Error())
+				assert.Equal(t, tc.expectedErr, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedDirty, dirty)
+				assert.Equal(t, tc.expectedFIPs, *lb.FrontendIPConfigurations)
 			}
-			assert.Equal(t, tc.expectedLBs, lbs)
 		})
 	}
 }

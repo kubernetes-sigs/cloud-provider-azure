@@ -1191,6 +1191,9 @@ func TestIsBackendPoolIPv6(t *testing.T) {
 	for _, test := range testcases {
 		isIPv6 := isBackendPoolIPv6(test.name)
 		assert.Equal(t, test.expectedIsIPv6, isIPv6)
+
+		isIPv6ManagedResource := managedResourceHasIPv6Suffix(test.name)
+		assert.Equal(t, test.expectedIsIPv6, isIPv6ManagedResource)
 	}
 }
 
@@ -1869,14 +1872,14 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc         string
-		existingPIPs []network.PublicIPAddress
-		fip          network.FrontendIPConfiguration
-		service      *v1.Service
-		isOwned      bool
-		isPrimary    bool
-		expectedErr  error
-		listError    *retry.Error
+		desc                 string
+		existingPIPs         []network.PublicIPAddress
+		fip                  network.FrontendIPConfiguration
+		service              *v1.Service
+		isOwned              bool
+		isPrimary            bool
+		listError            *retry.Error
+		expectedFIPIPVersion network.IPVersion
 	}{
 		{
 			desc: "serviceOwnsFrontendIP should detect the primary service",
@@ -1927,6 +1930,34 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4"},
 				},
 			},
+		},
+		{
+			desc: "serviceOwnsFrontendIP should return correct FIP IP version",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress:              pointer.String("4.3.2.1"),
+						PublicIPAddressVersion: network.IPv4,
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+				},
+			},
+			expectedFIPIPVersion: network.IPv4,
+			isOwned:              true,
 		},
 		{
 			desc: "serviceOwnsFrontendIP should return false if there is a mismatch between the PIP's ID and " +
@@ -2132,8 +2163,10 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 				mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, test.listError).MaxTimes(2)
 			}
-			isOwned, isPrimary, err := cloud.serviceOwnsFrontendIP(test.fip, test.service)
-			assert.Equal(t, test.expectedErr, err)
+			isOwned, isPrimary, fipIPVersion := cloud.serviceOwnsFrontendIP(test.fip, test.service)
+			if test.expectedFIPIPVersion != "" {
+				assert.Equal(t, test.expectedFIPIPVersion, fipIPVersion)
+			}
 			assert.Equal(t, test.isOwned, isOwned)
 			assert.Equal(t, test.isPrimary, isPrimary)
 		})

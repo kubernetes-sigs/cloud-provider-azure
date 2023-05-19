@@ -42,11 +42,19 @@ func (az *Cloud) reconcilePrivateLinkService(
 	wantPLS bool,
 ) error {
 	isinternal := requiresInternalLoadBalancer(service)
-	isIPv6, err := az.isFIPIPv6(service, fipConfig, isinternal)
-	if err != nil {
-		klog.Errorf("reconcilePrivateLinkService for service(%s): failed to get FIP IP family: %v", service, err)
-		return err
+	pipRG := az.getPublicIPAddressResourceGroup(service)
+	_, _, fipIPVersion := az.serviceOwnsFrontendIP(*fipConfig, service)
+	var isIPv6 bool
+	var err error
+	if fipIPVersion != "" {
+		isIPv6 = fipIPVersion == network.IPv6
+	} else {
+		if isIPv6, err = az.isFIPIPv6(service, pipRG, fipConfig); err != nil {
+			klog.Errorf("reconcilePrivateLinkService for service(%s): failed to get FIP IP family: %v", service, err)
+			return err
+		}
 	}
+
 	if isIPv6 {
 		klog.V(2).Infof("IPv6 is not supported for private link service, skip reconcilePrivateLinkService for service(%s)", service)
 		return nil
