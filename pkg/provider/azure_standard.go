@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -302,6 +303,10 @@ func getBackendPoolNames(clusterName string) map[bool]string {
 
 // ifBackendPoolIPv6 checks if a backend pool is of IPv6 according to name/ID.
 func isBackendPoolIPv6(name string) bool {
+	return managedResourceHasIPv6Suffix(name)
+}
+
+func managedResourceHasIPv6Suffix(name string) bool {
 	return strings.HasSuffix(strings.ToLower(name), fmt.Sprintf("-%s", v6SuffixLower))
 }
 
@@ -374,19 +379,20 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 // This means the name of the config can be tracked by the service UID.
 // 2. The secondary services must have their loadBalancer IP set if they want to share the same config as the primary
 // service. Hence, it can be tracked by the loadBalancer IP.
-func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) (bool, bool, error) {
+// If the IP version is not empty, which means it is the secondary Service, it returns IP version of the Service FIP.
+func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) (bool, bool, network.IPVersion) {
 	var isPrimaryService bool
 	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
 	if strings.HasPrefix(pointer.StringDeref(fip.Name, ""), baseName) {
 		klog.V(6).Infof("serviceOwnsFrontendIP: found primary service %s of the frontend IP config %s", service.Name, *fip.Name)
 		isPrimaryService = true
-		return true, isPrimaryService, nil
+		return true, isPrimaryService, ""
 	}
 
 	loadBalancerIPs := getServiceLoadBalancerIPs(service)
 	if len(loadBalancerIPs) == 0 {
 		// it is a must that the secondary services set the loadBalancer IP
-		return false, isPrimaryService, nil
+		return false, isPrimaryService, ""
 	}
 
 	// for external secondary service the public IP address should be checked
@@ -396,7 +402,7 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 			pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
 			if err != nil {
 				klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerIP %s: %v", service.Name, loadBalancerIP, err)
-				return false, isPrimaryService, nil
+				return false, isPrimaryService, ""
 			}
 
 			if pip != nil &&
@@ -407,19 +413,23 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 				fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
 				if strings.EqualFold(pointer.StringDeref(pip.ID, ""), pointer.StringDeref(fip.PublicIPAddress.ID, "")) {
 					klog.V(6).Infof("serviceOwnsFrontendIP:found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
-					return true, isPrimaryService, nil
+					return true, isPrimaryService, pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion
 				}
 			}
 			klog.V(6).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s "+
 				"OR it is of incorrect IP version", *pip.ID, *pip.IPAddress)
 		}
 
-		return false, isPrimaryService, nil
+		return false, isPrimaryService, ""
 	}
 
 	// for internal secondary service the private IP address on the frontend IP config should be checked
 	if fip.PrivateIPAddress == nil {
-		return false, isPrimaryService, nil
+		return false, isPrimaryService, ""
+	}
+	privateIPAddrVersion := network.IPv4
+	if net.ParseIP(*fip.PrivateIPAddress).To4() == nil {
+		privateIPAddrVersion = network.IPv6
 	}
 
 	privateIPEquals := false
@@ -429,7 +439,7 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 			break
 		}
 	}
-	return privateIPEquals, isPrimaryService, nil
+	return privateIPEquals, isPrimaryService, privateIPAddrVersion
 }
 
 func (az *Cloud) getFrontendIPConfigNames(service *v1.Service) map[bool]string {

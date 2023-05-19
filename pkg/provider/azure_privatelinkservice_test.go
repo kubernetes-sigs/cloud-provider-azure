@@ -29,7 +29,6 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
@@ -337,18 +336,6 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			}
 			clusterName := testClusterName
 
-			if isInternal, ok := test.annotations[consts.ServiceAnnotationLoadBalancerInternal]; !ok || isInternal != "true" {
-				existingPIPS := []network.PublicIPAddress{
-					{
-						ID: pointer.String("pipID"),
-						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-							PublicIPAddressVersion: network.IPv4,
-						},
-					},
-				}
-				mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(existingPIPS, nil).Times(1)
-			}
 			mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
 			mockPLSsClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 			if test.expectedSubnetGet {
