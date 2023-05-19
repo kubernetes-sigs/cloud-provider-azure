@@ -52,6 +52,9 @@ func (Generator) RegisterMarkers(into *markers.Registry) error {
 }
 
 func (g Generator) Generate(ctx *genall.GenerationContext) error {
+	if err := exec.Command("go", "get", "github.com/golang/mock/mockgen/model").Run(); err != nil {
+		return err
+	}
 	var headerText string
 
 	if g.HeaderFile != "" {
@@ -90,14 +93,9 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 			root.AddError(err)
 			return err
 		}
-
-		//nolint:gosec // G204 ignore this!
-		if err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", root.Name).Run(); err != nil {
-			root.AddError(err)
-			return err
-		}
 	}
-	return nil
+	//nolint:gosec // G204 ignore this!
+	return exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").Run()
 }
 
 func (Generator) CheckFilter() loader.NodeFilter {
