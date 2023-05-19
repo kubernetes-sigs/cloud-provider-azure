@@ -7,7 +7,7 @@ timeout: 9000s
 options:
   substitution_option: ALLOW_LOOSE
 steps:
-  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:latest"
+  - name: "gcr.io/k8s-testimages/gcb-docker-gcloud:v20230424-910a2a439d"
     entrypoint: make
     env:
       - TAG=${_GIT_TAG}
