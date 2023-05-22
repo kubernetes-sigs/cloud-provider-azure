@@ -181,6 +181,8 @@ Currently, the default protocol of the health probe varies among services with d
 1. for cluster TCP services, TCP would be used.
 1. for cluster UDP services, no health probes.
 
+> Note: For local services with PLS integration and PLS proxy protocol enabled, the default HTTP+/healthz health probe does not work. Thus health probe can be customized the same way as cluster services to support this scenario. For more details, please check [PLS Integration Note](../pls-integration).
+
 Since v1.20, service annotation `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is introduced to determine the health probe behavior.
 
 * For clusters <=1.23, `spec.ports.appProtocol` would only be used as probe protocol when `service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path` is also set.
