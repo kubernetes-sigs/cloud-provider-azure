@@ -4,28 +4,17 @@ linkTitle: "Cross Resource Group Nodes"
 weight: 5
 type: docs
 description: >
-    Deploy cross resource group nodes.
+  Deploy cross resource group nodes.
 ---
 
 **Feature status:** GA since v1.21.
 
-Kubernetes v1.12 adds support for cross resource group (RG) nodes and unmanaged (such as on-prem) nodes in Azure cloud provider. A few assumptions are made for such nodes:
+Kubernetes v1.21 adds support for cross resource group (RG) nodes and unmanaged (such as on-prem) nodes in Azure cloud provider. A few assumptions are made for such nodes:
 
 - Cross-RG nodes are in same region and set with required labels (as clarified in the following part)
 - Nodes will not be part of the load balancer managed by cloud provider
 - Both node and container networking should be configured properly by provisioning tools
 - AzureDisk is supported for Azure cross-RG nodes, but not for on-prem nodes
-
-**TOC:**
-
-<!-- TOC -->
-
-- [Pre-requirements](#pre-requirements)
-- [Cross-RG nodes](#cross-rg-nodes)
-- [Unmanaged nodes](#unmanaged-nodes)
-- [Reference](#reference)
-
-<!-- /TOC -->
 
 ## Pre-requirements
 
@@ -67,6 +56,10 @@ kubelet ...\
   --cloud-provider= \
   --node-labels=node.kubernetes.io/exclude-from-external-load-balancers=true,kubernetes.azure.com/managed=false
 ```
+
+## Limitations
+
+Cross resource group nodes and unmanaged nodes are unsupported when joined to an AKS cluster. Using these labels on AKS-managed nodes is not supported.
 
 ## Reference
 
