@@ -81,4 +81,9 @@ type Config struct {
 	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
 	// Its corresponding flag only gets registered in Windows builds
 	WindowsService bool
+
+	// EnableDeprecatedBetaTopologyLabels indicates whether the node should apply beta topology labels.
+	// If true, the node will apply beta topology labels.
+	// DEPRECATED: This flag will be removed in a future release.
+	EnableDeprecatedBetaTopologyLabels bool
 }

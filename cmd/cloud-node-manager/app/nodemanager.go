@@ -137,7 +137,8 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-c
 		c.ClientBuilder.ClientOrDie("node-controller"),
 		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath),
 		c.NodeStatusUpdateFrequency.Duration,
-		c.WaitForRoutes)
+		c.WaitForRoutes,
+		c.EnableDeprecatedBetaTopologyLabels)
 
 	go nodeController.Run(stopCh)
 
