@@ -60,6 +60,16 @@ func IsLBRuleOnK8sServicePortDisabled(annotations map[string]string, port int32)
 	return expectAttributeInSvcAnnotationBeEqualTo(annotations, BuildAnnotationKeyForPort(port, PortAnnotationNoLBRule), TrueAnnotationValue), nil
 }
 
+// IsPLSProxyProtocolEnabled return true if ServiceAnnotationPLSProxyProtocol is true
+func IsPLSProxyProtocolEnabled(annotations map[string]string) bool {
+	return expectAttributeInSvcAnnotationBeEqualTo(annotations, ServiceAnnotationPLSProxyProtocol, TrueAnnotationValue)
+}
+
+// IsPLSEnabled return true if ServiceAnnotationPLSCreation is true
+func IsPLSEnabled(annotations map[string]string) bool {
+	return expectAttributeInSvcAnnotationBeEqualTo(annotations, ServiceAnnotationPLSCreation, TrueAnnotationValue)
+}
+
 // Getint32ValueFromK8sSvcAnnotation get health probe configuration for port
 func Getint32ValueFromK8sSvcAnnotation(annotations map[string]string, key string, validators ...Int32BusinessValidator) (*int32, error) {
 	val, err := GetAttributeValueInSvcAnnotation(annotations, key)
