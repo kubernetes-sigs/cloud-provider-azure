@@ -59,6 +59,10 @@ const (
 	v6Suffix = "IPv6"
 )
 
+var (
+	v6SuffixLower = strings.ToLower(v6Suffix)
+)
+
 // returns the full identifier of an availabilitySet
 func (az *Cloud) getAvailabilitySetID(resourceGroup, availabilitySetName string) string {
 	return fmt.Sprintf(
@@ -303,7 +307,7 @@ func getBackendPoolNames(clusterName string) map[bool]string {
 
 // ifBackendPoolIPv6 checks if a backend pool is of IPv6 according to name/ID.
 func isBackendPoolIPv6(name string) bool {
-	return strings.HasSuffix(name, fmt.Sprintf("-%s", v6Suffix))
+	return strings.HasSuffix(strings.ToLower(name), fmt.Sprintf("-%s", v6SuffixLower))
 }
 
 func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protocol, port int32, isIPv6 bool) string {

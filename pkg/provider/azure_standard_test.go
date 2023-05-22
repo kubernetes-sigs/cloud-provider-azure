@@ -1186,7 +1186,7 @@ func TestIsBackendPoolIPv6(t *testing.T) {
 		{"bp-IPv6", true},
 		{"bp-IPv4", false},
 		{"bp", false},
-		{"bp-ipv6", false},
+		{"bp-ipv6", true},
 	}
 	for _, test := range testcases {
 		isIPv6 := isBackendPoolIPv6(test.name)
