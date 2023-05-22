@@ -2619,6 +2619,45 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedProbes:  probes,
 		expectedRules:   rules1,
 	})
+	rules1DualStack = map[bool][]network.LoadBalancingRule{
+		false: {
+			getTestRule(true, 80, false),
+		},
+		true: {
+			getTestRule(true, 80, true),
+		},
+	}
+	// When the service spec externalTrafficPolicy is Local and azure-disable-service-health-port-probe is set, should return default
+	svc = getTestServiceDualStack("test1", v1.ProtocolTCP, map[string]string{
+		consts.ServiceAnnotationPLSCreation:                                                    "true",
+		consts.ServiceAnnotationPLSProxyProtocol:                                               "true",
+		consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                "tcp",
+		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                             "/broken/global/path",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProbeInterval): "10",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol):      "https",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsRequestPath):   "/broken/local/path",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsNumOfProbe):    "10",
+	}, 80)
+	svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+	svc.Spec.HealthCheckNodePort = 34567
+	probes = getTestProbes("Https", "/broken/local/path", pointer.Int32(10), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(10))
+	testCases = append(testCases, struct {
+		desc            string
+		service         v1.Service
+		loadBalancerSku string
+		probeProtocol   string
+		probePath       string
+		expectedProbes  map[bool][]network.Probe
+		expectedRules   map[bool][]network.LoadBalancingRule
+		expectedErr     bool
+	}{
+		desc:            "getExpectedLBRules should return expected rules when externalTrafficPolicy is local and service.beta.kubernetes.io/azure-pls-proxy-protocol is enabled",
+		service:         svc,
+		loadBalancerSku: "standard",
+		probeProtocol:   "https",
+		expectedProbes:  probes,
+		expectedRules:   rules1DualStack,
+	})
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
