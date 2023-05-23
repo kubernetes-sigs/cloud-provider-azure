@@ -17,8 +17,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.7
 	github.com/spf13/cobra v1.7.0
-	go.opentelemetry.io/otel v1.15.1
-	go.opentelemetry.io/otel/trace v1.15.1
+	go.opentelemetry.io/otel v1.16.0
+	go.opentelemetry.io/otel/trace v1.16.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/client-go v0.27.2
 	k8s.io/klog/v2 v2.100.1
@@ -42,6 +42,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
