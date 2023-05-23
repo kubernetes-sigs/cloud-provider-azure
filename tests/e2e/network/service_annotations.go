@@ -422,10 +422,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 
 		expectedTags := map[string]*string{
-			// TODO(niqi): modify this after the AKS systemTags support is ready
 			"a": pointer.String("c"),
-			"c": pointer.String("d"),
-			"e": pointer.String(""),
 			"x": pointer.String("y"),
 		}
 
