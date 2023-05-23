@@ -1662,7 +1662,28 @@ func getBackendPort(port int32) int32 {
 	return port + 10000
 }
 
+// TODO: This function should be merged into getTestService()
+func getTestServiceDualStack(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
+	svc.Spec.ClusterIPs = []string{"10.0.0.2", "fd00::1907"}
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+
+	return svc
+}
+
 func getTestService(identifier string, proto v1.Protocol, annotations map[string]string, isIPv6 bool, requestedPorts ...int32) v1.Service {
+	svc := getTestServiceCommon(identifier, proto, annotations, requestedPorts...)
+	svc.Spec.ClusterIP = "10.0.0.2"
+	svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+	if isIPv6 {
+		svc.Spec.ClusterIP = "fd00::1907"
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	}
+
+	return svc
+}
+
+func getTestServiceCommon(identifier string, proto v1.Protocol, annotations map[string]string, requestedPorts ...int32) v1.Service {
 	ports := []v1.ServicePort{}
 	for _, port := range requestedPorts {
 		ports = append(ports, v1.ServicePort{
@@ -1686,11 +1707,6 @@ func getTestService(identifier string, proto v1.Protocol, annotations map[string
 		svc.Annotations = make(map[string]string)
 	} else {
 		svc.Annotations = annotations
-	}
-
-	svc.Spec.ClusterIP = "10.0.0.2"
-	if isIPv6 {
-		svc.Spec.ClusterIP = "fd00::1907"
 	}
 
 	return svc
