@@ -57,15 +57,15 @@ fmt: goimports ## Run go fmt against code.
 
 .PHONY: vet
 vet: golangci-lint ## Run go vet against code.
-	$(LOCALBIN)/golangci-lint run --timeout 10m client-gen/...
+	pushd client-gen; $(LOCALBIN)/golangci-lint run --timeout 10m ./... ;popd
 
 ##@ Build
 .PHONY: build
 TYPESCAFFOLD = $(LOCALBIN)/typescaffold
 CLIENTGEN = $(LOCALBIN)/client-gen
 build: fmt vet ## Build manager binary.
-	CGO_ENABLED=0 go build -o bin/client-gen ./client-gen/cmd/client-gen/
-	CGO_ENABLED=0 go build -o bin/typescaffold ./client-gen/cmd/typescaffold/
+	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/client-gen ./cmd/client-gen/ ;popd
+	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/typescaffold ./cmd/typescaffold/;popd
 
 .PHONY: generate
 generate: install-dependencies build generatecode generateimpl vet-all

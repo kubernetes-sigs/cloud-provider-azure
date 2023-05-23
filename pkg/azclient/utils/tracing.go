@@ -94,7 +94,7 @@ func NewOtlpSpan(ctx context.Context, spanName string, options *tracing.SpanOpti
 func NewOtlpSpanFromContext(ctx context.Context) (tracing.Span, bool) {
 	var span trace.Span
 
-	ctx, span = tracer.Start(ctx, "NewSpanFromCtx")
+	_, span = tracer.Start(ctx, "NewSpanFromCtx")
 
 	return tracing.NewSpan(
 		tracing.SpanImpl{

@@ -20,14 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"math"
 	"net/http"
 	"strings"
 	"time"
-
-	"k8s.io/klog/v2"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
@@ -113,8 +110,6 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 
 	bodyString := string(bodyBytes)
 	trimmed := strings.TrimSpace(bodyString)
-	klog.V(5).Infof("Send.sendRequest got response with ContentLength %d, StatusCode %d and responseBody length %d", response.ContentLength, response.StatusCode, len(trimmed))
-
 	// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
 	// Empty content and 2xx http status code are returned in this case.
 	// Issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1296
@@ -127,13 +122,11 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 
 		var body map[string]interface{}
 		if e := json.Unmarshal(bodyBytes, &body); e != nil {
-			klog.Errorf("Send.sendRequest: error in parsing response body string %q: %s, Skip retrying regional host", bodyBytes, e.Error())
 			return response, err
 		}
 
 		errBody, ok := body["error"].(map[string]interface{})
 		if !ok || errBody["code"] == nil || !strings.EqualFold(errBody["code"].(string), "ResourceGroupNotFound") {
-			klog.V(5).Infof("Send.sendRequest: response body does not contain ResourceGroupNotFound error code. Skip retrying regional host")
 			return response, err
 		}
 	}
@@ -145,13 +138,11 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 	}
 
 	if strings.HasPrefix(strings.ToLower(currentHost), strings.ToLower(p.regionalEndpoint)) {
-		klog.V(5).Infof("Send.sendRequest: current host %s is regional host. Skip retrying regional host.", html.EscapeString(currentHost))
 		return response, err
 	}
 
 	req.Raw().Host = p.regionalEndpoint
 	req.Raw().URL.Host = p.regionalEndpoint
-	klog.V(6).Infof("Send.sendRegionalRequest on ResourceGroupNotFound error. Retrying regional host: %s", html.EscapeString(req.Raw().Host))
 
 	regionalResponse, regionalError := req.Next()
 
@@ -159,12 +150,6 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 	// 1. the retry on regional ARM host approach is a hack.
 	// 2. the concatenated regional uri could be wrong as the rule is not officially declared by ARM.
 	if regionalResponse == nil || regionalResponse.StatusCode > 299 {
-		regionalErrStr := ""
-		if regionalError != nil {
-			regionalErrStr = regionalError.Error()
-		}
-
-		klog.V(6).Infof("Send.sendRegionalRequest failed to get response from regional host, error: %q. Ignoring the result.", regionalErrStr)
 		return response, err
 	}
 
@@ -178,7 +163,6 @@ func (p *GetRequestRegionalEndpointRetryPolicy) Do(req *policy.Request) (*http.R
 	emptyResp = (regionalResponse.ContentLength == 0 || trimmed == "" || trimmed == "{}") && regionalResponse.StatusCode >= 200 && regionalResponse.StatusCode < 300
 	if emptyResp {
 		contentLengthErrStr := fmt.Sprintf("empty response with trimmed body %q, ContentLength %d and StatusCode %d", trimmed, regionalResponse.ContentLength, regionalResponse.StatusCode)
-		klog.Errorf(contentLengthErrStr)
 		return response, fmt.Errorf(contentLengthErrStr)
 	}
 
