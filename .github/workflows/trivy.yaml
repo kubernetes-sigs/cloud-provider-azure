@@ -33,10 +33,15 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@128a63446a954579617e875aaab7d2978154e969 # v2.4.0
+        with:
+          egress-policy: audit
+
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       - name: Set up Go 1.x
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
         with:
           go-version-file: go.mod
           cache: true
@@ -48,7 +53,7 @@ jobs:
           make build-node-image-linux-amd64
 
       - name: Run Trivy scanner CCM
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@e5f43133f6e8736992c9f3c1b3296e24b37e17f2 # master
         with:
           image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
           format: 'sarif'
@@ -58,12 +63,12 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@29b1f65c5e92e24fe6b6647da1eaabe529cec70f # v2.3.3
         with:
           sarif_file: 'trivy-ccm-results.sarif'
           category: azure-cloud-controller-manager-image
       - name: Run Trivy scanner CNM
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@e5f43133f6e8736992c9f3c1b3296e24b37e17f2 # master
         with:
           image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
           format: 'sarif'
@@ -73,13 +78,13 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@29b1f65c5e92e24fe6b6647da1eaabe529cec70f # v2.3.3
         with:
           sarif_file: 'trivy-cnm-linux-results.sarif'
           category: azure-cloud-node-manager-linux-image
 
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@e5f43133f6e8736992c9f3c1b3296e24b37e17f2 # master
         with:
           scan-type: 'fs'
           ignore-unfixed: true

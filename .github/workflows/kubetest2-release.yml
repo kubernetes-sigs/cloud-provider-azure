@@ -16,13 +16,18 @@ jobs:
   build-kubetest2-aks:
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@128a63446a954579617e875aaab7d2978154e969 # v2.4.0
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
         with:
           ref: master
           fetch-depth: 0
       - name: Setup Golang
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
         with:
           go-version-file: kubetest2-aks/go.mod
       - name: Build binary
@@ -30,13 +35,13 @@ jobs:
           cd kubetest2-aks
           make deployer
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a # v2.1.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup kustomizer
-        uses: stefanprodan/kustomizer/action@main
+        uses: stefanprodan/kustomizer/action@8009953f93c2cf2ecbaff70be321d15e921ad591 # main
       - name: Push
         run: |
           kustomizer push artifact ${ARTIFACT}:${{ github.ref_name }} -f ./kubetest2-aks/bin/kubetest2-aks \

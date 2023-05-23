@@ -34,6 +34,9 @@ on:
   schedule:
     - cron: '0 */24 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze
@@ -51,10 +54,15 @@ jobs:
         # Learn more about CodeQL language support at https://git.io/codeql-language-support
 
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@128a63446a954579617e875aaab7d2978154e969 # v2.4.0
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
     - name: Set up Go 1.x
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
       with:
         go-version-file: go.mod
         cache: true
@@ -62,7 +70,7 @@ jobs:
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@29b1f65c5e92e24fe6b6647da1eaabe529cec70f # v2.3.3
       with:
         languages: ${{ matrix.language }}
         # If you wish to specify custom queries, you can do so here or in a config file.
@@ -85,4 +93,4 @@ jobs:
         $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov -service=github
     
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@29b1f65c5e92e24fe6b6647da1eaabe529cec70f # v2.3.3
