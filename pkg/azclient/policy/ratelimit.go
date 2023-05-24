@@ -21,7 +21,8 @@ import (
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"k8s.io/client-go/util/flowcontrol"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/flowcontrol"
 )
 
 // RateLimitConfig indicates the rate limit config options.
