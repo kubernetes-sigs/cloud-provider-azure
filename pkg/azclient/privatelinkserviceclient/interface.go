@@ -18,18 +18,18 @@ limitations under the License.
 package privatelinkserviceclient
 
 import (
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=PrivateLinkService,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2,packageAlias=network,clientName=PrivateLinkServicesClient,apiVersion="2022-07-01",expand=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=PrivateLinkService,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PrivateLinkServicesClient,apiVersion="2022-07-01",expand=true
 type Interface interface {
-	utils.GetWithExpandFunc[network.PrivateLinkService]
+	utils.GetWithExpandFunc[armnetwork.PrivateLinkService]
 
-	utils.CreateOrUpdateFunc[network.PrivateLinkService]
+	utils.CreateOrUpdateFunc[armnetwork.PrivateLinkService]
 
-	utils.DeleteFunc[network.PrivateLinkService]
+	utils.DeleteFunc[armnetwork.PrivateLinkService]
 
-	utils.ListFunc[network.PrivateLinkService]
+	utils.ListFunc[armnetwork.PrivateLinkService]
 }

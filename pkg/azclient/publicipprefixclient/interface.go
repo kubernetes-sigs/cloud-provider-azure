@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // +azure:enableclientgen:=true
-package routetableclient
+package publicipprefixclient
 
 import (
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
@@ -23,9 +23,13 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=RouteTablesClient,apiVersion="2022-07-01",expand=false
+// +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPPrefix,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PublicIPPrefixesClient,apiVersion="2022-07-01",expand=true
 type Interface interface {
-	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
+	utils.GetWithExpandFunc[armnetwork.PublicIPPrefix]
 
-	utils.DeleteFunc[armnetwork.RouteTable]
+	utils.CreateOrUpdateFunc[armnetwork.PublicIPPrefix]
+
+	utils.DeleteFunc[armnetwork.PublicIPPrefix]
+
+	utils.ListFunc[armnetwork.PublicIPPrefix]
 }
