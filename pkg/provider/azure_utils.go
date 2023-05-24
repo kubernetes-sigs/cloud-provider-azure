@@ -172,6 +172,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 		for k := range currentTagsOnResource {
 			if _, ok := newTags[k]; !ok {
 				if found, _ := findKeyInMapCaseInsensitive(systemTagsMap, k); !found {
+					klog.V(2).Infof("reconcileTags: delete tag %s: %s", k, pointer.StringDeref(currentTagsOnResource[k], ""))
 					delete(currentTagsOnResource, k)
 					changed = true
 				}
