@@ -3016,18 +3016,24 @@ func (az *Cloud) ensurePIPTagged(service *v1.Service, pip *network.PublicIPAddre
 	}
 
 	// include the cluster name and service names tags when comparing
-	var clusterName, serviceNames *string
+	var clusterName, serviceNames, serviceNameUsingDNS *string
 	if v := getClusterFromPIPClusterTags(pip.Tags); v != "" {
 		clusterName = &v
 	}
 	if v := getServiceFromPIPServiceTags(pip.Tags); v != "" {
 		serviceNames = &v
 	}
+	if v := getServiceFromPIPDNSTags(pip.Tags); v != "" {
+		serviceNameUsingDNS = &v
+	}
 	if clusterName != nil {
 		configTags[consts.ClusterNameKey] = clusterName
 	}
 	if serviceNames != nil {
 		configTags[consts.ServiceTagKey] = serviceNames
+	}
+	if serviceNameUsingDNS != nil {
+		configTags[consts.ServiceUsingDNSKey] = serviceNameUsingDNS
 	}
 
 	tags, changed := az.reconcileTags(pip.Tags, configTags)

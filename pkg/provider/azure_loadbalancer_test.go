@@ -5478,25 +5478,27 @@ func TestEnsurePIPTagged(t *testing.T) {
 	}
 	pip := network.PublicIPAddress{
 		Tags: map[string]*string{
-			consts.ClusterNameKey: pointer.String("testCluster"),
-			consts.ServiceTagKey:  pointer.String("default/svc1,default/svc2"),
-			"foo":                 pointer.String("bar"),
-			"a":                   pointer.String("j"),
-			"m":                   pointer.String("n"),
+			consts.ClusterNameKey:     pointer.String("testCluster"),
+			consts.ServiceTagKey:      pointer.String("default/svc1,default/svc2"),
+			consts.ServiceUsingDNSKey: pointer.String("default/svc1"),
+			"foo":                     pointer.String("bar"),
+			"a":                       pointer.String("j"),
+			"m":                       pointer.String("n"),
 		},
 	}
 
 	t.Run("ensurePIPTagged should ensure the pip is tagged as configured", func(t *testing.T) {
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey: pointer.String("testCluster"),
-				consts.ServiceTagKey:  pointer.String("default/svc1,default/svc2"),
-				"foo":                 pointer.String("bar"),
-				"a":                   pointer.String("b"),
-				"c":                   pointer.String("d"),
-				"y":                   pointer.String("z"),
-				"m":                   pointer.String("n"),
-				"e":                   pointer.String(""),
+				consts.ClusterNameKey:     pointer.String("testCluster"),
+				consts.ServiceTagKey:      pointer.String("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey: pointer.String("default/svc1"),
+				"foo":                     pointer.String("bar"),
+				"a":                       pointer.String("b"),
+				"c":                       pointer.String("d"),
+				"y":                       pointer.String("z"),
+				"m":                       pointer.String("n"),
+				"e":                       pointer.String(""),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -5508,13 +5510,14 @@ func TestEnsurePIPTagged(t *testing.T) {
 		cloud.SystemTags = "a,foo"
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey: pointer.String("testCluster"),
-				consts.ServiceTagKey:  pointer.String("default/svc1,default/svc2"),
-				"foo":                 pointer.String("bar"),
-				"a":                   pointer.String("b"),
-				"c":                   pointer.String("d"),
-				"y":                   pointer.String("z"),
-				"e":                   pointer.String(""),
+				consts.ClusterNameKey:     pointer.String("testCluster"),
+				consts.ServiceTagKey:      pointer.String("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey: pointer.String("default/svc1"),
+				"foo":                     pointer.String("bar"),
+				"a":                       pointer.String("b"),
+				"c":                       pointer.String("d"),
+				"y":                       pointer.String("z"),
+				"e":                       pointer.String(""),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
@@ -5527,13 +5530,14 @@ func TestEnsurePIPTagged(t *testing.T) {
 		cloud.TagsMap = map[string]string{"a": "c", "a=b": "c=d", "Y": "zz"}
 		expectedPIP := network.PublicIPAddress{
 			Tags: map[string]*string{
-				consts.ClusterNameKey: pointer.String("testCluster"),
-				consts.ServiceTagKey:  pointer.String("default/svc1,default/svc2"),
-				"foo":                 pointer.String("bar"),
-				"a":                   pointer.String("b"),
-				"c":                   pointer.String("d"),
-				"a=b":                 pointer.String("c=d"),
-				"e":                   pointer.String(""),
+				consts.ClusterNameKey:     pointer.String("testCluster"),
+				consts.ServiceTagKey:      pointer.String("default/svc1,default/svc2"),
+				consts.ServiceUsingDNSKey: pointer.String("default/svc1"),
+				"foo":                     pointer.String("bar"),
+				"a":                       pointer.String("b"),
+				"c":                       pointer.String("d"),
+				"a=b":                     pointer.String("c=d"),
+				"e":                       pointer.String(""),
 			},
 		}
 		changed := cloud.ensurePIPTagged(&service, &pip)
