@@ -2259,8 +2259,8 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			loadBalancerSku: "standard",
 			expectedProbes:  getDefaultTestProbes("Tcp", ""),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: getHATestRules(true, true, v1.ProtocolTCP, false),
-				true:  getHATestRules(true, true, v1.ProtocolTCP, true),
+				consts.IPVersionIPv4: getHATestRules(true, true, v1.ProtocolTCP, consts.IPVersionIPv4),
+				consts.IPVersionIPv6: getHATestRules(true, true, v1.ProtocolTCP, consts.IPVersionIPv6),
 			},
 		},
 		{
@@ -2271,8 +2271,8 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}, false, 80),
 			loadBalancerSku: "standard",
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: getHATestRules(true, false, v1.ProtocolSCTP, false),
-				true:  getHATestRules(true, false, v1.ProtocolSCTP, true),
+				consts.IPVersionIPv4: getHATestRules(true, false, v1.ProtocolSCTP, consts.IPVersionIPv4),
+				consts.IPVersionIPv6: getHATestRules(true, false, v1.ProtocolSCTP, consts.IPVersionIPv6),
 			},
 		},
 		{
@@ -2284,8 +2284,8 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			loadBalancerSku: "standard",
 			expectedProbes:  getDefaultTestProbes("Tcp", ""),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: getHATestRules(true, true, v1.ProtocolTCP, false),
-				true:  getHATestRules(true, true, v1.ProtocolTCP, true),
+				consts.IPVersionIPv4: getHATestRules(true, true, v1.ProtocolTCP, consts.IPVersionIPv4),
+				consts.IPVersionIPv6: getHATestRules(true, true, v1.ProtocolTCP, consts.IPVersionIPv6),
 			},
 		},
 		{
@@ -2468,8 +2468,8 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			service:         getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}, false, 80),
 			loadBalancerSku: "basic",
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: {getFloatingIPTestRule(false, false, 80, false)},
-				true:  {getFloatingIPTestRule(false, false, 80, true)},
+				consts.IPVersionIPv4: {getFloatingIPTestRule(false, false, 80, consts.IPVersionIPv4)},
+				consts.IPVersionIPv6: {getFloatingIPTestRule(false, false, 80, consts.IPVersionIPv6)},
 			},
 			expectedProbes: getDefaultTestProbes("Tcp", ""),
 		},
@@ -2516,17 +2516,17 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 				"service.beta.kubernetes.io/port_8000_health-probe_port": "port-tcp-80",
 			}, false, 80, 8000),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: {getTestRule(false, 80, false), getTestRule(false, 8000, false)},
-				true:  {getTestRule(false, 80, true), getTestRule(false, 8000, true)},
+				consts.IPVersionIPv4: {getTestRule(false, 80, consts.IPVersionIPv4), getTestRule(false, 8000, consts.IPVersionIPv4)},
+				consts.IPVersionIPv6: {getTestRule(false, 80, consts.IPVersionIPv6), getTestRule(false, 8000, consts.IPVersionIPv6)},
 			},
 			expectedProbes: map[bool][]network.Probe{
-				false: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), false),
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), false),
+				consts.IPVersionIPv4: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
 				},
-				true: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), true),
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), true),
+				consts.IPVersionIPv6: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
 				},
 			},
 		},
@@ -2536,23 +2536,23 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 				"service.beta.kubernetes.io/port_8000_health-probe_port": "80",
 			}, false, 80, 8000),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: {
-					getTestRule(false, 80, false),
-					getTestRule(false, 8000, false),
+				consts.IPVersionIPv4: {
+					getTestRule(false, 80, consts.IPVersionIPv4),
+					getTestRule(false, 8000, consts.IPVersionIPv4),
 				},
-				true: {
-					getTestRule(false, 80, true),
-					getTestRule(false, 8000, true),
+				consts.IPVersionIPv6: {
+					getTestRule(false, 80, consts.IPVersionIPv6),
+					getTestRule(false, 8000, consts.IPVersionIPv6),
 				},
 			},
 			expectedProbes: map[bool][]network.Probe{
-				false: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), false),
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), false),
+				consts.IPVersionIPv4: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
 				},
-				true: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), true),
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), true),
+				consts.IPVersionIPv6: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
 				},
 			},
 		},
@@ -2562,29 +2562,29 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 				"service.beta.kubernetes.io/port_8000_no_probe_rule": "true",
 			}, false, 80, 8000),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: {
-					getTestRule(false, 80, false),
+				consts.IPVersionIPv4: {
+					getTestRule(false, 80, consts.IPVersionIPv4),
 					func() network.LoadBalancingRule {
-						rule := getTestRule(false, 8000, false)
+						rule := getTestRule(false, 8000, consts.IPVersionIPv4)
 						rule.Probe = nil
 						return rule
 					}(),
 				},
-				true: {
-					getTestRule(false, 80, true),
+				consts.IPVersionIPv6: {
+					getTestRule(false, 80, consts.IPVersionIPv6),
 					func() network.LoadBalancingRule {
-						rule := getTestRule(false, 8000, true)
+						rule := getTestRule(false, 8000, consts.IPVersionIPv6)
 						rule.Probe = nil
 						return rule
 					}(),
 				},
 			},
 			expectedProbes: map[bool][]network.Probe{
-				false: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), false),
+				consts.IPVersionIPv4: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
 				},
-				true: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), true),
+				consts.IPVersionIPv6: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
 				},
 			},
 		},
@@ -2594,19 +2594,19 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 				"service.beta.kubernetes.io/port_8000_no_lb_rule": "true",
 			}, false, 80, 8000),
 			expectedRules: map[bool][]network.LoadBalancingRule{
-				false: {
-					getTestRule(false, 80, false),
+				consts.IPVersionIPv4: {
+					getTestRule(false, 80, consts.IPVersionIPv4),
 				},
-				true: {
-					getTestRule(false, 80, true),
+				consts.IPVersionIPv6: {
+					getTestRule(false, 80, consts.IPVersionIPv6),
 				},
 			},
 			expectedProbes: map[bool][]network.Probe{
-				false: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), false),
+				consts.IPVersionIPv4: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
 				},
-				true: {
-					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), true),
+				consts.IPVersionIPv6: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
 				},
 			},
 		},
@@ -2639,21 +2639,21 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedRules:   rulesDualStack,
 	})
 	rules1DualStack := map[bool][]network.LoadBalancingRule{
-		false: {
-			getTestRule(true, 80, false),
-			getTestRule(true, 443, false),
-			getTestRule(true, 421, false),
+		consts.IPVersionIPv4: {
+			getTestRule(true, 80, consts.IPVersionIPv4),
+			getTestRule(true, 443, consts.IPVersionIPv4),
+			getTestRule(true, 421, consts.IPVersionIPv4),
 		},
-		true: {
-			getTestRule(true, 80, true),
-			getTestRule(true, 443, true),
-			getTestRule(true, 421, true),
+		consts.IPVersionIPv6: {
+			getTestRule(true, 80, consts.IPVersionIPv6),
+			getTestRule(true, 443, consts.IPVersionIPv6),
+			getTestRule(true, 421, consts.IPVersionIPv6),
 		},
 	}
-	for _, rule := range rules1DualStack[false] {
+	for _, rule := range rules1DualStack[consts.IPVersionIPv4] {
 		rule.Probe.ID = pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567")
 	}
-	for _, rule := range rules1DualStack[true] {
+	for _, rule := range rules1DualStack[consts.IPVersionIPv6] {
 		rule.Probe.ID = pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/atest1-TCP-34567-IPv6")
 	}
 
@@ -2687,11 +2687,11 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		expectedRules:   rules1DualStack,
 	})
 	rules1DualStack = map[bool][]network.LoadBalancingRule{
-		false: {
-			getTestRule(true, 80, false),
+		consts.IPVersionIPv4: {
+			getTestRule(true, 80, consts.IPVersionIPv4),
 		},
-		true: {
-			getTestRule(true, 80, true),
+		consts.IPVersionIPv6: {
+			getTestRule(true, 80, consts.IPVersionIPv6),
 		},
 	}
 	// When the service spec externalTrafficPolicy is Local and azure-disable-service-health-port-probe is set, should return default
@@ -2754,8 +2754,8 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 
 func getTestProbes(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) map[bool][]network.Probe {
 	return map[bool][]network.Probe{
-		false: {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, false)},
-		true:  {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, true)},
+		consts.IPVersionIPv4: {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, consts.IPVersionIPv4)},
+		consts.IPVersionIPv6: {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, consts.IPVersionIPv6)},
 	}
 }
 
@@ -2785,8 +2785,8 @@ func getDefaultTestProbes(protocol, path string) map[bool][]network.Probe {
 
 func getDefaultTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingRule {
 	return map[bool][]network.LoadBalancingRule{
-		false: {getTestRule(enableTCPReset, 80, false)},
-		true:  {getTestRule(enableTCPReset, 80, true)},
+		consts.IPVersionIPv4: {getTestRule(enableTCPReset, 80, consts.IPVersionIPv4)},
+		consts.IPVersionIPv6: {getTestRule(enableTCPReset, 80, consts.IPVersionIPv6)},
 	}
 }
 
