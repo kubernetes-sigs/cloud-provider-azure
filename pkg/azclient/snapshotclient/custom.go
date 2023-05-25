@@ -14,18 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// +azure:enableclientgen:=true
-package routetableclient
+package snapshotclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	"context"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 )
 
-// +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=RouteTablesClient,apiVersion="2022-07-01",expand=false
-type Interface interface {
-	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
-
-	utils.DeleteFunc[armnetwork.RouteTable]
+// List gets a list of Snapshot in the resource group.
+func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.Snapshot, rerr error) {
+	pager := client.SnapshotsClient.NewListByResourceGroupPager(resourceGroupName, nil)
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
 }

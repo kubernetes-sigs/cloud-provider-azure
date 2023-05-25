@@ -22,13 +22,13 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 type Client struct {
-	*network.PrivateLinkServicesClient
+	*armnetwork.PrivateLinkServicesClient
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -36,7 +36,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 		options = utils.GetDefaultOption("2022-07-01")
 	}
 
-	client, err := network.NewPrivateLinkServicesClient(subscriptionID, credential, options)
+	client, err := armnetwork.NewPrivateLinkServicesClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -44,10 +44,10 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 }
 
 // Get gets the PrivateLinkService
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string, expand *string) (result *network.PrivateLinkService, rerr error) {
-	var ops *network.PrivateLinkServicesClientGetOptions
+func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string, expand *string) (result *armnetwork.PrivateLinkService, rerr error) {
+	var ops *armnetwork.PrivateLinkServicesClientGetOptions
 	if expand != nil {
-		ops = &network.PrivateLinkServicesClientGetOptions{Expand: expand}
+		ops = &armnetwork.PrivateLinkServicesClientGetOptions{Expand: expand}
 	}
 
 	resp, err := client.PrivateLinkServicesClient.Get(ctx, resourceGroupName, resourceName, ops)
@@ -59,7 +59,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 }
 
 // CreateOrUpdate creates or updates a PrivateLinkService.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource network.PrivateLinkService) (*network.PrivateLinkService, error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.PrivateLinkService) (*armnetwork.PrivateLinkService, error) {
 	resp, err := utils.NewPollerWrapper(client.PrivateLinkServicesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string, reso
 }
 
 // List gets a list of PrivateLinkService in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*network.PrivateLinkService, rerr error) {
+func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.PrivateLinkService, rerr error) {
 	pager := client.PrivateLinkServicesClient.NewListPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

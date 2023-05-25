@@ -95,7 +95,11 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		}
 	}
 	//nolint:gosec // G204 ignore this!
-	return exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").Run()
+	if err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").Run(); err != nil {
+		return err
+	}
+	//nolint:gosec // G204 ignore this!
+	return exec.Command("go", "test", "./...").Run()
 }
 
 func (Generator) CheckFilter() loader.NodeFilter {

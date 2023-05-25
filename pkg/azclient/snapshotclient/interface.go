@@ -15,17 +15,18 @@ limitations under the License.
 */
 
 // +azure:enableclientgen:=true
-package routetableclient
+package snapshotclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=RouteTablesClient,apiVersion="2022-07-01",expand=false
+// +azure:client:verbs=get;createorupdate;delete,resource=Snapshot,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=SnapshotsClient,apiVersion="2022-03-02",expand=false
 type Interface interface {
-	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
-
-	utils.DeleteFunc[armnetwork.RouteTable]
+	utils.GetFunc[armcompute.Snapshot]
+	utils.CreateOrUpdateFunc[armcompute.Snapshot]
+	utils.DeleteFunc[armcompute.Snapshot]
+	utils.ListFunc[armcompute.Snapshot]
 }
