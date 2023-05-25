@@ -495,3 +495,38 @@ func getResourceIDPrefix(id string) string {
 	}
 	return id[:idx]
 }
+
+func getLBNameFromBackendPoolID(backendPoolID string) (string, error) {
+	matches := backendPoolIDRE.FindStringSubmatch(backendPoolID)
+	if len(matches) != 2 {
+		return "", fmt.Errorf("backendPoolID %q is in wrong format", backendPoolID)
+	}
+
+	return matches[1], nil
+}
+
+func countNICsOnBackendPool(backendPool network.BackendAddressPool) int {
+	if backendPool.BackendAddressPoolPropertiesFormat == nil ||
+		backendPool.BackendIPConfigurations == nil {
+		return 0
+	}
+
+	return len(*backendPool.BackendIPConfigurations)
+}
+
+func countIPsOnBackendPool(backendPool network.BackendAddressPool) int {
+	if backendPool.BackendAddressPoolPropertiesFormat == nil ||
+		backendPool.LoadBalancerBackendAddresses == nil {
+		return 0
+	}
+
+	var ipsCount int
+	for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
+		if loadBalancerBackendAddress.LoadBalancerBackendAddressPropertiesFormat != nil &&
+			pointer.StringDeref(loadBalancerBackendAddress.IPAddress, "") != "" {
+			ipsCount++
+		}
+	}
+
+	return ipsCount
+}

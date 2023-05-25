@@ -857,7 +857,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
-	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, false, nil).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
@@ -3384,17 +3384,19 @@ func TestReconcileLoadBalancer(t *testing.T) {
 	}
 
 	testCases := []struct {
-		desc                      string
-		service                   v1.Service
-		loadBalancerSku           string
-		preConfigLBType           string
-		loadBalancerResourceGroup string
-		disableOutboundSnat       *bool
-		wantLb                    bool
-		existingLB                network.LoadBalancer
-		expectedLB                network.LoadBalancer
-		expectLBUpdate            bool
-		expectedError             error
+		desc                                      string
+		service                                   v1.Service
+		loadBalancerSku                           string
+		preConfigLBType                           string
+		loadBalancerResourceGroup                 string
+		disableOutboundSnat                       *bool
+		wantLb                                    bool
+		shouldRefreshLBAfterReconcileBackendPools bool
+		existingLB                                network.LoadBalancer
+		expectedLB                                network.LoadBalancer
+		expectLBUpdate                            bool
+		expectedGetLBError                        *retry.Error
+		expectedError                             error
 	}{
 		{
 			desc: "reconcileLoadBalancer shall return the lb deeply equal to the existingLB if there's no " +
@@ -3490,6 +3492,25 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			expectLBUpdate:            true,
 			expectedError:             nil,
 		},
+		{
+			desc:            "reconcileLoadBalancer should refresh the LB after reconciling backend pools if needed",
+			loadBalancerSku: "basic",
+			service:         service1,
+			existingLB:      basicLb1,
+			wantLb:          true,
+			shouldRefreshLBAfterReconcileBackendPools: true,
+			expectedLB:    basicLb1,
+			expectedError: nil,
+		},
+		{
+			desc:       "reconcileLoadBalancer should return the error if failed to get the LB after reconcileBackendPools",
+			service:    service1,
+			existingLB: basicLb1,
+			wantLb:     true,
+			shouldRefreshLBAfterReconcileBackendPools: true,
+			expectedGetLBError:                        retry.NewError(false, errors.New("error")),
+			expectedError:                             fmt.Errorf("reconcileLoadBalancer for service (default/service1): failed to get load balancer testCluster: %w", retry.NewError(false, errors.New("error")).Error()),
+		},
 	}
 
 	for _, test := range testCases {
@@ -3518,7 +3539,7 @@ func TestReconcileLoadBalancer(t *testing.T) {
 
 			mockLBsClient := mockloadbalancerclient.NewMockInterface(ctrl)
 			mockLBsClient.EXPECT().List(gomock.Any(), az.getLoadBalancerResourceGroup()).Return([]network.LoadBalancer{test.existingLB}, nil)
-			mockLBsClient.EXPECT().Get(gomock.Any(), az.getLoadBalancerResourceGroup(), *test.existingLB.Name, gomock.Any()).Return(test.existingLB, nil).AnyTimes()
+			mockLBsClient.EXPECT().Get(gomock.Any(), az.getLoadBalancerResourceGroup(), *test.existingLB.Name, gomock.Any()).Return(test.existingLB, test.expectedGetLBError).AnyTimes()
 			expectLBUpdateCount := 1
 			if test.expectLBUpdate {
 				expectLBUpdateCount++
@@ -3530,7 +3551,10 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			assert.NoError(t, err.Error())
 
 			mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
-			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil).AnyTimes()
+			if test.shouldRefreshLBAfterReconcileBackendPools {
+				mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, true, nil)
+			}
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, false, nil).AnyTimes()
 			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			lb, rerr := az.reconcileLoadBalancer("testCluster", &service, clusterResources.nodes, test.wantLb)
