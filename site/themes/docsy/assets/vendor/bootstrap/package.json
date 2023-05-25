@@ -123,7 +123,7 @@
     "karma-firefox-launcher": "^2.1.0",
     "karma-qunit": "^4.1.1",
     "karma-sinon": "^1.0.5",
-    "linkinator": "^2.11.2",
+    "linkinator": "^4.1.2",
     "lockfile-lint": "^4.3.7",
     "node-sass": "^5.0.0",
     "nodemon": "^2.0.7",
