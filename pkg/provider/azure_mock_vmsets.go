@@ -24,6 +24,7 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "github.com/golang/mock/gomock"
+
 	v1 "k8s.io/api/core/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	cloud_provider "k8s.io/cloud-provider"
@@ -418,7 +419,7 @@ func (mr *MockVMSetMockRecorder) UpdateVM(ctx, nodeName interface{}) *gomock.Cal
 // WaitForUpdateResult mocks base method.
 func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Future, nodeName types.NodeName, source string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForUpdateResult", ctx, future, source)
+	ret := m.ctrl.Call(m, "WaitForUpdateResult", ctx, future, nodeName, source)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -426,5 +427,5 @@ func (m *MockVMSet) WaitForUpdateResult(ctx context.Context, future *azure.Futur
 // WaitForUpdateResult indicates an expected call of WaitForUpdateResult.
 func (mr *MockVMSetMockRecorder) WaitForUpdateResult(ctx, future, nodeName, source interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForUpdateResult", reflect.TypeOf((*MockVMSet)(nil).WaitForUpdateResult), ctx, future, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForUpdateResult", reflect.TypeOf((*MockVMSet)(nil).WaitForUpdateResult), ctx, future, nodeName, source)
 }

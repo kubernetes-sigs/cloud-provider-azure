@@ -17,12 +17,14 @@ limitations under the License.
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -648,6 +650,57 @@ func (az *Cloud) CreateOrUpdateSubnet(service *v1.Service, subnet network.Subnet
 		klog.Errorf("SubnetClient.CreateOrUpdate(%s) failed: %s", *subnet.Name, rerr.Error().Error())
 		az.Event(service, v1.EventTypeWarning, "CreateOrUpdateSubnet", rerr.Error().Error())
 		return rerr.Error()
+	}
+
+	return nil
+}
+
+// MigrateToIPBasedBackendPoolAndWaitForCompletion use the migration API to migrate from
+// NIC-based to IP-based LB backend pools. It also makes sure the number of IP addresses
+// in the backend pools is expected.
+func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
+	lbName string, backendPoolNames []string, nicsCountMap map[string]int,
+) error {
+	if rerr := az.LoadBalancerClient.MigrateToIPBasedBackendPool(context.Background(), az.ResourceGroup, lbName, backendPoolNames); rerr != nil {
+		backendPoolNamesStr := strings.Join(backendPoolNames, ",")
+		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to migrate to IP based backend pool for lb %s, backend pool %s: %s", lbName, backendPoolNamesStr, rerr.Error().Error())
+		return rerr.Error()
+	}
+
+	succeeded := make(map[string]bool)
+	for bpName := range nicsCountMap {
+		succeeded[bpName] = false
+	}
+
+	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (done bool, err error) {
+		for bpName, nicsCount := range nicsCountMap {
+			if succeeded[bpName] {
+				continue
+			}
+
+			bp, rerr := az.LoadBalancerClient.GetLBBackendPool(context.Background(), az.ResourceGroup, lbName, bpName, "")
+			if rerr != nil {
+				klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to get backend pool %s for lb %s: %s", bpName, lbName, rerr.Error().Error())
+				return false, rerr.Error()
+			}
+
+			if countIPsOnBackendPool(bp) != nicsCount {
+				klog.V(4).Infof("MigrateToIPBasedBackendPoolAndWaitForCompletion: Expected IPs %s, current IPs %d, will retry in 5s", nicsCount, countIPsOnBackendPool(bp))
+				return false, nil
+			}
+			succeeded[bpName] = true
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			klog.Warningf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Timeout waiting for migration to IP based backend pool for lb %s, backend pool %s", lbName, strings.Join(backendPoolNames, ","))
+			return nil
+		}
+
+		klog.Errorf("MigrateToIPBasedBackendPoolAndWaitForCompletion: Failed to wait for migration to IP based backend pool for lb %s, backend pool %s: %s", lbName, strings.Join(backendPoolNames, ","), err.Error())
+		return err
 	}
 
 	return nil
