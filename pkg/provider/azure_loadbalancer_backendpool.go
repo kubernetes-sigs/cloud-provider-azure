@@ -70,11 +70,11 @@ func (bc *backendPoolTypeNodeIPConfig) EnsureHostsInPool(service *v1.Service, no
 }
 
 func isLBBackendPoolsExisting(lbBackendPoolNames map[bool]string, bpName *string) (found, isIPv6 bool) {
-	if strings.EqualFold(pointer.StringDeref(bpName, ""), lbBackendPoolNames[false]) {
+	if strings.EqualFold(pointer.StringDeref(bpName, ""), lbBackendPoolNames[IsIPv4]) {
 		isIPv6 = false
 		found = true
 	}
-	if strings.EqualFold(pointer.StringDeref(bpName, ""), lbBackendPoolNames[true]) {
+	if strings.EqualFold(pointer.StringDeref(bpName, ""), lbBackendPoolNames[IsIPv6]) {
 		isIPv6 = true
 		found = true
 	}
@@ -135,10 +135,10 @@ func (bc *backendPoolTypeNodeIPConfig) CleanupVMSetFromBackendPoolByCondition(sl
 			})
 		}
 		if v4Enabled {
-			findBackendpoolToBeDeleted(false)
+			findBackendpoolToBeDeleted(IsIPv4)
 		}
 		if v6Enabled {
-			findBackendpoolToBeDeleted(true)
+			findBackendpoolToBeDeleted(IsIPv6)
 		}
 		// decouple the backendPool from the node
 		shouldRefreshLB, err := bc.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolIDsSlice, vmSetName, &backendpoolToBeDeleted, true)
