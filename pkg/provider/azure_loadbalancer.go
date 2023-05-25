@@ -65,10 +65,10 @@ func (az *Cloud) existsPip(clusterName string, service *v1.Service) bool {
 		return existingPip
 	}
 
-	if v4Enabled && !existsPipSingleStack(false) {
+	if v4Enabled && !existsPipSingleStack(consts.IPVersionIPv4) {
 		return false
 	}
-	if v6Enabled && !existsPipSingleStack(true) {
+	if v6Enabled && !existsPipSingleStack(consts.IPVersionIPv6) {
 		return false
 	}
 	return true
