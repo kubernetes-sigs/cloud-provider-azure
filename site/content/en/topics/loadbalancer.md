@@ -122,10 +122,9 @@ The kubernetes controller manager supports excluding nodes from the load balance
 
 3. To re-include the nodes, just remove the label and the update would be operated in the next LB reconcile loop.
 
-> For AKS clusters: To ignore all nodes under a VMSS by adding the exclude label to the agent pool is not a supported scenario. In this case, the nodes being scaled out will be added to the LB backend pool because the VMSS has been added to it already. To exclude all nodes under a VMSS, please perform either of the flowing operations:
-> 1. Create a new agent pool with the exclude label. In this case, the VMSS will not be added to the LB backend pool, and all the VMs of this VMSS will be ignored.
-> 2. Label the node instead of the agent pool.
+### Limitations
 
+* Excluding nodes from LoadBalancer is not supported on AKS managed nodes.
 
 ## Using SCTP
 
