@@ -33,7 +33,6 @@ type TypeScaffoldOptions struct {
 	Package      string
 	PackageAlias string
 	ClientName   string
-	APIVersion   string
 	Verbs        []string
 	Expand       bool
 }
@@ -63,7 +62,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},apiVersion="{{.APIVersion}}",expand={{.Expand}}
+// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}
 type Interface interface {
 {{ $expandable := .Expand}}
 {{ $packageAlias := .PackageAlias}}
@@ -149,11 +148,6 @@ func main() {
 	rootCmd.Flags().StringVar(&scaffoldOptions.ClientName, "client-name", "", "client name")
 	if err := cobra.MarkFlagRequired(rootCmd.Flags(), "client-name"); err != nil {
 		fmt.Printf("failed to mark resource option as required, %s\n", err)
-		return
-	}
-	rootCmd.Flags().StringVar(&scaffoldOptions.APIVersion, "apiversion", "", "api version")
-	if err := cobra.MarkFlagRequired(rootCmd.Flags(), "apiversion"); err != nil {
-		fmt.Printf("failed to mark apiversion option as required, %s\n", err)
 		return
 	}
 	rootCmd.Flags().StringSliceVar(&scaffoldOptions.Verbs, "verbs", []string{"get", "createorupdate", "delete", "listbyrg"}, "verbs")

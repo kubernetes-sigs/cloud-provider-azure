@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=VirtualMachineScaleSet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=VirtualMachineScaleSetsClient,apiVersion="2022-03-01",expand=false
+// +azure:client:verbs=get;createorupdate;delete;list,resource=VirtualMachineScaleSet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=VirtualMachineScaleSetsClient,expand=false
 type Interface interface {
 	utils.GetFunc[armcompute.VirtualMachineScaleSet]
 

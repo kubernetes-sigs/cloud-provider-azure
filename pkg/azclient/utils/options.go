@@ -24,7 +24,7 @@ import (
 	custompolicy "sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy"
 )
 
-func GetDefaultOption(apiVersion string) *arm.ClientOptions {
+func GetDefaultOption() *arm.ClientOptions {
 	return &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
 			Retry: policy.RetryOptions{
@@ -37,8 +37,7 @@ func GetDefaultOption(apiVersion string) *arm.ClientOptions {
 			PerRetryPolicies: []policy.Policy{
 				custompolicy.NewThrottlingPolicy(),
 			},
-			APIVersion: apiVersion,
-			Transport:  defaultHTTPClient,
+			Transport: defaultHTTPClient,
 			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {
 				return tracing.NewTracer(NewOtlpSpan, nil)
 			}, nil),

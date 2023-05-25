@@ -33,7 +33,7 @@ type Client struct {
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
-		options = utils.GetDefaultOption("2022-03-01")
+		options = utils.GetDefaultOption()
 	}
 
 	client, err := armcompute.NewAvailabilitySetsClient(subscriptionID, credential, options)
