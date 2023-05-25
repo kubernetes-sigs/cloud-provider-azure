@@ -55,6 +55,10 @@ type Client struct {
 	RetryAfterWriter time.Time
 }
 
+type backendPoolsToBeMigrated struct {
+	BackendPoolNames []string `json:"pools"`
+}
+
 // New creates a new LoadBalancer client with ratelimiting.
 func New(config *azclients.ClientConfig) *Client {
 	baseURI := config.ResourceManagerEndpoint
@@ -421,6 +425,69 @@ func (page LoadBalancerListResultPage) Values() []network.LoadBalancer {
 	return *page.lblr.Value
 }
 
+// GetLBBackendPool gets a LoadBalancer backend pool.
+func (c *Client) GetLBBackendPool(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolName string, expand string) (network.BackendAddressPool, *retry.Error) {
+	mc := metrics.NewMetricContext("load_balancers", "get_backend_pool", resourceGroupName, c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterReader.TryAccept() {
+		mc.RateLimitedCount()
+		return network.BackendAddressPool{}, retry.GetRateLimitError(false, "LBGet")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterReader.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("LBBackendPoolGet", "client throttled", c.RetryAfterReader)
+		return network.BackendAddressPool{}, rerr
+	}
+
+	result, rerr := c.getLBBackendPool(ctx, resourceGroupName, loadBalancerName, backendPoolName, expand)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterReader = rerr.RetryAfter
+		}
+
+		return result, rerr
+	}
+
+	return result, nil
+}
+
+// getLBBackendPool gets a LoadBalancer backend pool.
+func (c *Client) getLBBackendPool(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolName string, expand string) (network.BackendAddressPool, *retry.Error) {
+	resourceID := armclient.GetChildResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		lbResourceType,
+		loadBalancerName,
+		"backendAddressPools",
+		backendPoolName,
+	)
+	result := network.BackendAddressPool{}
+
+	response, rerr := c.armClient.GetResourceWithExpandQuery(ctx, resourceID, expand)
+	defer c.armClient.CloseResponse(ctx, response)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.backendpool.get.request", resourceID, rerr.Error())
+		return result, rerr
+	}
+
+	err := autorest.Respond(
+		response,
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result))
+	if err != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.backendpool.get.respond", resourceID, err)
+		return result, retry.GetError(response, err)
+	}
+
+	result.Response = autorest.Response{Response: response}
+	return result, nil
+}
+
 // CreateOrUpdateBackendPools creates or updates a LoadBalancer backend pool.
 func (c *Client) CreateOrUpdateBackendPools(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolName string, parameters network.BackendAddressPool, etag string) *retry.Error {
 	mc := metrics.NewMetricContext("load_balancers", "create_or_update_backend_pools", resourceGroupName, c.subscriptionID, "")
@@ -470,14 +537,14 @@ func (c *Client) createOrUpdateLBBackendPool(ctx context.Context, resourceGroupN
 	response, rerr := c.armClient.PutResource(ctx, resourceID, parameters, decorators...)
 	defer c.armClient.CloseResponse(ctx, response)
 	if rerr != nil {
-		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.put.request", resourceID, rerr.Error())
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.backendpool.put.request", resourceID, rerr.Error())
 		return rerr
 	}
 
 	if response != nil && response.StatusCode != http.StatusNoContent {
 		_, rerr = c.createOrUpdateBackendPoolResponder(response)
 		if rerr != nil {
-			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.put.respond", resourceID, rerr.Error())
+			klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancer.backendpool.put.respond", resourceID, rerr.Error())
 			return rerr
 		}
 	}
@@ -536,4 +603,57 @@ func (c *Client) createOrUpdateBackendPoolResponder(resp *http.Response) (*netwo
 		autorest.ByUnmarshallingJSON(&result))
 	result.Response = autorest.Response{Response: resp}
 	return result, retry.GetError(resp, err)
+}
+
+// MigrateToIPBasedBackendPool migrates a NIC-based backend pool to IP-based.
+func (c *Client) MigrateToIPBasedBackendPool(ctx context.Context, resourceGroupName string, loadBalancerName string, backendPoolNames []string) *retry.Error {
+	mc := metrics.NewMetricContext("load_balancers", "migrate_to_ip_based_backend_pool", resourceGroupName, c.subscriptionID, "")
+
+	// Report errors if the client is rate limited.
+	if !c.rateLimiterWriter.TryAccept() {
+		mc.RateLimitedCount()
+		return retry.GetRateLimitError(true, "LBMigrateToIPBasedBackendPool")
+	}
+
+	// Report errors if the client is throttled.
+	if c.RetryAfterWriter.After(time.Now()) {
+		mc.ThrottledCount()
+		rerr := retry.GetThrottlingError("LBMigrateToIPBasedBackendPool", "client throttled", c.RetryAfterWriter)
+		return rerr
+	}
+
+	parameters := backendPoolsToBeMigrated{
+		BackendPoolNames: backendPoolNames,
+	}
+	rerr := c.migrateToIPBasedBackendPool(ctx, resourceGroupName, loadBalancerName, parameters)
+	mc.Observe(rerr)
+	if rerr != nil {
+		if rerr.IsThrottled() {
+			// Update RetryAfterReader so that no more requests would be sent until RetryAfter expires.
+			c.RetryAfterWriter = rerr.RetryAfter
+		}
+
+		return rerr
+	}
+
+	return nil
+}
+
+func (c *Client) migrateToIPBasedBackendPool(ctx context.Context, resourceGroupName string, loadBalancerName string, parameters backendPoolsToBeMigrated) *retry.Error {
+	resourceID := armclient.GetResourceID(
+		c.subscriptionID,
+		resourceGroupName,
+		lbResourceType,
+		loadBalancerName,
+	)
+
+	response, rerr := c.armClient.PostResource(ctx, resourceID, "migrateToIpBased", parameters, map[string]interface{}{})
+	defer c.armClient.CloseResponse(ctx, response)
+	if rerr != nil {
+		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "loadbalancerbackendpool.migrate.request", resourceID, rerr.Error())
+		return rerr
+	}
+
+	klog.Infof("Response: %v", response)
+	return nil
 }

@@ -251,6 +251,12 @@ type Config struct {
 	PutVMSSVMBatchSize int `json:"putVMSSVMBatchSize" yaml:"putVMSSVMBatchSize"`
 	// PrivateLinkServiceResourceGroup determines the specific resource group of the private link services user want to use
 	PrivateLinkServiceResourceGroup string `json:"privateLinkServiceResourceGroup,omitempty" yaml:"privateLinkServiceResourceGroup,omitempty"`
+
+	// EnableMigrateToIPBasedBackendPoolAPI uses the migration API to migrate from NIC-based to IP-based backend pool.
+	// The migration API can provide a migration from NIC-based to IP-based backend pool without service downtime.
+	// If the API is not used, the migration will be done by decoupling all nodes on the backend pool and then re-attaching
+	// node IPs, which will introduce service downtime. The downtime increases with the number of nodes in the backend pool.
+	EnableMigrateToIPBasedBackendPoolAPI bool `json:"enableMigrateToIPBasedBackendPoolAPI" yaml:"enableMigrateToIPBasedBackendPoolAPI"`
 }
 
 type InitSecretConfig struct {
