@@ -285,3 +285,58 @@ updates:
       - "approved"
       - "release-1.27"
 
+
+  - package-ecosystem: gomod
+    directory: /kubetest2-aks
+    schedule:
+      interval: daily
+
+  - package-ecosystem: gomod
+    directory: /pkg/azclient
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-common-types
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-free
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-svg-core
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-brands-svg-icons
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-regular-svg-icons
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-solid-svg-icons
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /site/themes/docsy/assets/vendor/bootstrap
+    schedule:
+      interval: daily
+
+  - package-ecosystem: docker
+    directory: /vendor/golang.org/x/net/http2
+    schedule:
+      interval: daily
