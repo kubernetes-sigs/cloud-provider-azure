@@ -68,10 +68,10 @@ func (az *Cloud) existsPip(clusterName string, service *v1.Service) bool {
 		return existingPip
 	}
 
-	if v4Enabled && !existsPipSingleStack(false) {
+	if v4Enabled && !existsPipSingleStack(IsIPv4) {
 		return false
 	}
-	if v6Enabled && !existsPipSingleStack(true) {
+	if v6Enabled && !existsPipSingleStack(IsIPv6) {
 		return false
 	}
 	return true
@@ -1277,7 +1277,7 @@ func (az *Cloud) isFrontendIPChanged(
 		subnetName := getInternalSubnet(service)
 		if subnetName != nil {
 			if subnet == nil {
-				return false, fmt.Errorf("isFrontendIPChanged: Unexpected nil subnet")
+				return false, fmt.Errorf("isFrontendIPChanged: Unexpected nil subnet %q", pointer.StringDeref(subnetName, ""))
 			}
 			if config.Subnet != nil && !strings.EqualFold(pointer.StringDeref(config.Subnet.ID, ""), pointer.StringDeref(subnet.ID, "")) {
 				return true, nil
@@ -1548,8 +1548,8 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		serviceName, lbResourceGroup, lbName, wantLb)
 	lbFrontendIPConfigNames := az.getFrontendIPConfigNames(service)
 	lbFrontendIPConfigIDs := map[bool]string{
-		false: az.getFrontendIPConfigID(lbName, lbFrontendIPConfigNames[false]),
-		true:  az.getFrontendIPConfigID(lbName, lbFrontendIPConfigNames[true]),
+		IsIPv4: az.getFrontendIPConfigID(lbName, lbFrontendIPConfigNames[IsIPv4]),
+		IsIPv6: az.getFrontendIPConfigID(lbName, lbFrontendIPConfigNames[IsIPv6]),
 	}
 	dirtyLb := false
 
@@ -1623,7 +1623,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		if err = az.checkLoadBalancerResourcesConflicts(lb, lbFrontendIPConfigIDs[false], service); err != nil {
 			return nil, err
 		}
-		if err := getExpectedLBRule(false); err != nil {
+		if err := getExpectedLBRule(IsIPv4); err != nil {
 			return nil, err
 		}
 	}
@@ -1631,7 +1631,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		if err = az.checkLoadBalancerResourcesConflicts(lb, lbFrontendIPConfigIDs[true], service); err != nil {
 			return nil, err
 		}
-		if err := getExpectedLBRule(true); err != nil {
+		if err := getExpectedLBRule(IsIPv6); err != nil {
 			return nil, err
 		}
 	}

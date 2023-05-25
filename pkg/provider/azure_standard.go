@@ -104,8 +104,8 @@ func (az *Cloud) getBackendPoolIDWithRG(lbName, rgName, backendPoolName string) 
 
 func (az *Cloud) getBackendPoolIDs(clusterName, lbName string) map[bool]string {
 	return map[bool]string{
-		false: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, false)),
-		true:  az.getBackendPoolID(lbName, getBackendPoolName(clusterName, true)),
+		IsIPv4: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, false)),
+		IsIPv6: az.getBackendPoolID(lbName, getBackendPoolName(clusterName, true)),
 	}
 }
 
@@ -282,8 +282,8 @@ func getBackendPoolName(clusterName string, isIPv6 bool) string {
 // getBackendPoolNames returns the IPv4 and IPv6 backend pool names.
 func getBackendPoolNames(clusterName string) map[bool]string {
 	return map[bool]string{
-		false: getBackendPoolName(clusterName, false),
-		true:  getBackendPoolName(clusterName, true),
+		IsIPv4: getBackendPoolName(clusterName, IsIPv4),
+		IsIPv6: getBackendPoolName(clusterName, IsIPv6),
 	}
 }
 
@@ -432,8 +432,8 @@ func (az *Cloud) getFrontendIPConfigNames(service *v1.Service) map[bool]string {
 	isDualStack := isServiceDualStack(service)
 	defaultLBFrontendIPConfigName := az.getDefaultFrontendIPConfigName(service)
 	return map[bool]string{
-		false: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, false),
-		true:  getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, true),
+		IsIPv4: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, IsIPv4),
+		IsIPv6: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, IsIPv6),
 	}
 }
 

@@ -34,6 +34,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+const (
+	IsIPv6 bool = true
+	IsIPv4 bool = false
+)
+
 var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
 	"edgezone": network.EdgeZone,
 }
