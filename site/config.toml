@@ -2,11 +2,7 @@ baseURL = "https://cloud-provider-azure.sigs.k8s.io"
 title = "Cloud Provider Azure"
 
 publishDir = "public"
-
 enableRobotsTXT = true
-
-# Hugo allows theme composition (and inheritance). The precedence is from left to right.
-theme = ["docsy"]
 
 # Will give values to .Lastmod etc.
 enableGitInfo = true
@@ -19,7 +15,7 @@ defaultContentLanguageInSubdir = false
 enableMissingTranslationPlaceholders = true
 
 disableKinds = ["taxonomy", "taxonomyTerm"]
-
+[params.taxonomy]
 # Highlighting config
 pygmentsCodeFences = true
 pygmentsUseClasses = false
@@ -98,6 +94,7 @@ version = "0.0"
 # point people to the main doc site.
 url_latest_version = "https://cloud-provider-azure.sigs.k8s.io"
 
+github_branch= "master"
 # Repository configuration (URLs for in-page links to opening issues and suggesting changes)
 github_repo = "https://github.com/kubernetes-sigs/cloud-provider-azure"
 # An optional link to a related project repo. For example, the sibling repository where your product code lives.
@@ -135,8 +132,8 @@ footer_about_disable = false
 [params.ui.feedback]
 enable = true
 # The responses that the user sees after clicking "yes" (the page was helpful) or "no" (the page was not helpful).
-no = 'Sorry to hear that. Please <a href="https://github.com/USERNAME/REPOSITORY/issues/new">tell us how we can improve</a>.'
-yes = 'Glad to hear it! Please <a href="https://github.com/USERNAME/REPOSITORY/issues/new">tell us how we can improve</a>.'
+no = 'Sorry to hear that. Please <a href="https://github.com/kubernetes-sigs/cloud-provider-azure/issues/new">tell us how we can improve</a>.'
+yes = 'Glad to hear it! Please <a href="https://github.com/kubernetes-sigs/cloud-provider-azure/issues/new">tell us how we can improve</a>.'
 
 # Adds a reading time to the top of each doc.
 # If you want this feature, but occasionally need to remove the Reading time from a single page, 
@@ -157,3 +154,19 @@ desc = "Development takes place here!"
 icon = "fab fa-github"
 name = "GitHub"
 url = "https://github.com/kubernetes-sigs/cloud-provider-azure"
+
+[module]
+  # uncomment line below for temporary local development of module
+  # replacements = "github.com/google/docsy -> ../../docsy"
+  [module.hugoVersion]
+    extended = true
+    min = "0.104.3"
+  [[module.imports]]
+    path = "github.com/google/docsy"
+    disable = false
+  [[module.imports]]
+    path = "github.com/google/docsy/dependencies"
+    disable = false   
+
+[outputs]
+section = [ "HTML", "RSS", "print" ]
