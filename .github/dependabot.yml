@@ -285,3 +285,18 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.27"
+
+  - package-ecosystem: gomod
+    directory: /pkg/azclient/client-gen
+    schedule:
+      interval: daily
+
+  - package-ecosystem: gomod
+    directory: /site
+    schedule:
+      interval: daily
+
+  - package-ecosystem: docker
+    directory: /vendor/golang.org/x/net/http2
+    schedule:
+      interval: daily
