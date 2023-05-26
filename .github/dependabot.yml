@@ -276,13 +276,40 @@ updates:
     directory: /pkg/azclient/client-gen
     schedule:
       interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
 
   - package-ecosystem: gomod
     directory: /site
     schedule:
       interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
 
-  - package-ecosystem: docker
-    directory: /vendor/golang.org/x/net/http2
+  - package-ecosystem: npm
+    directory: /site
     schedule:
       interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"

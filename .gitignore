@@ -36,3 +36,5 @@ chart_verify/
 _artifacts
 _kubeconfig
 _rundir
+
+site/.hugo_build.lock
