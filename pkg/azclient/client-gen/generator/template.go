@@ -24,8 +24,7 @@ type ClientGenConfig struct {
 	PackageName  string
 	PackageAlias string
 	ClientName   string
-	APIVersion   string `marker:"apiVersion,optional"`
-	Expand       bool   `marker:"expand,optional"`
+	Expand       bool `marker:"expand,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
@@ -37,7 +36,7 @@ type Client struct{
 var ClientFactoryTemplate = template.Must(template.New("object-scaffolding-factory").Parse(`
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
-		options = utils.GetDefaultOption("{{.APIVersion}}")
+		options = utils.GetDefaultOption()
 	}
 
 	client, err := {{.PackageAlias}}.New{{.ClientName}}(subscriptionID, credential, options)

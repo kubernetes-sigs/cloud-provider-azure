@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=LoadBalancer,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=LoadBalancersClient,apiVersion="2022-07-01",expand=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=LoadBalancer,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=LoadBalancersClient,expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.LoadBalancer]
 

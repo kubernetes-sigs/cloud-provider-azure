@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete,resource=Snapshot,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=SnapshotsClient,apiVersion="2022-03-02",expand=false
+// +azure:client:verbs=get;createorupdate;delete,resource=Snapshot,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=SnapshotsClient,expand=false
 type Interface interface {
 	utils.GetFunc[armcompute.Snapshot]
 	utils.CreateOrUpdateFunc[armcompute.Snapshot]

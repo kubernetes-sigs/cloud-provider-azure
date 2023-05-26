@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=delete,resource=Deployment,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources,packageAlias=resources,clientName=DeploymentsClient,apiVersion="2017-05-10",expand=false
+// +azure:client:verbs=delete,resource=Deployment,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources,packageAlias=resources,clientName=DeploymentsClient,expand=false
 type Interface interface {
 	Get(ctx context.Context, resourceGroupName string, resourceName string) (result *resources.DeploymentExtended, rerr error)
 	List(ctx context.Context, resourceGroupName string) (result []*resources.DeploymentExtended, rerr error)
