@@ -3,6 +3,7 @@ name: Trivy scanner
 on:
   push:
     branches: [ master, 'release-**' ]
+    workflow_dispatch:
     paths:
       - '.github/workflows/trivy.yaml'
       - 'pkg/**.go'
