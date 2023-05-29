@@ -30,6 +30,7 @@ import (
 
 type TypeScaffoldOptions struct {
 	Resource     string
+	SubResource  string
 	Package      string
 	PackageAlias string
 	ClientName   string
@@ -38,7 +39,11 @@ type TypeScaffoldOptions struct {
 }
 
 var (
-	TypeTemplateRaw = `
+	TypeTemplateHeader = `
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
 /*
 Copyright {{now.UTC.Year}} The Kubernetes Authors.
 
@@ -56,12 +61,13 @@ limitations under the License.
 */
 
 // +azure:enableclientgen:=true
-package {{tolower .Resource}}client
+package {{tolower $resource}}client
 import (
 	{{tolower .PackageAlias}} "{{.Package}}"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
-
+`
+	TypeResourceTemplate = `
 // +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}
 type Interface interface {
 {{ $expandable := .Expand}}
@@ -79,14 +85,33 @@ type Interface interface {
 {{end}}
 }
 `
+	TypeSubResourceTemplate = `
+// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},subResource={{.SubResource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}
+type Interface interface {
+{{ $expandable := .Expand}}
+{{ $packageAlias := .PackageAlias}}
+{{ $resource := .SubResource}}
+{{range $index,$element := .Verbs}}
+{{if strequal $element "Get"}}
+    {{ if $expandable }}utils.SubResourceGetWithExpandFunc[{{tolower $packageAlias}}.{{$resource}}]{{ else }}utils.SubResourceGetFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}{{end}}
+{{if or (strequal $element "ListByRG") (strequal $element "List") }}
+	utils.SubResourceListFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
+{{if strequal $element "CreateOrUpdate"}}
+	utils.SubResourceCreateOrUpdateFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
+{{if strequal $element "Delete"}}
+	utils.SubResourceDeleteFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
+{{end}}
+}
+`
 	typesTemplateHelpers = template.FuncMap{
 		"tolower":  strings.ToLower,
 		"now":      time.Now,
 		"join":     strings.Join,
 		"strequal": strings.EqualFold,
 	}
+	typesSubResourceTemplate = template.Must(template.New("object-scaffolding").Funcs(typesTemplateHelpers).Parse(TypeTemplateHeader + TypeSubResourceTemplate))
 
-	typesTemplate = template.Must(template.New("object-scaffolding").Funcs(typesTemplateHelpers).Parse(TypeTemplateRaw))
+	typesResourceTemplate = template.Must(template.New("object-scaffolding").Funcs(typesTemplateHelpers).Parse(TypeTemplateHeader + TypeResourceTemplate))
 )
 
 func main() {
@@ -99,18 +124,30 @@ func main() {
 		Long:  `scaffold client interface for azure resource`,
 
 		Run: func(cmd *cobra.Command, args []string) {
-
 			content := new(bytes.Buffer)
-			if err := typesTemplate.Execute(content, scaffoldOptions); err != nil {
-				fmt.Printf("failed to generate client from template %s\n", err.Error())
-				return
+			if len(scaffoldOptions.SubResource) > 0 {
+				if err := typesSubResourceTemplate.Execute(content, scaffoldOptions); err != nil {
+					fmt.Printf("failed to generate client from template %s\n", err.Error())
+					return
+				}
+			} else {
+				if err := typesResourceTemplate.Execute(content, scaffoldOptions); err != nil {
+					fmt.Printf("failed to generate client from template %s\n", err.Error())
+					return
+				}
 			}
 			formattedContent, err := format.Source(content.Bytes())
 			if err != nil {
-				fmt.Printf("failed to generate client %s\n", err.Error())
+				fmt.Printf("failed to generate client %s\noriginal content: \n%s\n", err.Error(), content.String())
 				return
 			}
-			fileName := strings.ToLower(scaffoldOptions.Resource) + "client"
+			var resourceName string
+			if len(scaffoldOptions.SubResource) > 0 {
+				resourceName = scaffoldOptions.SubResource
+			} else {
+				resourceName = scaffoldOptions.Resource
+			}
+			fileName := strings.ToLower(resourceName) + "client"
 			if err := os.MkdirAll(fileName, 0755); err != nil && !os.IsExist(err) {
 				fmt.Printf("failed to create dir %s\n", err.Error())
 				return
@@ -152,8 +189,11 @@ func main() {
 	}
 	rootCmd.Flags().StringSliceVar(&scaffoldOptions.Verbs, "verbs", []string{"get", "createorupdate", "delete", "listbyrg"}, "verbs")
 	rootCmd.Flags().BoolVar(&scaffoldOptions.Expand, "expand", false, "get support expand params")
+	rootCmd.Flags().StringVar(&scaffoldOptions.SubResource, "subresource", "", "subresource name")
+
 	err := rootCmd.Execute()
 	if err != nil {
+		fmt.Printf("failed to generate interface %s\n", err.Error())
 		os.Exit(1)
 	}
 }
