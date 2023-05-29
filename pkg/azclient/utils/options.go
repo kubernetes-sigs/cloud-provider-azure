@@ -17,25 +17,35 @@ limitations under the License.
 package utils
 
 import (
+	"math"
+	"time"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 
-	custompolicy "sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
+)
+
+const (
+	DefaultMaxRetries    = 3
+	DefaultMaxRetryDelay = math.MaxInt64
+	DefaultRetryDelay    = 5 * time.Second
+	DefaultTryTimeout    = 1 * time.Second
 )
 
 func GetDefaultOption() *arm.ClientOptions {
 	return &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
 			Retry: policy.RetryOptions{
-				RetryDelay:    custompolicy.DefaultRetryDelay,
-				MaxRetryDelay: custompolicy.DefaultMaxRetryDelay,
-				MaxRetries:    custompolicy.DefaultMaxRetries,
-				TryTimeout:    custompolicy.DefaultTryTimeout,
-				StatusCodes:   custompolicy.GetRetriableStatusCode(),
+				RetryDelay:    DefaultRetryDelay,
+				MaxRetryDelay: DefaultMaxRetryDelay,
+				MaxRetries:    DefaultMaxRetries,
+				TryTimeout:    DefaultTryTimeout,
+				StatusCodes:   retryrepectthrottled.GetRetriableStatusCode(),
 			},
 			PerRetryPolicies: []policy.Policy{
-				custompolicy.NewThrottlingPolicy(),
+				retryrepectthrottled.NewThrottlingPolicy(),
 			},
 			Transport: defaultHTTPClient,
 			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {

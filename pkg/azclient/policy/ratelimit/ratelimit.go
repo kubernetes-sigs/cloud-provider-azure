@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package ratelimit
 
 import (
 	"errors"
@@ -22,11 +22,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/flowcontrol"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit/flowcontrol"
 )
 
-// RateLimitConfig indicates the rate limit config options.
-type RateLimitConfig struct {
+// Config indicates the rate limit config options.
+type Config struct {
 	// Enable rate limiting
 	CloudProviderRateLimit bool `json:"cloudProviderRateLimit,omitempty" yaml:"cloudProviderRateLimit,omitempty"`
 	// Rate limit QPS (Read)
@@ -39,7 +39,7 @@ type RateLimitConfig struct {
 	CloudProviderRateLimitBucketWrite int `json:"cloudProviderRateLimitBucketWrite,omitempty" yaml:"cloudProviderRateLimitBucketWrite,omitempty"`
 }
 
-func NewRateLimitPolicy(config *RateLimitConfig) policy.Policy {
+func NewRateLimitPolicy(config *Config) policy.Policy {
 	if config != nil && config.CloudProviderRateLimit {
 		readLimiter := flowcontrol.NewTokenBucketRateLimiter(
 			config.CloudProviderRateLimitQPS,
@@ -48,7 +48,7 @@ func NewRateLimitPolicy(config *RateLimitConfig) policy.Policy {
 		writeLimiter := flowcontrol.NewTokenBucketRateLimiter(
 			config.CloudProviderRateLimitQPSWrite,
 			config.CloudProviderRateLimitBucketWrite)
-		return &RateLimitPolicy{
+		return &Policy{
 			rateLimiterReader: readLimiter,
 			rateLimiterWriter: writeLimiter,
 		}
@@ -56,12 +56,12 @@ func NewRateLimitPolicy(config *RateLimitConfig) policy.Policy {
 	return nil
 }
 
-type RateLimitPolicy struct {
+type Policy struct {
 	rateLimiterWriter flowcontrol.RateLimiter
 	rateLimiterReader flowcontrol.RateLimiter
 }
 
-func (f RateLimitPolicy) Do(req *policy.Request) (*http.Response, error) {
+func (f Policy) Do(req *policy.Request) (*http.Response, error) {
 	if req.Raw().Method == http.MethodGet || req.Raw().Method == http.MethodHead {
 		if !f.rateLimiterReader.TryAccept() {
 			return nil, errors.New("rate limit reached")
@@ -72,4 +72,30 @@ func (f RateLimitPolicy) Do(req *policy.Request) (*http.Response, error) {
 		}
 	}
 	return req.Next()
+}
+
+// CloudProviderRateLimitConfig indicates the rate limit config for each clients.
+type CloudProviderRateLimitConfig struct {
+	// The default rate limit config options.
+	Config
+
+	// Rate limit config for each clients. Values would override default settings above.
+	Entries map[string]*Config `json:",inline" yaml:",inline"`
+}
+
+func NewCloudProviderRateLimitConfig() *CloudProviderRateLimitConfig {
+	return &CloudProviderRateLimitConfig{
+		Config: Config{
+			CloudProviderRateLimit: false,
+		},
+		Entries: make(map[string]*Config),
+	}
+}
+
+// GetRateLimitConfig returns the rate limit config for the given client. if the client is not found, the default is returned.
+func (config *CloudProviderRateLimitConfig) GetRateLimitConfig(clientName string) *Config {
+	if entry, ok := config.Entries[clientName]; ok {
+		return entry
+	}
+	return &config.Config
 }

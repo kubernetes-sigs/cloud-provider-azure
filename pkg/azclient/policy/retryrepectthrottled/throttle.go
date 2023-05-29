@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package retryrepectthrottled
 
 import (
 	"errors"
@@ -32,6 +32,16 @@ func NewThrottlingPolicy() policy.Policy {
 	return &ThrottlingPolicy{
 		RetryAfterReader: time.Now(),
 		RetryAfterWriter: time.Now(),
+	}
+}
+
+func GetRetriableStatusCode() []int {
+	return []int{
+		http.StatusRequestTimeout,      // 408
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout,      // 504
 	}
 }
 
