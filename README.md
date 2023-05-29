@@ -80,7 +80,7 @@ azure-cloud-controller-manager \
     --cluster-cidr=10.240.0.0/16 \
     --route-reconciliation-period=10s \
     --leader-elect=true \
-    --port=10267 \
+    --secure-port=10267 \
     --v=2
 ```
 
