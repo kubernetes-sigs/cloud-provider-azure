@@ -235,15 +235,13 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 	az.PrimaryAvailabilitySetName = primary
 
 	cases := []struct {
-		description             string
-		vmSet                   string
-		isInternal              bool
-		useStandardLB           bool
-		enableMultipleSLBs      bool
-		vmSetsSharingPrimarySLB string
-		clusterName             string
-		lbName                  string
-		expected                string
+		description   string
+		vmSet         string
+		isInternal    bool
+		useStandardLB bool
+		clusterName   string
+		lbName        string
+		expected      string
 	}{
 		{
 			description: "prefix of loadBalancerName should be az.LoadBalancerName if az.LoadBalancerName is not nil",
@@ -308,23 +306,6 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			clusterName:   "azure",
 			expected:      "azure-internal",
 		},
-		{
-			description:        "getAzureLoadBalancerName should return the vmSet name if multiple slbs are enabled",
-			vmSet:              "as",
-			useStandardLB:      true,
-			enableMultipleSLBs: true,
-			clusterName:        "azure",
-			expected:           "as",
-		},
-		{
-			description:             "getAzureLoadBalancerName should return the cluster name if multiple slbs are enabled and the vmSet is sharing the primary slb",
-			vmSet:                   "as",
-			useStandardLB:           true,
-			enableMultipleSLBs:      true,
-			vmSetsSharingPrimarySLB: "as , as-1",
-			clusterName:             "azure",
-			expected:                "azure",
-		},
 	}
 
 	for _, c := range cases {
@@ -333,12 +314,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		} else {
 			az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
 		}
-		if c.enableMultipleSLBs {
-			az.EnableMultipleStandardLoadBalancers = true
-		}
-		if c.vmSetsSharingPrimarySLB != "" {
-			az.NodePoolsWithoutDedicatedSLB = c.vmSetsSharingPrimarySLB
-		}
+
 		az.Config.LoadBalancerName = c.lbName
 		loadbalancerName := az.getAzureLoadBalancerName(c.clusterName, c.vmSet, c.isInternal)
 		assert.Equal(t, c.expected, loadbalancerName, c.description)
@@ -1580,7 +1556,6 @@ func TestGetStandardVMSetNames(t *testing.T) {
 	for _, test := range testCases {
 		cloud := GetTestCloud(ctrl)
 		if test.usingSingleSLBS {
-			cloud.EnableMultipleStandardLoadBalancers = false
 			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 		mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -1636,7 +1611,6 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 		vmSetName         string
 		nicProvisionState network.ProvisioningState
 		isStandardLB      bool
-		useMultipleSLBs   bool
 		expectedErrMsg    error
 	}{
 		{
@@ -1646,16 +1620,6 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			nicName:   "nic1",
 			nicID:     "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1",
 			vmSetName: "availabilityset-1",
-		},
-		{
-			name:            "EnsureHostInPool should return nil if node is not in VMSet when using multiple SLBs",
-			service:         &v1.Service{},
-			nodeName:        "vm1",
-			nicName:         "nic1",
-			nicID:           "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic1",
-			vmSetName:       "availabilityset-1",
-			isStandardLB:    true,
-			useMultipleSLBs: true,
 		},
 		{
 			name:           "EnsureHostInPool should report error if last segment of nicID is nil",
@@ -1719,10 +1683,6 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 	for _, test := range testCases {
 		if test.isStandardLB {
 			cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		}
-
-		if test.useMultipleSLBs {
-			cloud.EnableMultipleStandardLoadBalancers = true
 		}
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})

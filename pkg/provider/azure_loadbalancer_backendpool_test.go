@@ -44,7 +44,6 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerSku = consts.LoadBalancerSkuStandard
-	az.EnableMultipleStandardLoadBalancers = true
 	bi := newBackendPoolTypeNodeIP(az)
 
 	nodes := []*v1.Node{
@@ -151,8 +150,6 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			mockVMSet := NewMockVMSet(ctrl)
-			mockVMSet.EXPECT().GetNodeVMSetName(gomock.Any()).Return("vmss-0", nil)
-			mockVMSet.EXPECT().GetPrimaryVMSetName().Return("vmss-0")
 			az.VMSet = mockVMSet
 
 			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
@@ -220,7 +217,6 @@ func TestCleanupVMSetFromBackendPoolByConditionNodeIPConfig(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 	cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
-	cloud.EnableMultipleStandardLoadBalancers = true
 	service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 	lb := buildDefaultTestLB("testCluster", []string{
 		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1",
@@ -311,7 +307,6 @@ func TestCleanupVMSetFromBackendPoolForInstanceNotFound(t *testing.T) {
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
 	cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
-	cloud.EnableMultipleStandardLoadBalancers = true
 	cloud.PrimaryAvailabilitySetName = "agentpool1-availabilitySet-00000000"
 	clusterName := "testCluster"
 	service := getTestService("test", v1.ProtocolTCP, nil, false, 80)

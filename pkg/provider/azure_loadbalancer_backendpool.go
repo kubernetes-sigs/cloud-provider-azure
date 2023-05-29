@@ -33,7 +33,6 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
@@ -418,33 +417,6 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 		for _, node := range nodes {
 			if isControlPlaneNode(node) {
 				klog.V(4).Infof("bi.EnsureHostsInPool: skipping control plane node %s", node.Name)
-				continue
-			}
-
-			var err error
-			shouldSkip := false
-			useSingleSLB := strings.EqualFold(bi.LoadBalancerSku, consts.LoadBalancerSkuStandard) && !bi.EnableMultipleStandardLoadBalancers
-			if !useSingleSLB {
-				vmSetName, err = bi.VMSet.GetNodeVMSetName(node)
-				if err != nil {
-					klog.Errorf("bi.EnsureHostsInPool: failed to get vmSet name by node name: %s", err.Error())
-					return err
-				}
-
-				if !strings.EqualFold(vmSetName, bi.mapLoadBalancerNameToVMSet(lbName, clusterName)) {
-					shouldSkip = true
-
-					lbNamePrefix := strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix)
-					if strings.EqualFold(lbNamePrefix, clusterName) &&
-						strings.EqualFold(bi.LoadBalancerSku, consts.LoadBalancerSkuStandard) &&
-						bi.getVMSetNamesSharingPrimarySLB().Has(vmSetName) {
-						klog.V(4).Infof("bi.EnsureHostsInPool: the node %s in VMSet %s is supposed to share the primary SLB", node.Name, vmSetName)
-						shouldSkip = false
-					}
-				}
-			}
-			if shouldSkip {
-				klog.V(4).Infof("bi.EnsureHostsInPool: skipping attaching node %s to lb %s, because the vmSet of the node is %s", node.Name, lbName, vmSetName)
 				continue
 			}
 

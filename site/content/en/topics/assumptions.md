@@ -13,13 +13,6 @@ Here is a list of Azure resource assumptions that are required for cloud provide
 
 * All Azure resources MUST be under the same tenant.
 * All virtual machine names MUST be the same as their hostname.
-* Node LoadBalancer's names SHOULD be following rules (`<clusterName>` is coming from `--cluster-name` configuration, default is `kubernetes`)
-  * When `enableMultipleStandardLoadBalancers` is configured to `false`, LoadBalancer's name SHOULD be `<clusterName>` for external type and `<clusterName>-internal` for internal type.
-  * When `enableMultipleStandardLoadBalancers` is configured to `true`, multiple standard load balancers SHOULD be provisioned:
-    * All the virtual machines MUST be part of either VirtualMachineScaleSet (VMSS) or AvailabilitySet (VMAS).
-    * Each VMAS and VMSS SHOULD be put behind a different standard LoadBalancer.
-    * The primary LoadBalancer's name SHOULD be `<clusterName>` for external type and `<clusterName>-internal` for internal type. Virtual machines that are part of primary VMAS (set by `primaryAvailabilitySetName`) or primary VMSS (set by `primaryScaleSetName`) SHOULD be added to primary LoadBalancer backend address pool.
-    * Other standard LoadBalancer's name SHOULD be same as VMAS or VMSS name.
 * The cluster name set for `kube-controller-manager --cluster-name=<cluster-name>` MUST not end with `-internal`.
 
 After the cluster is provisioned, cloud provider Azure MAY update the following Azure resources based on workloads:
