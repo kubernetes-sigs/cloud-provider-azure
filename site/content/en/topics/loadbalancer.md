@@ -52,7 +52,7 @@ Below is a list of annotations supported for Kubernetes services with type `Load
 Please note that
 
 * When `loadBalancerSourceRanges` have been set on service spec, `service.beta.kubernetes.io/azure-allowed-service-tags` won't work because of DROP iptables rules from kube-proxy. The CIDRs from service tags should be merged into `loadBalancerSourceRanges` to make it work.
-* When `allocateLoadBalancerNodePorts` is set to `true`, ensure the following conditions are met:
+* When `allocateLoadBalancerNodePorts` is set to `false`, ensure the following conditions are met:
   * Set `externalTrafficPolicy` to `Local`.
   * And enable the FloatingIP feature by either not setting annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or setting its value to false.
 
