@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package regionalendpointretry
 
 import (
 	"bytes"
@@ -28,16 +28,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
-
-func GetRetriableStatusCode() []int {
-	return []int{
-		http.StatusRequestTimeout,      // 408
-		http.StatusInternalServerError, // 500
-		http.StatusBadGateway,          // 502
-		http.StatusServiceUnavailable,  // 503
-		http.StatusGatewayTimeout,      // 504
-	}
-}
 
 const (
 	DefaultMaxRetries    = 3

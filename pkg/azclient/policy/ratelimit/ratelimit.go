@@ -14,15 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package ratelimit
 
 import (
 	"errors"
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/flowcontrol"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit/flowcontrol"
 )
 
 // RateLimitConfig indicates the rate limit config options.

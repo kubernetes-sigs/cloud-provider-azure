@@ -35,6 +35,16 @@ func NewThrottlingPolicy() policy.Policy {
 	}
 }
 
+func GetRetriableStatusCode() []int {
+	return []int{
+		http.StatusRequestTimeout,      // 408
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout,      // 504
+	}
+}
+
 // ThrottlingPolicy implements the Azure SDK for Go's Policy interface.
 // throttle counter is based on resources operation per subscription.
 type ThrottlingPolicy struct {

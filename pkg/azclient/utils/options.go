@@ -17,6 +17,8 @@ limitations under the License.
 package utils
 
 import (
+	"time"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
@@ -28,10 +30,10 @@ func GetDefaultOption() *arm.ClientOptions {
 	return &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
 			Retry: policy.RetryOptions{
-				RetryDelay:    custompolicy.DefaultRetryDelay,
-				MaxRetryDelay: custompolicy.DefaultMaxRetryDelay,
-				MaxRetries:    custompolicy.DefaultMaxRetries,
-				TryTimeout:    custompolicy.DefaultTryTimeout,
+				RetryDelay:    5 * time.Second,
+				MaxRetryDelay: 3 * time.Minute,
+				MaxRetries:    3,
+				TryTimeout:    1 * time.Minute,
 				StatusCodes:   custompolicy.GetRetriableStatusCode(),
 			},
 			PerRetryPolicies: []policy.Policy{
