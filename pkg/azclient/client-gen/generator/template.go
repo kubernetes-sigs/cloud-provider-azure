@@ -21,6 +21,7 @@ import "html/template"
 type ClientGenConfig struct {
 	Verbs        []string
 	Resource     string
+	SubResource  string `marker:"subResource,optional"`
 	PackageName  string
 	PackageAlias string
 	ClientName   string
@@ -48,14 +49,18 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 `))
 
 const CreateOrUpdateFuncTemplateRaw = `
-// CreateOrUpdate creates or updates a {{.Resource}}.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource {{.PackageAlias}}.{{.Resource}}) (*{{.PackageAlias}}.{{.Resource}}, error) {
-	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
+// CreateOrUpdate creates or updates a {{$resource}}.
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (*{{.PackageAlias}}.{{$resource}}, error) {
+	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName,{{with .SubResource}}parentResourceName,{{end}} resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if resp != nil {
-		return &resp.{{.Resource}}, nil
+		return &resp.{{$resource}}, nil
 	}
 	return nil, nil
 }
@@ -64,8 +69,12 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Parse(CreateOrUpdateFuncTemplateRaw))
 
 const ListByRGFuncTemplateRaw = `
-// List gets a list of {{.Resource}} in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*{{.PackageAlias}}.{{.Resource}}, rerr error) {
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
+// List gets a list of {{$resource}} in the resource group.
+func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
 	pager := client.{{.ClientName}}.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -81,9 +90,13 @@ func (client *Client) List(ctx context.Context, resourceGroupName string) (resul
 var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(ListByRGFuncTemplateRaw))
 
 const ListFuncTemplateRaw = `
-// List gets a list of {{.Resource}} in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*{{.PackageAlias}}.{{.Resource}}, rerr error) {
-	pager := client.{{.ClientName}}.NewListPager(resourceGroupName, nil)
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
+// List gets a list of {{$resource}} in the resource group.
+func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
+	pager := client.{{.ClientName}}.NewListPager(resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -98,9 +111,13 @@ func (client *Client) List(ctx context.Context, resourceGroupName string) (resul
 var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(ListFuncTemplateRaw))
 
 const DeleteFuncTemplateRaw = `
-// Delete deletes a {{.Resource}} by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
-	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
+// Delete deletes a {{$resource}} by name.
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) error {
+	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 `
@@ -108,19 +125,23 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string, reso
 var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Parse(DeleteFuncTemplateRaw))
 
 const GetFuncTemplateRaw = `
-// Get gets the {{.Resource}}
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{.Resource}}, rerr error) {
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
+// Get gets the {{$resource}}
+func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with .SubResource}}parentResourceName string,{{end}} resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, rerr error) {
 	var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
 	{{if .Expand}}if expand != nil {
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
 	}{{end}}
 
-	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, ops)
 	if err != nil {
 		return nil, err
 	}
 	//handle statuscode
-	return &resp.{{.Resource}}, nil
+	return &resp.{{$resource}}, nil
 }
 `
 
@@ -136,7 +157,10 @@ type ImportStatement struct {
 
 var TestSuiteTemplate = template.Must(template.New("object-scaffolding-test-suite").Parse(
 	`
-	
+{{ $resource := .Resource}}
+{{ if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{ end }}
 func TestClient(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Client Suite")
@@ -152,7 +176,7 @@ var recorder *recording.Recorder
 var realClient Interface
 
 var _ = BeforeSuite(func(ctx context.Context) {
-	recorder, err = recording.NewRecorder("testdata/{{.Resource}}")
+	recorder, err = recording.NewRecorder("testdata/{{$resource}}")
 	Expect(err).ToNot(HaveOccurred())
 	subscriptionID = recorder.SubscriptionID()
 	Expect(err).NotTo(HaveOccurred())
