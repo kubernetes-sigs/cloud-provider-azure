@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
