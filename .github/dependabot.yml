@@ -71,20 +71,6 @@ updates:
       - "lgtm"
       - "approved"
       
-  - package-ecosystem: "npm"
-    directory: "/site"
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/documentation"
-      - "lgtm"
-      - "approved"
-      
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
