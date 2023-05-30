@@ -32,6 +32,4 @@ type Interface interface {
 	utils.SubResourceListFunc[armcompute.VirtualMachineScaleSetVM]
 	// Update updates a VirtualMachineScaleSetVM.
 	Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters armcompute.VirtualMachineScaleSetVM) (*armcompute.VirtualMachineScaleSetVM, error)
-	// UpdateAsync updates a VirtualMachineScaleSetVM asynchronously
-	UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters armcompute.VirtualMachineScaleSetVM) *utils.PollerWrapper[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]
 }
