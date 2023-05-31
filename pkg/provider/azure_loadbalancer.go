@@ -2867,6 +2867,7 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 				shouldAddDenyRule = true
 			}
 		}
+
 		if shouldAddDenyRule {
 			for _, port := range ports {
 				_, securityProto, _, err := getProtocolsFromKubernetesProtocol(port.Protocol)
