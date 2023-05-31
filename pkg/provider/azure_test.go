@@ -4041,3 +4041,54 @@ func TestSetLBDefaults(t *testing.T) {
 	_ = az.setLBDefaults(config)
 	assert.Equal(t, config.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }
+
+func TestIsNodeReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     *v1.Node
+		expected bool
+	}{
+		{
+			node:     nil,
+			expected: false,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{},
+			},
+			expected: false,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeMemoryPressure,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		if got := isNodeReady(test.node); got != test.expected {
+			t.Errorf("isNodeReady() = %v, want %v", got, test.expected)
+		}
+	}
+}

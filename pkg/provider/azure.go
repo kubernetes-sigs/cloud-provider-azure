@@ -45,6 +45,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
+	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	"k8s.io/klog/v2"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
@@ -77,6 +78,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	nodemanager "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 
 	"sigs.k8s.io/yaml"
 )
@@ -1179,6 +1181,26 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			klog.V(4).Infof("adding IP address %s of the node %s", address, newNode.Name)
 			az.nodePrivateIPs[newNode.Name].Insert(address)
 		}
+
+		nodeOutOfServiceTaint := v1.Taint{
+			Key:    v1.TaintNodeOutOfService,
+			Effect: v1.TaintEffectNoSchedule,
+		}
+		if isNodeReady(newNode) {
+			if taints.TaintExists(newNode.Spec.Taints, &nodeOutOfServiceTaint) && az.KubeClient != nil {
+				klog.V(2).Infof("node %s is in ready state, removing taint %s from the node", newNode.Name, v1.TaintNodeOutOfService)
+				if err := cloudnodeutil.RemoveTaintOffNode(az.KubeClient, newNode.Name, newNode, &nodeOutOfServiceTaint); err != nil {
+					klog.Errorf("failed to remove taint %s from the node %s", v1.TaintNodeOutOfService, newNode.Name)
+				}
+			}
+		} else {
+			if !taints.TaintExists(newNode.Spec.Taints, &nodeOutOfServiceTaint) && az.KubeClient != nil {
+				klog.V(2).Infof("node %s is not in ready state, adding taint %s to the node", newNode.Name, v1.TaintNodeOutOfService)
+				if err := cloudnodeutil.AddOrUpdateTaintOnNode(az.KubeClient, newNode.Name, &nodeOutOfServiceTaint); err != nil {
+					klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, newNode.Name)
+				}
+			}
+		}
 	}
 }
 
@@ -1305,6 +1327,9 @@ func (az *Cloud) ShouldNodeExcludedFromLoadBalancer(nodeName string) (bool, erro
 }
 
 func isNodeReady(node *v1.Node) bool {
+	if node == nil {
+		return false
+	}
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == v1.NodeReady && cond.Status == v1.ConditionTrue {
 			return true
