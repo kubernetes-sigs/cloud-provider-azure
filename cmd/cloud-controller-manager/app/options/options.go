@@ -66,6 +66,7 @@ type CloudControllerManagerOptions struct {
 	KubeCloudShared    *cpoptions.KubeCloudSharedOptions
 	ServiceController  *cpoptions.ServiceControllerOptions
 	NodeIPAMController *NodeIPAMControllerOptions
+	NodeController     *cpoptions.NodeControllerOptions
 
 	SecureServing  *apiserveroptions.SecureServingOptionsWithLoopback
 	Authentication *apiserveroptions.DelegatingAuthenticationOptions
@@ -92,6 +93,9 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 		KubeCloudShared: cpoptions.NewKubeCloudSharedOptions(&componentConfig.KubeCloudShared),
 		ServiceController: &cpoptions.ServiceControllerOptions{
 			ServiceControllerConfiguration: &componentConfig.ServiceController,
+		},
+		NodeController: &cpoptions.NodeControllerOptions{
+			&componentConfig.NodeController,
 		},
 		NodeIPAMController:        defaultNodeIPAMControllerOptions(),
 		SecureServing:             apiserveroptions.NewSecureServingOptions().WithLoopback(),
@@ -137,6 +141,7 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 	o.KubeCloudShared.AddFlags(fss.FlagSet("generic"))
 	o.ServiceController.AddFlags(fss.FlagSet("service controller"))
 	o.NodeIPAMController.AddFlags(fss.FlagSet("node ipam controller"))
+	o.NodeController.AddFlags(fss.FlagSet("node controller"))
 
 	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
 	o.Authentication.AddFlags(fss.FlagSet("authentication"))
@@ -167,6 +172,9 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 		return err
 	}
 	if err = o.NodeIPAMController.ApplyTo(&c.NodeIPAMControllerConfig); err != nil {
+		return err
+	}
+	if err = o.NodeController.ApplyTo(&c.ComponentConfig.NodeController); err != nil {
 		return err
 	}
 	if err = o.SecureServing.ApplyTo(&c.SecureServing, &c.LoopbackClientConfig); err != nil {
@@ -234,6 +242,7 @@ func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefau
 	errors = append(errors, o.KubeCloudShared.Validate()...)
 	errors = append(errors, o.ServiceController.Validate()...)
 	errors = append(errors, o.NodeIPAMController.Validate()...)
+	errors = append(errors, o.NodeController.Validate()...)
 	errors = append(errors, o.SecureServing.Validate()...)
 	errors = append(errors, o.Authentication.Validate()...)
 	errors = append(errors, o.Authorization.Validate()...)
