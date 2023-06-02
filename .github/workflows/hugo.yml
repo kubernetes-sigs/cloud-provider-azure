@@ -55,9 +55,6 @@ jobs:
           HUGO_ENV: production
         run: |
           cd site
-          npm install postcss-cli
-          npm install autoprefixer
-          npm audit fix
           hugo \
             --minify \
             --baseURL "${{ steps.pages.outputs.base_url }}/"
