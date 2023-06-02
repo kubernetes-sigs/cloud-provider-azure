@@ -1,4 +1,3 @@
-baseURL = "https://cloud-provider-azure.sigs.k8s.io"
 title = "Cloud Provider Azure"
 
 publishDir = "public"
