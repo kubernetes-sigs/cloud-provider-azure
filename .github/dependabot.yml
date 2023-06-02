@@ -313,3 +313,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+
+  - package-ecosystem: docker
+    directory: /vendor/golang.org/x/net/http2
+    schedule:
+      interval: daily
