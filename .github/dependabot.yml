@@ -56,7 +56,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-
+      
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -70,7 +70,7 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
-
+      
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -282,42 +282,7 @@ updates:
     schedule:
       interval: daily
 
-  - package-ecosystem: npm
-    directory: /site
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-common-types
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-free
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/fontawesome-svg-core
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-brands-svg-icons
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-regular-svg-icons
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/Font-Awesome/js-packages/@fortawesome/free-solid-svg-icons
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /site/themes/docsy/assets/vendor/bootstrap
+  - package-ecosystem: docker
+    directory: /vendor/golang.org/x/net/http2
     schedule:
       interval: daily
