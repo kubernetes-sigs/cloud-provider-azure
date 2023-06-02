@@ -1986,6 +1986,7 @@ func (az *Cloud) reconcileFrontendIPConfigsSingleStack(
 					return privateIP != ""
 				}
 				if loadBalancerIP != "" {
+					klog.V(4).Infof("reconcileFrontendIPConfigs for service (%s): use loadBalancerIP %q from Service spec", serviceName, loadBalancerIP)
 					configProperties.PrivateIPAllocationMethod = network.Static
 					configProperties.PrivateIPAddress = &loadBalancerIP
 				} else if status != nil && len(status.Ingress) > 0 && ingressIPInSubnet(status.Ingress) {

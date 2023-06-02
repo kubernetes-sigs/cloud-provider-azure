@@ -258,7 +258,7 @@ func CreateLoadBalancerServiceManifest(name string, annotation map[string]string
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Namespace:   namespace,
-			Annotations: annotation,
+			Annotations: DeepCopyServiceAnnotation(annotation),
 		},
 		Spec: v1.ServiceSpec{
 			Selector:       labels,

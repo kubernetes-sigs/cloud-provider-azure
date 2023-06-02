@@ -444,7 +444,7 @@ func updateServiceAnnotation(service *v1.Service, annotation map[string]string) 
 	if result == nil {
 		return
 	}
-	result.Annotations = annotation
+	result.Annotations = utils.DeepCopyServiceAnnotation(annotation)
 	return
 }
 
