@@ -63,7 +63,7 @@ azure-cloud-node-manager should be run as daemonsets on both Windows and Linux n
 |`--node-name`|The node name for the Pod|Kubernetes Downward API could be used to get Pod's name|
 |`--wait-routes`| only set to true when `--configure-cloud-routes=true` in cloud-controller-manager | Used for non-AzureCNI clusters |
 
-Please refer examples [here](../example/out-of-tree.md) for sample deployment manifests for above components.
+Please refer examples [here](https://github.com/kubernetes-sigs/cloud-provider-azure/tree/master/examples/out-of-tree) for sample deployment manifests for above components.
 
 Alternatively, you can use [cluster-api-provider-azure](https://github.com/kubernetes-sigs/cluster-api-provider-azure) to deploy a Kubernetes cluster running with cloud-controller-manager.
 
