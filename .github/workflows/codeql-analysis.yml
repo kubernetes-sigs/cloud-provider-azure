@@ -33,7 +33,8 @@ on:
       - 'hack/verify-updates.sh'
       - '!vendor/**'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 */24 * * *'
+
 permissions:
   contents: read
 
@@ -83,7 +84,6 @@ jobs:
     - name: Autobuild
       run: |
         hack/verify-updates.sh
-        make all
         go test -covermode=count -coverprofile=profile.cov ./pkg/...
 
     - name: Send coverage
