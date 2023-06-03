@@ -1195,14 +1195,17 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			}
 		} else {
 			if !taints.TaintExists(newNode.Spec.Taints, &nodeOutOfServiceTaint) && az.KubeClient != nil {
-				shutdown, err := az.InstanceShutdown(context.Background(), newNode)
-				if err == nil && shutdown {
-					klog.V(2).Infof("node %s is now in shutdown state, adding taint %s to the node", newNode.Name, v1.TaintNodeOutOfService)
+				nodeNodeUnreachable := v1.Taint{
+					Key:    v1.TaintNodeUnreachable,
+					Effect: v1.TaintEffectNoExecute,
+				}
+				if taints.TaintExists(newNode.Spec.Taints, &nodeNodeUnreachable) {
+					klog.V(2).Infof("node %s is now in NodeUnreachable state, adding taint %s to the node", newNode.Name, v1.TaintNodeOutOfService)
 					if err := cloudnodeutil.AddOrUpdateTaintOnNode(az.KubeClient, newNode.Name, &nodeOutOfServiceTaint); err != nil {
 						klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, newNode.Name)
 					}
 				} else {
-					klog.Warningf("node %s is not ready, while it's not in shutdown state: %v", newNode.Name, err)
+					klog.V(2).Infof("node %s is not ready, while %s taint does not exist", newNode.Name, v1.TaintNodeUnreachable)
 				}
 			}
 		}
