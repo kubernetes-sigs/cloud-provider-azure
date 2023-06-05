@@ -666,3 +666,83 @@ func TestDeleteLBBackendPool(t *testing.T) {
 		assert.Equal(t, tc.expectedErr, err != nil)
 	}
 }
+
+func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		desc                  string
+		migrationError        *retry.Error
+		backendPool           network.BackendAddressPool
+		backendPoolAfterRetry *network.BackendAddressPool
+		getBackendPoolError   *retry.Error
+		expectedError         error
+	}{
+		{
+			desc:           "MigrateToIPBasedBackendPoolAndWaitForCompletion should return the error if the migration fails",
+			migrationError: retry.NewError(false, errors.New("error")),
+			expectedError:  retry.NewError(false, errors.New("error")).Error(),
+		},
+		{
+			desc:                "MigrateToIPBasedBackendPoolAndWaitForCompletion should return the error if failed to get the backend pool",
+			getBackendPoolError: retry.NewError(false, errors.New("error")),
+			expectedError:       retry.NewError(false, errors.New("error")).Error(),
+		},
+		{
+			desc: "MigrateToIPBasedBackendPoolAndWaitForCompletion should retry if the number IPs on the backend pool is not expected",
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String(testClusterName),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+			},
+			backendPoolAfterRetry: &network.BackendAddressPool{
+				Name: pointer.String(testClusterName),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("1.2.3.4"),
+							},
+						},
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("2.3.4.5"),
+							},
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			lbClient.EXPECT().MigrateToIPBasedBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.migrationError)
+			if tc.migrationError == nil {
+				lbClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.backendPool, tc.getBackendPoolError)
+			}
+			if tc.backendPoolAfterRetry != nil {
+				lbClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(*tc.backendPoolAfterRetry, nil)
+			}
+			az.LoadBalancerClient = lbClient
+
+			lbName := testClusterName
+			backendPoolNames := []string{testClusterName}
+			nicsCountMap := map[string]int{testClusterName: 2}
+			err := az.MigrateToIPBasedBackendPoolAndWaitForCompletion(lbName, backendPoolNames, nicsCountMap)
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

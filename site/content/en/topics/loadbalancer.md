@@ -294,6 +294,16 @@ The backend pool type can be configured by specifying `loadBalancerBackendPoolCo
 2. `nodeIP`. In this case we attach nodes to the LB by calling the LB API to add the node private IP addresses to the LB backend pool.
 3. `podIP` (not supported yet). In this case we do not attach nodes to the LB. Instead we directly adding pod IPs to the LB backend pool.
 
+To migrate from one backend pool type to another, just change the value of `loadBalancerBackendPoolConfigurationType` and re-apply the cloud configuration file. There will be downtime during the migration process.
+
+### Migration API from `nodeIPConfiguration` to `nodeIP`
+
+> This feature is supported since v1.24.0
+
+The migration from `nodeIPConfiguration` to `nodeIP` can be done without downtime by configuring `"enableMigrateToIPBasedBackendPoolAPI": true` in the cloud configuration file.
+
+```bash
+
 ## Load balancer limits
 
 The limits of the load balancer related resources are listed below:

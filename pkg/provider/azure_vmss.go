@@ -1555,7 +1555,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromNode(nodeName string, backendPoo
 
 	// Find primary network interface configuration.
 	if vm.VirtualMachineScaleSetVMProperties.NetworkProfileConfiguration.NetworkInterfaceConfigurations == nil {
-		klog.V(4).Infof("EnsureHostInPool: cannot obtain the primary network interface configuration, of vm %s, "+
+		klog.V(4).Infof("ensureBackendPoolDeletedFromNode: cannot obtain the primary network interface configuration, of vm %s, "+
 			"probably because the vm's being deleted", nodeName)
 		return "", "", "", nil, nil
 	}
