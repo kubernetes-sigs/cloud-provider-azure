@@ -252,6 +252,5 @@ stringData:
       "loadBalancerSku": "<loadbalancer-sku>",
       "excludeMasterFromStandardLB": false,
       "maximumLoadBalancerRuleCount": 250,
-      "enableMultipleStandardLoadBalancers": false,
       "tags": "a=b,c=d"
     }

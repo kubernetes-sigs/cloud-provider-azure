@@ -150,15 +150,10 @@ func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, 
 	// The LB name prefix is set to the name of the cluster when:
 	// 1. the LB belongs to the primary agent pool.
 	// 2. using the single SLB.
-	useSingleSLB := az.useStandardLoadBalancer() && !az.EnableMultipleStandardLoadBalancers
-	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || useSingleSLB {
+	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || az.useStandardLoadBalancer() {
 		lbNamePrefix = clusterName
 	}
-	// 3. using multiple SLBs while the vmSet is sharing the primary SLB
-	useMultipleSLB := az.useStandardLoadBalancer() && az.EnableMultipleStandardLoadBalancers
-	if useMultipleSLB && az.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmSetName)) {
-		lbNamePrefix = clusterName
-	}
+
 	if isInternal {
 		return fmt.Sprintf("%s%s", lbNamePrefix, consts.InternalLoadBalancerNameSuffix)
 	}
@@ -794,8 +789,7 @@ func (as *availabilitySet) getAgentPoolAvailabilitySets(vms []compute.VirtualMac
 // annotation would be ignored when using one SLB per cluster.
 func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (availabilitySetNames *[]string, err error) {
 	hasMode, isAuto, serviceAvailabilitySetName := as.getServiceLoadBalancerMode(service)
-	useSingleSLB := as.useStandardLoadBalancer() && !as.EnableMultipleStandardLoadBalancers
-	if !hasMode || useSingleSLB {
+	if !hasMode || as.useStandardLoadBalancer() {
 		// no mode specified in service annotation or use single SLB mode
 		// default to PrimaryAvailabilitySetName
 		availabilitySetNames = &[]string{as.Config.PrimaryAvailabilitySetName}
@@ -929,19 +923,6 @@ func (as *availabilitySet) getPrimaryInterfaceWithVMSet(nodeName, vmSetName stri
 	if !as.useStandardLoadBalancer() {
 		// need to check the vmSet name when using the basic LB
 		needCheck = true
-	} else if as.EnableMultipleStandardLoadBalancers {
-		// need to check the vmSet name when using multiple standard LBs
-		needCheck = true
-
-		// ensure the vm that is supposed to share the primary SLB in the backendpool of the primary SLB
-		if machine.AvailabilitySet != nil {
-			vmasName, _ := getLastSegment(pointer.StringDeref(machine.AvailabilitySet.ID, ""), "/")
-			if strings.EqualFold(as.GetPrimaryVMSetName(), vmSetName) &&
-				as.getVMSetNamesSharingPrimarySLB().Has(strings.ToLower(vmasName)) {
-				klog.V(4).Infof("getPrimaryInterfaceWithVMSet: the vm %s in the vmSet %s is supposed to share the primary SLB", nodeName, vmasName)
-				needCheck = false
-			}
-		}
 	}
 	if vmSetName != "" && needCheck {
 		expectedAvailabilitySetID := as.getAvailabilitySetID(nodeResourceGroup, vmSetName)

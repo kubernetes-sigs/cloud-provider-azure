@@ -1663,7 +1663,6 @@ func TestGetVMSetNames(t *testing.T) {
 		assert.NoError(t, err, "unexpected error when creating test VMSS")
 
 		if test.useSingleSLB {
-			ss.EnableMultipleStandardLoadBalancers = false
 			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
@@ -2170,7 +2169,6 @@ func TestEnsureHostInPool(t *testing.T) {
 		vmSetName                 string
 		isBasicLB                 bool
 		isNilVMNetworkConfigs     bool
-		useMultipleSLBs           bool
 		isVMBeingDeleted          bool
 		expectedNodeResourceGroup string
 		expectedVMSSName          string
@@ -2184,12 +2182,6 @@ func TestEnsureHostInPool(t *testing.T) {
 			nodeName:    "vmss-vm-000000",
 			vmSetName:   "vmss-1",
 			isBasicLB:   true,
-		},
-		{
-			description:     "EnsureHostInPool should skip the current node if the vmSetName is not equal to the node's vmss name and multiple SLBs are used",
-			nodeName:        "vmss-vm-000000",
-			vmSetName:       "vmss-1",
-			useMultipleSLBs: true,
 		},
 		{
 			description:           "EnsureHostInPool should skip the current node if the network configs of the VMSS VM is nil",
@@ -2269,10 +2261,6 @@ func TestEnsureHostInPool(t *testing.T) {
 
 		if !test.isBasicLB {
 			ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		}
-
-		if test.useMultipleSLBs {
-			ss.EnableMultipleStandardLoadBalancers = true
 		}
 
 		expectedVMSS := buildTestVMSS(testVMSSName, "vmss-vm-")
