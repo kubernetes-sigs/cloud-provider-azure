@@ -18,6 +18,7 @@ limitations under the License.
 package generator
 
 import (
+	"fmt"
 	"go/ast"
 	"os/exec"
 
@@ -52,7 +53,8 @@ func (Generator) RegisterMarkers(into *markers.Registry) error {
 }
 
 func (g Generator) Generate(ctx *genall.GenerationContext) error {
-	if err := exec.Command("go", "get", "github.com/golang/mock/mockgen/model").Run(); err != nil {
+	if output, err := exec.Command("go", "get", "github.com/golang/mock/mockgen/model").CombinedOutput(); err != nil {
+		fmt.Println(string(output))
 		return err
 	}
 	var headerText string
@@ -95,11 +97,16 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		}
 	}
 	//nolint:gosec // G204 ignore this!
-	if err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").Run(); err != nil {
+	if output, err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").CombinedOutput(); err != nil {
+		fmt.Println(string(output))
 		return err
 	}
 	//nolint:gosec // G204 ignore this!
-	return exec.Command("go", "test", "./...").Run()
+	if output, err := exec.Command("go", "test", "./...").CombinedOutput(); err != nil {
+		fmt.Println(string(output))
+		return err
+	}
+	return nil
 }
 
 func (Generator) CheckFilter() loader.NodeFilter {
