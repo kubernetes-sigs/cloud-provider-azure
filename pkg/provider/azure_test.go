@@ -3675,7 +3675,7 @@ func TestUpdateNodeCaches(t *testing.T) {
 	prevNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				consts.LabelFailureDomainBetaZone: zone,
+				v1.LabelTopologyZone:              zone,
 				consts.ExternalResourceGroupLabel: consts.TrueAnnotationValue,
 				consts.ManagedByAzureLabel:        "false",
 			},
@@ -3694,7 +3694,7 @@ func TestUpdateNodeCaches(t *testing.T) {
 	newNode := v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				consts.LabelFailureDomainBetaZone: zone,
+				v1.LabelTopologyZone:              zone,
 				consts.ExternalResourceGroupLabel: consts.TrueAnnotationValue,
 				consts.ManagedByAzureLabel:        "false",
 				v1.LabelNodeExcludeBalancers:      "true",
