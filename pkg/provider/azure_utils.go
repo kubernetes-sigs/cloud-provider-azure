@@ -435,50 +435,13 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 }
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
-func (az *Cloud) isFIPIPv6(service *v1.Service, fip *network.FrontendIPConfiguration, isInternal bool) (bool, error) {
-	if isInternal {
-		if fip.FrontendIPConfigurationPropertiesFormat != nil {
-			if fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion != "" {
-				return fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddressVersion == network.IPv6, nil
-			}
-			if fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress != nil {
-				return net.ParseIP(*fip.FrontendIPConfigurationPropertiesFormat.PrivateIPAddress).To4() == nil, nil
-			}
-		}
-		klog.Errorf("Checking IP Family of frontend IP configuration %q of internal Service but "+
-			"it is not clear. It's considered to be IPv4",
-			pointer.StringDeref(fip.Name, ""))
-		return false, nil
+// NOTICE: isFIPIPv6 assumes the FIP is owned by the Service and it is the primary Service.
+func (az *Cloud) isFIPIPv6(service *v1.Service, pipRG string, fip *network.FrontendIPConfiguration) (bool, error) {
+	isDualStack := isServiceDualStack(service)
+	if !isDualStack {
+		return service.Spec.IPFamilies[0] == v1.IPv6Protocol, nil
 	}
-	var fipPIPID string
-	if fip.FrontendIPConfigurationPropertiesFormat != nil && fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
-		fipPIPID = pointer.StringDeref(fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress.ID, "")
-	}
-	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
-	if err != nil {
-		return false, err
-	}
-	for _, pip := range pips {
-		id := pointer.StringDeref(pip.ID, "")
-		if !strings.EqualFold(fipPIPID, id) {
-			continue
-		}
-		if pip.PublicIPAddressPropertiesFormat != nil {
-			// First check PublicIPAddressVersion, then IPAddress
-			if pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion != "" {
-				return pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion == network.IPv6, nil
-			}
-			if pip.PublicIPAddressPropertiesFormat.IPAddress != nil {
-				return net.ParseIP(pointer.StringDeref(pip.PublicIPAddressPropertiesFormat.IPAddress, "")).To4() == nil, nil
-			}
-		}
-		klog.Errorf("Checking IP Family of PIP %q of corresponding frontend IP configuration %q of external Service but "+
-			"it is not clear. It's considered to be IPv4",
-			pointer.StringDeref(pip.Name, ""), pointer.StringDeref(fip.Name, ""))
-		break
-	}
-	return false, nil
+	return managedResourceHasIPv6Suffix(pointer.StringDeref(fip.Name, "")), nil
 }
 
 // getResourceIDPrefix returns a substring from the provided one between beginning and the last "/".

@@ -6395,17 +6395,6 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
 		existingLBs := []network.LoadBalancer{{Name: pointer.String("lb")}}
-		// external Service
-		existingPIPS := []network.PublicIPAddress{
-			{
-				ID: pointer.String("pipID"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPv4,
-				},
-			},
-		}
-		mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(existingPIPS, nil).Times(1)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, fip, "testCluster", &service)
 		assert.NoError(t, err)
 	})
@@ -6437,17 +6426,6 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		expectedPLS := make([]network.PrivateLinkService, 0)
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
-		// external Service
-		existingPIPS := []network.PublicIPAddress{
-			{
-				ID: pointer.String("pipID"),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion: network.IPv4,
-				},
-			},
-		}
-		mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-		mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(existingPIPS, nil).Times(1)
 		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, fip, "testCluster", &service)
 		assert.NoError(t, err)
 	})
@@ -6677,6 +6655,274 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			}
 			checkExpectedIP(false, tc.expectedIPv4)
 			checkExpectedIP(true, tc.expectedIPv6)
+		})
+	}
+}
+
+func TestReconcileFrontendIPConfigs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testcases := []struct {
+		desc          string
+		service       v1.Service
+		existingFIPs  []network.FrontendIPConfiguration
+		existingPIPs  []network.PublicIPAddress
+		status        *v1.LoadBalancerStatus
+		wantLB        bool
+		expectedDirty bool
+		expectedFIPs  []network.FrontendIPConfiguration
+		expectedErr   error
+	}{
+		{
+			desc:    "DualStack Service reconciles existing FIPs and does not touch others, not dirty",
+			service: getTestServiceDualStack("test", v1.ProtocolTCP, nil, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("fipV6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV6"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv6,
+								IPAddress:              pointer.String("fe::1"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
+						},
+					},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("testCluster-atest"),
+					ID:   pointer.String("testCluster-atest-id"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv4,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("1.2.3.5"),
+					},
+				},
+				{
+					Name: pointer.String("testCluster-atest-IPv6"),
+					ID:   pointer.String("testCluster-atest-id-IPv6"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv6,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("fe::2"),
+					},
+				},
+				{
+					Name: pointer.String("pipV4"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("1.2.3.4"),
+					},
+				},
+				{
+					Name: pointer.String("pipV6"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("fe::1"),
+					},
+				},
+			},
+			status:        nil,
+			wantLB:        true,
+			expectedDirty: false,
+			expectedFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("fipV6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV6"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv6,
+								IPAddress:              pointer.String("fe::1"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc:    "DualStack Service reconciles existing FIPs, wantLB == false, but an FIP ID is empty, should return error",
+			service: getTestServiceDualStack("test", v1.ProtocolTCP, nil, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest-IPv6"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest-IPv6"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id-IPv6"),
+						},
+					},
+				},
+			},
+			status:      nil,
+			wantLB:      false,
+			expectedErr: fmt.Errorf("isFrontendIPConfigUnsafeToDelete: incorrect parameters"),
+		},
+		{
+			desc:    "IPv6 Service with existing IPv4 FIP",
+			service: getTestService("test", v1.ProtocolTCP, nil, true, 80),
+			existingFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("testCluster-atest"),
+					ID:   pointer.String("testCluster-atest-id"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion:   network.IPv6,
+						PublicIPAllocationMethod: network.Static,
+						IPAddress:                pointer.String("fe::1"),
+					},
+				},
+				{
+					Name: pointer.String("pipV4"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("1.2.3.4"),
+					},
+				},
+			},
+			status:        nil,
+			wantLB:        true,
+			expectedDirty: true,
+			expectedFIPs: []network.FrontendIPConfiguration{
+				{
+					Name: pointer.String("fipV4"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							Name: pointer.String("pipV4"),
+							PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+								PublicIPAddressVersion: network.IPv4,
+								IPAddress:              pointer.String("1.2.3.4"),
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("atest"),
+					ID:   pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/atest"),
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &network.PublicIPAddress{
+							ID: pointer.String("testCluster-atest-id"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerSku = string(network.LoadBalancerSkuNameStandard)
+
+			lb := getTestLoadBalancer(pointer.String("lb"), pointer.String("rg"), pointer.String("testCluster"), pointer.String("testCluster"), tc.service, "standard")
+			existingFIPs := tc.existingFIPs
+			lb.FrontendIPConfigurations = &existingFIPs
+
+			mockPIPClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPClient.EXPECT().List(gomock.Any(), "rg").Return(tc.existingPIPs, nil).MaxTimes(2)
+			for _, pip := range tc.existingPIPs {
+				mockPIPClient.EXPECT().Get(gomock.Any(), "rg", *pip.Name, gomock.Any()).Return(pip, nil).MaxTimes(1)
+			}
+
+			service := tc.service
+			isDualStack := isServiceDualStack(&service)
+			defaultLBFrontendIPConfigName := cloud.getDefaultFrontendIPConfigName(&service)
+			lbFrontendIPConfigNames := map[bool]string{
+				false: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, false),
+				true:  getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, true),
+			}
+			_, _, dirty, err := cloud.reconcileFrontendIPConfigs("testCluster", &service, &lb, tc.status, tc.wantLB, lbFrontendIPConfigNames)
+			if tc.expectedErr != nil {
+				assert.Equal(t, tc.expectedErr, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedDirty, dirty)
+				assert.Equal(t, tc.expectedFIPs, *lb.FrontendIPConfigurations)
+			}
 		})
 	}
 }
