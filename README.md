@@ -40,10 +40,10 @@ Below table shows the cloud-controller-manager and cloud-node-manager versions s
 
 | AKS version                 | cloud-controller-manager version | cloud-node-manager version |
 |-----------------------------|----------------------------------|----------------------------|
-| v1.27.x (not supported yet) | v1.27.3                          | v1.26.8                    |
-| v1.26.x                     | v1.26.9                          | v1.26.8                    |
-| v1.25.x                     | v1.25.13                         | v1.25.12                   |
-| v1.24.x                     | v1.24.19                         | v1.24.18                   |
+| v1.27.x (not supported yet) | v1.27.5                          | v1.27.4                    |
+| v1.26.x                     | v1.26.11                         | v1.26.10                   |
+| v1.25.x                     | v1.25.15                         | v1.25.14                   |
+| v1.24.x                     | v1.24.21                         | v1.24.20                   |
 | v1.23.x                     | v1.23.30                         | v1.23.24                   |
 | v1.22.x                     | v1.1.26                          | v1.1.14                    |
 | v1.21.x                     | v1.0.23                          | v1.0.18                    |
