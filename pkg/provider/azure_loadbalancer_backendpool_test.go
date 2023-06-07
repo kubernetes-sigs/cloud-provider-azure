@@ -381,7 +381,7 @@ func TestReconcileBackendPoolsNodeIPConfig(t *testing.T) {
 
 	bc := newBackendPoolTypeNodeIPConfig(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
-	_, _, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
+	_, _, _, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.NoError(t, err)
 
 	lb = network.LoadBalancer{
@@ -391,9 +391,10 @@ func TestReconcileBackendPoolsNodeIPConfig(t *testing.T) {
 	az = GetTestCloud(ctrl)
 	az.PreConfiguredBackendPoolLoadBalancerTypes = consts.PreConfiguredBackendPoolLoadBalancerTypesAll
 	bc = newBackendPoolTypeNodeIPConfig(az)
-	preConfigured, changed, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
+	preConfigured, changed, shouldRefresh, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.NoError(t, err)
 	assert.False(t, preConfigured)
+	assert.False(t, shouldRefresh)
 	assert.True(t, changed)
 }
 
@@ -421,11 +422,11 @@ func TestReconcileBackendPoolsNodeIPConfigRemoveIPConfig(t *testing.T) {
 
 	bc := newBackendPoolTypeNodeIPConfig(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
-	_, _, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
+	_, _, _, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.NoError(t, err)
 
 	mockVMSet.EXPECT().GetNodeNameByIPConfigurationID("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1").Return("k8s-agentpool1-00000000", "", errors.New("error"))
-	_, _, err = bc.ReconcileBackendPools(testClusterName, &svc, &lb)
+	_, _, _, err = bc.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.Equal(t, "error", err.Error())
 }
 
@@ -449,7 +450,7 @@ func TestReconcileBackendPoolsNodeIPConfigPreConfigured(t *testing.T) {
 
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 	bc := newBackendPoolTypeNodeIPConfig(az)
-	preConfigured, changed, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
+	preConfigured, changed, _, err := bc.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.True(t, preConfigured)
 	assert.False(t, changed)
 	assert.NoError(t, err)
@@ -469,13 +470,14 @@ func TestReconcileBackendPoolsNodeIPToIPConfig(t *testing.T) {
 
 	bc := newBackendPoolTypeNodeIPConfig(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
-	_, _, err := bc.ReconcileBackendPools(testClusterName, &svc, lb)
+	_, _, _, err := bc.ReconcileBackendPools(testClusterName, &svc, lb)
 	assert.Contains(t, err.Error(), "create or update LB backend pool error")
 
 	lb = buildLBWithVMIPs(testClusterName, []string{"10.0.0.1", "10.0.0.2"})
 	mockLBClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	_, _, err = bc.ReconcileBackendPools(testClusterName, &svc, lb)
+	_, _, shouldRefresh, err := bc.ReconcileBackendPools(testClusterName, &svc, lb)
 	assert.NoError(t, err)
+	assert.False(t, shouldRefresh)
 	assert.Empty(t, (*lb.BackendAddressPools)[0].LoadBalancerBackendAddresses)
 }
 
@@ -537,14 +539,14 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 
 	lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
 	lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), bp, gomock.Any()).Return(nil)
-	lbClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(network.LoadBalancer{}, nil)
 	az.LoadBalancerClient = lbClient
 
 	bi := newBackendPoolTypeNodeIP(az)
 
 	service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 
-	_, _, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
+	_, _, shouldRefresh, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
+	assert.True(t, shouldRefresh)
 	assert.NoError(t, err)
 
 	lb = &network.LoadBalancer{
@@ -554,9 +556,10 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 	az = GetTestCloud(ctrl)
 	az.PreConfiguredBackendPoolLoadBalancerTypes = consts.PreConfiguredBackendPoolLoadBalancerTypesAll
 	bi = newBackendPoolTypeNodeIP(az)
-	preConfigured, changed, err := bi.ReconcileBackendPools(testClusterName, &service, lb)
+	preConfigured, changed, shouldRefresh, err := bi.ReconcileBackendPools(testClusterName, &service, lb)
 	assert.NoError(t, err)
 	assert.False(t, preConfigured)
+	assert.False(t, shouldRefresh)
 	assert.True(t, changed)
 }
 
@@ -570,18 +573,15 @@ func TestReconcileBackendPoolsNodeIPEmptyPool(t *testing.T) {
 	mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 	mockVMSet.EXPECT().GetPrimaryVMSetName().Return("k8s-agentpool1-00000000")
 
-	lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-	lbClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(network.LoadBalancer{}, nil)
-
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
 	az.VMSet = mockVMSet
-	az.LoadBalancerClient = lbClient
 	bi := newBackendPoolTypeNodeIP(az)
 
 	service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 
-	_, _, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
+	_, _, shouldRefresh, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
+	assert.True(t, shouldRefresh)
 	assert.NoError(t, err)
 }
 
@@ -601,9 +601,10 @@ func TestReconcileBackendPoolsNodeIPPreConfigured(t *testing.T) {
 
 	service := getTestService("test", v1.ProtocolTCP, nil, false, 80)
 	bi := newBackendPoolTypeNodeIP(az)
-	preConfigured, changed, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
+	preConfigured, changed, shouldRefresh, err := bi.ReconcileBackendPools("kubernetes", &service, lb)
 	assert.True(t, preConfigured)
 	assert.False(t, changed)
+	assert.False(t, shouldRefresh)
 	assert.NoError(t, err)
 }
 
@@ -623,7 +624,7 @@ func TestReconcileBackendPoolsNodeIPConfigToIP(t *testing.T) {
 	az.VMSet = mockVMSet
 	bi := newBackendPoolTypeNodeIP(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
-	_, _, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
+	_, _, _, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.Contains(t, err.Error(), "delete LB backend pool error")
 
 	lb = buildDefaultTestLB(testClusterName, []string{
@@ -631,9 +632,45 @@ func TestReconcileBackendPoolsNodeIPConfigToIP(t *testing.T) {
 		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool2-00000000-nic-1/ipConfigurations/ipconfig1",
 	})
 	mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
-	_, _, err = bi.ReconcileBackendPools(testClusterName, &svc, &lb)
+	_, _, shouldRefresh, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
 	assert.NoError(t, err)
+	assert.True(t, shouldRefresh)
 	assert.Empty(t, (*lb.BackendAddressPools)[0].LoadBalancerBackendAddresses)
+}
+
+func TestReconcileBackendPoolsNodeIPConfigToIPWithMigrationAPI(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	lb := buildDefaultTestLB(testClusterName, []string{
+		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1",
+		"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool2-00000000-nic-1/ipConfigurations/ipconfig1",
+	})
+
+	mockVMSet := NewMockVMSet(ctrl)
+	mockVMSet.EXPECT().EnsureBackendPoolDeleted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+	mockVMSet.EXPECT().GetPrimaryVMSetName().Return("k8s-agentpool1-00000000").AnyTimes()
+
+	mockLBClient := mockloadbalancerclient.NewMockInterface(ctrl)
+	mockLBClient.EXPECT().MigrateToIPBasedBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(retry.NewError(false, errors.New("error")))
+
+	az := GetTestCloud(ctrl)
+	az.VMSet = mockVMSet
+	az.LoadBalancerClient = mockLBClient
+	az.EnableMigrateToIPBasedBackendPoolAPI = true
+
+	bi := newBackendPoolTypeNodeIP(az)
+	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
+	_, _, _, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "error")
+
+	mockLBClient.EXPECT().MigrateToIPBasedBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	bps := buildLBWithVMIPs(testClusterName, []string{"1.2.3.4", "2.3.4.5"}).BackendAddressPools
+	mockLBClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return((*bps)[0], nil)
+	_, _, shouldRefresh, err := bi.ReconcileBackendPools(testClusterName, &svc, &lb)
+	assert.NoError(t, err)
+	assert.True(t, shouldRefresh)
 }
 
 func buildTestLoadBalancerBackendPoolWithIPs(name string, ips []string) network.BackendAddressPool {
