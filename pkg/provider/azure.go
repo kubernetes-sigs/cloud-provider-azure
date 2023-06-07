@@ -1077,7 +1077,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		az.nodeNames.Delete(prevNode.ObjectMeta.Name)
 
 		// Remove from nodeZones cache.
-		prevZone, ok := prevNode.ObjectMeta.Labels[consts.LabelFailureDomainBetaZone]
+		prevZone, ok := prevNode.ObjectMeta.Labels[v1.LabelTopologyZone]
 		if ok && az.isAvailabilityZone(prevZone) {
 			az.nodeZones[prevZone].Delete(prevNode.ObjectMeta.Name)
 			if az.nodeZones[prevZone].Len() == 0 {
@@ -1119,7 +1119,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		az.nodeNames.Insert(newNode.ObjectMeta.Name)
 
 		// Add to nodeZones cache.
-		newZone, ok := newNode.ObjectMeta.Labels[consts.LabelFailureDomainBetaZone]
+		newZone, ok := newNode.ObjectMeta.Labels[v1.LabelTopologyZone]
 		if ok && az.isAvailabilityZone(newZone) {
 			if az.nodeZones[newZone] == nil {
 				az.nodeZones[newZone] = sets.New[string]()
