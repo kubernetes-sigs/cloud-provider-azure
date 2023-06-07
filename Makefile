@@ -122,12 +122,6 @@ $(BIN_DIR)/azure-acr-credential-provider.exe: $(PKG_CONFIG) $(wildcard cmd/acr-c
 ##@ Images
 ## --------------------------------------
 
-.PHONY: docker-pull-prerequisites
-docker-pull-prerequisites: ## Pull prerequisite images.
-	docker pull docker/dockerfile:1
-	docker pull docker.io/library/golang:buster
-	docker pull gcr.io/distroless/static:latest
-
 buildx-setup:
 	$(DOCKER_BUILDX) inspect img-builder > /dev/null 2>&1 || $(DOCKER_BUILDX) create --name img-builder --use
 	# enable qemu for arm64 build
@@ -136,7 +130,7 @@ buildx-setup:
 	docker run --rm --privileged tonistiigi/binfmt --install all
 
 .PHONY: build-ccm-image
-build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-manager image.
+build-ccm-image: buildx-setup ## Build controller-manager image.
 	$(DOCKER_BUILDX) build \
 		--pull \
 		--output=type=$(OUTPUT_TYPE) \
@@ -150,7 +144,7 @@ build-ccm-image: buildx-setup docker-pull-prerequisites ## Build controller-mana
 		--sbom=false
 
 .PHONY: build-node-image-linux
-build-node-image-linux: buildx-setup docker-pull-prerequisites ## Build node-manager image.
+build-node-image-linux: buildx-setup ## Build node-manager image.
 	$(DOCKER_BUILDX) build \
 		--pull \
 		--output=type=$(OUTPUT_TYPE) \
