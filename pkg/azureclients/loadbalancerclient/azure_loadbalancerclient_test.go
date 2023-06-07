@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -39,8 +40,9 @@ import (
 )
 
 const (
-	testResourceID     = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1"
-	testResourcePrefix = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers"
+	testResourceID            = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1"
+	testBackendPoolResourceID = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb1/backendAddressPools/lb1"
+	testResourcePrefix        = "/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers"
 )
 
 func TestNew(t *testing.T) {
@@ -326,6 +328,67 @@ func TestDelete(t *testing.T) {
 		rerr := lbClient.Delete(context.TODO(), "rg", "lb1")
 		assert.Equal(t, test.expectedErr, rerr)
 	}
+}
+
+func TestGetLBBackendPoolInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testBackendPoolResourceID, "").Return(response, nil)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any())
+
+	lbClient := getTestLoadBalancerClient(armClient)
+	expected := network.BackendAddressPool{Response: autorest.Response{}}
+	result, rerr := lbClient.GetLBBackendPool(context.TODO(), "rg", "lb1", "lb1", "")
+	assert.Equal(t, expected, result)
+	assert.NotNil(t, rerr)
+	assert.Equal(t, http.StatusInternalServerError, rerr.HTTPStatusCode)
+}
+
+func TestGetLBBackendPoolThrottle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	response := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
+	}
+	throttleErr := &retry.Error{
+		HTTPStatusCode: http.StatusTooManyRequests,
+		RawError:       fmt.Errorf("error"),
+		Retriable:      true,
+		RetryAfter:     time.Unix(100, 0),
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	armClient.EXPECT().GetResourceWithExpandQuery(gomock.Any(), testBackendPoolResourceID, "").Return(response, throttleErr)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any())
+
+	lbClient := getTestLoadBalancerClient(armClient)
+	result, rerr := lbClient.GetLBBackendPool(context.TODO(), "rg", "lb1", "lb1", "")
+	assert.Empty(t, result)
+	assert.Equal(t, throttleErr, rerr)
+}
+
+func TestMigrateToIpBasedBackendPools(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "migrateToIpBased", backendPoolsToBeMigrated{BackendPoolNames: []string{"lb1"}}, gomock.Any()).Return(response, nil)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any())
+
+	lbClient := getTestLoadBalancerClient(armClient)
+	rerr := lbClient.MigrateToIPBasedBackendPool(context.TODO(), "rg", "lb1", []string{"lb1"})
+	assert.Nil(t, rerr)
 }
 
 func getTestLoadBalancer(name string) network.LoadBalancer {
