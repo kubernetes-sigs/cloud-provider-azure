@@ -170,7 +170,7 @@ func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.Azu
 // parameter async indicates whether allow multiple batch disk attach on one node in parallel
 // return (lun, error)
 func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName, diskURI string, nodeName types.NodeName,
-	cachingMode compute.CachingTypes, disk *compute.Disk) (int32, error) {
+	cachingMode compute.CachingTypes, disk *compute.Disk, attachDetachInitialDelayInMs int) (int32, error) {
 	diskEncryptionSetID := ""
 	writeAcceleratorEnabled := false
 
@@ -251,9 +251,13 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 		}
 	}()
 
-	if c.AttachDetachInitialDelayInMs > 0 && requestNum == 1 {
-		klog.V(2).Infof("wait %dms for more requests on node %s, current disk attach: %s", c.AttachDetachInitialDelayInMs, node, diskURI)
-		time.Sleep(time.Duration(c.AttachDetachInitialDelayInMs) * time.Millisecond)
+	if attachDetachInitialDelayInMs < 0 {
+		attachDetachInitialDelayInMs = c.AttachDetachInitialDelayInMs
+	}
+
+	if attachDetachInitialDelayInMs > 0 && requestNum == 1 {
+		klog.V(2).Infof("wait %dms for more requests on node %s, current disk attach: %s", attachDetachInitialDelayInMs, node, diskURI)
+		time.Sleep(time.Duration(attachDetachInitialDelayInMs) * time.Millisecond)
 	}
 
 	diskMap, err := c.cleanAttachDiskRequests(node)
@@ -397,7 +401,7 @@ func (c *controllerCommon) cleanAttachDiskRequests(nodeName string) (map[string]
 }
 
 // DetachDisk detaches a disk from VM
-func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI string, nodeName types.NodeName) error {
+func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI string, nodeName types.NodeName, attachDetachInitialDelayInMs int) error {
 	if _, err := c.cloud.InstanceID(ctx, nodeName); err != nil {
 		if errors.Is(err, cloudprovider.InstanceNotFound) {
 			// if host doesn't exist, no need to detach
@@ -424,9 +428,13 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 	c.lockMap.LockEntry(node)
 	defer c.lockMap.UnlockEntry(node)
 
-	if c.AttachDetachInitialDelayInMs > 0 && requestNum == 1 {
-		klog.V(2).Infof("wait %dms for more requests on node %s, current disk detach: %s", c.AttachDetachInitialDelayInMs, node, diskURI)
-		time.Sleep(time.Duration(c.AttachDetachInitialDelayInMs) * time.Millisecond)
+	if attachDetachInitialDelayInMs < 0 {
+		attachDetachInitialDelayInMs = c.AttachDetachInitialDelayInMs
+	}
+
+	if attachDetachInitialDelayInMs > 0 && requestNum == 1 {
+		klog.V(2).Infof("wait %dms for more requests on node %s, current disk detach: %s", attachDetachInitialDelayInMs, node, diskURI)
+		time.Sleep(time.Duration(attachDetachInitialDelayInMs) * time.Millisecond)
 	}
 	diskMap, err := c.cleanDetachDiskRequests(node)
 	if err != nil {
