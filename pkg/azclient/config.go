@@ -54,19 +54,31 @@ var ConfigNotFoundError = errors.New("resource manager service config is not fou
 
 func AzureCloudConfigFromName(cloudName string, endpoint string) (cloud.Configuration, error) {
 	cloudName = strings.ToUpper(cloudName)
-	var cloudConfig cloud.Configuration
-	var ok bool
-	if cloudConfig, ok = EnvironmentMapping[cloudName]; !ok {
-		return cloudConfig, ConfigNotFoundError
+	var config *cloud.Configuration
+	if cloudName == "" {
+		cloudName = "AZUREPUBLICCLOUD"
+	}
+	if cloudConfig, ok := EnvironmentMapping[cloudName]; ok {
+		config = &cloudConfig
 	}
 	if endpoint != "" {
+		if config == nil {
+			//if cloudName is customized profile, ActiveDirectoryAuthorityHost is not set.
+			//todo: load ActiveDirectoryAuthorityHost from azure.json
+			return cloud.Configuration{}, ConfigNotFoundError
+		}
 		var serviceConfig cloud.ServiceConfiguration
 		var ok bool
-		if serviceConfig, ok = cloudConfig.Services[cloud.ResourceManager]; !ok {
-			return cloudConfig, ConfigNotFoundError
+		if serviceConfig, ok = config.Services[cloud.ResourceManager]; !ok {
+			//todo: load cloud.ResourceManager.Audience from azure.json
+			return cloud.Configuration{}, ConfigNotFoundError
 		}
 		serviceConfig.Endpoint = endpoint
-		cloudConfig.Services[cloud.ResourceManager] = serviceConfig
+		config.Services[cloud.ResourceManager] = serviceConfig
 	}
-	return cloudConfig, nil
+	//todo: load endpoint config from file.
+	if config == nil {
+		return cloud.Configuration{}, ConfigNotFoundError
+	}
+	return *config, nil
 }

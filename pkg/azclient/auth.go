@@ -20,11 +20,13 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"golang.org/x/crypto/pkcs12"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -63,41 +65,61 @@ var (
 
 type AuthProvider struct {
 	AzureAuthConfig
-	ARMClientConfig
+	*policy.ClientOptions
 }
 
 const (
-	azureClientID           = "AZURE_CLIENT_ID"
-	azureFederatedTokenFile = "AZURE_FEDERATED_TOKEN_FILE"
-	azureTenantID           = "AZURE_TENANT_ID"
+	AzureClientID           = "AZURE_CLIENT_ID"
+	AzureFederatedTokenFile = "AZURE_FEDERATED_TOKEN_FILE"
+	AzureTenantID           = "AZURE_TENANT_ID"
 )
 
-func NewAuthProvider(config AzureAuthConfig, armConfig ARMClientConfig) (*AuthProvider, error) {
+func GetDefaultAuthClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, error) {
+	//Get default settings
+	options := utils.GetDefaultOption()
+	// armloadbalancer doesn't support ligin.microsoft.com
+	options.Transport = &http.Client{Transport: utils.DefaultTransport}
+
+	if armConfig != nil {
+		//update user agent header
+		options.ClientOptions.Telemetry.ApplicationID = armConfig.UserAgent
+		//todo: add backoff retry policy
+
+		//set cloud
+		var err error
+		options.ClientOptions.Cloud, err = AzureCloudConfigFromName(armConfig.Cloud, armConfig.ResourceManagerEndpoint)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		options.ClientOptions.Cloud = cloud.AzurePublic
+	}
+	return options, nil
+}
+
+func NewAuthProvider(config AzureAuthConfig, clientOption *policy.ClientOptions) (*AuthProvider, error) {
 	// these environment variables are injected by workload identity webhook
-	if tenantID := os.Getenv(azureTenantID); tenantID != "" {
+	if tenantID := os.Getenv(AzureTenantID); tenantID != "" {
 		config.TenantID = tenantID
 	}
-	if clientID := os.Getenv(azureClientID); clientID != "" {
+	if clientID := os.Getenv(AzureClientID); clientID != "" {
 		config.AADClientID = clientID
 	}
-	if federatedTokenFile := os.Getenv(azureFederatedTokenFile); federatedTokenFile != "" {
+	if federatedTokenFile := os.Getenv(AzureFederatedTokenFile); federatedTokenFile != "" {
 		config.AADFederatedTokenFile = federatedTokenFile
 		config.UseFederatedWorkloadIdentityExtension = true
 	}
+
 	return &AuthProvider{
 		AzureAuthConfig: config,
-		ARMClientConfig: armConfig,
+		ClientOptions:   clientOption,
 	}, nil
 }
 
 func (factory *AuthProvider) GetAzIdentity() (azcore.TokenCredential, error) {
 	if factory.UseFederatedWorkloadIdentityExtension {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		return azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
-			ClientOptions: clientOptions.ClientOptions,
+			ClientOptions: factory.ClientOptions.ClientOptions,
 			ClientID:      factory.AADClientID,
 			TenantID:      factory.TenantID,
 			TokenFilePath: factory.AADFederatedTokenFile,
@@ -105,12 +127,8 @@ func (factory *AuthProvider) GetAzIdentity() (azcore.TokenCredential, error) {
 	}
 
 	if factory.UseManagedIdentityExtension {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		credOptions := &azidentity.ManagedIdentityCredentialOptions{
-			ClientOptions: clientOptions.ClientOptions,
+			ClientOptions: factory.ClientOptions.ClientOptions,
 		}
 		if len(factory.UserAssignedIdentityID) > 0 {
 			if strings.Contains(strings.ToUpper(factory.UserAssignedIdentityID), "/SUBSCRIPTIONS/") {
@@ -123,23 +141,15 @@ func (factory *AuthProvider) GetAzIdentity() (azcore.TokenCredential, error) {
 	}
 
 	if len(factory.AADClientSecret) > 0 {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions: clientOptions.ClientOptions,
+			ClientOptions: factory.ClientOptions.ClientOptions,
 		}
 		return azidentity.NewClientSecretCredential(factory.TenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
 	}
 
 	if len(factory.AADClientCertPath) > 0 && len(factory.AADClientCertPassword) > 0 {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		credOptions := &azidentity.ClientCertificateCredentialOptions{
-			ClientOptions: clientOptions.ClientOptions,
+			ClientOptions: factory.ClientOptions.ClientOptions,
 		}
 		certData, err := os.ReadFile(factory.AADClientCertPath)
 		if err != nil {
@@ -176,12 +186,8 @@ func (factory *AuthProvider) GetNetworkAzIdentity() (azcore.TokenCredential, err
 		return nil, fmt.Errorf("got error(%w) in getting network resources service principal token", err)
 	}
 	if len(factory.AADClientSecret) > 0 {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions: clientOptions.ClientOptions,
+			ClientOptions: factory.ClientOptions.ClientOptions,
 		}
 		return azidentity.NewClientSecretCredential(factory.NetworkResourceTenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
 	}
@@ -218,12 +224,8 @@ func (factory *AuthProvider) GetMultiTenantIdentity() (azcore.TokenCredential, e
 	}
 
 	if len(factory.AADClientSecret) > 0 {
-		clientOptions, err := factory.GetDefaultClientOption()
-		if err != nil {
-			return nil, err
-		}
 		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions:              clientOptions.ClientOptions,
+			ClientOptions:              factory.ClientOptions.ClientOptions,
 			AdditionallyAllowedTenants: []string{factory.NetworkResourceTenantID},
 		}
 		return azidentity.NewClientSecretCredential(factory.TenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
@@ -233,20 +235,4 @@ func (factory *AuthProvider) GetMultiTenantIdentity() (azcore.TokenCredential, e
 	}
 
 	return nil, ErrorNoAuth
-}
-
-func (factory *AuthProvider) GetDefaultClientOption() (*policy.ClientOptions, error) {
-
-	//Get default settings
-	options := utils.GetDefaultOption()
-
-	//update user agent header
-	options.ClientOptions.Telemetry.ApplicationID = factory.UserAgent
-	//todo: add backoff retry policy
-
-	//set cloud
-	var err error
-	options.ClientOptions.Cloud, err = AzureCloudConfigFromName(factory.Cloud, factory.ARMClientConfig.ResourceManagerEndpoint)
-	return options, err
-
 }
