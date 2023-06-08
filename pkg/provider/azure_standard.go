@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -1127,7 +1128,6 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 	}
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
-	var nicUpdated bool
 
 	ipconfigPrefixToNicMap := map[string]network.Interface{} // ipconfig prefix -> nic
 	for i := range ipConfigurationIDs {
@@ -1176,6 +1176,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			ipconfigPrefixToNicMap[ipConfigIDPrefix] = nic
 		}
 	}
+	var nicUpdated atomic.Bool
 	for k := range ipconfigPrefixToNicMap {
 		nic := ipconfigPrefixToNicMap[k]
 		newIPConfigs := *nic.IPConfigurations
@@ -1208,21 +1209,21 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", as.ResourceGroup, pointer.StringDeref(nic.Name, ""), rerr.Error())
 				return rerr.Error()
 			}
-			nicUpdated = true
+			nicUpdated.Store(true)
 			return nil
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
 	if errs != nil {
-		return nicUpdated, utilerrors.Flatten(errs)
+		return nicUpdated.Load(), utilerrors.Flatten(errs)
 	}
 	// Fail if there are other errors.
 	if len(allErrs) > 0 {
-		return nicUpdated, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return nicUpdated.Load(), utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
-	return nicUpdated, nil
+	return nicUpdated.Load(), nil
 }
 
 func getAvailabilitySetNameByID(asID string) (string, error) {
