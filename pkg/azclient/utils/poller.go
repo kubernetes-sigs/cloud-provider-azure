@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 )
@@ -44,7 +45,9 @@ func (handler *PollerWrapper[ResponseType]) WaitforPollerResp(ctx context.Contex
 	if handler.poller == nil {
 		return nil, errors.New("poller is nil")
 	}
-	resp, err := handler.poller.PollUntilDone(ctx, nil)
+	resp, err := handler.poller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
+		Frequency: time.Second * 1,
+	})
 	if err != nil {
 		return nil, err
 	}
