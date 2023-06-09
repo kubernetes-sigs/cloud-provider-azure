@@ -299,13 +299,14 @@ func TestCreateOrUpdateLB(t *testing.T) {
 	}
 }
 
-func TestListAgentPoolLBs(t *testing.T) {
+func TestListManagedLBs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	tests := []struct {
 		existingLBs, expectedLBs []network.LoadBalancer
 		callTimes                int
+		multiSLBConfigs          []MultipleStandardLoadBalancerConfiguration
 		clientErr                *retry.Error
 		expectedErr              error
 	}{
@@ -334,9 +335,32 @@ func TestListAgentPoolLBs(t *testing.T) {
 			},
 			callTimes: 1,
 		},
+		{
+			existingLBs: []network.LoadBalancer{
+				{Name: pointer.String("kubernetes")},
+				{Name: pointer.String("kubernetes-internal")},
+				{Name: pointer.String("lb1-internal")},
+				{Name: pointer.String("lb2")},
+			},
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{Name: "kubernetes"},
+				{Name: "lb1"},
+			},
+			expectedLBs: []network.LoadBalancer{
+				{Name: pointer.String("kubernetes")},
+				{Name: pointer.String("kubernetes-internal")},
+				{Name: pointer.String("lb1-internal")},
+			},
+		},
 	}
 	for _, test := range tests {
 		az := GetTestCloud(ctrl)
+		if len(test.multiSLBConfigs) > 0 {
+			az.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			az.MultipleStandardLoadBalancerConfigurations = test.multiSLBConfigs
+		} else {
+			az.LoadBalancerSku = consts.LoadBalancerSkuBasic
+		}
 
 		mockLBClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLBClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingLBs, test.clientErr)

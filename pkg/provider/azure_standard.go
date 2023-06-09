@@ -138,26 +138,11 @@ func (az *Cloud) mapLoadBalancerNameToVMSet(lbName string, clusterName string) (
 	return vmSetName
 }
 
-// For a load balancer, all frontend ip should reference either a subnet or publicIpAddress.
-// Thus Azure do not allow mixed type (public and internal) load balancer.
-// So we'd have a separate name for internal load balancer.
-// This would be the name for Azure LoadBalancer resource.
-func (az *Cloud) getAzureLoadBalancerName(clusterName string, vmSetName string, isInternal bool) string {
-	if az.LoadBalancerName != "" {
-		clusterName = az.LoadBalancerName
+func (az *Cloud) mapVMSetNameToLoadBalancerName(vmSetName, clusterName string) string {
+	if vmSetName == az.VMSet.GetPrimaryVMSetName() {
+		return clusterName
 	}
-	lbNamePrefix := vmSetName
-	// The LB name prefix is set to the name of the cluster when:
-	// 1. the LB belongs to the primary agent pool.
-	// 2. using the single SLB.
-	if strings.EqualFold(vmSetName, az.VMSet.GetPrimaryVMSetName()) || az.useStandardLoadBalancer() {
-		lbNamePrefix = clusterName
-	}
-
-	if isInternal {
-		return fmt.Sprintf("%s%s", lbNamePrefix, consts.InternalLoadBalancerNameSuffix)
-	}
-	return lbNamePrefix
+	return vmSetName
 }
 
 // isControlPlaneNode returns true if the node has a control-plane role label.
