@@ -26,7 +26,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"golang.org/x/crypto/pkcs12"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -50,7 +49,7 @@ type AzureAuthConfig struct {
 	// More details of the user assigned identity can be found at: https://docs.microsoft.com/en-us/azure/active-directory/managed-service-identity/overview
 	// For the user assigned identity specified here to be used, the UseManagedIdentityExtension has to be set to true.
 	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" yaml:"userAssignedIdentityID,omitempty"`
-	// The AAD Tenant ID for the Subscription that the network resources are deployed in
+	// The AAD Tenant ID for the Subscription that the network resources are deployed in.
 	NetworkResourceTenantID string `json:"networkResourceTenantID,omitempty" yaml:"networkResourceTenantID,omitempty"`
 	// The AAD federated token file
 	AADFederatedTokenFile string `json:"aadFederatedTokenFile,omitempty" yaml:"aadFederatedTokenFile,omitempty"`
@@ -76,24 +75,12 @@ const (
 
 func GetDefaultAuthClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, error) {
 	//Get default settings
-	options := utils.GetDefaultOption()
-	// armloadbalancer doesn't support ligin.microsoft.com
-	options.Transport = &http.Client{Transport: utils.DefaultTransport}
-
-	if armConfig != nil {
-		//update user agent header
-		options.ClientOptions.Telemetry.ApplicationID = armConfig.UserAgent
-		//todo: add backoff retry policy
-
-		//set cloud
-		var err error
-		options.ClientOptions.Cloud, err = AzureCloudConfigFromName(armConfig.Cloud, armConfig.ResourceManagerEndpoint)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		options.ClientOptions.Cloud = cloud.AzurePublic
+	options, err := NewClientOptionFromARMClientConfig(armConfig)
+	if err != nil {
+		return nil, err
 	}
+	// armloadbalancer doesn't support login.microsoft.com
+	options.Transport = &http.Client{Transport: utils.DefaultTransport}
 	return options, nil
 }
 

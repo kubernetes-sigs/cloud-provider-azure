@@ -40,7 +40,7 @@ func NewClientFactory(config *ClientFactoryConfig, authProvider *AuthProvider) *
 func (factory *ClientFactory) GetDiskClient(subscription string) (diskclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
-	options, err := factory.GetDefaultResourceClientOption()
+	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
 	if err != nil {
 		return nil, err
 	}
