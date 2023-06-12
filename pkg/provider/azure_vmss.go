@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -1877,7 +1878,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 	}
 
 	// Update VMs with best effort that have already been added to nodeUpdates.
-	var updatedVM bool
+	var updatedVM atomic.Bool
 	for meta, update := range nodeUpdates {
 		// create new instance of meta and update for passing to anonymous function
 		meta := meta
@@ -1906,22 +1907,22 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(service *v1.Service, backendPoolIDs
 				return rerr.Error()
 			}
 
-			updatedVM = true
+			updatedVM.Store(true)
 			return nil
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(hostUpdates...)
 	if errs != nil {
-		return updatedVM, utilerrors.Flatten(errs)
+		return updatedVM.Load(), utilerrors.Flatten(errs)
 	}
 
 	// Fail if there are other errors.
 	if len(allErrs) > 0 {
-		return updatedVM, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return updatedVM.Load(), utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
 
 	isOperationSucceeded = true
-	return updatedVM, nil
+	return updatedVM.Load(), nil
 }
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.

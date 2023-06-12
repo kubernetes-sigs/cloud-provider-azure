@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -945,8 +946,8 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoo
 		}
 	}
 
-	klog.V(2).Infof("Ensure backendPoolIDs deleted from the VMSS VMs.", backendPoolIDs)
-	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %s", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
+	klog.V(2).Infof("Ensure backendPoolIDs %q deleted from the VMSS VMs.", backendPoolIDs)
+	klog.V(2).Infof("go into fs.ensureBackendPoolDeletedFromNode, vmssFlexVMNameMap: %s, size: %d", vmssFlexVMNameMap, len(vmssFlexVMNameMap))
 	nicUpdated, err := fs.ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap, backendPoolIDs)
 	klog.V(2).Infof("exit from fs.ensureBackendPoolDeletedFromNode")
 	if err != nil {
@@ -965,7 +966,6 @@ func (fs *FlexScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoo
 func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[string]string, backendPoolIDs []string) (bool, error) {
 	nicUpdaters := make([]func() error, 0)
 	allErrs := make([]error, 0)
-	var nicUpdated bool
 	nics := map[string]network.Interface{} // nicName -> nic
 	for nodeName, nicName := range vmssFlexVMNameMap {
 		if _, ok := nics[nicName]; ok {
@@ -989,7 +989,9 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 			nics[nicName] = nic
 		}
 	}
+	var nicUpdated atomic.Bool
 	for _, nic := range nics {
+		nic := nic
 		newIPConfigs := *nic.IPConfigurations
 		for j, ipConf := range newIPConfigs {
 			if !pointer.BoolDeref(ipConf.Primary, false) {
@@ -1020,18 +1022,18 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromNode(vmssFlexVMNameMap map[s
 				klog.Errorf("EnsureBackendPoolDeleted CreateOrUpdate for NIC(%s, %s) failed with error %v", fs.ResourceGroup, pointer.StringDeref(nic.Name, ""), rerr.Error())
 				return rerr.Error()
 			}
-			nicUpdated = true
+			nicUpdated.Store(true)
 			klog.V(2).Infof("EnsureBackendPoolDeleted done")
 			return nil
 		})
 	}
-	klog.V(2).Infof("nicUpdaters size: %s", len(nicUpdaters))
+	klog.V(2).Infof("nicUpdaters size: %d", len(nicUpdaters))
 	errs := utilerrors.AggregateGoroutines(nicUpdaters...)
 	if errs != nil {
 		allErrs = append(allErrs, utilerrors.Flatten(errs))
 	}
 	if len(allErrs) > 0 {
-		return nicUpdated, utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
+		return nicUpdated.Load(), utilerrors.Flatten(utilerrors.NewAggregate(allErrs))
 	}
-	return nicUpdated, nil
+	return nicUpdated.Load(), nil
 }
