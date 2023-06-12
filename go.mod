@@ -21,7 +21,7 @@ require (
 	golang.org/x/crypto v0.9.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.8.0
-	golang.org/x/text v0.9.0
+	golang.org/x/text v0.10.0
 	k8s.io/api v0.27.1
 	k8s.io/apimachinery v0.27.1
 	k8s.io/apiserver v0.27.1
