@@ -1,11 +1,11 @@
 # Netlify build instructions
 [build]
-    command = "hugo --minify --environment netlify"
+    command = "npm install && hugo --minify --environment netlify"
     base = "site/"
     publish = "public/"
 
 [build.environment]
-    HUGO_VERSION = "0.104.3"
+    HUGO_VERSION = "0.113.0"
     GO_VERSION = "1.19.2"
 
 # Standard Netlify redirects
