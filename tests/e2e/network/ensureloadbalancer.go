@@ -650,6 +650,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 	})
 
 	It("should support node label `node.kubernetes.io/exclude-from-external-load-balancers`", func() {
+		if os.Getenv(utils.AKSTestCCM) == "" {
+			Skip("Skip this test case for non-AKS test")
+		}
+
 		label := "node.kubernetes.io/exclude-from-external-load-balancers"
 		By("Checking the number of the node pools")
 		nodes, err := utils.GetAgentNodes(cs)
