@@ -20,6 +20,5 @@ jobs:
       - uses: codespell-project/actions-codespell@94259cd8be02ad2903ba34a22d9c13de21a74461 # master
         with:
           check_filenames: true
-          skip: ./.git,./.github/workflows/codespell.yaml,.git,*.png,*.jpg,*.svg,*.sum,./vendor,go.sum,crd-csi-snapshot-ga.yaml,crd-csi-snapshot.yaml,./site,testdata
-          ignore_words_list: AKS,aks,complies,ro,AfterAll
-          only_warn: 1
+          skip: ./.git,./.github/workflows/codespell.yaml,.git,*.png,*.jpg,*.svg,*.sum,./vendor,go.sum,testdata
+          ignore_words_file: .codespellignore
