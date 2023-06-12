@@ -63,8 +63,12 @@ var (
 )
 
 type AuthProvider struct {
-	AzureAuthConfig
-	*policy.ClientOptions
+	FederatedIdentityCredential   azcore.TokenCredential
+	ManagedIdentityCredential     azcore.TokenCredential
+	ClientSecretCredential        azcore.TokenCredential
+	NetworkClientSecretCredential azcore.TokenCredential
+	MultiTenantCredential         azcore.TokenCredential
+	ClientCertificateCredential   azcore.TokenCredential
 }
 
 const (
@@ -85,6 +89,9 @@ func GetDefaultAuthClientOption(armConfig *ARMClientConfig) (*policy.ClientOptio
 }
 
 func NewAuthProvider(config AzureAuthConfig, clientOption *policy.ClientOptions) (*AuthProvider, error) {
+	if clientOption == nil {
+		clientOption = &policy.ClientOptions{}
+	}
 	// these environment variables are injected by workload identity webhook
 	if tenantID := os.Getenv(AzureTenantID); tenantID != "" {
 		config.TenantID = tenantID
@@ -92,64 +99,120 @@ func NewAuthProvider(config AzureAuthConfig, clientOption *policy.ClientOptions)
 	if clientID := os.Getenv(AzureClientID); clientID != "" {
 		config.AADClientID = clientID
 	}
+	var err error
+	// federatedIdentityCredential is used for workload identity federation
+	var federatedIdentityCredential azcore.TokenCredential
 	if federatedTokenFile := os.Getenv(AzureFederatedTokenFile); federatedTokenFile != "" {
 		config.AADFederatedTokenFile = federatedTokenFile
 		config.UseFederatedWorkloadIdentityExtension = true
 	}
+	if config.UseFederatedWorkloadIdentityExtension {
+		federatedIdentityCredential, err = azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+			ClientOptions: clientOption.ClientOptions,
+			ClientID:      config.AADClientID,
+			TenantID:      config.TenantID,
+			TokenFilePath: config.AADFederatedTokenFile,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// managedIdentityCredential is used for managed identity extension
+	var managedIdentityCredential azcore.TokenCredential
+	if config.UseManagedIdentityExtension {
+		credOptions := &azidentity.ManagedIdentityCredentialOptions{
+			ClientOptions: clientOption.ClientOptions,
+		}
+		if len(config.UserAssignedIdentityID) > 0 {
+			if strings.Contains(strings.ToUpper(config.UserAssignedIdentityID), "/SUBSCRIPTIONS/") {
+				credOptions.ID = azidentity.ResourceID(config.UserAssignedIdentityID)
+			} else {
+				credOptions.ID = azidentity.ClientID(config.UserAssignedIdentityID)
+			}
+		}
+		managedIdentityCredential, err = azidentity.NewManagedIdentityCredential(credOptions)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// ClientSecretCredential is used for client secret
+	var clientSecretCredential azcore.TokenCredential
+	var networkClientSecretCredential azcore.TokenCredential
+	var multiTenantCredential azcore.TokenCredential
+	if len(config.AADClientSecret) > 0 {
+		credOptions := &azidentity.ClientSecretCredentialOptions{
+			ClientOptions: clientOption.ClientOptions,
+		}
+		clientSecretCredential, err = azidentity.NewClientSecretCredential(config.TenantID, config.AADClientID, config.AADClientSecret, credOptions)
+		if err != nil {
+			return nil, err
+		}
+		if len(config.NetworkResourceTenantID) > 0 && !strings.EqualFold(config.NetworkResourceTenantID, config.TenantID) {
+			credOptions := &azidentity.ClientSecretCredentialOptions{
+				ClientOptions: clientOption.ClientOptions,
+			}
+			networkClientSecretCredential, err = azidentity.NewClientSecretCredential(config.NetworkResourceTenantID, config.AADClientID, config.AADClientSecret, credOptions)
+			if err != nil {
+				return nil, err
+			}
+
+			credOptions = &azidentity.ClientSecretCredentialOptions{
+				ClientOptions:              clientOption.ClientOptions,
+				AdditionallyAllowedTenants: []string{config.NetworkResourceTenantID},
+			}
+			multiTenantCredential, err = azidentity.NewClientSecretCredential(config.TenantID, config.AADClientID, config.AADClientSecret, credOptions)
+			if err != nil {
+				return nil, err
+			}
+
+		}
+	}
+
+	// ClientCertificateCredential is used for client certificate
+	var clientCertificateCredential azcore.TokenCredential
+	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
+		credOptions := &azidentity.ClientCertificateCredentialOptions{
+			ClientOptions: clientOption.ClientOptions,
+		}
+		certData, err := os.ReadFile(config.AADClientCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
+		}
+		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		if err != nil {
+			return nil, fmt.Errorf("decoding the client certificate: %w", err)
+		}
+		clientCertificateCredential, err = azidentity.NewClientCertificateCredential(config.TenantID, config.AADClientID, []*x509.Certificate{certificate}, privateKey, credOptions)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &AuthProvider{
-		AzureAuthConfig: config,
-		ClientOptions:   clientOption,
+		FederatedIdentityCredential:   federatedIdentityCredential,
+		ManagedIdentityCredential:     managedIdentityCredential,
+		ClientSecretCredential:        clientSecretCredential,
+		ClientCertificateCredential:   clientCertificateCredential,
+		NetworkClientSecretCredential: networkClientSecretCredential,
+		MultiTenantCredential:         multiTenantCredential,
 	}, nil
 }
 
 func (factory *AuthProvider) GetAzIdentity() (azcore.TokenCredential, error) {
-	if factory.UseFederatedWorkloadIdentityExtension {
-		return azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
-			ClientOptions: factory.ClientOptions.ClientOptions,
-			ClientID:      factory.AADClientID,
-			TenantID:      factory.TenantID,
-			TokenFilePath: factory.AADFederatedTokenFile,
-		})
+	switch true {
+	case factory.FederatedIdentityCredential != nil:
+		return factory.FederatedIdentityCredential, nil
+	case factory.ManagedIdentityCredential != nil:
+		return factory.ManagedIdentityCredential, nil
+	case factory.ClientSecretCredential != nil:
+		return factory.ClientSecretCredential, nil
+	case factory.ClientCertificateCredential != nil:
+		return factory.ClientCertificateCredential, nil
+	default:
+		return nil, ErrorNoAuth
 	}
-
-	if factory.UseManagedIdentityExtension {
-		credOptions := &azidentity.ManagedIdentityCredentialOptions{
-			ClientOptions: factory.ClientOptions.ClientOptions,
-		}
-		if len(factory.UserAssignedIdentityID) > 0 {
-			if strings.Contains(strings.ToUpper(factory.UserAssignedIdentityID), "/SUBSCRIPTIONS/") {
-				credOptions.ID = azidentity.ResourceID(factory.UserAssignedIdentityID)
-			} else {
-				credOptions.ID = azidentity.ClientID(factory.UserAssignedIdentityID)
-			}
-		}
-		return azidentity.NewManagedIdentityCredential(credOptions)
-	}
-
-	if len(factory.AADClientSecret) > 0 {
-		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions: factory.ClientOptions.ClientOptions,
-		}
-		return azidentity.NewClientSecretCredential(factory.TenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
-	}
-
-	if len(factory.AADClientCertPath) > 0 && len(factory.AADClientCertPassword) > 0 {
-		credOptions := &azidentity.ClientCertificateCredentialOptions{
-			ClientOptions: factory.ClientOptions.ClientOptions,
-		}
-		certData, err := os.ReadFile(factory.AADClientCertPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading the client certificate from file %s: %w", factory.AADClientCertPath, err)
-		}
-		certificate, privateKey, err := decodePkcs12(certData, factory.AADClientCertPassword)
-		if err != nil {
-			return nil, fmt.Errorf("decoding the client certificate: %w", err)
-		}
-		return azidentity.NewClientCertificateCredential(factory.TenantID, factory.AADClientID, []*x509.Certificate{certificate}, privateKey, credOptions)
-	}
-	return nil, ErrorNoAuth
-
 }
 
 // decodePkcs12 decodes a PKCS#12 client certificate by extracting the public certificate and
@@ -168,58 +231,15 @@ func decodePkcs12(pkcs []byte, password string) (*x509.Certificate, *rsa.Private
 }
 
 func (factory *AuthProvider) GetNetworkAzIdentity() (azcore.TokenCredential, error) {
-	err := factory.checkConfigWhenNetworkResourceInDifferentTenant()
-	if err != nil {
-		return nil, fmt.Errorf("got error(%w) in getting network resources service principal token", err)
-	}
-	if len(factory.AADClientSecret) > 0 {
-		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions: factory.ClientOptions.ClientOptions,
-		}
-		return azidentity.NewClientSecretCredential(factory.NetworkResourceTenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
-	}
-	if len(factory.AADClientCertPath) > 0 && len(factory.AADClientCertPassword) > 0 {
-		return nil, fmt.Errorf("AAD Application client certificate authentication is not supported in getting network resources service principal token")
+	if factory.NetworkClientSecretCredential != nil {
+		return factory.NetworkClientSecretCredential, nil
 	}
 	return nil, ErrorNoAuth
 }
 
-// UsesNetworkResourceInDifferentTenant determines whether the AzureAuthConfig indicates to use network resources in
-// different AAD Tenant than those for the cluster. Return true when NetworkResourceTenantID is specified  and not equal
-// to one defined in global configs
-func (factory *AuthProvider) UsesNetworkResourceInDifferentTenant() bool {
-	return len(factory.NetworkResourceTenantID) > 0 && !strings.EqualFold(factory.NetworkResourceTenantID, factory.TenantID)
-}
-
-// checkConfigWhenNetworkResourceInDifferentTenant checks configuration for the scenario of using network resource in different tenant
-func (factory *AuthProvider) checkConfigWhenNetworkResourceInDifferentTenant() error {
-	if !factory.UsesNetworkResourceInDifferentTenant() {
-		return fmt.Errorf("NetworkResourceTenantID must be configured")
-	}
-
-	if factory.UseManagedIdentityExtension {
-		return fmt.Errorf("managed identity is not supported")
-	}
-
-	return nil
-}
-
 func (factory *AuthProvider) GetMultiTenantIdentity() (azcore.TokenCredential, error) {
-	err := factory.checkConfigWhenNetworkResourceInDifferentTenant()
-	if err != nil {
-		return nil, fmt.Errorf("got error(%w) in getting network resources service principal token", err)
+	if factory.MultiTenantCredential != nil {
+		return factory.MultiTenantCredential, nil
 	}
-
-	if len(factory.AADClientSecret) > 0 {
-		credOptions := &azidentity.ClientSecretCredentialOptions{
-			ClientOptions:              factory.ClientOptions.ClientOptions,
-			AdditionallyAllowedTenants: []string{factory.NetworkResourceTenantID},
-		}
-		return azidentity.NewClientSecretCredential(factory.TenantID, factory.AADClientID, factory.AADClientSecret, credOptions)
-	}
-	if len(factory.AADClientCertPath) > 0 && len(factory.AADClientCertPassword) > 0 {
-		return nil, fmt.Errorf("AAD Application client certificate authentication is not supported in getting multi-tenant service principal token")
-	}
-
 	return nil, ErrorNoAuth
 }
