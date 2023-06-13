@@ -18,6 +18,7 @@ package utils
 
 import (
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -47,7 +48,9 @@ func GetDefaultOption() *arm.ClientOptions {
 			PerRetryPolicies: []policy.Policy{
 				retryrepectthrottled.NewThrottlingPolicy(),
 			},
-			Transport: defaultHTTPClient,
+			Transport: &http.Client{
+				Transport: DefaultTransport,
+			},
 			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {
 				return tracing.NewTracer(NewOtlpSpan, nil)
 			}, nil),

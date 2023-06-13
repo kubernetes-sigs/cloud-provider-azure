@@ -17,8 +17,12 @@ limitations under the License.
 package azclient
 
 import (
+	"net/http"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
+	"github.com/Azure/go-armbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 type ClientFactoryConfig struct {
@@ -44,6 +48,12 @@ func GetDefaultResourceClientOption(config *ClientFactoryConfig) (*policy.Client
 		if !config.CloudProviderBackoff {
 			options.ClientOptions.Retry.MaxRetries = 1
 		}
+	}
+	options.Transport = &http.Client{
+		Transport: armbalancer.New(armbalancer.Options{
+			Transport: utils.DefaultTransport,
+			PoolSize:  100,
+		}),
 	}
 	return options, err
 }
