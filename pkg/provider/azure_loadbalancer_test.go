@@ -32,12 +32,15 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
@@ -5701,6 +5704,7 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
+			az.LoadBalancerSku = consts.LoadBalancerSkuBasic
 			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
 			v4Enabled, v6Enabled := getIPFamiliesEnabled(&service)
 			service.Spec.Type = test.serviceType
@@ -5748,7 +5752,7 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 
 			mockVMSet := NewMockVMSet(ctrl)
 			mockVMSet.EXPECT().GetAgentPoolVMSetNames(gomock.Any()).Return(&[]string{"vmas"}, nil).MaxTimes(1)
-			mockVMSet.EXPECT().GetPrimaryVMSetName().Return(az.Config.PrimaryAvailabilitySetName).Times(2)
+			mockVMSet.EXPECT().GetPrimaryVMSetName().Return(az.Config.PrimaryAvailabilitySetName).MaxTimes(3)
 			az.VMSet = mockVMSet
 
 			shouldUpdateLoadBalancer, err := az.shouldUpdateLoadBalancer(testClusterName, &service, existingNodes)
@@ -7193,6 +7197,659 @@ func TestEqualSubResource(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			equal := equalSubResource(tc.subResource1, tc.subResource2)
 			assert.Equal(t, tc.expected, equal)
+		})
+	}
+}
+
+func TestGetEligibleLoadBalancers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description string
+		lbConfigs   []MultipleStandardLoadBalancerConfiguration
+		svc         v1.Service
+		namespace   *v1.Namespace
+		labels      map[string]string
+		expectedLBs []string
+		expectedErr error
+	}{
+		{
+			description: "should respect service annotation",
+			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "A ,b"}, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+			},
+			expectedLBs: []string{"a"},
+		},
+		{
+			description: "should respect namespace selector",
+			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+			},
+			namespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ns1",
+					Labels: map[string]string{"k1": "v1"},
+				},
+			},
+			expectedLBs: []string{"a"},
+		},
+		{
+			description: "should respect label selector",
+			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
+			labels:      map[string]string{"k2": "v2"},
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+			},
+			expectedLBs: []string{"b"},
+		},
+		{
+			description: "should return the intersection of annotation, namespace and label selector",
+			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,b"}, false),
+			labels:      map[string]string{"k2": "v2"},
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"v1", "v2", "v3"},
+								},
+							},
+						},
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"v1", "v2", "v3"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+			},
+			namespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ns1",
+					Labels: map[string]string{"k1": "v1", "k2": "v2"},
+				},
+			},
+			expectedLBs: []string{"b"},
+		},
+		{
+			description: "should return an error if there is no matching lb config",
+			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,b,c"}, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"v1", "v3"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v3"},
+						},
+					},
+				},
+				{
+					Name: "d",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						AllowServicePlacement: pointer.Bool(false),
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: sets.New[string]("default/test"),
+					},
+				},
+			},
+			namespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ns1",
+					Labels: map[string]string{"k1": "v1", "k2": "v2"},
+				},
+			},
+			expectedLBs: []string{},
+			expectedErr: errors.New(`service "ns1/test" selects 3 load balancers (a, b, c), but 0 of them () have AllowServicePlacement set to false and the service is not using any of them, 1 of them (a) do not match the service label selector, and 2 of them (c, b) do not match the service namespace selector`),
+		},
+		{
+			description: "should report an error if failed to convert label selector as a selector",
+			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{},
+								},
+							}},
+					},
+				},
+			},
+			expectedLBs: []string{},
+			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+		},
+		{
+			description: "should report an error if failed to convert namespace selector as a selector",
+			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{},
+								},
+							}},
+					},
+				},
+			},
+			expectedLBs: []string{},
+			expectedErr: errors.New("values: Invalid value: []string(nil): for 'in', 'notin' operators, values set can't be empty"),
+		},
+		{
+			description: "should respect allowServicePlacement flag",
+			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,c"}, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						AllowServicePlacement: pointer.Bool(false),
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: sets.New[string]("default/test"),
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+				{
+					Name: "d",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+			},
+			expectedLBs: []string{"a", "c"},
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			az.MultipleStandardLoadBalancerConfigurations = tc.lbConfigs
+			if tc.namespace != nil {
+				az.KubeClient = fake.NewSimpleClientset(tc.namespace)
+			}
+			if tc.namespace != nil {
+				tc.svc.Namespace = tc.namespace.Name
+			}
+			if tc.labels != nil {
+				tc.svc.Labels = tc.labels
+			}
+
+			lbs, err := az.getEligibleLoadBalancers(&tc.svc)
+			assert.Equal(t, tc.expectedLBs, lbs)
+			if tc.expectedErr != nil {
+				assert.Equal(t, tc.expectedErr.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestGetAzureLoadBalancerName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.PrimaryAvailabilitySetName = primary
+
+	cases := []struct {
+		description       string
+		vmSet             string
+		isInternal        bool
+		useStandardLB     bool
+		clusterName       string
+		lbName            string
+		multiSLBConfigs   []MultipleStandardLoadBalancerConfiguration
+		serviceAnnotation map[string]string
+		serviceLabel      map[string]string
+		expected          string
+		expectedErr       error
+	}{
+		{
+			description: "prefix of loadBalancerName should be az.LoadBalancerName if az.LoadBalancerName is not nil",
+			vmSet:       primary,
+			clusterName: "azure",
+			lbName:      "azurelb",
+			expected:    "azurelb",
+		},
+		{
+			description: "default external LB should get primary vmset",
+			vmSet:       primary,
+			clusterName: "azure",
+			expected:    "azure",
+		},
+		{
+			description: "default internal LB should get primary vmset",
+			vmSet:       primary,
+			clusterName: "azure",
+			isInternal:  true,
+			expected:    "azure-internal",
+		},
+		{
+			description: "non-default external LB should get its own vmset",
+			vmSet:       "as",
+			clusterName: "azure",
+			expected:    "as",
+		},
+		{
+			description: "non-default internal LB should get its own vmset",
+			vmSet:       "as",
+			clusterName: "azure",
+			isInternal:  true,
+			expected:    "as-internal",
+		},
+		{
+			description:   "default standard external LB should get cluster name",
+			vmSet:         primary,
+			useStandardLB: true,
+			clusterName:   "azure",
+			expected:      "azure",
+		},
+		{
+			description:   "default standard internal LB should get cluster name",
+			vmSet:         primary,
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			expected:      "azure-internal",
+		},
+		{
+			description:   "non-default standard external LB should get cluster-name",
+			vmSet:         "as",
+			useStandardLB: true,
+			clusterName:   "azure",
+			expected:      "azure",
+		},
+		{
+			description:   "non-default standard internal LB should get cluster-name",
+			vmSet:         "as",
+			useStandardLB: true,
+			isInternal:    true,
+			clusterName:   "azure",
+			expected:      "azure-internal",
+		},
+		{
+			description:   "should select the most eligible load balancer when using multi-slb",
+			vmSet:         primary,
+			useStandardLB: true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "b",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "k2",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"v1", "v2", "v3"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+			},
+			serviceAnnotation: map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,b"},
+			serviceLabel:      map[string]string{"k2": "v2"},
+			isInternal:        true,
+			expected:          "b-internal",
+		},
+		{
+			description:   "should report an error if failed to select eligible load balancers",
+			vmSet:         primary,
+			useStandardLB: true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+			},
+			expectedErr: errors.New(`service "default/test" selects 1 load balancers (a), but 0 of them () have AllowServicePlacement set to false and the service is not using any of them, 1 of them (a) do not match the service label selector, and 0 of them () do not match the service namespace selector`),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+
+			if len(c.multiSLBConfigs) > 0 {
+				az.MultipleStandardLoadBalancerConfigurations = c.multiSLBConfigs
+			}
+
+			az.Config.LoadBalancerName = c.lbName
+			svc := getTestService("test", v1.ProtocolTCP, c.serviceAnnotation, false)
+			if c.serviceLabel != nil {
+				svc.Labels = c.serviceLabel
+			}
+			loadbalancerName, err := az.getAzureLoadBalancerName(&svc, &[]network.LoadBalancer{}, c.clusterName, c.vmSet, c.isInternal)
+			assert.Equal(t, c.expected, loadbalancerName)
+			if c.expectedErr != nil {
+				assert.EqualError(t, err, c.expectedErr.Error())
+			}
+		})
+	}
+}
+
+func TestGetMostEligibleLBName(t *testing.T) {
+	for _, tc := range []struct {
+		description    string
+		currentLBName  string
+		eligibleLBs    []string
+		existingLBs    *[]network.LoadBalancer
+		expectedLBName string
+	}{
+		{
+			description:    "should return current LB name if it is eligible",
+			currentLBName:  "lb1",
+			eligibleLBs:    []string{"lb1", "lb2"},
+			expectedLBName: "lb1",
+		},
+		{
+			description:   "should return eligible LBs with fewest rules",
+			currentLBName: "lb1",
+			eligibleLBs:   []string{"lb2", "lb3"},
+			existingLBs: &[]network.LoadBalancer{
+				{
+					Name: pointer.String("lb2"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{},
+							{},
+							{},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb3"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{},
+							{},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb4"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{},
+						},
+					},
+				},
+			},
+			expectedLBName: "lb3",
+		},
+		{
+			description:    "should return the first eligible LB if there is no existing eligible LBs",
+			eligibleLBs:    []string{"lb1", "lb2"},
+			expectedLBName: "lb1",
+		},
+		{
+			description: "should return the first eligible LB that does not exist",
+			eligibleLBs: []string{"lb1", "lb2", "lb3"},
+			existingLBs: &[]network.LoadBalancer{
+				{
+					Name: pointer.String("lb3"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{},
+					},
+				},
+			},
+			expectedLBName: "lb1",
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			lbName := getMostEligibleLBName(tc.currentLBName, tc.eligibleLBs, tc.existingLBs)
+			assert.Equal(t, tc.expectedLBName, lbName)
+		})
+	}
+}
+
+func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description            string
+		useMultipleLB          bool
+		noPrimaryConfig        bool
+		expectedActiveServices map[string]sets.Set[string]
+		expectedErr            error
+	}{
+		{
+			description:   "should set active services correctly",
+			useMultipleLB: true,
+			expectedActiveServices: map[string]sets.Set[string]{
+				"kubernetes": sets.New[string]("default/LBSvcOnKubernetes"),
+				"lb1":        sets.New[string]("ns1/LBSvcOnLB1"),
+			},
+		},
+		{
+			description: "should do nothing when using single standard LB",
+		},
+		{
+			description:     "should report an error if there is no primary LB config",
+			useMultipleLB:   true,
+			noPrimaryConfig: true,
+			expectedErr:     errors.New(`multiple standard load balancers are enabled but no configuration named "kubernetes" is found`),
+		},
+	} {
+		az := GetTestCloud(ctrl)
+		az.LoadBalancerSku = consts.LoadBalancerSkuStandard
+
+		t.Run(tc.description, func(t *testing.T) {
+			existingSvcs := []v1.Service{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "newLBSvc",
+						Namespace: "default",
+					},
+					Spec: v1.ServiceSpec{
+						Type: v1.ServiceTypeLoadBalancer,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "LBSvcOnKubernetes",
+						Namespace: "default",
+						UID:       types.UID("lbSvcOnKubernetesUID"),
+					},
+					Spec: v1.ServiceSpec{
+						Type: v1.ServiceTypeLoadBalancer,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "LBSvcOnLB1",
+						Namespace: "ns1",
+						UID:       types.UID("lbSvcOnLB1UID"),
+					},
+					Spec: v1.ServiceSpec{
+						Type: v1.ServiceTypeLoadBalancer,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "nonLBSvc",
+						UID:  types.UID("nonLBSvcUID"),
+					},
+				},
+			}
+			az.KubeClient = fake.NewSimpleClientset(&existingSvcs[0], &existingSvcs[1], &existingSvcs[2], &existingSvcs[3])
+
+			lbSvcOnKubernetesRuleName := az.getLoadBalancerRuleName(&existingSvcs[1], v1.ProtocolTCP, 80, false)
+			lbSvcOnLB1RuleName := az.getLoadBalancerRuleName(&existingSvcs[2], v1.ProtocolTCP, 80, false)
+			existingLBs := []network.LoadBalancer{
+				{
+					Name: pointer.String("kubernetes-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{Name: &lbSvcOnKubernetesRuleName},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{Name: &lbSvcOnLB1RuleName},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb2"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{},
+					},
+				},
+			}
+
+			if tc.useMultipleLB {
+				az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+					{Name: "lb1"},
+					{Name: "lb2"},
+				}
+				if !tc.noPrimaryConfig {
+					az.MultipleStandardLoadBalancerConfigurations = append(az.MultipleStandardLoadBalancerConfigurations, MultipleStandardLoadBalancerConfiguration{Name: "kubernetes"})
+				}
+			}
+
+			err := az.reconcileMultipleStandardLoadBalancerConfigurations("kubernetes", &existingLBs)
+			assert.Equal(t, err, tc.expectedErr)
+
+			activeServices := make(map[string]sets.Set[string])
+			for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
+				svcNames := sets.New[string]()
+				for activeService := range multiSLBConfig.ActiveServices {
+					svcNames.Insert(activeService)
+				}
+				activeServices[multiSLBConfig.Name] = svcNames
+			}
+			for lbConfigName, svcNames := range tc.expectedActiveServices {
+				assert.Equal(t, svcNames, activeServices[lbConfigName])
+			}
+
 		})
 	}
 }

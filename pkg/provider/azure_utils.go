@@ -505,3 +505,22 @@ func countIPsOnBackendPool(backendPool network.BackendAddressPool) int {
 
 	return ipsCount
 }
+
+// StringInSlice check if string in a list
+func StringInSlice(s string, list []string) bool {
+	for _, item := range list {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// stringSlice returns a string slice value for the passed string slice pointer. It returns a nil
+// slice if the pointer is nil.
+func stringSlice(s *[]string) []string {
+	if s != nil {
+		return *s
+	}
+	return nil
+}

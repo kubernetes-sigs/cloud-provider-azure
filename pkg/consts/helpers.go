@@ -142,3 +142,17 @@ func expectAttributeInSvcAnnotationBeEqualTo(annotations map[string]string, key 
 	}
 	return false
 }
+
+// getLoadBalancerConfigurationsNames parse the annotation and return the names of the load balancer configurations.
+func GetLoadBalancerConfigurationsNames(service *v1.Service) []string {
+	var names []string
+	for key, lbConfig := range service.Annotations {
+		if strings.EqualFold(key, ServiceAnnotationLoadBalancerConfigurations) {
+			names = append(names, strings.Split(lbConfig, ",")...)
+		}
+	}
+	for i := range names {
+		names[i] = strings.ToLower(strings.TrimSpace(names[i]))
+	}
+	return names
+}

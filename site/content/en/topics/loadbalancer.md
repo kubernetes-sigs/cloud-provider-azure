@@ -65,7 +65,7 @@ If you want to specify an IP address for the load balancer, there are two ways:
 
 ### Load balancer selection modes
 
-There are currently three possible load balancer selection modes :
+This is only useful for cluster with basic SKU load balancers. There are currently three possible load balancer selection modes:
 
 1. Default mode - service has no annotation ("service.beta.kubernetes.io/azure-load-balancer-mode"). In this case the Loadbalancer of the primary Availability set is selected
 2. "__auto__" mode - service is annotated with `__auto__` value. In this case, services would be associated with the Loadbalancer with the minimum number of rules.
