@@ -20,12 +20,12 @@ package virtualmachinescalesetvmclient
 import (
 	"context"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;delete;list,resource=VirtualMachineScaleSet,subResource=VirtualMachineScaleSetVM,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=VirtualMachineScaleSetVMsClient,expand=false
+// +azure:client:verbs=get;delete,resource=VirtualMachineScaleSet,subResource=VirtualMachineScaleSetVM,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=VirtualMachineScaleSetVMsClient,expand=false
 type Interface interface {
 	utils.SubResourceGetFunc[armcompute.VirtualMachineScaleSetVM]
 	utils.SubResourceDeleteFunc[armcompute.VirtualMachineScaleSetVM]

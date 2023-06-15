@@ -34,6 +34,7 @@ type TypeScaffoldOptions struct {
 	Package      string
 	PackageAlias string
 	ClientName   string
+	PropertyName string
 	Verbs        []string
 	Expand       bool
 }
@@ -75,14 +76,12 @@ type Interface interface {
 {{ $resource := .Resource}}
 {{range $index,$element := .Verbs}}
 {{if strequal $element "Get"}}
-    {{ if $expandable }}utils.GetWithExpandFunc[{{tolower $packageAlias}}.{{$resource}}]{{ else }}utils.GetFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}{{end}}
-{{if or (strequal $element "ListByRG") (strequal $element "List") }}
-	utils.ListFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{if strequal $element "CreateOrUpdate"}}
-	utils.CreateOrUpdateFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{if strequal $element "Delete"}}
-	utils.DeleteFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{end}}
+{{ if $expandable }}utils.GetWithExpandFunc[{{tolower $packageAlias}}.{{$resource}}]{{ else }}utils.GetFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{- end -}}
+{{if or (strequal $element "ListByRG") (strequal $element "List") }}utils.ListFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{if strequal $element "CreateOrUpdate"}}utils.CreateOrUpdateFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{if strequal $element "Delete"}}utils.DeleteFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{- end -}}
 }
 `
 	TypeSubResourceTemplate = `
@@ -93,14 +92,14 @@ type Interface interface {
 {{ $resource := .SubResource}}
 {{range $index,$element := .Verbs}}
 {{if strequal $element "Get"}}
-    {{ if $expandable }}utils.SubResourceGetWithExpandFunc[{{tolower $packageAlias}}.{{$resource}}]{{ else }}utils.SubResourceGetFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}{{end}}
-{{if or (strequal $element "ListByRG") (strequal $element "List") }}
-	utils.SubResourceListFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{if strequal $element "CreateOrUpdate"}}
-	utils.SubResourceCreateOrUpdateFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{if strequal $element "Delete"}}
-	utils.SubResourceDeleteFunc[{{tolower $packageAlias}}.{{$resource}}]{{end}}
-{{end}}
+{{ if $expandable }}utils.SubResourceGetWithExpandFunc[{{tolower $packageAlias}}.{{$resource}}]{{ else }}utils.SubResourceGetFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{- end -}}
+{{if or (strequal $element "ListByRG") (strequal $element "List") }}utils.SubResourceListFunc[{{tolower $packageAlias}}.{{$resource}}]
+{{- end -}}
+{{if strequal $element "CreateOrUpdate"}}utils.SubResourceCreateOrUpdateFunc[{{tolower $packageAlias}}.{{$resource}}]
+{{- end -}}
+{{if strequal $element "Delete"}}utils.SubResourceDeleteFunc[{{tolower $packageAlias}}.{{$resource}}]{{- end -}}
+{{- end -}}
 }
 `
 	typesTemplateHelpers = template.FuncMap{
@@ -152,8 +151,8 @@ func main() {
 				fmt.Printf("failed to create dir %s\n", err.Error())
 				return
 			}
-			if _, err = os.Lstat(fileName + "/interface.go"); err == nil {
-				fmt.Printf("file %s already exists, skip\n", fileName+"/interface.go")
+			if _, err = os.Lstat(fileName + "/custom.go"); err == nil {
+				fmt.Printf("customization file %s already exists, skip\n", fileName+"/custom.go")
 				return
 			}
 			err = os.WriteFile(fileName+"/interface.go", formattedContent, 0600)

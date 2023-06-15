@@ -18,19 +18,16 @@ package azclient_test
 
 import (
 	"context"
-	"os"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	azpolicy "github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"gopkg.in/dnaeon/go-vcr.v3/cassette"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/dnaeon/go-vcr.v3/recorder"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"
 )
 
 var _ = Describe("Auth", Ordered, func() {
@@ -39,75 +36,26 @@ var _ = Describe("Auth", Ordered, func() {
 
 	var cred azcore.TokenCredential
 	var authProvider *azclient.AuthProvider
-	var httpRecorder *recorder.Recorder
-	var clientOptions *policy.ClientOptions
+	var httpRecorder *recording.Recorder
 	var err error
 	BeforeAll(func() {
-		httpRecorder, err = recorder.NewWithOptions(&recorder.Options{
-			CassetteName:       "testdata/auth",
-			Mode:               recorder.ModeRecordOnce,
-			RealTransport:      utils.DefaultTransport,
-			SkipRequestLatency: true,
-		})
-		httpRecorder.SetReplayableInteractions(true)
-
+		httpRecorder, err = recording.NewRecorder("testdata/auth")
 		Expect(err).NotTo(HaveOccurred())
-		if httpRecorder.IsNewCassette() {
-			tenantID = os.Getenv(azclient.AzureTenantID)
-			clientID = os.Getenv(azclient.AzureClientID)
-		}
-		httpRecorder.AddHook(func(i *cassette.Interaction) error {
-			i.Request.URL = strings.Replace(i.Request.URL, tenantID, "tenantid", -1)
-			i.Request.Body = strings.Replace(i.Request.Body, tenantID, "tenantid", -1)
-			i.Response.Body = strings.Replace(i.Response.Body, tenantID, "tenantid", -1)
-
-			i.Request.URL = strings.Replace(i.Request.URL, clientID, "clientid", -1)
-			i.Request.Body = strings.Replace(i.Request.Body, clientID, "clientid", -1)
-			i.Response.Body = strings.Replace(i.Response.Body, clientID, "clientid", -1)
-			if i.Request.Form.Has("client_id") {
-				i.Request.Form.Set("client_id", clientID)
-			}
-
-			delete(i.Response.Headers, "Set-Cookie")
-			delete(i.Response.Headers, "Date")
-			delete(i.Response.Headers, "X-Ms-Request-Id")
-			delete(i.Response.Headers, "X-Ms-Ests-Server")
-			delete(i.Response.Headers, "Content-Security-Policy-Report-Only")
-
-			if strings.Contains(i.Response.Body, "access_token") {
-				i.Response.Body = `{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}`
-			}
-
-			return nil
-		}, recorder.BeforeSaveHook)
-		clientOptions, err = azclient.GetDefaultAuthClientOption(nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		// armloadbalancer doesn't support ligin.microsoft.com
-		clientOptions.Transport = httpRecorder.GetDefaultClient()
+		tenantID = httpRecorder.TenantID()
+		clientID = httpRecorder.ClientID()
 	})
 
 	When("AADClientSecret is set", func() {
 		It("should return a valid token", func() {
-			clientSecret := "clientSecret"
-			if httpRecorder.IsNewCassette() {
-				clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
-			}
-			httpRecorder.AddHook(func(i *cassette.Interaction) error {
-				i.Request.URL = strings.Replace(i.Request.URL, clientSecret, "clientsecret", -1)
-				i.Request.Body = strings.Replace(i.Request.Body, clientSecret, "clientsecret", -1)
-				i.Response.Body = strings.Replace(i.Response.Body, clientSecret, "clientsecret", -1)
-				if i.Request.Form.Has("client_secret") {
-					i.Request.Form.Set("client_secret", "clientsecret")
-				}
-				return nil
-			}, recorder.BeforeSaveHook)
-			Expect(err).NotTo(HaveOccurred())
 			authProvider, err = azclient.NewAuthProvider(azclient.AzureAuthConfig{
 				TenantID:        tenantID,
 				AADClientID:     clientID,
-				AADClientSecret: clientSecret,
-			}, clientOptions)
+				AADClientSecret: httpRecorder.ClientSecret(),
+			}, &arm.ClientOptions{
+				ClientOptions: azpolicy.ClientOptions{
+					Transport: httpRecorder.HTTPClient(),
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
 			cred, err = authProvider.GetAzIdentity()
 			Expect(err).NotTo(HaveOccurred())
@@ -121,6 +69,7 @@ var _ = Describe("Auth", Ordered, func() {
 		})
 	})
 	AfterAll(func() {
-		httpRecorder.Stop()
+		err := httpRecorder.Stop()
+		Expect(err).NotTo(HaveOccurred())
 	})
 })

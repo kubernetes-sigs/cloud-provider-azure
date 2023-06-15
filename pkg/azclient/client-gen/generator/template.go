@@ -48,7 +48,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 }
 `))
 
-const CreateOrUpdateFuncTemplateRaw = `
+var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Parse(`
 {{ $resource := .Resource}}
 {{ if (gt (len .SubResource) 0) }}
 {{ $resource = .SubResource}}
@@ -64,11 +64,9 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	}
 	return nil, nil
 }
-`
+`))
 
-var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Parse(CreateOrUpdateFuncTemplateRaw))
-
-const ListByRGFuncTemplateRaw = `
+var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
 {{ $resource := .Resource}}
 {{ if (gt (len .SubResource) 0) }}
 {{ $resource = .SubResource}}
@@ -85,11 +83,9 @@ func (client *Client) List(ctx context.Context, resourceGroupName string{{with .
 	}
 	return result, nil
 }
-`
+`))
 
-var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(ListByRGFuncTemplateRaw))
-
-const ListFuncTemplateRaw = `
+var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
 {{ $resource := .Resource}}
 {{ if (gt (len .SubResource) 0) }}
 {{ $resource = .SubResource}}
@@ -106,11 +102,9 @@ func (client *Client) List(ctx context.Context, resourceGroupName string{{with .
 	}
 	return result, nil
 }
-`
+`))
 
-var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(ListFuncTemplateRaw))
-
-const DeleteFuncTemplateRaw = `
+var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Parse(`
 {{ $resource := .Resource}}
 {{ if (gt (len .SubResource) 0) }}
 {{ $resource = .SubResource}}
@@ -120,11 +114,9 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{wi
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
-`
+`))
 
-var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Parse(DeleteFuncTemplateRaw))
-
-const GetFuncTemplateRaw = `
+var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").Parse(`
 {{ $resource := .Resource}}
 {{ if (gt (len .SubResource) 0) }}
 {{ $resource = .SubResource}}
@@ -143,9 +135,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 	//handle statuscode
 	return &resp.{{$resource}}, nil
 }
-`
-
-var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").Parse(GetFuncTemplateRaw))
+`))
 
 var ImportTemplate = template.Must(template.New("import").Parse(`{{.Alias}} "{{.Package}}"
 `))
@@ -166,8 +156,9 @@ func TestClient(t *testing.T) {
 	RunSpecs(t, "Client Suite")
 }
 
-var resourceGroupName = "aks-cit"
-var resourceName = "testdisk"
+var resourceGroupName = "aks-cit-{{$resource}}"
+var resourceName = "testResource"
+{{if .SubResource}}var parentResourceName = "testParentResource"{{- end }}
 var subscriptionID string
 var location = "eastus"
 var resourceGroupClient *armresources.ResourceGroupsClient
@@ -183,20 +174,12 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	cred := recorder.TokenCredential()
 	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
-			Retry: policy.RetryOptions{
-				MaxRetryDelay: 1 * time.Millisecond,
-				RetryDelay:    1 * time.Millisecond,
-			},
 			Transport: recorder.HTTPClient(),
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
-			Retry: policy.RetryOptions{
-				MaxRetryDelay: 1 * time.Millisecond,
-				RetryDelay:    1 * time.Millisecond,
-			},
 			Transport: recorder.HTTPClient(),
 		},
 	})
@@ -212,12 +195,147 @@ var _ = BeforeSuite(func(ctx context.Context) {
 })
 
 var _ = AfterSuite(func(ctx context.Context) {
-	pollerResp, err := resourceGroupClient.BeginDelete(ctx, resourceGroupName, nil)
-	Expect(err).NotTo(HaveOccurred())
-	_, err = pollerResp.PollUntilDone(ctx, nil)
+	_, err := resourceGroupClient.BeginDelete(ctx, resourceGroupName, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = recorder.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
+`))
+
+var TestCaseTemplate = template.Must(template.New("object-scaffolding-test-case").Parse(
+	`
+{{ $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{ $resource = .SubResource}}
+{{- end -}}
+{{- $HasCreateOrUpdate := false }}
+{{-  $HasGet := false }}
+{{-  $HasDelete := false }}
+{{- $HasListByRG := false }}
+{{- $HasList := false }}
+{{- range .Verbs}}
+{{- if eq . "createorupdate"}}{{$HasCreateOrUpdate = true}}{{end}}
+{{- if eq . "get"}}{{$HasGet = true}}{{end}}
+{{- if eq . "delete"}}{{$HasDelete = true}}{{end}}
+{{- if eq . "listbyrg"}}{{$HasListByRG = true}}{{end}}
+{{- if eq . "list"}}{{$HasList = true}}{{end}}
+{{- end -}}
+var beforeAllFunc func(context.Context)
+var afterAllFunc func(context.Context)
+var addtionalTestCases func()
+
+{{if or $HasCreateOrUpdate}}var newResource *{{.PackageAlias}}.{{$resource}} = &{{.PackageAlias}}.{{$resource}}{} {{- end }}
+
+var _ = Describe("{{.ClientName}}", Ordered, func() {
+
+	if beforeAllFunc != nil {
+		BeforeAll(beforeAllFunc)
+	}
+	
+	if addtionalTestCases != nil {
+		addtionalTestCases()
+	}
+
+{{if $HasCreateOrUpdate}}
+	When("creation requests are raised", func() {
+		It("should not return error", func(ctx context.Context) {
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newResource).NotTo(BeNil())
+			Expect(*newResource.Name).To(Equal(resourceName))
+		})
+	})
+{{end -}}
+{{if $HasGet}}
+	When("get requests are raised", func() {
+		It("should not return error", func(ctx context.Context) {
+			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName{{if .Expand}}, nil{{end}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newResource).NotTo(BeNil())
+		})
+	})
+	When("invalid get requests are raised", func() {
+		It("should return 404 error", func(ctx context.Context) {
+			newResource, err := realClient.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName+"notfound"{{if .Expand}}, nil{{end}})
+			Expect(err).To(HaveOccurred())
+			Expect(newResource).To(BeNil())
+		})
+	})
+{{end -}}
+{{if $HasCreateOrUpdate}}
+	When("update requests are raised", func() {
+		It("should not return error", func(ctx context.Context) {
+			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newResource).NotTo(BeNil())
+		})
+	})
+{{end -}}
+{{if or $HasListByRG $HasList}}
+	When("list requests are raised", func() {
+		It("should not return error", func(ctx context.Context) {
+			resourceList, err := realClient.List(ctx, resourceGroupName,{{with .SubResource}}parentResourceName{{end}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resourceList).NotTo(BeNil())
+			Expect(len(resourceList)).To(Equal(1))
+			Expect(*resourceList[0].Name).To(Equal(resourceName))
+		})
+	})
+	When("invalid list requests are raised", func() {
+		It("should return error", func(ctx context.Context) {
+			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound",{{with .SubResource}}parentResourceName{{end}})
+			Expect(err).To(HaveOccurred())
+			Expect(resourceList).To(BeNil())
+		})
+	})
+{{end -}}
+{{if $HasDelete}}
+	When("deletion requests are raised", func() {
+		It("should not return error", func(ctx context.Context) {
+			err = realClient.Delete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+{{end -}}
+
+	if afterAllFunc != nil {
+		AfterAll(afterAllFunc)
+	}
+})
+`))
+
+var TestCaseCustomTemplate = template.Must(template.New("object-scaffolding-test-case-custom").Parse(
+	`
+	{{ $resource := .Resource}}
+	{{ if (gt (len .SubResource) 0) }}
+	{{ $resource = .SubResource}}
+	{{- end -}}
+	{{- $HasCreateOrUpdate := false }}
+	{{-  $HasGet := false }}
+	{{-  $HasDelete := false }}
+	{{- $HasListByRG := false }}
+	{{- $HasList := false }}
+	{{- range .Verbs}}
+	{{- if eq . "createorupdate"}}{{$HasCreateOrUpdate = true}}{{end}}
+	{{- if eq . "get"}}{{$HasGet = true}}{{end}}
+	{{- if eq . "delete"}}{{$HasDelete = true}}{{end}}
+	{{- if eq . "listbyrg"}}{{$HasListByRG = true}}{{end}}
+	{{- if eq . "list"}}{{$HasList = true}}{{end}}
+	{{- end -}}
+func init() {
+	addtionalTestCases = func() {
+	}
+
+	beforeAllFunc = func(ctx context.Context) {
+		{{if not $HasCreateOrUpdate}} 
+		newResource = &{{.PackageAlias}}.{{$resource}}{
+			{{if not .SubResource}}Location: to.Ptr(location), {{- end -}}
+		}
+		{{- end -}}
+	}
+	afterAllFunc = func(ctx context.Context) {
+	}
+}
+
 `))

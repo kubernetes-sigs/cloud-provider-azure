@@ -26,6 +26,5 @@ import (
 // +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=RouteTablesClient,expand=false
 type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
-
 	utils.DeleteFunc[armnetwork.RouteTable]
 }

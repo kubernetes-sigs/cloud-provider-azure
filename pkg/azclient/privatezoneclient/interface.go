@@ -26,6 +26,5 @@ import (
 // +azure:client:verbs=get;createorupdate,resource=PrivateZone,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns,packageAlias=armprivatedns,clientName=PrivateZonesClient,expand=false
 type Interface interface {
 	utils.GetFunc[armprivatedns.PrivateZone]
-
 	utils.CreateOrUpdateFunc[armprivatedns.PrivateZone]
 }

@@ -14,9 +14,7 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers:
-            User-Agent:
-                - azsdk-go-azidentity/v1.3.0 (go1.20.3; linux)
+        headers: {}
         url: https://login.microsoftonline.com/common/discovery/instance?api-version=1.1&authorization_endpoint=https%3A%2F%2Flogin.microsoftonline.com%2Ftenantid%2Foauth2%2Fv2.0%2Fauthorize
         method: GET
       response:
@@ -49,7 +47,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 551.315934ms
+        duration: 678.830804ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -63,9 +61,7 @@ interactions:
         request_uri: ""
         body: ""
         form: {}
-        headers:
-            User-Agent:
-                - azsdk-go-azidentity/v1.3.0 (go1.20.3; linux)
+        headers: {}
         url: https://login.microsoftonline.com/tenantid/v2.0/.well-known/openid-configuration
         method: GET
       response:
@@ -98,7 +94,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 387.160736ms
+        duration: 362.302803ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -125,8 +121,6 @@ interactions:
                 - "213"
             Content-Type:
                 - application/x-www-form-urlencoded; charset=utf-8
-            User-Agent:
-                - azsdk-go-azidentity/v1.3.0 (go1.20.3; linux)
         url: https://login.microsoftonline.com/tenantid/oauth2/v2.0/token
         method: POST
       response:
@@ -135,14 +129,14 @@ interactions:
         proto_minor: 1
         transfer_encoding: []
         trailer: {}
-        content_length: 1397
+        content_length: 1402
         uncompressed: false
         body: '{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}'
         headers:
             Cache-Control:
                 - no-store, no-cache
             Content-Length:
-                - "1397"
+                - "1402"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -159,4 +153,4 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 355.472124ms
+        duration: 264.480502ms

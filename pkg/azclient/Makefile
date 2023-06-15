@@ -72,26 +72,25 @@ generate: install-dependencies build generatecode generateimpl vet-all
 
 .PHONY: generatecode
 generatecode: build ## Generate client
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2 --package-alias armcontainerservice --resource ManagedCluster --client-name ManagedClustersClient 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 --package-alias armcontainerservice --resource ManagedCluster --client-name ManagedClustersClient 
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias resources --resource Deployment --client-name DeploymentsClient --verbs delete 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource Disk --client-name DisksClient 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource AvailabilitySet --client-name AvailabilitySetsClient --verbs get,list 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource VirtualMachine --client-name VirtualMachinesClient --verbs createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource VirtualMachineScaleSet --client-name VirtualMachineScaleSetsClient --verbs get,createorupdate,delete,list 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource VirtualMachineScaleSet --subresource VirtualMachineScaleSetVM --client-name VirtualMachineScaleSetVMsClient --verbs get,delete,list 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4 --package-alias armcompute --resource Snapshot --client-name SnapshotsClient --verbs get,createorupdate,delete 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource VirtualNetwork --subresource Subnet --client-name SubnetsClient --verbs get,createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource Interface --client-name InterfacesClient --verbs get,createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource LoadBalancer --client-name LoadBalancersClient --verbs get,createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PrivateEndpoint --client-name PrivateEndpointsClient --verbs get,createorupdate --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PublicIPAddress --client-name PublicIPAddressesClient --verbs get,createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PublicIPPrefix --client-name PublicIPPrefixesClient --verbs get,createorupdate,delete,list --expand
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource RouteTable --client-name RouteTablesClient --verbs createorupdate,delete 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource Disk --client-name DisksClient 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource AvailabilitySet --client-name AvailabilitySetsClient --verbs get,list 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource VirtualMachine --client-name VirtualMachinesClient --verbs createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource VirtualMachineScaleSet --client-name VirtualMachineScaleSetsClient --verbs get,createorupdate,delete,list 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource VirtualMachineScaleSet --subresource VirtualMachineScaleSetVM --client-name VirtualMachineScaleSetVMsClient --verbs get,delete,list -
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource Snapshot --client-name SnapshotsClient --verbs get,createorupdate,delete 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource VirtualNetwork --subresource Subnet --client-name SubnetsClient --verbs get,createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource Interface --client-name InterfacesClient --verbs get,createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource LoadBalancer --client-name LoadBalancersClient --verbs get,createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PrivateEndpoint --client-name PrivateEndpointsClient --verbs get,createorupdate --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PublicIPAddress --client-name PublicIPAddressesClient --verbs get,createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PublicIPPrefix --client-name PublicIPPrefixesClient --verbs get,createorupdate,delete,list --expand 
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource RouteTable --client-name RouteTablesClient --verbs createorupdate,delete  
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource SecurityGroup --client-name SecurityGroupsClient --verbs get,createorupdate,delete,list 
-	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PrivateLinkService --client-name PrivateLinkServicesClient --verbs get,createorupdate,delete,list --expand
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource PrivateLinkService --client-name PrivateLinkServicesClient --verbs get,createorupdate,delete,list --expand 
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns --package-alias armprivatedns --resource PrivateZone --client-name PrivateZonesClient  --verbs get,createorupdate 
 ##  $(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource FileShare --client-name FileSharesClient --expand
-#	#$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 --package-alias armnetwork --resource Subnet --client-name SubnetsClient --verbs get,createorupdate,delete,list --expand
 
 .PHONY: generateimpl
 generateimpl: build ## Generate client

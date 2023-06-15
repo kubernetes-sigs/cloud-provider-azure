@@ -34,7 +34,7 @@ var _ = Describe("Cloud", func() {
 			It("should return the cloud", func() {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
-					w.Write([]byte(`
+					_, err := w.Write([]byte(`
 [
     {
         "portal":"https://portal.azure.com",
@@ -72,10 +72,11 @@ var _ = Describe("Cloud", func() {
 
 ]
 					`))
+					Expect(err).ToNot(HaveOccurred())
 				}))
 				defer server.Close()
 
-				cloudConfig, err := azclient.AzureCloudConfigFromUrl(server.URL)
+				cloudConfig, err := azclient.AzureCloudConfigFromURL(server.URL)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cloudConfig).ToNot(BeNil())
 				Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(Equal("https://login.microsoftonline.com/"))
@@ -150,7 +151,7 @@ var _ = Describe("Cloud", func() {
                    "resourceManagerEndpoint":"https://management.chinacloudapi.cn",
 				   "activeDirectoryEndpoint":"https://login.chinacloudapi.cn",
 				   "tokenAudience":"https://management.core.chinacloudapi.cn/"
-				}`), 0644)
+				}`), 0600)
 				Expect(err).ToNot(HaveOccurred())
 				os.Setenv(azclient.EnvironmentFilepathName, configFile.Name())
 				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(&cloud.AzureGovernment)

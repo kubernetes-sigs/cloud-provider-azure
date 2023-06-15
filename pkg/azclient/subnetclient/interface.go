@@ -26,10 +26,7 @@ import (
 // +azure:client:verbs=get;createorupdate;delete;list,resource=VirtualNetwork,subResource=Subnet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=SubnetsClient,expand=true
 type Interface interface {
 	utils.SubResourceGetWithExpandFunc[armnetwork.Subnet]
-
 	utils.SubResourceCreateOrUpdateFunc[armnetwork.Subnet]
-
 	utils.SubResourceDeleteFunc[armnetwork.Subnet]
-
 	utils.SubResourceListFunc[armnetwork.Subnet]
 }

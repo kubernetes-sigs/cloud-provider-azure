@@ -24,7 +24,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
+	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
 	gomock "github.com/golang/mock/gomock"
 )
 

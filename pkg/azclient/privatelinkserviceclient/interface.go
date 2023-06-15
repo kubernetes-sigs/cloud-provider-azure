@@ -26,10 +26,7 @@ import (
 // +azure:client:verbs=get;createorupdate;delete;list,resource=PrivateLinkService,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PrivateLinkServicesClient,expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PrivateLinkService]
-
 	utils.CreateOrUpdateFunc[armnetwork.PrivateLinkService]
-
 	utils.DeleteFunc[armnetwork.PrivateLinkService]
-
 	utils.ListFunc[armnetwork.PrivateLinkService]
 }
