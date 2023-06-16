@@ -140,7 +140,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		// 1. Create a Service with managed PIP and check connectivity with DNS
 		// 2. Delete the Service
 		// 3. Create a Service with user assigned PIP
-		// 4. Delete the Servcie and check tags
+		// 4. Delete the Service and check tags
 		// 5. Create a Service with different name
 		// 6. Update the Service with new tag
 		By("Create a Service with managed PIP")
