@@ -5,13 +5,13 @@
 {{- else if eq .Capabilities.KubeVersion.Minor "23" -}}
   {{- $_ := set . "cloudProviderAzureVersion" "v1.23.30" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "24" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.24.18" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.24.21" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "25" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.25.12" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.25.15" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "26" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.26.8" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.26.11" }}
 {{- else if eq .Capabilities.KubeVersion.Minor "27" -}}
-  {{- $_ := set . "cloudProviderAzureVersion" "v1.27.1" }}
+  {{- $_ := set . "cloudProviderAzureVersion" "v1.27.5" }}
 {{- end -}}
 {{- if .Values.cloudControllerManager.enabled }}
 apiVersion: v1
@@ -408,6 +408,7 @@ spec:
             {{- if hasKey .Values.cloudNodeManager "waitRoutes" }}
             - "--wait-routes={{ .Values.cloudNodeManager.waitRoutes }}"
             {{- end }}
+            - "--v={{ .Values.cloudNodeManager.logVerbosity }}"
           env:
             - name: NODE_NAME
               valueFrom:
@@ -438,7 +439,7 @@ data:
 
     $argList = @()
 
-    foreach ($var in @("CLOUD_CONFIG", "KUBE_API_BURST", "KUBE_API_CONTENT_TYPE", "KUBE_API_QPS", "MASTER", "MIN_RESYNC_PERIOD", "NODE_STATUS_UPDATE_FREQUENCY", "WAIT_ROUTES")) {
+    foreach ($var in @("LOG_VERBOSITY", "CLOUD_CONFIG", "KUBE_API_BURST", "KUBE_API_CONTENT_TYPE", "KUBE_API_QPS", "MASTER", "MIN_RESYNC_PERIOD", "NODE_STATUS_UPDATE_FREQUENCY", "WAIT_ROUTES")) {
       if ([System.Environment]::GetEnvironmentVariable($var) -NE $null) {
         $argList += [System.Environment]::GetEnvironmentVariable($var)
       }
@@ -500,6 +501,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        {{- if hasKey .Values.cloudNodeManager "logVerbosity" }}
+        - name: LOG_VERBOSITY
+          value: "--v={{ .Values.cloudNodeManager.logVerbosity }}"
+        {{- end }}
         {{- if hasKey .Values.cloudNodeManager "cloudConfig" }}
         - name: CLOUD_CONFIG
           value: "--cloud-config={{ .Values.cloudNodeManager.cloudConfig }}"
