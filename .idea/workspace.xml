@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e03169c6-d365-49e0-be00-348112245885" name="变更" comment="变更">
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/availabilitysetclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/availabilitysetclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/availabilitysetclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/availabilitysetclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/availabilitysetclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/availabilitysetclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/cmd/client-gen/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/cmd/client-gen/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/cmd/typescaffold/type_scaffold.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/cmd/typescaffold/type_scaffold.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/generator/codegenerator.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/generator/codegenerator.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/generator/gencode_action.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/generator/gencode_action.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/generator/genmock_action.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/generator/genmock_action.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/client-gen/generator/template.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/client-gen/generator/template.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/deploymentclient/custom.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/deploymentclient/custom.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/deploymentclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/deploymentclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/deploymentclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/deploymentclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/deploymentclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/deploymentclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/diskclient_suite_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/diskclient_suite_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/diskclient_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/diskclient_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/testdata/diskclient.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/testdata/diskclient.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/diskclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/diskclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/interfaceclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/interfaceclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/interfaceclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/interfaceclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/interfaceclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/interfaceclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/loadbalancerclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/loadbalancerclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/loadbalancerclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/loadbalancerclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/loadbalancerclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/loadbalancerclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/managedclusterclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/managedclusterclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/managedclusterclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/managedclusterclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/managedclusterclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/managedclusterclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/policy/ratelimit.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/policy/ratelimit.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/policy/retry.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/policy/retry.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/policy/throttle.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/policy/throttle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privateendpointclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privateendpointclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privateendpointclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privateendpointclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privateendpointclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privateendpointclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatelinkserviceclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatelinkserviceclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatelinkserviceclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatelinkserviceclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatelinkserviceclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatelinkserviceclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatezoneclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatezoneclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatezoneclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatezoneclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/privatezoneclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/privatezoneclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/publicipaddressclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/publicipaddressclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/publicipaddressclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/publicipaddressclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/publicipaddressclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/publicipaddressclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/readme.md" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/readme.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/recording/counter.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/recording/counter.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/recording/recorder.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/recording/recorder.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/recording/transport.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/recording/transport.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/routetableclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/routetableclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/routetableclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/routetableclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/routetableclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/routetableclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/securitygroupclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/securitygroupclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/securitygroupclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/securitygroupclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/securitygroupclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/securitygroupclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/utils/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/utils/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/utils/options.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/utils/options.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/utils/policy_wrapper.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/utils/policy_wrapper.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/utils/poller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/utils/poller.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/utils/transport.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/utils/transport.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachineclient/custom.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachineclient/custom.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachineclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachineclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachineclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachineclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachineclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachineclient/zz_generated.client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachinescalesetclient/interface.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachinescalesetclient/interface.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachinescalesetclient/mock_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachinescalesetclient/mock_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/azureclients/v2/virtualmachinescalesetclient/zz_generated.client.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/azclient/virtualmachinescalesetclient/zz_generated.client.go" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
+  </component>
+  <component name="GOROOT" url="file:///usr/lib/go-1.20" />
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="clienttesting" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="HARD" />
+  </component>
+  <component name="GithubPullRequestsUISettings">
+    <option name="selectedUrlAndAccountId">
+      <UrlAndAccount>
+        <option name="accountId" value="98820698-5b54-467c-bda7-e3d4e4f4949f" />
+        <option name="url" value="https://github.com/kubernetes-sigs/cloud-provider-azure" />
+      </UrlAndAccount>
+    </option>
+  </component>
+  <component name="GoLibraries">
+    <option name="indexEntireGoPath" value="true" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/../../../pkg/mod/gopkg.in/dnaeon/go-vcr.v3@v3.1.2/recorder/recorder.go" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectId" id="2FQzCDevKw7PnedXyYpbn65zTKP" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "Git.Branch.Popup.ShowAllRemotes": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "RunOnceActivity.go.vendoring.notification.had.been.shown": "true",
+    "RunOnceActivity.go.watchers.conflict.with.on.save.actions.check.performed": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "configurable..is.expanded": "false",
+    "configurable.GoLibrariesConfigurable.is.expanded": "true",
+    "git-widget-placeholder": "master",
+    "go.import.settings.migrated": "true",
+    "go.sdk.automatically.set": "true",
+    "last_opened_file_path": "/home/shafan",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.github.codespaces.jetbrains.gateway.settings.CodespacesSettingsConfigurable"
+  },
+  "keyToStringList": {
+    "GitStage.ChangesTree.GroupingKeys": [
+      "directory",
+      "module",
+      "repository"
+    ]
+  }
+}]]></component>
+  <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
+    <layout>
+      <window_info id="Space Code Reviews" />
+      <window_info id="Bookmarks" side_tool="true" />
+      <window_info id="Commit_Guest" show_stripe_button="false" />
+      <window_info id="Pull Requests" />
+      <window_info id="Learn" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.10758464" />
+      <window_info id="Commit" order="1" weight="0.25" />
+      <window_info id="Structure" order="2" weight="0.25" />
+      <window_info anchor="bottom" id="Database Changes" />
+      <window_info anchor="bottom" id="TypeScript" />
+      <window_info anchor="bottom" id="File Transfer" />
+      <window_info anchor="bottom" id="Run" weight="0.121308625" />
+      <window_info anchor="bottom" id="Find" weight="0.32976258" />
+      <window_info anchor="bottom" id="Dependency Checker" />
+      <window_info anchor="bottom" id="Version Control" order="0" weight="0.2834395" />
+      <window_info anchor="bottom" id="Problems View" order="1" weight="0.61696583" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="2" visible="true" weight="0.32976258" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.25506657" />
+      <window_info anchor="bottom" id="Services" order="4" weight="0.61696583" />
+      <window_info anchor="right" id="Endpoints" />
+      <window_info anchor="right" id="make" side_tool="true" />
+      <window_info anchor="right" id="Coverage" side_tool="true" />
+      <window_info anchor="right" id="Meet New UI" show_stripe_button="false" side_tool="true" />
+      <window_info anchor="right" id="Notifications" order="0" weight="0.074381515" />
+      <window_info anchor="right" id="Database" order="1" weight="0.32991534" />
+      <window_info anchor="right" id="github.copilotToolWindow" order="2" weight="0.32991534" />
+    </layout>
+  </component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/provider/config" />
+      <recent name="\\wsl$\Ubuntu\home\shafan\go\src\sigs.k8s.io\cloud-provider-azure\pkg\provider\config" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Go Remote.未命名">
+    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
+      <module name="cloud-provider-azure" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="PACKAGE" />
+      <package value="sigs.k8s.io/cloud-provider-azure" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="未命名" type="GoRemoteDebugConfigurationType" factoryName="Go Remote" nameIsGenerated="true" host="172.19.111.113">
+      <option name="disconnectOption" value="STOP" />
+      <disconnect value="STOP" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestNodeAddresses in sigs.k8s.io/cloud-provider-azure/pkg/provider" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="cloud-provider-azure" />
+      <working_directory value="$PROJECT_DIR$/pkg/provider" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestNodeAddresses\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="cloud-provider-azure" />
+      <working_directory value="$PROJECT_DIR$/pkg/provider" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestReconcileSecurityGroup\E$/^\QreconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure-shared-securityrule_annotations\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="cloud-provider-azure" />
+      <working_directory value="$PROJECT_DIR$/pkg/provider" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestReconcileSecurityGroup\E$/^\QreconcileSecurityGroup_shall_delete_shared_sgs_for_service_with_azure-shared-securityrule_annotations\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
+      <module name="cloud-provider-azure" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="DIRECTORY" />
+      <package value="sigs.k8s.io/cloud-provider-azure" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <method v="2" />
+    </configuration>
+    <configuration name="golangci-lint" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile" temporary="true">
+      <makefile filename="$PROJECT_DIR$/Makefile" target="golangci-lint" workingDirectory="" arguments="">
+        <envs />
+      </makefile>
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Makefile Target.golangci-lint" />
+        <item itemvalue="Go Test.TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+        <item itemvalue="Go Test.TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+        <item itemvalue="Go Test.TestNodeAddresses in sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+        <item itemvalue="Go Test.TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="e03169c6-d365-49e0-be00-348112245885" name="变更" comment="" />
+      <created>1664439039923</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1664439039923</updated>
+      <workItem from="1664439041712" duration="1261000" />
+      <workItem from="1664440657926" duration="1971000" />
+      <workItem from="1664444004846" duration="8334000" />
+      <workItem from="1665194741602" duration="171000" />
+      <workItem from="1665194926506" duration="101000" />
+      <workItem from="1667790424608" duration="619000" />
+      <workItem from="1667796805140" duration="8341000" />
+      <workItem from="1667807372423" duration="1099000" />
+      <workItem from="1667810671789" duration="71000" />
+      <workItem from="1668662302033" duration="9688000" />
+      <workItem from="1669098824941" duration="2106000" />
+      <workItem from="1669100976451" duration="54000" />
+      <workItem from="1669101527620" duration="6496000" />
+      <workItem from="1669109073645" duration="6421000" />
+      <workItem from="1670208183900" duration="111000" />
+      <workItem from="1670208345472" duration="40000" />
+      <workItem from="1670208495733" duration="102000" />
+      <workItem from="1670306896724" duration="12000" />
+      <workItem from="1670306976261" duration="311000" />
+      <workItem from="1670307312668" duration="629000" />
+      <workItem from="1670321526203" duration="21000" />
+      <workItem from="1672733479665" duration="1000" />
+      <workItem from="1672733522596" duration="14000" />
+      <workItem from="1680850184985" duration="38000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="dependencySupport" implementationName="javascript:npm:karma" />
+    <option featureType="dependencySupport" implementationName="javascript:npm:postcss" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="origin/master" />
+                </option>
+              </RecentGroup>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="clientv2" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VgoProject">
+    <settings-migrated>true</settings-migrated>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/cloud_provider_azure$TestReconcileSecurityGroup_reconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure_shared_securityrule_annotations_in_sigs_k8s_io_cloud_provider_azure_pkg_provider.out" NAME="TestReconcileSecurityGroup/reconcileSecurityGroup_shall_delete_shared_sgs_destination_for_service_with_azure-shared-securityrule_annotations in sigs.k8s.io/cloud-provider-azure/pkg/provider Coverage Results" MODIFIED="1682063744985" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="GoCoverage" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" />
+  </component>
+</project>
