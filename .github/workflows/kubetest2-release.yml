@@ -42,7 +42,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup kustomizer
-        uses: stefanprodan/kustomizer/action@8009953f93c2cf2ecbaff70be321d15e921ad591 # main
+        uses: stefanprodan/kustomizer/action@d5f7cea0a21fd41c44c6a0b808a436b9a66fa8d6 # main
       - name: Push
         run: |
           kustomizer push artifact ${ARTIFACT}:${{ github.ref_name }} -f ./kubetest2-aks/bin/kubetest2-aks \
