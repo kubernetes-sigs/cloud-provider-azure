@@ -458,14 +458,13 @@ func TestGetVMSSVMCacheKey(t *testing.T) {
 }
 
 func TestIsNodeInVMSSVMCache(t *testing.T) {
-
 	getter := func(key string) (interface{}, error) {
 		return nil, nil
 	}
-	emptyCacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
+	emptyCacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)
 	emptyCacheEntryTimedCache.Set("key", nil)
 
-	cacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
+	cacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)
 	syncMap := &sync.Map{}
 	syncMap.Store("node", nil)
 	cacheEntryTimedCache.Set("key", syncMap)
@@ -473,7 +472,7 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 	tests := []struct {
 		description    string
 		nodeName       string
-		vmssVMCache    *azcache.TimedCache
+		vmssVMCache    azcache.Resource
 		expectedResult bool
 	}{
 		{
@@ -483,26 +482,28 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 		},
 		{
 			description:    "empty CacheEntry timed cache",
-			vmssVMCache:    emptyCacheEntryTimedCache,
+			vmssVMCache:    emptyCacheEntryTimedCache.(*azcache.TimedCache),
 			expectedResult: false,
 		},
 		{
 			description:    "node name in the cache",
 			nodeName:       "node",
-			vmssVMCache:    cacheEntryTimedCache,
+			vmssVMCache:    cacheEntryTimedCache.(*azcache.TimedCache),
 			expectedResult: true,
 		},
 		{
 			description:    "node name not in the cache",
 			nodeName:       "node2",
-			vmssVMCache:    cacheEntryTimedCache,
+			vmssVMCache:    cacheEntryTimedCache.(*azcache.TimedCache),
 			expectedResult: false,
 		},
 	}
 
 	for _, test := range tests {
-		result := isNodeInVMSSVMCache(test.nodeName, test.vmssVMCache)
-		assert.Equal(t, test.expectedResult, result, test.description)
+		t.Run(test.description, func(t *testing.T) {
+			result := isNodeInVMSSVMCache(test.nodeName, test.vmssVMCache)
+			assert.Equal(t, test.expectedResult, result)
+		})
 	}
 }
 

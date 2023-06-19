@@ -262,6 +262,9 @@ type Config struct {
 	// If the length is not 0, it is assumed the multiple standard load balancers mode is on. In this case,
 	// there must be one configuration named “<clustername>” or an error will be reported.
 	MultipleStandardLoadBalancerConfigurations []MultipleStandardLoadBalancerConfiguration `json:"multipleStandardLoadBalancerConfigurations,omitempty" yaml:"multipleStandardLoadBalancerConfigurations,omitempty"`
+
+	// DisableAPICallCache disables the cache for Azure API calls. It is for ARG support and not all resources will be disabled.
+	DisableAPICallCache bool `json:"disableAPICallCache,omitempty" yaml:"disableAPICallCache,omitempty"`
 }
 
 // MultipleStandardLoadBalancerConfiguration stores the properties regarding multiple standard load balancers.
@@ -399,16 +402,16 @@ type Cloud struct {
 	eventRecorder    record.EventRecorder
 	routeUpdater     *delayedRouteUpdater
 
-	vmCache  *azcache.TimedCache
-	lbCache  *azcache.TimedCache
-	nsgCache *azcache.TimedCache
-	rtCache  *azcache.TimedCache
+	vmCache  azcache.Resource
+	lbCache  azcache.Resource
+	nsgCache azcache.Resource
+	rtCache  azcache.Resource
 	// public ip cache
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
-	pipCache *azcache.TimedCache
+	pipCache azcache.Resource
 	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
-	plsCache *azcache.TimedCache
+	plsCache azcache.Resource
 
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
@@ -742,6 +745,10 @@ func (az *Cloud) getPutVMSSVMBatchSize() int {
 }
 
 func (az *Cloud) initCaches() (err error) {
+	if az.Config.DisableAPICallCache {
+		klog.Infof("API call cache is disabled, ignore logs about cache operations")
+	}
+
 	az.vmCache, err = az.newVMCache()
 	if err != nil {
 		return err

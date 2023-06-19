@@ -245,9 +245,9 @@ func TestInstanceID(t *testing.T) {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
-			})
+			}, false)
 			if err != nil {
 				t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 			}
@@ -640,9 +640,9 @@ func TestNodeAddresses(t *testing.T) {
 		}
 
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedcache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
-			})
+			}, false)
 			if err != nil {
 				t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 			}

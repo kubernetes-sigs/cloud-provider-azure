@@ -494,7 +494,7 @@ func MakeCRC32(str string) string {
 type availabilitySet struct {
 	*Cloud
 
-	vmasCache *azcache.TimedCache
+	vmasCache azcache.Resource
 }
 
 type AvailabilitySetEntry struct {
@@ -502,7 +502,7 @@ type AvailabilitySetEntry struct {
 	ResourceGroup string
 }
 
-func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
+func (as *availabilitySet) newVMASCache() (azcache.Resource, error) {
 	getter := func(key string) (interface{}, error) {
 		localCache := &sync.Map{}
 
@@ -538,7 +538,7 @@ func (as *availabilitySet) newVMASCache() (*azcache.TimedCache, error) {
 		as.Config.AvailabilitySetsCacheTTLInSeconds = consts.VMASCacheTTLDefaultInSeconds
 	}
 
-	return azcache.NewTimedcache(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter)
+	return azcache.NewTimedCache(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter, as.Cloud.Config.DisableAPICallCache)
 }
 
 // newStandardSet creates a new availabilitySet.

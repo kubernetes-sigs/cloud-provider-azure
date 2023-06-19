@@ -86,19 +86,19 @@ type ScaleSet struct {
 	// vmssCache is timed cache where the Store in the cache is a map of
 	// Key: consts.VMSSKey
 	// Value: sync.Map of [vmssName]*VMSSEntry
-	vmssCache *azcache.TimedCache
+	vmssCache azcache.Resource
 
 	// vmssVMCache is timed cache where the Store in the cache is a map of
 	// Key: [resourcegroup/vmssName]
 	// Value: sync.Map of [vmName]*VMSSVirtualMachineEntry
-	vmssVMCache *azcache.TimedCache
+	vmssVMCache azcache.Resource
 
 	// nonVmssUniformNodesCache is used to store node names from non uniform vm.
 	// Currently, the nodes can from avset or vmss flex or individual vm.
 	// This cache contains an entry called nonVmssUniformNodesEntry.
 	// nonVmssUniformNodesEntry contains avSetVMNodeNames list, clusterNodeNames list
 	// and current clusterNodeNames.
-	nonVmssUniformNodesCache *azcache.TimedCache
+	nonVmssUniformNodesCache azcache.Resource
 
 	// lockMap in cache refresh
 	lockMap *lockMap

@@ -286,17 +286,17 @@ func getVMSSVMCacheKey(resourceGroup, vmssName string) string {
 }
 
 // isNodeInVMSSVMCache check whether nodeName is in vmssVMCache
-func isNodeInVMSSVMCache(nodeName string, vmssVMCache *azcache.TimedCache) bool {
+func isNodeInVMSSVMCache(nodeName string, vmssVMCache azcache.Resource) bool {
 	if vmssVMCache == nil {
 		return false
 	}
 
 	var isInCache bool
 
-	vmssVMCache.Lock.Lock()
-	defer vmssVMCache.Lock.Unlock()
+	vmssVMCache.Lock()
+	defer vmssVMCache.Unlock()
 
-	for _, entry := range vmssVMCache.Store.List() {
+	for _, entry := range vmssVMCache.GetStore().List() {
 		if entry != nil {
 			e := entry.(*azcache.AzureCacheEntry)
 			e.Lock.Lock()
