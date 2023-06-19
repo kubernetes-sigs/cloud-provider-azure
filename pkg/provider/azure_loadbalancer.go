@@ -765,6 +765,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 	if id := getServicePIPPrefixID(service, isIPv6); id != "" {
 		pipName, err := az.getPublicIPName(clusterName, service, isIPv6)
+
 		return pipName, false, err
 	}
 

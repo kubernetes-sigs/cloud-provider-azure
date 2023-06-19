@@ -82,6 +82,8 @@ jobs:
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Autobuild
       run: |
+        go version
+        uname -a
         hack/verify-updates.sh
         make all
         go test -covermode=count -coverprofile=profile.cov ./pkg/...
