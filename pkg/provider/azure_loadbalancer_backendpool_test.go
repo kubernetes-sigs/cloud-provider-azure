@@ -70,6 +70,23 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 				},
 			},
 		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vmss-1",
+			},
+			Status: v1.NodeStatus{
+				Addresses: []v1.NodeAddress{
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "10.0.0.1",
+					},
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "2001::1",
+					},
+				},
+			},
+		},
 	}
 
 	testcases := []struct {
@@ -86,6 +103,11 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.3"),
 							},
 						},
 					},
