@@ -21,7 +21,7 @@ import (
 	"errors"
 	"sync"
 
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
@@ -83,4 +83,17 @@ func UpdateVMsInBatch(ctx context.Context, client *Client, resourceGroupName str
 	close(cocurrentFence)
 	close(errChannel)
 	return err
+}
+
+// List gets a list of VirtualMachineScaleSetVM in the resource group.
+func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armcompute.VirtualMachineScaleSetVM, rerr error) {
+	pager := client.VirtualMachineScaleSetVMsClient.NewListPager(resourceGroupName, parentResourceName, nil)
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
 }

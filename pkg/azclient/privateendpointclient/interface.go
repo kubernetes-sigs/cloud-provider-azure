@@ -26,6 +26,5 @@ import (
 // +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PrivateEndpointsClient,expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PrivateEndpoint]
-
 	utils.CreateOrUpdateFunc[armnetwork.PrivateEndpoint]
 }

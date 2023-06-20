@@ -52,11 +52,11 @@ func AzureCloudConfigFromName(cloudName string) *cloud.Configuration {
 	return nil
 }
 
-// AzureCloudConfigFromUrl returns cloud config from url
+// AzureCloudConfigFromURL returns cloud config from url
 // track2 sdk will add this one in the near future https://github.com/Azure/azure-sdk-for-go/issues/20959
-func AzureCloudConfigFromUrl(endpoint string) (*cloud.Configuration, error) {
+func AzureCloudConfigFromURL(endpoint string) (*cloud.Configuration, error) {
 	managementEndpoint := fmt.Sprintf("%s%s", strings.TrimSuffix(endpoint, "/"), "/metadata/endpoints?api-version=2019-05-01")
-	res, err := http.Get(managementEndpoint)
+	res, err := http.Get(managementEndpoint) //nolint
 	if err != nil {
 		return nil, err
 	}
@@ -126,14 +126,13 @@ func GetAzureCloudConfig(armConfig *ARMClientConfig) (*cloud.Configuration, erro
 	} else {
 		config = AzureCloudConfigFromName(armConfig.Cloud)
 		if armConfig.ResourceManagerEndpoint != "" {
-			config, err = AzureCloudConfigFromUrl(armConfig.ResourceManagerEndpoint)
+			config, err = AzureCloudConfigFromURL(armConfig.ResourceManagerEndpoint)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	config, err = AzureCloudConfigOverrideFromEnv(config)
-	return config, nil
+	return AzureCloudConfigOverrideFromEnv(config)
 }
 
 // Environment represents a set of endpoints for each of Azure's Clouds.

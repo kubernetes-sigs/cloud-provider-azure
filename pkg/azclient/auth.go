@@ -20,7 +20,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"golang.org/x/crypto/pkcs12"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -71,20 +71,12 @@ type AuthProvider struct {
 	ClientCertificateCredential   azcore.TokenCredential
 }
 
-const (
-	AzureClientID           = "AZURE_CLIENT_ID"
-	AzureFederatedTokenFile = "AZURE_FEDERATED_TOKEN_FILE"
-	AzureTenantID           = "AZURE_TENANT_ID"
-)
-
 func GetDefaultAuthClientOption(armConfig *ARMClientConfig) (*policy.ClientOptions, error) {
 	//Get default settings
 	options, err := NewClientOptionFromARMClientConfig(armConfig)
 	if err != nil {
 		return nil, err
 	}
-	// armloadbalancer doesn't support login.microsoft.com
-	options.Transport = &http.Client{Transport: utils.DefaultTransport}
 	return options, nil
 }
 
@@ -93,16 +85,16 @@ func NewAuthProvider(config AzureAuthConfig, clientOption *policy.ClientOptions)
 		clientOption = &policy.ClientOptions{}
 	}
 	// these environment variables are injected by workload identity webhook
-	if tenantID := os.Getenv(AzureTenantID); tenantID != "" {
+	if tenantID := os.Getenv(utils.AzureTenantID); tenantID != "" {
 		config.TenantID = tenantID
 	}
-	if clientID := os.Getenv(AzureClientID); clientID != "" {
+	if clientID := os.Getenv(utils.AzureClientID); clientID != "" {
 		config.AADClientID = clientID
 	}
 	var err error
 	// federatedIdentityCredential is used for workload identity federation
 	var federatedIdentityCredential azcore.TokenCredential
-	if federatedTokenFile := os.Getenv(AzureFederatedTokenFile); federatedTokenFile != "" {
+	if federatedTokenFile := os.Getenv(utils.AzureFederatedTokenFile); federatedTokenFile != "" {
 		config.AADFederatedTokenFile = federatedTokenFile
 		config.UseFederatedWorkloadIdentityExtension = true
 	}

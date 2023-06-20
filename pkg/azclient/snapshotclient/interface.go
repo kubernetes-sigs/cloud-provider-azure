@@ -18,12 +18,12 @@ limitations under the License.
 package snapshotclient
 
 import (
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete,resource=Snapshot,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4,packageAlias=armcompute,clientName=SnapshotsClient,expand=false
+// +azure:client:verbs=get;createorupdate;delete,resource=Snapshot,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=SnapshotsClient,expand=false
 type Interface interface {
 	utils.GetFunc[armcompute.Snapshot]
 	utils.CreateOrUpdateFunc[armcompute.Snapshot]

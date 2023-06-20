@@ -19,6 +19,7 @@ package generator
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 
@@ -49,5 +50,6 @@ func generateMock(ctx *genall.GenerationContext, pkg *loader.Package, headerText
 		return err
 	}
 	_, err = mockFile.Write(mockCache.Bytes())
+	fmt.Println("Generated mock in " + pkg.Name)
 	return err
 }

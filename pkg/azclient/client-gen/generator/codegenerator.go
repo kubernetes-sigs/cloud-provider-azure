@@ -20,7 +20,9 @@ package generator
 import (
 	"fmt"
 	"go/ast"
+	"os"
 	"os/exec"
+	"sync"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
@@ -53,8 +55,10 @@ func (Generator) RegisterMarkers(into *markers.Registry) error {
 }
 
 func (g Generator) Generate(ctx *genall.GenerationContext) error {
-	if output, err := exec.Command("go", "get", "github.com/golang/mock/mockgen/model").CombinedOutput(); err != nil {
-		fmt.Println(string(output))
+	cmd := exec.Command("go", "get", "github.com/golang/mock/mockgen/model")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
 		return err
 	}
 	var headerText string
@@ -67,46 +71,70 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		headerText = string(headerBytes)
 	}
 
+	var errChan = make(chan error, len(ctx.Roots))
+	var waitGroup sync.WaitGroup
+
 	for _, root := range ctx.Roots {
-		pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
+		root := root
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
+			if err != nil {
+				root.AddError(err)
+				errChan <- err
+				return
+			}
+			if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
+				return
+			}
+
+			//check for syntax error
+			ctx.Checker.Check(root)
+
+			//visit each type
+			root.NeedTypesInfo()
+			if err := generateClient(ctx, root, headerText); err != nil {
+				root.AddError(err)
+				errChan <- err
+				return
+			}
+			if err := generateMock(ctx, root, headerText); err != nil {
+				root.AddError(err)
+				errChan <- err
+				return
+			}
+			if err := generateTest(ctx, root, headerText); err != nil {
+				root.AddError(err)
+				errChan <- err
+				return
+			}
+		}()
+	}
+	waitGroup.Wait()
+	close(errChan)
+	for err := range errChan {
 		if err != nil {
-			root.AddError(err)
-			return err
-		}
-		if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
-			continue
-		}
-
-		//check for syntax error
-		ctx.Checker.Check(root)
-
-		//visit each type
-		root.NeedTypesInfo()
-
-		if err := generateClient(ctx, root, headerText); err != nil {
-			root.AddError(err)
-			return err
-		}
-		if err := generateMock(ctx, root, headerText); err != nil {
-			root.AddError(err)
-			return err
-		}
-		if err := generateTest(ctx, root, headerText); err != nil {
-			root.AddError(err)
 			return err
 		}
 	}
+	fmt.Println("format code")
+
 	//nolint:gosec // G204 ignore this!
-	if output, err := exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".").CombinedOutput(); err != nil {
-		fmt.Println(string(output))
+	cmd = exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
 		return err
 	}
+
+	fmt.Println("Run go test ")
+
 	//nolint:gosec // G204 ignore this!
-	if output, err := exec.Command("go", "test", "./...").CombinedOutput(); err != nil {
-		fmt.Println(string(output))
-		return err
-	}
-	return nil
+	cmd = exec.Command("go", "test", "./...")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func (Generator) CheckFilter() loader.NodeFilter {

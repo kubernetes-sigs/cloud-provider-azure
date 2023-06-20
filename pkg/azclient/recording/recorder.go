@@ -17,10 +17,8 @@ limitations under the License.
 package recording
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -36,8 +34,40 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
+var requestHeadersToRemove = []string{
+	// remove all Authorization headers from stored requests
+	"Authorization",
+
+	// Not needed, adds to diff churn:
+	"User-Agent",
+}
+
+var responseHeadersToRemove = []string{
+	// Request IDs
+	"X-Ms-Arm-Service-Request-Id",
+	"X-Ms-Correlation-Request-Id",
+	"X-Ms-Request-Id",
+	"X-Ms-Ests-Server",
+	"X-Ms-Routing-Request-Id",
+	"X-Ms-Client-Request-Id",
+	"Client-Request-Id",
+
+	// Quota limits
+	"X-Ms-Ratelimit-Remaining-Subscription-Deletes",
+	"X-Ms-Ratelimit-Remaining-Subscription-Reads",
+	"X-Ms-Ratelimit-Remaining-Subscription-Writes",
+
+	// Not needed, adds to diff churn
+	"Date",
+	"Set-Cookie",
+	// Causes client to delay long time
+	"Retry-After",
+
+	"Content-Security-Policy-Report-Only",
+}
+
 var (
-	dateMatcher   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?Z`)
+	dateMatcher   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?(\+\d{2}\:\d{2})?(Z)?`)
 	sshKeyMatcher = regexp.MustCompile("ssh-rsa [0-9a-zA-Z+/=]+")
 
 	// This is pretty involved, here's the breakdown of what each bit means:
@@ -55,6 +85,9 @@ var (
 	// in the payloads (such as operationResults URLs for polling async operations for some services) that seem to use
 	// very long base64 strings as well.
 	keyMatcher = regexp.MustCompile("(?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)")
+
+	// uuidMatcher matches any valid UUID
+	uuidMatcher = regexp.MustCompile("[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}")
 )
 
 // hideDates replaces all ISO8601 datetimes with a fixed value
@@ -66,6 +99,11 @@ func hideDates(s string) string {
 // hideSSHKeys hides anything that looks like SSH keys
 func hideSSHKeys(s string) string {
 	return sshKeyMatcher.ReplaceAllLiteralString(s, "ssh-rsa {KEY}")
+}
+
+// hideuuid hides uuid
+func hideUUID(s string) string {
+	return uuidMatcher.ReplaceAllLiteralString(s, uuid.Nil.String())
 }
 
 // hidePasswords hides anything that looks like a generated password
@@ -91,17 +129,17 @@ func hideRecordingData(s string) string {
 	result = hideSSHKeys(result)
 	result = hidePasswords(result)
 	result = hideKeys(result)
-
+	result = hideUUID(result)
 	return result
 }
 
 type Recorder struct {
-	cassetteName   string
 	credential     azcore.TokenCredential
 	rec            *gorecorder.Recorder
 	subscriptionID string
-
-	httpClient *http.Client
+	tenantID       string
+	clientID       string
+	clientSecret   string
 }
 
 type DummyTokenCredential func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error)
@@ -111,22 +149,23 @@ func (d DummyTokenCredential) GetToken(ctx context.Context, opts policy.TokenReq
 }
 
 func NewRecorder(cassetteName string) (*Recorder, error) {
+
 	rec, err := gorecorder.NewWithOptions(&gorecorder.Options{
 		CassetteName:       cassetteName,
 		Mode:               gorecorder.ModeRecordOnce,
 		SkipRequestLatency: true,
-		RealTransport:      http.DefaultTransport,
+		RealTransport:      utils.DefaultTransport,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	rec.SetRealTransport(utils.DefaultTransport)
-	rec.SetReplayableInteractions(true)
+	rec.SetReplayableInteractions(false)
 	var tokenCredential azcore.TokenCredential
 	var subscriptionID string
-
-	if rec.IsRecording() {
+	var tenantID string
+	var clientID string
+	var clientSecret string
+	if rec.IsNewCassette() {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
 		if subscriptionID == "" {
 			return nil, errors.New("required environment variable AZURE_SUBSCRIPTION_ID was not supplied")
@@ -135,6 +174,17 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		tenantID = os.Getenv(utils.AzureTenantID)
+		if tenantID == "" {
+			return nil, errors.New("required environment variable AZURE_TENANT_ID was not supplied")
+		}
+
+		clientID = os.Getenv(utils.AzureClientID)
+		if clientID == "" {
+			return nil, errors.New("required environment variable AZURE_CLIENT_ID was not supplied")
+		}
+		clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
 	} else {
 		// if we are replaying, we won't need auth
 		// and we use a dummy subscription ID
@@ -142,56 +192,46 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		tokenCredential = DummyTokenCredential(func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
 			return azcore.AccessToken{}, nil
 		})
+
+		tenantID = "tenantid"
+		clientID = "clientid"
+		clientSecret = "clientsecret"
 	}
 
-	// check body as well as URL/Method (copied from go-vcr documentation)
-	rec.SetMatcher(func(r *http.Request, i cassette.Request) bool {
-		if !cassette.DefaultMatcher(r, i) {
-			return false
+	rec.AddHook(func(i *cassette.Interaction) error {
+		//ignore inprogress requests
+		if strings.Contains(i.Response.Body, "\"status\": \"InProgress\"") {
+			i.DiscardOnSave = true
+			return nil
 		}
-
-		// verify custom request count header (see counting_roundtripper.go)
-		if r.Header.Get(countHeader) != i.Headers.Get(countHeader) {
-			return false
+		if !strings.EqualFold(tenantID, "tenantid") {
+			i.Request.URL = strings.Replace(i.Request.URL, tenantID, "tenantid", -1)
+			i.Request.Body = strings.Replace(i.Request.Body, tenantID, "tenantid", -1)
+			i.Response.Body = strings.Replace(i.Response.Body, tenantID, "tenantid", -1)
+			if i.Request.Form.Has("tenant_id") {
+				i.Request.Form.Set("tenant_id", tenantID)
+			}
 		}
-
-		if r.Body == nil {
-			return i.Body == ""
-		}
-
-		var b bytes.Buffer
-		if _, err := b.ReadFrom(r.Body); err != nil {
-			panic(err)
-		}
-
-		r.Body = io.NopCloser(&b)
-		return b.String() == "" || hideRecordingData(b.String()) == i.Body
-	})
-
-	hook := func(i *cassette.Interaction) error {
-		// rewrite all request/response fields to hide the real subscription ID
-		// this is *not* a security measure but intended to make the tests updateable from
-		// any subscription, so a contributor can update the tests against their own sub.
-		hideSubID := func(s string) string {
-			return strings.ReplaceAll(s, subscriptionID, uuid.Nil.String())
-		}
-
-		i.Request.Body = hideRecordingData(hideSubID(i.Request.Body))
-		i.Response.Body = hideRecordingData(hideSubID(i.Response.Body))
-		i.Request.URL = hideSubID(i.Request.URL)
-
-		for _, values := range i.Request.Headers {
-			for i := range values {
-				values[i] = hideSubID(values[i])
+		if !strings.EqualFold(clientID, "clientid") {
+			i.Request.URL = strings.Replace(i.Request.URL, clientID, "clientid", -1)
+			i.Request.Body = strings.Replace(i.Request.Body, clientID, "clientid", -1)
+			i.Response.Body = strings.Replace(i.Response.Body, clientID, "clientid", -1)
+			if i.Request.Form.Has("client_id") {
+				i.Request.Form.Set("client_id", clientID)
 			}
 		}
 
-		for _, values := range i.Response.Headers {
-			for i := range values {
-				values[i] = hideSubID(values[i])
+		if !strings.EqualFold(clientSecret, "clientsecret") {
+			i.Request.URL = strings.Replace(i.Request.URL, clientSecret, "clientsecret", -1)
+			i.Request.Body = strings.Replace(i.Request.Body, clientSecret, "clientsecret", -1)
+			i.Response.Body = strings.Replace(i.Response.Body, clientSecret, "clientsecret", -1)
+			if i.Request.Form.Has("client_secret") {
+				i.Request.Form.Set("client_secret", "clientsecret")
 			}
 		}
-
+		if strings.Contains(i.Response.Body, "access_token") {
+			i.Response.Body = `{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}`
+		}
 		for _, header := range requestHeadersToRemove {
 			delete(i.Request.Headers, header)
 		}
@@ -200,26 +240,37 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 			delete(i.Response.Headers, header)
 		}
 
+		i.Request.Body = hideRecordingData(i.Request.Body)
+		i.Response.Body = hideRecordingData(i.Response.Body)
+		i.Request.URL = hideUUID(i.Request.URL)
+
+		for _, values := range i.Request.Headers {
+			for i := range values {
+				values[i] = hideUUID(values[i])
+			}
+		}
+
+		for _, values := range i.Response.Headers {
+			for i := range values {
+				values[i] = hideUUID(values[i])
+			}
+		}
+
 		return nil
-	}
-	rec.AddHook(hook, gorecorder.BeforeSaveHook)
+	}, gorecorder.BeforeSaveHook)
 
 	return &Recorder{
-		cassetteName:   cassetteName,
 		credential:     tokenCredential,
 		rec:            rec,
 		subscriptionID: subscriptionID,
+		tenantID:       tenantID,
+		clientID:       clientID,
+		clientSecret:   clientSecret,
 	}, nil
 }
 
 func (r *Recorder) HTTPClient() *http.Client {
-	if r.httpClient == nil {
-		r.httpClient = &http.Client{
-			Transport: addCountHeader(translateErrors(r.rec, r.cassetteName)),
-		}
-	}
-
-	return r.httpClient
+	return r.rec.GetDefaultClient()
 }
 
 func (r *Recorder) TokenCredential() azcore.TokenCredential {
@@ -228,6 +279,18 @@ func (r *Recorder) TokenCredential() azcore.TokenCredential {
 
 func (r *Recorder) SubscriptionID() string {
 	return r.subscriptionID
+}
+
+func (r *Recorder) TenantID() string {
+	return r.tenantID
+}
+
+func (r *Recorder) ClientID() string {
+	return r.clientID
+}
+
+func (r *Recorder) ClientSecret() string {
+	return r.clientSecret
 }
 
 func (r *Recorder) Stop() error {

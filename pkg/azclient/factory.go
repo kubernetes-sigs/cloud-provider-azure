@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
 )
@@ -37,7 +39,7 @@ func NewClientFactory(config *ClientFactoryConfig, authProvider *AuthProvider) *
 	}
 }
 
-func (factory *ClientFactory) GetDiskClient(subscription string) (diskclient.Interface, error) {
+func (factory *ClientFactory) GetDiskClient(cred azcore.TokenCredential, subscription string) (diskclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -49,10 +51,6 @@ func (factory *ClientFactory) GetDiskClient(subscription string) (diskclient.Int
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 
-	cred, err := factory.AuthProvider.GetAzIdentity()
-	if err != nil {
-		return nil, err
-	}
 	defaultClient, err := diskclient.New(subscription, cred, options)
 	if err != nil {
 		return nil, err

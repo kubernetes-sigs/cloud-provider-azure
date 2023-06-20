@@ -26,10 +26,7 @@ import (
 // +azure:client:verbs=get;createorupdate;delete;list,resource=PublicIPPrefix,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PublicIPPrefixesClient,expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PublicIPPrefix]
-
 	utils.CreateOrUpdateFunc[armnetwork.PublicIPPrefix]
-
 	utils.DeleteFunc[armnetwork.PublicIPPrefix]
-
 	utils.ListFunc[armnetwork.PublicIPPrefix]
 }

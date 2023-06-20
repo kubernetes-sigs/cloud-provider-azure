@@ -18,18 +18,15 @@ limitations under the License.
 package managedclusterclient
 
 import (
-	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
+	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=ManagedCluster,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2,packageAlias=armcontainerservice,clientName=ManagedClustersClient,expand=false
+// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=ManagedCluster,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4,packageAlias=armcontainerservice,clientName=ManagedClustersClient,expand=false
 type Interface interface {
 	utils.GetFunc[armcontainerservice.ManagedCluster]
-
 	utils.CreateOrUpdateFunc[armcontainerservice.ManagedCluster]
-
 	utils.DeleteFunc[armcontainerservice.ManagedCluster]
-
 	utils.ListFunc[armcontainerservice.ManagedCluster]
 }

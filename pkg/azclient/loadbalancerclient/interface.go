@@ -26,10 +26,7 @@ import (
 // +azure:client:verbs=get;createorupdate;delete;list,resource=LoadBalancer,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=LoadBalancersClient,expand=true
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.LoadBalancer]
-
 	utils.CreateOrUpdateFunc[armnetwork.LoadBalancer]
-
 	utils.DeleteFunc[armnetwork.LoadBalancer]
-
 	utils.ListFunc[armnetwork.LoadBalancer]
 }

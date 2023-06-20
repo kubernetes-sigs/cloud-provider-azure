@@ -20,11 +20,9 @@ package publicipaddressclient
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	. "github.com/onsi/ginkgo/v2"
@@ -38,8 +36,9 @@ func TestClient(t *testing.T) {
 	RunSpecs(t, "Client Suite")
 }
 
-var resourceGroupName = "aks-cit"
-var resourceName = "testdisk"
+var resourceGroupName = "aks-cit-PublicIPAddress"
+var resourceName = "testResource"
+
 var subscriptionID string
 var location = "eastus"
 var resourceGroupClient *armresources.ResourceGroupsClient
@@ -55,20 +54,12 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	cred := recorder.TokenCredential()
 	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
-			Retry: policy.RetryOptions{
-				MaxRetryDelay: 1 * time.Millisecond,
-				RetryDelay:    1 * time.Millisecond,
-			},
 			Transport: recorder.HTTPClient(),
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
-			Retry: policy.RetryOptions{
-				MaxRetryDelay: 1 * time.Millisecond,
-				RetryDelay:    1 * time.Millisecond,
-			},
 			Transport: recorder.HTTPClient(),
 		},
 	})
@@ -84,9 +75,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 })
 
 var _ = AfterSuite(func(ctx context.Context) {
-	pollerResp, err := resourceGroupClient.BeginDelete(ctx, resourceGroupName, nil)
-	Expect(err).NotTo(HaveOccurred())
-	_, err = pollerResp.PollUntilDone(ctx, nil)
+	_, err := resourceGroupClient.BeginDelete(ctx, resourceGroupName, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = recorder.Stop()
