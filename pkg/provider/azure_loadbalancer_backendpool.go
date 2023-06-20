@@ -408,8 +408,10 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 	}
 	vnetID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s", bi.SubscriptionID, vnetResourceGroup, bi.VnetName)
 
-	changed := false
-	numOfAdd := 0
+	var (
+		changed               bool
+		numOfAdd, numOfDelete int
+	)
 	lbBackendPoolName := getBackendPoolName(clusterName, isIPv6)
 	if strings.EqualFold(pointer.StringDeref(backendPool.Name, ""), lbBackendPoolName) &&
 		backendPool.BackendAddressPoolPropertiesFormat != nil {
@@ -431,6 +433,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			}
 		}
 
+		nodePrivateIPsSet := sets.New[string]()
 		for _, node := range nodes {
 			if isControlPlaneNode(node) {
 				klog.V(4).Infof("bi.EnsureHostsInPool: skipping control plane node %s", node.Name)
@@ -465,6 +468,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			}
 
 			privateIP := getNodePrivateIPAddress(node, isIPv6)
+			nodePrivateIPsSet.Insert(privateIP)
 			if !existingIPs.Has(privateIP) {
 				name := node.Name
 				if utilnet.IsIPv6String(privateIP) {
@@ -482,9 +486,21 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 				changed = true
 			}
 		}
+
+		var nodeIPsToBeDeleted []string
+		for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
+			ip := pointer.StringDeref(loadBalancerBackendAddress.IPAddress, "")
+			if !nodePrivateIPsSet.Has(ip) {
+				klog.V(4).Infof("bi.EnsureHostsInPool: removing IP %s", ip)
+				nodeIPsToBeDeleted = append(nodeIPsToBeDeleted, ip)
+				changed = true
+				numOfDelete++
+			}
+		}
+		removeNodeIPAddressesFromBackendPool(backendPool, nodeIPsToBeDeleted, false)
 	}
 	if changed {
-		klog.V(2).Infof("bi.EnsureHostsInPool: updating backend pool %s of load balancer %s to add %d nodes", lbBackendPoolName, lbName, numOfAdd)
+		klog.V(2).Infof("bi.EnsureHostsInPool: updating backend pool %s of load balancer %s to add %d nodes and remove %d nodes", lbBackendPoolName, lbName, numOfAdd, numOfDelete)
 		if err := bi.CreateOrUpdateLBBackendPool(lbName, backendPool); err != nil {
 			return fmt.Errorf("bi.EnsureHostsInPool: failed to update backend pool %s: %w", lbBackendPoolName, err)
 		}
