@@ -86,5 +86,7 @@ func (az *Cloud) GetConfigFromSecret() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse Azure cloud-config: %w", err)
 	}
 
-	return &config, nil
+	configChecked := configChecks(config)
+
+	return configChecked, nil
 }
