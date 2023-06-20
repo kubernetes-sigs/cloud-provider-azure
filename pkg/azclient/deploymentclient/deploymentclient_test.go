@@ -26,7 +26,7 @@ import (
 
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
-var addtionalTestCases func()
+var additionalTestCases func()
 
 var _ = Describe("DeploymentsClient", Ordered, func() {
 
@@ -34,8 +34,8 @@ var _ = Describe("DeploymentsClient", Ordered, func() {
 		BeforeAll(beforeAllFunc)
 	}
 
-	if addtionalTestCases != nil {
-		addtionalTestCases()
+	if additionalTestCases != nil {
+		additionalTestCases()
 	}
 
 	When("deletion requests are raised", func() {

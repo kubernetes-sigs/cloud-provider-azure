@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=VirtualNetwork,subResource=Subnet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=SubnetsClient,expand=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=VirtualNetwork,subResource=Subnet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=SubnetsClient,expand=true,rateLimitKey=subnetsRateLimit
 type Interface interface {
 	utils.SubResourceGetWithExpandFunc[armnetwork.Subnet]
 	utils.SubResourceCreateOrUpdateFunc[armnetwork.Subnet]

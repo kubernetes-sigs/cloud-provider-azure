@@ -49,7 +49,7 @@ var (
 )
 
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

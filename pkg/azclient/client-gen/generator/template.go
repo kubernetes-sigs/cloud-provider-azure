@@ -25,7 +25,8 @@ type ClientGenConfig struct {
 	PackageName  string
 	PackageAlias string
 	ClientName   string
-	Expand       bool `marker:"expand,optional"`
+	Expand       bool   `marker:"expand,optional"`
+	RateLimitKey string `marker:"rateLimitKey,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
@@ -137,7 +138,15 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 }
 `))
 
-var ImportTemplate = template.Must(template.New("import").Parse(`{{.Alias}} "{{.Package}}"
+var ImportTemplate = template.Must(template.New("import").Parse(
+	`
+import (
+  {{ range $package, $Entry := . }}
+  {{- range $alias, $flag := $Entry }}
+  {{- $alias }} 
+  {{- end }} "{{$package}}"
+  {{ end }}
+)
 `))
 
 type ImportStatement struct {
@@ -223,7 +232,7 @@ var TestCaseTemplate = template.Must(template.New("object-scaffolding-test-case"
 {{- end -}}
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
-var addtionalTestCases func()
+var additionalTestCases func()
 
 {{if or $HasCreateOrUpdate}}var newResource *{{.PackageAlias}}.{{$resource}} = &{{.PackageAlias}}.{{$resource}}{} {{- end }}
 
@@ -233,8 +242,8 @@ var _ = Describe("{{.ClientName}}", Ordered, func() {
 		BeforeAll(beforeAllFunc)
 	}
 	
-	if addtionalTestCases != nil {
-		addtionalTestCases()
+	if additionalTestCases != nil {
+		additionalTestCases()
 	}
 
 {{if $HasCreateOrUpdate}}
@@ -324,7 +333,7 @@ var TestCaseCustomTemplate = template.Must(template.New("object-scaffolding-test
 	{{- if eq . "list"}}{{$HasList = true}}{{end}}
 	{{- end -}}
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

@@ -27,10 +27,10 @@ import (
 	"sigs.k8s.io/controller-tools/pkg/loader"
 )
 
-func generateMock(ctx *genall.GenerationContext, pkg *loader.Package, headerText string) error {
+func generateMock(ctx *genall.GenerationContext, pkg *loader.Package, typeName string, _ ClientGenConfig, headerText string) error {
 	var mockCache bytes.Buffer
 	//nolint:gosec // G204 ignore this!
-	cmd := exec.Command("mockgen", "-package", "mock_"+pkg.Name, pkg.PkgPath, "Interface")
+	cmd := exec.Command("mockgen", "-package", "mock_"+pkg.Name, pkg.PkgPath, typeName)
 	cmd.Stdout = &mockCache
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()

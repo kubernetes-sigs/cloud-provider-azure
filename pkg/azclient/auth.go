@@ -235,3 +235,7 @@ func (factory *AuthProvider) GetMultiTenantIdentity() (azcore.TokenCredential, e
 	}
 	return nil, ErrorNoAuth
 }
+
+func (factory *AuthProvider) IsMultiTenantModeEnabled() bool {
+	return factory.MultiTenantCredential != nil
+}

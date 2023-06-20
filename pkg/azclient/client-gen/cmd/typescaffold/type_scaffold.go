@@ -37,6 +37,7 @@ type TypeScaffoldOptions struct {
 	PropertyName string
 	Verbs        []string
 	Expand       bool
+	RateLimitKey string
 }
 
 var (
@@ -69,7 +70,7 @@ import (
 )
 `
 	TypeResourceTemplate = `
-// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}
+// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}{{with .RateLimitKey}},rateLimitKey={{.}}{{end}}
 type Interface interface {
 {{ $expandable := .Expand}}
 {{ $packageAlias := .PackageAlias}}
@@ -85,7 +86,7 @@ type Interface interface {
 }
 `
 	TypeSubResourceTemplate = `
-// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},subResource={{.SubResource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}
+// +azure:client:verbs={{join .Verbs ";"}},resource={{.Resource}},subResource={{.SubResource}},packageName={{.Package}},packageAlias={{tolower .PackageAlias}},clientName={{.ClientName}},expand={{.Expand}}{{with .RateLimitKey}},rateLimitKey={{.}}{{end}}
 type Interface interface {
 {{ $expandable := .Expand}}
 {{ $packageAlias := .PackageAlias}}
@@ -108,7 +109,7 @@ type Interface interface {
 		"join":     strings.Join,
 		"strequal": strings.EqualFold,
 	}
-	typesSubResourceTemplate = template.Must(template.New("object-scaffolding").Funcs(typesTemplateHelpers).Parse(TypeTemplateHeader + TypeSubResourceTemplate))
+	typesSubResourceTemplate = template.Must(template.New("object-scaffolding-subresource").Funcs(typesTemplateHelpers).Parse(TypeTemplateHeader + TypeSubResourceTemplate))
 
 	typesResourceTemplate = template.Must(template.New("object-scaffolding").Funcs(typesTemplateHelpers).Parse(TypeTemplateHeader + TypeResourceTemplate))
 )
@@ -189,6 +190,7 @@ func main() {
 	rootCmd.Flags().StringSliceVar(&scaffoldOptions.Verbs, "verbs", []string{"get", "createorupdate", "delete", "listbyrg"}, "verbs")
 	rootCmd.Flags().BoolVar(&scaffoldOptions.Expand, "expand", false, "get support expand params")
 	rootCmd.Flags().StringVar(&scaffoldOptions.SubResource, "subresource", "", "subresource name")
+	rootCmd.Flags().StringVar(&scaffoldOptions.RateLimitKey, "ratelimitkey", "", "ratelimit config key")
 
 	err := rootCmd.Execute()
 	if err != nil {

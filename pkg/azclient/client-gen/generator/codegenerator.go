@@ -22,7 +22,6 @@ import (
 	"go/ast"
 	"os"
 	"os/exec"
-	"sync"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
@@ -71,55 +70,61 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		headerText = string(headerBytes)
 	}
 
-	var errChan = make(chan error, len(ctx.Roots))
-	var waitGroup sync.WaitGroup
+	factoryGenerator := NewGenerator(headerText)
 
 	for _, root := range ctx.Roots {
-		root := root
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
-			if err != nil {
-				root.AddError(err)
-				errChan <- err
-				return
-			}
-			if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
-				return
-			}
-
-			//check for syntax error
-			ctx.Checker.Check(root)
-
-			//visit each type
-			root.NeedTypesInfo()
-			if err := generateClient(ctx, root, headerText); err != nil {
-				root.AddError(err)
-				errChan <- err
-				return
-			}
-			if err := generateMock(ctx, root, headerText); err != nil {
-				root.AddError(err)
-				errChan <- err
-				return
-			}
-			if err := generateTest(ctx, root, headerText); err != nil {
-				root.AddError(err)
-				errChan <- err
-				return
-			}
-		}()
-	}
-	waitGroup.Wait()
-	close(errChan)
-	for err := range errChan {
+		pkgMakers, err := markers.PackageMarkers(ctx.Collector, root)
 		if err != nil {
-			return err
+			root.AddError(err)
+			break
+		}
+		if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
+			continue
+		}
+		fmt.Println("Generate code for pkg ", root.PkgPath)
+		//check for syntax error
+		ctx.Checker.Check(root)
+
+		//visit each type
+		root.NeedTypesInfo()
+
+		err = markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
+			if marker := typeInfo.Markers.Get(clientGenMarker.Name); marker != nil {
+				fmt.Println("Generate code for Type ", typeInfo.Name)
+
+				markerConf := marker.(ClientGenConfig)
+
+				if err := generateClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
+					root.AddError(err)
+					return
+				}
+
+				if err := generateMock(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
+					root.AddError(err)
+					return
+				}
+
+				if err := generateTest(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
+					root.AddError(err)
+					return
+				}
+
+				if err := factoryGenerator.RegisterClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
+					root.AddError(err)
+					return
+				}
+			}
+		})
+		if err != nil {
+			root.AddError(err)
+			break
 		}
 	}
-	fmt.Println("format code")
 
+	if err := factoryGenerator.Generate(ctx); err != nil {
+		return err
+	}
+	fmt.Println("format code")
 	//nolint:gosec // G204 ignore this!
 	cmd = exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".")
 	cmd.Stdout = os.Stdout

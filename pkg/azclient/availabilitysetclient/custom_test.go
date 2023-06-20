@@ -31,7 +31,7 @@ var computeClientFactory *armcompute.ClientFactory
 var availabilitySetsClient *armcompute.AvailabilitySetsClient
 
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

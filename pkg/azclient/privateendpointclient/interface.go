@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PrivateEndpointsClient,expand=true
+// +azure:client:verbs=get;createorupdate,resource=PrivateEndpoint,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=PrivateEndpointsClient,expand=true,rateLimitKey=privateEndpointRateLimit
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.PrivateEndpoint]
 	utils.CreateOrUpdateFunc[armnetwork.PrivateEndpoint]

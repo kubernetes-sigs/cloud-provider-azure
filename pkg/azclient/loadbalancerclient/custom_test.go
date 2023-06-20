@@ -33,7 +33,7 @@ var pipClient *armnetwork.PublicIPAddressesClient
 var pipResource *armnetwork.PublicIPAddress
 
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
