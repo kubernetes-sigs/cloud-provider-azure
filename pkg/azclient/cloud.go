@@ -45,7 +45,7 @@ func AzureCloudConfigFromName(cloudName string) *cloud.Configuration {
 	if cloudName == "" {
 		return &cloud.AzurePublic
 	}
-	cloudName = strings.ToUpper(cloudName)
+	cloudName = strings.ToUpper(strings.TrimSpace(cloudName))
 	if cloudConfig, ok := EnvironmentMapping[cloudName]; ok {
 		return cloudConfig
 	}

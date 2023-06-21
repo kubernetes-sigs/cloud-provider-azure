@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
@@ -44,7 +45,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 )
 
-type ClientFactory struct {
+type ClientFactoryImpl struct {
 	*ClientFactoryConfig
 	cred                                            azcore.TokenCredential
 	availabilitysetclientInterfaceRegistry          sync.Map
@@ -67,14 +68,20 @@ type ClientFactory struct {
 	virtualmachinescalesetvmclientInterfaceRegistry sync.Map
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) *ClientFactory {
-	return &ClientFactory{
+func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) ClientFactory {
+	if config == nil {
+		config = &ClientFactoryConfig{}
+	}
+	if cred == nil {
+		cred = &azidentity.DefaultAzureCredential{}
+	}
+	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred,
 	}
 }
 
-func (factory *ClientFactory) GetavailabilitysetclientInterface(subscription string) (availabilitysetclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetavailabilitysetclientInterface(subscription string) (availabilitysetclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -94,7 +101,7 @@ func (factory *ClientFactory) GetavailabilitysetclientInterface(subscription str
 	return *client.(*availabilitysetclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetdeploymentclientInterface(subscription string) (deploymentclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetdeploymentclientInterface(subscription string) (deploymentclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -114,7 +121,7 @@ func (factory *ClientFactory) GetdeploymentclientInterface(subscription string) 
 	return *client.(*deploymentclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetdiskclientInterface(subscription string) (diskclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetdiskclientInterface(subscription string) (diskclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -134,7 +141,7 @@ func (factory *ClientFactory) GetdiskclientInterface(subscription string) (diskc
 	return *client.(*diskclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetinterfaceclientInterface(subscription string) (interfaceclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetinterfaceclientInterface(subscription string) (interfaceclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -154,7 +161,7 @@ func (factory *ClientFactory) GetinterfaceclientInterface(subscription string) (
 	return *client.(*interfaceclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetloadbalancerclientInterface(subscription string) (loadbalancerclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetloadbalancerclientInterface(subscription string) (loadbalancerclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -174,7 +181,7 @@ func (factory *ClientFactory) GetloadbalancerclientInterface(subscription string
 	return *client.(*loadbalancerclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetmanagedclusterclientInterface(subscription string) (managedclusterclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetmanagedclusterclientInterface(subscription string) (managedclusterclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -194,7 +201,7 @@ func (factory *ClientFactory) GetmanagedclusterclientInterface(subscription stri
 	return *client.(*managedclusterclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetprivateendpointclientInterface(subscription string) (privateendpointclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetprivateendpointclientInterface(subscription string) (privateendpointclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -214,7 +221,7 @@ func (factory *ClientFactory) GetprivateendpointclientInterface(subscription str
 	return *client.(*privateendpointclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetprivatelinkserviceclientInterface(subscription string) (privatelinkserviceclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetprivatelinkserviceclientInterface(subscription string) (privatelinkserviceclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -234,7 +241,7 @@ func (factory *ClientFactory) GetprivatelinkserviceclientInterface(subscription 
 	return *client.(*privatelinkserviceclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetprivatezoneclientInterface(subscription string) (privatezoneclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetprivatezoneclientInterface(subscription string) (privatezoneclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -254,7 +261,7 @@ func (factory *ClientFactory) GetprivatezoneclientInterface(subscription string)
 	return *client.(*privatezoneclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetpublicipaddressclientInterface(subscription string) (publicipaddressclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetpublicipaddressclientInterface(subscription string) (publicipaddressclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -274,7 +281,7 @@ func (factory *ClientFactory) GetpublicipaddressclientInterface(subscription str
 	return *client.(*publicipaddressclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetpublicipprefixclientInterface(subscription string) (publicipprefixclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetpublicipprefixclientInterface(subscription string) (publicipprefixclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -291,7 +298,7 @@ func (factory *ClientFactory) GetpublicipprefixclientInterface(subscription stri
 	return *client.(*publicipprefixclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetroutetableclientInterface(subscription string) (routetableclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetroutetableclientInterface(subscription string) (routetableclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -311,7 +318,7 @@ func (factory *ClientFactory) GetroutetableclientInterface(subscription string) 
 	return *client.(*routetableclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetsecuritygroupclientInterface(subscription string) (securitygroupclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetsecuritygroupclientInterface(subscription string) (securitygroupclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -331,7 +338,7 @@ func (factory *ClientFactory) GetsecuritygroupclientInterface(subscription strin
 	return *client.(*securitygroupclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetsnapshotclientInterface(subscription string) (snapshotclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetsnapshotclientInterface(subscription string) (snapshotclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -351,7 +358,7 @@ func (factory *ClientFactory) GetsnapshotclientInterface(subscription string) (s
 	return *client.(*snapshotclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetsubnetclientInterface(subscription string) (subnetclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetsubnetclientInterface(subscription string) (subnetclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -371,7 +378,7 @@ func (factory *ClientFactory) GetsubnetclientInterface(subscription string) (sub
 	return *client.(*subnetclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetvirtualmachineclientInterface(subscription string) (virtualmachineclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetvirtualmachineclientInterface(subscription string) (virtualmachineclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -391,7 +398,7 @@ func (factory *ClientFactory) GetvirtualmachineclientInterface(subscription stri
 	return *client.(*virtualmachineclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetvirtualmachinescalesetclientInterface(subscription string) (virtualmachinescalesetclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetvirtualmachinescalesetclientInterface(subscription string) (virtualmachinescalesetclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -411,7 +418,7 @@ func (factory *ClientFactory) GetvirtualmachinescalesetclientInterface(subscript
 	return *client.(*virtualmachinescalesetclient.Interface), nil
 }
 
-func (factory *ClientFactory) GetvirtualmachinescalesetvmclientInterface(subscription string) (virtualmachinescalesetvmclient.Interface, error) {
+func (factory *ClientFactoryImpl) GetvirtualmachinescalesetvmclientInterface(subscription string) (virtualmachinescalesetvmclient.Interface, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
