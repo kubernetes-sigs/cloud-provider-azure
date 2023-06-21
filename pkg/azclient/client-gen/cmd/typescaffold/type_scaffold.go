@@ -152,8 +152,8 @@ func main() {
 				fmt.Printf("failed to create dir %s\n", err.Error())
 				return
 			}
-			if _, err = os.Lstat(fileName + "/custom.go"); err == nil {
-				fmt.Printf("customization file %s already exists, skip\n", fileName+"/custom.go")
+			if _, err = os.Lstat(fileName + "/interface.go"); err == nil {
+				fmt.Printf("interface file %s already exists, skip\n", fileName+"/interface.go")
 				return
 			}
 			err = os.WriteFile(fileName+"/interface.go", formattedContent, 0600)
