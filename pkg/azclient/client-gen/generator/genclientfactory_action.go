@@ -19,8 +19,10 @@ package generator
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"os"
+	"os/exec"
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
@@ -62,26 +64,78 @@ func (generator *ClientFactoryGenerator) RegisterClient(_ *genall.GenerationCont
 }
 
 func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) error {
-	var outContent bytes.Buffer
-	if err := AbstractClientFactoryTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
-		return err
+	{
+		var outContent bytes.Buffer
+		if err := AbstractClientFactoryInterfaceTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
+			return err
+		}
+		file, err := os.Create("factory.go")
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		err = DumpToWriter(file, generator.headerText, generator.importList, "azclient", &outContent)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Generated client factory interface")
 	}
-	file, err := os.Create("factory_gen.go")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	generator.importList["strings"] = make(map[string]struct{})
-	generator.importList["sync"] = make(map[string]struct{})
-	generator.importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
-	generator.importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
+	{
+		var outContent bytes.Buffer
+		if err := AbstractClientFactoryImplTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
+			return err
+		}
+		file, err := os.Create("factory_gen.go")
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		importList := make(map[string]map[string]struct{})
+		for k, v := range generator.importList {
+			importList[k] = v
+		}
+		importList["strings"] = make(map[string]struct{})
+		importList["sync"] = make(map[string]struct{})
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
 
-	return DumpToWriter(file, generator.headerText, generator.importList, "azclient", &outContent)
+		err = DumpToWriter(file, generator.headerText, importList, "azclient", &outContent)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Generated client factory impl")
+	}
+	{
+		var mockCache bytes.Buffer
+		//nolint:gosec // G204 ignore this!
+		cmd := exec.Command("mockgen", "-package", "mock_azclient", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "ClientFactory")
+		cmd.Stdout = &mockCache
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll("mock_azclient", 0755); err != nil {
+			return err
+		}
+		mockFile, err := os.Create("mock_azclient/interface.go")
+		if err != nil {
+			return err
+		}
+		defer mockFile.Close()
+		err = DumpToWriter(mockFile, generator.headerText, nil, "", &mockCache)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Generated client factory mock")
+	}
+	return nil
 }
 
-var AbstractClientFactoryTemplate = template.Must(template.New("object-scaffolding-test-case-custom").Parse(
+var AbstractClientFactoryImplTemplate = template.Must(template.New("object-factory-impl").Parse(
 	`
-type ClientFactory struct {
+type ClientFactoryImpl struct {
 	*ClientFactoryConfig
 	cred               azcore.TokenCredential
 	{{ range $key, $client := . -}}
@@ -89,15 +143,21 @@ type ClientFactory struct {
 	{{end -}}
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) *ClientFactory {
-	return &ClientFactory{
+func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) ClientFactory {
+	if config == nil {
+		config = &ClientFactoryConfig{}
+	}
+	if cred == nil {
+		cred = &azidentity.DefaultAzureCredential{}
+	}
+	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred,
 	}
 }
 
 {{range $key, $client := . }}
-func (factory *ClientFactory) Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscription string) ({{.PkgAlias}}.{{.InterfaceTypeName}}, error) {
+func (factory *ClientFactoryImpl) Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscription string) ({{.PkgAlias}}.{{.InterfaceTypeName}}, error) {
 	subID := strings.ToLower(subscription)
 
 	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
@@ -119,4 +179,13 @@ func (factory *ClientFactory) Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscriptio
 	return *client.(*{{.PkgAlias}}.{{.InterfaceTypeName}}), nil
 }
 {{ end }}
+`))
+
+var AbstractClientFactoryInterfaceTemplate = template.Must(template.New("object-factory-impl").Parse(
+	`
+type ClientFactory interface {
+	{{- range $key, $client := . }}
+	Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscription string) ({{.PkgAlias}}.{{.InterfaceTypeName}}, error)
+	{{- end }}
+}
 `))

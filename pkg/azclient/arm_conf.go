@@ -17,6 +17,8 @@ limitations under the License.
 package azclient
 
 import (
+	"strings"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 
@@ -39,7 +41,7 @@ func NewClientOptionFromARMClientConfig(config *ARMClientConfig) (*policy.Client
 	var err error
 	if config != nil {
 		//update user agent header
-		options.ClientOptions.Telemetry.ApplicationID = config.UserAgent
+		options.ClientOptions.Telemetry.ApplicationID = strings.TrimSpace(config.UserAgent)
 		//set cloud
 		var cloudConfig *cloud.Configuration
 		cloudConfig, err = GetAzureCloudConfig(config)
