@@ -18,6 +18,8 @@ limitations under the License.
 package interfaceclient
 
 import (
+	"context"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -25,6 +27,8 @@ import (
 
 // +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=InterfacesClient,expand=true,rateLimitKey=interfaceRateLimit
 type Interface interface {
+	// GetVirtualMachineScaleSetNetworkInterface gets a network.Interface of VMSS VM.
+	GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, virtualmachineIndex string, networkInterfaceName string, options *armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceOptions) (armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse, error)
 	utils.GetWithExpandFunc[armnetwork.Interface]
 	utils.CreateOrUpdateFunc[armnetwork.Interface]
 	utils.DeleteFunc[armnetwork.Interface]
