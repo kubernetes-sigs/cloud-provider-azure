@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;list,resource=AvailabilitySet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=AvailabilitySetsClient,expand=false
+// +azure:client:verbs=get;list,resource=AvailabilitySet,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=AvailabilitySetsClient,expand=false,rateLimitKey=availabilitySetRateLimit
 type Interface interface {
 	utils.GetFunc[armcompute.AvailabilitySet]
 	utils.ListFunc[armcompute.AvailabilitySet]

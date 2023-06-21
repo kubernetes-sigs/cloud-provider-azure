@@ -31,7 +31,7 @@ import (
 var newResource *armresources.Deployment
 
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 		When("creation requests are raised", func() {
 			It("should not return error", func(ctx context.Context) {
 				newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)

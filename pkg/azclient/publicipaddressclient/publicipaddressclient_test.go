@@ -27,7 +27,7 @@ import (
 
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
-var addtionalTestCases func()
+var additionalTestCases func()
 
 var newResource *armnetwork.PublicIPAddress = &armnetwork.PublicIPAddress{}
 
@@ -37,8 +37,8 @@ var _ = Describe("PublicIPAddressesClient", Ordered, func() {
 		BeforeAll(beforeAllFunc)
 	}
 
-	if addtionalTestCases != nil {
-		addtionalTestCases()
+	if additionalTestCases != nil {
+		additionalTestCases()
 	}
 
 	When("creation requests are raised", func() {

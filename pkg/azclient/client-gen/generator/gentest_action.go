@@ -25,19 +25,18 @@ import (
 
 	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
-	"sigs.k8s.io/controller-tools/pkg/markers"
 )
 
-func generateTest(ctx *genall.GenerationContext, root *loader.Package, headerText string) error {
-	if err := generateTestSuite(ctx, root, headerText); err != nil {
+func generateTest(ctx *genall.GenerationContext, root *loader.Package, typeName string, markerConf ClientGenConfig, headerText string) error {
+	if err := generateTestSuite(ctx, root, typeName, markerConf, headerText); err != nil {
 		return err
 	}
 
-	if err := generateTestCase(ctx, root, headerText); err != nil {
+	if err := generateTestCase(ctx, root, typeName, markerConf, headerText); err != nil {
 		return err
 	}
 
-	if err := generateTestCaseCustom(ctx, root, headerText); err != nil {
+	if err := generateTestCaseCustom(ctx, root, typeName, markerConf, headerText); err != nil {
 		return err
 	}
 
@@ -48,31 +47,23 @@ func generateTest(ctx *genall.GenerationContext, root *loader.Package, headerTex
 	return nil
 }
 
-func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, headerText string) error {
-	var codeSnips []*bytes.Buffer
+func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
 	var importList = make(map[string]map[string]struct{})
-	err := markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
-		if typeInfo := typeInfo.Markers.Get(clientGenMarker.Name); typeInfo != nil {
-			markerConf := typeInfo.(ClientGenConfig)
-			for _, verb := range markerConf.Verbs {
-				if strings.EqualFold(FuncCreateOrUpdate, verb) {
-					if markerConf.SubResource == "" {
-						importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
-					}
-				}
+
+	for _, verb := range markerConf.Verbs {
+		if strings.EqualFold(FuncCreateOrUpdate, verb) {
+			if markerConf.SubResource == "" {
+				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 			}
-			var outContent bytes.Buffer
-			if err := TestSuiteTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-			}
-			codeSnips = append(codeSnips, &outContent)
 		}
-	})
-	if err != nil {
+	}
+	var outContent bytes.Buffer
+	if err := TestSuiteTemplate.Execute(&outContent, markerConf); err != nil {
 		root.AddError(err)
 		return err
 	}
-	if len(codeSnips) <= 0 {
+
+	if outContent.Len() <= 0 {
 		return nil
 	}
 
@@ -85,36 +76,25 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, head
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
 	importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
 
-	return WriteToFile(ctx, root, root.Name+"_suite_test.go", headerText, importList, codeSnips)
+	return WriteToFile(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)
 }
 
-func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, headerText string) error {
+func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
 	var importList = make(map[string]map[string]struct{})
 
-	var codeSnips []*bytes.Buffer
-	err := markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
-		if typeInfo := typeInfo.Markers.Get(clientGenMarker.Name); typeInfo != nil {
-			markerConf := typeInfo.(ClientGenConfig)
-
-			aliasMap, ok := importList[markerConf.PackageName]
-			if !ok {
-				aliasMap = make(map[string]struct{})
-				importList[markerConf.PackageName] = aliasMap
-			}
-			aliasMap[markerConf.PackageAlias] = struct{}{}
-
-			var outContent bytes.Buffer
-			if err := TestCaseTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-			}
-			codeSnips = append(codeSnips, &outContent)
-		}
-	})
-	if err != nil {
-		root.AddError(err)
-		return err
+	aliasMap, ok := importList[markerConf.PackageName]
+	if !ok {
+		aliasMap = make(map[string]struct{})
+		importList[markerConf.PackageName] = aliasMap
 	}
-	if len(codeSnips) <= 0 {
+	aliasMap[markerConf.PackageAlias] = struct{}{}
+
+	var outContent bytes.Buffer
+	if err := TestCaseTemplate.Execute(&outContent, markerConf); err != nil {
+		root.AddError(err)
+	}
+
+	if outContent.Len() <= 0 {
 		return nil
 	}
 
@@ -122,43 +102,33 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, heade
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
 	importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
-	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, codeSnips)
+	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, &outContent)
 }
 
-func generateTestCaseCustom(ctx *genall.GenerationContext, root *loader.Package, headerText string) error {
+func generateTestCaseCustom(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
 	if _, err := os.Lstat(root.Name + "/custom_test.go"); err == nil || !os.IsNotExist(err) {
 		fmt.Println(root.Name + "/custom_test.go already exists, skipping generation of custom test")
 		return nil
 	}
 
 	var importList = make(map[string]map[string]struct{})
-	var codeSnips []*bytes.Buffer
-	err := markers.EachType(ctx.Collector, root, func(typeInfo *markers.TypeInfo) {
-		if typeInfo := typeInfo.Markers.Get(clientGenMarker.Name); typeInfo != nil {
-			markerConf := typeInfo.(ClientGenConfig)
 
-			aliasMap, ok := importList[markerConf.PackageName]
-			if !ok {
-				aliasMap = make(map[string]struct{})
-				importList[markerConf.PackageName] = aliasMap
-			}
-			aliasMap[markerConf.PackageAlias] = struct{}{}
-
-			var outContent bytes.Buffer
-			if err := TestCaseCustomTemplate.Execute(&outContent, markerConf); err != nil {
-				root.AddError(err)
-			}
-			codeSnips = append(codeSnips, &outContent)
-		}
-	})
-	if err != nil {
-		root.AddError(err)
-		return err
+	aliasMap, ok := importList[markerConf.PackageName]
+	if !ok {
+		aliasMap = make(map[string]struct{})
+		importList[markerConf.PackageName] = aliasMap
 	}
-	if len(codeSnips) <= 0 {
+	aliasMap[markerConf.PackageAlias] = struct{}{}
+
+	var outContent bytes.Buffer
+	if err := TestCaseCustomTemplate.Execute(&outContent, markerConf); err != nil {
+		root.AddError(err)
+	}
+
+	if outContent.Len() <= 0 {
 		return nil
 	}
 
 	importList["context"] = make(map[string]struct{})
-	return WriteToFile(ctx, root, "custom_test.go", headerText, importList, codeSnips)
+	return WriteToFile(ctx, root, "custom_test.go", headerText, importList, &outContent)
 }

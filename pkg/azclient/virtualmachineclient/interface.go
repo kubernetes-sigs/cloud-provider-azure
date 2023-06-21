@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=createorupdate;delete;list,resource=VirtualMachine,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=VirtualMachinesClient,expand=true
+// +azure:client:verbs=createorupdate;delete;list,resource=VirtualMachine,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=VirtualMachinesClient,expand=true,rateLimitKey=virtualMachineRateLimit
 type Interface interface {
 	utils.GetWithExpandFunc[armcompute.VirtualMachine]
 	utils.CreateOrUpdateFunc[armcompute.VirtualMachine]

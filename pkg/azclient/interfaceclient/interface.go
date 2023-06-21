@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=InterfacesClient,expand=true
+// +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=InterfacesClient,expand=true,rateLimitKey=interfaceRateLimit
 type Interface interface {
 	utils.GetWithExpandFunc[armnetwork.Interface]
 	utils.CreateOrUpdateFunc[armnetwork.Interface]

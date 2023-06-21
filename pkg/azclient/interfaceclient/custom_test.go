@@ -33,7 +33,7 @@ var subnet *armnetwork.Subnet
 var vnetClient *armnetwork.VirtualNetworksClient
 
 func init() {
-	addtionalTestCases = func() {
+	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
