@@ -39,22 +39,22 @@ import (
 )
 
 type ClientFactory interface {
-	GetavailabilitysetclientInterface(subscription string) (availabilitysetclient.Interface, error)
-	GetdeploymentclientInterface(subscription string) (deploymentclient.Interface, error)
-	GetdiskclientInterface(subscription string) (diskclient.Interface, error)
-	GetinterfaceclientInterface(subscription string) (interfaceclient.Interface, error)
-	GetloadbalancerclientInterface(subscription string) (loadbalancerclient.Interface, error)
-	GetmanagedclusterclientInterface(subscription string) (managedclusterclient.Interface, error)
-	GetprivateendpointclientInterface(subscription string) (privateendpointclient.Interface, error)
-	GetprivatelinkserviceclientInterface(subscription string) (privatelinkserviceclient.Interface, error)
-	GetprivatezoneclientInterface(subscription string) (privatezoneclient.Interface, error)
-	GetpublicipaddressclientInterface(subscription string) (publicipaddressclient.Interface, error)
-	GetpublicipprefixclientInterface(subscription string) (publicipprefixclient.Interface, error)
-	GetroutetableclientInterface(subscription string) (routetableclient.Interface, error)
-	GetsecuritygroupclientInterface(subscription string) (securitygroupclient.Interface, error)
-	GetsnapshotclientInterface(subscription string) (snapshotclient.Interface, error)
-	GetsubnetclientInterface(subscription string) (subnetclient.Interface, error)
-	GetvirtualmachineclientInterface(subscription string) (virtualmachineclient.Interface, error)
-	GetvirtualmachinescalesetclientInterface(subscription string) (virtualmachinescalesetclient.Interface, error)
-	GetvirtualmachinescalesetvmclientInterface(subscription string) (virtualmachinescalesetvmclient.Interface, error)
+	GetavailabilitysetclientInterface() availabilitysetclient.Interface
+	GetdeploymentclientInterface() deploymentclient.Interface
+	GetdiskclientInterface() diskclient.Interface
+	GetinterfaceclientInterface() interfaceclient.Interface
+	GetloadbalancerclientInterface() loadbalancerclient.Interface
+	GetmanagedclusterclientInterface() managedclusterclient.Interface
+	GetprivateendpointclientInterface() privateendpointclient.Interface
+	GetprivatelinkserviceclientInterface() privatelinkserviceclient.Interface
+	GetprivatezoneclientInterface() privatezoneclient.Interface
+	GetpublicipaddressclientInterface() publicipaddressclient.Interface
+	GetpublicipprefixclientInterface() publicipprefixclient.Interface
+	GetroutetableclientInterface() routetableclient.Interface
+	GetsecuritygroupclientInterface() securitygroupclient.Interface
+	GetsnapshotclientInterface() snapshotclient.Interface
+	GetsubnetclientInterface() subnetclient.Interface
+	GetvirtualmachineclientInterface() virtualmachineclient.Interface
+	GetvirtualmachinescalesetclientInterface() virtualmachinescalesetclient.Interface
+	GetvirtualmachinescalesetvmclientInterface() virtualmachinescalesetvmclient.Interface
 }

@@ -69,271 +69,253 @@ func (m *MockClientFactory) EXPECT() *MockClientFactoryMockRecorder {
 }
 
 // GetavailabilitysetclientInterface mocks base method.
-func (m *MockClientFactory) GetavailabilitysetclientInterface(arg0 string) (availabilitysetclient.Interface, error) {
+func (m *MockClientFactory) GetavailabilitysetclientInterface() availabilitysetclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetavailabilitysetclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetavailabilitysetclientInterface")
 	ret0, _ := ret[0].(availabilitysetclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetavailabilitysetclientInterface indicates an expected call of GetavailabilitysetclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetavailabilitysetclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetavailabilitysetclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetavailabilitysetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetavailabilitysetclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetavailabilitysetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetavailabilitysetclientInterface))
 }
 
 // GetdeploymentclientInterface mocks base method.
-func (m *MockClientFactory) GetdeploymentclientInterface(arg0 string) (deploymentclient.Interface, error) {
+func (m *MockClientFactory) GetdeploymentclientInterface() deploymentclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetdeploymentclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetdeploymentclientInterface")
 	ret0, _ := ret[0].(deploymentclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetdeploymentclientInterface indicates an expected call of GetdeploymentclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetdeploymentclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetdeploymentclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetdeploymentclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetdeploymentclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetdeploymentclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetdeploymentclientInterface))
 }
 
 // GetdiskclientInterface mocks base method.
-func (m *MockClientFactory) GetdiskclientInterface(arg0 string) (diskclient.Interface, error) {
+func (m *MockClientFactory) GetdiskclientInterface() diskclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetdiskclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetdiskclientInterface")
 	ret0, _ := ret[0].(diskclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetdiskclientInterface indicates an expected call of GetdiskclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetdiskclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetdiskclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetdiskclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetdiskclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetdiskclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetdiskclientInterface))
 }
 
 // GetinterfaceclientInterface mocks base method.
-func (m *MockClientFactory) GetinterfaceclientInterface(arg0 string) (interfaceclient.Interface, error) {
+func (m *MockClientFactory) GetinterfaceclientInterface() interfaceclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetinterfaceclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetinterfaceclientInterface")
 	ret0, _ := ret[0].(interfaceclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetinterfaceclientInterface indicates an expected call of GetinterfaceclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetinterfaceclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetinterfaceclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetinterfaceclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetinterfaceclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetinterfaceclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetinterfaceclientInterface))
 }
 
 // GetloadbalancerclientInterface mocks base method.
-func (m *MockClientFactory) GetloadbalancerclientInterface(arg0 string) (loadbalancerclient.Interface, error) {
+func (m *MockClientFactory) GetloadbalancerclientInterface() loadbalancerclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetloadbalancerclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetloadbalancerclientInterface")
 	ret0, _ := ret[0].(loadbalancerclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetloadbalancerclientInterface indicates an expected call of GetloadbalancerclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetloadbalancerclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetloadbalancerclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetloadbalancerclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetloadbalancerclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetloadbalancerclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetloadbalancerclientInterface))
 }
 
 // GetmanagedclusterclientInterface mocks base method.
-func (m *MockClientFactory) GetmanagedclusterclientInterface(arg0 string) (managedclusterclient.Interface, error) {
+func (m *MockClientFactory) GetmanagedclusterclientInterface() managedclusterclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetmanagedclusterclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetmanagedclusterclientInterface")
 	ret0, _ := ret[0].(managedclusterclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetmanagedclusterclientInterface indicates an expected call of GetmanagedclusterclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetmanagedclusterclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetmanagedclusterclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetmanagedclusterclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetmanagedclusterclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetmanagedclusterclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetmanagedclusterclientInterface))
 }
 
 // GetprivateendpointclientInterface mocks base method.
-func (m *MockClientFactory) GetprivateendpointclientInterface(arg0 string) (privateendpointclient.Interface, error) {
+func (m *MockClientFactory) GetprivateendpointclientInterface() privateendpointclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetprivateendpointclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetprivateendpointclientInterface")
 	ret0, _ := ret[0].(privateendpointclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetprivateendpointclientInterface indicates an expected call of GetprivateendpointclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetprivateendpointclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetprivateendpointclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivateendpointclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivateendpointclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivateendpointclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivateendpointclientInterface))
 }
 
 // GetprivatelinkserviceclientInterface mocks base method.
-func (m *MockClientFactory) GetprivatelinkserviceclientInterface(arg0 string) (privatelinkserviceclient.Interface, error) {
+func (m *MockClientFactory) GetprivatelinkserviceclientInterface() privatelinkserviceclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetprivatelinkserviceclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetprivatelinkserviceclientInterface")
 	ret0, _ := ret[0].(privatelinkserviceclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetprivatelinkserviceclientInterface indicates an expected call of GetprivatelinkserviceclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetprivatelinkserviceclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetprivatelinkserviceclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivatelinkserviceclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivatelinkserviceclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivatelinkserviceclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivatelinkserviceclientInterface))
 }
 
 // GetprivatezoneclientInterface mocks base method.
-func (m *MockClientFactory) GetprivatezoneclientInterface(arg0 string) (privatezoneclient.Interface, error) {
+func (m *MockClientFactory) GetprivatezoneclientInterface() privatezoneclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetprivatezoneclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetprivatezoneclientInterface")
 	ret0, _ := ret[0].(privatezoneclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetprivatezoneclientInterface indicates an expected call of GetprivatezoneclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetprivatezoneclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetprivatezoneclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivatezoneclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivatezoneclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetprivatezoneclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetprivatezoneclientInterface))
 }
 
 // GetpublicipaddressclientInterface mocks base method.
-func (m *MockClientFactory) GetpublicipaddressclientInterface(arg0 string) (publicipaddressclient.Interface, error) {
+func (m *MockClientFactory) GetpublicipaddressclientInterface() publicipaddressclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetpublicipaddressclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetpublicipaddressclientInterface")
 	ret0, _ := ret[0].(publicipaddressclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetpublicipaddressclientInterface indicates an expected call of GetpublicipaddressclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetpublicipaddressclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetpublicipaddressclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetpublicipaddressclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetpublicipaddressclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetpublicipaddressclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetpublicipaddressclientInterface))
 }
 
 // GetpublicipprefixclientInterface mocks base method.
-func (m *MockClientFactory) GetpublicipprefixclientInterface(arg0 string) (publicipprefixclient.Interface, error) {
+func (m *MockClientFactory) GetpublicipprefixclientInterface() publicipprefixclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetpublicipprefixclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetpublicipprefixclientInterface")
 	ret0, _ := ret[0].(publicipprefixclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetpublicipprefixclientInterface indicates an expected call of GetpublicipprefixclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetpublicipprefixclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetpublicipprefixclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetpublicipprefixclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetpublicipprefixclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetpublicipprefixclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetpublicipprefixclientInterface))
 }
 
 // GetroutetableclientInterface mocks base method.
-func (m *MockClientFactory) GetroutetableclientInterface(arg0 string) (routetableclient.Interface, error) {
+func (m *MockClientFactory) GetroutetableclientInterface() routetableclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetroutetableclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetroutetableclientInterface")
 	ret0, _ := ret[0].(routetableclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetroutetableclientInterface indicates an expected call of GetroutetableclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetroutetableclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetroutetableclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetroutetableclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetroutetableclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetroutetableclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetroutetableclientInterface))
 }
 
 // GetsecuritygroupclientInterface mocks base method.
-func (m *MockClientFactory) GetsecuritygroupclientInterface(arg0 string) (securitygroupclient.Interface, error) {
+func (m *MockClientFactory) GetsecuritygroupclientInterface() securitygroupclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetsecuritygroupclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetsecuritygroupclientInterface")
 	ret0, _ := ret[0].(securitygroupclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetsecuritygroupclientInterface indicates an expected call of GetsecuritygroupclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetsecuritygroupclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetsecuritygroupclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsecuritygroupclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsecuritygroupclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsecuritygroupclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsecuritygroupclientInterface))
 }
 
 // GetsnapshotclientInterface mocks base method.
-func (m *MockClientFactory) GetsnapshotclientInterface(arg0 string) (snapshotclient.Interface, error) {
+func (m *MockClientFactory) GetsnapshotclientInterface() snapshotclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetsnapshotclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetsnapshotclientInterface")
 	ret0, _ := ret[0].(snapshotclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetsnapshotclientInterface indicates an expected call of GetsnapshotclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetsnapshotclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetsnapshotclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsnapshotclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsnapshotclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsnapshotclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsnapshotclientInterface))
 }
 
 // GetsubnetclientInterface mocks base method.
-func (m *MockClientFactory) GetsubnetclientInterface(arg0 string) (subnetclient.Interface, error) {
+func (m *MockClientFactory) GetsubnetclientInterface() subnetclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetsubnetclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetsubnetclientInterface")
 	ret0, _ := ret[0].(subnetclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetsubnetclientInterface indicates an expected call of GetsubnetclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetsubnetclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetsubnetclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsubnetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsubnetclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetsubnetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetsubnetclientInterface))
 }
 
 // GetvirtualmachineclientInterface mocks base method.
-func (m *MockClientFactory) GetvirtualmachineclientInterface(arg0 string) (virtualmachineclient.Interface, error) {
+func (m *MockClientFactory) GetvirtualmachineclientInterface() virtualmachineclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetvirtualmachineclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetvirtualmachineclientInterface")
 	ret0, _ := ret[0].(virtualmachineclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetvirtualmachineclientInterface indicates an expected call of GetvirtualmachineclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetvirtualmachineclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetvirtualmachineclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachineclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachineclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachineclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachineclientInterface))
 }
 
 // GetvirtualmachinescalesetclientInterface mocks base method.
-func (m *MockClientFactory) GetvirtualmachinescalesetclientInterface(arg0 string) (virtualmachinescalesetclient.Interface, error) {
+func (m *MockClientFactory) GetvirtualmachinescalesetclientInterface() virtualmachinescalesetclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetvirtualmachinescalesetclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetvirtualmachinescalesetclientInterface")
 	ret0, _ := ret[0].(virtualmachinescalesetclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetvirtualmachinescalesetclientInterface indicates an expected call of GetvirtualmachinescalesetclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetvirtualmachinescalesetclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetvirtualmachinescalesetclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachinescalesetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachinescalesetclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachinescalesetclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachinescalesetclientInterface))
 }
 
 // GetvirtualmachinescalesetvmclientInterface mocks base method.
-func (m *MockClientFactory) GetvirtualmachinescalesetvmclientInterface(arg0 string) (virtualmachinescalesetvmclient.Interface, error) {
+func (m *MockClientFactory) GetvirtualmachinescalesetvmclientInterface() virtualmachinescalesetvmclient.Interface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetvirtualmachinescalesetvmclientInterface", arg0)
+	ret := m.ctrl.Call(m, "GetvirtualmachinescalesetvmclientInterface")
 	ret0, _ := ret[0].(virtualmachinescalesetvmclient.Interface)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetvirtualmachinescalesetvmclientInterface indicates an expected call of GetvirtualmachinescalesetvmclientInterface.
-func (mr *MockClientFactoryMockRecorder) GetvirtualmachinescalesetvmclientInterface(arg0 interface{}) *gomock.Call {
+func (mr *MockClientFactoryMockRecorder) GetvirtualmachinescalesetvmclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachinescalesetvmclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachinescalesetvmclientInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetvirtualmachinescalesetvmclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetvirtualmachinescalesetvmclientInterface))
 }

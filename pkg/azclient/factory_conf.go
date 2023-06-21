@@ -32,6 +32,9 @@ type ClientFactoryConfig struct {
 
 	// Enable exponential backoff to manage resource request retries
 	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
+
+	// The ID of the Azure Subscription that the cluster is deployed in
+	SubscriptionID string `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
 }
 
 func GetDefaultResourceClientOption(config *ClientFactoryConfig) (*policy.ClientOptions, error) {
