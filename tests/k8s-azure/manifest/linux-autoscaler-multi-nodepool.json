@@ -25,14 +25,14 @@
                                 "name": "agentpool1",
                                 "config": {
                                     "min-nodes": "1",
-                                    "max-nodes": "1000"
+                                    "max-nodes": "150"
                                 }
                             },
                             {
                                 "name": "agentpool2",
                                 "config": {
                                     "min-nodes": "1",
-                                    "max-nodes": "1000"
+                                    "max-nodes": "150"
                                 }
                             }
                         ],
