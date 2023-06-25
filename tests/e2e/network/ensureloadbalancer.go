@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -834,7 +833,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:  "8",
 		}
 
-		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) &&
+		if strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(aznetwork.PublicIPAddressSkuNameStandard)) &&
 			tc.IPFamily == utils.IPv4 {
 			// Routing preference is only supported in standard public IPs
 			annotation[consts.ServiceAnnotationIPTagsForPublicIP] = "RoutingPreference=Internet"
@@ -921,7 +920,7 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 	})
 
 	It("should respect service with BYO public IP prefix with various configurations", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(aznetwork.PublicIPAddressSkuNameStandard)) {
 			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
@@ -1044,11 +1043,11 @@ func updateServiceAndCompareEtags(tc *utils.AzureTestClient, cs clientset.Interf
 	Expect(pipEtag).To(Equal(newPipEtag), "pip etag")
 }
 
-func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*network.Subnet, bool) {
+func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*aznetwork.Subnet, bool) {
 	vNet, err := tc.GetClusterVirtualNetwork()
 	Expect(err).NotTo(HaveOccurred())
 
-	var subnetToReturn *network.Subnet
+	var subnetToReturn *aznetwork.Subnet
 	isNew := false
 	for i := range *vNet.Subnets {
 		existingSubnet := (*vNet.Subnets)[i]
@@ -1107,7 +1106,7 @@ func getResourceEtags(tc *utils.AzureTestClient, ip, nsgRulePrefix string, inter
 	return
 }
 
-func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lbResourceGroup string) *network.LoadBalancer {
+func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lbResourceGroup string) *aznetwork.LoadBalancer {
 	if lbResourceGroup == "" {
 		lbResourceGroup = tc.GetResourceGroup()
 	}
@@ -1115,7 +1114,7 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lb
 	lbList, err := tc.ListLoadBalancers(lbResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
 
-	var ilb *network.LoadBalancer
+	var ilb *aznetwork.LoadBalancer
 	utils.Logf("Looking for internal load balancer frontend config ID with private ip as frontend")
 	for i := range lbList {
 		lb := lbList[i]
@@ -1213,7 +1212,7 @@ func defaultPublicIPAddress(ipName string, isIPv6 bool) aznetwork.PublicIPAddres
 		},
 	}
 	if isIPv6 {
-		pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = network.IPv6
+		pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion = aznetwork.IPv6
 	}
 	return pip
 }
