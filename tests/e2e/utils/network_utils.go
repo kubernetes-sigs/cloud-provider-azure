@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
@@ -87,7 +86,7 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 }
 
 // CreateSubnet creates a new subnet in the specified virtual network.
-func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefixes *[]string, waitUntilComplete bool) (network.Subnet, error) {
+func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwork, subnetName *string, prefixes *[]string, waitUntilComplete bool) (aznetwork.Subnet, error) {
 	Logf("creating a new subnet %s, %v", *subnetName, *prefixes)
 	subnetParameter := (*vnet.Subnets)[0]
 	subnetParameter.Name = subnetName
@@ -98,7 +97,7 @@ func (azureTestClient *AzureTestClient) CreateSubnet(vnet aznetwork.VirtualNetwo
 	}
 	subnetsClient := azureTestClient.createSubnetsClient()
 	_, err := subnetsClient.CreateOrUpdate(context.Background(), azureTestClient.GetResourceGroup(), *vnet.Name, *subnetName, subnetParameter)
-	var subnet network.Subnet
+	var subnet aznetwork.Subnet
 	if err != nil || !waitUntilComplete {
 		return subnet, err
 	}
@@ -345,9 +344,9 @@ func WaitGetPIPByPrefix(
 	cli *AzureTestClient,
 	prefixName string,
 	untilPIPCreated bool,
-) (network.PublicIPAddress, error) {
+) (aznetwork.PublicIPAddress, error) {
 
-	var pip network.PublicIPAddress
+	var pip aznetwork.PublicIPAddress
 
 	err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 		prefix, err := WaitGetPIPPrefix(cli, prefixName)
