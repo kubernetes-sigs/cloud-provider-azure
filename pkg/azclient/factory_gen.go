@@ -18,10 +18,9 @@
 package azclient
 
 import (
-	"strings"
-	"sync"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
@@ -47,390 +46,359 @@ import (
 
 type ClientFactoryImpl struct {
 	*ClientFactoryConfig
-	cred                                            azcore.TokenCredential
-	availabilitysetclientInterfaceRegistry          sync.Map
-	deploymentclientInterfaceRegistry               sync.Map
-	diskclientInterfaceRegistry                     sync.Map
-	interfaceclientInterfaceRegistry                sync.Map
-	loadbalancerclientInterfaceRegistry             sync.Map
-	managedclusterclientInterfaceRegistry           sync.Map
-	privateendpointclientInterfaceRegistry          sync.Map
-	privatelinkserviceclientInterfaceRegistry       sync.Map
-	privatezoneclientInterfaceRegistry              sync.Map
-	publicipaddressclientInterfaceRegistry          sync.Map
-	publicipprefixclientInterfaceRegistry           sync.Map
-	routetableclientInterfaceRegistry               sync.Map
-	securitygroupclientInterfaceRegistry            sync.Map
-	snapshotclientInterfaceRegistry                 sync.Map
-	subnetclientInterfaceRegistry                   sync.Map
-	virtualmachineclientInterfaceRegistry           sync.Map
-	virtualmachinescalesetclientInterfaceRegistry   sync.Map
-	virtualmachinescalesetvmclientInterfaceRegistry sync.Map
+	cred                                    azcore.TokenCredential
+	availabilitysetclientInterface          availabilitysetclient.Interface
+	deploymentclientInterface               deploymentclient.Interface
+	diskclientInterface                     diskclient.Interface
+	interfaceclientInterface                interfaceclient.Interface
+	loadbalancerclientInterface             loadbalancerclient.Interface
+	managedclusterclientInterface           managedclusterclient.Interface
+	privateendpointclientInterface          privateendpointclient.Interface
+	privatelinkserviceclientInterface       privatelinkserviceclient.Interface
+	privatezoneclientInterface              privatezoneclient.Interface
+	publicipaddressclientInterface          publicipaddressclient.Interface
+	publicipprefixclientInterface           publicipprefixclient.Interface
+	routetableclientInterface               routetableclient.Interface
+	securitygroupclientInterface            securitygroupclient.Interface
+	snapshotclientInterface                 snapshotclient.Interface
+	subnetclientInterface                   subnetclient.Interface
+	virtualmachineclientInterface           virtualmachineclient.Interface
+	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
+	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) ClientFactory {
+func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) (ClientFactory, error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
 	if cred == nil {
 		cred = &azidentity.DefaultAzureCredential{}
 	}
+
+	var options *arm.ClientOptions
+	var err error
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+
+	var ratelimitOption *ratelimit.Config
+	var rateLimitPolicy policy.Policy
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("availabilitySetRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("deploymentRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	deploymentclientInterface, err := deploymentclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("diskRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("interfaceRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("loadBalancerRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	loadbalancerclientInterface, err := loadbalancerclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("containerServiceRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	managedclusterclientInterface, err := managedclusterclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("privateEndpointRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	privateendpointclientInterface, err := privateendpointclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("privateLinkServiceRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	privatelinkserviceclientInterface, err := privatelinkserviceclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("privateDNSRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	privatezoneclientInterface, err := privatezoneclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("publicIPAddressRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	publicipaddressclientInterface, err := publicipaddressclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+
+	publicipprefixclientInterface, err := publicipprefixclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("routeTableRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	routetableclientInterface, err := routetableclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("securityGroupRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	securitygroupclientInterface, err := securitygroupclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("snapshotRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	snapshotclientInterface, err := snapshotclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("subnetsRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("virtualMachineRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	virtualmachineclientInterface, err := virtualmachineclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("virtualMachineSizesRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	virtualmachinescalesetclientInterface, err := virtualmachinescalesetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+
+	virtualmachinescalesetvmclientInterface, err := virtualmachinescalesetvmclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
-		cred:                cred,
-	}
+		cred:                cred, availabilitysetclientInterface: availabilitysetclientInterface,
+		deploymentclientInterface:               deploymentclientInterface,
+		diskclientInterface:                     diskclientInterface,
+		interfaceclientInterface:                interfaceclientInterface,
+		loadbalancerclientInterface:             loadbalancerclientInterface,
+		managedclusterclientInterface:           managedclusterclientInterface,
+		privateendpointclientInterface:          privateendpointclientInterface,
+		privatelinkserviceclientInterface:       privatelinkserviceclientInterface,
+		privatezoneclientInterface:              privatezoneclientInterface,
+		publicipaddressclientInterface:          publicipaddressclientInterface,
+		publicipprefixclientInterface:           publicipprefixclientInterface,
+		routetableclientInterface:               routetableclientInterface,
+		securitygroupclientInterface:            securitygroupclientInterface,
+		snapshotclientInterface:                 snapshotclientInterface,
+		subnetclientInterface:                   subnetclientInterface,
+		virtualmachineclientInterface:           virtualmachineclientInterface,
+		virtualmachinescalesetclientInterface:   virtualmachinescalesetclientInterface,
+		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
+	}, nil
 }
 
-func (factory *ClientFactoryImpl) GetavailabilitysetclientInterface(subscription string) (availabilitysetclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("availabilitySetRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := availabilitysetclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.availabilitysetclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*availabilitysetclient.Interface), nil
+func (factory *ClientFactoryImpl) GetavailabilitysetclientInterface() availabilitysetclient.Interface {
+	return factory.availabilitysetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetdeploymentclientInterface(subscription string) (deploymentclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("deploymentRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := deploymentclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.deploymentclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*deploymentclient.Interface), nil
+func (factory *ClientFactoryImpl) GetdeploymentclientInterface() deploymentclient.Interface {
+	return factory.deploymentclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetdiskclientInterface(subscription string) (diskclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("diskRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := diskclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.diskclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*diskclient.Interface), nil
+func (factory *ClientFactoryImpl) GetdiskclientInterface() diskclient.Interface {
+	return factory.diskclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetinterfaceclientInterface(subscription string) (interfaceclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("interfaceRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := interfaceclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.interfaceclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*interfaceclient.Interface), nil
+func (factory *ClientFactoryImpl) GetinterfaceclientInterface() interfaceclient.Interface {
+	return factory.interfaceclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetloadbalancerclientInterface(subscription string) (loadbalancerclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("loadBalancerRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := loadbalancerclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.loadbalancerclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*loadbalancerclient.Interface), nil
+func (factory *ClientFactoryImpl) GetloadbalancerclientInterface() loadbalancerclient.Interface {
+	return factory.loadbalancerclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetmanagedclusterclientInterface(subscription string) (managedclusterclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("containerServiceRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := managedclusterclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.managedclusterclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*managedclusterclient.Interface), nil
+func (factory *ClientFactoryImpl) GetmanagedclusterclientInterface() managedclusterclient.Interface {
+	return factory.managedclusterclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivateendpointclientInterface(subscription string) (privateendpointclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("privateEndpointRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := privateendpointclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.privateendpointclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*privateendpointclient.Interface), nil
+func (factory *ClientFactoryImpl) GetprivateendpointclientInterface() privateendpointclient.Interface {
+	return factory.privateendpointclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivatelinkserviceclientInterface(subscription string) (privatelinkserviceclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("privateLinkServiceRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := privatelinkserviceclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.privatelinkserviceclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*privatelinkserviceclient.Interface), nil
+func (factory *ClientFactoryImpl) GetprivatelinkserviceclientInterface() privatelinkserviceclient.Interface {
+	return factory.privatelinkserviceclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivatezoneclientInterface(subscription string) (privatezoneclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("privateDNSRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := privatezoneclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.privatezoneclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*privatezoneclient.Interface), nil
+func (factory *ClientFactoryImpl) GetprivatezoneclientInterface() privatezoneclient.Interface {
+	return factory.privatezoneclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetpublicipaddressclientInterface(subscription string) (publicipaddressclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("publicIPAddressRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := publicipaddressclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.publicipaddressclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*publicipaddressclient.Interface), nil
+func (factory *ClientFactoryImpl) GetpublicipaddressclientInterface() publicipaddressclient.Interface {
+	return factory.publicipaddressclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetpublicipprefixclientInterface(subscription string) (publicipprefixclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	defaultClient, err := publicipprefixclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.publicipprefixclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*publicipprefixclient.Interface), nil
+func (factory *ClientFactoryImpl) GetpublicipprefixclientInterface() publicipprefixclient.Interface {
+	return factory.publicipprefixclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetroutetableclientInterface(subscription string) (routetableclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("routeTableRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := routetableclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.routetableclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*routetableclient.Interface), nil
+func (factory *ClientFactoryImpl) GetroutetableclientInterface() routetableclient.Interface {
+	return factory.routetableclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsecuritygroupclientInterface(subscription string) (securitygroupclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("securityGroupRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := securitygroupclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.securitygroupclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*securitygroupclient.Interface), nil
+func (factory *ClientFactoryImpl) GetsecuritygroupclientInterface() securitygroupclient.Interface {
+	return factory.securitygroupclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsnapshotclientInterface(subscription string) (snapshotclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("snapshotRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := snapshotclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.snapshotclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*snapshotclient.Interface), nil
+func (factory *ClientFactoryImpl) GetsnapshotclientInterface() snapshotclient.Interface {
+	return factory.snapshotclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsubnetclientInterface(subscription string) (subnetclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("subnetsRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := subnetclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.subnetclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*subnetclient.Interface), nil
+func (factory *ClientFactoryImpl) GetsubnetclientInterface() subnetclient.Interface {
+	return factory.subnetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachineclientInterface(subscription string) (virtualmachineclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("virtualMachineRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := virtualmachineclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.virtualmachineclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*virtualmachineclient.Interface), nil
+func (factory *ClientFactoryImpl) GetvirtualmachineclientInterface() virtualmachineclient.Interface {
+	return factory.virtualmachineclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachinescalesetclientInterface(subscription string) (virtualmachinescalesetclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("virtualMachineSizesRateLimit")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	defaultClient, err := virtualmachinescalesetclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.virtualmachinescalesetclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*virtualmachinescalesetclient.Interface), nil
+func (factory *ClientFactoryImpl) GetvirtualmachinescalesetclientInterface() virtualmachinescalesetclient.Interface {
+	return factory.virtualmachinescalesetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachinescalesetvmclientInterface(subscription string) (virtualmachinescalesetvmclient.Interface, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	defaultClient, err := virtualmachinescalesetvmclient.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.virtualmachinescalesetvmclientInterfaceRegistry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*virtualmachinescalesetvmclient.Interface), nil
+func (factory *ClientFactoryImpl) GetvirtualmachinescalesetvmclientInterface() virtualmachinescalesetvmclient.Interface {
+	return factory.virtualmachinescalesetvmclientInterface
 }

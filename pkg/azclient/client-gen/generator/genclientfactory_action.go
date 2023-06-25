@@ -94,9 +94,10 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 		for k, v := range generator.importList {
 			importList[k] = v
 		}
-		importList["strings"] = make(map[string]struct{})
-		importList["sync"] = make(map[string]struct{})
+
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
+		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
 
@@ -139,44 +140,55 @@ type ClientFactoryImpl struct {
 	*ClientFactoryConfig
 	cred               azcore.TokenCredential
 	{{ range $key, $client := . -}}
-	{{ $key }}Registry sync.Map
+	{{ $key }} {{.PkgAlias}}.{{.InterfaceTypeName}} 
 	{{end -}}
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) ClientFactory {
+func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) (ClientFactory,error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
 	if cred == nil {
 		cred = &azidentity.DefaultAzureCredential{}
 	}
+
+	var options *arm.ClientOptions
+	var err error 
+
+	{{ $rateLimitPolicyNotDefined := true -}}
+	{{range $key, $client := . }}
+	options, err = GetDefaultResourceClientOption(config)
+	if err != nil {
+		return nil, err
+	}
+	{{with $rateLimitPolicyNotDefined}}
+	var ratelimitOption *ratelimit.Config
+	var rateLimitPolicy policy.Policy
+	{{ $rateLimitPolicyNotDefined = false -}}
+	{{end -}}
+	{{with $client.RateLimitKey -}}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("{{.}}")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	{{- end }}	
+	{{$key}}, err := {{.PkgAlias}}.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+	{{end -}}
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred,
-	}
+		{{- range $key, $client := . -}}
+		{{ $key }} : {{ $key }},
+		{{end -}}
+	}, nil
 }
 
 {{range $key, $client := . }}
-func (factory *ClientFactoryImpl) Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscription string) ({{.PkgAlias}}.{{.InterfaceTypeName}}, error) {
-	subID := strings.ToLower(subscription)
-
-	options, err := GetDefaultResourceClientOption(factory.ClientFactoryConfig)
-	if err != nil {
-		return nil, err
-	}
-	{{with .RateLimitKey -}}
-	//add ratelimit policy
-	ratelimitOption := factory.ClientFactoryConfig.GetRateLimitConfig("{{.}}")
-	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	{{- end }}
-	defaultClient, err := {{.PkgAlias}}.New(subscription, factory.cred, options)
-	if err != nil {
-		return nil, err
-	}
-	client, _ := factory.{{ $key }}Registry.LoadOrStore(subID, &defaultClient)
-
-	return *client.(*{{.PkgAlias}}.{{.InterfaceTypeName}}), nil
+func (factory *ClientFactoryImpl) Get{{.PkgAlias}}{{.InterfaceTypeName}}(){{.PkgAlias}}.{{.InterfaceTypeName}} {
+	return factory.{{ $key }}
 }
 {{ end }}
 `))
@@ -185,7 +197,7 @@ var AbstractClientFactoryInterfaceTemplate = template.Must(template.New("object-
 	`
 type ClientFactory interface {
 	{{- range $key, $client := . }}
-	Get{{.PkgAlias}}{{.InterfaceTypeName}}(subscription string) ({{.PkgAlias}}.{{.InterfaceTypeName}}, error)
+	Get{{.PkgAlias}}{{.InterfaceTypeName}}() {{.PkgAlias}}.{{.InterfaceTypeName}}
 	{{- end }}
 }
 `))

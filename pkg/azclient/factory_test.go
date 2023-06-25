@@ -26,10 +26,10 @@ import (
 var _ = Describe("Factory", func() {
 	When("config is nil", func() {
 		It("should create factory instance without painc", func() {
-			factory := azclient.NewClientFactory(nil, nil)
-			Expect(factory).NotTo(BeNil())
-			client, err := factory.GetavailabilitysetclientInterface("dummy")
+			factory, err := azclient.NewClientFactory(nil, nil)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetavailabilitysetclientInterface()
 			Expect(client).NotTo(BeNil())
 		})
 	})
