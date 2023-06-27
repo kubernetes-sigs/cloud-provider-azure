@@ -287,11 +287,12 @@ updates:
       - "approved"
 
   - package-ecosystem: gomod
-    directory: /site
+    directory: /
     schedule:
       interval: daily
       time: "01:00"
       timezone: "Asia/Shanghai"
+    target-branch: "documentation"
     labels:
       - "area/dependency"
       - "release-note-none"
@@ -301,11 +302,12 @@ updates:
       - "approved"
 
   - package-ecosystem: npm
-    directory: /site
+    directory: /
     schedule:
       interval: daily
       time: "01:00"
       timezone: "Asia/Shanghai"
+    target-branch: "documentation"
     labels:
       - "area/dependency"
       - "release-note-none"
