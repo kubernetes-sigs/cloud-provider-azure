@@ -117,7 +117,7 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 		})
 		if err != nil {
 			root.AddError(err)
-			break
+			return err
 		}
 	}
 

@@ -18,6 +18,7 @@ package azclient
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
 	"github.com/Azure/go-armbalancer"
@@ -26,9 +27,22 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
+var DefaultResourceClientTransport *http.Client
+var once sync.Once
+
+func init() {
+	once.Do(func() {
+		DefaultResourceClientTransport = &http.Client{
+			Transport: armbalancer.New(armbalancer.Options{
+				Transport: utils.DefaultTransport,
+				PoolSize:  100,
+			}),
+		}
+	})
+}
+
 type ClientFactoryConfig struct {
 	ratelimit.CloudProviderRateLimitConfig
-	*ARMClientConfig
 
 	// Enable exponential backoff to manage resource request retries
 	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" yaml:"cloudProviderBackoff,omitempty"`
@@ -37,27 +51,18 @@ type ClientFactoryConfig struct {
 	SubscriptionID string `json:"subscriptionId,omitempty" yaml:"subscriptionId,omitempty"`
 }
 
-func GetDefaultResourceClientOption(config *ClientFactoryConfig) (*policy.ClientOptions, error) {
-	var armConfig *ARMClientConfig
-	if config != nil {
-		armConfig = config.ARMClientConfig
-	}
+func GetDefaultResourceClientOption(armConfig *ARMClientConfig, factoryConfig *ClientFactoryConfig) (*policy.ClientOptions, error) {
 	//Get default settings
 	options, err := NewClientOptionFromARMClientConfig(armConfig)
 	if err != nil {
 		return nil, err
 	}
-	if config != nil {
-		// add retry policy
-		if !config.CloudProviderBackoff {
-			options.ClientOptions.Retry.MaxRetries = 1
+	if factoryConfig != nil {
+		//Set retry
+		if !factoryConfig.CloudProviderBackoff {
+			options.Retry.MaxRetries = 0
 		}
 	}
-	options.Transport = &http.Client{
-		Transport: armbalancer.New(armbalancer.Options{
-			Transport: utils.DefaultTransport,
-			PoolSize:  100,
-		}),
-	}
+	options.Transport = DefaultResourceClientTransport
 	return options, err
 }

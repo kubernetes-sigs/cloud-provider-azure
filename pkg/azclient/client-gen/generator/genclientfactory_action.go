@@ -144,7 +144,7 @@ type ClientFactoryImpl struct {
 	{{end -}}
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) (ClientFactory,error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory,error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -157,7 +157,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 
 	{{ $rateLimitPolicyNotDefined := true -}}
 	{{range $key, $client := . }}
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {{$client}}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 	if err != nil {
 		return nil, err
 	}
-	{{end -}}
+	{{end}}
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred,

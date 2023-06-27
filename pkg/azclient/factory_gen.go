@@ -67,7 +67,7 @@ type ClientFactoryImpl struct {
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
 }
 
-func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) (ClientFactory, error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory, error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -78,7 +78,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 	var options *arm.ClientOptions
 	var err error
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient Interface availabilitySetRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {deploymentclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient Interface deploymentRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +109,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {diskclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient Interface diskRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +123,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {interfaceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient Interface interfaceRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +137,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {loadbalancerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient Interface loadBalancerRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +151,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {managedclusterclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient Interface containerServiceRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +165,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {privateendpointclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient Interface privateEndpointRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +179,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {privatelinkserviceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient Interface privateLinkServiceRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +193,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {privatezoneclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient Interface privateDNSRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +207,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {publicipaddressclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient Interface publicIPAddressRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +221,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {publicipprefixclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +232,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {routetableclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient Interface routeTableRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +246,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {securitygroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient Interface securityGroupRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +260,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {snapshotclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient Interface snapshotRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +274,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {subnetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient Interface subnetsRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +288,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {virtualmachineclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient Interface virtualMachineRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +302,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {virtualmachinescalesetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient Interface virtualMachineSizesRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +316,8 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 		return nil, err
 	}
 
-	options, err = GetDefaultResourceClientOption(config)
+	//initialize {virtualmachinescalesetvmclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -308,6 +326,7 @@ func NewClientFactory(config *ClientFactoryConfig, cred azcore.TokenCredential) 
 	if err != nil {
 		return nil, err
 	}
+
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred, availabilitysetclientInterface: availabilitysetclientInterface,
