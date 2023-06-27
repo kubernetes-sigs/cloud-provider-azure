@@ -21,7 +21,7 @@
         "availabilityProfile": "VirtualMachineScaleSets",
         "storageProfile": "ManagedDisks",
         "enableAutoScaling": true,
-        "maxCount": 1000,
+        "maxCount": 100,
         "minCount": 1
       },
       {
@@ -33,7 +33,7 @@
         "availabilityProfile": "VirtualMachineScaleSets",
         "storageProfile": "ManagedDisks",
         "enableAutoScaling": true,
-        "maxCount": 1000,
+        "maxCount": 100,
         "minCount": 1
       }
     ],
