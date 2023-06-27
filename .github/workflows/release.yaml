@@ -172,10 +172,10 @@ jobs:
         with:
           branch: doc/release-note-${{github.ref_name}}
           delete-branch: true
-          base: master
+          base: documentation
           commit-message: Update release notes for ${{github.ref_name}}
           add-paths: |
-            ./site/content/en/blog/releases/*.md
+            ./content/en/blog/releases/*.md
           title: Update release notes for ${{github.ref_name}}
           labels: |
             lgtm
