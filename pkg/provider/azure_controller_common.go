@@ -727,7 +727,8 @@ func vmUpdateRequired(future *azure.Future, err error) bool {
 func getValidCreationData(subscriptionID, resourceGroup string, options *ManagedDiskOptions) (compute.CreationData, error) {
 	if options.SourceResourceID == "" {
 		return compute.CreationData{
-			CreateOption: compute.Empty,
+			CreateOption:    compute.Empty,
+			PerformancePlus: options.PerformancePlus,
 		}, nil
 	}
 
@@ -744,7 +745,8 @@ func getValidCreationData(subscriptionID, resourceGroup string, options *Managed
 		}
 	default:
 		return compute.CreationData{
-			CreateOption: compute.Empty,
+			CreateOption:    compute.Empty,
+			PerformancePlus: options.PerformancePlus,
 		}, nil
 	}
 
