@@ -81,9 +81,9 @@ func newFakeCache(t *testing.T) (*fakeDataSource, *TimedCache) {
 		sem: *semaphore.NewWeighted(1),
 	}
 	getter := dataSource.get
-	cache, err := NewTimedcache(fakeCacheTTL, getter)
+	cache, err := NewTimedCache(fakeCacheTTL, getter, false)
 	assert.NoError(t, err)
-	return dataSource, cache
+	return dataSource, cache.(*TimedCache)
 }
 
 func TestCacheGet(t *testing.T) {
@@ -127,7 +127,7 @@ func TestCacheGetError(t *testing.T) {
 	getter := func(key string) (interface{}, error) {
 		return nil, getError
 	}
-	cache, err := NewTimedcache(fakeCacheTTL, getter)
+	cache, err := NewTimedCache(fakeCacheTTL, getter, false)
 	assert.NoError(t, err)
 
 	val, err := cache.GetWithDeepCopy("key", CacheReadTypeDefault)

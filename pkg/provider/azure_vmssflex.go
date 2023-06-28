@@ -48,11 +48,11 @@ var (
 type FlexScaleSet struct {
 	*Cloud
 
-	vmssFlexCache *azcache.TimedCache
+	vmssFlexCache azcache.Resource
 
 	vmssFlexVMNameToVmssID   *sync.Map
 	vmssFlexVMNameToNodeName *sync.Map
-	vmssFlexVMCache          *azcache.TimedCache
+	vmssFlexVMCache          azcache.Resource
 
 	// lockMap in cache refresh
 	lockMap *lockMap
