@@ -24,7 +24,6 @@ export PATH="${PATH:-}:${GOPATH}/bin"
 export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
 if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
-  az extension add -n aks-preview
   az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
 fi
 
@@ -38,13 +37,24 @@ get_k8s_version() {
     return
   fi
   K8S_RELEASE="${K8S_RELEASE:-$(echo ${BUILD_SOURCE_BRANCH_NAME:-} | cut -f2 -d'-')}"
-  AKS_KUBERNETES_VERSION=$(az aks get-versions -l "${AZURE_LOCATION:-}" --subscription ${AZURE_SUBSCRIPTION_ID:-} --output json \
-    | jq -r --arg K8S_RELEASE "${K8S_RELEASE:-}" 'last(.orchestrators |.[] | select(.orchestratorVersion | startswith($K8S_RELEASE))) | .orchestratorVersion')
-  # Normally, K8S_RELEASE has at least one match in AKS, but in case the k8s release is the first minor version,
-  # not picked by AKS, we use the latest AKS k8s version as a try-your-best workaround.
-  if [[ "${AKS_KUBERNETES_VERSION:-}" == "null" ]]; then
-  AKS_KUBERNETES_VERSION=$(az aks get-versions -l "${AZURE_LOCATION:-}" --subscription ${AZURE_SUBSCRIPTION_ID:-} --output json \
-    | jq -r '.orchestrators |.[] |select(.upgrades | .==null) |.orchestratorVersion')
+  az aks get-versions -l "${AZURE_LOCATION:-}" --subscription ${AZURE_SUBSCRIPTION_ID:-} --output json > az_aks_versions
+  echo "Current AKS versions are: $(cat az_aks_versions)"
+  if [[ $(cat az_aks_versions | jq 'has("orchestrators")') == true ]]; then
+    # Old format
+    AKS_KUBERNETES_VERSION=$(cat az_aks_versions \
+      | jq -r --arg K8S_RELEASE "${K8S_RELEASE:-}" 'last(.orchestrators |.[] | select(.orchestratorVersion | startswith($K8S_RELEASE))) | .orchestratorVersion')
+    if [[ "${AKS_KUBERNETES_VERSION:-}" == "null" ]]; then
+      cat az_aks_versions | jq -r '.orchestrators[] | .orchestratorVersion' | sort -V > sorted_k8s_versions 
+      AKS_KUBERNETES_VERSION=$(cat sorted_k8s_versions | tail -1)
+    fi
+  else
+    # Preview format
+    AKS_KUBERNETES_VERSION=$(cat az_aks_versions \
+      | jq -r --arg K8S_RELEASE "${K8S_RELEASE:-}" 'last(.values[] | select(.version | startswith($K8S_RELEASE)) | .patchVersions | keys | .[])')
+    if [[ "${AKS_KUBERNETES_VERSION:-}" == "null" ]]; then
+      cat az_aks_versions | jq -r '.values[] | .patchVersions | keys | .[]' | sort -V > sorted_k8s_versions
+      AKS_KUBERNETES_VERSION=$(cat sorted_k8s_versions | tail -1)
+    fi
   fi
 }
 
@@ -146,6 +156,7 @@ echo "Running e2e"
 
 # TODO: We should do it in autoscaling-multipool.json
 if [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
+  az extension add -n aks-preview
   az aks update --subscription ${AZURE_SUBSCRIPTION_ID:-} --resource-group "${RESOURCE_GROUP:-}" --name "${CLUSTER_NAME:-}" --cluster-autoscaler-profile balance-similar-node-groups=true
 fi
 
