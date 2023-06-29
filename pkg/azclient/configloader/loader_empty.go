@@ -14,23 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package azclient_test
+package configloader
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"context"
 )
 
-var _ = Describe("Factory", func() {
-	When("config is nil", func() {
-		It("should create factory instance without painc", func() {
-			factory, err := azclient.NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
-			client := factory.GetavailabilitysetclientInterface()
-			Expect(client).NotTo(BeNil())
-		})
-	})
-})
+type EmptyLoader[Type any] struct {
+	Data *Type
+}
+
+func (e *EmptyLoader[Type]) Load(ctx context.Context) (*Type, error) {
+	return e.Data, nil
+}
+
+func NewEmptyLoader[Type any](config *Type) ConfigLoader[Type] {
+	if config == nil {
+		config = new(Type)
+	}
+	return &EmptyLoader[Type]{
+		Data: config,
+	}
+}
