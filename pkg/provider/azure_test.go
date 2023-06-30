@@ -3896,3 +3896,73 @@ func TestSetLBDefaults(t *testing.T) {
 	_ = az.setLBDefaults(config)
 	assert.Equal(t, config.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }
+
+func TestCheckEnableMultipleStandardLoadBalancers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
+
+	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+		{
+			Name: "kubernetes",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-0",
+			},
+		},
+		{
+			Name: "lb1",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-1",
+			},
+		},
+		{
+			Name: "kubernetes",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-2",
+			},
+		},
+	}
+
+	err := az.checkEnableMultipleStandardLoadBalancers()
+	assert.Equal(t, "duplicated multiple standard load balancer configuration name kubernetes", err.Error())
+
+	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+		{
+			Name: "kubernetes",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-0",
+			},
+		},
+		{
+			Name: "lb1",
+		},
+	}
+
+	err = az.checkEnableMultipleStandardLoadBalancers()
+	assert.Equal(t, "multiple standard load balancer configuration lb1 must have primary VMSet", err.Error())
+
+	az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+		{
+			Name: "kubernetes",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-0",
+			},
+		},
+		{
+			Name: "lb1",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-2",
+			},
+		},
+		{
+			Name: "lb2",
+			MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+				PrimaryVMSet: "vmss-2",
+			},
+		},
+	}
+
+	err = az.checkEnableMultipleStandardLoadBalancers()
+	assert.Equal(t, "duplicated primary VMSet vmss-2 in multiple standard load balancer configurations lb2", err.Error())
+}
