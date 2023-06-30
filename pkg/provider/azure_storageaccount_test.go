@@ -850,7 +850,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			account: storage.Account{
@@ -859,7 +859,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				AllowBlobPublicAccess: pointer.Bool(false),
 			},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -879,7 +879,7 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				AllowBlobPublicAccess: pointer.Bool(true),
 			},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			account: storage.Account{
@@ -913,7 +913,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			account: storage.Account{
@@ -922,7 +922,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				AllowSharedKeyAccess: pointer.Bool(false),
 			},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			account: storage.Account{
@@ -942,7 +942,7 @@ func TestIsAllowSharedKeyAccessEqual(t *testing.T) {
 			accountOptions: &AccountOptions{
 				AllowSharedKeyAccess: pointer.Bool(true),
 			},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			account: storage.Account{

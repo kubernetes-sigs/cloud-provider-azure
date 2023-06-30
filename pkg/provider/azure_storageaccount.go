@@ -251,11 +251,11 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 						return "", "", err
 					}
 					index = int(n.Int64())
-					klog.V(4).Infof("randomly pick one matching account, index: %d", index)
+					klog.V(4).Infof("randomly pick one matching account, index: %d, matching accounts: %s", index, accounts)
 				}
 				accountName = accounts[index].Name
 				createNewAccount = false
-				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[0].Name, accounts[0].StorageType, accounts[0].Location)
+				klog.V(4).Infof("found a matching account %s type %s location %s", accounts[index].Name, accounts[index].StorageType, accounts[index].Location)
 			}
 		}
 
@@ -742,7 +742,7 @@ func isPrivateEndpointAsExpected(account storage.Account, accountOptions *Accoun
 }
 
 func isAllowBlobPublicAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return pointer.BoolDeref(accountOptions.AllowBlobPublicAccess, false) == pointer.BoolDeref(account.AllowBlobPublicAccess, false)
+	return pointer.BoolDeref(accountOptions.AllowBlobPublicAccess, true) == pointer.BoolDeref(account.AllowBlobPublicAccess, true)
 }
 
 func isRequireInfrastructureEncryptionEqual(account storage.Account, accountOptions *AccountOptions) bool {
@@ -754,7 +754,7 @@ func isRequireInfrastructureEncryptionEqual(account storage.Account, accountOpti
 }
 
 func isAllowSharedKeyAccessEqual(account storage.Account, accountOptions *AccountOptions) bool {
-	return pointer.BoolDeref(accountOptions.AllowSharedKeyAccess, false) == pointer.BoolDeref(account.AllowSharedKeyAccess, false)
+	return pointer.BoolDeref(accountOptions.AllowSharedKeyAccess, true) == pointer.BoolDeref(account.AllowSharedKeyAccess, true)
 }
 
 func isAccessTierEqual(account storage.Account, accountOptions *AccountOptions) bool {
