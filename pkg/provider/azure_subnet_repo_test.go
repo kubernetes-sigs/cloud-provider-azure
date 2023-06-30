@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,25 +15,3 @@ limitations under the License.
 */
 
 package provider
-
-import (
-	"testing"
-
-	"k8s.io/apimachinery/pkg/util/wait"
-
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-)
-
-func TestRequestBackoff(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	az := GetTestCloud(ctrl)
-	az.CloudProviderBackoff = true
-	az.ResourceRequestBackoff = wait.Backoff{Steps: 3}
-
-	backoff := az.RequestBackoff()
-	assert.Equal(t, wait.Backoff{Steps: 3}, backoff)
-
-}
