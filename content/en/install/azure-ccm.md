@@ -43,12 +43,12 @@ Do not set flag `--cloud-provider`.
 
 azure-cloud-controller-manager should be run as Deployment with multiple replicas or Kubelet static Pods on each master Node.
 
-|Flag|Value|Remark|
-|---|---|---|
-|`--cloud-provider`|azure|cloud-provider should be set azure|
-|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json|Path for [cloud provider config](./configs.md)|
-|`--controllers`|*,-cloud-node | cloud node controller should be disabled|
-|`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters |
+|Flag|Value| Remark                                       |
+|---|---|----------------------------------------------|
+|`--cloud-provider`|azure| cloud-provider should be set azure           |
+|`--cloud-config`|/etc/kubernetes/cloud-config/azure.json| Path for [cloud provider config](../configs) |
+|`--controllers`|*,-cloud-node | cloud node controller should be disabled     |
+|`--configure-cloud-routes`| "false" for Azure CNI and "true" for other network plugins| Used for non-AzureCNI clusters               |
 
 For other flags such as `--allocate-node-cidrs`, `--cluster-cidr` and `--cluster-name`, they are moved from kube-controller-manager. If you are migrating from kube-controller-manager, they should be set to same value.
 
