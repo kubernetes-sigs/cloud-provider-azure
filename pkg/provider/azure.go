@@ -1229,9 +1229,11 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		switch {
 		case !isNodeManagedByCloudProvider:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not managed by cloud provider", newNode.ObjectMeta.Name)
 
 		case hasExcludeBalancerLabel:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it has exclude-from-external-load-balancers label", newNode.ObjectMeta.Name)
 
 		case !isNodeReady(newNode) && nodemanager.GetCloudTaint(newNode.Spec.Taints) == nil:
 			// If not in ready state and not a newly created node, add to excludeLoadBalancerNodes cache.
@@ -1240,6 +1242,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			// VMSS API calls and not provoke VMScaleSetActiveModelsCountLimitReached.
 			// (https://github.com/kubernetes-sigs/cloud-provider-azure/issues/851)
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not in ready state or a newly created one", newNode.ObjectMeta.Name)
 
 		default:
 			// Nodes not falling into the three cases above are valid backends and
@@ -1253,7 +1256,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 				az.nodePrivateIPs[newNode.Name] = sets.New[string]()
 			}
 
-			klog.V(4).Infof("adding IP address %s of the node %s", address, newNode.Name)
+			klog.V(6).Infof("adding IP address %s of the node %s", address, newNode.Name)
 			az.nodePrivateIPs[newNode.Name].Insert(address)
 		}
 	}
