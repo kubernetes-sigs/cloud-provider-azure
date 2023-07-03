@@ -15,7 +15,7 @@
         "osType": "Linux",
         "availabilityProfile": "VirtualMachineScaleSets",
         "enableAutoScaling": true,
-        "maxCount": 1000,
+        "maxCount": 399,
         "minCount": 1
       }
     ],
