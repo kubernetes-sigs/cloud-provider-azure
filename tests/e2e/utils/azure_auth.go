@@ -39,15 +39,6 @@ const (
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
-	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
-	CAPZTestCCM = "TEST_CCM"
-	// If "E2E_ON_AKS_CLUSTER" is true, the test is running on a AKS cluster.
-	AKSTestCCM     = "E2E_ON_AKS_CLUSTER"
-	AKSClusterType = "CLUSTER_TYPE"
-	// If "INGEST_TEST_RESULT" is true, the test result needs ingestion to kusto
-	IngestTestResult = "INGEST_TEST_RESULT"
-
-	TrueValue = "true"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
