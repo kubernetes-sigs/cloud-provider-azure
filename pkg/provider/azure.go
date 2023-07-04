@@ -135,8 +135,8 @@ type Config struct {
 	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
 	// In other words, if you use multiple agent pools (availability sets), you MUST set this field.
 	PrimaryAvailabilitySetName string `json:"primaryAvailabilitySetName,omitempty" yaml:"primaryAvailabilitySetName,omitempty"`
-	// The type of azure nodes. Candidate values are: vmss and standard.
-	// If not set, it will be default to standard.
+	// The type of azure nodes. Candidate values are: vmss, standard and vmssflex.
+	// If not set, it will be default to vmss.
 	VMType string `json:"vmType,omitempty" yaml:"vmType,omitempty"`
 	// The name of the scale set that should be used as the load balancer backend.
 	// If this is set, the Azure cloudprovider will only add nodes from that scale set to the load
@@ -556,8 +556,8 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	}
 
 	if config.VMType == "" {
-		// default to standard vmType if not set.
-		config.VMType = consts.VMTypeStandard
+		// default to vmss vmType if not set.
+		config.VMType = consts.VMTypeVMSS
 	}
 
 	if config.RouteUpdateWaitingInSeconds <= 0 {
