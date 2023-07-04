@@ -31,6 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+
+	. "github.com/onsi/gomega"
 )
 
 const (
@@ -93,21 +95,31 @@ func WaitServiceExposureAndGetIPs(cs clientset.Interface, namespace string, name
 }
 
 // WaitServiceExposureAndValidateConnectivity returns IPs of the service and check the connectivity if they are public IPs.
+// Service should have been created before calling this function.
 func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily IPFamily, namespace string, name string, targetIPs []string) ([]string, error) {
 	var service *v1.Service
 	var err error
 	var ips []string
+
+	defer func() {
+		if err != nil {
+			deleteSvcErr := DeleteService(cs, namespace, name)
+			Expect(deleteSvcErr).NotTo(HaveOccurred())
+		}
+	}()
 
 	service, err = WaitServiceExposure(cs, namespace, name, targetIPs)
 	if err != nil {
 		return ips, err
 	}
 	if service == nil {
-		return ips, errors.New("the service is nil")
+		err = errors.New("the service is nil")
+		return ips, err
 	}
 
 	if len(service.Status.LoadBalancer.Ingress) == 0 {
-		return ips, errors.New("service.Status.LoadBalancer.Ingress is empty")
+		err = errors.New("service.Status.LoadBalancer.Ingress is empty")
+		return ips, err
 	}
 	ips = append(ips, service.Status.LoadBalancer.Ingress[0].IP)
 	if len(service.Status.LoadBalancer.Ingress) > 1 {
@@ -117,13 +129,14 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily
 	// Create host exec Pod
 	result, err := CreateHostExecPod(cs, namespace, ExecAgnhostPod)
 	defer func() {
-		err := DeletePod(cs, namespace, ExecAgnhostPod)
-		if err != nil {
+		deletePodErr := DeletePod(cs, namespace, ExecAgnhostPod)
+		if deletePodErr != nil {
 			Logf("failed to delete ExecAgnhostPod, error: %v", err)
 		}
 	}()
 	if !result || err != nil {
-		return ips, fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %w", result, err)
+		err = fmt.Errorf("failed to create ExecAgnhostPod, result: %v, error: %w", result, err)
+		return ips, err
 	}
 
 	// TODO: Check if other WaitServiceExposureAndValidateConnectivity() callers with internal Service
