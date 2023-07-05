@@ -88,6 +88,9 @@ if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   elif [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
     CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/autoscaling-multipool.json"
     export AZURE_LOADBALANCER_SKU=standard
+  elif [[ "${CLUSTER_TYPE:-}" == "vmas" ]]; then
+    CLUSTER_CONFIG_PATH="${REPO_ROOT}/.pipelines/templates/slb-vmas.json"
+    export AZURE_LOADBALANCER_SKU=standard
   fi
 fi
 
