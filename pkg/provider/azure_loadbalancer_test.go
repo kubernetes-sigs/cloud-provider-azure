@@ -312,141 +312,6 @@ func TestGetLoadBalancer(t *testing.T) {
 	}
 }
 
-func TestFindProbe(t *testing.T) {
-	tests := []struct {
-		msg           string
-		existingProbe []network.Probe
-		curProbe      network.Probe
-		expected      bool
-	}{
-		{
-			msg:      "empty existing probes should return false",
-			expected: false,
-		},
-		{
-			msg: "probe names match while ports don't should return false",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("httpProbe"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("httpProbe"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(2),
-				},
-			},
-			expected: false,
-		},
-		{
-			msg: "probe ports match while names don't should return false",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("probe1"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("probe2"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(1),
-				},
-			},
-			expected: false,
-		},
-		{
-			msg: "probe protocol don't match should return false",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("probe1"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:     pointer.Int32(1),
-						Protocol: network.ProbeProtocolHTTP,
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:     pointer.Int32(1),
-					Protocol: network.ProbeProtocolTCP,
-				},
-			},
-			expected: false,
-		},
-		{
-			msg: "probe path don't match should return false",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("probe1"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:        pointer.Int32(1),
-						RequestPath: pointer.String("/path1"),
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:        pointer.Int32(1),
-					RequestPath: pointer.String("/path2"),
-				},
-			},
-			expected: false,
-		},
-		{
-			msg: "probe interval don't match should return false",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("probe1"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:              pointer.Int32(1),
-						RequestPath:       pointer.String("/path"),
-						IntervalInSeconds: pointer.Int32(5),
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:              pointer.Int32(1),
-					RequestPath:       pointer.String("/path"),
-					IntervalInSeconds: pointer.Int32(10),
-				},
-			},
-			expected: false,
-		},
-		{
-			msg: "probe match should return true",
-			existingProbe: []network.Probe{
-				{
-					Name: pointer.String("matchName"),
-					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
-					},
-				},
-			},
-			curProbe: network.Probe{
-				Name: pointer.String("matchName"),
-				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(1),
-				},
-			},
-			expected: true,
-		},
-	}
-
-	for i, test := range tests {
-		findResult := findProbe(test.existingProbe, test.curProbe)
-		assert.Equal(t, test.expected, findResult, fmt.Sprintf("TestCase[%d]: %s", i, test.msg))
-	}
-}
-
 func TestFindRule(t *testing.T) {
 	tests := []struct {
 		msg          string
@@ -2971,14 +2836,14 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 		consts.ServiceAnnotationPLSProxyProtocol:                                               "true",
 		consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                "tcp",
 		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                             "/broken/global/path",
-		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProbeInterval): "10",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProbeInterval): "7",
 		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol):      "https",
 		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsRequestPath):   "/broken/local/path",
-		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsNumOfProbe):    "10",
+		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsNumOfProbe):    "15",
 	}, 80)
 	svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 	svc.Spec.HealthCheckNodePort = 34567
-	probes = getTestProbes("Https", "/broken/local/path", pointer.Int32(10), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(10))
+	probes = getTestProbes("Https", "/broken/local/path", pointer.Int32(7), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(15))
 	testCases = append(testCases, struct {
 		desc            string
 		service         v1.Service
@@ -3021,37 +2886,6 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			}
 		})
 	}
-}
-
-func getTestProbes(protocol, path string, interval, servicePort, probePort, numOfProbe *int32) map[bool][]network.Probe {
-	return map[bool][]network.Probe{
-		consts.IPVersionIPv4: {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, consts.IPVersionIPv4)},
-		consts.IPVersionIPv6: {getTestProbe(protocol, path, interval, servicePort, probePort, numOfProbe, consts.IPVersionIPv6)},
-	}
-}
-
-func getTestProbe(protocol, path string, interval, servicePort, probePort, numOfProbe *int32, isIPv6 bool) network.Probe {
-	suffix := ""
-	if isIPv6 {
-		suffix = "-" + v6Suffix
-	}
-	expectedProbes := network.Probe{
-		Name: pointer.String(fmt.Sprintf("atest1-TCP-%d", *servicePort) + suffix),
-		ProbePropertiesFormat: &network.ProbePropertiesFormat{
-			Protocol:          network.ProbeProtocol(protocol),
-			Port:              probePort,
-			IntervalInSeconds: interval,
-			ProbeThreshold:    numOfProbe,
-		},
-	}
-	if (strings.EqualFold(protocol, "Http") || strings.EqualFold(protocol, "Https")) && len(strings.TrimSpace(path)) > 0 {
-		expectedProbes.RequestPath = pointer.String(path)
-	}
-	return expectedProbes
-}
-
-func getDefaultTestProbes(protocol, path string) map[bool][]network.Probe {
-	return getTestProbes(protocol, path, pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2))
 }
 
 func getDefaultTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingRule {
