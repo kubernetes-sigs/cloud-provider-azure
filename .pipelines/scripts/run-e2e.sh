@@ -24,7 +24,6 @@ export PATH="${PATH:-}:${GOPATH}/bin"
 export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
 if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
-  az extension add -n aks-preview
   az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
 fi
 
@@ -94,10 +93,12 @@ if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
   fi
 fi
 
-if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
+# basic-lb and vmas
+CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
+if [[ "${CLUSTER_TYPE:-}" == "autoscaling" ]]; then
   CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration-autoscaling.json}"
-else
-  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration.json}"
+elif [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
+  CUSTOM_CONFIG_PATH="${CUSTOM_CONFIG_PATH:-${REPO_ROOT}/.pipelines/templates/customconfiguration-autoscaling-multipool.json}"
 fi
 
 rm -rf kubetest2-aks
@@ -157,11 +158,6 @@ kubectl wait --for=condition=Ready node --all --timeout=5m
 kubectl get node -owide
 
 echo "Running e2e"
-
-# TODO: We should do it in autoscaling-multipool.json
-if [[ "${CLUSTER_TYPE:-}" == "autoscaling-multipool" ]]; then
-  az aks update --subscription ${AZURE_SUBSCRIPTION_ID:-} --resource-group "${RESOURCE_GROUP:-}" --name "${CLUSTER_NAME:-}" --cluster-autoscaler-profile balance-similar-node-groups=true
-fi
 
 export E2E_ON_AKS_CLUSTER=true
 if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
