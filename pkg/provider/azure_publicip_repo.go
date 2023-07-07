@@ -18,12 +18,14 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
@@ -151,4 +153,75 @@ func (az *Cloud) listPIP(pipResourceGroup string, crt azcache.AzureCacheReadType
 		return true
 	})
 	return ret, nil
+}
+
+func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string) (pip *network.PublicIPAddress, err error) {
+	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
+	if err != nil {
+		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP: %w", err)
+	}
+
+	if loadBalancerIP != "" {
+		pip, err = az.findMatchedPIPByLoadBalancerIP(&pips, loadBalancerIP, pipResourceGroup)
+		if err != nil {
+			return nil, err
+		}
+		return pip, nil
+	}
+
+	if pipResourceGroup != "" {
+		pip, err = az.findMatchedPIPByName(&pips, pipName, pipResourceGroup)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return pip, nil
+}
+
+func (az *Cloud) findMatchedPIPByName(pips *[]network.PublicIPAddress, pipName, pipResourceGroup string) (*network.PublicIPAddress, error) {
+	for _, pip := range *pips {
+		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
+			return &pip, nil
+		}
+	}
+
+	pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+	if err != nil {
+		return nil, fmt.Errorf("findMatchedPIPByName: failed to listPIP force refresh: %w", err)
+	}
+	for _, pip := range pipList {
+		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
+			return &pip, nil
+		}
+	}
+
+	return nil, fmt.Errorf("findMatchedPIPByName: failed to find PIP %s in resource group %s", pipName, pipResourceGroup)
+}
+
+func (az *Cloud) findMatchedPIPByLoadBalancerIP(pips *[]network.PublicIPAddress, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
+	pip, err := getExpectedPIPFromListByIPAddress(*pips, loadBalancerIP)
+	if err != nil {
+		pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+		if err != nil {
+			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP force refresh: %w", err)
+		}
+
+		pip, err = getExpectedPIPFromListByIPAddress(pipList, loadBalancerIP)
+		if err != nil {
+			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address %s in resource group %s", loadBalancerIP, pipResourceGroup)
+		}
+	}
+
+	return pip, nil
+}
+
+func getExpectedPIPFromListByIPAddress(pips []network.PublicIPAddress, ip string) (*network.PublicIPAddress, error) {
+	for _, pip := range pips {
+		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+			*pip.PublicIPAddressPropertiesFormat.IPAddress == ip {
+			return &pip, nil
+		}
+	}
+
+	return nil, fmt.Errorf("getExpectedPIPFromListByIPAddress: cannot find public IP with IP address %s", ip)
 }

@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
@@ -819,77 +820,6 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	}
 
 	return "", false, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
-}
-
-func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string) (pip *network.PublicIPAddress, err error) {
-	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
-	if err != nil {
-		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP: %w", err)
-	}
-
-	if loadBalancerIP != "" {
-		pip, err = az.findMatchedPIPByLoadBalancerIP(&pips, loadBalancerIP, pipResourceGroup)
-		if err != nil {
-			return nil, err
-		}
-		return pip, nil
-	}
-
-	if pipResourceGroup != "" {
-		pip, err = az.findMatchedPIPByName(&pips, pipName, pipResourceGroup)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return pip, nil
-}
-
-func (az *Cloud) findMatchedPIPByName(pips *[]network.PublicIPAddress, pipName, pipResourceGroup string) (*network.PublicIPAddress, error) {
-	for _, pip := range *pips {
-		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
-			return &pip, nil
-		}
-	}
-
-	pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
-	if err != nil {
-		return nil, fmt.Errorf("findMatchedPIPByName: failed to listPIP force refresh: %w", err)
-	}
-	for _, pip := range pipList {
-		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
-			return &pip, nil
-		}
-	}
-
-	return nil, fmt.Errorf("findMatchedPIPByName: failed to find PIP %s in resource group %s", pipName, pipResourceGroup)
-}
-
-func (az *Cloud) findMatchedPIPByLoadBalancerIP(pips *[]network.PublicIPAddress, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
-	pip, err := getExpectedPIPFromListByIPAddress(*pips, loadBalancerIP)
-	if err != nil {
-		pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
-		if err != nil {
-			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP force refresh: %w", err)
-		}
-
-		pip, err = getExpectedPIPFromListByIPAddress(pipList, loadBalancerIP)
-		if err != nil {
-			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address %s in resource group %s", loadBalancerIP, pipResourceGroup)
-		}
-	}
-
-	return pip, nil
-}
-
-func getExpectedPIPFromListByIPAddress(pips []network.PublicIPAddress, ip string) (*network.PublicIPAddress, error) {
-	for _, pip := range pips {
-		if pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
-			*pip.PublicIPAddressPropertiesFormat.IPAddress == ip {
-			return &pip, nil
-		}
-	}
-
-	return nil, fmt.Errorf("getExpectedPIPFromListByIPAddress: cannot find public IP with IP address %s", ip)
 }
 
 func flipServiceInternalAnnotation(service *v1.Service) *v1.Service {
@@ -3958,4 +3888,110 @@ func isLoadBalancerInUseByService(service *v1.Service, lbConfig MultipleStandard
 		return lbConfig.ActiveServices.Has(serviceName)
 	}
 	return false
+}
+
+// There are two cases when a service owns the frontend IP config:
+// 1. The primary service, which means the frontend IP config is created after the creation of the service.
+// This means the name of the config can be tracked by the service UID.
+// 2. The secondary services must have their loadBalancer IP set if they want to share the same config as the primary
+// service. Hence, it can be tracked by the loadBalancer IP.
+// If the IP version is not empty, which means it is the secondary Service, it returns IP version of the Service FIP.
+func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, service *v1.Service) (bool, bool, network.IPVersion) {
+	var isPrimaryService bool
+	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
+	if strings.HasPrefix(pointer.StringDeref(fip.Name, ""), baseName) {
+		klog.V(6).Infof("serviceOwnsFrontendIP: found primary service %s of the frontend IP config %s", service.Name, *fip.Name)
+		isPrimaryService = true
+		return true, isPrimaryService, ""
+	}
+
+	loadBalancerIPs := getServiceLoadBalancerIPs(service)
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
+	var pipNames []string
+	if len(loadBalancerIPs) == 0 {
+		if !requiresInternalLoadBalancer(service) {
+			pipNames = getServicePIPNames(service)
+			for _, pipName := range pipNames {
+				if pipName != "" {
+					pip, err := az.findMatchedPIP("", pipName, pipResourceGroup)
+					if err != nil {
+						klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with name %s: %v", service.Name, pipName, err)
+						return false, isPrimaryService, ""
+					}
+					if publicIPOwnsFrontendIP(service, &fip, pip) {
+						return true, isPrimaryService, pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion
+					}
+				}
+			}
+		}
+		// it is a must that the secondary services set the loadBalancer IP or pip name
+		return false, isPrimaryService, ""
+	}
+
+	// for external secondary service the public IP address should be checked
+	if !requiresInternalLoadBalancer(service) {
+		for _, loadBalancerIP := range loadBalancerIPs {
+			pip, err := az.findMatchedPIP(loadBalancerIP, "", pipResourceGroup)
+			if err != nil {
+				klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerIP %s: %v", service.Name, loadBalancerIP, err)
+				return false, isPrimaryService, ""
+			}
+
+			if publicIPOwnsFrontendIP(service, &fip, pip) {
+				return true, isPrimaryService, pip.PublicIPAddressPropertiesFormat.PublicIPAddressVersion
+			}
+			klog.V(6).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s "+
+				"OR it is of incorrect IP version", *pip.ID, *pip.IPAddress)
+		}
+
+		return false, isPrimaryService, ""
+	}
+
+	// for internal secondary service the private IP address on the frontend IP config should be checked
+	if fip.PrivateIPAddress == nil {
+		return false, isPrimaryService, ""
+	}
+	privateIPAddrVersion := network.IPv4
+	if net.ParseIP(*fip.PrivateIPAddress).To4() == nil {
+		privateIPAddrVersion = network.IPv6
+	}
+
+	privateIPEquals := false
+	for _, loadBalancerIP := range loadBalancerIPs {
+		if strings.EqualFold(*fip.PrivateIPAddress, loadBalancerIP) {
+			privateIPEquals = true
+			break
+		}
+	}
+	return privateIPEquals, isPrimaryService, privateIPAddrVersion
+}
+
+func (az *Cloud) getFrontendIPConfigNames(service *v1.Service) map[bool]string {
+	isDualStack := isServiceDualStack(service)
+	defaultLBFrontendIPConfigName := az.getDefaultFrontendIPConfigName(service)
+	return map[bool]string{
+		consts.IPVersionIPv4: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, consts.IPVersionIPv4),
+		consts.IPVersionIPv6: getResourceByIPFamily(defaultLBFrontendIPConfigName, isDualStack, consts.IPVersionIPv6),
+	}
+}
+
+func (az *Cloud) getDefaultFrontendIPConfigName(service *v1.Service) string {
+	baseName := az.GetLoadBalancerName(context.TODO(), "", service)
+	subnetName := getInternalSubnet(service)
+	if subnetName != nil {
+		ipcName := fmt.Sprintf("%s-%s", baseName, *subnetName)
+
+		// Azure lb front end configuration name must not exceed 80 characters
+		maxLength := consts.FrontendIPConfigNameMaxLength - consts.IPFamilySuffixLength
+		if len(ipcName) > maxLength {
+			ipcName = ipcName[:maxLength]
+			// Cutting the string may result in char like "-" as the string end.
+			// If the last char is not a letter or '_', replace it with "_".
+			if !unicode.IsLetter(rune(ipcName[len(ipcName)-1:][0])) && ipcName[len(ipcName)-1:] != "_" {
+				ipcName = ipcName[:len(ipcName)-1] + "_"
+			}
+		}
+		return ipcName
+	}
+	return baseName
 }

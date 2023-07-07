@@ -2094,133 +2094,6 @@ func TestIsFrontendIPChanged(t *testing.T) {
 	}
 }
 
-func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	testPIP := network.PublicIPAddress{
-		Name: pointer.String("pipName"),
-		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: pointer.String("1.2.3.4"),
-		},
-	}
-	testCases := []struct {
-		desc               string
-		pips               []network.PublicIPAddress
-		pipsSecondTime     []network.PublicIPAddress
-		shouldRefreshCache bool
-		expectedPIP        *network.PublicIPAddress
-		expectedError      bool
-	}{
-		{
-			desc:        "findMatchedPIPByLoadBalancerIP shall return the matched ip",
-			pips:        []network.PublicIPAddress{testPIP},
-			expectedPIP: &testPIP,
-		},
-		{
-			desc:               "findMatchedPIPByLoadBalancerIP shall return error if ip is not found",
-			pips:               []network.PublicIPAddress{},
-			shouldRefreshCache: true,
-			expectedError:      true,
-		},
-		{
-			desc:               "findMatchedPIPByLoadBalancerIP should refresh cache if no matched ip is found",
-			pipsSecondTime:     []network.PublicIPAddress{testPIP},
-			shouldRefreshCache: true,
-			expectedPIP:        &testPIP,
-		},
-	}
-	for _, test := range testCases {
-		t.Run(test.desc, func(t *testing.T) {
-			az := GetTestCloud(ctrl)
-
-			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-			if test.shouldRefreshCache {
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipsSecondTime, nil)
-			}
-			pip, err := az.findMatchedPIPByLoadBalancerIP(&test.pips, "1.2.3.4", "rg")
-			assert.Equal(t, test.expectedPIP, pip)
-			assert.Equal(t, test.expectedError, err != nil)
-		})
-	}
-}
-
-func TestFindMatchedPIP(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	testPIP := network.PublicIPAddress{
-		Name: pointer.String("pipName"),
-		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: pointer.String("1.2.3.4"),
-		},
-	}
-
-	for _, tc := range []struct {
-		description         string
-		pips                []network.PublicIPAddress
-		pipsSecondTime      []network.PublicIPAddress
-		pipName             string
-		loadBalancerIP      string
-		shouldRefreshCache  bool
-		listError           *retry.Error
-		listErrorSecondTime *retry.Error
-		expectedPIP         *network.PublicIPAddress
-		expectedError       error
-	}{
-		{
-			description:        "should ignore pipName if loadBalancerIP is specified",
-			pips:               []network.PublicIPAddress{testPIP},
-			pipsSecondTime:     []network.PublicIPAddress{testPIP},
-			shouldRefreshCache: true,
-			loadBalancerIP:     "2.3.4.5",
-			pipName:            "pipName",
-			expectedError:      errors.New("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 2.3.4.5 in resource group rg"),
-		},
-		{
-			description:   "should report an error if failed to list pip",
-			listError:     retry.NewError(false, errors.New("list error")),
-			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: failed to listPIP: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
-		},
-		{
-			description:        "should refresh the cache if failed to search by name",
-			pips:               []network.PublicIPAddress{},
-			pipsSecondTime:     []network.PublicIPAddress{testPIP},
-			shouldRefreshCache: true,
-			pipName:            "pipName",
-			expectedPIP:        &testPIP,
-		},
-		{
-			description: "should return the expected pip by name",
-			pips:        []network.PublicIPAddress{testPIP},
-			pipName:     "pipName",
-			expectedPIP: &testPIP,
-		},
-		{
-			description:         "should report an error if failed to list pip second time",
-			pips:                []network.PublicIPAddress{},
-			listErrorSecondTime: retry.NewError(false, errors.New("list error")),
-			shouldRefreshCache:  true,
-			expectedError:       errors.New("findMatchedPIPByName: failed to listPIP force refresh: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
-		},
-	} {
-		t.Run(tc.description, func(t *testing.T) {
-			az := GetTestCloud(ctrl)
-			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pips, tc.listError)
-			if tc.shouldRefreshCache {
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pipsSecondTime, tc.listErrorSecondTime)
-			}
-
-			pip, err := az.findMatchedPIP(tc.loadBalancerIP, tc.pipName, "rg")
-			assert.Equal(t, tc.expectedPIP, pip)
-			if tc.expectedError != nil {
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-			}
-		})
-	}
-}
-
 func TestDeterminePublicIPName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -7899,6 +7772,449 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 				assert.Equal(t, svcNames, activeServices[lbConfigName])
 			}
 
+		})
+	}
+}
+
+func TestGetFrontendIPConfigName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.PrimaryAvailabilitySetName = primary
+
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+			},
+			UID: "257b9655-5137-4ad2-b091-ef3f07043ad3",
+		},
+	}
+
+	cases := []struct {
+		description   string
+		subnetName    string
+		isInternal    bool
+		useStandardLB bool
+		expected      string
+	}{
+		{
+			description:   "internal lb should have subnet name on the frontend ip configuration name",
+			subnetName:    "shortsubnet",
+			isInternal:    true,
+			useStandardLB: true,
+			expected:      "a257b965551374ad2b091ef3f07043ad-shortsubnet",
+		},
+		{
+			description:   "internal lb should have subnet name on the frontend ip configuration name but truncated to 80 characters, also not end with char like '-'",
+			subnetName:    "a--------------------------------------------------z",
+			isInternal:    true,
+			useStandardLB: true,
+			expected:      "a257b965551374ad2b091ef3f07043ad-a----------------------------------------_",
+		},
+		{
+			description:   "internal standard lb should have subnet name on the frontend ip configuration name but truncated to 80 characters",
+			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
+			isInternal:    true,
+			useStandardLB: true,
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggg",
+		},
+		{
+			description:   "internal basic lb should have subnet name on the frontend ip configuration name but truncated to 80 characters",
+			subnetName:    "averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggggggggggggggggggggggggggggggggggsubet",
+			isInternal:    true,
+			useStandardLB: false,
+			expected:      "a257b965551374ad2b091ef3f07043ad-averylonnnngggnnnnnnnnnnnnnnnnnnnnnngggggg",
+		},
+		{
+			description:   "external standard lb should not have subnet name on the frontend ip configuration name",
+			subnetName:    "shortsubnet",
+			isInternal:    false,
+			useStandardLB: true,
+			expected:      "a257b965551374ad2b091ef3f07043ad",
+		},
+		{
+			description:   "external basic lb should not have subnet name on the frontend ip configuration name",
+			subnetName:    "shortsubnet",
+			isInternal:    false,
+			useStandardLB: false,
+			expected:      "a257b965551374ad2b091ef3f07043ad",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+
+			ipconfigName := az.getDefaultFrontendIPConfigName(svc)
+			assert.Equal(t, c.expected, ipconfigName)
+		})
+	}
+}
+
+func TestGetFrontendIPConfigNames(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+	az.PrimaryAvailabilitySetName = primary
+
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerInternalSubnet: "subnet",
+				consts.ServiceAnnotationLoadBalancerInternal:       "true",
+			},
+			UID: "257b9655-5137-4ad2-b091-ef3f07043ad3",
+		},
+		Spec: v1.ServiceSpec{
+			IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+		},
+	}
+
+	cases := []struct {
+		description   string
+		subnetName    string
+		isInternal    bool
+		useStandardLB bool
+		expectedV4    string
+		expectedV6    string
+	}{
+		{
+			description:   "internal lb should have subnet name on the frontend ip configuration name",
+			subnetName:    "shortsubnet",
+			isInternal:    true,
+			useStandardLB: true,
+			expectedV4:    "a257b965551374ad2b091ef3f07043ad-shortsubnet",
+			expectedV6:    "a257b965551374ad2b091ef3f07043ad-shortsubnet-IPv6",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			if c.useStandardLB {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			} else {
+				az.Config.LoadBalancerSku = consts.LoadBalancerSkuBasic
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet] = c.subnetName
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = strconv.FormatBool(c.isInternal)
+
+			ipconfigNames := az.getFrontendIPConfigNames(svc)
+			assert.Equal(t, c.expectedV4, ipconfigNames[false])
+			assert.Equal(t, c.expectedV6, ipconfigNames[true])
+		})
+	}
+}
+
+func TestServiceOwnsFrontendIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		desc                 string
+		existingPIPs         []network.PublicIPAddress
+		fip                  network.FrontendIPConfiguration
+		service              *v1.Service
+		isOwned              bool
+		isPrimary            bool
+		expectedFIPIPVersion network.IPVersion
+		listError            *retry.Error
+	}{
+		{
+			desc: "serviceOwnsFrontendIP should detect the primary service",
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("uid"),
+				},
+			},
+			isOwned:   true,
+			isPrimary: true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should return false if the secondary external service doesn't set it's loadBalancer IP",
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+				},
+			},
+		},
+		{
+			desc: "serviceOwnsFrontendIP should report a not found error if there is no public IP " +
+				"found according to the external service's loadBalancer IP but do not return the error",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("4.3.2.1"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "1.2.3.4"},
+				},
+			},
+		},
+		{
+			desc: "serviceOwnsFrontendIP should return correct FIP IP version",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress:              pointer.String("4.3.2.1"),
+						PublicIPAddressVersion: network.IPv4,
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+				},
+			},
+			expectedFIPIPVersion: network.IPv4,
+			isOwned:              true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should return false if there is a mismatch between the PIP's ID and " +
+				"the counterpart on the frontend IP config",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("4.3.2.1"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         types.UID("secondary"),
+					Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1"},
+				},
+			},
+		},
+		{
+			desc: "serviceOwnsFrontendIP should return false if there is no public IP address in the frontend IP config",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("4.3.2.1"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPPrefix: &network.SubResource{
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+					},
+				},
+			},
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary external service",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					ID: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("4.3.2.1"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			isOwned: true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary external service dual-stack",
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("pip"),
+					ID:   pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv4,
+						IPAddress:              pointer.String("4.3.2.1"),
+					},
+				},
+				{
+					Name: pointer.String("pip1"),
+					ID:   pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						PublicIPAddressVersion: network.IPv6,
+						IPAddress:              pointer.String("fd00::eef0"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+							PublicIPAddressVersion: network.IPv6,
+						},
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			isOwned:   true,
+			isPrimary: false,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary internal service",
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress: pointer.String("4.3.2.1"),
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerInternal:           "true",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+					},
+				},
+			},
+			isOwned: true,
+		},
+		{
+			desc: "serviceOwnsFrontendIP should detect the secondary internal service - dualstack",
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("auid"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PrivateIPAddress: pointer.String("fd00::eef0"),
+				},
+			},
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID: types.UID("secondary"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerInternal:           "true",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "4.3.2.1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "fd00::eef0",
+					},
+				},
+			},
+			isOwned: true,
+		},
+		{
+			desc:      "serviceOwnsFrontendIP should return false if failed to find matched pip by name",
+			service:   &v1.Service{},
+			listError: retry.NewError(false, errors.New("error")),
+		},
+		{
+			desc: "serviceOwnsFrontnedIP should support search pip by name",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("pip1"),
+					ID:   pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("1.2.3.4"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("test"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			isOwned: true,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.desc, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			if test.existingPIPs != nil {
+				mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, test.listError).MaxTimes(2)
+			}
+			isOwned, isPrimary, fipIPVersion := cloud.serviceOwnsFrontendIP(test.fip, test.service)
+			if test.expectedFIPIPVersion != "" {
+				assert.Equal(t, test.expectedFIPIPVersion, fipIPVersion)
+			}
+			assert.Equal(t, test.isOwned, isOwned)
+			assert.Equal(t, test.isPrimary, isPrimary)
 		})
 	}
 }

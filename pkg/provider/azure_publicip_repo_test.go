@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -202,6 +203,133 @@ func TestGetPublicIPAddress(t *testing.T) {
 			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectExists, pipExists)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestFindMatchedPIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPIP := network.PublicIPAddress{
+		Name: pointer.String("pipName"),
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			IPAddress: pointer.String("1.2.3.4"),
+		},
+	}
+
+	for _, tc := range []struct {
+		description         string
+		pips                []network.PublicIPAddress
+		pipsSecondTime      []network.PublicIPAddress
+		pipName             string
+		loadBalancerIP      string
+		shouldRefreshCache  bool
+		listError           *retry.Error
+		listErrorSecondTime *retry.Error
+		expectedPIP         *network.PublicIPAddress
+		expectedError       error
+	}{
+		{
+			description:        "should ignore pipName if loadBalancerIP is specified",
+			pips:               []network.PublicIPAddress{testPIP},
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			loadBalancerIP:     "2.3.4.5",
+			pipName:            "pipName",
+			expectedError:      errors.New("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 2.3.4.5 in resource group rg"),
+		},
+		{
+			description:   "should report an error if failed to list pip",
+			listError:     retry.NewError(false, errors.New("list error")),
+			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: failed to listPIP: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+		},
+		{
+			description:        "should refresh the cache if failed to search by name",
+			pips:               []network.PublicIPAddress{},
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			pipName:            "pipName",
+			expectedPIP:        &testPIP,
+		},
+		{
+			description: "should return the expected pip by name",
+			pips:        []network.PublicIPAddress{testPIP},
+			pipName:     "pipName",
+			expectedPIP: &testPIP,
+		},
+		{
+			description:         "should report an error if failed to list pip second time",
+			pips:                []network.PublicIPAddress{},
+			listErrorSecondTime: retry.NewError(false, errors.New("list error")),
+			shouldRefreshCache:  true,
+			expectedError:       errors.New("findMatchedPIPByName: failed to listPIP force refresh: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pips, tc.listError)
+			if tc.shouldRefreshCache {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pipsSecondTime, tc.listErrorSecondTime)
+			}
+
+			pip, err := az.findMatchedPIP(tc.loadBalancerIP, tc.pipName, "rg")
+			assert.Equal(t, tc.expectedPIP, pip)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPIP := network.PublicIPAddress{
+		Name: pointer.String("pipName"),
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			IPAddress: pointer.String("1.2.3.4"),
+		},
+	}
+	testCases := []struct {
+		desc               string
+		pips               []network.PublicIPAddress
+		pipsSecondTime     []network.PublicIPAddress
+		shouldRefreshCache bool
+		expectedPIP        *network.PublicIPAddress
+		expectedError      bool
+	}{
+		{
+			desc:        "findMatchedPIPByLoadBalancerIP shall return the matched ip",
+			pips:        []network.PublicIPAddress{testPIP},
+			expectedPIP: &testPIP,
+		},
+		{
+			desc:               "findMatchedPIPByLoadBalancerIP shall return error if ip is not found",
+			pips:               []network.PublicIPAddress{},
+			shouldRefreshCache: true,
+			expectedError:      true,
+		},
+		{
+			desc:               "findMatchedPIPByLoadBalancerIP should refresh cache if no matched ip is found",
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			expectedPIP:        &testPIP,
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			if test.shouldRefreshCache {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipsSecondTime, nil)
+			}
+			pip, err := az.findMatchedPIPByLoadBalancerIP(&test.pips, "1.2.3.4", "rg")
+			assert.Equal(t, test.expectedPIP, pip)
+			assert.Equal(t, test.expectedError, err != nil)
 		})
 	}
 }
