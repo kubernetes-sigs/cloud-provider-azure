@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 type BackendPool interface {
@@ -258,7 +259,10 @@ func (bc *backendPoolTypeNodeIPConfig) ReconcileBackendPools(clusterName string,
 		// decouple the backendPool from the node
 		updated, err := bc.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolIDsSlice, vmSetName, &backendpoolToBeDeleted, false)
 		if err != nil {
-			return false, false, false, err
+			if !retry.HasStatusForbiddenOrIgnoredError(err) {
+				return false, false, false, err
+			}
+			klog.Warningf("EnsureBackendPoolDeleted: failed to delete backend pool: %v", err)
 		}
 		if updated {
 			shouldRefreshLB = true
@@ -614,8 +618,11 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		klog.V(2).Infof("bi.ReconcileBackendPools for service (%s) and vmSet (%s): ensuring the LB is decoupled from the VMSet", serviceName, vmSetName)
 		shouldRefreshLB, err = bi.VMSet.EnsureBackendPoolDeleted(service, lbBackendPoolIDsSlice, vmSetName, lb.BackendAddressPools, true)
 		if err != nil {
-			klog.Errorf("bi.ReconcileBackendPools for service (%s): failed to EnsureBackendPoolDeleted: %s", serviceName, err.Error())
-			return false, false, false, err
+			if !retry.HasStatusForbiddenOrIgnoredError(err) {
+				klog.Errorf("bi.ReconcileBackendPools for service (%s): failed to EnsureBackendPoolDeleted: %s", serviceName, err.Error())
+				return false, false, false, err
+			}
+			klog.Warningf("bi.ReconcileBackendPools for service (%s): failed to EnsureBackendPoolDeleted: %s", serviceName, err.Error())
 		}
 
 		for _, i := range bpIdxes {

@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 
@@ -39,17 +40,18 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc              string
-		annotations       map[string]string
-		wantPLS           bool
-		expectedSubnetGet bool
-		existingSubnet    *network.Subnet
-		expectedPLSList   bool
-		existingPLSList   []network.PrivateLinkService
-		expectedPLSCreate bool
-		expectedPLS       *network.PrivateLinkService
-		expectedPLSDelete bool
-		expectedError     bool
+		desc               string
+		annotations        map[string]string
+		wantPLS            bool
+		expectedSubnetGet  bool
+		existingSubnet     *network.Subnet
+		expectedPLSList    bool
+		existingPLSList    []network.PrivateLinkService
+		existingPLSListErr *retry.Error
+		expectedPLSCreate  bool
+		expectedPLS        *network.PrivateLinkService
+		expectedPLSDelete  bool
+		expectedError      bool
 	}{
 		{
 			desc:    "reconcilePrivateLinkService should do nothing if service does not create any PLS",
@@ -316,6 +318,27 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			},
 			expectedPLSDelete: true,
 		},
+		{
+			desc: "should delete pls when frontend is deleted, get pls returns 404 error",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSName:              "testpls",
+			},
+			expectedPLSList:    true,
+			existingPLSListErr: retry.NewError(false, errors.New("HTTPStatusCode: 404")),
+		},
+		{
+			desc: "should delete pls when frontend is deleted, get pls returns random error",
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSCreation:          "true",
+				consts.ServiceAnnotationLoadBalancerInternal: "true",
+				consts.ServiceAnnotationPLSName:              "testpls",
+			},
+			expectedPLSList:    true,
+			existingPLSListErr: retry.NewError(false, errors.New("random error")),
+			expectedError:      true,
+		},
 	}
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
@@ -342,7 +365,7 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 				mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", "").Return(*test.existingSubnet, nil).MaxTimes(2)
 			}
 			if test.expectedPLSList {
-				mockPLSsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPLSList, nil).MaxTimes(1)
+				mockPLSsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPLSList, test.existingPLSListErr).MaxTimes(1)
 			}
 			if test.expectedPLSCreate {
 				mockPLSsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", pointer.StringDeref(test.expectedPLS.Name, ""), gomock.Any(), gomock.Any()).Return(nil).Times(1)

@@ -162,16 +162,19 @@ func (az *Cloud) reconcilePrivateLinkService(
 	} else if !wantPLS {
 		existingPLS, err := az.getPrivateLinkService(fipConfigID, azcache.CacheReadTypeDefault)
 		if err != nil {
-			klog.Errorf("reconcilePrivateLinkService for service(%s): getPrivateLinkService(%s) failed: %v", serviceName, pointer.StringDeref(fipConfigID, ""), err)
-			return err
-		}
-
-		exists := !strings.EqualFold(pointer.StringDeref(existingPLS.ID, ""), consts.PrivateLinkServiceNotExistID)
-		if exists {
-			deleteErr := az.safeDeletePLS(&existingPLS, service)
-			if deleteErr != nil {
-				klog.Errorf("reconcilePrivateLinkService for service(%s): deletePLS for frontEnd(%s) failed: %v", serviceName, pointer.StringDeref(fipConfigID, ""), err)
-				return deleteErr.Error()
+			if !retry.HasStatusForbiddenOrIgnoredError(err) {
+				klog.Errorf("reconcilePrivateLinkService for service(%s): getPrivateLinkService(%s) failed: %v", serviceName, pointer.StringDeref(fipConfigID, ""), err)
+				return err
+			}
+			klog.Warningf("reconcilePrivateLinkService for service(%s): getPrivateLinkService(%s) failed: %v", serviceName, pointer.StringDeref(fipConfigID, ""), err)
+		} else {
+			exists := !strings.EqualFold(pointer.StringDeref(existingPLS.ID, ""), consts.PrivateLinkServiceNotExistID)
+			if exists {
+				deleteErr := az.safeDeletePLS(&existingPLS, service)
+				if deleteErr != nil {
+					klog.Errorf("reconcilePrivateLinkService for service(%s): deletePLS for frontEnd(%s) failed: %v", serviceName, pointer.StringDeref(fipConfigID, ""), err)
+					return deleteErr.Error()
+				}
 			}
 		}
 	}
