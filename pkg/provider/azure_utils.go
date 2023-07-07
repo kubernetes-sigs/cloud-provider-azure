@@ -364,3 +364,10 @@ func countIPsOnBackendPool(backendPool network.BackendAddressPool) int {
 
 	return ipsCount
 }
+
+func getServicePIPName(service *v1.Service) string {
+	if service == nil {
+		return ""
+	}
+	return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]]
+}

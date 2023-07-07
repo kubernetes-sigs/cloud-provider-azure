@@ -799,6 +799,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		clusterName             string
 		serviceName             string
 		serviceLBIP             string
+		serviceLBName           string
 		expectedOwns            bool
 		expectedUserAssignedPIP bool
 	}{
@@ -811,6 +812,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		{
 			desc: "false should be returned when service name tag doesn't match",
 			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
 					consts.ServiceTagKey: pointer.String("default/nginx"),
 				},
@@ -853,6 +855,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		{
 			desc: "false should be returned when cluster name matches while service name doesn't match",
 			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
 					consts.ServiceTagKey:  pointer.String("default/web"),
 					consts.ClusterNameKey: pointer.String("kubernetes"),
@@ -883,6 +886,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		{
 			desc: "false should be returned when the tag is empty and load balancer IP does not match",
 			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
 					consts.ServiceTagKey:  pointer.String(""),
 					consts.ClusterNameKey: pointer.String("kubernetes"),
@@ -914,6 +918,7 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 		{
 			desc: "false should be returned if there is not a match among a multi-service tag",
 			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
 				Tags: map[string]*string{
 					consts.ServiceTagKey:  pointer.String("default/nginx1,default/nginx2"),
 					consts.ClusterNameKey: pointer.String("kubernetes"),
@@ -970,6 +975,45 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			expectedOwns:            true,
 			expectedUserAssignedPIP: true,
 		},
+		{
+			desc: "should be true if the pip name matches",
+			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: pointer.String("1.2.3.4"),
+				},
+			},
+			serviceLBName:           "pip1",
+			expectedOwns:            true,
+			expectedUserAssignedPIP: true,
+		},
+		{
+			desc: "should be true if the pip with tag matches the pip name",
+			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
+				Tags: map[string]*string{},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: pointer.String("1.2.3.4"),
+				},
+			},
+			serviceLBName:           "pip1",
+			expectedOwns:            true,
+			expectedUserAssignedPIP: true,
+		},
+		{
+			desc: "should be true if the pip with service tag matches the pip name",
+			pip: &network.PublicIPAddress{
+				Name: pointer.String("pip1"),
+				Tags: map[string]*string{
+					consts.ServiceTagKey: pointer.String("default/web"),
+				},
+				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+					IPAddress: pointer.String("1.2.3.4"),
+				},
+			},
+			serviceLBName: "pip1",
+			expectedOwns:  true,
+		},
 	}
 
 	for i, c := range tests {
@@ -977,6 +1021,13 @@ func TestServiceOwnsPublicIP(t *testing.T) {
 			service := getTestService(c.serviceName, v1.ProtocolTCP, nil, false, 80)
 			if c.serviceLBIP != "" {
 				setServiceLoadBalancerIP(&service, c.serviceLBIP)
+			}
+			if c.serviceLBName != "" {
+				if service.ObjectMeta.Annotations == nil {
+					service.ObjectMeta.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"}
+				} else {
+					service.ObjectMeta.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = "pip1"
+				}
 			}
 			owns, isUserAssignedPIP := serviceOwnsPublicIP(&service, c.pip, c.clusterName)
 			assert.Equal(t, c.expectedOwns, owns, "TestCase[%d]: %s", i, c.desc)
@@ -2072,6 +2123,7 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 	testCases := []struct {
 		desc               string
 		pips               []network.PublicIPAddress
+		pipsSecondTime     []network.PublicIPAddress
 		shouldRefreshCache bool
 		expectedPIP        *network.PublicIPAddress
 		expectedError      bool
@@ -2089,7 +2141,7 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 		},
 		{
 			desc:               "findMatchedPIPByLoadBalancerIP should refresh cache if no matched ip is found",
-			pips:               []network.PublicIPAddress{testPIP},
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
 			shouldRefreshCache: true,
 			expectedPIP:        &testPIP,
 		},
@@ -2097,17 +2149,90 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
-			setServiceLoadBalancerIP(&service, "1.2.3.4")
 
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 			if test.shouldRefreshCache {
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return([]network.PublicIPAddress{}, nil)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pipsSecondTime, nil)
 			}
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.pips, nil)
-			pip, err := az.findMatchedPIPByLoadBalancerIP(&service, "1.2.3.4", "rg")
+			pip, err := az.findMatchedPIPByLoadBalancerIP(&test.pips, "1.2.3.4", "rg")
 			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectedError, err != nil)
+		})
+	}
+}
+
+func TestFindMatchedPIP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPIP := network.PublicIPAddress{
+		Name: pointer.String("pipName"),
+		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+			IPAddress: pointer.String("1.2.3.4"),
+		},
+	}
+
+	for _, tc := range []struct {
+		description         string
+		pips                []network.PublicIPAddress
+		pipsSecondTime      []network.PublicIPAddress
+		pipName             string
+		loadBalancerIP      string
+		shouldRefreshCache  bool
+		listError           *retry.Error
+		listErrorSecondTime *retry.Error
+		expectedPIP         *network.PublicIPAddress
+		expectedError       error
+	}{
+		{
+			description:        "should ignore pipName if loadBalancerIP is specified",
+			pips:               []network.PublicIPAddress{testPIP},
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			loadBalancerIP:     "2.3.4.5",
+			pipName:            "pipName",
+			expectedError:      errors.New("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address 2.3.4.5 in resource group rg"),
+		},
+		{
+			description:   "should report an error if failed to list pip",
+			listError:     retry.NewError(false, errors.New("list error")),
+			expectedError: errors.New("findMatchedPIPByLoadBalancerIP: failed to listPIP: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+		},
+		{
+			description:        "should refresh the cache if failed to search by name",
+			pips:               []network.PublicIPAddress{},
+			pipsSecondTime:     []network.PublicIPAddress{testPIP},
+			shouldRefreshCache: true,
+			pipName:            "pipName",
+			expectedPIP:        &testPIP,
+		},
+		{
+			description: "should return the expected pip by name",
+			pips:        []network.PublicIPAddress{testPIP},
+			pipName:     "pipName",
+			expectedPIP: &testPIP,
+		},
+		{
+			description:         "should report an error if failed to list pip second time",
+			pips:                []network.PublicIPAddress{},
+			listErrorSecondTime: retry.NewError(false, errors.New("list error")),
+			shouldRefreshCache:  true,
+			expectedError:       errors.New("findMatchedPIPByName: failed to listPIP force refresh: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: list error"),
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pips, tc.listError)
+			if tc.shouldRefreshCache {
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pipsSecondTime, tc.listErrorSecondTime)
+			}
+
+			pip, err := az.findMatchedPIP(tc.loadBalancerIP, tc.pipName, "rg")
+			assert.Equal(t, tc.expectedPIP, pip)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
 		})
 	}
 }
