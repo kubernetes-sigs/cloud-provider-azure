@@ -55,10 +55,10 @@ func getServiceLoadBalancerIP(service *v1.Service) string {
 		return ""
 	}
 
-	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[false]]; ok && ip != "" {
+	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv4]]; ok && ip != "" {
 		return ip
 	}
-	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[true]]; ok && ip != "" {
+	if ip, ok := service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv6]]; ok && ip != "" {
 		return ip
 	}
 
