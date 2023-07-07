@@ -392,7 +392,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		targetIP := pointer.StringDeref(pip.IPAddress, "")
 
 		serviceNames := []string{}
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 3; i++ {
 			serviceLabels := labels
 			deploymentName := testDeploymentName
 			tcpPort := int32(80 + i)
@@ -411,6 +411,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
+			var service *v1.Service
 			serviceName := fmt.Sprintf("%s-%d", testServiceName, i)
 			utils.Logf("Creating Service %q", serviceName)
 			serviceNames = append(serviceNames, serviceName)
@@ -418,9 +419,17 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				Port:       tcpPort,
 				TargetPort: intstr.FromInt(int(tcpPort)),
 			}}
-			service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, serviceLabels, ns.Name, servicePort)
-			service = updateServiceLBIPs(service, false, []string{targetIP})
-			_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			service = utils.CreateLoadBalancerServiceManifest(serviceName, nil, serviceLabels, ns.Name, servicePort)
+			if i < 2 {
+				targetIPs := []string{targetIP}
+				service = updateServiceLBIPs(service, false, targetIPs)
+			} else {
+				var pipNames []string
+				pipNames = append(pipNames, ipName)
+				utils.Logf("update pip names %s", strings.Join(pipNames, ","))
+				service = updateServicePIPNames(service, pipNames)
+			}
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			defer func() {
 				err = utils.DeleteService(cs, ns.Name, serviceName)
 				Expect(err).NotTo(HaveOccurred())
@@ -466,8 +475,16 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				TargetPort: intstr.FromInt(int(tcpPort)),
 			}}
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, nil, serviceLabels, ns.Name, servicePort)
-			if len(sharedIPs) != 0 {
-				service = updateServiceLBIPs(service, false, sharedIPs)
+			if i < 2 {
+				if len(sharedIPs) != 0 {
+					service = updateServiceLBIPs(service, false, sharedIPs)
+				}
+			} else {
+				pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), sharedIPs[0])
+				Expect(err).NotTo(HaveOccurred())
+				pipNames := []string{pointer.StringDeref(pip.Name, "")}
+				utils.Logf("update pip names %s", strings.Join(pipNames, ","))
+				service = updateServicePIPNames(service, pipNames)
 			}
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -1038,6 +1055,22 @@ func updateServiceLBIPs(service *v1.Service, isInternal bool, ips []string) (res
 		delete(result.Annotations, consts.ServiceAnnotationLoadBalancerInternal)
 	}
 	return
+}
+
+func updateServicePIPNames(service *v1.Service, pipNames []string) *v1.Service {
+	if service.Annotations == nil {
+		service.Annotations = map[string]string{}
+	}
+
+	for _, pipName := range pipNames {
+		if strings.HasSuffix(pipName, "-IPv6") {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = pipName
+		} else {
+			service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = pipName
+		}
+	}
+
+	return service
 }
 
 func defaultPublicIPAddress(ipName string, isIPv6 bool) aznetwork.PublicIPAddress {
