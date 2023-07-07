@@ -1746,6 +1746,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 		isOwned              bool
 		isPrimary            bool
 		expectedFIPIPVersion network.IPVersion
+		listError            *retry.Error
 	}{
 		{
 			desc: "serviceOwnsFrontendIP should detect the primary service",
@@ -1989,6 +1990,37 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			},
 			isOwned: true,
 		},
+		{
+			desc:      "serviceOwnsFrontendIP should return false if failed to find matched pip by name",
+			service:   &v1.Service{},
+			listError: retry.NewError(false, errors.New("error")),
+		},
+		{
+			desc: "serviceOwnsFrontnedIP should support search pip by name",
+			service: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "pip1"},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("pip1"),
+					ID:   pointer.String("pip1"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("1.2.3.4"),
+					},
+				},
+			},
+			fip: network.FrontendIPConfiguration{
+				Name: pointer.String("test"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pip1"),
+					},
+				},
+			},
+			isOwned: true,
+		},
 	}
 
 	for _, test := range testCases {
@@ -1996,7 +2028,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			if test.existingPIPs != nil {
 				mockPIPsClient := cloud.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, nil).MaxTimes(2)
+				mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPIPs, test.listError).MaxTimes(2)
 			}
 			isOwned, isPrimary, fipIPVersion := cloud.serviceOwnsFrontendIP(test.fip, test.service)
 			if test.expectedFIPIPVersion != "" {
