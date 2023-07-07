@@ -676,24 +676,33 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-		// Here we use BackendPool IP instead of IP config because this works for both NIC based LB and IP based LB.
-		lbBackendPoolIPCount := 0
-		lbBackendPoolIPs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
-		Expect(lbBackendPoolIPs).NotTo(BeNil())
-		if utils.IsAutoscalingAKSCluster() {
-			for _, ip := range *lbBackendPoolIPs {
-				Expect(ip.LoadBalancerBackendAddressPropertiesFormat).NotTo(BeNil())
-				Expect(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration).NotTo(BeNil())
-				ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
-				if !strings.Contains(ipConfigID, utils.SystemPool) {
-					lbBackendPoolIPCount++
-				}
-			}
+		if lb.Sku != nil && lb.Sku.Name == aznetwork.LoadBalancerSkuNameBasic {
+			// For a basic lb, not autoscaling pipeline
+			ipConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
+			Expect(ipConfigs).NotTo(BeNil())
+			lbBackendPoolIPConfigCount := len(*ipConfigs)
+			Expect(lbBackendPoolIPConfigCount).To(Equal(len(nodes)))
+			utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPConfigCount)
 		} else {
-			lbBackendPoolIPCount = len(*lbBackendPoolIPs)
+			// SLB: Here we use BackendPool IP instead of IP config because this works for both NIC based LB and IP based LB.
+			lbBackendPoolIPCount := 0
+			lbBackendPoolIPs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
+			Expect(lbBackendPoolIPs).NotTo(BeNil())
+			if utils.IsAutoscalingAKSCluster() {
+				for _, ip := range *lbBackendPoolIPs {
+					Expect(ip.LoadBalancerBackendAddressPropertiesFormat).NotTo(BeNil())
+					Expect(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration).NotTo(BeNil())
+					ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
+					if !strings.Contains(ipConfigID, utils.SystemPool) {
+						lbBackendPoolIPCount++
+					}
+				}
+			} else {
+				lbBackendPoolIPCount = len(*lbBackendPoolIPs)
+			}
+			Expect(lbBackendPoolIPCount).To(Equal(len(nodes)))
+			utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPCount)
 		}
-		Expect(lbBackendPoolIPCount).To(Equal(len(nodes)))
-		utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPCount)
 		nodeToLabel := nodes[0]
 
 		By(fmt.Sprintf("Labeling node %q", nodeToLabel.Name))
@@ -1170,6 +1179,21 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lb
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
+		if lb.Sku != nil && lb.Sku.Name == aznetwork.LoadBalancerSkuNameBasic {
+			// basic lb
+			lbBackendPoolIPConfigs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].BackendIPConfigurations
+			ipConfigNum := 0
+			if lbBackendPoolIPConfigs != nil {
+				ipConfigNum = len(*lbBackendPoolIPConfigs)
+			}
+			if expectedNum == ipConfigNum {
+				utils.Logf("Number of IP configs matches expected number %d. Success", expectedNum)
+				return true, nil
+			}
+			utils.Logf("Number of IP configs: %d in the LB backend pool, expected %d, will retry soon", ipConfigNum, expectedNum)
+			return false, nil
+		}
+		// SLB
 		lbBackendPoolIPs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
 		ipNum := 0
 		if lbBackendPoolIPs != nil {
