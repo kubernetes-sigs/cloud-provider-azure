@@ -349,6 +349,22 @@ func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
 	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))
 }
 
+func publicIPOwnsFrontendIP(service *v1.Service, fip *network.FrontendIPConfiguration, pip *network.PublicIPAddress) bool {
+	if pip != nil &&
+		pip.ID != nil &&
+		pip.PublicIPAddressPropertiesFormat != nil &&
+		pip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
+		fip != nil &&
+		fip.FrontendIPConfigurationPropertiesFormat != nil &&
+		fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
+		if strings.EqualFold(pointer.StringDeref(pip.ID, ""), pointer.StringDeref(fip.PublicIPAddress.ID, "")) {
+			klog.V(6).Infof("publicIPOwnsFrontendIP:found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
+			return true
+		}
+	}
+	return false
+}
+
 // There are two cases when a service owns the frontend IP config:
 // 1. The primary service, which means the frontend IP config is created after the creation of the service.
 // This means the name of the config can be tracked by the service UID.
@@ -364,33 +380,37 @@ func (az *Cloud) serviceOwnsFrontendIP(fip network.FrontendIPConfiguration, serv
 	}
 
 	loadBalancerIP := getServiceLoadBalancerIP(service)
+	pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
 	if loadBalancerIP == "" {
-		// it is a must that the secondary services set the loadBalancer IP
+		if !requiresInternalLoadBalancer(service) {
+			pipName := getServicePIPName(service)
+			if pipName != "" {
+				pip, err := az.findMatchedPIP("", pipName, pipResourceGroup)
+				if err != nil {
+					klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with name %s: %v", service.Name, pipName, err)
+					return false, isPrimaryService, nil
+				}
+				if publicIPOwnsFrontendIP(service, &fip, pip) {
+					return true, isPrimaryService, nil
+				}
+			}
+		}
+		// it is a must that the secondary services set the loadBalancer IP or pip name
 		return false, isPrimaryService, nil
 	}
 
 	// for external secondary service the public IP address should be checked
 	if !requiresInternalLoadBalancer(service) {
-		pipResourceGroup := az.getPublicIPAddressResourceGroup(service)
-		pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
+		pip, err := az.findMatchedPIP(loadBalancerIP, "", pipResourceGroup)
 		if err != nil {
-			klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerLP %s: %v", service.Name, loadBalancerIP, err)
+			klog.Warningf("serviceOwnsFrontendIP: unexpected error when finding match public IP of the service %s with loadBalancerIP %s: %v", service.Name, loadBalancerIP, err)
 			return false, isPrimaryService, nil
 		}
 
-		if pip != nil &&
-			pip.ID != nil &&
-			pip.PublicIPAddressPropertiesFormat != nil &&
-			pip.IPAddress != nil &&
-			fip.FrontendIPConfigurationPropertiesFormat != nil &&
-			fip.FrontendIPConfigurationPropertiesFormat.PublicIPAddress != nil {
-			if strings.EqualFold(pointer.StringDeref(pip.ID, ""), pointer.StringDeref(fip.PublicIPAddress.ID, "")) {
-				klog.V(4).Infof("serviceOwnsFrontendIP: found secondary service %s of the frontend IP config %s", service.Name, *fip.Name)
-
-				return true, isPrimaryService, nil
-			}
-			klog.V(4).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s", *pip.ID, *pip.IPAddress)
+		if publicIPOwnsFrontendIP(service, &fip, pip) {
+			return true, isPrimaryService, nil
 		}
+		klog.V(4).Infof("serviceOwnsFrontendIP: the public IP with ID %s is being referenced by other service with public IP address %s", *pip.ID, *pip.IPAddress)
 
 		return false, isPrimaryService, nil
 	}
