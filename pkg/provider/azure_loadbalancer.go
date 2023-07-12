@@ -31,7 +31,6 @@ import (
 	"unicode"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +47,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -3777,7 +3777,7 @@ func (az *Cloud) getServiceCurrentLoadBalancerName(service *v1.Service) string {
 // If there is no ServiceNamespace selector on the LB, all services can be valid.
 func (az *Cloud) getEligibleLoadBalancers(service *v1.Service) ([]string, error) {
 	var (
-		eligibleLBs               []MultipleStandardLoadBalancerConfiguration
+		eligibleLBs               []azureconfig.MultipleStandardLoadBalancerConfiguration
 		eligibleLBNames           []string
 		lbSelectedByAnnotation    []string
 		lbFailedLabelSelector     []string
@@ -3882,7 +3882,7 @@ func (az *Cloud) getEligibleLoadBalancers(service *v1.Service) ([]string, error)
 	return eligibleLBNames, nil
 }
 
-func isLoadBalancerInUseByService(service *v1.Service, lbConfig MultipleStandardLoadBalancerConfiguration) bool {
+func isLoadBalancerInUseByService(service *v1.Service, lbConfig azureconfig.MultipleStandardLoadBalancerConfiguration) bool {
 	serviceName := getServiceName(service)
 	if lbConfig.ActiveServices != nil {
 		return lbConfig.ActiveServices.Has(serviceName)

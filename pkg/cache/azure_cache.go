@@ -88,8 +88,8 @@ type ResourceProvider struct {
 	Getter GetFunc
 }
 
-// NewTimedCache creates a new azcache.Resource.
-func NewTimedCache(ttl time.Duration, getter GetFunc, disabled bool) (Resource, error) {
+// NewCachedResourceRepo creates a new azcache.Resource.
+func NewCachedResourceRepo(ttl time.Duration, getter GetFunc, disabled bool) (Resource, error) {
 	if getter == nil {
 		return nil, fmt.Errorf("getter is not provided")
 	}

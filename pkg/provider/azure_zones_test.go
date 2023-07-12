@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/golang/mock/gomock"
@@ -45,7 +46,7 @@ const (
 func TestIsAvailabilityZone(t *testing.T) {
 	location := "eastus"
 	az := &Cloud{
-		Config: Config{
+		Config: azureconfig.Config{
 			Location: location,
 		},
 	}
@@ -71,7 +72,7 @@ func TestIsAvailabilityZone(t *testing.T) {
 func TestGetZoneID(t *testing.T) {
 	location := "eastus"
 	az := &Cloud{
-		Config: Config{
+		Config: azureconfig.Config{
 			Location: location,
 		},
 	}
@@ -96,7 +97,7 @@ func TestGetZoneID(t *testing.T) {
 
 func TestGetZone(t *testing.T) {
 	cloud := &Cloud{
-		Config: Config{
+		Config: azureconfig.Config{
 			Location:            "eastus",
 			UseInstanceMetadata: true,
 		},
@@ -208,7 +209,7 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
 			cloud := &Cloud{
-				Config: Config{
+				Config: azureconfig.Config{
 					Location:            "eastus",
 					UseInstanceMetadata: true,
 				},

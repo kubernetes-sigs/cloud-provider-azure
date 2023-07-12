@@ -27,13 +27,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -44,7 +44,7 @@ func TestDeleteRoute(t *testing.T) {
 
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
-		Config: Config{
+		Config: azureconfig.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -116,7 +116,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
-		Config: Config{
+		Config: azureconfig.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -189,7 +189,7 @@ func TestCreateRoute(t *testing.T) {
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
 		VMSet:             mockVMSet,
-		Config: Config{
+		Config: azureconfig.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -385,7 +385,7 @@ func TestCreateRouteTable(t *testing.T) {
 
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
-		Config: Config{
+		Config: azureconfig.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -596,7 +596,7 @@ func TestListRoutes(t *testing.T) {
 	cloud := &Cloud{
 		RouteTablesClient: routeTableClient,
 		VMSet:             mockVMSet,
-		Config: Config{
+		Config: azureconfig.Config{
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",

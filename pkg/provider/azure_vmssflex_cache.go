@@ -73,7 +73,7 @@ func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (azcache.Resource,
 	if fs.Config.VmssFlexCacheTTLInSeconds == 0 {
 		fs.Config.VmssFlexCacheTTLInSeconds = consts.VmssFlexCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(fs.Config.VmssFlexCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(fs.Config.VmssFlexCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
 }
 
 func (fs *FlexScaleSet) newVmssFlexVMCache(ctx context.Context) (azcache.Resource, error) {
@@ -123,7 +123,7 @@ func (fs *FlexScaleSet) newVmssFlexVMCache(ctx context.Context) (azcache.Resourc
 	if fs.Config.VmssFlexVMCacheTTLInSeconds == 0 {
 		fs.Config.VmssFlexVMCacheTTLInSeconds = consts.VmssFlexVMCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(fs.Config.VmssFlexVMCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(fs.Config.VmssFlexVMCacheTTLInSeconds)*time.Second, getter, fs.Cloud.Config.DisableAPICallCache)
 }
 
 func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {

@@ -112,7 +112,7 @@ func (az *Cloud) newPIPCache() (azcache.Resource, error) {
 	if az.PublicIPCacheTTLInSeconds == 0 {
 		az.PublicIPCacheTTLInSeconds = publicIPCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.PublicIPCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(az.PublicIPCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
 func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt azcache.AzureCacheReadType) (network.PublicIPAddress, bool, error) {

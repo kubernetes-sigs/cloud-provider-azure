@@ -130,5 +130,5 @@ func (az *Cloud) newPLSCache() (azcache.Resource, error) {
 	if az.PlsCacheTTLInSeconds == 0 {
 		az.PlsCacheTTLInSeconds = plsCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.PlsCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(az.PlsCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }

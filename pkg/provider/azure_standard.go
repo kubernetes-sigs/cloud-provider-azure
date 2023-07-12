@@ -453,7 +453,7 @@ func (as *availabilitySet) newVMASCache() (azcache.Resource, error) {
 		as.Config.AvailabilitySetsCacheTTLInSeconds = consts.VMASCacheTTLDefaultInSeconds
 	}
 
-	return azcache.NewTimedCache(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter, as.Cloud.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(as.Config.AvailabilitySetsCacheTTLInSeconds)*time.Second, getter, as.Cloud.Config.DisableAPICallCache)
 }
 
 // newStandardSet creates a new availabilitySet.

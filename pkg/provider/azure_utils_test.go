@@ -461,10 +461,10 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 	getter := func(key string) (interface{}, error) {
 		return nil, nil
 	}
-	emptyCacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)
+	emptyCacheEntryTimedCache, _ := azcache.NewCachedResourceRepo(fakeCacheTTL, getter, false)
 	emptyCacheEntryTimedCache.Set("key", nil)
 
-	cacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)
+	cacheEntryTimedCache, _ := azcache.NewCachedResourceRepo(fakeCacheTTL, getter, false)
 	syncMap := &sync.Map{}
 	syncMap.Store("node", nil)
 	cacheEntryTimedCache.Set("key", syncMap)

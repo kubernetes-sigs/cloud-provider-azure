@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
@@ -38,8 +39,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func getTestConfig() *Config {
-	return &Config{
+func getTestConfig() *azureconfig.Config {
+	return &azureconfig.Config{
 		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:        "TenantID",
 			SubscriptionID:  "SubscriptionID",
@@ -59,8 +60,8 @@ func getTestConfig() *Config {
 	}
 }
 
-func getTestCloudConfigTypeSecretConfig() *Config {
-	return &Config{
+func getTestCloudConfigTypeSecretConfig() *azureconfig.Config {
+	return &azureconfig.Config{
 		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:       "TenantID",
 			SubscriptionID: "SubscriptionID",
@@ -69,12 +70,12 @@ func getTestCloudConfigTypeSecretConfig() *Config {
 		RouteTableName:          "RouteTableName",
 		RouteTableResourceGroup: "RouteTableResourceGroup",
 		SecurityGroupName:       "SecurityGroupName",
-		CloudConfigType:         cloudConfigTypeSecret,
+		CloudConfigType:         azureconfig.CloudConfigTypeSecret,
 	}
 }
 
-func getTestCloudConfigTypeMergeConfig() *Config {
-	return &Config{
+func getTestCloudConfigTypeMergeConfig() *azureconfig.Config {
+	return &azureconfig.Config{
 		AzureAuthConfig: config.AzureAuthConfig{
 			TenantID:       "TenantID",
 			SubscriptionID: "SubscriptionID",
@@ -83,32 +84,32 @@ func getTestCloudConfigTypeMergeConfig() *Config {
 		RouteTableName:          "RouteTableName",
 		RouteTableResourceGroup: "RouteTableResourceGroup",
 		SecurityGroupName:       "SecurityGroupName",
-		CloudConfigType:         cloudConfigTypeMerge,
+		CloudConfigType:         azureconfig.CloudConfigTypeMerge,
 	}
 }
 
-func getTestCloudConfigTypeMergeConfigExpected() *Config {
+func getTestCloudConfigTypeMergeConfigExpected() *azureconfig.Config {
 	config := getTestConfig()
 	config.SecurityGroupName = "SecurityGroupName"
-	config.CloudConfigType = cloudConfigTypeMerge
+	config.CloudConfigType = azureconfig.CloudConfigTypeMerge
 	return config
 }
 
 func TestGetConfigFromSecret(t *testing.T) {
-	emptyConfig := &Config{}
-	badConfig := &Config{ResourceGroup: "DuplicateColumnsIncloud-config"}
+	emptyConfig := &azureconfig.Config{}
+	badConfig := &azureconfig.Config{ResourceGroup: "DuplicateColumnsIncloud-config"}
 	tests := []struct {
 		name           string
-		existingConfig *Config
-		secretConfig   *Config
-		expected       *Config
+		existingConfig *azureconfig.Config
+		secretConfig   *azureconfig.Config
+		expected       *azureconfig.Config
 		expectErr      bool
 	}{
 		{
 			name: "Azure config shouldn't be override when cloud config type is file",
-			existingConfig: &Config{
+			existingConfig: &azureconfig.Config{
 				ResourceGroup:   "ResourceGroup1",
-				CloudConfigType: cloudConfigTypeFile,
+				CloudConfigType: azureconfig.CloudConfigTypeFile,
 			},
 			secretConfig: getTestConfig(),
 			expected:     nil,
@@ -148,7 +149,7 @@ func TestGetConfigFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
-				InitSecretConfig: InitSecretConfig{
+				InitSecretConfig: azureconfig.InitSecretConfig{
 					SecretName:      "azure-cloud-provider",
 					SecretNamespace: "kube-system",
 					CloudConfigKey:  "cloud-config",
@@ -195,28 +196,28 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	emptyConfig := &Config{}
+	emptyConfig := &azureconfig.Config{}
 	unknownConfigTypeConfig := getTestConfig()
 	unknownConfigTypeConfig.CloudConfigType = "UnknownConfigType"
 	tests := []struct {
 		name           string
-		existingConfig *Config
-		secretConfig   *Config
-		expected       *Config
+		existingConfig *azureconfig.Config
+		secretConfig   *azureconfig.Config
+		expected       *azureconfig.Config
 		expectErr      bool
 	}{
 		{
 			name: "Azure config shouldn't be override when cloud config type is file",
-			existingConfig: &Config{
+			existingConfig: &azureconfig.Config{
 				ResourceGroup:   "ResourceGroup1",
-				CloudConfigType: cloudConfigTypeFile,
+				CloudConfigType: azureconfig.CloudConfigTypeFile,
 			},
 			secretConfig: getTestConfig(),
 			expected:     nil,
 		},
 		{
 			name: "Azure config shouldn't be override when cloud config type is unknown",
-			existingConfig: &Config{
+			existingConfig: &azureconfig.Config{
 				ResourceGroup:   "ResourceGroup1",
 				CloudConfigType: "UnknownConfigType",
 			},
@@ -253,7 +254,7 @@ func TestInitializeCloudFromSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			az := &Cloud{
 				KubeClient: fakeclient.NewSimpleClientset(),
-				InitSecretConfig: InitSecretConfig{
+				InitSecretConfig: azureconfig.InitSecretConfig{
 					SecretName:      "azure-cloud-provider",
 					SecretNamespace: "kube-system",
 					CloudConfigKey:  "cloud-config",

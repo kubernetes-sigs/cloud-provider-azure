@@ -22,20 +22,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
 	"sigs.k8s.io/yaml"
-)
 
-// The config type for Azure cloud provider secret. Supported values are:
-// * file   : The values are read from local cloud-config file.
-// * secret : The values from secret would override all configures from local cloud-config file.
-// * merge  : The values from secret would override only configurations that are explicitly set in the secret. This is the default value.
-type cloudConfigType string
-
-const (
-	cloudConfigTypeFile   cloudConfigType = "file"
-	cloudConfigTypeSecret cloudConfigType = "secret"
-	cloudConfigTypeMerge  cloudConfigType = "merge"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 // InitializeCloudFromSecret initializes Azure cloud provider from Kubernetes secret.
@@ -59,9 +48,9 @@ func (az *Cloud) InitializeCloudFromSecret(ctx context.Context) error {
 	return nil
 }
 
-func (az *Cloud) GetConfigFromSecret() (*Config, error) {
+func (az *Cloud) GetConfigFromSecret() (*azureconfig.Config, error) {
 	// Read config from file and no override, return nil.
-	if az.Config.CloudConfigType == cloudConfigTypeFile {
+	if az.Config.CloudConfigType == azureconfig.CloudConfigTypeFile {
 		return nil, nil
 	}
 
@@ -75,8 +64,8 @@ func (az *Cloud) GetConfigFromSecret() (*Config, error) {
 		return nil, fmt.Errorf("cloud-config is not set in the secret (%s/%s)", az.SecretNamespace, az.SecretName)
 	}
 
-	config := Config{}
-	if az.Config.CloudConfigType == "" || az.Config.CloudConfigType == cloudConfigTypeMerge {
+	config := azureconfig.Config{}
+	if az.Config.CloudConfigType == "" || az.Config.CloudConfigType == azureconfig.CloudConfigTypeMerge {
 		// Merge cloud config, set default value to existing config.
 		config = az.Config
 	}

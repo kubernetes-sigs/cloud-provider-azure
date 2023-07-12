@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -7129,7 +7130,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 
 	for _, tc := range []struct {
 		description string
-		lbConfigs   []MultipleStandardLoadBalancerConfiguration
+		lbConfigs   []azureconfig.MultipleStandardLoadBalancerConfiguration
 		svc         v1.Service
 		namespace   *v1.Namespace
 		labels      map[string]string
@@ -7139,14 +7140,14 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should respect service annotation",
 			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "A ,b"}, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{},
 				},
 				{
 					Name: "c",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{},
 				},
 			},
 			expectedLBs: []string{"a"},
@@ -7154,10 +7155,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should respect namespace selector",
 			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7165,7 +7166,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v2"},
 						},
@@ -7184,10 +7185,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 			description: "should respect label selector",
 			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
 			labels:      map[string]string{"k2": "v2"},
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7195,7 +7196,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v2"},
 						},
@@ -7208,10 +7209,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 			description: "should return the intersection of annotation, namespace and label selector",
 			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,b"}, false),
 			labels:      map[string]string{"k2": "v2"},
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7219,7 +7220,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
@@ -7242,7 +7243,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "c",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v2"},
 						},
@@ -7260,10 +7261,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should return an error if there is no matching lb config",
 			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,b,c"}, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7271,7 +7272,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
@@ -7285,7 +7286,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "c",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v3"},
 						},
@@ -7293,13 +7294,13 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 				{
 					Name: "d",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						AllowServicePlacement: pointer.Bool(false),
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v2"},
 						},
 					},
-					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+					MultipleStandardLoadBalancerConfigurationStatus: azureconfig.MultipleStandardLoadBalancerConfigurationStatus{
 						ActiveServices: sets.New[string]("default/test"),
 					},
 				},
@@ -7316,10 +7317,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should report an error if failed to convert label selector as a selector",
 			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
@@ -7337,10 +7338,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should report an error if failed to convert namespace selector as a selector",
 			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
@@ -7358,27 +7359,27 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 		{
 			description: "should respect allowServicePlacement flag",
 			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "a,c"}, false),
-			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+			lbConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						AllowServicePlacement: pointer.Bool(false),
 					},
-					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+					MultipleStandardLoadBalancerConfigurationStatus: azureconfig.MultipleStandardLoadBalancerConfigurationStatus{
 						ActiveServices: sets.New[string]("default/test"),
 					},
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{},
 				},
 				{
 					Name: "c",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{},
 				},
 				{
 					Name: "d",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{},
 				},
 			},
 			expectedLBs: []string{"a", "c"},
@@ -7419,7 +7420,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 		useStandardLB     bool
 		clusterName       string
 		lbName            string
-		multiSLBConfigs   []MultipleStandardLoadBalancerConfiguration
+		multiSLBConfigs   []azureconfig.MultipleStandardLoadBalancerConfiguration
 		serviceAnnotation map[string]string
 		serviceLabel      map[string]string
 		expected          string
@@ -7492,10 +7493,10 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			description:   "should select the most eligible load balancer when using multi-slb",
 			vmSet:         primary,
 			useStandardLB: true,
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7503,7 +7504,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				},
 				{
 					Name: "b",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
@@ -7517,7 +7518,7 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 				},
 				{
 					Name: "c",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceNamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k2": "v2"},
 						},
@@ -7533,10 +7534,10 @@ func TestGetAzureLoadBalancerName(t *testing.T) {
 			description:   "should report an error if failed to select eligible load balancers",
 			vmSet:         primary,
 			useStandardLB: true,
-			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+			multiSLBConfigs: []azureconfig.MultipleStandardLoadBalancerConfiguration{
 				{
 					Name: "a",
-					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+					MultipleStandardLoadBalancerConfigurationSpec: azureconfig.MultipleStandardLoadBalancerConfigurationSpec{
 						ServiceLabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"k1": "v1"},
 						},
@@ -7648,7 +7649,7 @@ func TestGetMostEligibleLBName(t *testing.T) {
 	}
 }
 
-func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
+func TestReconcilerMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -7748,12 +7749,12 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			}
 
 			if tc.useMultipleLB {
-				az.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+				az.MultipleStandardLoadBalancerConfigurations = []azureconfig.MultipleStandardLoadBalancerConfiguration{
 					{Name: "lb1"},
 					{Name: "lb2"},
 				}
 				if !tc.noPrimaryConfig {
-					az.MultipleStandardLoadBalancerConfigurations = append(az.MultipleStandardLoadBalancerConfigurations, MultipleStandardLoadBalancerConfiguration{Name: "kubernetes"})
+					az.MultipleStandardLoadBalancerConfigurations = append(az.MultipleStandardLoadBalancerConfigurations, azureconfig.MultipleStandardLoadBalancerConfiguration{Name: "kubernetes"})
 				}
 			}
 

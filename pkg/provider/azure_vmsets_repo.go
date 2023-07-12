@@ -154,7 +154,7 @@ func (az *Cloud) newVMCache() (azcache.Resource, error) {
 	if az.VMCacheTTLInSeconds == 0 {
 		az.VMCacheTTLInSeconds = vmCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.VMCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(az.VMCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
 // getVirtualMachine calls 'VirtualMachinesClient.Get' with a timed cache

@@ -121,7 +121,7 @@ func (ss *ScaleSet) newVMSSCache(ctx context.Context) (azcache.Resource, error) 
 	if ss.Config.VmssCacheTTLInSeconds == 0 {
 		ss.Config.VmssCacheTTLInSeconds = consts.VMSSCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(ss.Config.VmssCacheTTLInSeconds)*time.Second, getter, ss.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(ss.Config.VmssCacheTTLInSeconds)*time.Second, getter, ss.Config.DisableAPICallCache)
 }
 
 func (ss *ScaleSet) getVMSSVMsFromCache(resourceGroup, vmssName string, crt azcache.AzureCacheReadType) (*sync.Map, error) {
@@ -242,7 +242,7 @@ func (ss *ScaleSet) newVMSSVirtualMachinesCache() (azcache.Resource, error) {
 		return localCache, nil
 	}
 
-	return azcache.NewTimedCache(vmssVirtualMachinesCacheTTL, getter, ss.Cloud.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(vmssVirtualMachinesCacheTTL, getter, ss.Cloud.Config.DisableAPICallCache)
 }
 
 // DeleteCacheForNode deletes Node from VMSS VM and VM caches.
@@ -379,7 +379,7 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 	if ss.Config.NonVmssUniformNodesCacheTTLInSeconds == 0 {
 		ss.Config.NonVmssUniformNodesCacheTTLInSeconds = consts.NonVmssUniformNodesCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(ss.Config.NonVmssUniformNodesCacheTTLInSeconds)*time.Second, getter, ss.Cloud.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(ss.Config.NonVmssUniformNodesCacheTTLInSeconds)*time.Second, getter, ss.Cloud.Config.DisableAPICallCache)
 }
 
 func (ss *ScaleSet) getVMManagementTypeByNodeName(nodeName string, crt azcache.AzureCacheReadType) (VMManagementType, error) {

@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -3665,7 +3666,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 	assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
-	config := Config{
+	config := azureconfig.Config{
 		DisableAvailabilitySetNodes: true,
 		VMType:                      consts.VMTypeStandard,
 	}
@@ -3673,24 +3674,24 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 	expectedErr := fmt.Errorf("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'")
 	assert.Equal(t, expectedErr, err)
 
-	config = Config{
+	config = azureconfig.Config{
 		AzureAuthConfig: providerconfig.AzureAuthConfig{
 			Cloud: "AZUREPUBLICCLOUD",
 		},
-		CloudConfigType: cloudConfigTypeFile,
+		CloudConfigType: azureconfig.CloudConfigTypeFile,
 	}
 	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 	assert.Equal(t, expectedErr, err)
 
-	config = Config{
+	config = azureconfig.Config{
 		LoadBalancerBackendPoolConfigurationType: "invalid",
 	}
 	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr = errors.New("loadBalancerBackendPoolConfigurationType invalid is not supported, supported values are")
 	assert.Contains(t, err.Error(), expectedErr.Error())
 
-	config = Config{}
+	config = azureconfig.Config{}
 	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	assert.NoError(t, err)
 	assert.Equal(t, az.Config.LoadBalancerBackendPoolConfigurationType, consts.LoadBalancerBackendPoolConfigurationTypeNodeIPConfiguration)
@@ -3892,7 +3893,7 @@ func TestSetLBDefaults(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 
-	config := &Config{}
+	config := &azureconfig.Config{}
 	_ = az.setLBDefaults(config)
 	assert.Equal(t, config.LoadBalancerSku, consts.LoadBalancerSkuStandard)
 }

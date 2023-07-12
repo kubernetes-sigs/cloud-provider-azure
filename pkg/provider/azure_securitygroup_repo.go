@@ -83,7 +83,7 @@ func (az *Cloud) newNSGCache() (azcache.Resource, error) {
 	if az.NsgCacheTTLInSeconds == 0 {
 		az.NsgCacheTTLInSeconds = nsgCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.NsgCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(az.NsgCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
 
 func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (network.SecurityGroup, error) {

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
+	azureconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/golang/mock/gomock"
 
@@ -75,8 +75,8 @@ func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 // GetTestCloud returns a fake azure cloud for unit tests in Azure related CSI drivers
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az = &Cloud{
-		Config: Config{
-			AzureAuthConfig: config.AzureAuthConfig{
+		Config: azureconfig.Config{
+			AzureAuthConfig: azureconfig.AzureAuthConfig{
 				TenantID:       "tenant",
 				SubscriptionID: "subscription",
 			},

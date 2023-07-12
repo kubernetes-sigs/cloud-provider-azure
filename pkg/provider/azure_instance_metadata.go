@@ -111,7 +111,7 @@ func NewInstanceMetadataService(imdsServer string) (*InstanceMetadataService, er
 		imdsServer: imdsServer,
 	}
 
-	imsCache, err := azcache.NewTimedCache(consts.MetadataCacheTTL, ims.getMetadata, false)
+	imsCache, err := azcache.NewCachedResourceRepo(consts.MetadataCacheTTL, ims.getMetadata, false)
 	if err != nil {
 		return nil, err
 	}

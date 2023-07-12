@@ -80,5 +80,5 @@ func (az *Cloud) newRouteTableCache() (azcache.Resource, error) {
 	if az.RouteTableCacheTTLInSeconds == 0 {
 		az.RouteTableCacheTTLInSeconds = routeTableCacheTTLDefaultInSeconds
 	}
-	return azcache.NewTimedCache(time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
+	return azcache.NewCachedResourceRepo(time.Duration(az.RouteTableCacheTTLInSeconds)*time.Second, getter, az.Config.DisableAPICallCache)
 }
