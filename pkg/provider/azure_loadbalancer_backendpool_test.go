@@ -87,11 +87,29 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 				},
 			},
 		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vmss-2",
+			},
+			Status: v1.NodeStatus{
+				Addresses: []v1.NodeAddress{
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "10.0.0.4",
+					},
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "2001::4",
+					},
+				},
+			},
+		},
 	}
 
 	testcases := []struct {
 		desc                string
 		backendPool         network.BackendAddressPool
+		multiSLBConfigs     []MultipleStandardLoadBalancerConfiguration
 		expectedBackendPool network.BackendAddressPool
 	}{
 		{
@@ -129,6 +147,12 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 								IPAddress: pointer.String("10.0.0.2"),
 							},
 						},
+						{
+							Name: pointer.String("vmss-2"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.4"),
+							},
+						},
 					},
 				},
 			},
@@ -163,6 +187,54 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 								IPAddress: pointer.String("2001::2"),
 							},
 						},
+						{
+							Name: pointer.String("vmss-2-IPv6"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("2001::4"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "should add correct nodes to the pool and remove unwanted ones when using multi-slb",
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+						{
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.3"),
+							},
+						},
+					},
+				},
+			},
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.New[string]("vmss-2"),
+					},
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("kubernetes"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: pointer.String("vmss-2"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.4"),
+							},
+						},
 					},
 				},
 			},
@@ -171,8 +243,18 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
-			mockVMSet := NewMockVMSet(ctrl)
-			az.VMSet = mockVMSet
+			if len(tc.multiSLBConfigs) > 0 {
+				az.MultipleStandardLoadBalancerConfigurations = tc.multiSLBConfigs
+				az.LoadBalancerSku = consts.LoadBalancerSkuStandard
+				az.nodePrivateIPToNodeNameMap = map[string]string{
+					"10.0.0.2": "vmss-0",
+					"2001::2":  "vmss-0",
+					"10.0.0.1": "vmss-1",
+					"2001::1":  "vmss-1",
+					"10.0.0.4": "vmss-2",
+					"2001::4":  "vmss-2",
+				}
+			}
 
 			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
 			lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
@@ -712,7 +794,7 @@ func buildTestLoadBalancerBackendPoolWithIPs(name string, ips []string) network.
 func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
 	for _, tc := range []struct {
 		description                           string
-		removeAll                             bool
+		removeAll, useMultiSLB                bool
 		unwantedIPs, existingIPs, expectedIPs []string
 	}{
 		{
@@ -728,6 +810,13 @@ func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
 			expectedIPs: []string{"1.2.3.4", "4.3.2.1"},
 		},
 		{
+			description: "removeNodeIPAddressFromBackendPool should make the backend pool empty for multi-SLB",
+			unwantedIPs: []string{"1.2.3.4", "4.3.2.1"},
+			existingIPs: []string{"1.2.3.4", "4.3.2.1"},
+			useMultiSLB: true,
+			expectedIPs: []string{},
+		},
+		{
 			description: "removeNodeIPAddressFromBackendPool should remove all the IP addresses from the backend pool",
 			removeAll:   true,
 			unwantedIPs: []string{"1.2.3.4", "4.3.2.1"},
@@ -739,7 +828,7 @@ func TestRemoveNodeIPAddressFromBackendPool(t *testing.T) {
 			backendPool := buildTestLoadBalancerBackendPoolWithIPs("kubernetes", tc.existingIPs)
 			expectedBackendPool := buildTestLoadBalancerBackendPoolWithIPs("kubernetes", tc.expectedIPs)
 
-			removeNodeIPAddressesFromBackendPool(backendPool, tc.unwantedIPs, tc.removeAll)
+			removeNodeIPAddressesFromBackendPool(backendPool, tc.unwantedIPs, tc.removeAll, tc.useMultiSLB)
 			assert.Equal(t, expectedBackendPool, backendPool)
 		})
 	}

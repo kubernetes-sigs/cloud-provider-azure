@@ -1792,7 +1792,7 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			}
 			az.LoadBalancerSku = test.sku
 			service := test.service
-			lb, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+			lb, status, _, exists, _, err := az.getServiceLoadBalancer(&service, testClusterName,
 				clusterResources.nodes, test.wantLB, []network.LoadBalancer{})
 			assert.Equal(t, test.expectedLB, lb)
 			assert.Equal(t, test.expectedStatus, status)
@@ -1825,7 +1825,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+	lb, status, _, exists, _, err := az.getServiceLoadBalancer(&service, testClusterName,
 		clusterResources.nodes, false, []network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
@@ -1850,7 +1850,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, status, _, exists, err = az.getServiceLoadBalancer(&service, testClusterName,
+	lb, status, _, exists, _, err = az.getServiceLoadBalancer(&service, testClusterName,
 		clusterResources.nodes, true, []network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
@@ -6321,7 +6321,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
 		existingLBs := []network.LoadBalancer{{Name: pointer.String("lb")}}
-		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -6352,7 +6352,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		expectedPLS := make([]network.PrivateLinkService, 0)
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
-		err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -7038,10 +7038,14 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 	cloud := GetTestCloud(ctrl)
 
 	testCases := []struct {
-		desc                string
-		expectedDeleteCall  bool
-		expectedDecoupleErr error
-		expectedErr         *retry.Error
+		desc                          string
+		expectedDeleteCall            bool
+		expectedDecoupleErr           error
+		multiSLBConfigs               []MultipleStandardLoadBalancerConfiguration
+		nodesWithCorrectVMSet         sets.Set[string]
+		expectedMultiSLBConfigs       []MultipleStandardLoadBalancerConfiguration
+		expectedNodesWithCorrectVMSet sets.Set[string]
+		expectedErr                   *retry.Error
 	}{
 		{
 			desc:               "Standard SKU: should delete the load balancer",
@@ -7056,6 +7060,40 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 				false,
 				fmt.Errorf("safeDeleteLoadBalancer: failed to EnsureBackendPoolDeleted: %w", errors.New("error")),
 			),
+		},
+		{
+			desc:               "should cleanup active nodes when using multi-slb",
+			expectedDeleteCall: true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "test",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.New[string]("node1", "node2"),
+					},
+				},
+				{
+					Name: "test2",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.New[string]("node3"),
+					},
+				},
+			},
+			nodesWithCorrectVMSet: sets.New[string]("node1", "node2", "node3"),
+			expectedMultiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "test",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.New[string](),
+					},
+				},
+				{
+					Name: "test2",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.New[string]("node3"),
+					},
+				},
+			},
+			expectedNodesWithCorrectVMSet: sets.New[string]("node3"),
 		},
 	}
 
@@ -7075,6 +7113,12 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 			).Return(false, tc.expectedDecoupleErr)
 			cloud.VMSet = mockVMSet
 			cloud.LoadBalancerClient = mockLBClient
+			if len(tc.multiSLBConfigs) > 0 {
+				cloud.MultipleStandardLoadBalancerConfigurations = tc.multiSLBConfigs
+				for nodeName := range tc.nodesWithCorrectVMSet {
+					cloud.nodesWithCorrectLoadBalancerByPrimaryVMSet.Store(nodeName, sets.Empty{})
+				}
+			}
 			svc := getTestService("svc", v1.ProtocolTCP, nil, false, 80)
 			lb := network.LoadBalancer{
 				Name: pointer.String("test"),
@@ -7084,6 +7128,15 @@ func TestSafeDeleteLoadBalancer(t *testing.T) {
 			}
 			err := cloud.safeDeleteLoadBalancer(lb, "cluster", "vmss", &svc)
 			assert.Equal(t, tc.expectedErr, err)
+			if len(tc.multiSLBConfigs) > 0 {
+				assert.Equal(t, tc.expectedMultiSLBConfigs, cloud.MultipleStandardLoadBalancerConfigurations)
+				actualNodesWithCorrectLoadBalancerByPrimaryVMSet := sets.New[string]()
+				cloud.nodesWithCorrectLoadBalancerByPrimaryVMSet.Range(func(key, value interface{}) bool {
+					actualNodesWithCorrectLoadBalancerByPrimaryVMSet.Insert(key.(string))
+					return true
+				})
+				assert.Equal(t, tc.expectedNodesWithCorrectVMSet, actualNodesWithCorrectLoadBalancerByPrimaryVMSet)
+			}
 		})
 	}
 }
@@ -7150,6 +7203,21 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				},
 			},
 			expectedLBs: []string{"a"},
+		},
+		{
+			description: "should report an error if a service selects a load balancer that is not defined in the configuration",
+			svc:         getTestService("test", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationLoadBalancerConfigurations: "b"}, false),
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "a",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+			},
+			expectedErr: errors.New(`service "test" selects 1 load balancers by annotation, but none of them is defined in cloud provider configuration`),
 		},
 		{
 			description: "should respect namespace selector",
@@ -7397,7 +7465,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 				tc.svc.Labels = tc.labels
 			}
 
-			lbs, err := az.getEligibleLoadBalancers(&tc.svc)
+			lbs, err := az.getEligibleLoadBalancersForService(&tc.svc)
 			assert.Equal(t, tc.expectedLBs, lbs)
 			if tc.expectedErr != nil {
 				assert.Equal(t, tc.expectedErr.Error(), err.Error())
@@ -7642,7 +7710,7 @@ func TestGetMostEligibleLBName(t *testing.T) {
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
-			lbName := getMostEligibleLBName(tc.currentLBName, tc.eligibleLBs, tc.existingLBs)
+			lbName := getMostEligibleLBForService(tc.currentLBName, tc.eligibleLBs, tc.existingLBs)
 			assert.Equal(t, tc.expectedLBName, lbName)
 		})
 	}
@@ -7656,6 +7724,7 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 		description            string
 		useMultipleLB          bool
 		noPrimaryConfig        bool
+		nodes                  []*v1.Node
 		expectedActiveServices map[string]sets.Set[string]
 		expectedErr            error
 	}{
@@ -7663,8 +7732,8 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 			description:   "should set active services correctly",
 			useMultipleLB: true,
 			expectedActiveServices: map[string]sets.Set[string]{
-				"kubernetes": sets.New[string]("default/LBSvcOnKubernetes"),
-				"lb1":        sets.New[string]("ns1/LBSvcOnLB1"),
+				"kubernetes": sets.New[string]("default/lbsvconkubernetes"),
+				"lb1":        sets.New[string]("ns1/lbsvconlb1"),
 			},
 		},
 		{
@@ -7757,7 +7826,8 @@ func TestReconcileMultipleStandardLoadBalancerConfigurations(t *testing.T) {
 				}
 			}
 
-			err := az.reconcileMultipleStandardLoadBalancerConfigurations("kubernetes", &existingLBs)
+			svc := getTestService("test", v1.ProtocolTCP, nil, false)
+			err := az.reconcileMultipleStandardLoadBalancerConfigurations(&existingLBs, &svc, "kubernetes", &existingLBs, tc.nodes)
 			assert.Equal(t, err, tc.expectedErr)
 
 			activeServices := make(map[string]sets.Set[string])
@@ -8216,5 +8286,321 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 			assert.Equal(t, test.isOwned, isOwned)
 			assert.Equal(t, test.isPrimary, isPrimary)
 		})
+	}
+}
+
+func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description          string
+		lbName               string
+		existingLBConfigs    []MultipleStandardLoadBalancerConfiguration
+		existingNodes        []*v1.Node
+		existingLBs          []network.LoadBalancer
+		expectedPutLBTimes   int
+		expectedLBToNodesMap map[string]sets.Set[string]
+	}{
+		{
+			description: "should remove unwanted nodes and arrange existing nodes with primary vmSet as expected",
+			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.Set[string]{"node1": sets.Empty{}, "node2": sets.Empty{}},
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.Set[string]{"node3": sets.Empty{}, "node4": sets.Empty{}},
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", nil, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-2", nil, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-2", nil, "10.1.0.3"),
+			},
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: pointer.String("lb1-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: pointer.String("node1"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.1"),
+											},
+										},
+										{
+											Name: pointer.String("node2"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.2"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb2"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: pointer.String("node3"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.3"),
+											},
+										},
+										{
+											Name: pointer.String("node4"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.4"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPutLBTimes: 1,
+			expectedLBToNodesMap: map[string]sets.Set[string]{
+				"lb1": {"node1": sets.Empty{}},
+				"lb2": {"node2": sets.Empty{}, "node3": sets.Empty{}},
+			},
+		},
+		{
+			description: "should respect node selector",
+			lbName:      "lb2-internal",
+			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.Set[string]{"node1": sets.Empty{}, "node2": sets.Empty{}},
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.Set[string]{"node3": sets.Empty{}, "node4": sets.Empty{}},
+					},
+				},
+				{
+					Name: "lb3",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+				{
+					Name: "lb4",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", map[string]string{"k2": "v2"}, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-3", map[string]string{"k3": "v3"}, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-3", map[string]string{"k2": "v2"}, "10.1.0.3"),
+				getTestNodeWithMetadata("node5", "vmss-3", map[string]string{"k2": "v2"}, "10.1.0.5"),
+				getTestNodeWithMetadata("node6", "vmss-3", map[string]string{"k3": "v3"}, "10.1.0.6"),
+			},
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: pointer.String("lb1-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+								BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+									LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+										{
+											Name: pointer.String("node1"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.1"),
+											},
+										},
+										{
+											Name: pointer.String("node2"),
+											LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+												IPAddress: pointer.String("10.1.0.2"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb3"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+							},
+						},
+					},
+				},
+			},
+			expectedLBToNodesMap: map[string]sets.Set[string]{
+				"lb1": {"node1": sets.Empty{}},
+				"lb2": {"node3": sets.Empty{}},
+				"lb3": {"node5": sets.Empty{}},
+				"lb4": {"node2": sets.Empty{}, "node6": sets.Empty{}},
+			},
+		},
+		{
+			description: "should remove the node on the lb if it is no longer eligible",
+			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveNodes: sets.Set[string]{"node1": sets.Empty{}, "node2": sets.Empty{}},
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-2", map[string]string{"k2": "v2"}, "10.1.0.1"),
+			},
+			expectedLBToNodesMap: map[string]sets.Set[string]{
+				"lb1": {},
+			},
+		},
+		{
+			description: "should skip lbs that do not exist or will not be created",
+			existingLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-1",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+				{
+					Name: "lb3",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						PrimaryVMSet: "vmss-2",
+						NodeSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k3": "v3"},
+						},
+					},
+				},
+				{
+					Name: "lb4",
+				},
+			},
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: pointer.String("lb2-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{Name: pointer.String("kubernetes")},
+						},
+					},
+				},
+			},
+			existingNodes: []*v1.Node{
+				getTestNodeWithMetadata("node1", "vmss-1", map[string]string{"k1": "v1"}, "10.1.0.1"),
+				getTestNodeWithMetadata("node2", "vmss-3", map[string]string{"k3": "v3"}, "10.1.0.2"),
+				getTestNodeWithMetadata("node3", "vmss-3", map[string]string{"k2": "v2"}, "10.1.0.3"),
+				getTestNodeWithMetadata("node5", "vmss-3", map[string]string{"k2": "v2"}, "10.1.0.5"),
+				getTestNodeWithMetadata("node6", "vmss-3", map[string]string{"k3": "v3"}, "10.1.0.6"),
+			},
+			expectedLBToNodesMap: map[string]sets.Set[string]{
+				"lb1": nil,
+				"lb2": {"node3": sets.Empty{}, "node5": sets.Empty{}},
+				"lb3": nil,
+				"lb4": {"node1": sets.Empty{}, "node2": sets.Empty{}, "node6": sets.Empty{}},
+			},
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			ss, _ := NewTestScaleSet(ctrl)
+			ss.DisableAvailabilitySetNodes = true
+			az.VMSet = ss
+			az.MultipleStandardLoadBalancerConfigurations = tc.existingLBConfigs
+			svc := getTestService("test", v1.ProtocolTCP, nil, false)
+			_ = az.reconcileMultipleStandardLoadBalancerBackendNodes(tc.lbName, &tc.existingLBs, &svc, tc.existingNodes)
+
+			expectedLBToNodesMap := make(map[string]sets.Set[string])
+			for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
+				expectedLBToNodesMap[multiSLBConfig.Name] = multiSLBConfig.ActiveNodes
+			}
+			assert.Equal(t, tc.expectedLBToNodesMap, expectedLBToNodesMap)
+		})
+	}
+}
+
+func getTestNodeWithMetadata(nodeName, vmssName string, labels map[string]string, ip string) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   nodeName,
+			Labels: labels,
+		},
+		Spec: v1.NodeSpec{
+			ProviderID: fmt.Sprintf("azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/0", vmssName),
+		},
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: ip,
+				},
+			},
+		},
 	}
 }
