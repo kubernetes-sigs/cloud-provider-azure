@@ -60,7 +60,6 @@ jobs:
     - name: Autobuild
       run: |
         make all
-        hack/verify-updates.sh
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
