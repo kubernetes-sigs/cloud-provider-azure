@@ -53,7 +53,30 @@ Note that if you specify the annotations `service.beta.kubernetes.io/azure-load-
 
 Even if multiple services can refer to one public IP, the DNS label cannot be re-used. The public IP would have the label `kubernetes-dns-label-service: <svcName>` to indicate which service is binding to the DNS label. In this case if there is another service sharing this specific IP address trying to refer to the DNS label, an error would be reported. For managed public IPs, this label will be added automatically by the cloud provider. For static public IPs, this label should be added manually.
 
+## Using public IP name instead of IP address to share the public IP
+
+> This feature is supported since v1.24.0.
+
+In addition to using the IP address annotation, you could also use the public IP name to share the public IP. The public IP name could be specified by the annotation `service.beta.kubernetes.io/azure-pip-name`. You can point to a system-created public IP or a static public IP.
+
 ```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: https
+  namespace: default
+  annotations:
+    service.beta.kubernetes.io/azure-pip-name: pip-1
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 443
+  selector:
+    app: https
+  type: LoadBalancer
+```
+
 
 ## Restrictions
 
