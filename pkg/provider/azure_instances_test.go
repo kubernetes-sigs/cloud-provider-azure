@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -880,7 +881,20 @@ func TestInstanceMetadata(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	t.Run("", func(t *testing.T) {
+	t.Run("instance not exists", func(t *testing.T) {
+		cloud := GetTestCloud(ctrl)
+		cloud.unmanagedNodes = sets.New("node0")
+
+		meta, err := cloud.InstanceMetadata(context.Background(), &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node0",
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, cloudprovider.InstanceMetadata{}, *meta)
+	})
+
+	t.Run("instance exists", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
 		expectedVM := buildDefaultTestVirtualMachine("as", []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1"})
 		expectedVM.HardwareProfile = &compute.HardwareProfile{
