@@ -86,7 +86,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		tc = nil
 	})
 
-	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), func() {
+	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), Label(utils.TestSuiteLabelNonMultiSLB), func() {
 		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
 			Skip("only test standard load balancer")
 		}

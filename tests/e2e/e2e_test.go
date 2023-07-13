@@ -41,6 +41,7 @@ const (
 	defaultReportDir            = "_report/"
 	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
 	clusterProvisioningToolCAPZ = "capz"
+	testMultiSLB                = "TEST_MULTI_SLB"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -70,6 +71,18 @@ func TestAzureTest(t *testing.T) {
 		} else {
 			suiteConfig.LabelFilter = suiteConfig.LabelFilter + " && " + additionalFilter
 		}
+	}
+
+	var multiSLBFilter string
+	if !strings.EqualFold(os.Getenv(testMultiSLB), utils.TrueValue) {
+		multiSLBFilter = "!Multi-SLB"
+	} else {
+		multiSLBFilter = "!Non-Multi-Slb"
+	}
+	if suiteConfig.LabelFilter == "" {
+		suiteConfig.LabelFilter = multiSLBFilter
+	} else {
+		suiteConfig.LabelFilter = suiteConfig.LabelFilter + " && " + multiSLBFilter
 	}
 
 	reporterConfig.Verbose = true

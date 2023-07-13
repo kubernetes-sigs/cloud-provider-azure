@@ -790,7 +790,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(len(publicIPs)).NotTo(BeZero())
 		ids := []string{}
 		for _, publicIP := range publicIPs {
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
 			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 			ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
@@ -934,7 +934,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 		Expect(len(publicIPs)).NotTo(BeZero())
 		for _, publicIP := range publicIPs {
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
 			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 		}
@@ -1129,6 +1129,10 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-load-balancer-mode`", func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("service.beta.kubernetes.io/azure-load-balancer-mode only works for basic load balancer")
+		}
+
 		//get nodelist and providerID specific to an agentnodes
 		By("Getting agent nodes list")
 		nodes, err := utils.GetAgentNodes(cs)
@@ -1307,7 +1311,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			ids := []string{}
 			for _, publicIP := range publicIPs {
-				pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
+				pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
 				pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 				Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 				ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
@@ -1444,7 +1448,21 @@ func ifPIPDNSLabelDeleted(tc *utils.AzureTestClient, pipName string) (bool, erro
 	return true, nil
 }
 
-func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) string {
+func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGroup string, shouldWait bool) string {
+	pipFrontendConfigurationID := getFrontendConfigurationIDFromPIP(tc, pip, pipResourceGroup)
+
+	if shouldWait {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, false, func(context context.Context) (done bool, err error) {
+			pipFrontendConfigurationID = getFrontendConfigurationIDFromPIP(tc, pip, pipResourceGroup)
+			return pipFrontendConfigurationID != "", nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	return pipFrontendConfigurationID
+}
+
+func getFrontendConfigurationIDFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup string) string {
 	utils.Logf("Getting public IPs in the resourceGroup " + pipResourceGroup)
 	pipList, err := tc.ListPublicIPs(pipResourceGroup)
 	Expect(err).NotTo(HaveOccurred())
@@ -1457,7 +1475,9 @@ func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGr
 			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
 			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
 			*ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
-			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
+			ipConfig := pointer.StringDeref(ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID, "")
+			utils.Logf("Found pip %q with ipConfig %q", pip, ipConfig)
+			pipFrontendConfigurationID = ipConfig
 			break
 		}
 	}
@@ -1466,7 +1486,7 @@ func getPIPFrontendConfigurationID(tc *utils.AzureTestClient, pip, pipResourceGr
 }
 
 func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
-	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, pip, pipResourceGroup, lbResourceGroup)
+	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, pip, pipResourceGroup, true)
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
 	utils.Logf("Getting loadBalancer name from pipFrontendConfigurationID")

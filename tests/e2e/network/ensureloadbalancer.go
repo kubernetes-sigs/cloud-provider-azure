@@ -797,7 +797,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		By("testing if floating IP disabled in load balancer rule")
 		Expect(len(targetIPs)).NotTo(Equal(0))
-		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, targetIPs[0], tc.GetResourceGroup(), "")
+		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, targetIPs[0], tc.GetResourceGroup(), false)
 		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 		configID := pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1]

@@ -497,7 +497,7 @@ data:
                 - "--leader-elect=true"
                 - "--route-reconciliation-period=10s"
                 - "--v=4"
-                - "--port=10267"
+                - "--secure-port=10267"
               resources:
                 requests:
                   cpu: 100m
@@ -509,6 +509,7 @@ data:
                 httpGet:
                   path: /healthz
                   port: 10267
+                  scheme: HTTPS
                 initialDelaySeconds: 20
                 periodSeconds: 10
                 timeoutSeconds: 5

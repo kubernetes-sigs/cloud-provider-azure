@@ -37,6 +37,8 @@ const (
 	TestSuiteLabelLB                 = "LB"
 	TestSuiteLabelMultiPorts         = "Multi-Ports"
 	TestSuiteLabelNSG                = "NSG"
+	TestSuiteLabelNonMultiSLB        = "Non-Multi-Slb"
+	TestSuiteLabelMultiSLB           = "Multi-SLB"
 
 	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
 	CAPZTestCCM = "TEST_CCM"
