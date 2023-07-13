@@ -1175,15 +1175,19 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			ipconfigPrefixToNicMap[ipConfigIDPrefix] = nic
 		}
 	}
+	v4Enabled, v6Enabled := getIPFamiliesEnabled(service)
+	isServiceIPv4 := v4Enabled && !v6Enabled
 	var nicUpdated atomic.Bool
 	for k := range ipconfigPrefixToNicMap {
 		nic := ipconfigPrefixToNicMap[k]
 		newIPConfigs := *nic.IPConfigurations
 		for j, ipConf := range newIPConfigs {
-			if !pointer.BoolDeref(ipConf.Primary, false) {
+			if isServiceIPv4 && !pointer.BoolDeref(ipConf.Primary, false) {
 				continue
 			}
-			// found primary ip configuration
+			// To support IPv6 only and dual-stack clusters, all IP configurations
+			// should be checked regardless of primary or not because IPv6 IP configurations
+			// are not marked as primary.
 			if ipConf.LoadBalancerBackendAddressPools != nil {
 				newLBAddressPools := *ipConf.LoadBalancerBackendAddressPools
 				for k := len(newLBAddressPools) - 1; k >= 0; k-- {
