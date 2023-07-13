@@ -795,6 +795,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 			ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
 		}
+		utils.Logf("PIP frontend config IDs %q", ids)
 
 		var lb *network.LoadBalancer
 		var targetProbes []*network.Probe
@@ -812,8 +813,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
 				probeSplitID := probeSplit[0]
-				if len(probeSplit) > 1 &&
-					(probeSplit[len(probeSplit)-1] == "IPv4" || probeSplit[len(probeSplit)-1] == "IPv6") {
+				if probeSplit[len(probeSplit)-1] == "IPv6" {
 					probeSplitID += "-" + probeSplit[len(probeSplit)-1]
 				}
 				for _, id := range ids {
@@ -823,6 +823,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 			}
 
+			utils.Logf("targetProbes count %d, expectedTargetProbes count %d", len(targetProbes), expectedTargetProbesCount)
 			return len(targetProbes) == expectedTargetProbesCount, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -837,11 +838,15 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				utils.Logf("Validating health probe config intervalInSeconds")
 				Expect(*probe.IntervalInSeconds).To(Equal(int32(10)))
 			}
+			utils.Logf("Validating health probe config ProbeProtocolHTTP")
 			Expect(probe.Protocol).To(Equal(network.ProbeProtocolHTTP))
 		}
 
 		By("Changing ExternalTrafficPolicy of the service to Local")
-		expectedTargetProbesCount = 1
+		expectedTargetProbesLocalCount := 1
+		if tc.IPFamily == utils.DualStack {
+			expectedTargetProbesLocalCount = 2
+		}
 		var service *v1.Service
 		utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
 		retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -869,7 +874,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		})
 		Expect(retryErr).NotTo(HaveOccurred())
 
-		err = wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollImmediate(5*time.Second, 300*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
 			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
@@ -878,8 +883,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
 				probeSplitID := probeSplit[0]
-				if len(probeSplit) > 1 &&
-					(probeSplit[len(probeSplit)-1] == "IPv4" || probeSplit[len(probeSplit)-1] == "IPv6") {
+				if probeSplit[len(probeSplit)-1] == "IPv6" {
 					probeSplitID += "-" + probeSplit[len(probeSplit)-1]
 				}
 				for _, id := range ids {
@@ -889,22 +893,28 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 			}
 
-			return len(targetProbes) == expectedTargetProbesCount, nil
+			utils.Logf("targetProbes count %d, expectedTargetProbesLocal count %d", len(targetProbes), expectedTargetProbesLocalCount)
+			if len(targetProbes) != expectedTargetProbesLocalCount {
+				return false, nil
+			}
+			By("Validating health probe configs")
+			for _, probe := range targetProbes {
+				utils.Logf("Validating health probe config numberOfProbes")
+				if probe.ProbeThreshold == nil || *probe.ProbeThreshold != int32(5) {
+					return false, nil
+				}
+				utils.Logf("Validating health probe config intervalInSeconds")
+				if probe.IntervalInSeconds == nil || *probe.IntervalInSeconds != int32(15) {
+					return false, nil
+				}
+				utils.Logf("Validating health probe config ProbeProtocolHTTP")
+				if !strings.EqualFold(string(probe.Protocol), string(network.ProbeProtocolHTTP)) {
+					return false, nil
+				}
+			}
+			return true, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
-
-		By("Validating health probe configs")
-		for _, probe := range targetProbes {
-			if probe.ProbeThreshold != nil {
-				utils.Logf("Validating health probe config numberOfProbes")
-				Expect(*probe.ProbeThreshold).To(Equal(int32(5)))
-			}
-			if probe.IntervalInSeconds != nil {
-				utils.Logf("Validating health probe config intervalInSeconds")
-				Expect(*probe.IntervalInSeconds).To(Equal(int32(15)))
-			}
-			Expect(probe.Protocol).To(Equal(network.ProbeProtocolHTTP))
-		}
 	})
 
 	It("should generate health probe configs in multi-port scenario", func() {
