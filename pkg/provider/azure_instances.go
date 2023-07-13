@@ -227,6 +227,15 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 	if node == nil {
 		return false, nil
 	}
+	unmanaged, err := az.IsNodeUnmanaged(node.Name)
+	if err != nil {
+		return false, err
+	}
+	if unmanaged {
+		klog.V(4).Infof("InstanceExists: omitting unmanaged node %q", node.Name)
+		return false, nil
+	}
+
 	providerID := node.Spec.ProviderID
 	if providerID == "" {
 		var err error
@@ -295,6 +304,14 @@ func (az *Cloud) InstanceShutdownByProviderID(ctx context.Context, providerID st
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, error) {
 	if node == nil {
+		return false, nil
+	}
+	unmanaged, err := az.IsNodeUnmanaged(node.Name)
+	if err != nil {
+		return false, err
+	}
+	if unmanaged {
+		klog.V(4).Infof("InstanceShutdown: omitting unmanaged node %q", node.Name)
 		return false, nil
 	}
 	providerID := node.Spec.ProviderID
@@ -498,11 +515,18 @@ func (az *Cloud) CurrentNodeName(ctx context.Context, hostname string) (types.No
 // translated into specific fields in the Node object on registration.
 // Use the node.name or node.spec.providerID field to find the node in the cloud provider.
 func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
-	if node == nil {
-		return &cloudprovider.InstanceMetadata{}, nil
-	}
-
 	meta := cloudprovider.InstanceMetadata{}
+	if node == nil {
+		return &meta, nil
+	}
+	unmanaged, err := az.IsNodeUnmanaged(node.Name)
+	if err != nil {
+		return &meta, err
+	}
+	if unmanaged {
+		klog.V(4).Infof("InstanceMetadata: omitting unmanaged node %q", node.Name)
+		return &meta, nil
+	}
 
 	if node.Spec.ProviderID != "" {
 		meta.ProviderID = node.Spec.ProviderID
