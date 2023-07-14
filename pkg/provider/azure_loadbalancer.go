@@ -887,7 +887,7 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 
 	// For the services with loadBalancerIP set, an existing public IP is required, primary
 	// or secondary, or a public IP not found error would be reported.
-	pip, err := az.findMatchedPIPByLoadBalancerIP(service, loadBalancerIP, pipResourceGroup)
+	pip, err := az.findMatchedPIP(loadBalancerIP, "", pipResourceGroup)
 	if err != nil {
 		return "", false, err
 	}
@@ -899,20 +899,58 @@ func (az *Cloud) determinePublicIPName(clusterName string, service *v1.Service, 
 	return "", false, fmt.Errorf("user supplied IP Address %s was not found in resource group %s", loadBalancerIP, pipResourceGroup)
 }
 
-func (az *Cloud) findMatchedPIPByLoadBalancerIP(service *v1.Service, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
+func (az *Cloud) findMatchedPIP(loadBalancerIP, pipName, pipResourceGroup string) (pip *network.PublicIPAddress, err error) {
 	pips, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeDefault)
 	if err != nil {
 		return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP: %w", err)
 	}
 
-	pip, err := getExpectedPIPFromListByIPAddress(pips, loadBalancerIP)
+	if loadBalancerIP != "" {
+		pip, err = az.findMatchedPIPByLoadBalancerIP(&pips, loadBalancerIP, pipResourceGroup)
+		if err != nil {
+			return nil, err
+		}
+		return pip, nil
+	}
+
+	if pipResourceGroup != "" {
+		pip, err = az.findMatchedPIPByName(&pips, pipName, pipResourceGroup)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return pip, nil
+}
+
+func (az *Cloud) findMatchedPIPByName(pips *[]network.PublicIPAddress, pipName, pipResourceGroup string) (*network.PublicIPAddress, error) {
+	for _, pip := range *pips {
+		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
+			return &pip, nil
+		}
+	}
+
+	pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
 	if err != nil {
-		pips, err = az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
+		return nil, fmt.Errorf("findMatchedPIPByName: failed to listPIP force refresh: %w", err)
+	}
+	for _, pip := range pipList {
+		if strings.EqualFold(pointer.StringDeref(pip.Name, ""), pipName) {
+			return &pip, nil
+		}
+	}
+
+	return nil, fmt.Errorf("findMatchedPIPByName: failed to find PIP %s in resource group %s", pipName, pipResourceGroup)
+}
+
+func (az *Cloud) findMatchedPIPByLoadBalancerIP(pips *[]network.PublicIPAddress, loadBalancerIP, pipResourceGroup string) (*network.PublicIPAddress, error) {
+	pip, err := getExpectedPIPFromListByIPAddress(*pips, loadBalancerIP)
+	if err != nil {
+		pipList, err := az.listPIP(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
 		if err != nil {
 			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: failed to listPIP force refresh: %w", err)
 		}
 
-		pip, err = getExpectedPIPFromListByIPAddress(pips, loadBalancerIP)
+		pip, err = getExpectedPIPFromListByIPAddress(pipList, loadBalancerIP)
 		if err != nil {
 			return nil, fmt.Errorf("findMatchedPIPByLoadBalancerIP: cannot find public IP with IP address %s in resource group %s", loadBalancerIP, pipResourceGroup)
 		}
@@ -3588,7 +3626,7 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 
 		// if there is no service tag on the pip, it is user-created pip
 		if serviceTag == "" {
-			return isServiceLoadBalancerIPMatchesPIP(service, pip, isIPv6), true
+			return isServiceSelectPIP(service, pip, isIPv6), true
 		}
 
 		// if there is service tag on the pip, it is system-created pip
@@ -3604,16 +3642,24 @@ func serviceOwnsPublicIP(service *v1.Service, pip *network.PublicIPAddress, clus
 		}
 
 		// if the service is not included in the tags of the system-created pip, check the ip address
-		// this could happen for secondary services
-		return isServiceLoadBalancerIPMatchesPIP(service, pip, isIPv6), false
+		// or pip name, this could happen for secondary services
+		return isServiceSelectPIP(service, pip, isIPv6), false
 	}
 
 	// if the pip has no tags, it should be user-created
-	return isServiceLoadBalancerIPMatchesPIP(service, pip, isIPv6), true
+	return isServiceSelectPIP(service, pip, isIPv6), true
 }
 
 func isServiceLoadBalancerIPMatchesPIP(service *v1.Service, pip *network.PublicIPAddress, isIPV6 bool) bool {
 	return strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), getServiceLoadBalancerIP(service, isIPV6))
+}
+
+func isServicePIPNameMatchesPIP(service *v1.Service, pip *network.PublicIPAddress, isIPV6 bool) bool {
+	return strings.EqualFold(pointer.StringDeref(pip.Name, ""), getServicePIPName(service, isIPV6))
+}
+
+func isServiceSelectPIP(service *v1.Service, pip *network.PublicIPAddress, isIPV6 bool) bool {
+	return isServiceLoadBalancerIPMatchesPIP(service, pip, isIPV6) || isServicePIPNameMatchesPIP(service, pip, isIPV6)
 }
 
 func isSVCNameInPIPTag(tag, svcName string) bool {

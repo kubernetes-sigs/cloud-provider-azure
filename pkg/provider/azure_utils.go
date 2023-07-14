@@ -424,6 +424,14 @@ func getServicePIPName(service *v1.Service, isIPv6 bool) string {
 	return service.Annotations[consts.ServiceAnnotationPIPNameDualStack[isIPv6]]
 }
 
+func getServicePIPNames(service *v1.Service) []string {
+	var ips []string
+	for _, ipVersion := range []bool{false, true} {
+		ips = append(ips, getServicePIPName(service, ipVersion))
+	}
+	return ips
+}
+
 func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 	if service == nil {
 		return ""
