@@ -204,6 +204,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 	})
 
 	It("should balance the sizes of multiple node group if the `--balance-node-groups` is set to true", Label(utils.TestSuiteLabelMultiNodePools), func() {
+		Skip("--balance-node-groups is not supported due to autoscaler bug. This label should be ignored: kubernetes.azure.com/consolidated-additional-properties")
+
 		By("Checking the number of node pools")
 		if len(initNodepoolNodeMap) < 2 {
 			Skip("multiple node pools are needed in this scenario")
