@@ -1116,3 +1116,16 @@ func defaultPublicIPPrefix(name string, isIPv6 bool) aznetwork.PublicIPPrefix {
 		},
 	}
 }
+
+func createPIP(tc *utils.AzureTestClient, ipNameBase string, isIPv6 bool) (string, func()) {
+	ipName := utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[isIPv6])
+	pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, isIPv6))
+	Expect(err).NotTo(HaveOccurred())
+	targetIP := pointer.StringDeref(pip.IPAddress, "")
+	utils.Logf("Created PIP to %s", targetIP)
+	return targetIP, func() {
+		By("Cleaning up PIP")
+		err = utils.DeletePIPWithRetry(tc, ipName, "")
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
