@@ -585,6 +585,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 	}
 
 	// check if the service already has a load balancer
+	var shouldChangeLB bool
 	for i := range existingLBs {
 		existingLB := existingLBs[i]
 
@@ -610,6 +611,7 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		// the current one if the change is needed
 		var err error
 		if wantLb && az.shouldChangeLoadBalancer(service, pointer.StringDeref(existingLB.Name, ""), clusterName, defaultLBName) {
+			shouldChangeLB = true
 			fipConfigNames := []string{}
 			for _, fipConfig := range fipConfigs {
 				fipConfigNames = append(fipConfigNames, pointer.StringDeref(fipConfig.Name, ""))
@@ -641,6 +643,16 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 		}
 
 		return selectedLB, status, lbIPsPrimaryPIPs, exists, "", err
+	}
+
+	// If the service moves to a different load balancer, return the one
+	// instead of creating a new load balancer if it exists.
+	if shouldChangeLB {
+		for _, existingLB := range existingLBs {
+			if strings.EqualFold(pointer.StringDeref(existingLB.Name, ""), defaultLBName) {
+				return &existingLB, status, lbIPsPrimaryPIPs, true, deletedLBName, nil
+			}
+		}
 	}
 
 	// create a default LB with meta data if not present
@@ -1582,6 +1594,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 			if err != nil {
 				return lb, fmt.Errorf("reconcileLoadBalancer for service (%s): failed to get load balancer %s: %w", serviceName, lbName, err)
 			}
+			addOrUpdateLBInList(&existingLBs, lb)
 		}
 	}
 
@@ -1702,17 +1715,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 			}
 			lb = newLB
 
-			var found bool
-			for i, existingLB := range existingLBs {
-				if strings.EqualFold(pointer.StringDeref(existingLB.Name, ""), pointer.StringDeref(newLB.Name, "")) {
-					existingLBs[i] = *newLB
-					found = true
-					break
-				}
-			}
-			if !found {
-				existingLBs = append(existingLBs, *newLB)
-			}
+			addOrUpdateLBInList(&existingLBs, newLB)
 		}
 	}
 
@@ -1761,6 +1764,17 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s) finished", serviceName, lbName)
 	return lb, nil
+}
+
+// addOrUpdateLBInList adds or updates the given lb in the list
+func addOrUpdateLBInList(lbs *[]network.LoadBalancer, targetLB *network.LoadBalancer) {
+	for i, lb := range *lbs {
+		if strings.EqualFold(pointer.StringDeref(lb.Name, ""), pointer.StringDeref(targetLB.Name, "")) {
+			(*lbs)[i] = *targetLB
+			return
+		}
+	}
+	*lbs = append(*lbs, *targetLB)
 }
 
 // removeLBFromList removes the given lb from the list
@@ -1836,15 +1850,7 @@ func (az *Cloud) accommodateNodesByPrimaryVMSet(
 		for i := range az.MultipleStandardLoadBalancerConfigurations {
 			multiSLBConfig := az.MultipleStandardLoadBalancerConfigurations[i]
 			if strings.EqualFold(multiSLBConfig.PrimaryVMSet, vmSetName) {
-				var foundPrimaryLB bool
-				if lbs != nil {
-					for _, lb := range *lbs {
-						if strings.EqualFold(strings.TrimSuffix(pointer.StringDeref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
-							foundPrimaryLB = true
-							break
-						}
-					}
-				}
+				foundPrimaryLB := isLBInList(lbs, multiSLBConfig.Name)
 				if !foundPrimaryLB && !strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
 					klog.V(4).Infof("accommodateNodesByPrimaryVMSet: node(%s) should be on lb(%s) because of primary vmSet (%s), but the lb is not found and will not be created this time, will ignore the primaryVMSet", node.Name, multiSLBConfig.Name, vmSetName)
 					continue
@@ -1895,17 +1901,9 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 					return err
 				}
 				if nodeSelector.Matches(labels.Set(node.Labels)) {
-					var foundLB bool
-					if lbs != nil {
-						for _, lb := range *lbs {
-							if strings.EqualFold(strings.TrimSuffix(pointer.StringDeref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
-								foundLB = true
-								break
-							}
-						}
-					}
 					klog.V(4).Infof("accommodateNodesByNodeSelector: lb(%s) matches node(%s) labels", multiSLBConfig.Name, node.Name)
-					if !foundLB && !strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
+					found := isLBInList(lbs, multiSLBConfig.Name)
+					if !found && !strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
 						klog.V(4).Infof("accommodateNodesByNodeSelector: but the lb is not found and will not be created this time, will ignore this load balancer")
 						continue
 					}
@@ -1919,6 +1917,16 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 				if multiSLBConfig.NodeSelector == nil {
 					eligibleLBsIDX = append(eligibleLBsIDX, i)
 				}
+			}
+		}
+		// Check if the valid load balancer exists or will exist
+		// after the reconciliation.
+		for i := len(eligibleLBsIDX) - 1; i >= 0; i-- {
+			multiSLBConfig := az.MultipleStandardLoadBalancerConfigurations[eligibleLBsIDX[i]]
+			found := isLBInList(lbs, multiSLBConfig.Name)
+			if !found && !strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
+				klog.V(4).Infof("accommodateNodesByNodeSelector: the load balancer %s is a valid placement target for node %s, but the lb is not found and will not be created this time, ignore this load balancer", multiSLBConfig.Name, node.Name)
+				eligibleLBsIDX = append(eligibleLBsIDX[:i], eligibleLBsIDX[i+1:]...)
 			}
 		}
 		if idx, ok := nodeNameToLBConfigIDXMap[node.Name]; ok {
@@ -1959,6 +1967,18 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 	}
 
 	return nil
+}
+
+// isLBInList checks if the lb is in the list by multipleStandardLoadBalancerConfig name
+func isLBInList(lbs *[]network.LoadBalancer, lbConfigName string) bool {
+	if lbs != nil {
+		for _, lb := range *lbs {
+			if strings.EqualFold(strings.TrimSuffix(pointer.StringDeref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix), lbConfigName) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // reconcileMultipleStandardLoadBalancerBackendNodes makes sure the arrangement of nodes

@@ -105,9 +105,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 		clusterName := os.Getenv("CLUSTER_NAME")
 		lbNameToExpectedVMSetNameMap := map[string]string{
-			clusterName: fmt.Sprintf("%s-vmss-0", clusterName),
-			"lb1":       fmt.Sprintf("%s-vmss-1", clusterName),
-			"lb2":       fmt.Sprintf("%s-vmss-2", clusterName),
+			clusterName: fmt.Sprintf("%s-mp-0", clusterName),
+			"lb1":       fmt.Sprintf("%s-mp-1", clusterName),
+			"lb2":       fmt.Sprintf("%s-mp-2", clusterName),
 		}
 
 		for _, svcIP := range svcIPs {
@@ -166,16 +166,17 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		_, err = waitLBCountEqualTo(tc, interval, timeout, 3, svcIPs)
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("Updating service %s to move to another load balancer", svc.Name))
-		updateServiceAnnotation(svc, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-configurations": "lb-2"})
+		clusterName := os.Getenv("CLUSTER_NAME")
+		By(fmt.Sprintf("Updating service %s to move to another load balancer %s", svc.Name, clusterName))
+		updateServiceAnnotation(svc, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-configurations": clusterName})
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking the load balancer count to equal 2")
 		lbNames, err = waitLBCountEqualTo(tc, interval, timeout, 2, svcIPs)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(lbNames.Has("lb-2")).To(BeTrue())
 		Expect(lbNames.Has("lb-1")).To(BeFalse())
+		Expect(lbNames.Has(clusterName)).To(BeTrue())
 	})
 })
 
