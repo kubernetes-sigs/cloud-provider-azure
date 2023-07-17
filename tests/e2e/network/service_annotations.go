@@ -347,6 +347,32 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 	})
 
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports'", func() {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+			Skip("azure-load-balancer-enable-high-availability-ports only work with Standard Load Balancer")
+		}
+
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerEnableHighAvailabilityPorts: "true",
+			consts.ServiceAnnotationLoadBalancerInternal:                    "true",
+		}
+		// create service with given annotation and wait it to expose
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			utils.Logf("cleaning up test service %s", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(len(ips)).NotTo(BeZero())
+
+		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ips[0], "")
+
+		Expect(len(*lb.LoadBalancingRules)).To(Equal(1))
+		rule := (*lb.LoadBalancingRules)[0]
+		Expect(*rule.FrontendPort).To(Equal(int32(0)))
+		Expect(*rule.BackendPort).To(Equal(int32(0)))
+	})
+
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout'", func() {
 		annotation := map[string]string{
 			consts.ServiceAnnotationLoadBalancerIdleTimeout: "5",
@@ -425,6 +451,64 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(len(pips)).NotTo(BeZero())
 		lb := getAzureLoadBalancerFromPIP(tc, pips[0], *rg.Name, "")
 		Expect(lb).NotTo(BeNil())
+	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-additional-public-ips`", func() {
+		By("creating a public IP")
+		ipName := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
+		pip := defaultPublicIPAddress(ipName, false)
+		pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
+		Expect(err).NotTo(HaveOccurred())
+		additionalPIP := pointer.StringDeref(pip.IPAddress, "")
+		utils.Logf("created pip with address %s", additionalPIP)
+
+		By("Exposing service with additional pip")
+		annotation := map[string]string{
+			consts.ServiceAnnotationAdditionalPublicIPs: additionalPIP,
+		}
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			By("cleaning up")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+			err = utils.DeletePIPWithRetry(tc, ipName, "")
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
+
+		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
+			service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
+			if err != nil {
+				if utils.IsRetryableAPIError(err) {
+					return false, nil
+				}
+				return false, err
+			}
+
+			utils.Logf("Checking additionalPIP in ingress")
+			foundInIngress := false
+			ingressList := service.Status.LoadBalancer.Ingress
+			Expect(ingressList).NotTo(BeNil())
+			for _, ingress := range ingressList {
+				if additionalPIP == ingress.IP {
+					foundInIngress = true
+					break
+				}
+			}
+
+			utils.Logf("Checking additionalPIP in nsg")
+			ipList := []string{ip, additionalPIP}
+			port := fmt.Sprintf("%d", serverPort)
+			nsgs, err := tc.GetClusterSecurityGroups()
+			if err != nil {
+				return false, err
+			}
+			foundInNsg := validateSharedSecurityRuleExists(nsgs, ipList, port)
+
+			return foundInIngress && foundInNsg, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-tags`", func() {
@@ -661,22 +745,22 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 	})
 
-	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe' and port specific configs", func() {
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe', 'service.beta.kubernetes.io/azure-load-balancer-health-probe-interval', 'service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol' and port specific configs", func() {
 		By("Creating a service with health probe annotations")
 		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                   "5",
-			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsNumOfProbe): "3",
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                      "5",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsNumOfProbe):    "3",
+			consts.ServiceAnnotationLoadBalancerHealthProbeInterval:                                        "15",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsProbeInterval): "10",
+			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                        "Http",
+			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                                     "/",
 		}
 
 		// create service with given annotation and wait it to expose
 		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
-		Expect(len(publicIPs)).NotTo(BeZero())
-		publicIP := publicIPs[0]
 		defer func() {
-			By("Cleaning up service and public IP")
+			By("Cleaning up service")
 			err := utils.DeleteService(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		Expect(len(publicIPs)).NotTo(BeZero())
@@ -721,55 +805,20 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Validating health probe configs")
 		var numberOfProbes *int32
+		var intervalInSeconds *int32
 		for _, probe := range targetProbes {
 			if probe.ProbeThreshold != nil {
 				numberOfProbes = probe.ProbeThreshold
 			}
-		}
-		Expect(*numberOfProbes).To(Equal(int32(3)))
-	})
-	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol' and port specific configs", func() {
-		By("Creating a service with health probe annotations")
-		annotation := map[string]string{
-			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:    "Http",
-			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/",
-		}
-
-		// create service with given annotation and wait it to expose
-		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
-		Expect(len(publicIPs)).NotTo(BeZero())
-		publicIP := publicIPs[0]
-		defer func() {
-			By("Cleaning up service and public IP")
-			err := utils.DeleteService(cs, ns.Name, serviceName)
-			Expect(err).NotTo(HaveOccurred())
-			err = utils.DeletePIPWithRetry(tc, publicIP, tc.GetResourceGroup())
-			Expect(err).NotTo(HaveOccurred())
-		}()
-		pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), "")
-		pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
-		Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
-
-		var lb *network.LoadBalancer
-		var targetProbes []*network.Probe
-		//wait for backend update
-		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
-			lb = getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-			targetProbes = []*network.Probe{}
-			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
-				utils.Logf("One probe of LB is %q", *probe.Name)
-				probeSplit := strings.Split(*probe.Name, "-")
-				Expect(len(probeSplit)).NotTo(Equal(0))
-				if pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1] == probeSplit[0] {
-					targetProbes = append(targetProbes, &probe)
-				}
+			if probe.IntervalInSeconds != nil {
+				intervalInSeconds = probe.IntervalInSeconds
 			}
-			return len(targetProbes) == 1, nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-		// get lb from azure client
-		By("Validating health probe configs")
+		}
+		utils.Logf("Validating health probe config numberOfProbes")
+		Expect(*numberOfProbes).To(Equal(int32(3)))
+		utils.Logf("Validating health probe config intervalInSeconds")
+		Expect(*intervalInSeconds).To(Equal(int32(10)))
+		utils.Logf("Validating health probe config protocol")
 		Expect((len(targetProbes))).To(Equal(1))
 		Expect(targetProbes[0].Protocol).To(Equal(network.ProbeProtocolHTTP))
 	})
