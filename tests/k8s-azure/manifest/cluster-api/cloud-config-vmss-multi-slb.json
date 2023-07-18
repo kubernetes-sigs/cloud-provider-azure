@@ -22,15 +22,15 @@
   "multipleStandardLoadBalancerConfigurations": [
     {
       "name": "${CLUSTER_NAME}",
-      "primaryVMSet": "${CLUSTER_NAME}-vmss-0"
+      "primaryVMSet": "${CLUSTER_NAME}-mp-0"
     },
     {
       "name": "lb-1",
-      "primaryVMSet": "${CLUSTER_NAME}-vmss-1"
+      "primaryVMSet": "${CLUSTER_NAME}-mp-win"
     },
     {
       "name": "lb-2",
-      "primaryVMSet": "${CLUSTER_NAME}-vmss-2",
+      "primaryVMSet": "${CLUSTER_NAME}-mp-2",
       "serviceLabelSelector": {
         "matchLabels": {
           "a": "b"
