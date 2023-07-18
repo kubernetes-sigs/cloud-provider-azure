@@ -1,0 +1,41 @@
+{
+  "cloud": "AzurePublicCloud",
+  "tenantId": "${AZURE_TENANT_ID}",
+  "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
+  "aadClientId": "${AZURE_CLIENT_ID}",
+  "aadClientSecret": "${AZURE_CLIENT_SECRET}",
+  "resourceGroup": "${AZURE_RESOURCE_GROUP}",
+  "securityGroupName": "${CLUSTER_NAME}-node-nsg",
+  "securityGroupResourceGroup": "${AZURE_RESOURCE_GROUP}",
+  "location": "${AZURE_LOCATION}",
+  "vmType": "vmss",
+  "vnetName": "${CLUSTER_NAME}-vnet",
+  "vnetResourceGroup": "${AZURE_RESOURCE_GROUP}",
+  "subnetName": "node-subnet",
+  "routeTableName": "${CLUSTER_NAME}-node-routetable",
+  "loadBalancerSku": "${AZURE_LOADBALANCER_SKU}",
+  "maximumLoadBalancerRuleCount": 250,
+  "useManagedIdentityExtension": false,
+  "useInstanceMetadata": true,
+  "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
+  "loadBalancerBackendPoolConfigurationType": "nodeIP",
+  "multipleStandardLoadBalancerConfigurations": [
+    {
+      "name": "${CLUSTER_NAME}",
+      "primaryVMSet": "${CLUSTER_NAME}-vmss-0"
+    },
+    {
+      "name": "lb-1",
+      "primaryVMSet": "${CLUSTER_NAME}-vmss-1"
+    },
+    {
+      "name": "lb-2",
+      "primaryVMSet": "${CLUSTER_NAME}-vmss-2",
+      "serviceLabelSelector": {
+        "matchLabels": {
+          "a": "b"
+        }
+      }
+    }
+  ]
+}
