@@ -1160,7 +1160,8 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backend
 			return false, fmt.Errorf("EnsureBackendPoolDeleted: failed to parse the VMAS ID %s: %w", vmasID, err)
 		}
 		// Only remove nodes belonging to specified vmSet to basic LB backends.
-		if !strings.EqualFold(vmasName, vmSetName) {
+		// If vmasID is empty, then it is standalone VM.
+		if vmasID != "" && !strings.EqualFold(vmasName, vmSetName) {
 			klog.V(2).Infof("EnsureBackendPoolDeleted: skipping the node %s belonging to another vm set %s", nodeName, vmasName)
 			continue
 		}

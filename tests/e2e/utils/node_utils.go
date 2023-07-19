@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -38,6 +39,11 @@ const (
 	nodeOSLabel               = "kubernetes.io/os"
 	typeLabel                 = "type"
 	agentpoolLabelKey         = "agentpool"
+
+	NodeModeLabel  = "kubernetes.azure.com/mode"
+	NodeModeSystem = "system"
+	NodeModeUser   = "user"
+	SystemPool     = "systempool"
 
 	// GPUResourceKey is the key of the GPU in the resource map of a node
 	GPUResourceKey = "nvidia.com/gpu"
@@ -269,7 +275,32 @@ func isVirtualKubeletNode(node *v1.Node) bool {
 	return false
 }
 
+// IsSystemPoolNode checks if the Node is of system pool when running tests in an AKS autoscaling cluster.
+func IsSystemPoolNode(node *v1.Node) bool {
+	if !IsAutoscalingAKSCluster() {
+		return false
+	}
+	if val, ok := node.Labels[NodeModeLabel]; ok && val == NodeModeSystem {
+		return true
+	}
+	return false
+}
+
+// IsAutoscalingAKSCluster checks if the cluster is an autoscaling AKS one.
+func IsAutoscalingAKSCluster() bool {
+	return os.Getenv(AKSTestCCM) != "" && strings.Contains(os.Getenv(AKSClusterType), "autoscaling")
+}
+
+// Before using the node config to update Node, some fields need to be cleaned.
+func cleanNodeConfigBeforeUpdate(node *v1.Node) {
+	node.CreationTimestamp = metav1.Time{}
+	node.ResourceVersion = ""
+	node.SetSelfLink("")
+	node.SetUID("")
+}
+
 func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete bool) (*v1.Node, error) {
+	cleanNodeConfigBeforeUpdate(node)
 	if _, ok := node.Labels[label]; ok {
 		if isDelete {
 			delete(node.Labels, label)
@@ -279,9 +310,13 @@ func LabelNode(cs clientset.Interface, node *v1.Node, label string, isDelete boo
 		Logf("Found label %s on node %s, do nothing", label, node.Name)
 		return node, nil
 	}
-	node.Labels[label] = TrueValue
-	node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
-	return node, err
+	if !isDelete {
+		node.Labels[label] = TrueValue
+		node, err := cs.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+		return node, err
+	}
+	Logf("No such label %s on node %s, do nothing", label, node.Name)
+	return node, nil
 }
 
 func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
