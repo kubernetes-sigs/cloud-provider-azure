@@ -32,7 +32,9 @@ on:
       - 'hack/verify-updates.sh'
       - '!vendor/**'
   schedule:
-    - cron: '0 */24 * * *'
+    - cron: '0 */4 * * *'
+permissions:
+  contents: read
 
 jobs:
   analyze:
@@ -56,7 +58,8 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v4
       with:
-        go-version-file: go.mod
+        go-version: '>=1.20'
+        check-latest: true
       id: go
 
     # Initializes the CodeQL tools for scanning.
