@@ -1151,9 +1151,11 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 		switch {
 		case !isNodeManagedByCloudProvider:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it is not managed by cloud provider", newNode.ObjectMeta.Name)
 
 		case hasExcludeBalancerLabel:
 			az.excludeLoadBalancerNodes.Insert(newNode.ObjectMeta.Name)
+			klog.V(6).Infof("excluding Node %q from LoadBalancer because it has exclude-from-external-load-balancers label", newNode.ObjectMeta.Name)
 
 		default:
 			// Nodes not falling into the three cases above are valid backends and
@@ -1167,7 +1169,7 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 				az.nodePrivateIPs[newNode.Name] = sets.New[string]()
 			}
 
-			klog.V(4).Infof("adding IP address %s of the node %s", address, newNode.Name)
+			klog.V(6).Infof("adding IP address %s of the node %s", address, newNode.Name)
 			az.nodePrivateIPs[newNode.Name].Insert(address)
 		}
 	}
