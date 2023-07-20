@@ -144,7 +144,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: master
+          ref: documentation
           fetch-depth: 0
       - name: Setup Golang
         uses: actions/setup-go@v4
