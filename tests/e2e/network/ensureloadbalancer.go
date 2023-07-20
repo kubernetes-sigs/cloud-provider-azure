@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -698,24 +699,37 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		By("Checking the initial node number in the LB backend pool")
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
-		// Here we use BackendPool IP instead of IP config because this works for both NIC based LB and IP based LB.
-		lbBackendPoolIPCount := 0
-		lbBackendPoolIPs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
-		Expect(lbBackendPoolIPs).NotTo(BeNil())
-		if utils.IsAutoscalingAKSCluster() {
-			for _, ip := range *lbBackendPoolIPs {
-				Expect(ip.LoadBalancerBackendAddressPropertiesFormat).NotTo(BeNil())
-				Expect(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration).NotTo(BeNil())
-				ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
-				if !strings.Contains(ipConfigID, utils.SystemPool) {
-					lbBackendPoolIPCount++
-				}
-			}
+		if lb.Sku != nil && lb.Sku.Name == aznetwork.LoadBalancerSkuNameBasic {
+			// For a basic lb, not autoscaling pipeline
+			idxes := getLBBackendPoolIndex(lb)
+			Expect(idxes).NotTo(BeZero())
+			ipConfigs := (*lb.BackendAddressPools)[idxes[0]].BackendIPConfigurations
+			Expect(ipConfigs).NotTo(BeNil())
+			lbBackendPoolIPConfigCount := len(*ipConfigs)
+			Expect(lbBackendPoolIPConfigCount).To(Equal(len(nodes)))
+			utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPConfigCount)
 		} else {
-			lbBackendPoolIPCount = len(*lbBackendPoolIPs)
+			// SLB: Here we use BackendPool IP instead of IP config because this works for both NIC based LB and IP based LB.
+			lbBackendPoolIPCount := 0
+			idxes := getLBBackendPoolIndex(lb)
+			Expect(idxes).NotTo(BeZero())
+			lbBackendPoolIPs := (*lb.BackendAddressPools)[idxes[0]].LoadBalancerBackendAddresses
+			Expect(lbBackendPoolIPs).NotTo(BeNil())
+			if utils.IsAutoscalingAKSCluster() {
+				for _, ip := range *lbBackendPoolIPs {
+					Expect(ip.LoadBalancerBackendAddressPropertiesFormat).NotTo(BeNil())
+					Expect(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration).NotTo(BeNil())
+					ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
+					if !strings.Contains(ipConfigID, utils.SystemPool) {
+						lbBackendPoolIPCount++
+					}
+				}
+			} else {
+				lbBackendPoolIPCount = len(*lbBackendPoolIPs)
+			}
+			Expect(lbBackendPoolIPCount).To(Equal(len(nodes)))
+			utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPCount)
 		}
-		Expect(lbBackendPoolIPCount).To(Equal(len(nodes)))
-		utils.Logf("Initial node number in the LB backend pool is %d", lbBackendPoolIPCount)
 		nodeToLabel := nodes[0]
 
 		By(fmt.Sprintf("Labeling node %q", nodeToLabel.Name))
@@ -801,7 +815,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			utils.Logf("Checking LB rule %q", *lbRule.Name)
 			lbRuleSplit := strings.Split(*lbRule.Name, "-")
 			Expect(len(lbRuleSplit)).NotTo(Equal(0))
-			// id is like xxx-IPv4 or xxx-IPv6 and lbRuleSplit[0] is like xxx.
+			// id is like xxx or xxx-IPv6 and lbRuleSplit[0] is like xxx.
 			if !strings.Contains(configID, lbRuleSplit[0]) {
 				continue
 			}
@@ -1192,31 +1206,64 @@ func getAzureInternalLoadBalancerFromPrivateIP(tc *utils.AzureTestClient, ip, lb
 func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedNum int) error {
 	return wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 		lb := getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "")
-		lbBackendPoolIPs := (*lb.BackendAddressPools)[getLBBackendPoolIndex(lb)].LoadBalancerBackendAddresses
-		ipNum := 0
-		if lbBackendPoolIPs != nil {
-			if utils.IsAutoscalingAKSCluster() {
-				// Autoscaling tests don't include IP based LB.
-				for _, ip := range *lbBackendPoolIPs {
-					if ip.LoadBalancerBackendAddressPropertiesFormat == nil ||
-						ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration == nil {
-						return false, fmt.Errorf("LB backendPool address's NIC IP config ID is nil")
-					}
-					ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
-					if !strings.Contains(ipConfigID, utils.SystemPool) {
-						ipNum++
-					}
+		if lb.Sku != nil && lb.Sku.Name == aznetwork.LoadBalancerSkuNameBasic {
+			// basic lb
+			idxes := getLBBackendPoolIndex(lb)
+			if len(idxes) == 0 {
+				return false, errors.New("no backend pool found")
+			}
+			failed := false
+			for _, idx := range idxes {
+				bp := (*lb.BackendAddressPools)[idx]
+				lbBackendPoolIPConfigs := bp.BackendIPConfigurations
+				ipConfigNum := 0
+				if lbBackendPoolIPConfigs != nil {
+					ipConfigNum = len(*lbBackendPoolIPConfigs)
 				}
+				if expectedNum == ipConfigNum {
+					utils.Logf("Number of IP configs in the LB backend pool %q matches expected number %d. Success", *bp.Name, expectedNum)
+				} else {
+					utils.Logf("Number of IP configs: %d in the LB backend pool %q, expected %d, will retry soon", ipConfigNum, *bp.Name, expectedNum)
+					failed = true
+				}
+			}
+			return !failed, nil
+		}
+		// SLB
+		idxes := getLBBackendPoolIndex(lb)
+		if len(idxes) == 0 {
+			return false, errors.New("no backend pool found")
+		}
+		failed := false
+		for _, idx := range idxes {
+			bp := (*lb.BackendAddressPools)[idx]
+			lbBackendPoolIPs := bp.LoadBalancerBackendAddresses
+			ipNum := 0
+			if lbBackendPoolIPs != nil {
+				if utils.IsAutoscalingAKSCluster() {
+					// Autoscaling tests don't include IP based LB.
+					for _, ip := range *lbBackendPoolIPs {
+						if ip.LoadBalancerBackendAddressPropertiesFormat == nil ||
+							ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration == nil {
+							return false, fmt.Errorf("LB backendPool address's NIC IP config ID is nil")
+						}
+						ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
+						if !strings.Contains(ipConfigID, utils.SystemPool) {
+							ipNum++
+						}
+					}
+				} else {
+					ipNum = len(*lbBackendPoolIPs)
+				}
+			}
+			if ipNum == expectedNum {
+				utils.Logf("Number of IPs in the LB backend pool %q matches expected number %d. Success", *bp.Name, expectedNum)
 			} else {
-				ipNum = len(*lbBackendPoolIPs)
+				utils.Logf("Number of IPs: %d in the LB backend pool %q, expected %d, will retry soon", ipNum, *bp.Name, expectedNum)
+				failed = true
 			}
 		}
-		if ipNum == expectedNum {
-			utils.Logf("Number of IPs matches expected number %d. Success", expectedNum)
-			return true, nil
-		}
-		utils.Logf("Number of IPs: %d in the LB backend pool, expected %d, will retry soon", ipNum, expectedNum)
-		return false, nil
+		return !failed, nil
 	})
 }
 
@@ -1224,15 +1271,14 @@ func judgeInternal(service v1.Service) bool {
 	return service.Annotations[consts.ServiceAnnotationLoadBalancerInternal] == utils.TrueValue
 }
 
-func getLBBackendPoolIndex(lb *aznetwork.LoadBalancer) int {
-	if os.Getenv(utils.AKSTestCCM) != "" {
-		for index, backendPool := range *lb.BackendAddressPools {
-			if *backendPool.Name != "aksOutboundBackendPool" {
-				return index
-			}
+func getLBBackendPoolIndex(lb *aznetwork.LoadBalancer) []int {
+	idxes := []int{}
+	for index, backendPool := range *lb.BackendAddressPools {
+		if !strings.Contains(strings.ToLower(*backendPool.Name), "outboundbackendpool") {
+			idxes = append(idxes, index)
 		}
 	}
-	return 0
+	return idxes
 }
 
 func updateServiceLBIPs(service *v1.Service, isInternal bool, ips []string) (result *v1.Service) {
