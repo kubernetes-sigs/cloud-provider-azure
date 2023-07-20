@@ -26,7 +26,7 @@
     },
     {
       "name": "lb-1",
-      "primaryVMSet": "${CLUSTER_NAME}-mp-win"
+      "primaryVMSet": "${CLUSTER_NAME}-mp-1"
     },
     {
       "name": "lb-2",
