@@ -890,7 +890,7 @@ func TestInstanceMetadata(t *testing.T) {
 
 	t.Run("instance exists", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		expectedVM := buildDefaultTestVirtualMachine("as", []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1"})
+		expectedVM := buildDefaultTestVirtualMachine("", "as", []string{"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1"})
 		expectedVM.HardwareProfile = &compute.HardwareProfile{
 			VMSize: compute.BasicA0,
 		}

@@ -143,6 +143,8 @@ const (
 
 	// GetNodeVmssFlexIDLockKey is the key for getting the lock for getNodeVmssFlexID function
 	GetNodeVmssFlexIDLockKey = "k8sGetNodeVmssFlexIDLockKey"
+	// VMManagementTypeLockKey is the key for getting the lock for getVMManagementType function
+	VMManagementTypeLockKey = "VMManagementType"
 
 	// AvailabilitySetNodesCacheTTLDefaultInSeconds is the TTL of the availabilitySet node cache
 	AvailabilitySetNodesCacheTTLDefaultInSeconds = 900

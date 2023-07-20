@@ -1571,6 +1571,41 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 		mc.ObserveOperationWithResult(isOperationSucceeded)
 	}()
 
+	avSetBackendIPConfigurations := []network.InterfaceIPConfiguration{}
+
+	for _, backendPool := range *backendAddressPools {
+		if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {
+			for _, ipConf := range *backendPool.BackendIPConfigurations {
+				if ipConf.ID == nil {
+					continue
+				}
+
+				vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(*ipConf.ID, azcache.CacheReadTypeUnsafe)
+				if err != nil {
+					klog.Warningf("Failed to check VM management type by ipConfigurationID %s: %v, skip it", *ipConf.ID, err)
+				}
+
+				if vmManagementType == ManagedByAvSet {
+					// vm is managed by availability set.
+					avSetBackendIPConfigurations = append(avSetBackendIPConfigurations, ipConf)
+				}
+			}
+		}
+	}
+
+	if len(avSetBackendIPConfigurations) > 0 {
+		klog.V(2).Infof("EnsureBackendPoolDeleted: found %d availability set VMs in backend pool %s", len(avSetBackendIPConfigurations), backendPoolID)
+		avSetBackendPools := &[]network.BackendAddressPool{
+			{
+				ID: pointer.String(backendPoolID),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					BackendIPConfigurations: &avSetBackendIPConfigurations,
+				},
+			},
+		}
+		return ss.availabilitySet.EnsureBackendPoolDeleted(service, backendPoolID, vmSetName, avSetBackendPools, deleteFromVMSet)
+	}
+
 	ipConfigurationIDs := []string{}
 	for _, backendPool := range *backendAddressPools {
 		if strings.EqualFold(*backendPool.ID, backendPoolID) && backendPool.BackendIPConfigurations != nil {

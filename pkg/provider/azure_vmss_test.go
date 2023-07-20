@@ -2840,9 +2840,34 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 		backendpoolID          string
 		backendAddressPools    *[]network.BackendAddressPool
 		expectedVMSSVMPutTimes int
+		existingVM             compute.VirtualMachine
+		existingNIC            network.Interface
+		shouldCheckVMAS        bool
 		vmClientErr            *retry.Error
 		expectedErr            bool
 	}{
+		{
+			description:   "EnsureBackendPoolDeleted should decouple the nic and the load balancer properly for availability set nodes",
+			backendpoolID: testLBBackendpoolID0,
+			backendAddressPools: &[]network.BackendAddressPool{
+				{
+					ID: pointer.String(testLBBackendpoolID0),
+					BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+						BackendIPConfigurations: &[]network.InterfaceIPConfiguration{
+							{
+								ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1/ipConfigurations/ipconfig1"),
+							},
+						},
+					},
+				},
+			},
+			existingVM: buildDefaultTestVirtualMachine("k8s-agentpool1-00000000-1", "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/as", []string{
+				"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1",
+			}),
+			existingNIC:     buildDefaultTestInterface(true, []string{"/subscriptions/sub/resourceGroups/gh/providers/Microsoft.Network/loadBalancers/testCluster/backendAddressPools/testCluster"}),
+			shouldCheckVMAS: true,
+		},
+
 		{
 			description:   "EnsureBackendPoolDeleted should skip the unwanted backend address pools and update the VMSS VM correctly",
 			backendpoolID: testLBBackendpoolID0,
@@ -2917,28 +2942,47 @@ func TestEnsureBackendPoolDeleted(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		ss, err := NewTestScaleSet(ctrl)
-		assert.NoError(t, err, test.description)
+		t.Run(test.description, func(t *testing.T) {
+			ss, err := NewTestScaleSet(ctrl)
+			assert.NoError(t, err, test.description)
 
-		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
-		mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
-		mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
-		mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSS, nil).MaxTimes(1)
-		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil).Times(1)
+			if !test.shouldCheckVMAS {
+				expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
+				mockVMSSClient := ss.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
+				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSS, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil).Times(1)
 
-		expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
-		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
-		mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-		mockVMSSVMClient.EXPECT().UpdateVMs(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
+				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
+				mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+				mockVMSSVMClient.EXPECT().UpdateVMs(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any(), gomock.Any(), gomock.Any()).Return(test.vmClientErr).Times(test.expectedVMSSVMPutTimes)
+			}
+			mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
+			mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{test.existingVM}, nil).AnyTimes()
+			mockVMClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, "k8s-agentpool1-00000000-1", gomock.Any()).Return(test.existingVM, nil).AnyTimes()
 
-		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]compute.VirtualMachine{}, nil).AnyTimes()
+			mockNICClient := mockinterfaceclient.NewMockInterface(ctrl)
+			if test.shouldCheckVMAS {
+				test.existingNIC.VirtualMachine = &network.SubResource{
+					ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/k8s-agentpool1-00000000-1"),
+				}
+			}
+			mockNICClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-nic-1", gomock.Any()).Return(test.existingNIC, nil).MaxTimes(2)
+			mockNICClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			ss.cloud.InterfacesClient = mockNICClient
 
-		updated, err := ss.EnsureBackendPoolDeleted(&v1.Service{}, test.backendpoolID, testVMSSName, test.backendAddressPools, true)
-		assert.Equal(t, test.expectedErr, err != nil, test.description+", but an error occurs")
-		if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
-			assert.True(t, updated, test.description)
-		}
+			vmSetName := testVMSSName
+			if test.shouldCheckVMAS {
+				vmSetName = TestASResourceBaseName
+			}
+
+			updated, err := ss.EnsureBackendPoolDeleted(&v1.Service{}, test.backendpoolID, vmSetName, test.backendAddressPools, true)
+			assert.Equal(t, test.expectedErr, err != nil, test.description+", but an error occurs")
+			if !test.expectedErr && test.expectedVMSSVMPutTimes > 0 {
+				assert.True(t, updated, test.description)
+			}
+		})
 	}
 }
 
