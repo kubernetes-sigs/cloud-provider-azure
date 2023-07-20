@@ -423,6 +423,9 @@ const (
 const (
 	RouteNameFmt       = "%s____%s"
 	RouteNameSeparator = "____"
+
+	// routeUpdateInterval defines the route reconciling interval.
+	RouteUpdateInterval = 30 * time.Second
 )
 
 // cloud provider config secret
