@@ -56,7 +56,7 @@ Please note that
   * Set `externalTrafficPolicy` to `Local`.
   * And enable the FloatingIP feature by either not setting annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip`, or setting its value to false.
 
-### Setting LoadBalaner IP
+### Setting LoadBalancer IP
 
 If you want to specify an IP address for the load balancer, there are two ways:
 
