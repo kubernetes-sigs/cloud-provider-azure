@@ -27,10 +27,10 @@ metadata:
   name: ${CLUSTER_NAME}
   namespace: default
 spec:
-  additionalTags:
-    buildProvenance: ${BUILD_PROVENANCE}
-    creationTimestamp: ${TIMESTAMP}
-    jobName: ${JOB_NAME}
+  #  additionalTags:
+  #    buildProvenance: ${BUILD_PROVENANCE}
+  #    creationTimestamp: ${TIMESTAMP}
+  #    jobName: ${JOB_NAME}
   identityRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: AzureClusterIdentity
@@ -45,8 +45,8 @@ spec:
           name: node-natgateway
         role: node
     vnet:
-      name: ${AZURE_VNET_NAME:=${CLUSTER_NAME}-vnet}
-  resourceGroup: ${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}
+      name: ${CLUSTER_NAME}-vnet
+  resourceGroup: ${CLUSTER_NAME}
   subscriptionID: ${AZURE_SUBSCRIPTION_ID}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -226,7 +226,7 @@ spec:
       osDisk:
         diskSizeGB: 128
         osType: Linux
-      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+      sshPublicKey: ""
       vmSize: ${AZURE_CONTROL_PLANE_MACHINE_TYPE}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -258,7 +258,7 @@ metadata:
   namespace: default
 spec:
   location: ${AZURE_LOCATION}
-  orchestrationMode: ${ORCHESTRATION_MODE:=Uniform}
+  orchestrationMode: Uniform
   strategy:
     rollingUpdate:
       deletePolicy: Oldest
@@ -277,7 +277,7 @@ spec:
       managedDisk:
         storageAccountType: Premium_LRS
       osType: Linux
-    sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+    sshPublicKey: ""
     vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
@@ -411,7 +411,7 @@ metadata:
   namespace: default
 spec:
   location: ${AZURE_LOCATION}
-  orchestrationMode: ${ORCHESTRATION_MODE:=Uniform}
+  orchestrationMode: Uniform
   strategy:
     rollingUpdate:
       deletePolicy: Oldest
@@ -430,7 +430,7 @@ spec:
       managedDisk:
         storageAccountType: Premium_LRS
       osType: Linux
-    sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+    sshPublicKey: ""
     vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
