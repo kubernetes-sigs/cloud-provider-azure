@@ -644,7 +644,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
 		// start delayed route updater.
-		az.routeUpdater = newDelayedRouteUpdater(az, routeUpdateInterval)
+		az.routeUpdater = newDelayedRouteUpdater(az, consts.RouteUpdateInterval)
 		go az.routeUpdater.run()
 
 		// Azure Stack does not support zone at the moment
