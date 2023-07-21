@@ -37,4 +37,16 @@ const (
 	TestSuiteLabelLB                 = "LB"
 	TestSuiteLabelMultiPorts         = "Multi-Ports"
 	TestSuiteLabelNSG                = "NSG"
+
+	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
+	CAPZTestCCM = "TEST_CCM"
+	// If "E2E_ON_AKS_CLUSTER" is true, the test is running on a AKS cluster.
+	AKSTestCCM     = "E2E_ON_AKS_CLUSTER"
+	AKSClusterType = "CLUSTER_TYPE"
+	// If "INGEST_TEST_RESULT" is true, the test result needs ingestion to kusto
+	IngestTestResult = "INGEST_TEST_RESULT"
+	// LB backendpool config type, may be nodeIP
+	LBBackendPoolConfigType = "LB_BACKEND_POOL_CONFIG_TYPE"
+
+	TrueValue = "true"
 )
