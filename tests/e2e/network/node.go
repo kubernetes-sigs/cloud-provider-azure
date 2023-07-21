@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -31,8 +32,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
@@ -247,21 +250,23 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		}
 		utils.Logf("nodeSet: %v", nodeSet)
 
-		var succeeded bool
-		for _, routeTable := range *routeTables {
-			utils.Logf("getting all routes in route table %s", *routeTable.Name)
-			routeSet, err := utils.GetNodesInRouteTable(routeTable)
-			Expect(err).NotTo(HaveOccurred())
+		// Considering the route reconciling interval, the timeout is set to interval + 10s.
+		err = wait.PollImmediate(5*time.Second, consts.RouteUpdateInterval+10*time.Second, func() (bool, error) {
+			for _, routeTable := range *routeTables {
+				routeSet, err := utils.GetNodesInRouteTable(routeTable)
+				if err != nil {
+					return false, err
+				}
 
-			utils.Logf("routeSet: %v", routeSet)
-
-			if reflect.DeepEqual(nodeSet, routeSet) {
-				succeeded = true
-				break
+				utils.Logf("all routes in route table: %v", routeSet)
+				if reflect.DeepEqual(nodeSet, routeSet) {
+					return true, nil
+				}
 			}
-		}
+			return false, nil
+		})
 
-		Expect(succeeded).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 

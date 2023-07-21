@@ -37,11 +37,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
-var (
-	// routeUpdateInterval defines the route reconciling interval.
-	routeUpdateInterval = 30 * time.Second
-)
-
 // routeOperation defines the allowed operations for route updating.
 type routeOperation string
 
