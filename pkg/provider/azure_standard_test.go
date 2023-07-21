@@ -659,7 +659,7 @@ func TestGetStandardVMPrimaryInterfaceID(t *testing.T) {
 	}{
 		{
 			name:          "GetPrimaryInterfaceID should get the only NIC ID",
-			vm:            buildDefaultTestVirtualMachine("", []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"}),
+			vm:            buildDefaultTestVirtualMachine("", "", []string{"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"}),
 			expectedNicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic",
 		},
 		{
@@ -1480,7 +1480,7 @@ func TestStandardEnsureHostInPool(t *testing.T) {
 			cloud.EnableMultipleStandardLoadBalancers = true
 		}
 
-		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
+		testVM := buildDefaultTestVirtualMachine("", availabilitySetID, []string{test.nicID})
 		testVM.Name = pointer.String(string(test.nodeName))
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
 		testNIC.Name = pointer.String(test.nicName)
@@ -1622,7 +1622,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 		cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
 		cloud.excludeLoadBalancerNodes = sets.NewString(test.excludeLBNodes...)
 
-		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
+		testVM := buildDefaultTestVirtualMachine("", availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})
 		testNIC.Name = pointer.String(test.nicName)
 		testNIC.ID = pointer.String(test.nicID)
@@ -1880,7 +1880,7 @@ func TestStandardEnsureBackendPoolDeleted(t *testing.T) {
 					},
 				},
 			},
-			existingVM: buildDefaultTestVirtualMachine("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/as", []string{
+			existingVM: buildDefaultTestVirtualMachine("", "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/as", []string{
 				"/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/k8s-agentpool1-00000000-nic-1",
 			}),
 			existingNIC: buildDefaultTestInterface(true, []string{"/subscriptions/sub/resourceGroups/gh/providers/Microsoft.Network/loadBalancers/testCluster/backendAddressPools/testCluster"}),
@@ -1929,8 +1929,9 @@ func buildDefaultTestInterface(isPrimary bool, lbBackendpoolIDs []string) networ
 	return expectedNIC
 }
 
-func buildDefaultTestVirtualMachine(asID string, nicIDs []string) compute.VirtualMachine {
+func buildDefaultTestVirtualMachine(name, asID string, nicIDs []string) compute.VirtualMachine {
 	expectedVM := compute.VirtualMachine{
+		Name: pointer.String(name),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			AvailabilitySet: &compute.SubResource{
 				ID: pointer.String(asID),
@@ -1952,7 +1953,7 @@ func TestStandardGetNodeNameByIPConfigurationID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	cloud := GetTestCloud(ctrl)
-	expectedVM := buildDefaultTestVirtualMachine("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/AGENTPOOL1-AVAILABILITYSET-00000000", []string{})
+	expectedVM := buildDefaultTestVirtualMachine("", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/AGENTPOOL1-AVAILABILITYSET-00000000", []string{})
 	expectedVM.Name = pointer.String("name")
 	mockVMClient := cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), "rg", "k8s-agentpool1-00000000-0", gomock.Any()).Return(expectedVM, nil)
