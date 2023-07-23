@@ -14,7 +14,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.11.0
-	github.com/onsi/gomega v1.27.8
+	github.com/onsi/gomega v1.27.9
 	go.opentelemetry.io/otel v1.16.0
 	go.opentelemetry.io/otel/trace v1.16.0
 	golang.org/x/crypto v0.11.0
@@ -37,7 +37,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
-	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/tools v0.9.3 // indirect
