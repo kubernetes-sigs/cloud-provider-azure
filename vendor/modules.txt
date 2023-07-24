@@ -1194,7 +1194,7 @@ k8s.io/component-base/version
 # k8s.io/component-helpers v0.24.16
 ## explicit; go 1.19
 k8s.io/component-helpers/node/util
-# k8s.io/controller-manager v0.24.15
+# k8s.io/controller-manager v0.24.16
 ## explicit; go 1.19
 k8s.io/controller-manager/app
 k8s.io/controller-manager/config
