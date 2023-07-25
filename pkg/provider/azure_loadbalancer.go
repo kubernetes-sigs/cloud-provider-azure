@@ -2611,7 +2611,7 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 	if lbIdleTimeout, err = consts.Getint32ValueFromK8sSvcAnnotation(service.Annotations, consts.ServiceAnnotationLoadBalancerIdleTimeout, func(val *int32) error {
 		const (
 			min = 4
-			max = 30
+			max = 100
 		)
 		if *val < min || *val > max {
 			return fmt.Errorf("idle timeout value must be a whole number representing minutes between %d and %d, actual value: %d", min, max, *val)
