@@ -1149,7 +1149,7 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/cloud-provider v0.24.15
+# k8s.io/cloud-provider v0.24.16
 ## explicit; go 1.19
 k8s.io/cloud-provider
 k8s.io/cloud-provider/api
