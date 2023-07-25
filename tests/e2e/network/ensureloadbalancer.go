@@ -673,7 +673,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		}
 	})
 
-	It("should support node label `node.kubernetes.io/exclude-from-external-load-balancers`", func() {
+	It("should support node label `node.kubernetes.io/exclude-from-external-load-balancers`", Label(utils.TestSuiteLabelNonMultiSLB), func() {
 		label := "node.kubernetes.io/exclude-from-external-load-balancers"
 		By("Checking the number of the node pools")
 		nodes, err := utils.GetAgentNodes(cs)
