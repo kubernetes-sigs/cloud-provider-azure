@@ -125,6 +125,10 @@ const (
 	TagKeyValueDelimiter = "="
 	// VMSetNamesSharingPrimarySLBDelimiter is the delimiter of vmSet names sharing the primary SLB
 	VMSetNamesSharingPrimarySLBDelimiter = ","
+	// ProvisioningStateDeleting ...
+	ProvisioningStateDeleting = "Deleting"
+	// ProvisioningStateSucceeded ...
+	ProvisioningStateSucceeded = "Succeeded"
 )
 
 // cache
@@ -386,6 +390,8 @@ const (
 	CannotUpdateVMBeingDeletedMessagePrefix = "'Put on Virtual Machine Scale Set VM Instance' is not allowed on Virtual Machine Scale Set"
 	// CannotUpdateVMBeingDeletedMessageSuffix is the suffix of the error message that the request failed due to delete a VM that is being deleted
 	CannotUpdateVMBeingDeletedMessageSuffix = "since it is marked for deletion"
+	// OperationPreemptedErrorCode is the error code returned for vm operation preempted errors
+	OperationPreemptedErrorCode = "OperationPreempted"
 )
 
 // node ipam controller

@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -733,7 +733,11 @@ func TestGetValidCreationData(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := getValidCreationData(test.subscriptionID, test.resourceGroup, test.sourceResourceID, test.sourceType)
+		options := ManagedDiskOptions{
+			SourceResourceID: test.sourceResourceID,
+			SourceType:       test.sourceType,
+		}
+		result, err := getValidCreationData(test.subscriptionID, test.resourceGroup, &options)
 		if !reflect.DeepEqual(result, test.expected1) || !reflect.DeepEqual(err, test.expected2) {
 			t.Errorf("input sourceResourceID: %v, sourceType: %v, getValidCreationData result: %v, expected1 : %v, err: %v, expected2: %v", test.sourceResourceID, test.sourceType, result, test.expected1, err, test.expected2)
 		}
