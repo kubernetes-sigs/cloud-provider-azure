@@ -103,11 +103,3 @@ func (az *Cloud) getSecurityGroup(crt azcache.AzureCacheReadType) (network.Secur
 
 	return *(securityGroup.(*network.SecurityGroup)), nil
 }
-
-func (az *Cloud) getPrivateLinkService(frontendIPConfigID *string, crt azcache.AzureCacheReadType) (pls network.PrivateLinkService, err error) {
-	cachedPLS, err := az.plsCache.GetWithDeepCopy(*frontendIPConfigID, crt)
-	if err != nil {
-		return pls, err
-	}
-	return *(cachedPLS.(*network.PrivateLinkService)), nil
-}
