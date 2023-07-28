@@ -425,6 +425,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			}
 		}
 
+		var nodeIPsToBeAdded []string
 		nodePrivateIPsSet := sets.New[string]()
 		for _, node := range nodes {
 			if isControlPlaneNode(node) {
@@ -444,21 +445,12 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 
 			if !existingIPs.Has(privateIP) {
 				name := node.Name
-				if utilnet.IsIPv6String(privateIP) {
-					name = fmt.Sprintf("%s-%s", name, v6Suffix)
-				}
-
 				klog.V(6).Infof("bi.EnsureHostsInPool: adding %s with ip address %s", name, privateIP)
-				*backendPool.LoadBalancerBackendAddresses = append(*backendPool.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
-					Name: pointer.String(name),
-					LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-						IPAddress: pointer.String(privateIP),
-					},
-				})
+				nodeIPsToBeAdded = append(nodeIPsToBeAdded, privateIP)
 				numOfAdd++
-				changed = true
 			}
 		}
+		changed = bi.addNodeIPAddressesToBackendPool(&backendPool, nodeIPsToBeAdded)
 
 		var nodeIPsToBeDeleted []string
 		for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
@@ -770,6 +762,47 @@ func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, p
 
 	// Always returns false
 	return isBackendPoolPreConfigured
+}
+
+func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *network.BackendAddressPool, nodeIPAddresses []string) bool {
+	if backendPool.LoadBalancerBackendAddresses == nil {
+		lbBackendPoolAddresses := make([]network.LoadBalancerBackendAddress, 0)
+		backendPool.LoadBalancerBackendAddresses = &lbBackendPoolAddresses
+	}
+
+	var changed bool
+	addresses := *backendPool.LoadBalancerBackendAddresses
+	for _, ipAddress := range nodeIPAddresses {
+		if !hasIPAddressInBackendPool(backendPool, ipAddress) {
+			name := az.nodePrivateIPToNodeNameMap[ipAddress]
+			klog.V(4).Infof("bi.addNodeIPAddressesToBackendPool: adding %s to the backend pool %s", ipAddress, pointer.StringDeref(backendPool.Name, ""))
+			addresses = append(addresses, network.LoadBalancerBackendAddress{
+				Name: pointer.String(name),
+				LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+					IPAddress: pointer.String(ipAddress),
+				},
+			})
+			changed = true
+		}
+	}
+	backendPool.LoadBalancerBackendAddresses = &addresses
+	return changed
+}
+
+func hasIPAddressInBackendPool(backendPool *network.BackendAddressPool, ipAddress string) bool {
+	if backendPool.LoadBalancerBackendAddresses == nil {
+		return false
+	}
+
+	addresses := *backendPool.LoadBalancerBackendAddresses
+	for _, address := range addresses {
+		if address.LoadBalancerBackendAddressPropertiesFormat != nil &&
+			pointer.StringDeref(address.IPAddress, "") == ipAddress {
+			return true
+		}
+	}
+
+	return false
 }
 
 func removeNodeIPAddressesFromBackendPool(
