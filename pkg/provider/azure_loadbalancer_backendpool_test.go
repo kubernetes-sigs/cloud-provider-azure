@@ -44,6 +44,14 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerSku = consts.LoadBalancerSkuStandard
+	az.nodePrivateIPToNodeNameMap = map[string]string{
+		"10.0.0.2": "vmss-0",
+		"2001::2":  "vmss-0",
+		"10.0.0.1": "vmss-1",
+		"2001::1":  "vmss-1",
+		"10.0.0.4": "vmss-2",
+		"2001::4":  "vmss-2",
+	}
 	bi := newBackendPoolTypeNodeIP(az)
 
 	nodes := []*v1.Node{
@@ -182,13 +190,13 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 							},
 						},
 						{
-							Name: pointer.String("vmss-0-IPv6"),
+							Name: pointer.String("vmss-0"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: pointer.String("2001::2"),
 							},
 						},
 						{
-							Name: pointer.String("vmss-2-IPv6"),
+							Name: pointer.String("vmss-2"),
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
 								IPAddress: pointer.String("2001::4"),
 							},

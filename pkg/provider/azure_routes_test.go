@@ -55,7 +55,7 @@ func TestDeleteRoute(t *testing.T) {
 	cache, _ := cloud.newRouteTableCache()
 	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
-	go cloud.routeUpdater.run()
+	go cloud.routeUpdater.run(context.Background())
 	route := cloudprovider.Route{
 		TargetNode:      "node",
 		DestinationCIDR: "1.2.3.4/24",
@@ -128,7 +128,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 	cache, _ := cloud.newRouteTableCache()
 	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
-	go cloud.routeUpdater.run()
+	go cloud.routeUpdater.run(context.Background())
 
 	route := cloudprovider.Route{
 		TargetNode:      "node",
@@ -200,7 +200,7 @@ func TestCreateRoute(t *testing.T) {
 	cache, _ := cloud.newRouteTableCache()
 	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
-	go cloud.routeUpdater.run()
+	go cloud.routeUpdater.run(context.Background())
 
 	route := cloudprovider.Route{TargetNode: "node", DestinationCIDR: "1.2.3.4/24"}
 	nodePrivateIP := "2.4.6.8"
@@ -607,7 +607,7 @@ func TestListRoutes(t *testing.T) {
 	cache, _ := cloud.newRouteTableCache()
 	cloud.rtCache = cache
 	cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
-	go cloud.routeUpdater.run()
+	go cloud.routeUpdater.run(context.Background())
 
 	testCases := []struct {
 		name                  string
