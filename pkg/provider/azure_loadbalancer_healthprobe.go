@@ -99,29 +99,22 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 		if s == nil {
 			return nil
 		}
+		//not a integer
+		for _, item := range serviceManifest.Spec.Ports {
+			if strings.EqualFold(item.Name, *s) {
+				//found the port
+				return nil
+			}
+		}
 		//nolint:gosec
 		port, err := strconv.Atoi(*s)
 		if err != nil {
-			//not a integer
-			for _, item := range serviceManifest.Spec.Ports {
-				if strings.EqualFold(item.Name, *s) {
-					//found the port
-					return nil
-				}
-			}
 			return fmt.Errorf("port %s not found in service", *s)
 		}
 		if port < 0 || port > 65535 {
 			return fmt.Errorf("port %d is out of range", port)
 		}
-		for _, item := range serviceManifest.Spec.Ports {
-			//nolint:gosec
-			if item.Port == int32(port) {
-				//found the port
-				return nil
-			}
-		}
-		return fmt.Errorf("port %s not found in service", *s)
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse annotation %s: %w", consts.BuildHealthProbeAnnotationKeyForPort(port.Port, consts.HealthProbeParamsPort), err)
@@ -129,7 +122,7 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 
 	if probePort != nil {
 		//nolint:gosec
-		port, err := strconv.Atoi(*probePort)
+		port, err := strconv.ParseInt(*probePort, 10, 32)
 		if err != nil {
 			//not a integer
 			for _, item := range serviceManifest.Spec.Ports {
@@ -140,12 +133,19 @@ func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port 
 			}
 		} else {
 			// Not need to verify probePort is in correct range again.
+			var found bool
 			for _, item := range serviceManifest.Spec.Ports {
 				//nolint:gosec
 				if item.Port == int32(port) {
 					//found the port
 					properties.Port = pointer.Int32(item.NodePort)
+					found = true
+					break
 				}
+			}
+			if !found {
+				//nolint:gosec
+				properties.Port = pointer.Int32(int32(port))
 			}
 		}
 	}
