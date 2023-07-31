@@ -118,14 +118,14 @@ In my testing on Ubuntu 16.04 D2_V2 VM, when attaching the 6th data disk will ca
 ```sh
 azureuser@k8s-agentpool2-40588258-0:~$ tree /dev/disk/azure
 ...
-â””â”€â”€ scsi1
-    â”œâ”€â”€ lun0 -> ../../../sdk
-    â”œâ”€â”€ lun1 -> ../../../sdj
-    â”œâ”€â”€ lun2 -> ../../../sde
-    â”œâ”€â”€ lun3 -> ../../../sdf
-    â”œâ”€â”€ lun4 -> ../../../sdg
-    â”œâ”€â”€ lun5 -> ../../../sdh
-    â””â”€â”€ lun6 -> ../../../sdi
+â""â"€â"€ scsi1
+    â"œâ"€â"€ lun0 -> ../../../sdk
+    â"œâ"€â"€ lun1 -> ../../../sdj
+    â"œâ"€â"€ lun2 -> ../../../sde
+    â"œâ"€â"€ lun3 -> ../../../sdf
+    â"œâ"€â"€ lun4 -> ../../../sdg
+    â"œâ"€â"€ lun5 -> ../../../sdh
+    â""â"€â"€ lun6 -> ../../../sdi
 ```
 
 **Related issues**
@@ -570,7 +570,7 @@ In some condition when first detach azure disk operation failed, it won't retry 
 
 Following error may occur when move one disk from one node to another(keyword: `ConflictingUserInput`):
 ```
-[Warning] AttachVolume.Attach failed for volume “pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9” : Attach volume “kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9" to instance “/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-0” failed with compute.VirtualMachinesClient#CreateOrUpdate: Failure sending request: StatusCode=0 -- Original Error: autorest/azure: Service returned an error. Status= Code=“ConflictingUserInput” Message=“Disk ‘/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/disks/kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9’ cannot be attached as the disk is already owned by VM ‘/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-1’.”
+[Warning] AttachVolume.Attach failed for volume "pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9" : Attach volume "kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9" to instance "/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-0" failed with compute.VirtualMachinesClient#CreateOrUpdate: Failure sending request: StatusCode=0 -- Original Error: autorest/azure: Service returned an error. Status= Code="ConflictingUserInput" Message="Disk '/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/disks/kubernetes-dynamic-pvc-7b7976d7-3a46-11e9-93d5-dee1946e6ce9' cannot be attached as the disk is already owned by VM '/subscriptions/XXX/resourceGroups/XXX/providers/Microsoft.Compute/virtualMachines/aks-agentpool-57634498-1'."
 ```
 
 **Fix**
@@ -731,7 +731,7 @@ Restart kube-controller-manager on master node.
 
 When user use an existing disk in static provisioning, may hit following error:
 ```
-AttachVolume.Attach failed for volume "azure" : invalid disk URI: /subscriptions/xxx/resourcegroups/xxx/providers/Microsoft.Compute/disks/Test_Resize_1/”
+AttachVolume.Attach failed for volume "azure" : invalid disk URI: /subscriptions/xxx/resourcegroups/xxx/providers/Microsoft.Compute/disks/Test_Resize_1/"
 ```
 
 
