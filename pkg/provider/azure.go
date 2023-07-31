@@ -723,7 +723,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 				return err
 			}
 
-			go az.refreshZones(az.syncRegionZonesMap)
+			go az.refreshZones(ctx, az.syncRegionZonesMap)
 		}
 	}
 
