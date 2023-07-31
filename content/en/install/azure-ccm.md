@@ -7,7 +7,7 @@ description: >
     The configurations for using Azure Cloud Controller Manager.
 ---
 
-`azure-cloud-controller-manager` is a Kubernetes component which provides interoperability with Azure API, and will be used by Kubernetes clusters running on Azure. It runs together with other components to provide the Kubernetes cluster’s control plane.
+`azure-cloud-controller-manager` is a Kubernetes component which provides interoperability with Azure API, and will be used by Kubernetes clusters running on Azure. It runs together with other components to provide the Kubernetes cluster's control plane.
 
 Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/components/#cloud-controller-manager) is a new alpha feature for Kubernetes since v1.14. `cloud-controller-manager` runs cloud provider related controller loops, which used to be run by `controller-manager`.
 
