@@ -2746,6 +2746,32 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "getExpectedLBRules should support customize health probe port ",
+			service: getTestServiceDualStack("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/port_8000_health-probe_port": "5080",
+			}, 80, 8000),
+			expectedRules: map[bool][]network.LoadBalancingRule{
+				consts.IPVersionIPv4: {
+					getTestRule(false, 80, consts.IPVersionIPv4),
+					getTestRule(false, 8000, consts.IPVersionIPv4),
+				},
+				consts.IPVersionIPv6: {
+					getTestRule(false, 80, consts.IPVersionIPv6),
+					getTestRule(false, 8000, consts.IPVersionIPv6),
+				},
+			},
+			expectedProbes: map[bool][]network.Probe{
+				consts.IPVersionIPv4: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv4),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(5080), pointer.Int32(2), consts.IPVersionIPv4),
+				},
+				consts.IPVersionIPv6: {
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2), consts.IPVersionIPv6),
+					getTestProbe("Tcp", "/", pointer.Int32(5), pointer.Int32(8000), pointer.Int32(5080), pointer.Int32(2), consts.IPVersionIPv6),
+				},
+			},
+		},
 	}
 	rulesDualStack := getDefaultTestRules(true)
 	for _, rules := range rulesDualStack {
