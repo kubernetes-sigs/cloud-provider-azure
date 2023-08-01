@@ -405,7 +405,7 @@ type Cloud struct {
 	KubeClient       clientset.Interface
 	eventBroadcaster record.EventBroadcaster
 	eventRecorder    record.EventRecorder
-	routeUpdater     *delayedRouteUpdater
+	routeUpdater     batchProcessor
 
 	vmCache  azcache.Resource
 	lbCache  azcache.Resource
@@ -711,7 +711,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	if callFromCCM {
 		// start delayed route updater.
 		az.routeUpdater = newDelayedRouteUpdater(az, consts.RouteUpdateInterval)
-		go az.routeUpdater.run()
+		go az.routeUpdater.run(ctx)
 
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
@@ -723,7 +723,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 				return err
 			}
 
-			go az.refreshZones(az.syncRegionZonesMap)
+			go az.refreshZones(ctx, az.syncRegionZonesMap)
 		}
 	}
 

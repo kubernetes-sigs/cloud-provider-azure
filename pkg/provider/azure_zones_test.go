@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 
@@ -374,4 +375,21 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
 		})
 	}
+}
+
+func TestRefreshZones(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	mockZoneClient := mockzoneclient.NewMockInterface(ctrl)
+	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, nil).Times(0)
+	az.ZoneClient = mockZoneClient
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(1 * time.Second)
+		cancel()
+	}()
+	az.refreshZones(ctx, az.syncRegionZonesMap)
 }
