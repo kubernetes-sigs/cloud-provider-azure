@@ -987,4 +987,21 @@ func TestCloud_InstanceExists(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, exist)
 	})
+	t.Run("should return true when instance is not managed by azure", func(t *testing.T) {
+		ctx := context.Background()
+		cloud := GetTestCloud(ctrl)
+		cloud.unmanagedNodes = sets.New("foo")
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "foo",
+				Labels: map[string]string{
+					"kubernetes.azure.com/managed": "false",
+				},
+			},
+		}
+
+		exist, err := cloud.InstanceExists(ctx, node)
+		assert.NoError(t, err)
+		assert.True(t, exist)
+	})
 }
