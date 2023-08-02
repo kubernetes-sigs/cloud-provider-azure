@@ -233,7 +233,7 @@ func (az *Cloud) InstanceExists(ctx context.Context, node *v1.Node) (bool, error
 	}
 	if unmanaged {
 		klog.V(4).Infof("InstanceExists: omitting unmanaged node %q", node.Name)
-		return false, nil
+		return true, nil
 	}
 
 	providerID := node.Spec.ProviderID
