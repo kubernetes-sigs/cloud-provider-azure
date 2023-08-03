@@ -7,7 +7,7 @@ timeout: 9000s
 options:
   substitution_option: ALLOW_LOOSE
 steps:
-  - name: "gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:v20220830-45cbff55bc"
+  - name: "gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:v20230623-56e06d7c18"
     entrypoint: make
     env:
       - TAG=${_GIT_TAG}
@@ -17,7 +17,6 @@ steps:
       - DOCKER_CLI_EXPERIMENTAL=enabled
       - DOCKER_BUILDKIT=1
       - IMAGE_REGISTRY=gcr.io/k8s-staging-provider-azure
-      - DOCKER_BUILDX=/root/.docker/cli-plugins/docker-buildx
       - CLOUD_BUILD_IMAGE=${_CLOUD_BUILD_IMAGE}
     args:
       - release-staging
