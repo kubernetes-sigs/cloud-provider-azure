@@ -1661,13 +1661,16 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 	defer ctrl.Finish()
 
 	for _, tc := range []struct {
-		description           string
-		existingLBs           []network.LoadBalancer
-		service               v1.Service
-		multiSLBConfigs       []MultipleStandardLoadBalancerConfiguration
-		expectedLB            *network.LoadBalancer
-		expectedDeletedLBName string
-		expectedError         error
+		description     string
+		existingLBs     []network.LoadBalancer
+		refreshedLBs    []network.LoadBalancer
+		existingPIPs    []network.PublicIPAddress
+		service         v1.Service
+		local           bool
+		multiSLBConfigs []MultipleStandardLoadBalancerConfiguration
+		expectedLB      *network.LoadBalancer
+		expectedLBs     *[]network.LoadBalancer
+		expectedError   error
 	}{
 		{
 			description: "should return the existing lb if the service is moved to the lb",
@@ -1702,9 +1705,118 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 					},
 				},
 			},
-			expectedDeletedLBName: "lb1-internal",
 			expectedLB: &network.LoadBalancer{
 				Name: pointer.String("lb2-internal"),
+			},
+			expectedLBs: &[]network.LoadBalancer{
+				{Name: pointer.String("lb2-internal")},
+			},
+		},
+		{
+			description: "remove backend pool when a local service changes its load balancer",
+			existingLBs: []network.LoadBalancer{
+				{
+					Name: pointer.String("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+							{
+								Name: pointer.String("atest1"),
+								ID:   pointer.String("atest1"),
+								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip")},
+								},
+							},
+							{
+								Name: pointer.String("atest2"),
+							},
+						},
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+							},
+							{
+								Name: pointer.String("default-test1"),
+							},
+						},
+					},
+				},
+			},
+			refreshedLBs: []network.LoadBalancer{
+				{
+					Name: pointer.String("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+							{
+								Name: pointer.String("atest1"),
+								ID:   pointer.String("atest1"),
+								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip")},
+								},
+							},
+							{
+								Name: pointer.String("atest2"),
+							},
+						},
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+							},
+						},
+					},
+				},
+			},
+			existingPIPs: []network.PublicIPAddress{
+				{
+					Name: pointer.String("pip"),
+					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: pointer.String("1.2.3.4"),
+					},
+				},
+			},
+			service: getTestService("test1", v1.ProtocolTCP, nil, false, 80),
+			local:   true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+				},
+				{
+					Name: "lb2",
+					MultipleStandardLoadBalancerConfigurationStatus: MultipleStandardLoadBalancerConfigurationStatus{
+						ActiveServices: sets.Set[string]{"default/test1": sets.Empty{}},
+					},
+				},
+			},
+			expectedLB: &network.LoadBalancer{
+				Name:     pointer.String("lb2"),
+				Location: pointer.String("westus"),
+				Sku: &network.LoadBalancerSku{
+					Name: network.LoadBalancerSkuNameStandard,
+				},
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{},
+			},
+			expectedLBs: &[]network.LoadBalancer{
+				{
+					Name: pointer.String("lb1"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+							{
+								Name: pointer.String("atest1"),
+								ID:   pointer.String("atest1"),
+								FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+									PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip")},
+								},
+							},
+							{
+								Name: pointer.String("atest2"),
+							},
+						},
+						BackendAddressPools: &[]network.BackendAddressPool{
+							{
+								Name: pointer.String("kubernetes"),
+							},
+						},
+					},
+				},
 			},
 		},
 	} {
@@ -1714,18 +1826,29 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 			cloud.MultipleStandardLoadBalancerConfigurations = tc.multiSLBConfigs
 			cloud.plsCache, _ = cloud.newPLSCache()
 			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-			lbClient.EXPECT().Delete(gomock.Any(), gomock.Any(), "lb1-internal")
+			lbClient.EXPECT().Delete(gomock.Any(), gomock.Any(), "lb1-internal").MaxTimes(1)
+			lbClient.EXPECT().DeleteLBBackendPool(gomock.Any(), gomock.Any(), "lb1", "default-test1").Return(nil).MaxTimes(1)
+			lbClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(tc.refreshedLBs, nil).MaxTimes(1)
+			lbClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MaxTimes(1)
 			cloud.LoadBalancerClient = lbClient
 
 			expectedPLS := make([]network.PrivateLinkService, 0)
 			mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 			mockPLSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(expectedPLS, nil)
 
-			lb, _, _, _, deletedLBName, err := cloud.getServiceLoadBalancer(&tc.service, testClusterName,
-				[]*v1.Node{}, true, tc.existingLBs)
+			mockPIPClient := mockpublicipclient.NewMockInterface(ctrl)
+			mockPIPClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]network.PublicIPAddress{}, nil).MaxTimes(2)
+			cloud.PublicIPAddressesClient = mockPIPClient
+
+			if tc.local {
+				tc.service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			}
+
+			lb, lbs, _, _, _, err := cloud.getServiceLoadBalancer(&tc.service, testClusterName,
+				[]*v1.Node{}, true, &tc.existingLBs)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedLB, lb)
-			assert.Equal(t, tc.expectedDeletedLBName, deletedLBName)
+			assert.Equal(t, tc.expectedLBs, lbs)
 		})
 	}
 }
@@ -1866,8 +1989,8 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			}
 			az.LoadBalancerSku = test.sku
 			service := test.service
-			lb, status, _, exists, _, err := az.getServiceLoadBalancer(&service, testClusterName,
-				clusterResources.nodes, test.wantLB, []network.LoadBalancer{})
+			lb, _, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+				clusterResources.nodes, test.wantLB, &[]network.LoadBalancer{})
 			assert.Equal(t, test.expectedLB, lb)
 			assert.Equal(t, test.expectedStatus, status)
 			assert.Equal(t, test.expectedExists, exists)
@@ -1899,8 +2022,8 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, status, _, exists, _, err := az.getServiceLoadBalancer(&service, testClusterName,
-		clusterResources.nodes, false, []network.LoadBalancer{})
+	lb, _, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+		clusterResources.nodes, false, &[]network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
 	assert.Equal(t, false, exists, "GetServiceLoadBalancer: Default LB should not exist.")
@@ -1924,8 +2047,8 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, status, _, exists, _, err = az.getServiceLoadBalancer(&service, testClusterName,
-		clusterResources.nodes, true, []network.LoadBalancer{})
+	lb, _, status, _, exists, err = az.getServiceLoadBalancer(&service, testClusterName,
+		clusterResources.nodes, true, &[]network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
 	assert.Equal(t, false, exists, "GetServiceLoadBalancer: LB should not exist before hand.")
@@ -6421,7 +6544,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerDelete(t *testing.T) {
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
 		existingLBs := []network.LoadBalancer{{Name: pointer.String("lb")}}
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, existingLBs, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, &existingLBs, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }
@@ -6452,7 +6575,7 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 		expectedPLS := make([]network.PrivateLinkService, 0)
 		mockPLSClient := cloud.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 		mockPLSClient.EXPECT().List(gomock.Any(), "rg").Return(expectedPLS, nil).MaxTimes(1)
-		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, []network.LoadBalancer{}, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
+		_, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(&lb, &[]network.LoadBalancer{}, []*network.FrontendIPConfiguration{fip}, "testCluster", &service)
 		assert.NoError(t, err)
 	})
 }

@@ -42,18 +42,6 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	az.LoadBalancerSku = consts.LoadBalancerSkuStandard
-	az.nodePrivateIPToNodeNameMap = map[string]string{
-		"10.0.0.2": "vmss-0",
-		"2001::2":  "vmss-0",
-		"10.0.0.1": "vmss-1",
-		"2001::1":  "vmss-1",
-		"10.0.0.4": "vmss-2",
-		"2001::4":  "vmss-2",
-	}
-	bi := newBackendPoolTypeNodeIP(az)
-
 	nodes := []*v1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -118,6 +106,10 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 		desc                string
 		backendPool         network.BackendAddressPool
 		multiSLBConfigs     []MultipleStandardLoadBalancerConfiguration
+		local               bool
+		notFound            bool
+		skip                bool
+		cache               bool
 		expectedBackendPool network.BackendAddressPool
 	}{
 		{
@@ -247,10 +239,113 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc:  "should add ips to the local service dedicated backend pool",
+			local: true,
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("default-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
+				},
+			},
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("default-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: pointer.String("vmss-0"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.2"),
+							},
+						},
+						{
+							Name: pointer.String("vmss-1"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc:     "local service without service info",
+			local:    true,
+			notFound: true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+				},
+			},
+		},
+		{
+			desc:  "local service with another load balancer",
+			local: true,
+			skip:  true,
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+				},
+			},
+		},
+		{
+			desc:  "local service with its endpoint slice in cache",
+			local: true,
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("default-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
+				},
+			},
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("default-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: pointer.String("vmss-0"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.2"),
+							},
+						},
+						{
+							Name: pointer.String("vmss-1"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.1"),
+							},
+						},
+					},
+				},
+			},
+			cache: true,
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			az.nodePrivateIPToNodeNameMap = map[string]string{
+				"10.0.0.2": "vmss-0",
+				"2001::2":  "vmss-0",
+				"10.0.0.1": "vmss-1",
+				"2001::1":  "vmss-1",
+				"10.0.0.4": "vmss-2",
+				"2001::4":  "vmss-2",
+			}
+			bi := newBackendPoolTypeNodeIP(az)
+
 			if len(tc.multiSLBConfigs) > 0 {
 				az.MultipleStandardLoadBalancerConfigurations = tc.multiSLBConfigs
 				az.LoadBalancerSku = consts.LoadBalancerSkuStandard
@@ -265,10 +360,35 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			}
 
 			lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
-			lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			if !tc.notFound && !tc.skip {
+				lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			}
 			az.LoadBalancerClient = lbClient
+			if !tc.notFound {
+				az.localServiceNameToServiceInfoMap.Store("default/svc-1", &serviceInfo{lbName: "kubernetes"})
+			}
+			if tc.skip {
+				az.localServiceNameToServiceInfoMap.Store("default/svc-1", &serviceInfo{lbName: "lb"})
+			}
+
+			var kubeClient *fake.Clientset
+			eps := getTestEndpointSlice("eps", "default", "svc-1", "vmss-0", "vmss-1")
+			if !tc.cache {
+				kubeClient = fake.NewSimpleClientset(eps)
+			} else {
+				kubeClient = fake.NewSimpleClientset()
+				az.endpointSlicesCache.Store("eps", eps)
+			}
+			az.KubeClient = kubeClient
+			az.nodePrivateIPs = map[string]sets.Set[string]{
+				"vmss-0": sets.New[string]("1.2.3.4"),
+				"vmss-1": sets.New[string]("5.6.7.8"),
+			}
 
 			service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
+			if tc.local {
+				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			}
 			err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedBackendPool, tc.backendPool)

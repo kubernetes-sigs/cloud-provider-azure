@@ -178,7 +178,86 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(lbNames.Has("lb-1")).To(BeFalse())
 		Expect(lbNames.Has(clusterName)).To(BeTrue())
 	})
+
+	It("should arrange local services", func() {
+		By("Creating a local service")
+		svc := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
+		svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []string{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(ips)).NotTo(BeZero())
+
+		nodes, err := utils.GetAgentNodes(cs)
+		By(fmt.Sprintf("Checking the node count in the local service backend pool to equal %d)", len(nodes)))
+		clusterName := os.Getenv("CLUSTER_NAME")
+		Expect(err).NotTo(HaveOccurred())
+		expectedBPName := fmt.Sprintf("%s-%s", svc.Namespace, svc.Name)
+		err = checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodes))
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Scaling the deployment to 3 replicas and then to 1")
+		deployment.Spec.Replicas = pointer.Int32(3)
+		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		deployment.Spec.Replicas = pointer.Int32(1)
+		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+			if err := checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, 1); err != nil {
+				if strings.Contains(err.Error(), "expected node count") {
+					utils.Logf("Waiting for the node count in the backend pool to equal 1")
+					return false, nil
+				}
+				return false, err
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Scaling the deployment to 5")
+		deployment.Spec.Replicas = pointer.Int32(5)
+		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+			if err := checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodes)); err != nil {
+				if strings.Contains(err.Error(), "expected node count") {
+					utils.Logf("Waiting for the node count in the backend pool to equal %d", len(nodes))
+					return false, nil
+				}
+				return false, err
+			}
+			return true, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
+
+func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expectedLBName, bpName string, svcIPs []string, expectedCount int) error {
+	for _, svcIP := range svcIPs {
+		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+		lbName := pointer.StringDeref(lb.Name, "")
+		if !strings.EqualFold(lbName, expectedLBName) {
+			return fmt.Errorf("expected load balancer name %s, actual %s", expectedLBName, lbName)
+		}
+
+		var found bool
+		for _, bp := range *lb.BackendAddressPools {
+			if strings.HasPrefix(strings.ToLower(pointer.StringDeref(bp.Name, "")), strings.ToLower(bpName)) {
+				found = true
+			}
+			if len(*bp.LoadBalancerBackendAddresses) != expectedCount {
+				return fmt.Errorf("expected node count %d, actual %d", expectedCount, len(*bp.LoadBalancerBackendAddresses))
+			}
+		}
+		if !found {
+			return fmt.Errorf("cannot find backend pool %s in load balancer %s", bpName, lbName)
+		}
+	}
+	return nil
+}
 
 func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []string) sets.Set[string] {
 	lbNames := sets.New[string]()

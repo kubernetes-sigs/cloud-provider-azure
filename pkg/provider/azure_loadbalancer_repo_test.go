@@ -52,11 +52,12 @@ func TestListManagedLBs(t *testing.T) {
 	defer ctrl.Finish()
 
 	tests := []struct {
-		existingLBs, expectedLBs []network.LoadBalancer
-		callTimes                int
-		multiSLBConfigs          []MultipleStandardLoadBalancerConfiguration
-		clientErr                *retry.Error
-		expectedErr              error
+		existingLBs     []network.LoadBalancer
+		expectedLBs     *[]network.LoadBalancer
+		callTimes       int
+		multiSLBConfigs []MultipleStandardLoadBalancerConfiguration
+		clientErr       *retry.Error
+		expectedErr     error
 	}{
 		{
 			clientErr:   &retry.Error{HTTPStatusCode: http.StatusInternalServerError},
@@ -75,7 +76,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: pointer.String("unmanaged")},
 				{Name: pointer.String("unmanaged-internal")},
 			},
-			expectedLBs: []network.LoadBalancer{
+			expectedLBs: &[]network.LoadBalancer{
 				{Name: pointer.String("kubernetes")},
 				{Name: pointer.String("kubernetes-internal")},
 				{Name: pointer.String("vmas-1")},
@@ -94,7 +95,7 @@ func TestListManagedLBs(t *testing.T) {
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
-			expectedLBs: []network.LoadBalancer{
+			expectedLBs: &[]network.LoadBalancer{
 				{Name: pointer.String("kubernetes")},
 				{Name: pointer.String("kubernetes-internal")},
 				{Name: pointer.String("lb1-internal")},
