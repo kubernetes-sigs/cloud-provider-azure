@@ -43,6 +43,35 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
+
+  - package-ecosystem: gomod
+    directory: /pkg/azclient/client-gen
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+
+  - package-ecosystem: gomod
+    directory: /pkg/azclient/client-gen/configloader
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -271,20 +300,6 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.27"
-
-  - package-ecosystem: gomod
-    directory: /pkg/azclient/client-gen
-    schedule:
-      interval: daily
-      time: "01:00"
-      timezone: "Asia/Shanghai"
-    labels:
-      - "area/dependency"
-      - "release-note-none"
-      - "ok-to-test"
-      - "kind/cleanup"
-      - "lgtm"
-      - "approved"
 
   - package-ecosystem: gomod
     directory: /
