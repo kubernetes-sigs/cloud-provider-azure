@@ -18,13 +18,8 @@ package configloader
 
 import (
 	"context"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
 
 type ConfigLoader[Type any] interface {
 	Load(ctx context.Context) (*Type, error)
 }
-
-type FactoryConfigLoader ConfigLoader[azclient.ClientFactoryConfig]
-type AuthConfigLoader ConfigLoader[azclient.AzureAuthConfig]
