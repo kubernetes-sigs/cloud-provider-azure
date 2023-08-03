@@ -254,7 +254,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		utils.Logf("nodeSet: %v", nodeSet)
 
 		// Considering the route reconciling interval, the timeout is set to interval + 10s.
-		err = wait.PollImmediate(5*time.Second, consts.RouteUpdateInterval+10*time.Second, func() (bool, error) {
+		err = wait.PollImmediate(5*time.Second, consts.DefaultRouteUpdateIntervalInSeconds*time.Second+10*time.Second, func() (bool, error) {
 			for _, routeTable := range *routeTables {
 				routeSet, err := utils.GetNodesInRouteTable(routeTable)
 				if err != nil {

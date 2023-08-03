@@ -163,6 +163,12 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 		return nil, err
 	}
 
+	if az.useMultipleStandardLoadBalancers() && isLocalService(service) {
+		lbName := strings.ToLower(pointer.StringDeref(lb.Name, ""))
+		key := strings.ToLower(serviceName)
+		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
+	}
+
 	return lbStatus, nil
 }
 
@@ -301,6 +307,11 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 	if _, err = az.reconcilePublicIPs(clusterName, service, "", false /* wantLb */); err != nil {
 		return err
+	}
+
+	if az.useMultipleStandardLoadBalancers() && isLocalService(service) {
+		key := strings.ToLower(serviceName)
+		az.localServiceNameToServiceInfoMap.Delete(key)
 	}
 
 	klog.V(2).Infof("Delete service (%s): FINISH", serviceName)

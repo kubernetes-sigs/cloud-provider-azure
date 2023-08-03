@@ -28,10 +28,16 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"k8s.io/api/discovery/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -39,9 +45,9 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	addOperationPool1 := getAddIPsToBackendPoolOperation("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	removeOperationPool1 := getRemoveIPsFromBackendPoolOperation("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	addOperationPool2 := getAddIPsToBackendPoolOperation("lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	removeOperationPool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool2 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"})
 
 	testCases := []struct {
 		name                               string
@@ -222,7 +228,7 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	addOperationPool1 := getAddIPsToBackendPoolOperation("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
 
 	testCases := []struct {
 		name                               string
@@ -434,4 +440,98 @@ func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) netwo
 		}
 	}
 	return bp
+}
+
+func getTestEndpointSlice(name, namespace, svcName string, nodeNames ...string) *v1beta1.EndpointSlice {
+	endpoints := make([]v1beta1.Endpoint, 0)
+	for _, nodeName := range nodeNames {
+		nodeName := nodeName
+		endpoints = append(endpoints, v1beta1.Endpoint{
+			NodeName: &nodeName,
+		})
+	}
+	return &v1beta1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				consts.ServiceNameLabel: svcName,
+			},
+		},
+		Endpoints: endpoints,
+	}
+}
+
+func TestEndpointSlicesInformer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		name                        string
+		existingEPS                 *v1beta1.EndpointSlice
+		updatedEPS                  *v1beta1.EndpointSlice
+		expectedGetBackendPoolCount int
+		expectedPutBackendPoolCount int
+	}{
+		{
+			name:                        "remove unwanted ips and add wanted ones",
+			existingEPS:                 getTestEndpointSlice("eps1", "test", "svc1", "node1"),
+			updatedEPS:                  getTestEndpointSlice("eps1", "test", "svc1", "node2"),
+			expectedGetBackendPoolCount: 1,
+			expectedPutBackendPoolCount: 1,
+		},
+		{
+			name:        "skip non-local services",
+			existingEPS: getTestEndpointSlice("eps1", "test", "svc2", "node1"),
+			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc2", "node2"),
+		},
+		{
+			name:        "skip an endpoint slice that don't belong to a service",
+			existingEPS: getTestEndpointSlice("eps1", "test", "", "node1"),
+			updatedEPS:  getTestEndpointSlice("eps1", "test", "", "node2"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
+			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			cloud.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+				},
+			}
+			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			cloud.nodePrivateIPs = map[string]sets.Set[string]{
+				"node1": sets.New[string]("10.0.0.1"),
+				"node2": sets.New[string]("10.0.0.2"),
+			}
+
+			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "test-svc1", []string{"10.0.0.1"})
+			expectedBackendPool := getTestBackendAddressPoolWithIPs("lb1", "test-svc1", []string{"10.0.0.2"})
+			mockLBClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			mockLBClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), "lb1", "test-svc1", "").Return(existingBackendPool, nil).Times(tc.expectedGetBackendPoolCount)
+			mockLBClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), "lb1", "test-svc1", expectedBackendPool, "").Return(nil).Times(tc.expectedPutBackendPoolCount)
+			cloud.LoadBalancerClient = mockLBClient
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cloud.backendPoolUpdater = u
+			go cloud.backendPoolUpdater.run(ctx)
+
+			client := fake.NewSimpleClientset(tc.existingEPS)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.setUpEndpointSlicesInformer(informerFactory)
+			stopChan := make(chan struct{})
+			defer func() {
+				stopChan <- struct{}{}
+			}()
+			informerFactory.Start(stopChan)
+			time.Sleep(100 * time.Millisecond)
+
+			_, err := client.DiscoveryV1beta1().EndpointSlices("test").Update(context.Background(), tc.updatedEPS, metav1.UpdateOptions{})
+			assert.NoError(t, err)
+			time.Sleep(2 * time.Second)
+		})
+	}
 }

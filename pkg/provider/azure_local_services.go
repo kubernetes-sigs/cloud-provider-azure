@@ -23,7 +23,11 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/api/discovery/v1beta1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 
@@ -47,6 +51,7 @@ type batchOperation interface {
 
 // loadBalancerBackendPoolUpdateOperation is an operation that updates the backend pool of a load balancer.
 type loadBalancerBackendPoolUpdateOperation struct {
+	serviceName      string
 	loadBalancerName string
 	backendPoolName  string
 	kind             consts.LoadBalancerBackendPoolUpdateOperation
@@ -88,8 +93,9 @@ func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
 
 // getAddIPsToBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
 // that adds nodeIPs to the backend pool.
-func getAddIPsToBackendPoolOperation(loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
+func getAddIPsToBackendPoolOperation(serviceName, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
 	return &loadBalancerBackendPoolUpdateOperation{
+		serviceName:      serviceName,
 		loadBalancerName: loadBalancerName,
 		backendPoolName:  backendPoolName,
 		kind:             consts.LoadBalancerBackendPoolUpdateOperationAdd,
@@ -100,8 +106,9 @@ func getAddIPsToBackendPoolOperation(loadBalancerName, backendPoolName string, n
 
 // getRemoveIPsFromBackendPoolOperation creates a new loadBalancerBackendPoolUpdateOperation
 // that removes nodeIPs from the backend pool.
-func getRemoveIPsFromBackendPoolOperation(loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
+func getRemoveIPsFromBackendPoolOperation(serviceName, loadBalancerName, backendPoolName string, nodeIPs []string) *loadBalancerBackendPoolUpdateOperation {
 	return &loadBalancerBackendPoolUpdateOperation{
+		serviceName:      serviceName,
 		loadBalancerName: loadBalancerName,
 		backendPoolName:  backendPoolName,
 		kind:             consts.LoadBalancerBackendPoolUpdateOperationRemove,
@@ -216,5 +223,108 @@ func newBatchOperationResult(name string, success bool, err error) batchOperatio
 		name:    name,
 		success: success,
 		err:     err,
+	}
+}
+
+// setUpEndpointSlicesInformer creates an informer for EndpointSlices of local services.
+// It watches the update events and send backend pool update operations to the batch updater.
+func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
+	endpointSlicesInformer := informerFactory.Discovery().V1beta1().EndpointSlices().Informer()
+	_, _ = endpointSlicesInformer.AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				previousES := oldObj.(*v1beta1.EndpointSlice)
+				newES := newObj.(*v1beta1.EndpointSlice)
+
+				svcName := getServiceNameOfEndpointSlice(newES)
+				if svcName == "" {
+					klog.V(4).Infof("EndpointSlice %s/%s does not have service name label, skip updating load balancer backend pool", newES.Namespace, newES.Name)
+					return
+				}
+
+				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
+				data, ok := az.localServiceNameToServiceInfoMap.Load(key)
+				if !ok {
+					klog.V(4).Infof("EndpointSlice %s/%s belongs to service %s, but the service is not a service, skip updating load balancer backend pool", key, newES.Namespace, newES.Name)
+					return
+				}
+				si := data.(*serviceInfo)
+				lbName, ipFamily := si.lbName, si.ipFamily
+
+				var previousIPs, currentIPs, previousNodeNames, currentNodeNames []string
+				if previousES != nil {
+					for _, ep := range previousES.Endpoints {
+						previousNodeNames = append(previousNodeNames, pointer.StringDeref(ep.NodeName, ""))
+					}
+				}
+				if newES != nil {
+					for _, ep := range newES.Endpoints {
+						currentNodeNames = append(currentNodeNames, pointer.StringDeref(ep.NodeName, ""))
+					}
+				}
+				for _, previousNodeName := range previousNodeNames {
+					nodeIPsSet := az.nodePrivateIPs[previousNodeName]
+					previousIPs = append(previousIPs, setToStrings(nodeIPsSet)...)
+				}
+				for _, currentNodeName := range currentNodeNames {
+					nodeIPsSet := az.nodePrivateIPs[currentNodeName]
+					currentIPs = append(currentIPs, setToStrings(nodeIPsSet)...)
+				}
+				ipsToBeDeleted := compareNodeIPs(previousIPs, currentIPs)
+
+				if az.backendPoolUpdater != nil {
+					var bpNames []string
+					bpNameIPv4 := getLocalServiceBackendPoolName(key, false)
+					bpNameIPv6 := getLocalServiceBackendPoolName(key, true)
+					switch strings.ToLower(ipFamily) {
+					case strings.ToLower(consts.IPVersionIPv4String):
+						bpNames = append(bpNames, bpNameIPv4)
+					case strings.ToLower(consts.IPVersionIPv6String):
+						bpNames = append(bpNames, bpNameIPv6)
+					default:
+						bpNames = append(bpNames, bpNameIPv4, bpNameIPv6)
+					}
+					for _, bpName := range bpNames {
+						az.backendPoolUpdater.addOperation(getRemoveIPsFromBackendPoolOperation(key, lbName, bpName, ipsToBeDeleted))
+						az.backendPoolUpdater.addOperation(getAddIPsToBackendPoolOperation(key, lbName, bpName, currentIPs))
+					}
+				}
+			},
+		})
+}
+
+// getServiceNameOfEndpointSlice gets the service name of an EndpointSlice.
+func getServiceNameOfEndpointSlice(es *v1beta1.EndpointSlice) string {
+	if es.Labels != nil {
+		return es.Labels[consts.ServiceNameLabel]
+	}
+	return ""
+}
+
+// compareNodeIPs compares the previous and current node IPs and returns the IPs to be deleted.
+func compareNodeIPs(previousIPs, currentIPs []string) []string {
+	previousIPSet := sets.NewString(previousIPs...)
+	currentIPSet := sets.NewString(currentIPs...)
+	return previousIPSet.Difference(currentIPSet).List()
+}
+
+// getLocalServiceBackendPoolName gets the name of the backend pool of a local service.
+func getLocalServiceBackendPoolName(serviceName string, ipv6 bool) string {
+	serviceName = strings.Replace(serviceName, "/", "-", -1)
+	if ipv6 {
+		return fmt.Sprintf("%s-ipv6", serviceName)
+	}
+	return serviceName
+}
+
+type serviceInfo struct {
+	ipFamily string
+	lbName   string
+}
+
+func newServiceInfo(ipFamily, lbName string) *serviceInfo {
+	return &serviceInfo{
+		ipFamily: ipFamily,
+		lbName:   lbName,
 	}
 }
