@@ -59,7 +59,7 @@ updates:
       - "approved"
 
   - package-ecosystem: gomod
-    directory: /pkg/azclient/client-gen/configloader
+    directory: /pkg/azclient/configloader
     schedule:
       interval: daily
       time: "01:00"
