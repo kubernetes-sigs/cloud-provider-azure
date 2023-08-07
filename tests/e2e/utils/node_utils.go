@@ -339,3 +339,12 @@ func GetNodepoolNodeMap(nodes *[]v1.Node) map[string][]string {
 
 	return nodepoolNodeMap
 }
+
+func CreateNodeManifest(name string, labels map[string]string) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: DeepCopyMap(labels),
+		},
+	}
+}
