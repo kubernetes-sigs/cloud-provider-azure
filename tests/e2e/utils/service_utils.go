@@ -203,6 +203,8 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 
 		return true, nil
 	}); err != nil {
+		output, _ := RunKubectl(namespace, "describe", "service", name)
+		Logf("Service describe info: %s", output)
 		return nil, err
 	}
 
