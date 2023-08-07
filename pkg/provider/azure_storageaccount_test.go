@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/storageaccountclient/mockstorageaccountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/virtualnetworklinksclient/mockvirtualnetworklinksclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -136,7 +137,7 @@ func TestGetStorageAccessKeys(t *testing.T) {
 	}
 }
 
-func TestGetStorageAccount(t *testing.T) {
+func TestGetStorageAccounts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -556,6 +557,61 @@ func TestEnsureStorageAccount(t *testing.T) {
 		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
 		if test.expectedErr != "" {
 			assert.Equal(t, err != nil, strings.Contains(err.Error(), test.expectedErr), err.Error(), test.name)
+		}
+	}
+}
+
+func TestGetStorageAccountWithCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	cloud := &Cloud{}
+
+	tests := []struct {
+		name                    string
+		subsID                  string
+		resourceGroup           string
+		account                 string
+		setStorageAccountClient bool
+		setStorageAccountCache  bool
+		expectedErr             string
+	}{
+		{
+			name:        "[failure] StorageAccountClient is nil",
+			expectedErr: "StorageAccountClient is nil",
+		},
+		{
+			name:                    "[failure] storageAccountCache is nil",
+			setStorageAccountClient: true,
+			expectedErr:             "storageAccountCache is nil",
+		},
+		{
+			name:                    "[Success]",
+			setStorageAccountClient: true,
+			setStorageAccountCache:  true,
+			expectedErr:             "",
+		},
+	}
+
+	for _, test := range tests {
+		if test.setStorageAccountClient {
+			mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
+			cloud.StorageAccountClient = mockStorageAccountsClient
+			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{}, nil).AnyTimes()
+		}
+
+		if test.setStorageAccountCache {
+			getter := func(key string) (interface{}, error) { return nil, nil }
+			cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+		}
+
+		_, err := cloud.getStorageAccountWithCache(ctx, test.subsID, test.resourceGroup, test.account)
+		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
+		if test.expectedErr != "" && err != nil {
+			assert.Equal(t, err.RawError.Error(), test.expectedErr, err.RawError.Error(), test.name)
 		}
 	}
 }

@@ -417,6 +417,8 @@ type Cloud struct {
 	pipCache azcache.Resource
 	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
 	plsCache azcache.Resource
+	// a timed cache storing storage account properties to avoid querying storage account frequently
+	storageAccountCache azcache.Resource
 
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
@@ -811,6 +813,9 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
+	if az.storageAccountCache, err = az.newStorageAccountCache(); err != nil {
+		return err
+	}
 	return nil
 }
 
