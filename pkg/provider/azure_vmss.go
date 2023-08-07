@@ -1699,8 +1699,6 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSetName string) error {
-	klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmSetName (%s), backendPoolID (%s)", vmSetName, backendPoolID)
-
 	vmssNamesMap := make(map[string]bool)
 	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
 	if ss.useStandardLoadBalancer() && !ss.EnableMultipleStandardLoadBalancers {
@@ -1719,7 +1717,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSet
 			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
-			klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmss (%s)", pointer.StringDeref(vmss.Name, ""))
+			klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmss %q, backendPoolID %q", pointer.StringDeref(vmss.Name, ""), backendPoolID)
 
 			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
@@ -1769,6 +1767,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolID, vmSet
 			return utilerrors.Flatten(utilerrors.NewAggregate(errorList))
 		}
 	} else {
+		klog.V(2).Infof("ensureBackendPoolDeletedFromVmssUniform: vmss %q, backendPoolID %q", vmSetName, backendPoolID)
 		vmssNamesMap[vmSetName] = true
 	}
 
@@ -1941,7 +1940,7 @@ func (ss *ScaleSet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolID,
 					vmssFlexBackendIPConfigurations = append(vmssFlexBackendIPConfigurations, ipConf)
 				}
 				if vmManagementType == ManagedByVmssUniform {
-					// vm is managed by vmss flex.
+					// vm is managed by vmss uniform.
 					vmssUniformBackendIPConfigurations = append(vmssUniformBackendIPConfigurations, ipConf)
 				}
 			}
