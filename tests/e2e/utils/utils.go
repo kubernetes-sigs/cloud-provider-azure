@@ -196,7 +196,7 @@ func CompareStrings(s0, s1 []string) bool {
 	return ss0.Equal(ss1)
 }
 
-func DeepCopyServiceAnnotation(m map[string]string) map[string]string {
+func DeepCopyMap(m map[string]string) map[string]string {
 	newMap := make(map[string]string)
 	for k, v := range m {
 		newMap[k] = v
