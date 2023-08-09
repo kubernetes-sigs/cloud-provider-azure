@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -675,16 +675,50 @@ func TestSetServiceLoadBalancerIP(t *testing.T) {
 		expectedSvc *v1.Service
 	}{
 		{
+			"IPv4",
+			"10.0.0.1",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv4]: "10.0.0.1",
+					},
+				},
+			},
+		},
+		{
 			"IPv6",
 			"2001::1",
 			&v1.Service{},
 			&v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001::1",
+						consts.ServiceAnnotationLoadBalancerIPDualStack[consts.IPVersionIPv6]: "2001::1",
 					},
 				},
 			},
+		},
+		{
+			"empty IP",
+			"",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{},
+			},
+		},
+		{
+			"invalid IP",
+			"invalid-ip",
+			&v1.Service{},
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{},
+			},
+		},
+		{
+			"empty Service",
+			"10.0.0.1",
+			nil,
+			nil,
 		},
 	}
 	for _, tc := range testcases {
@@ -902,58 +936,59 @@ func TestIsFIPIPv6(t *testing.T) {
 
 	testcases := []struct {
 		desc           string
+		svc            v1.Service
 		fip            *network.FrontendIPConfiguration
-		pips           []network.PublicIPAddress
-		isInternal     bool
 		expectedIsIPv6 bool
 	}{
 		{
-			"Internal IPv4",
-			&network.FrontendIPConfiguration{
-				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PrivateIPAddressVersion: network.IPv4,
-					PrivateIPAddress:        pointer.String("10.0.0.1"),
+			desc: "IPv4",
+			svc: v1.Service{
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
 				},
 			},
-			[]network.PublicIPAddress{},
-			true,
-			false,
+			fip:            nil,
+			expectedIsIPv6: false,
 		},
 		{
-			"External IPv6",
-			&network.FrontendIPConfiguration{
-				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
-					PublicIPAddress: &network.PublicIPAddress{ID: pointer.String("pip-id0")},
+			desc: "IPv6",
+			svc: v1.Service{
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
 				},
 			},
-			[]network.PublicIPAddress{
-				{
-					Name: pointer.String("pip0"),
-					ID:   pointer.String("pip-id0"),
-					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion: network.IPv6,
-						IPAddress:              pointer.String("2001::1"),
-					},
-				},
-				{
-					Name: pointer.String("pip1"),
-					ID:   pointer.String("pip-id1"),
-					PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-						PublicIPAddressVersion: network.IPv4,
-						IPAddress:              pointer.String("10.0.0.1"),
-					},
+			fip:            nil,
+			expectedIsIPv6: true,
+		},
+		{
+			desc: "DualStack IPv4",
+			svc: v1.Service{
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
 				},
 			},
-			false,
-			true,
+			fip: &network.FrontendIPConfiguration{
+				Name: pointer.StringPtr("fip"),
+			},
+			expectedIsIPv6: false,
+		},
+		{
+			desc: "DualStack IPv6",
+			svc: v1.Service{
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				},
+			},
+			fip: &network.FrontendIPConfiguration{
+				Name: pointer.StringPtr("fip-IPv6"),
+			},
+			expectedIsIPv6: true,
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
-			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return(tc.pips, nil)
-			isIPv6, err := az.isFIPIPv6(tc.fip, "rg", tc.isInternal)
+			isIPv6, err := az.isFIPIPv6(&tc.svc, "rg", tc.fip)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedIsIPv6, isIPv6)
 		})
@@ -973,6 +1008,56 @@ func TestGetResourceIDPrefix(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			prefix := getResourceIDPrefix(tc.id)
 			assert.Equal(t, tc.expectedPrefix, prefix)
+		})
+	}
+}
+
+func TestFillSubnet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testcases := []struct {
+		desc           string
+		subnetName     string
+		subnet         *network.Subnet
+		expectedTimes  int
+		expectedSubnet *network.Subnet
+	}{
+		{
+			desc:          "empty subnet",
+			subnetName:    "subnet0",
+			subnet:        &network.Subnet{},
+			expectedTimes: 1,
+			expectedSubnet: &network.Subnet{
+				Name: pointer.String("subnet0"),
+				ID:   pointer.String("subnet-id0"),
+			},
+		},
+		{
+			desc:       "filled subnet",
+			subnetName: "subnet1",
+			subnet: &network.Subnet{
+				Name: pointer.String("subnet1"),
+				ID:   pointer.String("subnet-id1"),
+			},
+			expectedTimes: 0,
+			expectedSubnet: &network.Subnet{
+				Name: pointer.String("subnet1"),
+				ID:   pointer.String("subnet-id1"),
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
+			mockSubnetsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), tc.subnetName, gomock.Any()).
+				Return(*tc.expectedSubnet, nil).Times(tc.expectedTimes)
+
+			err := az.fillSubnet(tc.subnet, tc.subnetName)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expectedSubnet, tc.subnet)
 		})
 	}
 }

@@ -317,31 +317,42 @@ func TestReconcilePrivateLinkService(t *testing.T) {
 			expectedPLSDelete: true,
 		},
 	}
-	for i, test := range testCases {
-		az := GetTestCloud(ctrl)
-		service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
-		fipConfig := &network.FrontendIPConfiguration{
-			Name: pointer.String("fipConfig"),
-			ID:   pointer.String("fipConfigID"),
-		}
-		clusterName := testClusterName
+	for _, test := range testCases {
+		t.Run(test.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			service := getTestServiceWithAnnotation("test", test.annotations, false, 80)
+			fipConfig := &network.FrontendIPConfiguration{
+				Name: pointer.String("fipConfig"),
+				ID:   pointer.String("fipConfigID"),
+				FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &network.PublicIPAddress{
+						ID: pointer.String("pipID"),
+						PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+							PublicIPAddressVersion: network.IPv4,
+						},
+					},
+					PrivateIPAddressVersion: network.IPv4,
+				},
+			}
+			clusterName := testClusterName
 
-		mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
-		mockPLSsClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
-		if test.expectedSubnetGet {
-			mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", "").Return(*test.existingSubnet, nil).MaxTimes(2)
-		}
-		if test.expectedPLSList {
-			mockPLSsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPLSList, nil).MaxTimes(1)
-		}
-		if test.expectedPLSCreate {
-			mockPLSsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", pointer.StringDeref(test.expectedPLS.Name, ""), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-		}
-		if test.expectedPLSDelete {
-			mockPLSsClient.EXPECT().Delete(gomock.Any(), "rg", "testpls").Return(nil).Times(1)
-		}
-		err := az.reconcilePrivateLinkService(clusterName, &service, fipConfig, test.wantPLS)
-		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
+			mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
+			mockPLSsClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+			if test.expectedSubnetGet {
+				mockSubnetsClient.EXPECT().Get(gomock.Any(), "rg", "vnet", "subnet", "").Return(*test.existingSubnet, nil).MaxTimes(2)
+			}
+			if test.expectedPLSList {
+				mockPLSsClient.EXPECT().List(gomock.Any(), "rg").Return(test.existingPLSList, nil).MaxTimes(1)
+			}
+			if test.expectedPLSCreate {
+				mockPLSsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", pointer.StringDeref(test.expectedPLS.Name, ""), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			}
+			if test.expectedPLSDelete {
+				mockPLSsClient.EXPECT().Delete(gomock.Any(), "rg", "testpls").Return(nil).Times(1)
+			}
+			err := az.reconcilePrivateLinkService(clusterName, &service, fipConfig, test.wantPLS)
+			assert.Equal(t, test.expectedError, err != nil)
+		})
 	}
 }
 
