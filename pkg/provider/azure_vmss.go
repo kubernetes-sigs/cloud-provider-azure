@@ -1482,8 +1482,6 @@ func getScaleSetAndResourceGroupNameByIPConfigurationID(ipConfigurationID string
 }
 
 func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName string) error {
-	klog.V(2).Infof("ensureBackendPoolDeletedFromVMSS: vmSetName (%s), backendPoolID (%s)", vmSetName, backendPoolID)
-
 	vmssNamesMap := make(map[string]bool)
 	// the standard load balancer supports multiple vmss in its backend while the basic sku doesn't
 	if ss.useStandardLoadBalancer() {
@@ -1502,7 +1500,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 			} else if v, ok := value.(*compute.VirtualMachineScaleSet); ok {
 				vmss = v
 			}
-			klog.V(2).Infof("ensureBackendPoolDeletedFromVmss: vmss (%s)", pointer.StringDeref(vmss.Name, ""))
+			klog.V(2).Infof("ensureBackendPoolDeletedFromVmss: vmss %q, backendPoolID %q", pointer.StringDeref(vmss.Name, ""), backendPoolID)
 
 			// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
 			// Since it is being deleted, we shouldn't send more CreateOrUpdate requests for it.
@@ -1552,6 +1550,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolID, vmSetName st
 			return utilerrors.Flatten(utilerrors.NewAggregate(errorList))
 		}
 	} else {
+		klog.V(2).Infof("ensureBackendPoolDeletedFromVmss: vmss %q, backendPoolID %q", vmSetName, backendPoolID)
 		vmssNamesMap[vmSetName] = true
 	}
 
