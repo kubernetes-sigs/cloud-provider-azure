@@ -10,9 +10,9 @@ require (
 	github.com/go-git/go-git/v5 v5.8.1
 	github.com/octago/sflags v0.2.0
 	github.com/spf13/pflag v1.0.5
-	k8s.io/apimachinery v0.27.4
+	k8s.io/apimachinery v0.28.0
 	k8s.io/klog v1.0.0
-	k8s.io/utils v0.0.0-20230209194617-a36077c30491
+	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	sigs.k8s.io/kubetest2 v0.0.0-20220728001911-c76fb417aa01
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.4.1 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -38,17 +38,16 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
-	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/skeema/knownhosts v1.2.0 // indirect
 	github.com/spf13/cobra v1.5.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
-	golang.org/x/mod v0.9.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/mod v0.10.0 // indirect
+	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
-	golang.org/x/tools v0.7.0 // indirect
+	golang.org/x/tools v0.8.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/klog/v2 v2.90.1 // indirect
+	k8s.io/klog/v2 v2.100.1 // indirect
 )
