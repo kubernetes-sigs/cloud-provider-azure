@@ -33,13 +33,15 @@ const (
 	TestSuiteLabelSLBOutbound        = "SLBOutbound"
 	TestSuiteLabelServiceAnnotation  = "ServiceAnnotation"
 	TestSuiteLabelCredential         = "Credential"
-	TestSuiteLabelNode               = "Node"
-	TestSuiteLabelLB                 = "LB"
-	TestSuiteLabelMultiPorts         = "Multi-Ports"
-	TestSuiteLabelNSG                = "NSG"
-	TestSuiteLabelNonMultiSLB        = "Non-Multi-Slb"
-	TestSuiteLabelMultiSLB           = "Multi-SLB"
-	TestSuiteUnmanagedNode           = "Unmanaged-Node"
+	//nolint:gosec // G101 ignore this!
+	TestSuiteLabelOOTCredential = "OOT-Credential"
+	TestSuiteLabelNode          = "Node"
+	TestSuiteLabelLB            = "LB"
+	TestSuiteLabelMultiPorts    = "Multi-Ports"
+	TestSuiteLabelNSG           = "NSG"
+	TestSuiteLabelNonMultiSLB   = "Non-Multi-Slb"
+	TestSuiteLabelMultiSLB      = "Multi-SLB"
+	TestSuiteUnmanagedNode      = "Unmanaged-Node"
 
 	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
 	CAPZTestCCM = "TEST_CCM"
