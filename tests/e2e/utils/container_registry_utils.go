@@ -132,16 +132,64 @@ func PushImageToACR(registryName, image string) (tag string, err error) {
 	return tag, nil
 }
 
-// AssignRoleToACR assigns the role to acr by roleDefinitionID
-func (tc *AzureTestClient) AssignRoleToACR(registryName, roleDefinitionID string) (err error) {
-	Logf("Assigning role to registry %s", registryName)
-	authConfig := tc.GetAuthConfig()
-	scopeFormat := "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
-	scope := fmt.Sprintf(scopeFormat, authConfig.SubscriptionID, tc.GetResourceGroup(), registryName)
-
-	_, err = tc.assignRoleByID(scope, roleDefinitionID)
+// AZACRLogin does az login and then az acr login.
+func AZACRLogin(acrName string) (err error) {
+	authConfig, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return err
 	}
+
+	Logf("Attempting az login with azure cred.")
+	//nolint:gosec // G204 ignore this!
+	cmd := exec.Command("az", "login", "--service-principal",
+		"--username", authConfig.AADClientID,
+		"--password", authConfig.AADClientSecret,
+		"--tenant", authConfig.TenantID)
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("az failed to login with error: %w", err)
+	}
+	Logf("az login success.")
+
+	cmd = exec.Command("az", "account", "show")
+	var output []byte
+	if output, err = cmd.Output(); err != nil {
+		return fmt.Errorf("az failed to account show with output: %s\n error: %w", string(output), err)
+	}
+	Logf("az account show success %q.", output)
+
+	Logf("Attempting az acr login with azure cred.")
+	cmd = exec.Command("az", "acr", "login",
+		"-n", acrName)
+	if output, err = cmd.Output(); err != nil {
+		return fmt.Errorf("az acr failed to login with output %s\n error: %w", string(output), err)
+	}
+	Logf("az acr login success %q.", string(output))
+
+	return nil
+}
+
+// AZLogout does az logout.
+func AZLogout() (err error) {
+	Logf("Attempting az logout.")
+	cmd := exec.Command("az", "logout")
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("az failed to logout with error: %w", err)
+	}
+	Logf("az logout success.")
+	return nil
+}
+
+// AZACRCacheCreate enables acr cache for a image.
+func AZACRCacheCreate(acrName, ruleName, imageURL, imageName string) (err error) {
+	Logf("Attempting az acr cache create for image URL %q.", imageURL)
+	cmd := exec.Command("az", "acr", "cache", "create",
+		"-r", acrName,
+		"-n", ruleName,
+		"-s", imageURL,
+		"-t", imageName)
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("az acr cache create failed with error: %w", err)
+	}
+	Logf("az acr cache create success.")
 	return nil
 }
