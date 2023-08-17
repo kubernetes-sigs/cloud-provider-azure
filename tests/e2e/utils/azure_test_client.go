@@ -48,7 +48,8 @@ type AzureTestClient struct {
 	authClient     azauth.BaseClient
 	computeClient  azcompute.BaseClient
 
-	IPFamily IPFamily
+	IPFamily        IPFamily
+	HasWindowsNodes bool
 }
 
 // CreateAzureTestClient makes a new AzureTestClient
@@ -90,6 +91,14 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		return nil, fmt.Errorf("no nodes available for the cluster")
 	}
 
+	hasWindowsNodes := false
+	for _, node := range nodes {
+		if os, ok := node.Labels["kubernetes.io/os"]; ok && os == "windows" {
+			hasWindowsNodes = true
+			break
+		}
+	}
+
 	resourceGroup, err := getResourceGroupFromProviderID(nodes[0].Spec.ProviderID)
 	if err != nil {
 		return nil, err
@@ -102,15 +111,16 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	}
 
 	c := &AzureTestClient{
-		location:       location,
-		resourceGroup:  resourceGroup,
-		authConfig:     *authConfig,
-		networkClient:  baseClient,
-		resourceClient: resourceBaseClient,
-		acrClient:      acrClient,
-		authClient:     authClient,
-		computeClient:  computeClient,
-		IPFamily:       ipFamily,
+		location:        location,
+		resourceGroup:   resourceGroup,
+		authConfig:      *authConfig,
+		networkClient:   baseClient,
+		resourceClient:  resourceBaseClient,
+		acrClient:       acrClient,
+		authClient:      authClient,
+		computeClient:   computeClient,
+		IPFamily:        ipFamily,
+		HasWindowsNodes: hasWindowsNodes,
 	}
 
 	return c, nil
@@ -179,11 +189,6 @@ func (tc *AzureTestClient) createResourceGroupClient() *azresources.GroupsClient
 // createACRClient generates ACR client with the same baseclient as azure test client
 func (tc *AzureTestClient) createACRClient() *acr.RegistriesClient {
 	return &acr.RegistriesClient{BaseClient: tc.acrClient}
-}
-
-// createRoleAssignmentsClient generates authorization client with the same baseclient as azure test client
-func (tc *AzureTestClient) createRoleAssignmentsClient() *azauth.RoleAssignmentsClient {
-	return &azauth.RoleAssignmentsClient{BaseClient: tc.authClient}
 }
 
 // createVMSSClient generates VMSS client with the same baseclient as azure test client
