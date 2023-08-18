@@ -443,7 +443,7 @@ data:
   start.ps1: |
     $cm = "$env:CONTAINER_SANDBOX_MOUNT_POINT/cloud-node-manager.exe"
 
-    ((Get-Content -path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf -Raw) -replace '/var',"$($env:CONTAINER_SANDBOX_MOUNT_POINT)/var") | Set-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf
+    ((Get-Content -path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf -Raw) -replace '/var',"$($env:CONTAINER_SANDBOX_MOUNT_POINT)/var") | Set-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig-cnm.conf
 
     $argList = @()
 
@@ -453,8 +453,8 @@ data:
       }
     }
 
-    Write-Host "Running $cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
-    Invoke-Expression "$cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig.conf"
+    Write-Host "Running $cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig-cnm.conf"
+    Invoke-Expression "$cm $argList --node-name=$env:NODE_NAME --use-instance-metadata=true --kubeconfig=$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/cpaw/kubeconfig-cnm.conf"
 ---
 apiVersion: apps/v1
 kind: DaemonSet
