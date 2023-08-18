@@ -110,6 +110,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 		notFound            bool
 		skip                bool
 		cache               bool
+		namespace           string
 		expectedBackendPool network.BackendAddressPool
 	}{
 		{
@@ -330,6 +331,43 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			},
 			cache: true,
 		},
+		{
+			desc:  "local service in another namespace",
+			local: true,
+			backendPool: network.BackendAddressPool{
+				Name: pointer.String("another-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
+				},
+			},
+			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "kubernetes",
+				},
+			},
+			expectedBackendPool: network.BackendAddressPool{
+				Name: pointer.String("another-svc-1"),
+				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork: &network.SubResource{ID: pointer.String("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
+						{
+							Name: pointer.String("vmss-0"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.2"),
+							},
+						},
+						{
+							Name: pointer.String("vmss-2"),
+							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: pointer.String("10.0.0.4"),
+							},
+						},
+					},
+				},
+			},
+			cache:     true,
+			namespace: "another",
+		},
 	}
 
 	for _, tc := range testcases {
@@ -373,11 +411,13 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 
 			var kubeClient *fake.Clientset
 			eps := getTestEndpointSlice("eps", "default", "svc-1", "vmss-0", "vmss-1")
+			epsInAnotherNamespace := getTestEndpointSlice("eps", "another", "svc-1", "vmss-0", "vmss-2")
 			if !tc.cache {
 				kubeClient = fake.NewSimpleClientset(eps)
 			} else {
 				kubeClient = fake.NewSimpleClientset()
-				az.endpointSlicesCache.Store("eps", eps)
+				az.endpointSlicesCache.Store("default/eps", eps)
+				az.endpointSlicesCache.Store("another/eps", epsInAnotherNamespace)
 			}
 			az.KubeClient = kubeClient
 			az.nodePrivateIPs = map[string]sets.Set[string]{
@@ -388,6 +428,9 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
 			if tc.local {
 				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			}
+			if tc.namespace != "" {
+				service.Namespace = tc.namespace
 			}
 			err := bi.EnsureHostsInPool(&service, nodes, "", "", "kubernetes", "kubernetes", tc.backendPool)
 			assert.NoError(t, err)

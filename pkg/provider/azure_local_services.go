@@ -293,7 +293,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
-				az.endpointSlicesCache.Store(strings.ToLower(es.Name), es)
+				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)), es)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				previousES := oldObj.(*discovery_v1.EndpointSlice)
@@ -306,7 +306,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				}
 
 				klog.V(4).Infof("Detecting EndpointSlice %s/%s update", newES.Namespace, newES.Name)
-				az.endpointSlicesCache.Store(strings.ToLower(newES.Name), newES)
+				az.endpointSlicesCache.Store(strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, newES.Name)), newES)
 
 				key := strings.ToLower(fmt.Sprintf("%s/%s", newES.Namespace, svcName))
 				si, found := az.getLocalServiceInfo(key)
@@ -365,7 +365,7 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 			},
 			DeleteFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
-				az.endpointSlicesCache.Delete(strings.ToLower(es.Name))
+				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", es.Namespace, es.Name)))
 			},
 		})
 }
@@ -474,7 +474,8 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) (sets.Se
 	var ep *discovery_v1.EndpointSlice
 	az.endpointSlicesCache.Range(func(key, value interface{}) bool {
 		endpointSlice := value.(*discovery_v1.EndpointSlice)
-		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) {
+		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) &&
+			strings.EqualFold(endpointSlice.Namespace, service.Namespace) {
 			ep = endpointSlice
 			return false
 		}
