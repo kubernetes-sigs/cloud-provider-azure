@@ -272,6 +272,8 @@ func (d *delayedRouteUpdater) addOperation(operation batchOperation) batchOperat
 	return operation
 }
 
+func (d *delayedRouteUpdater) removeOperation(name string) {}
+
 // ListRoutes lists all managed routes that belong to the specified clusterName
 func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
 	klog.V(10).Infof("ListRoutes: START clusterName=%q", clusterName)

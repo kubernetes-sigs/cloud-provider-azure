@@ -580,3 +580,27 @@ func safeRemoveKeyFromStringsSet(set sets.Set[string], key string) (sets.Set[str
 
 	return set, has
 }
+
+func setToStrings(set sets.Set[string]) []string {
+	var res []string
+	for key := range set {
+		res = append(res, key)
+	}
+	return res
+}
+
+func isLocalService(service *v1.Service) bool {
+	return service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyLocal
+}
+
+func getServiceIPFamily(service *v1.Service) string {
+	if len(service.Spec.IPFamilies) > 1 {
+		return consts.IPVersionDualStackString
+	}
+	for _, ipFamily := range service.Spec.IPFamilies {
+		if ipFamily == v1.IPv6Protocol {
+			return consts.IPVersionIPv6String
+		}
+	}
+	return consts.IPVersionIPv4String
+}
