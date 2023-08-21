@@ -230,6 +230,39 @@ spec:
       targetPort: 30104
 ```
 
+In this manifest, the https ports use a different node port, an HTTP readiness check at port 10256 on /healthz(healthz endpoint of kube-proxy).
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    service.beta.kubernetes.io/port_443_health-probe_protocol: "http"
+    service.beta.kubernetes.io/port_443_health-probe_port: "10256"
+    service.beta.kubernetes.io/port_443_health-probe_request-path: "/healthz"
+spec:
+  ports:
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+      nodePort: 30104
+      appProtocol: https
+  selector:
+    app: istio-ingressgateway
+    gateway: istio-ingressgateway
+    istio: ingressgateway
+  type: LoadBalancer
+  sessionAffinity: None
+  externalTrafficPolicy: Local
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  allocateLoadBalancerNodePorts: true
+  internalTrafficPolicy: Cluster
+```
+
 In this manifest, the https ports use a different health probe endpoint, an HTTP readiness check at port 30000 on /healthz/ready.
 ```yaml
 apiVersion: v1
