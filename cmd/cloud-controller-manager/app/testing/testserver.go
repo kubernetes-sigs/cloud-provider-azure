@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/cloud-provider/names"
 
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app"
 	cloudcontrollerconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-controller-manager/app/config"
@@ -104,7 +105,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 		t.Logf("cloud-controller-manager will listen securely on port %d...", s.SecureServing.BindPort)
 	}
 
-	config, err := s.Config(all, disabled)
+	config, err := s.Config(all, disabled, names.CCMControllerAliases())
 	if err != nil {
 		return result, fmt.Errorf("failed to create config from options: %w", err)
 	}
