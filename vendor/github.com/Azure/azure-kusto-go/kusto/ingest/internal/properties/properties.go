@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
@@ -174,6 +175,14 @@ func (d DataFormat) CamelCase() string {
 	return ""
 }
 
+func (d DataFormat) KnownOrDefault() kusto.DataFormatForStreaming {
+	if d == DFUnknown {
+		return CSV
+	}
+
+	return d
+}
+
 // MarshalJSON implements json.Marshaler.MarshalJSON.
 func (d DataFormat) MarshalJSON() ([]byte, error) {
 	if d == 0 {
@@ -249,7 +258,7 @@ type SourceOptions struct {
 	// DeleteLocalSource indicates to delete the local file after it has been consumed.
 	DeleteLocalSource bool
 
-	// DontCompress indicates to not compress the file.
+	// DontCompress indicates to not compress the file. In streaming - do not pass DontCompress if file is not already compressed.
 	DontCompress bool
 
 	// OriginalSource is the path to the original source file, used for deletion.
@@ -266,16 +275,13 @@ type Ingestion struct {
 	DatabaseName string
 	// TableName is the name of the Kusto table the the data will ingest into.
 	TableName string
-	// RawDataSize is the size of the file on the filesystem, if it was provided.
+	// RawDataSize is the uncompressed data size. Should be used to comunicate the file size to the service for efficient ingestion.
 	RawDataSize int64 `json:",omitempty"`
-	// RetainBlobOnSuccess indicates if the source blob should be retained or deleted.
+	// RetainBlobOnSuccess indicates if the source blob should be retained or deleted. True is preferrable.
 	RetainBlobOnSuccess bool `json:",omitempty"`
-	// Daniel:
-	// FlushImmediately ... I know what flushing means, but in terms of here, do we not return until the Kusto
-	// table is updated, does this mean we do....  This is really a duplicate comment on the options in ingest.go
+	// FlushImmediately - the service batching manager will not aggregate this file, thus overriding the batching policy
 	FlushImmediately bool
-	// Daniel:
-	// IgnoreSizeLimit
+	// IgnoreSizeLimit - ignores the size limit for data ingestion.
 	IgnoreSizeLimit bool `json:",omitempty"`
 	// ReportLevel defines which if any ingestion states are reported.
 	ReportLevel IngestionReportLevel `json:",omitempty"`
@@ -303,8 +309,9 @@ type Additional struct {
 	IngestionMappingType DataFormat `json:"ingestionMappingType,omitempty"`
 	// ValidationPolicy is a JSON encoded string that tells our ingestion action what policies we want on the
 	// data being ingested and what to do when that is violated.
-	ValidationPolicy string     `json:"validationPolicy,omitempty"`
-	Format           DataFormat `json:"format,omitempty"`
+	ValidationPolicy  string     `json:"validationPolicy,omitempty"`
+	Format            DataFormat `json:"format,omitempty"`
+	IgnoreFirstRecord bool       `json:"ignoreFirstRecord"`
 	// Tags is a list of tags to associated with the ingested data.
 	Tags []string `json:"tags,omitempty"`
 	// IngestIfNotExists is a string value that, if specified, prevents ingestion from succeeding if the table already
@@ -404,6 +411,17 @@ func (i Ingestion) validate() error {
 		return fmt.Errorf("the BlobPath was not set")
 	}
 	return nil
+}
+
+func RemoveQueryParamsFromUrl(url string) string {
+	result := url
+	if idx := strings.Index(result, "?"); idx != -1 {
+		result = result[:idx]
+	}
+	if idx := strings.Index(result, ";"); idx != -1 {
+		result = result[:idx]
+	}
+	return result
 }
 
 func uuidIsZero(id uuid.UUID) bool {

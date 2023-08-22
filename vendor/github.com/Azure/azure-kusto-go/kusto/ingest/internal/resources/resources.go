@@ -15,6 +15,7 @@ import (
 	"github.com/Azure/azure-kusto-go/kusto"
 	kustoErrors "github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
+	"github.com/Azure/azure-kusto-go/kusto/kql"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -27,7 +28,7 @@ const (
 
 // mgmter is a private interface that allows us to write hermetic tests against the kusto.Client.Mgmt() method.
 type mgmter interface {
-	Mgmt(ctx context.Context, db string, query kusto.Stmt, options ...kusto.MgmtOption) (*kusto.RowIterator, error)
+	Mgmt(ctx context.Context, db string, query kusto.Statement, options ...kusto.MgmtOption) (*kusto.RowIterator, error)
 }
 
 var objectTypes = map[string]bool{
@@ -43,8 +44,8 @@ type URI struct {
 	sas                             url.Values
 }
 
-// parse parses a string representing a Kutso resource URI.
-func parse(uri string) (*URI, error) {
+// Parse parses a string representing a Kutso resource URI.
+func Parse(uri string) (*URI, error) {
 	// Example for a valid url:
 	// https://fkjsalfdks.blob.core.windows.com/sdsadsadsa?sas=asdasdasd
 
@@ -62,12 +63,23 @@ func parse(uri string) (*URI, error) {
 		return nil, fmt.Errorf("error: Storage URI (%s) is invalid'", uri)
 	}
 
-	v := &URI{
-		u:          u,
-		account:    hostSplit[0],
-		objectType: hostSplit[1],
-		objectName: strings.TrimLeft(u.EscapedPath(), "/"),
-		sas:        u.Query(),
+	var v *URI
+	if len(hostSplit) == 5 {
+		v = &URI{
+			u:          u,
+			account:    hostSplit[0],
+			objectType: hostSplit[1],
+			objectName: strings.TrimLeft(u.EscapedPath(), "/"),
+			sas:        u.Query(),
+		}
+	} else {
+		v = &URI{
+			u:          u,
+			account:    hostSplit[0] + "." + hostSplit[1],
+			objectType: hostSplit[2],
+			objectName: strings.TrimLeft(u.EscapedPath(), "/"),
+			sas:        u.Query(),
+		}
 	}
 
 	if err := v.validate(); err != nil {
@@ -104,7 +116,7 @@ func (u *URI) ObjectType() string {
 	return u.objectType
 }
 
-// ObjectName returns the object name that will be ingested???
+// ObjectName returns the object name of the resource, i.e container name.
 func (u *URI) ObjectName() string {
 	return u.objectName
 }
@@ -201,7 +213,7 @@ func (m *Manager) AuthContext(ctx context.Context) (string, error) {
 	retryCtx := backoff.WithContext(InitBackoff(), ctx)
 	err := backoff.Retry(func() error {
 		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get kusto identity token"), kusto.IngestionEndpoint())
+		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kql.New(".get kusto identity token"), kusto.IngestionEndpoint())
 		if err == nil {
 			return nil
 		}
@@ -262,7 +274,7 @@ type Ingestion struct {
 var errDoNotCare = errors.New("don't care about this")
 
 func (i *Ingestion) importRec(rec ingestResc) error {
-	u, err := parse(rec.Root)
+	u, err := Parse(rec.Root)
 	if err != nil {
 		return fmt.Errorf("the StorageRoot URI received(%s) has an error: %s", rec.Root, err)
 	}
@@ -289,7 +301,7 @@ func (m *Manager) fetch(ctx context.Context) error {
 	retryCtx := backoff.WithContext(InitBackoff(), ctx)
 	err := backoff.Retry(func() error {
 		var err error
-		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kusto.NewStmt(".get ingestion resources"), kusto.IngestionEndpoint())
+		rows, err = m.client.Mgmt(ctx, "NetDefaultDB", kql.New(".get ingestion resources"), kusto.IngestionEndpoint())
 		if err == nil {
 			return nil
 		}
