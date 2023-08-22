@@ -218,7 +218,7 @@ updates:
     target-branch: "release-1.27"
     ignore:
       - dependency-name: "k8s.io/*"
-        versions: [">=0.24.0"]
+        versions: [">=0.28.0"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -249,6 +249,55 @@ updates:
       - "lgtm"
       - "approved"
       - "release-1.27"
+  - package-ecosystem: "gomod"
+    directory: "/"
+    open-pull-requests-limit: 1
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.28"
+    target-branch: "release-1.28"
+    ignore:
+      - dependency-name: "k8s.io/*"
+        versions: [">=0.29.0"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.28"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/testing"
+      - "lgtm"
+      - "approved"
+      - "release-1.28"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "release-1.28"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+      - "release-1.28"
 
   - package-ecosystem: gomod
     directory: /
