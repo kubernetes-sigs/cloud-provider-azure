@@ -57,11 +57,24 @@ func (m *NodeProvider) GetPlatformSubFaultDomain() (string, error) {
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
+func (m *NodeProvider) GetPriority() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPriority")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
 
 // GetPlatformSubFaultDomain indicates an expected call of GetPlatformSubFaultDomain.
 func (mr *NodeProviderMockRecorder) GetPlatformSubFaultDomain() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlatformSubFaultDomain", reflect.TypeOf((*NodeProvider)(nil).GetPlatformSubFaultDomain))
+}
+
+// GetPriority indicates an expected call of GetPriority.
+func (mr *NodeProviderMockRecorder) GetPriority() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPriority", reflect.TypeOf((*NodeProvider)(nil).GetPriority))
 }
 
 // GetZone mocks base method.

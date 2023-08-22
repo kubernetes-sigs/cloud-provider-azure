@@ -102,3 +102,8 @@ func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cl
 func (np *ARMNodeProvider) GetPlatformSubFaultDomain() (string, error) {
 	return "", nil
 }
+
+// GetPriority returns scale set priority
+func (np *ARMNodeProvider) GetPriority() (string, error) {
+	return "", nil
+}

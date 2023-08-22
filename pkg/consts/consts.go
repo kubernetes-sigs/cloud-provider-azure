@@ -45,6 +45,9 @@ const (
 	// LabelPlatformSubFaultDomain is the label key of platformSubFaultDomain
 	LabelPlatformSubFaultDomain = "topology.kubernetes.azure.com/sub-fault-domain"
 
+	// LabelScaleSetPriority is the label key of priority
+	LabelScaleSetPriority = "kubernetes.azure.com/scalesetpriority"
+
 	// ADFSIdentitySystem is the override value for tenantID on Azure Stack clouds.
 	ADFSIdentitySystem = "adfs"
 

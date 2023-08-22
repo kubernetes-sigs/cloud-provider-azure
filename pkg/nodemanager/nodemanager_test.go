@@ -183,6 +183,7 @@ func TestNodeInitialized(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
+	mockNP.EXPECT().GetPriority().Return("Spot", nil).AnyTimes()
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -199,6 +200,7 @@ func TestNodeInitialized(t *testing.T) {
 	assert.Equal(t, "node0", fnh.UpdatedNodes[0].Name, "Node was not updated")
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
+	assert.Equal(t, "spot", fnh.UpdatedNodes[0].Labels[consts.LabelScaleSetPriority])
 }
 
 func TestUpdateCloudNode(t *testing.T) {
@@ -261,6 +263,7 @@ func TestUpdateCloudNode(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("1", nil)
+	mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -281,6 +284,7 @@ func TestUpdateCloudNode(t *testing.T) {
 	assert.Equal(t, 2, len(fnh.UpdatedNodes[0].Status.Conditions), "Node Contions was not updated")
 	assert.Equal(t, "NetworkUnavailable", string(fnh.UpdatedNodes[0].Status.Conditions[0].Type), "Node Condition NetworkUnavailable was not updated")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
+	assert.NotContains(t, fnh.UpdatedNodes[0].Labels, consts.LabelScaleSetPriority)
 }
 
 // This test checks that a node without the external cloud provider taint are NOT cloudprovider initialized
@@ -394,6 +398,7 @@ func TestZoneInitialized(t *testing.T) {
 			},
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+		mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -475,6 +480,7 @@ func TestZoneInitialized(t *testing.T) {
 			},
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+		mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -572,6 +578,7 @@ func TestAddCloudNode(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+	mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 	factory := informers.NewSharedInformerFactory(fnh, 0)
 	nodeInformer := factory.Core().V1().Nodes()
@@ -736,6 +743,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil)
+	mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -1158,6 +1166,7 @@ func TestNodeProviderID(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1244,6 +1253,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 		},
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain().Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetPriority().Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{

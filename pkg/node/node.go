@@ -83,3 +83,8 @@ func (np *IMDSNodeProvider) GetZone(ctx context.Context, name types.NodeName) (c
 func (np *IMDSNodeProvider) GetPlatformSubFaultDomain() (string, error) {
 	return np.azure.GetPlatformSubFaultDomain()
 }
+
+// GetPriority returns scale set priority from IMDS if set.
+func (np *IMDSNodeProvider) GetPriority() (string, error) {
+	return np.azure.GetPriority()
+}

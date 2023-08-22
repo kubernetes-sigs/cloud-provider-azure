@@ -233,3 +233,20 @@ func (az *Cloud) GetPlatformSubFaultDomain() (string, error) {
 	}
 	return "", nil
 }
+
+// GetPriority returns scale set priority from IMDS if set.
+func (az *Cloud) GetPriority() (string, error) {
+	if az.UseInstanceMetadata {
+		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
+		if err != nil {
+			klog.Errorf("GetPriority: failed to GetMetadata: %s", err.Error())
+			return "", err
+		}
+		if metadata.Compute == nil {
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+			return "", errors.New("failure of getting compute information from instance metadata")
+		}
+		return metadata.Compute.Priority, nil
+	}
+	return "", nil
+}

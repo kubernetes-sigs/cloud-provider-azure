@@ -61,6 +61,8 @@ type NodeProvider interface {
 	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
 	// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
 	GetPlatformSubFaultDomain() (string, error)
+	// GetPriority returns the Priority from IMDS if set.
+	GetPriority() (string, error)
 }
 
 // labelReconcile holds information about a label to reconcile and how to reconcile it.
@@ -513,6 +515,14 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelPlatformSubFaultDomain, platformSubFaultDomain))
 	}
 
+	priority, err := cnc.getPriority()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get priority: %w", err)
+	}
+	if priority != "" {
+		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelScaleSetPriority, strings.ToLower(priority)))
+	}
+
 	return nodeModifiers, nil
 }
 
@@ -647,6 +657,14 @@ func (cnc *CloudNodeController) getPlatformSubFaultDomain() (string, error) {
 		return "", fmt.Errorf("cnc.getPlatformSubfaultDomain: %w", err)
 	}
 	return subFD, nil
+}
+
+func (cnc *CloudNodeController) getPriority() (string, error) {
+	prio, err := cnc.nodeProvider.GetPriority()
+	if err != nil {
+		return "", fmt.Errorf("cnc.getPriority: %w", err)
+	}
+	return prio, nil
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {

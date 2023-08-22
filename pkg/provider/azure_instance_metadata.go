@@ -75,6 +75,7 @@ type ComputeMetadata struct {
 	VMScaleSetName         string `json:"vmScaleSetName,omitempty"`
 	SubscriptionID         string `json:"subscriptionId,omitempty"`
 	ResourceID             string `json:"resourceId,omitempty"`
+	Priority               string `json:"priority,omitempty"`
 }
 
 // InstanceMetadata represents instance information.
