@@ -38,6 +38,7 @@ import (
 	ccmconfig "k8s.io/cloud-provider/config"
 	ccmconfigscheme "k8s.io/cloud-provider/config/install"
 	ccmconfigv1alpha1 "k8s.io/cloud-provider/config/v1alpha1"
+	"k8s.io/cloud-provider/names"
 	cpoptions "k8s.io/cloud-provider/options"
 	cliflag "k8s.io/component-base/cli/flag"
 	cmoptions "k8s.io/controller-manager/options"
@@ -133,7 +134,7 @@ func NewDefaultComponentConfig() (*ccmconfig.CloudControllerManagerConfiguration
 // Flags returns flags for a specific APIServer by section name
 func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultControllers []string) cliflag.NamedFlagSets {
 	fss := cliflag.NamedFlagSets{}
-	o.Generic.AddFlags(&fss, allControllers, disabledByDefaultControllers)
+	o.Generic.AddFlags(&fss, allControllers, disabledByDefaultControllers, names.CCMControllerAliases())
 	o.KubeCloudShared.AddFlags(fss.FlagSet("generic"))
 	o.ServiceController.AddFlags(fss.FlagSet("service controller"))
 	o.NodeIPAMController.AddFlags(fss.FlagSet("node ipam controller"))
@@ -155,9 +156,13 @@ func (o *CloudControllerManagerOptions) Flags(allControllers, disabledByDefaultC
 }
 
 // ApplyTo fills up cloud controller manager config with options.
-func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config, userAgent string) error {
+func (o *CloudControllerManagerOptions) ApplyTo(
+	c *cloudcontrollerconfig.Config,
+	userAgent string,
+	allControllers, disabledByDefaultControllers []string,
+	controllerAliases map[string]string) error {
 	var err error
-	if err = o.Generic.ApplyTo(&c.ComponentConfig.Generic); err != nil {
+	if err = o.Generic.ApplyTo(&c.ComponentConfig.Generic, allControllers, disabledByDefaultControllers, controllerAliases); err != nil {
 		return err
 	}
 	if err = o.KubeCloudShared.ApplyTo(&c.ComponentConfig.KubeCloudShared); err != nil {
@@ -227,10 +232,10 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 }
 
 // Validate is used to validate config before launching the cloud controller manager
-func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefaultControllers []string) error {
+func (o *CloudControllerManagerOptions) Validate(allControllers, disabledByDefaultControllers []string, controllerAliases map[string]string) error {
 	errors := []error{}
 
-	errors = append(errors, o.Generic.Validate(allControllers, disabledByDefaultControllers)...)
+	errors = append(errors, o.Generic.Validate(allControllers, disabledByDefaultControllers, controllerAliases)...)
 	errors = append(errors, o.KubeCloudShared.Validate()...)
 	errors = append(errors, o.ServiceController.Validate()...)
 	errors = append(errors, o.NodeIPAMController.Validate()...)
@@ -263,8 +268,11 @@ func ResyncPeriod(c *cloudcontrollerconfig.Config) func() time.Duration {
 }
 
 // Config return a cloud controller manager config objective
-func (o *CloudControllerManagerOptions) Config(allControllers, disabledByDefaultControllers []string) (*cloudcontrollerconfig.Config, error) {
-	if err := o.Validate(allControllers, disabledByDefaultControllers); err != nil {
+func (o *CloudControllerManagerOptions) Config(
+	allControllers, disabledByDefaultControllers []string,
+	controllerAliases map[string]string,
+) (*cloudcontrollerconfig.Config, error) {
+	if err := o.Validate(allControllers, disabledByDefaultControllers, controllerAliases); err != nil {
 		return nil, err
 	}
 
@@ -273,7 +281,7 @@ func (o *CloudControllerManagerOptions) Config(allControllers, disabledByDefault
 	}
 
 	c := &cloudcontrollerconfig.Config{}
-	if err := o.ApplyTo(c, CloudControllerManagerUserAgent); err != nil {
+	if err := o.ApplyTo(c, CloudControllerManagerUserAgent, allControllers, disabledByDefaultControllers, controllerAliases); err != nil {
 		return nil, err
 	}
 

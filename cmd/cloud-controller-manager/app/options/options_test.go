@@ -23,12 +23,14 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	cpconfig "k8s.io/cloud-provider/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
+	"k8s.io/cloud-provider/names"
 	cpoptions "k8s.io/cloud-provider/options"
 	componentbaseconfig "k8s.io/component-base/config"
 	kubectrlmgrconfig "k8s.io/controller-manager/config"
@@ -337,7 +339,7 @@ func TestValidate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := tc.generateTestCloudControllerManagerOptions()
-			err := s.Validate([]string{}, []string{})
+			err := s.Validate([]string{}, []string{}, names.CCMControllerAliases())
 			var errMsg string
 			if err == nil {
 				errMsg = ""

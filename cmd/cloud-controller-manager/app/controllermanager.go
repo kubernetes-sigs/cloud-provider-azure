@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/cloud-provider/names"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/configz"
@@ -75,6 +76,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
+	controllerAliases := names.CCMControllerAliases()
 
 	cmd := &cobra.Command{
 		Use:  "cloud-controller-manager",
@@ -83,7 +85,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 			verflag.PrintAndExitIfRequested("Cloud Provider Azure")
 			cliflag.PrintFlags(cmd.Flags())
 
-			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
+			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), controllerAliases)
 			if err != nil {
 				klog.Errorf("Run: failed to configure cloud controller manager: %v", err)
 				os.Exit(1)
@@ -256,7 +258,7 @@ func runAsync(s *options.CloudControllerManagerOptions, errCh chan error, h *con
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	go func() {
-		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
+		c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List(), names.CCMControllerAliases())
 		if err != nil {
 			klog.Errorf("RunAsync: failed to configure cloud controller manager: %v", err)
 			os.Exit(1)
@@ -432,10 +434,10 @@ var ControllersDisabledByDefault = sets.NewString()
 // paired to their initFunc.  This allows for structured downstream composition and subdivision.
 func newControllerInitializers() map[string]initFunc {
 	controllers := map[string]initFunc{}
-	controllers["cloud-node"] = startCloudNodeController
-	controllers["cloud-node-lifecycle"] = startCloudNodeLifecycleController
-	controllers["service"] = startServiceController
-	controllers["route"] = startRouteController
+	controllers[names.CloudNodeController] = startCloudNodeController
+	controllers[names.CloudNodeLifecycleController] = startCloudNodeLifecycleController
+	controllers[names.ServiceLBController] = startServiceController
+	controllers[names.NodeRouteController] = startRouteController
 	controllers["node-ipam"] = startNodeIpamController
 	return controllers
 }
