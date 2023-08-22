@@ -33,6 +33,8 @@ import (
 const (
 	pollInterval = 10 * time.Second
 	pollTimeout  = 5 * time.Minute
+
+	AgnhostImage = "registry.k8s.io/e2e-test-images/agnhost:2.36"
 )
 
 // PodIPRE tests if there's a valid IP in a easy way
@@ -167,7 +169,7 @@ func CreateHostExecPod(cs clientset.Interface, ns, name string) (bool, error) {
 			Containers: []v1.Container{
 				{
 					Name:            "agnhost",
-					Image:           "registry.k8s.io/e2e-test-images/agnhost:2.36",
+					Image:           AgnhostImage,
 					Args:            []string{"pause"},
 					ImagePullPolicy: v1.PullIfNotPresent,
 				},
@@ -249,7 +251,7 @@ func CreatePodGetIPManifest() *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:            "test-app",
-					Image:           "registry.k8s.io/e2e-test-images/agnhost:2.36",
+					Image:           AgnhostImage,
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Command: []string{
 						"/bin/sh", "-c", "curl -s -m 5 --retry-delay 5 --retry 10 ifconfig.me",
