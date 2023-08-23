@@ -2,11 +2,12 @@ package kusto
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	kustoErrors "github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"strconv"
-	"strings"
 )
 
 type ConnectionStringBuilder struct {
@@ -23,14 +24,18 @@ type ConnectionStringBuilder struct {
 	ApplicationToken                 string
 	AzCli                            bool
 	MsiAuthentication                bool
+	WorkloadAuthentication           bool
+	FederationTokenFilePath          string
 	ManagedServiceIdentity           string
 	InteractiveLogin                 bool
 	RedirectURL                      string
 	DefaultAuth                      bool
 	ClientOptions                    *azcore.ClientOptions
+	ApplicationForTracing            string
+	UserForTracing                   string
+	TokenCredential                  azcore.TokenCredential
 }
 
-// params mapping
 const (
 	dataSource                       string = "DataSource"
 	aadUserId                        string = "AADUserID"
@@ -43,9 +48,6 @@ const (
 	userToken                        string = "UserToken"
 	applicationCertificateThumbprint string = "ApplicationCertificateThumbprint"
 	sendCertificateChain             string = "SendCertificateChain"
-	msiAuth                          string = "MSIAuthentication"
-	managedServiceIdentity           string = "ManagedServiceIdentity"
-	azCli                            string = "AZCLI"
 	interactiveLogin                 string = "InteractiveLogin"
 	domainHint                       string = "RedirectURL"
 )
@@ -116,7 +118,7 @@ func assignValue(kcsb *ConnectionStringBuilder, rawKey string, value string) err
 
 // NewConnectionStringBuilder Creates new Kusto ConnectionStringBuilder.
 // Params takes kusto connection string connStr: string.  Kusto connection string should be of the format:
-// https://<clusterName>.kusto.windows.net;AAD User ID="user@microsoft.com";Password=P@ssWord
+// https://<clusterName>.<location>.kusto.windows.net;AAD User ID="user@microsoft.com";Password=P@ssWord
 // For more information please look at:
 // https://docs.microsoft.com/azure/data-explorer/kusto/api/connection-strings/kusto
 func NewConnectionStringBuilder(connStr string) *ConnectionStringBuilder {
@@ -142,6 +144,7 @@ func NewConnectionStringBuilder(connStr string) *ConnectionStringBuilder {
 			panic(err)
 		}
 	}
+
 	return &kcsb
 }
 
@@ -158,11 +161,13 @@ func (kcsb *ConnectionStringBuilder) resetConnectionString() {
 	kcsb.ApplicationToken = ""
 	kcsb.AzCli = false
 	kcsb.MsiAuthentication = false
+	kcsb.WorkloadAuthentication = false
 	kcsb.ManagedServiceIdentity = ""
 	kcsb.InteractiveLogin = false
 	kcsb.RedirectURL = ""
 	kcsb.ClientOptions = nil
 	kcsb.DefaultAuth = false
+	kcsb.TokenCredential = nil
 }
 
 // WithAadUserPassAuth Creates a Kusto Connection string builder that will authenticate with AAD user name and password.
@@ -250,6 +255,18 @@ func (kcsb *ConnectionStringBuilder) WithSystemManagedIdentity() *ConnectionStri
 	return kcsb
 }
 
+// WithKubernetesWorkloadIdentity Creates a Kusto Connection string builder that will authenticate with AAD application, using
+// an application token obtained from a Microsoft Service Identity endpoint using Kubernetes workload identity.
+func (kcsb *ConnectionStringBuilder) WithKubernetesWorkloadIdentity(appId, tokenFilePath, authorityID string) *ConnectionStringBuilder {
+	requireNonEmpty(dataSource, kcsb.DataSource)
+	kcsb.resetConnectionString()
+	kcsb.ApplicationClientId = appId
+	kcsb.AuthorityId = authorityID
+	kcsb.FederationTokenFilePath = tokenFilePath
+	kcsb.WorkloadAuthentication = true
+	return kcsb
+}
+
 // WithInteractiveLogin Creates a Kusto Connection string builder that will authenticate by launching the system default browser
 // to interactively authenticate a user, and obtain an access token
 func (kcsb *ConnectionStringBuilder) WithInteractiveLogin(authorityID string) *ConnectionStringBuilder {
@@ -266,7 +283,7 @@ func (kcsb *ConnectionStringBuilder) WithInteractiveLogin(authorityID string) *C
 // Read more at https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azcore@v1.2.0/policy#ClientOptions
 func (kcsb *ConnectionStringBuilder) AttachPolicyClientOptions(options *azcore.ClientOptions) *ConnectionStringBuilder {
 	requireNonEmpty(dataSource, kcsb.DataSource)
-	if options == nil {
+	if options != nil {
 		kcsb.ClientOptions = options
 	}
 	return kcsb
@@ -277,6 +294,12 @@ func (kcsb *ConnectionStringBuilder) AttachPolicyClientOptions(options *azcore.C
 func (kcsb *ConnectionStringBuilder) WithDefaultAzureCredential() *ConnectionStringBuilder {
 	kcsb.resetConnectionString()
 	kcsb.DefaultAuth = true
+	return kcsb
+}
+
+func (kcsb *ConnectionStringBuilder) WithTokenCredential(tokenCredential azcore.TokenCredential) *ConnectionStringBuilder {
+	kcsb.resetConnectionString()
+	kcsb.TokenCredential = tokenCredential
 	return kcsb
 }
 
@@ -371,6 +394,29 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 
 			return cred, nil
 		}
+	case kcsb.WorkloadAuthentication:
+		init = func(ci *CloudInfo, cliOpts *azcore.ClientOptions, appClientId string) (azcore.TokenCredential, error) {
+			opts := &azidentity.WorkloadIdentityCredentialOptions{ClientOptions: *cliOpts}
+			if !isEmpty(kcsb.ApplicationClientId) {
+				opts.ClientID = kcsb.ApplicationClientId
+			}
+
+			if !isEmpty(kcsb.FederationTokenFilePath) {
+				opts.TokenFilePath = kcsb.FederationTokenFilePath
+			}
+
+			if !isEmpty(kcsb.AuthorityId) {
+				opts.TenantID = kcsb.AuthorityId
+			}
+
+			cred, err := azidentity.NewWorkloadIdentityCredential(opts)
+			if err != nil {
+				return nil, kustoErrors.E(kustoErrors.OpTokenProvider, kustoErrors.KOther,
+					fmt.Errorf("error: Couldn't retrieve client credentials using Workload Identity: %s", err))
+			}
+
+			return cred, nil
+		}
 	case !isEmpty(kcsb.UserToken):
 		{
 			tkp.customToken = kcsb.UserToken
@@ -402,8 +448,9 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 		init = func(ci *CloudInfo, cliOpts *azcore.ClientOptions, appClientId string) (azcore.TokenCredential, error) {
 			//Default Azure authentication
 			opts := &azidentity.DefaultAzureCredentialOptions{}
+			opts.ClientOptions = *cliOpts
 			if kcsb.ClientOptions != nil {
-				opts.ClientOptions = *cliOpts
+				opts.ClientOptions = *kcsb.ClientOptions
 			}
 			if !isEmpty(kcsb.AuthorityId) {
 				opts.TenantID = kcsb.AuthorityId
@@ -418,6 +465,11 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 
 			return cred, nil
 		}
+	case kcsb.TokenCredential != nil:
+		init = func(ci *CloudInfo, cliOpts *azcore.ClientOptions, appClientId string) (azcore.TokenCredential, error) {
+			return kcsb.TokenCredential, nil
+		}
+
 	}
 
 	if init != nil {
@@ -429,4 +481,10 @@ func (kcsb *ConnectionStringBuilder) newTokenProvider() (*TokenProvider, error) 
 
 func isEmpty(str string) bool {
 	return strings.TrimSpace(str) == ""
+}
+
+func (kcsb *ConnectionStringBuilder) SetConnectorDetails(name, version, appName, appVersion string, sendUser bool, overrideUser string, additionalFields ...StringPair) {
+	app, user := setConnectorDetails(name, version, appName, appVersion, sendUser, overrideUser, additionalFields...)
+	kcsb.ApplicationForTracing = app
+	kcsb.UserForTracing = user
 }
