@@ -29,7 +29,7 @@ require (
 	k8s.io/cloud-provider v0.27.1
 	k8s.io/component-base v0.27.4
 	k8s.io/component-helpers v0.27.1
-	k8s.io/controller-manager v0.27.1
+	k8s.io/controller-manager v0.27.4
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kubelet v0.27.1
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
