@@ -18,6 +18,7 @@ package auth
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -92,6 +93,10 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 	})
 
 	It("should be able to create an ACR cache and pull images from it", Label(utils.TestSuiteLabelOOTCredential), func() {
+		if os.Getenv(utils.AKSTestCCM) != "" {
+			Skip("Skip the test for AKS pipeline for now")
+		}
+
 		// This test involves a preview feature ACR: ACR cache
 		// https://learn.microsoft.com/en-us/azure/container-registry/tutorial-registry-cache
 		// The reason is that Windows test should be included but control-plane Node is Linux.
