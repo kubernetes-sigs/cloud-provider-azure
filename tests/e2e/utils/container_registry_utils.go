@@ -163,7 +163,7 @@ func AZACRLogin(acrName string) (err error) {
 	if output, err = cmd.Output(); err != nil {
 		return fmt.Errorf("az acr failed to login with output %s\n error: %w", string(output), err)
 	}
-	Logf("az acr login success %q.", string(output))
+	Logf("az acr login success.")
 
 	return nil
 }
@@ -187,8 +187,8 @@ func AZACRCacheCreate(acrName, ruleName, imageURL, imageName string) (err error)
 		"-n", ruleName,
 		"-s", imageURL,
 		"-t", imageName)
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("az acr cache create failed with error: %w", err)
+	if output, err := cmd.Output(); err != nil {
+		return fmt.Errorf("az acr cache create failed with output %s\n error: %w", string(output), err)
 	}
 	Logf("az acr cache create success.")
 	return nil
