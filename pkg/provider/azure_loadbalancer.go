@@ -333,6 +333,7 @@ func (az *Cloud) GetLoadBalancerName(ctx context.Context, clusterName string, se
 }
 
 func (az *Cloud) getLoadBalancerResourceGroup() string {
+
 	if az.LoadBalancerResourceGroup != "" {
 		return az.LoadBalancerResourceGroup
 	}
