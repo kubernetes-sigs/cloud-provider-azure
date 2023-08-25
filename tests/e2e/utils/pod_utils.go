@@ -316,7 +316,7 @@ func WaitPodTo(phase v1.PodPhase, cs clientset.Interface, podTemplate *v1.Pod, n
 			return false, err
 		}
 		if pod.Status.Phase != phase {
-			Logf("waiting for the pod status to be %s, current status: %s", phase, pod.Status.Phase)
+			Logf("waiting for the pod status to be %s, on Node %q, current status: %s", phase, pod.Spec.NodeName, pod.Status.Phase)
 			return false, nil
 		}
 		return true, nil
