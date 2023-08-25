@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
@@ -52,6 +53,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 )
 
 const (
@@ -3508,6 +3510,124 @@ func TestUpdateNodeCaches(t *testing.T) {
 	assert.Equal(t, 1, len(az.nodeNames))
 }
 
+func TestUpdateNodeTaint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	az := GetTestCloud(ctrl)
+
+	tests := []struct {
+		desc     string
+		node     *v1.Node
+		hasTaint bool
+	}{
+		{
+			desc: "ready node without taint should not have taint",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node",
+				},
+				Spec: v1.NodeSpec{},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			hasTaint: false,
+		},
+		{
+			desc: "ready node with taint should remove the taint",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{*nodeOutOfServiceTaint},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			hasTaint: false,
+		},
+		{
+			desc: "not-ready node without shutdown taint should not have out-of-service taint",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionFalse,
+						},
+					},
+				},
+			},
+			hasTaint: false,
+		},
+		{
+			desc: "not-ready node with shutdown taint should have out-of-service taint",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{*nodeShutdownTaint},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionFalse,
+						},
+					},
+				},
+			},
+			hasTaint: true,
+		},
+		{
+			desc: "not-ready node with out-of-service taint should keep it",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{*nodeOutOfServiceTaint},
+				},
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionFalse,
+						},
+					},
+				},
+			},
+			hasTaint: true,
+		},
+	}
+	for _, test := range tests {
+		cs := fake.NewSimpleClientset(test.node)
+		az.KubeClient = cs
+		az.updateNodeTaint(test.node)
+		newNode, _ := cs.CoreV1().Nodes().Get(context.Background(), "node", metav1.GetOptions{})
+		assert.Equal(t, test.hasTaint, taints.TaintExists(newNode.Spec.Taints, nodeOutOfServiceTaint), test.desc)
+	}
+}
+
 func TestUpdateNodeCacheExcludeLoadBalancer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -3826,5 +3946,69 @@ func TestFindSecurityRule(t *testing.T) {
 	for i := range testCases {
 		found := findSecurityRule([]network.SecurityRule{sg}, testCases[i].testRule)
 		assert.Equal(t, testCases[i].expected, found, testCases[i].desc)
+	}
+}
+
+func TestIsNodeReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     *v1.Node
+		expected bool
+	}{
+		{
+			node:     nil,
+			expected: false,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeReady,
+							Status: v1.ConditionFalse,
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{},
+			},
+			expected: false,
+		},
+		{
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Conditions: []v1.NodeCondition{
+						{
+							Type:   v1.NodeMemoryPressure,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		if got := isNodeReady(test.node); got != test.expected {
+			assert.Equal(t, test.expected, got)
+		}
 	}
 }
