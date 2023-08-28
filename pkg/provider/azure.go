@@ -46,6 +46,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
+	cloudproviderapi "k8s.io/cloud-provider/api"
+	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
+	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
@@ -77,6 +80,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
 
 	"sigs.k8s.io/yaml"
 )
@@ -88,6 +92,14 @@ var (
 	defaultDisableOutboundSNAT = false
 	// RouteUpdateWaitingInSeconds is 30 seconds by default.
 	defaultRouteUpdateWaitingInSeconds = 30
+	nodeOutOfServiceTaint              = &v1.Taint{
+		Key:    v1.TaintNodeOutOfService,
+		Effect: v1.TaintEffectNoExecute,
+	}
+	nodeShutdownTaint = &v1.Taint{
+		Key:    cloudproviderapi.TaintNodeShutdown,
+		Effect: v1.TaintEffectNoSchedule,
+	}
 )
 
 // Config holds the configuration parsed from the --cloud-config flag
@@ -1174,11 +1186,13 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 		AddFunc: func(obj interface{}) {
 			node := obj.(*v1.Node)
 			az.updateNodeCaches(nil, node)
+			az.updateNodeTaint(node)
 		},
 		UpdateFunc: func(prev, obj interface{}) {
 			prevNode := prev.(*v1.Node)
 			newNode := obj.(*v1.Node)
 			az.updateNodeCaches(prevNode, newNode)
+			az.updateNodeTaint(newNode)
 		},
 		DeleteFunc: func(obj interface{}) {
 			node, isNode := obj.(*v1.Node)
@@ -1318,6 +1332,35 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 	}
 }
 
+// updateNodeTaint updates node out-of-service taint
+func (az *Cloud) updateNodeTaint(node *v1.Node) {
+	if node == nil {
+		klog.Warningf("node is nil, skip updating node out-of-service taint (should not happen)")
+		return
+	}
+	if az.KubeClient == nil {
+		klog.Warningf("az.KubeClient is nil, skip updating node out-of-service taint")
+		return
+	}
+
+	if isNodeReady(node) {
+		if err := cloudnodeutil.RemoveTaintOffNode(az.KubeClient, node.Name, node, nodeOutOfServiceTaint); err != nil {
+			klog.Errorf("failed to remove taint %s from the node %s", v1.TaintNodeOutOfService, node.Name)
+		}
+	} else {
+		// node shutdown taint is added when cloud provider determines instance is shutdown
+		if !taints.TaintExists(node.Spec.Taints, nodeOutOfServiceTaint) &&
+			taints.TaintExists(node.Spec.Taints, nodeShutdownTaint) {
+			klog.V(2).Infof("adding %s taint to node %s", v1.TaintNodeOutOfService, node.Name)
+			if err := cloudnodeutil.AddOrUpdateTaintOnNode(az.KubeClient, node.Name, nodeOutOfServiceTaint); err != nil {
+				klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, node.Name)
+			}
+		} else {
+			klog.V(2).Infof("node %s is not ready but node shutdown taint is not added, skip adding node out-of-service taint", node.Name)
+		}
+	}
+}
+
 // GetActiveZones returns all the zones in which k8s nodes are currently running.
 func (az *Cloud) GetActiveZones() (sets.Set[string], error) {
 	if az.nodeInformerSynced == nil {
@@ -1451,4 +1494,14 @@ func (az *Cloud) getActiveNodesByLoadBalancerName(lbName string) sets.Set[string
 	}
 
 	return sets.New[string]()
+}
+
+func isNodeReady(node *v1.Node) bool {
+	if node == nil {
+		return false
+	}
+	if _, c := nodeutil.GetNodeCondition(&node.Status, v1.NodeReady); c != nil {
+		return c.Status == v1.ConditionTrue
+	}
+	return false
 }
