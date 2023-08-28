@@ -2400,7 +2400,7 @@ func (az *Cloud) getExpectedLoadBalancingRulePropertiesForPort(
 		IdleTimeoutInMinutes: lbIdleTimeout,
 	}
 	if strings.EqualFold(string(transportProto), string(network.TransportProtocolTCP)) && az.useStandardLoadBalancer() {
-		props.EnableTCPReset = pointer.Bool(true)
+		props.EnableTCPReset = pointer.Bool(!consts.IsTCPResetDisabled(service.Annotations))
 	}
 
 	// Azure ILB does not support secondary IPs as floating IPs on the LB. Therefore, floating IP needs to be turned
@@ -2421,7 +2421,8 @@ func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 	if err != nil {
 		return nil, fmt.Errorf("error generate lb rule for ha mod loadbalancer. err: %w", err)
 	}
-	props.EnableTCPReset = pointer.Bool(true)
+	props.EnableTCPReset = pointer.Bool(!consts.IsTCPResetDisabled(service.Annotations))
+
 	return props, nil
 }
 
