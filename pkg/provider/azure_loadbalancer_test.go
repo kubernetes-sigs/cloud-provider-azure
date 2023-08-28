@@ -2472,6 +2472,15 @@ func TestReconcileLoadBalancerRule(t *testing.T) {
 			expectedProbes: getDefaultTestProbes("Http", "/"),
 		},
 		{
+			desc: "getExpectedLBRules should disable tcp reset when annotation is set",
+			service: getTestServiceDualStack("test1", v1.ProtocolTCP, map[string]string{
+				"service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset": "true",
+			}, 80),
+			loadBalancerSku: "standard",
+			expectedRules:   getTCPResetTestRules(false),
+			expectedProbes:  getDefaultTestProbes("Tcp", ""),
+		},
+		{
 			desc: "getExpectedLBRules should prioritize port specific probe protocol over appProtocol",
 			service: getTestService("test1", v1.ProtocolTCP, map[string]string{
 				"service.beta.kubernetes.io/port_80_health-probe_protocol": "HtTp",
@@ -2776,7 +2785,7 @@ func getDefaultTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingRu
 }
 
 func getDefaultInternalIPv6Rules(enableTCPReset bool) map[bool][]network.LoadBalancingRule {
-	rulesDualStack := getDefaultTestRules(true)
+	rulesDualStack := getDefaultTestRules(enableTCPReset)
 	for _, rules := range rulesDualStack {
 		for _, rule := range rules {
 			rule.EnableFloatingIP = pointer.Bool(false)
@@ -2784,6 +2793,18 @@ func getDefaultInternalIPv6Rules(enableTCPReset bool) map[bool][]network.LoadBal
 		}
 	}
 	return rulesDualStack
+}
+
+// getTCPResetTestRules returns rules with TCPReset always set.
+func getTCPResetTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingRule {
+	IPv4Rule := getTestRule(enableTCPReset, 80, consts.IPVersionIPv4)
+	IPv6Rule := getTestRule(enableTCPReset, 80, consts.IPVersionIPv6)
+	IPv4Rule.EnableTCPReset = pointer.Bool(enableTCPReset)
+	IPv6Rule.EnableTCPReset = pointer.Bool(enableTCPReset)
+	return map[bool][]network.LoadBalancingRule{
+		consts.IPVersionIPv4: {IPv4Rule},
+		consts.IPVersionIPv6: {IPv6Rule},
+	}
 }
 
 func getTestRule(enableTCPReset bool, port int32, isIPv6 bool) network.LoadBalancingRule {
