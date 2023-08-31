@@ -241,7 +241,7 @@ func setMockPublicIP(az *Cloud, mockPIPsClient *mockpublicipclient.MockInterface
 	ipAddr1 := "1.2.3.4"
 	ipAddra := "1.2.3.5"
 	if isIPv6 {
-		suffix = "-" + v6Suffix
+		suffix = "-" + consts.IPVersionIPv6String
 		ipVer = network.IPv6
 		ipAddr1 = "fd00::eef0"
 		ipAddra = "fd00::eef1"
@@ -1994,7 +1994,7 @@ func validateLoadBalancer(t *testing.T, loadBalancer *network.LoadBalancer, serv
 			expectedFrontendIPs = append(expectedFrontendIPs, expectedFrontendIP)
 			if svcIPFamilyCount == 2 {
 				expectedFrontendIP := ExpectedFrontendIPInfo{
-					Name:   az.getDefaultFrontendIPConfigName(&services[i]) + "-" + v6Suffix,
+					Name:   az.getDefaultFrontendIPConfigName(&services[i]) + "-" + consts.IPVersionIPv6String,
 					Subnet: pointer.String(expectedSubnetName),
 				}
 				expectedFrontendIPs = append(expectedFrontendIPs, expectedFrontendIP)

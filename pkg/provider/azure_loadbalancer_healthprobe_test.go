@@ -39,7 +39,7 @@ func getTestProbes(protocol, path string, interval, servicePort, probePort, numO
 func getTestProbe(protocol, path string, interval, servicePort, probePort, numOfProbe *int32, isIPv6 bool) network.Probe {
 	suffix := ""
 	if isIPv6 {
-		suffix = "-" + v6Suffix
+		suffix = "-" + consts.IPVersionIPv6String
 	}
 	expectedProbes := network.Probe{
 		Name: pointer.String(fmt.Sprintf("atest1-TCP-%d", *servicePort) + suffix),

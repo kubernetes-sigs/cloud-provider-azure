@@ -17,6 +17,7 @@ limitations under the License.
 package consts
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
@@ -202,6 +203,8 @@ const (
 	IPVersionIPv6String      string = "IPv6"
 	IPVersionDualStackString string = "DualStack"
 )
+
+var IPVersionIPv6StringLower = strings.ToLower(IPVersionIPv6String)
 
 // LB variables for dual-stack
 var (

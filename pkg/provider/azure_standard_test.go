@@ -568,7 +568,7 @@ func testGetLoadBalancerSubResourceIDs(
 				subscriptionID,
 				rgName,
 				c.loadBalancerName,
-				clusterName) + "-" + v6Suffix
+				clusterName) + "-" + consts.IPVersionIPv6String
 			subResourceIDs := getLoadBalancerSubResourceIDs(clusterName, c.loadBalancerName)
 			assert.Equal(t, expectedV4, subResourceIDs[false])
 			assert.Equal(t, expectedV6, subResourceIDs[true])
