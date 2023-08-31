@@ -54,14 +54,6 @@ var (
 	vmasIDRE           = regexp.MustCompile(`/subscriptions/(?:.*)/resourceGroups/(?:.*)/providers/Microsoft.Compute/availabilitySets/(.+)`)
 )
 
-const (
-	v6Suffix = "IPv6"
-)
-
-var (
-	v6SuffixLower = strings.ToLower(v6Suffix)
-)
-
 // returns the full identifier of an availabilitySet
 func (az *Cloud) getAvailabilitySetID(resourceGroup, availabilitySetName string) string {
 	return fmt.Sprintf(
@@ -270,7 +262,7 @@ func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
 // clusters moving from IPv6 to dualstack will require no changes as the IPv4 backend pool will created with <clusterName>
 func getBackendPoolName(clusterName string, isIPv6 bool) string {
 	if isIPv6 {
-		return fmt.Sprintf("%s-%s", clusterName, v6Suffix)
+		return fmt.Sprintf("%s-%s", clusterName, consts.IPVersionIPv6String)
 	}
 
 	return clusterName
@@ -290,7 +282,7 @@ func isBackendPoolIPv6(name string) bool {
 }
 
 func managedResourceHasIPv6Suffix(name string) bool {
-	return strings.HasSuffix(strings.ToLower(name), fmt.Sprintf("-%s", v6SuffixLower))
+	return strings.HasSuffix(strings.ToLower(name), fmt.Sprintf("-%s", consts.IPVersionIPv6StringLower))
 }
 
 func (az *Cloud) getLoadBalancerRuleName(service *v1.Service, protocol v1.Protocol, port int32, isIPv6 bool) string {

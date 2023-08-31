@@ -453,7 +453,7 @@ func getServicePIPPrefixID(service *v1.Service, isIPv6 bool) string {
 // the old PIPs will be recreated.
 func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 	if isDualStack && isIPv6 {
-		return fmt.Sprintf("%s-%s", resource, v6Suffix)
+		return fmt.Sprintf("%s-%s", resource, consts.IPVersionIPv6String)
 	}
 	return resource
 }

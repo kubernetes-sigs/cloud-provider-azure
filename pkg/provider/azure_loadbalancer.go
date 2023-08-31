@@ -167,6 +167,12 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 	key := strings.ToLower(serviceName)
 	if az.useMultipleStandardLoadBalancers() && isLocalService(service) {
 		az.localServiceNameToServiceInfoMap.Store(key, newServiceInfo(getServiceIPFamily(service), lbName))
+		// There are chances that the endpointslice changes after EnsureHostsInPool, so
+		// need to check endpointslice for a second time.
+		if err := az.checkAndApplyLocalServiceBackendPoolUpdates(*lb, service); err != nil {
+			klog.Errorf("failed to checkAndApplyLocalServiceBackendPoolUpdates: %v", err)
+			return nil, err
+		}
 	} else {
 		az.localServiceNameToServiceInfoMap.Delete(key)
 	}
@@ -1801,18 +1807,9 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		if az.useMultipleStandardLoadBalancers() {
 			lbToReconcile = *existingLBs
 		}
-		for _, lb := range lbToReconcile {
-			lbName := pointer.StringDeref(lb.Name, "")
-			if lb.LoadBalancerPropertiesFormat != nil && lb.LoadBalancerPropertiesFormat.BackendAddressPools != nil {
-				for _, backendPool := range *lb.LoadBalancerPropertiesFormat.BackendAddressPools {
-					isIPv6 := isBackendPoolIPv6(pointer.StringDeref(backendPool.Name, ""))
-					if strings.EqualFold(pointer.StringDeref(backendPool.Name, ""), az.getBackendPoolNameForService(service, clusterName, isIPv6)) {
-						if err := az.LoadBalancerBackendPool.EnsureHostsInPool(service, nodes, lbBackendPoolIDs[isIPv6], vmSetName, clusterName, lbName, backendPool); err != nil {
-							return nil, err
-						}
-					}
-				}
-			}
+		lb, err = az.reconcileBackendPoolHosts(lb, lbToReconcile, service, nodes, clusterName, vmSetName, lbBackendPoolIDs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -1822,6 +1819,44 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 
 	klog.V(2).Infof("reconcileLoadBalancer for service(%s): lb(%s) finished", serviceName, lbName)
 	return lb, nil
+}
+
+func (az *Cloud) reconcileBackendPoolHosts(
+	currentLB *network.LoadBalancer,
+	lbs []network.LoadBalancer,
+	service *v1.Service,
+	nodes []*v1.Node,
+	clusterName, vmSetName string,
+	lbBackendPoolIDs map[bool]string,
+) (*network.LoadBalancer, error) {
+	var res *network.LoadBalancer
+	res = currentLB
+	for _, lb := range lbs {
+		lb := lb
+		lbName := pointer.StringDeref(lb.Name, "")
+		if lb.LoadBalancerPropertiesFormat != nil && lb.LoadBalancerPropertiesFormat.BackendAddressPools != nil {
+			for i, backendPool := range *lb.LoadBalancerPropertiesFormat.BackendAddressPools {
+				isIPv6 := isBackendPoolIPv6(pointer.StringDeref(backendPool.Name, ""))
+				if strings.EqualFold(pointer.StringDeref(backendPool.Name, ""), az.getBackendPoolNameForService(service, clusterName, isIPv6)) {
+					if err := az.LoadBalancerBackendPool.EnsureHostsInPool(
+						service,
+						nodes,
+						lbBackendPoolIDs[isIPv6],
+						vmSetName,
+						clusterName,
+						lbName,
+						(*lb.LoadBalancerPropertiesFormat.BackendAddressPools)[i],
+					); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		if strings.EqualFold(lbName, *currentLB.Name) {
+			res = &lb
+		}
+	}
+	return res, nil
 }
 
 // addOrUpdateLBInList adds or updates the given lb in the list

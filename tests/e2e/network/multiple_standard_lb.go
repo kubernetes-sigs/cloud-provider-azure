@@ -189,12 +189,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 
-		nodes, err := utils.GetAgentNodes(cs)
-		By(fmt.Sprintf("Checking the node count in the local service backend pool to equal %d)", len(nodes)))
+		nodeNames, err := getDeploymentPodsNodeNames(cs, ns.Name, testDeploymentName)
+		Expect(err).NotTo(HaveOccurred())
+		By(fmt.Sprintf("Checking the node count in the local service backend pool to equal %d", len(nodeNames)))
 		clusterName := os.Getenv("CLUSTER_NAME")
 		Expect(err).NotTo(HaveOccurred())
 		expectedBPName := fmt.Sprintf("%s-%s", svc.Namespace, svc.Name)
-		err = checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodes))
+		err = checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodeNames))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling the deployment to 3 replicas and then to 1")
@@ -221,10 +222,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		deployment.Spec.Replicas = pointer.Int32(5)
 		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		nodeNames, err = getDeploymentPodsNodeNames(cs, ns.Name, testDeploymentName)
+		Expect(err).NotTo(HaveOccurred())
 		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-			if err := checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodes)); err != nil {
+			if err := checkNodeCountInBackendPoolByServiceIPs(tc, clusterName, expectedBPName, ips, len(nodeNames)); err != nil {
 				if strings.Contains(err.Error(), "expected node count") {
-					utils.Logf("Waiting for the node count in the backend pool to equal %d", len(nodes))
+					utils.Logf("Waiting for the node count in the backend pool to equal %d", len(nodeNames))
 					return false, nil
 				}
 				return false, err
@@ -234,6 +237,37 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
+
+// getDeploymentPodsNodeNames returns the node names of the pods in the deployment created in BeforeEach.
+func getDeploymentPodsNodeNames(kubeClient clientset.Interface, namespace, deploymentName string) (map[string]bool, error) {
+	var (
+		podList *v1.PodList
+		res     = make(map[string]bool)
+		err     error
+	)
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		podList, err = kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, pod := range podList.Items {
+			if strings.HasPrefix(pod.Name, deploymentName) {
+				if pod.Spec.NodeName == "" {
+					utils.Logf("Waiting for pod %s to be running", pod.Name)
+					return false, nil
+				}
+				utils.Logf("Pod %s is running on node %s", pod.Name, pod.Spec.NodeName)
+				res[pod.Spec.NodeName] = true
+			}
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
 
 func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expectedLBName, bpName string, svcIPs []string, expectedCount int) error {
 	for _, svcIP := range svcIPs {
