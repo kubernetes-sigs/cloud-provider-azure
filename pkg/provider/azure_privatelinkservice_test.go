@@ -18,6 +18,7 @@ package provider
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
@@ -603,6 +604,7 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 	for i, test := range []struct {
 		desc              string
 		annotations       map[string]string
+		plsName           string
 		existingIPConfigs *[]network.PrivateLinkServiceIPConfiguration
 		expectedIPConfigs *[]network.PrivateLinkServiceIPConfiguration
 		getSubnetError    *retry.Error
@@ -610,7 +612,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 		expectedErr       bool
 	}{
 		{
-			desc: "reconcilePLSIpConfigs should report error when subnet specified by service does not exist",
+			desc:    "reconcilePLSIpConfigs should report error when subnet specified by service does not exist",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationSubnet: "subnet",
 			},
@@ -618,7 +621,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedErr:    true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should report error when ip count specified is fewer than number of static IPs",
+			desc:    "reconcilePLSIpConfigs should report error when ip count specified is fewer than number of static IPs",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationSubnet:         "subnet",
 				consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: "1",
@@ -627,7 +631,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if its ipConfig is nil",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if its ipConfig is nil",
+			plsName: "testpls",
 			expectedIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
 				{
 					Name: pointer.String("subnet-testpls-dynamic-0"),
@@ -642,7 +647,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if its ipConfig count is different",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if its ipConfig count is different",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: "2",
 			},
@@ -680,7 +686,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if its subnetID is different",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if its subnetID is different",
+			plsName: "testpls",
 			existingIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
 				{
 					Name: pointer.String("subnet-testpls-dynamic-0"),
@@ -706,7 +713,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if ip allocation type is changed from dynamic to static",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if ip allocation type is changed from dynamic to static",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: "2",
 				consts.ServiceAnnotationPLSIpConfigurationIPAddress:      "10.2.0.4",
@@ -746,7 +754,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if ip allocation type is changed from static to dynamic",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if ip allocation type is changed from static to dynamic",
+			plsName: "testpls",
 			existingIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
 				{
 					Name: pointer.String("subnet-testpls-static-10.2.0.4"),
@@ -773,7 +782,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should change existingPLS if static ip is changed",
+			desc:    "reconcilePLSIpConfigs should change existingPLS if static ip is changed",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationIPAddress: "10.2.0.5",
 			},
@@ -804,7 +814,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			desc: "reconcilePLSIpConfigs should not change existingPLS if ip allocation type is dynamic only",
+			desc:    "reconcilePLSIpConfigs should not change existingPLS if ip allocation type is dynamic only",
+			plsName: "testpls",
 			existingIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
 				{
 					Name: pointer.String("subnet-testpls-dynamic-0"),
@@ -829,7 +840,8 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 		},
 		{
-			desc: "reconcilePLSIpConfigs should not change existingPLS if static ip is exactly same",
+			desc:    "reconcilePLSIpConfigs should not change existingPLS if static ip is exactly same",
+			plsName: "testpls",
 			annotations: map[string]string{
 				consts.ServiceAnnotationPLSIpConfigurationIPAddress: "10.2.0.5",
 			},
@@ -853,6 +865,87 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 						PrivateIPAddress:          pointer.String("10.2.0.5"),
 						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
 						Primary:                   pointer.Bool(true),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+			},
+		},
+		{
+			desc:    "reconcilePLSIpConfigs should truncate frontendIPConfig name if it's too long",
+			plsName: strings.Repeat("12345678", 10),
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSIpConfigurationIPAddress:      "10.2.0.5",
+				consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: "2",
+			},
+			existingIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{},
+			expectedIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Static,
+						PrivateIPAddress:          pointer.String("10.2.0.5"),
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(true),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Dynamic,
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(false),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+			},
+			expectedChanged: true,
+		},
+		{
+			desc:    "reconcilePLSIpConfigs should not modify existingPLS in name truncation case",
+			plsName: strings.Repeat("12345678", 10),
+			annotations: map[string]string{
+				consts.ServiceAnnotationPLSIpConfigurationIPAddress:      "10.2.0.5",
+				consts.ServiceAnnotationPLSIpConfigurationIPAddressCount: "2",
+			},
+			existingIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Static,
+						PrivateIPAddress:          pointer.String("10.2.0.5"),
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(true),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Dynamic,
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(false),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+			},
+			expectedIPConfigs: &[]network.PrivateLinkServiceIPConfiguration{
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1" + "-static-10.2.0.5"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Static,
+						PrivateIPAddress:          pointer.String("10.2.0.5"),
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(true),
+						PrivateIPAddressVersion:   network.IPv4,
+					},
+				},
+				{
+					Name: pointer.String("subnet-" + strings.Repeat("12345678", 7) + "1234567" + "-dynamic-0"),
+					PrivateLinkServiceIPConfigurationProperties: &network.PrivateLinkServiceIPConfigurationProperties{
+						PrivateIPAllocationMethod: network.Dynamic,
+						Subnet:                    &network.Subnet{ID: pointer.String("subnetID")},
+						Primary:                   pointer.Bool(false),
 						PrivateIPAddressVersion:   network.IPv4,
 					},
 				},
@@ -868,7 +961,7 @@ func TestReconcilePLSIpConfigs(t *testing.T) {
 			},
 		}
 		pls := &network.PrivateLinkService{
-			Name: pointer.String("testpls"),
+			Name: pointer.String(test.plsName),
 			PrivateLinkServiceProperties: &network.PrivateLinkServiceProperties{
 				IPConfigurations: test.existingIPConfigs,
 			},
