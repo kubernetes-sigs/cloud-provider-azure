@@ -10,7 +10,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3 v3.0.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.1.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.1.1
-	github.com/Azure/go-armbalancer v0.0.2
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.1
 	github.com/onsi/ginkgo/v2 v2.12.0
@@ -21,6 +20,7 @@ require (
 	golang.org/x/time v0.3.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer v0.0.0-20230831215230-8f671efb7194
 )
 
 require (
@@ -38,6 +38,7 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	go.opentelemetry.io/otel/metric v1.17.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/tools v0.12.0 // indirect
