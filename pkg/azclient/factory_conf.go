@@ -17,11 +17,12 @@ limitations under the License.
 package azclient
 
 import (
+	"context"
 	"net/http"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
-	"github.com/Azure/go-armbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -33,7 +34,7 @@ var once sync.Once
 func init() {
 	once.Do(func() {
 		DefaultResourceClientTransport = &http.Client{
-			Transport: armbalancer.New(armbalancer.Options{
+			Transport: armbalancer.New(context.Background(), armbalancer.Options{
 				Transport: utils.DefaultTransport,
 				PoolSize:  100,
 			}),
