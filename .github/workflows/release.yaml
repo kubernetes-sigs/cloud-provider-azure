@@ -23,7 +23,7 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Golang
         uses: actions/setup-go@v4
         with:
@@ -54,7 +54,7 @@ jobs:
             arch: amd64
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Golang
         uses: actions/setup-go@v4
         with:
@@ -100,7 +100,7 @@ jobs:
             arch: amd64
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Golang
         uses: actions/setup-go@v4
         with:
@@ -142,7 +142,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: documentation
           fetch-depth: 0
