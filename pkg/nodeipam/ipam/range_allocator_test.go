@@ -854,3 +854,91 @@ func TestReleaseCIDRSuccess(t *testing.T) {
 		testFunc(tc)
 	}
 }
+
+func TestRetryAllocatingPodCidr(t *testing.T) {
+	testCases := []testCase{
+		{
+			description: "It should release allocated CIDR and retry with new CIDR when node patch fails",
+			fakeNodeHandler: &testutil.FakeNodeHandler{
+				Existing: []*v1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node0",
+						},
+					},
+				},
+				Clientset:       fake.NewSimpleClientset(),
+				PatchErrorCount: 9, // need 9 because we want first 3 ranges to fail, and each range is retried for 3 times
+			},
+			allocatorParams: CIDRAllocatorParams{
+				ClusterCIDRs: func() []*net.IPNet {
+					_, clusterCIDR, _ := net.ParseCIDR("127.123.234.0/28")
+					return []*net.IPNet{clusterCIDR}
+				}(),
+				ServiceCIDR:          nil,
+				SecondaryServiceCIDR: nil,
+				NodeCIDRMaskSizes:    []int{30},
+			},
+			allocatedCIDRs: map[int][]string{
+				0: {"127.123.234.0/30", "127.123.234.4/30", "127.123.234.8/30"},
+			},
+			expectedAllocatedCIDR: map[int]string{
+				0: "127.123.234.12/30",
+			},
+		},
+	}
+
+	testFunc := func(tc testCase) {
+		// Initialize the range allocator.
+		allocator, err := NewCIDRRangeAllocator(tc.fakeNodeHandler, getFakeNodeInformer(tc.fakeNodeHandler), tc.allocatorParams, nil)
+		if err != nil {
+			t.Logf("%v: failed to create CIDRRangeAllocator with error %v", tc.description, err)
+		}
+		rangeAllocator, ok := allocator.(*rangeAllocator)
+		if !ok {
+			t.Logf("%v: found non-default implementation of CIDRAllocator, skipping white-box test...", tc.description)
+			return
+		}
+		rangeAllocator.nodesSynced = alwaysReady
+		rangeAllocator.recorder = testutil.NewFakeRecorder()
+		go allocator.Run(wait.NeverStop)
+
+		if err := allocator.AllocateOrOccupyCIDR(tc.fakeNodeHandler.Existing[0]); err != nil {
+			t.Errorf("%v: unexpected error in AllocateOrOccupyCIDR: %v", tc.description, err)
+		}
+
+		if err := waitForUpdatedNodeWithTimeout(tc.fakeNodeHandler, 1, wait.ForeverTestTimeout); err != nil {
+			t.Fatalf("%v: timeout while waiting for Node update: %v", tc.description, err)
+		}
+
+		for _, updatedNode := range tc.fakeNodeHandler.GetUpdatedNodesCopy() {
+			if len(updatedNode.Spec.PodCIDRs) == 0 {
+				continue // not assigned yet
+			}
+			//match
+			for podCIDRIdx, expectedPodCIDR := range tc.expectedAllocatedCIDR {
+				if updatedNode.Spec.PodCIDRs[podCIDRIdx] != expectedPodCIDR {
+					t.Errorf("%v: Unable to find allocated CIDR %v, found updated Nodes with CIDRs: %v", tc.description, expectedPodCIDR, updatedNode.Spec.PodCIDRs)
+					break
+				}
+			}
+		}
+
+		// Make sure previously tried CIDRs are all released
+		for idx, allocatedList := range tc.allocatedCIDRs {
+			for _, allocated := range allocatedList {
+				_, cidr, err := net.ParseCIDR(allocated)
+				if err != nil {
+					t.Fatalf("%v: unexpected error when parsing CIDR %v: %v", tc.description, allocated, err)
+				}
+				if err = rangeAllocator.cidrSets[idx].Occupy(cidr); err != nil {
+					t.Fatalf("%v: unexpected error when occupying CIDR %v: %v", tc.description, allocated, err)
+				}
+			}
+		}
+	}
+
+	for _, tc := range testCases {
+		testFunc(tc)
+	}
+}
