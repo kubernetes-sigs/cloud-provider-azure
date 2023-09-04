@@ -191,7 +191,7 @@ func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
 				klog.Warning("Channel nodeCIDRUpdateChannel was unexpectedly closed")
 				return
 			}
-			if err := r.updateCIDRsAllocation(workItem); err != nil {
+			if workItem, err := r.updateCIDRsAllocation(workItem); err != nil {
 				// Requeue the failed node for update again.
 				r.nodeCIDRUpdateChannel <- workItem
 			}
@@ -257,23 +257,20 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 	if len(node.Spec.PodCIDRs) > 0 {
 		return r.occupyCIDRs(node)
 	}
-	// allocate and queue the assignment
+
+	// allocate pod cidrs
+	allocatedCIDRs, err := r.allocatePodCIDRs()
+	if err != nil {
+		r.removeNodeFromProcessing(node.Name)
+		nodeutil.RecordNodeStatusChange(r.recorder, node, "CIDRNotAvailable")
+		return fmt.Errorf("failed to allocate cidr for node %s: %w", node.Name, err)
+	}
 	allocated := nodeReservedCIDRs{
 		nodeName:       node.Name,
-		allocatedCIDRs: make([]*net.IPNet, len(r.cidrSets)),
+		allocatedCIDRs: allocatedCIDRs,
 	}
 
-	for idx := range r.cidrSets {
-		podCIDR, err := r.cidrSets[idx].AllocateNext()
-		if err != nil {
-			r.removeNodeFromProcessing(node.Name)
-			nodeutil.RecordNodeStatusChange(r.recorder, node, "CIDRNotAvailable")
-			return fmt.Errorf("failed to allocate cidr from cluster cidr at idx:%v: %w", idx, err)
-		}
-		allocated.allocatedCIDRs[idx] = podCIDR
-	}
-
-	//queue the assignment
+	// queue the assignment
 	klog.V(4).Infof("Putting node %s with CIDR %v into the work queue", node.Name, allocated.allocatedCIDRs)
 	r.nodeCIDRUpdateChannel <- allocated
 	return nil
@@ -327,21 +324,55 @@ func filterOutServiceRange(clusterCIDRs []*net.IPNet, cidrSets []*cidrset.CidrSe
 	}
 }
 
+func (r *rangeAllocator) allocatePodCIDRs() ([]*net.IPNet, error) {
+	allocatedCIDRs := make([]*net.IPNet, len(r.cidrSets))
+	for idx := range r.cidrSets {
+		podCIDR, err := r.cidrSets[idx].AllocateNext()
+		if err != nil {
+			for i := 0; i < idx; i++ {
+				if releaseErr := r.cidrSets[idx].Release(allocatedCIDRs[i]); releaseErr != nil {
+					// continue releasing the rest
+					klog.Errorf("Error releasing allocated CIDR at index %d for node: %v", i, releaseErr)
+				}
+			}
+			return nil, fmt.Errorf("failed to allocate cidr from cluster cidr at idx:%v: %w", idx, err)
+		}
+		allocatedCIDRs[idx] = podCIDR
+	}
+	return allocatedCIDRs, nil
+}
+
 // updateCIDRsAllocation assigns CIDR to Node and sends an update to the API server.
-func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
-	var err error
+func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) (dataToRetry nodeReservedCIDRs, err error) {
 	var node *v1.Node
-	defer r.removeNodeFromProcessing(data.nodeName)
-	cidrsString := cidrsAsString(data.allocatedCIDRs)
+
+	defer func() {
+		if err == nil {
+			// only remove node when node patch succeeds
+			r.removeNodeFromProcessing(data.nodeName)
+		}
+	}()
+
 	node, err = r.nodeLister.Get(data.nodeName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.Warningf("Failed to get node %s: not found", data.nodeName)
-			return nil
+			return data, nil
 		}
 		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %v", data.nodeName, err)
-		return err
+		return data, err
 	}
+
+	// this happens when node patch fails, we release the CIDRs allocated and retry
+	if data.allocatedCIDRs == nil {
+		allocatedCIDRs, err := r.allocatePodCIDRs()
+		if err != nil {
+			nodeutil.RecordNodeStatusChange(r.recorder, node, "CIDRNotAvailable")
+			return data, fmt.Errorf("failed to allocate cidr for node %s: %w", data.nodeName, err)
+		}
+		data.allocatedCIDRs = allocatedCIDRs
+	}
+	cidrsString := cidrsAsString(data.allocatedCIDRs)
 
 	// if cidr list matches the proposed.
 	// then we possibly updated this node
@@ -356,7 +387,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 		}
 		if match {
 			klog.V(4).Infof("Node %v already has allocated CIDR %v. It matches the proposed one.", node.Name, data.allocatedCIDRs)
-			return nil
+			return data, nil
 		}
 	}
 
@@ -368,13 +399,13 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 				klog.Errorf("Error when releasing CIDR idx:%v value: %v err:%v", idx, cidr, releaseErr)
 			}
 		}
-		return nil
+		return data, nil
 	}
 
 	// If we reached here, it means that the node has no CIDR currently assigned. So we set it.
 	for i := 0; i < cidrUpdateRetries; i++ {
 		if err = utilnode.PatchNodeCIDRs(r.client, types.NodeName(node.Name), cidrsString); err == nil {
-			return nil
+			return data, nil
 		}
 	}
 	// failed release back to the pool
@@ -390,8 +421,9 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 				klog.Errorf("Error releasing allocated CIDR for node %v: %v", node.Name, releaseErr)
 			}
 		}
+		data.allocatedCIDRs = nil
 	}
-	return err
+	return data, err
 }
 
 // converts a slice of cidrs into <c-1>,<c-2>,<c-n>
