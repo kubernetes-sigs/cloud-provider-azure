@@ -333,6 +333,9 @@ const (
 	// The list is separated by comma. It will be omitted if multi-slb is not used.
 	ServiceAnnotationLoadBalancerConfigurations = "service.beta.kubernetes.io/azure-load-balancer-configurations"
 
+	// ServiceAnnotationDisableTCPReset is the annotation used on the service to disable TCP reset on the load balancer.
+	ServiceAnnotationDisableTCPReset = "service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset"
+
 	// ServiceTagKey is the service key applied for public IP tags.
 	ServiceTagKey       = "k8s-azure-service"
 	LegacyServiceTagKey = "service"
