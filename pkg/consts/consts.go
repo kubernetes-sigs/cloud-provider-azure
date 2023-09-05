@@ -328,6 +328,9 @@ const (
 	// automatically on Azure LoadBalancer. Instead, they need to be configured manually (e.g. on Azure cross-region LoadBalancer by another operator).
 	ServiceAnnotationAdditionalPublicIPs = "service.beta.kubernetes.io/azure-additional-public-ips"
 
+	// ServiceAnnotationDisableTCPReset is the annotation used on the service to disable TCP reset on the load balancer.
+	ServiceAnnotationDisableTCPReset = "service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset"
+
 	// ServiceTagKey is the service key applied for public IP tags.
 	ServiceTagKey       = "k8s-azure-service"
 	LegacyServiceTagKey = "service"
