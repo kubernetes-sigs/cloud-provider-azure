@@ -16,7 +16,7 @@ require (
 	github.com/onsi/gomega v1.27.10
 	go.opentelemetry.io/otel v1.17.0
 	go.opentelemetry.io/otel/trace v1.17.0
-	golang.org/x/crypto v0.12.0
+	golang.org/x/crypto v0.13.0
 	golang.org/x/time v0.3.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
@@ -39,8 +39,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.17.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.12.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
