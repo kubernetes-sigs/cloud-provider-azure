@@ -56,7 +56,7 @@ type AccountOptions struct {
 	EnableHTTPSTrafficOnly                    bool
 	// indicate whether create new account when Name is empty or when account does not exists
 	CreateAccount                           bool
-	CreatePrivateEndpoint                   bool
+	CreatePrivateEndpoint                   *bool
 	StorageType                             StorageType
 	StorageEndpointSuffix                   string
 	DisableFileServiceDeleteRetentionPolicy *bool
@@ -216,7 +216,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 	}
 
 	var privateDNSZoneName string
-	if accountOptions.CreatePrivateEndpoint {
+	if pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) {
 		if accountOptions.StorageType == "" {
 			klog.V(2).Info("set StorageType as file when not specified")
 			accountOptions.StorageType = StorageTypeFile
@@ -282,7 +282,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 	}
 
-	if accountOptions.CreatePrivateEndpoint {
+	if pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) {
 		if _, err := az.privatednsclient.Get(ctx, vnetResourceGroup, privateDNSZoneName); err != nil {
 			klog.V(2).Infof("get private dns zone %s returned with %v", privateDNSZoneName, err.Error())
 			// Create DNS zone first, this could make sure driver has write permission on vnetResourceGroup
@@ -320,7 +320,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 			}
 		}
 
-		if accountOptions.CreatePrivateEndpoint {
+		if pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) {
 			networkRuleSet = &storage.NetworkRuleSet{
 				DefaultAction: storage.DefaultActionDeny,
 			}
@@ -471,7 +471,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 	}
 
-	if accountOptions.CreatePrivateEndpoint {
+	if pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) {
 		// Get properties of the storageAccount
 		storageAccount, err := az.StorageAccountClient.GetProperties(ctx, subsID, resourceGroup, accountName)
 		if err != nil {
@@ -770,10 +770,15 @@ func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *Account
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
-	if accountOptions.CreatePrivateEndpoint && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
+	if accountOptions.CreatePrivateEndpoint == nil {
+		// CreatePrivateEndpoint is not set, match current account
 		return true
 	}
-	if !accountOptions.CreatePrivateEndpoint && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
+
+	if pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) && account.PrivateEndpointConnections != nil && len(*account.PrivateEndpointConnections) > 0 {
+		return true
+	}
+	if !pointer.BoolDeref(accountOptions.CreatePrivateEndpoint, false) && (account.PrivateEndpointConnections == nil || len(*account.PrivateEndpointConnections) == 0) {
 		return true
 	}
 	return false

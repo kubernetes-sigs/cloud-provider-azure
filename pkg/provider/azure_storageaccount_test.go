@@ -343,7 +343,7 @@ func TestGetStorageAccountEdgeCases(t *testing.T) {
 			testCase: "account options CreatePrivateEndpoint is true and no private endpoint exists",
 			testAccountOptions: &AccountOptions{
 				ResourceGroup:         "rg",
-				CreatePrivateEndpoint: true,
+				CreatePrivateEndpoint: pointer.BoolPtr(true),
 			},
 			testResourceGroups: []storage.Account{{Name: &name, Kind: "kind", Location: &location, Sku: sku, AccountProperties: &storage.AccountProperties{}}},
 			expectedResult:     []accountWithLocation{},
@@ -409,7 +409,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 	tests := []struct {
 		name                            string
 		createAccount                   bool
-		createPrivateEndpoint           bool
+		createPrivateEndpoint           *bool
 		SubnetPropertiesFormatNil       bool
 		mockStorageAccountsClient       bool
 		setAccountOptions               bool
@@ -426,7 +426,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint and storagetype blob",
 			createAccount:                   true,
-			createPrivateEndpoint:           true,
+			createPrivateEndpoint:           pointer.BoolPtr(true),
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
 			pickRandomMatchingAccount:       true,
@@ -441,7 +441,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
 			createAccount:                   true,
-			createPrivateEndpoint:           true,
+			createPrivateEndpoint:           pointer.BoolPtr(true),
 			mockStorageAccountsClient:       true,
 			setAccountOptions:               true,
 			requireInfrastructureEncryption: pointer.Bool(true),
@@ -454,7 +454,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		{
 			name:                      "[Failed] EnsureStorageAccount with createPrivateEndpoint: get storage key failed",
 			createAccount:             true,
-			createPrivateEndpoint:     true,
+			createPrivateEndpoint:     pointer.BoolPtr(true),
 			SubnetPropertiesFormatNil: true,
 			mockStorageAccountsClient: true,
 			setAccountOptions:         true,
@@ -496,7 +496,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			cloud.StorageAccountClient = mockStorageAccountsClient
 		}
 
-		if test.createPrivateEndpoint {
+		if pointer.BoolDeref(test.createPrivateEndpoint, false) {
 			mockStorageAccountsClient.EXPECT().ListByResourceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts, nil).AnyTimes()
 			mockStorageAccountsClient.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(testStorageAccounts[0], nil).AnyTimes()
@@ -629,7 +629,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: true,
+				CreatePrivateEndpoint: pointer.BoolPtr(true),
 			},
 			expectedResult: true,
 		},
@@ -640,7 +640,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: false,
+				CreatePrivateEndpoint: pointer.BoolPtr(false),
 			},
 			expectedResult: true,
 		},
@@ -651,9 +651,20 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: false,
+				CreatePrivateEndpoint: pointer.BoolPtr(false),
 			},
 			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					PrivateEndpointConnections: &[]storage.PrivateEndpointConnection{{}},
+				},
+			},
+			accountOptions: &AccountOptions{
+				CreatePrivateEndpoint: nil,
+			},
+			expectedResult: true,
 		},
 		{
 			account: storage.Account{
@@ -662,7 +673,7 @@ func TestIsPrivateEndpointAsExpected(t *testing.T) {
 				},
 			},
 			accountOptions: &AccountOptions{
-				CreatePrivateEndpoint: true,
+				CreatePrivateEndpoint: pointer.BoolPtr(true),
 			},
 			expectedResult: false,
 		},
