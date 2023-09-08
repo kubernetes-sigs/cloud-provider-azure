@@ -53,8 +53,9 @@ type FakeNodeHandler struct {
 	*fake.Clientset
 
 	// Input: Hooks determine if request is valid or not
-	CreateHook func(*FakeNodeHandler, *v1.Node) bool
-	Existing   []*v1.Node
+	CreateHook      func(*FakeNodeHandler, *v1.Node) bool
+	Existing        []*v1.Node
+	PatchErrorCount int
 
 	// Output
 	CreatedNodes        []*v1.Node
@@ -274,6 +275,11 @@ func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchTy
 		}
 		m.lock.Unlock()
 	}()
+
+	if m.RequestCount < m.PatchErrorCount {
+		return nil, fmt.Errorf("patch failed count is %d, which is smaller than %d", m.RequestCount, m.PatchErrorCount)
+	}
+
 	var nodeCopy v1.Node
 	for i := range m.Existing {
 		if m.Existing[i].Name == name {
