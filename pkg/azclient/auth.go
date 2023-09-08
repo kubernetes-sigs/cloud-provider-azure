@@ -166,7 +166,8 @@ func NewAuthProvider(config AzureAuthConfig, clientOption *policy.ClientOptions)
 	var clientCertificateCredential azcore.TokenCredential
 	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
 		credOptions := &azidentity.ClientCertificateCredentialOptions{
-			ClientOptions: clientOption.ClientOptions,
+			ClientOptions:        clientOption.ClientOptions,
+			SendCertificateChain: true,
 		}
 		certData, err := os.ReadFile(config.AADClientCertPath)
 		if err != nil {
