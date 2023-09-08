@@ -78,7 +78,7 @@ func PatchNodeCIDRs(c clientset.Interface, node types.NodeName, cidrs []string) 
 	if err != nil {
 		return fmt.Errorf("failed to json.Marshal CIDR: %w", err)
 	}
-	klog.V(4).Infof("cidrs patch bytes are:%s", string(patchBytes))
+	klog.V(4).Infof("cidrs patch bytes for node %s are:%s", string(node), string(patchBytes))
 	if _, err := c.CoreV1().Nodes().Patch(context.TODO(), string(node), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("failed to patch node CIDR: %w", err)
 	}
