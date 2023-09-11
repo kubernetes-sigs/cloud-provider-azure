@@ -17,27 +17,7 @@
   "maximumLoadBalancerRuleCount": 250,
   "useManagedIdentityExtension": false,
   "useInstanceMetadata": true,
-  "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
-  "loadBalancerBackendPoolConfigurationType": "nodeIP",
-  "multipleStandardLoadBalancerConfigurations": [
-    {
-      "name": "${CLUSTER_NAME}",
-      "primaryVMSet": "${CLUSTER_NAME}-mp-0"
-    },
-    {
-      "name": "lb-1",
-      "primaryVMSet": "${CLUSTER_NAME}-mp-1"
-    },
-    {
-      "name": "lb-2",
-      "primaryVMSet": "${CLUSTER_NAME}-mp-2",
-      "serviceLabelSelector": {
-        "matchLabels": {
-          "a": "b"
-        }
-      }
-    }
-  ],
+  "enableVmssFlexNodes": true,
   "nonVmssUniformNodesCacheTTLInSeconds": 450,
   "vmssCacheTTLInSeconds": 300,
   "vmssVirtualMachinesCacheTTLInSeconds": 300,

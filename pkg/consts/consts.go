@@ -156,8 +156,6 @@ const (
 
 	// NonVmssUniformNodesCacheTTLDefaultInSeconds is the TTL of the non vmss uniform node cache
 	NonVmssUniformNodesCacheTTLDefaultInSeconds = 900
-	// AvailabilitySetNodesCacheTTLDefaultInSeconds is the TTL of the availabilitySet node cache
-	AvailabilitySetNodesCacheTTLDefaultInSeconds = 900
 	// VMSSCacheTTLDefaultInSeconds is the TTL of the vmss cache
 	VMSSCacheTTLDefaultInSeconds = 600
 	// VMSSVirtualMachinesCacheTTLDefaultInSeconds is the TTL of the vmss vm cache

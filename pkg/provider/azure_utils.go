@@ -404,7 +404,7 @@ func setServiceLoadBalancerIP(service *v1.Service, ip string) {
 	}
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
-		klog.Warning("setServiceLoadBalancerIP: IP %q is not valid for Service", ip, service.Name)
+		klog.Warningf("setServiceLoadBalancerIP: IP %q is not valid for Service %q", ip, service.Name)
 		return
 	}
 

@@ -2382,7 +2382,7 @@ func TestNewCloudFromJSON(t *testing.T) {
 		"cloudProviderRatelimit": true,
 		"cloudProviderRateLimitQPS": 0.5,
 		"cloudProviderRateLimitBucket": 5,
-		"availabilitySetNodesCacheTTLInSeconds": 100,
+		"availabilitySetsCacheTTLInSeconds": 100,
 		"nonVmssUniformNodesCacheTTLInSeconds": 100,
 		"vmssCacheTTLInSeconds": 100,
 		"vmssVirtualMachinesCacheTTLInSeconds": 100,
@@ -2449,7 +2449,7 @@ cloudProviderBackoffJitter: 1.0
 cloudProviderRatelimit: true
 cloudProviderRateLimitQPS: 0.5
 cloudProviderRateLimitBucket: 5
-availabilitySetNodesCacheTTLInSeconds: 100
+availabilitySetsCacheTTLInSeconds: 100
 nonVmssUniformNodesCacheTTLInSeconds: 100
 vmssCacheTTLInSeconds: 100
 vmssVirtualMachinesCacheTTLInSeconds: 100
@@ -2544,8 +2544,8 @@ func validateConfig(t *testing.T, config string) { //nolint
 	if azureCloud.CloudProviderRateLimitBucket != 5 {
 		t.Errorf("got incorrect value for CloudProviderRateLimitBucket")
 	}
-	if azureCloud.AvailabilitySetNodesCacheTTLInSeconds != 100 {
-		t.Errorf("got incorrect value for availabilitySetNodesCacheTTLInSeconds")
+	if azureCloud.AvailabilitySetsCacheTTLInSeconds != 100 {
+		t.Errorf("got incorrect value for AvailabilitySetsCacheTTLInSeconds")
 	}
 	if azureCloud.NonVmssUniformNodesCacheTTLInSeconds != 100 {
 		t.Errorf("got incorrect value for nonVmssUniformNodesCacheTTLInSeconds")

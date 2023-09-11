@@ -19,6 +19,12 @@
   "useInstanceMetadata": true,
   "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
   "loadBalancerBackendPoolConfigurationType": "${LB_BACKEND_POOL_CONFIG_TYPE}",
+  "nonVmssUniformNodesCacheTTLInSeconds": 450,
+  "vmssCacheTTLInSeconds": 300,
+  "vmssVirtualMachinesCacheTTLInSeconds": 300,
+  "availabilitySetsCacheTTLInSeconds": 300,
+  "vmssFlexCacheTTLInSeconds": 300,
+  "vmssFlexVMCacheTTLInSeconds": 300,
   "putVMSSVMBatchSize": ${PUT_VMSS_VM_BATCH_SIZE},
   "enableVmssFlexNodes": ${ENABLE_VMSS_FLEX}
 }
