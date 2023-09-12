@@ -28,6 +28,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
 )
 
+var TracingProvider tracing.Provider
+
 const (
 	DefaultMaxRetries    = 3
 	DefaultMaxRetryDelay = math.MaxInt64
@@ -51,9 +53,7 @@ func GetDefaultOption() *arm.ClientOptions {
 			Transport: &http.Client{
 				Transport: DefaultTransport,
 			},
-			TracingProvider: tracing.NewProvider(func(name, version string) tracing.Tracer {
-				return tracing.NewTracer(NewOtlpSpan, nil)
-			}, nil),
+			TracingProvider: TracingProvider,
 		},
 	}
 }

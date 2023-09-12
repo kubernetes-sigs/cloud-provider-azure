@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package trace
 
 import (
 	"context"
@@ -26,7 +26,14 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
+
+func init() {
+	utils.TracingProvider = tracing.NewProvider(func(name, version string) tracing.Tracer {
+		return tracing.NewTracer(NewOtlpSpan, nil)
+	}, nil)
+}
 
 const (
 	instrumentationName    = "otlp"
