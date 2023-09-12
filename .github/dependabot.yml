@@ -87,6 +87,20 @@ updates:
       - "lgtm"
       - "approved"
 
+  - package-ecosystem: gomod
+    directory: /pkg/azclient/trace
+    schedule:
+      interval: daily
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
