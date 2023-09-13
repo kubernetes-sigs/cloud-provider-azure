@@ -6,4 +6,4 @@ description: >
     Azure PLS Integration Design Document.
 ---
 
-This feature is now in public preview. The page has been moved to ([topics](../../../topics/pls-integration)).
+This feature is now generally available. The page has been moved to ([topics](../../../topics/pls-integration)).
