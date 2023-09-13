@@ -279,23 +279,24 @@ func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine)
 	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
 		return fmt.Errorf("vm.OsProfile.ComputerName is nil")
 	}
-
-	vmssFlexID, err := fs.getNodeVmssFlexID(nodeName)
-	if err != nil {
-		return err
+	if vm.VirtualMachineScaleSet == nil || vm.VirtualMachineScaleSet.ID == nil {
+		return fmt.Errorf("vm.VirtualMachineScaleSet.ID is nil")
 	}
 
+	vmssFlexID := *vm.VirtualMachineScaleSet.ID
 	fs.lockMap.LockEntry(vmssFlexID)
 	defer fs.lockMap.UnlockEntry(vmssFlexID)
-	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeDefault)
+	cached, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeNoRefresh)
 	if err != nil {
 		return err
 	}
-	vmMap := cached.(*sync.Map)
-	vmMap.Store(nodeName, vm)
+	if cached != nil {
+		vmMap := cached.(*sync.Map)
+		vmMap.Store(nodeName, vm)
+		fs.vmssFlexVMCache.Update(vmssFlexID, vmMap)
+	}
 
-	fs.vmssFlexVMNameToVmssID.Store(strings.ToLower(*vm.OsProfile.ComputerName), vmssFlexID)
-	fs.vmssFlexVMNameToNodeName.Store(*vm.Name, strings.ToLower(*vm.OsProfile.ComputerName))
+	fs.cacheVirtualMachine(*vm)
 	klog.V(2).Infof("updateCache(%s) for vmssFlexID(%s) successfully", nodeName, vmssFlexID)
 	return nil
 }

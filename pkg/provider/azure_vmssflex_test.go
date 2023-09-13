@@ -18,6 +18,7 @@ package provider
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
@@ -126,8 +127,8 @@ func TestGetNodeVMSetNameVmssFlex(t *testing.T) {
 	for _, tc := range testCases {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName1, testVmssFlexID1)
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName2, testVmssFlexID2)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName1, testVmssFlexID1)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName2, testVmssFlexID2)
 
 		vmSetName, err := fs.GetNodeVMSetName(testNode1)
 		assert.Equal(t, tc.expectedVMSetName, vmSetName, tc.description)
@@ -157,8 +158,8 @@ func TestGetAgentPoolVMSetNamesVmssFlex(t *testing.T) {
 	for _, tc := range testCases {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName1, testVmssFlexID1)
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName2, testVmssFlexID2)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName1, testVmssFlexID1)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName2, testVmssFlexID2)
 
 		agentPoolVMSetNames, err := fs.GetAgentPoolVMSetNames(tc.nodes)
 		assert.Equal(t, tc.expectedAgentPoolVMSetNames, agentPoolVMSetNames, tc.description)
@@ -220,8 +221,8 @@ func TestGetVMSetNamesVmssFlex(t *testing.T) {
 	for _, tc := range testCases {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName1, testVmssFlexID1)
-		fs.vmssFlexVMNameToVmssID.Store(testNodeName2, testVmssFlexID2)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName1, testVmssFlexID1)
+		fs.vmssFlexNodeNameToVmssID.Store(testNodeName2, testVmssFlexID2)
 
 		if tc.useSingleSLB {
 			fs.LoadBalancerSku = consts.LoadBalancerSkuStandard
@@ -238,31 +239,31 @@ func TestGetNodeNameByProviderIDVmssFlex(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		description                    string
-		providerID                     string
-		testVMListWithoutInstanceView  []compute.VirtualMachine
-		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
-		expectedNodeName               types.NodeName
-		expectedErr                    error
+		description      string
+		providerID       string
+		testVM           compute.VirtualMachine
+		vmGetErr         *retry.Error
+		expectedNodeName types.NodeName
+		expectedErr      error
 	}{
 		{
-			description:                    "GetNodeNameByProviderID should return the correct nodeName by VMSS Flex VM ID",
-			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
-			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
-			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
-			expectedNodeName:               types.NodeName("vmssflex1000001"),
-			expectedErr:                    nil,
+			description:      "GetNodeNameByProviderID should return the correct nodeName by VMSS Flex VM ID",
+			providerID:       "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			testVM:           testVM1,
+			vmGetErr:         nil,
+			expectedNodeName: types.NodeName("vmssflex1000001"),
+			expectedErr:      nil,
 		},
 		{
-			description:                    "GetNodeNameByProviderID should throw error of instance not found if the vm is deleted",
-			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/" + nonExistingNodeName,
-			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
-			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
-			expectedNodeName:               "",
-			expectedErr:                    cloudprovider.InstanceNotFound,
+			description: "GetNodeNameByProviderID should throw error of instance not found if the vm is deleted",
+			providerID:  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/" + nonExistingNodeName,
+			testVM:      compute.VirtualMachine{},
+			vmGetErr: &retry.Error{
+				HTTPStatusCode: http.StatusNotFound,
+				RawError:       cloudprovider.InstanceNotFound,
+			},
+			expectedNodeName: "",
+			expectedErr:      cloudprovider.InstanceNotFound,
 		},
 	}
 
@@ -274,8 +275,7 @@ func TestGetNodeNameByProviderIDVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
-		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmGetErr).AnyTimes()
 
 		nodeName, err := fs.GetNodeNameByProviderID(tc.providerID)
 		assert.Equal(t, tc.expectedNodeName, nodeName)
@@ -770,9 +770,10 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 	testCases := []struct {
 		description                    string
 		ipConfigurationID              string
+		testVM                         compute.VirtualMachine
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
+		vmGetErr                       *retry.Error
 		nic                            network.Interface
 		expectedNodeName               string
 		expectedVMSetName              string
@@ -781,9 +782,10 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeNameByIPConfigurationID should return the correct nodeName by IPConfig",
 			ipConfigurationID:              testIPConfigurationID,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
+			vmGetErr:                       nil,
 			nic:                            generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1"),
 			expectedNodeName:               "vmssflex1000001",
 			expectedVMSetName:              "vmssflex1",
@@ -792,20 +794,25 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeNameByIPConfigurationID should return error if the VM does not exist",
 			ipConfigurationID:              fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/%s-nic/ipConfigurations/pipConfig", nonExistingNodeName),
+			testVM:                         compute.VirtualMachine{},
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
-			nic:                            generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", nonExistingNodeName)),
-			expectedNodeName:               "",
-			expectedVMSetName:              "",
-			expectedErr:                    fmt.Errorf("failed to map VM Name to NodeName: VM Name NonExistingNodeName"),
+			vmGetErr: &retry.Error{
+				HTTPStatusCode: http.StatusNotFound,
+				RawError:       cloudprovider.InstanceNotFound,
+			},
+			nic:               generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", nonExistingNodeName)),
+			expectedNodeName:  "",
+			expectedVMSetName: "",
+			expectedErr:       fmt.Errorf("failed to map VM Name to NodeName: VM Name NonExistingNodeName"),
 		},
 		{
 			description:                    "GetNodeNameByIPConfigurationID should return error if the ipConfigurationID is in wrong format",
 			ipConfigurationID:              "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig",
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
+			vmGetErr:                       nil,
 			expectedNodeName:               "",
 			expectedVMSetName:              "",
 			expectedErr:                    fmt.Errorf("invalid ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig"),
@@ -820,8 +827,9 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
-		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmGetErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmGetErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmGetErr).AnyTimes()
 
 		mockInterfacesClient := fs.InterfacesClient.(*mockinterfaceclient.MockInterface)
 		mockInterfacesClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.nic, nil).AnyTimes()
@@ -841,9 +849,10 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 	testCases := []struct {
 		description                    string
 		providerID                     string
+		testVM                         compute.VirtualMachine
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
+		vmListErr                      *retry.Error
 		tags                           map[string]*string
 		expectedNodeMaskCIDRIPv4       int
 		expectedNodeMaskCIDRIPv6       int
@@ -852,6 +861,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeCIDRMasksByProviderID should return the GetNodeCIDRMasksByProviderID",
 			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -862,16 +872,21 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeCIDRMasksByProviderID should return error if the node does not exist",
 			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/" + nonExistingNodeName,
+			testVM:                         compute.VirtualMachine{},
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
-			vmListErr:                      nil,
-			expectedNodeMaskCIDRIPv4:       0,
-			expectedNodeMaskCIDRIPv6:       0,
-			expectedErr:                    cloudprovider.InstanceNotFound,
+			vmListErr: &retry.Error{
+				HTTPStatusCode: http.StatusNotFound,
+				RawError:       cloudprovider.InstanceNotFound,
+			},
+			expectedNodeMaskCIDRIPv4: 0,
+			expectedNodeMaskCIDRIPv6: 0,
+			expectedErr:              cloudprovider.InstanceNotFound,
 		},
 		{
 			description:                    "GetNodeCIDRMasksByProviderID should return error if providerID is invalid",
 			providerID:                     "azure:///subscriptions//resourceGroups//providers/Microsoft.Compute/virtualMachines",
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -882,6 +897,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeCIDRMasksByProviderID should return the correct mask sizes even if some of the tags are not specified",
 			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -895,6 +911,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		{
 			description:                    "GetNodeCIDRMasksByProviderID should not fail even if some of the tag is invalid",
 			providerID:                     "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -919,6 +936,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
@@ -941,9 +959,10 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 		vmSetNameOfLB                  string
 		backendPoolID                  string
 		isStandardLB                   bool
+		testVM                         compute.VirtualMachine
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
+		vmListErr                      *retry.Error
 		nic                            network.Interface
 		nicGetErr                      *retry.Error
 		nicPutErr                      *retry.Error
@@ -959,6 +978,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -976,6 +996,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -993,6 +1014,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1010,6 +1032,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1027,6 +1050,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1045,6 +1069,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1063,6 +1088,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  testBackendPoolID0,
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1080,6 +1106,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1103,6 +1130,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
@@ -1285,9 +1313,10 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		vmSetNameOfLB                  string
 		backendPoolID                  string
 		isStandardLB                   bool
+		testVM                         compute.VirtualMachine
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
+		vmListErr                      *retry.Error
 		nic                            network.Interface
 		nicGetErr                      *retry.Error
 		vmssPutErr                     *retry.Error
@@ -1306,6 +1335,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1326,6 +1356,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   false,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1346,6 +1377,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			vmSetNameOfLB:                  "",
 			backendPoolID:                  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb-internal/backendAddressPools/backendpool-1",
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1369,6 +1401,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
@@ -1633,9 +1666,10 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 		deleteFromVMSet     bool
 		isStandardLB        bool
 
+		testVM                         compute.VirtualMachine
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
-		vmListErr                      error
+		vmListErr                      *retry.Error
 		nic                            network.Interface
 		nicGetErr                      *retry.Error
 		nicPutErr                      *retry.Error
@@ -1651,6 +1685,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			backendAddressPools:            testBackendPools,
 			deleteFromVMSet:                true,
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1666,6 +1701,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			backendAddressPools:            nil,
 			deleteFromVMSet:                true,
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1681,6 +1717,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 			backendAddressPools:            testBackendPools,
 			deleteFromVMSet:                true,
 			isStandardLB:                   true,
+			testVM:                         testVM1,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
@@ -1707,6 +1744,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVM, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
