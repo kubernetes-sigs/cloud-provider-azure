@@ -294,7 +294,7 @@ func (d *deployer) createAKSWithCustomConfig() error {
 		return fmt.Errorf("failed to new managed cluster client with sub ID %q: %v", subscriptionID, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	poller, err := client.BeginCreateOrUpdate(ctx, d.ResourceGroupName, d.ClusterName, *mcConfig, nil)
@@ -305,7 +305,7 @@ func (d *deployer) createAKSWithCustomConfig() error {
 		return fmt.Errorf("failed to put resource: %v", err.Error())
 	}
 
-	klog.Infof("An AKS cluster %q in resource group %q is creating", d.ClusterName, d.ResourceGroupName)
+	klog.Infof("An AKS cluster %q in resource group %q is created", d.ClusterName, d.ResourceGroupName)
 	return nil
 }
 
@@ -318,7 +318,7 @@ func (d *deployer) getAKSKubeconfig() error {
 	}
 
 	var resp armcontainerservicev2.ManagedClustersClientListClusterUserCredentialsResponse
-	err = wait.PollImmediate(1*time.Minute, 20*time.Minute, func() (done bool, err error) {
+	err = wait.PollImmediate(1*time.Minute, 30*time.Minute, func() (done bool, err error) {
 		resp, err = client.ListClusterUserCredentials(ctx, d.ResourceGroupName, d.ClusterName, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "404 Not Found") {
@@ -394,36 +394,11 @@ func (d *deployer) Up() error {
 		return fmt.Errorf("failed to create the AKS cluster: %v", err)
 	}
 
-	// Wait for the cluster to be up
-	if err := d.waitForClusterUp(); err != nil {
-		return fmt.Errorf("failed to wait for cluster to be up: %v", err)
-	}
-
 	// Get the cluster kubeconfig
 	if err := d.getAKSKubeconfig(); err != nil {
 		return fmt.Errorf("failed to get AKS cluster kubeconfig: %v", err)
 	}
 	return nil
-}
-
-func (d *deployer) waitForClusterUp() error {
-	klog.Infof("Waiting for AKS cluster to be up")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	client, err := armcontainerservicev2.NewManagedClustersClient(subscriptionID, cred, nil)
-	if err != nil {
-		return fmt.Errorf("failed to new managed cluster client with sub ID %q: %v", subscriptionID, err)
-	}
-	err = wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
-		managedCluster, rerr := client.Get(ctx, d.ResourceGroupName, d.ClusterName, nil)
-		if rerr != nil {
-			return false, fmt.Errorf("failed to get managed cluster %q in resource group %q: %v", d.ClusterName, d.ResourceGroupName, rerr.Error())
-		}
-		return managedCluster.Properties.ProvisioningState != nil && *managedCluster.Properties.ProvisioningState == "Succeeded", nil
-	})
-	return err
 }
 
 func (d *deployer) IsUp() (up bool, err error) {

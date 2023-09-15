@@ -1219,13 +1219,17 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 				bp := (*lb.BackendAddressPools)[idx]
 				lbBackendPoolIPConfigs := bp.BackendIPConfigurations
 				ipConfigNum := 0
+				ipConfigIDs := []string{}
 				if lbBackendPoolIPConfigs != nil {
 					ipConfigNum = len(*lbBackendPoolIPConfigs)
+					for _, ipConfig := range *lbBackendPoolIPConfigs {
+						ipConfigIDs = append(ipConfigIDs, pointer.StringDeref(ipConfig.ID, ""))
+					}
 				}
 				if expectedNum == ipConfigNum {
 					utils.Logf("Number of IP configs in the LB backend pool %q matches expected number %d. Success", *bp.Name, expectedNum)
 				} else {
-					utils.Logf("Number of IP configs: %d in the LB backend pool %q, expected %d, will retry soon", ipConfigNum, *bp.Name, expectedNum)
+					utils.Logf("Number of IP configs: %d in the LB backend pool %q, expected %d, IP config IDs %q, will retry soon", ipConfigNum, *bp.Name, expectedNum, ipConfigIDs)
 					failed = true
 				}
 			}
@@ -1241,6 +1245,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 			bp := (*lb.BackendAddressPools)[idx]
 			lbBackendPoolIPs := bp.LoadBalancerBackendAddresses
 			ipNum := 0
+			ipConfigIDs := []string{}
 			if lbBackendPoolIPs != nil {
 				if utils.IsAutoscalingAKSCluster() {
 					// Autoscaling tests don't include IP based LB.
@@ -1252,6 +1257,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 						ipConfigID := pointer.StringDeref(ip.LoadBalancerBackendAddressPropertiesFormat.NetworkInterfaceIPConfiguration.ID, "")
 						if !strings.Contains(ipConfigID, utils.SystemPool) {
 							ipNum++
+							ipConfigIDs = append(ipConfigIDs, ipConfigID)
 						}
 					}
 				} else {
@@ -1261,7 +1267,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip string, expectedN
 			if ipNum == expectedNum {
 				utils.Logf("Number of IPs in the LB backend pool %q matches expected number %d. Success", *bp.Name, expectedNum)
 			} else {
-				utils.Logf("Number of IPs: %d in the LB backend pool %q, expected %d, will retry soon", ipNum, *bp.Name, expectedNum)
+				utils.Logf("Number of IPs: %d in the LB backend pool %q, expected %d, IP config IDs %q, will retry soon", ipNum, *bp.Name, expectedNum, ipConfigIDs)
 				failed = true
 			}
 		}
