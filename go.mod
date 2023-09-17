@@ -21,16 +21,16 @@ require (
 	golang.org/x/crypto v0.13.0
 	golang.org/x/sys v0.12.0
 	golang.org/x/text v0.13.0
-	k8s.io/api v0.26.8
+	k8s.io/api v0.26.9
 	k8s.io/apimachinery v0.26.9
 	k8s.io/apiserver v0.26.8
-	k8s.io/client-go v0.26.8
+	k8s.io/client-go v0.26.9
 	k8s.io/cloud-provider v0.26.8
-	k8s.io/component-base v0.26.8
+	k8s.io/component-base v0.26.9
 	k8s.io/component-helpers v0.26.8
 	k8s.io/controller-manager v0.26.8
 	k8s.io/klog/v2 v2.80.1
-	k8s.io/kubelet v0.26.8
+	k8s.io/kubelet v0.26.9
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
 	sigs.k8s.io/yaml v1.3.0
 )
@@ -99,7 +99,7 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.5 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.5 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.35.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.1 // indirect
 	go.opentelemetry.io/otel v1.10.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.10.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.10.0 // indirect
