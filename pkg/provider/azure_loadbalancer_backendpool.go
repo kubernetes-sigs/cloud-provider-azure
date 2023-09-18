@@ -352,7 +352,7 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, 
 						klog.Errorf("bc.GetBackendPrivateIPs for service (%s): GetNodeNameByIPConfigurationID failed with error: %v", serviceName, err)
 						continue
 					}
-					privateIPsSet, ok := bc.nodePrivateIPs[nodeName]
+					privateIPsSet, ok := bc.nodePrivateIPs[strings.ToLower(nodeName)]
 					if !ok {
 						klog.Warningf("bc.GetBackendPrivateIPs for service (%s): failed to get private IPs of node %s", serviceName, nodeName)
 						continue
@@ -658,7 +658,7 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 			bp := newBackendPools[i]
 			var nodeIPAddressesToBeDeleted []string
 			for nodeName := range bi.excludeLoadBalancerNodes {
-				for ip := range bi.nodePrivateIPs[nodeName] {
+				for ip := range bi.nodePrivateIPs[strings.ToLower(nodeName)] {
 					klog.V(2).Infof("bi.ReconcileBackendPools for service (%s): found unwanted node private IP %s, decouple it from the LB %s", serviceName, ip, lbName)
 					nodeIPAddressesToBeDeleted = append(nodeIPAddressesToBeDeleted, ip)
 				}

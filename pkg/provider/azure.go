@@ -1255,17 +1255,18 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 			az.unmanagedNodes.Delete(prevNode.ObjectMeta.Name)
 		}
 
+		// Remove from nodePrivateIPs cache.
+		for _, address := range getNodePrivateIPAddresses(prevNode) {
+			klog.V(6).Infof("removing IP address %s of the node %s", address, prevNode.Name)
+			az.nodePrivateIPs[prevNode.Name].Delete(address)
+			delete(az.nodePrivateIPToNodeNameMap, address)
+		}
+
 		// if the node is being deleted from the cluster, exclude it from load balancers
 		if newNode == nil {
 			az.excludeLoadBalancerNodes.Insert(prevNode.ObjectMeta.Name)
 			az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Delete(strings.ToLower(prevNode.ObjectMeta.Name))
-		}
-
-		// Remove from nodePrivateIPs cache.
-		for _, address := range getNodePrivateIPAddresses(prevNode) {
-			klog.V(4).Infof("removing IP address %s of the node %s", address, prevNode.Name)
-			az.nodePrivateIPs[prevNode.Name].Delete(address)
-			delete(az.nodePrivateIPToNodeNameMap, address)
+			delete(az.nodePrivateIPs, strings.ToLower(prevNode.Name))
 		}
 	}
 
@@ -1315,15 +1316,15 @@ func (az *Cloud) updateNodeCaches(prevNode, newNode *v1.Node) {
 
 		// Add to nodePrivateIPs cache
 		for _, address := range getNodePrivateIPAddresses(newNode) {
-			if az.nodePrivateIPs[newNode.Name] == nil {
-				az.nodePrivateIPs[newNode.Name] = sets.New[string]()
+			if az.nodePrivateIPs[strings.ToLower(newNode.Name)] == nil {
+				az.nodePrivateIPs[strings.ToLower(newNode.Name)] = sets.New[string]()
 			}
 			if az.nodePrivateIPToNodeNameMap == nil {
 				az.nodePrivateIPToNodeNameMap = make(map[string]string)
 			}
 
 			klog.V(6).Infof("adding IP address %s of the node %s", address, newNode.Name)
-			az.nodePrivateIPs[newNode.Name].Insert(address)
+			az.nodePrivateIPs[strings.ToLower(newNode.Name)].Insert(address)
 			az.nodePrivateIPToNodeNameMap[address] = newNode.Name
 		}
 	}
