@@ -57,6 +57,7 @@ const (
 	serverPort             = 80
 	alterNativeServicePort = 8080
 	testingPort            = 81
+	IPV6Prefix             = "IPv6"
 )
 
 var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnnotation), func() {
@@ -769,6 +770,85 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}
 	})
 
+	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-port' and port specific configs", func() {
+		By("Creating a service with health probe annotations")
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerHealthProbeNumOfProbe:                                      "5",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsNumOfProbe):    "3",
+			consts.ServiceAnnotationLoadBalancerHealthProbeInterval:                                        "15",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsProbeInterval): "10",
+			consts.ServiceAnnotationLoadBalancerHealthProbeProtocol:                                        "Http",
+			consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                                     "/",
+			consts.BuildHealthProbeAnnotationKeyForPort(serverPort, consts.HealthProbeParamsPort):          "10249",
+		}
+
+		// create service with given annotation and wait it to expose
+		publicIPs := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports, func(s *v1.Service) error {
+			s.Spec.HealthCheckNodePort = 32252
+			s.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+			return nil
+		})
+		defer func() {
+			By("Cleaning up service")
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(len(publicIPs)).NotTo(BeZero())
+		ids := []string{}
+		for _, publicIP := range publicIPs {
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
+			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
+			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
+			ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
+		}
+		utils.Logf("PIP frontend config IDs %q", ids)
+
+		var lb *network.LoadBalancer
+		var targetProbes []*network.Probe
+		expectedTargetProbesCount := 1
+		if tc.IPFamily == utils.DualStack {
+			expectedTargetProbesCount = 2
+		}
+		//wait for backend update
+		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
+			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
+			targetProbes = []*network.Probe{}
+			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
+				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				utils.Logf("One probe of LB is %q", *probe.Name)
+				probeSplit := strings.Split(*probe.Name, "-")
+				Expect(len(probeSplit)).NotTo(Equal(0))
+				probeSplitID := probeSplit[0]
+				if probeSplit[len(probeSplit)-1] == IPV6Prefix {
+					probeSplitID += "-" + probeSplit[len(probeSplit)-1]
+				}
+				for _, id := range ids {
+					if id == probeSplitID {
+						targetProbes = append(targetProbes, &probe)
+					}
+				}
+			}
+
+			utils.Logf("targetProbes count %d, expectedTargetProbes count %d", len(targetProbes), expectedTargetProbesCount)
+			return len(targetProbes) == expectedTargetProbesCount, nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Validating health probe configs")
+		for _, probe := range targetProbes {
+			if probe.ProbeThreshold != nil {
+				utils.Logf("Validating health probe config numberOfProbes")
+				Expect(*probe.ProbeThreshold).To(Equal(int32(3)))
+			}
+			if probe.IntervalInSeconds != nil {
+				utils.Logf("Validating health probe config intervalInSeconds")
+				Expect(*probe.IntervalInSeconds).To(Equal(int32(10)))
+			}
+			utils.Logf("Validating health probe config ProbeProtocolHTTP")
+			Expect(probe.Protocol).To(Equal(network.ProbeProtocolHTTP))
+		}
+	})
+
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe', 'service.beta.kubernetes.io/azure-load-balancer-health-probe-interval', 'service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol' and port specific configs", func() {
 		By("Creating a service with health probe annotations")
 		annotation := map[string]string{
@@ -813,7 +893,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
 				probeSplitID := probeSplit[0]
-				if probeSplit[len(probeSplit)-1] == "IPv6" {
+				if probeSplit[len(probeSplit)-1] == IPV6Prefix {
 					probeSplitID += "-" + probeSplit[len(probeSplit)-1]
 				}
 				for _, id := range ids {
@@ -883,7 +963,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
 				probeSplitID := probeSplit[0]
-				if probeSplit[len(probeSplit)-1] == "IPv6" {
+				if probeSplit[len(probeSplit)-1] == IPV6Prefix {
 					probeSplitID += "-" + probeSplit[len(probeSplit)-1]
 				}
 				for _, id := range ids {
