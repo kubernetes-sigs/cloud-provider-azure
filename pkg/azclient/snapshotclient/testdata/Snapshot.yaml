@@ -49,7 +49,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 2.261321605s
+        duration: 3.9563929s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -70,7 +70,7 @@ interactions:
                 - "122"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2023-01-02
         method: PUT
       response:
         proto: HTTP/2.0
@@ -83,7 +83,7 @@ interactions:
         body: "{\r\n  \"name\": \"test-disk\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk\",\r\n  \"type\": \"Microsoft.Compute/disks\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Empty\"\r\n    },\r\n    \"diskSizeGB\": 64,\r\n    \"provisioningState\": \"Updating\"\r\n  }\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -93,7 +93,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-01-02
             Pragma:
                 - no-cache
             Server:
@@ -104,12 +104,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/CreateUpdateDisks3Min;2998,Microsoft.Compute/CreateUpdateDisks30Min;24998
+                - Microsoft.Compute/CreateUpdateDisks3Min;2999,Microsoft.Compute/CreateUpdateDisks30Min;24997
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 202 Accepted
         code: 202
-        duration: 3.550839492s
+        duration: 5.90880434s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -124,7 +124,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -154,12 +154,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49995,Microsoft.Compute/GetOperation30Min;399995
+                - Microsoft.Compute/GetOperation3Min;49999,Microsoft.Compute/GetOperation30Min;399993
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 757.402398ms
+        duration: 3.761629053s
     - id: 3
       request:
         proto: HTTP/1.1
@@ -174,7 +174,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -204,12 +204,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14994,Microsoft.Compute/LowCostGet30Min;119987
+                - Microsoft.Compute/LowCostGet3Min;14995,Microsoft.Compute/LowCostGet30Min;119968
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 878.592002ms
+        duration: 1.073546787s
     - id: 4
       request:
         proto: HTTP/1.1
@@ -230,7 +230,7 @@ interactions:
                 - "224"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: PUT
       response:
         proto: HTTP/2.0
@@ -243,7 +243,7 @@ interactions:
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource\",\r\n  \"type\": \"Microsoft.Compute/snapshots\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Copy\",\r\n      \"sourceResourceId\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk\"\r\n    },\r\n    \"provisioningState\": \"Updating\"\r\n  }\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -253,7 +253,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-01-02
             Pragma:
                 - no-cache
             Server:
@@ -269,7 +269,7 @@ interactions:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 202 Accepted
         code: 202
-        duration: 2.007075005s
+        duration: 3.242128959s
     - id: 5
       request:
         proto: HTTP/1.1
@@ -284,7 +284,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -314,12 +314,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49993,Microsoft.Compute/GetOperation30Min;399993
+                - Microsoft.Compute/GetOperation3Min;49997,Microsoft.Compute/GetOperation30Min;399991
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 754.006502ms
+        duration: 858.519623ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -334,7 +334,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -364,12 +364,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14992,Microsoft.Compute/LowCostGet30Min;119985
+                - Microsoft.Compute/LowCostGet3Min;14992,Microsoft.Compute/LowCostGet30Min;119965
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 880.315502ms
+        duration: 2.644273397s
     - id: 7
       request:
         proto: HTTP/1.1
@@ -386,7 +386,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -416,12 +416,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14991,Microsoft.Compute/LowCostGet30Min;119984
+                - Microsoft.Compute/LowCostGet3Min;14990,Microsoft.Compute/LowCostGet30Min;119963
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 882.894898ms
+        duration: 1.601800267s
     - id: 8
       request:
         proto: HTTP/1.1
@@ -438,7 +438,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResourcenotfound?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResourcenotfound?api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -468,7 +468,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 245.409599ms
+        duration: 3.199219678s
     - id: 9
       request:
         proto: HTTP/1.1
@@ -489,7 +489,7 @@ interactions:
                 - "224"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: PUT
       response:
         proto: HTTP/2.0
@@ -502,7 +502,7 @@ interactions:
         body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource\",\r\n  \"type\": \"Microsoft.Compute/snapshots\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Copy\",\r\n      \"sourceResourceId\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk\"\r\n    },\r\n    \"diskSizeGB\": 64,\r\n    \"provisioningState\": \"Updating\"\r\n  }\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -512,7 +512,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-01-02
             Pragma:
                 - no-cache
             Server:
@@ -528,7 +528,7 @@ interactions:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 202 Accepted
         code: 202
-        duration: 1.002439594s
+        duration: 1.36357817s
     - id: 10
       request:
         proto: HTTP/1.1
@@ -543,7 +543,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -553,7 +553,7 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource\",\r\n  \"type\": \"Microsoft.Compute/snapshots\",\r\n  \"location\": \"eastus\",\r\n  \"sku\": {\r\n    \"name\": \"Standard_LRS\",\r\n    \"tier\": \"Standard\"\r\n  },\r\n  \"properties\": {\r\n    \"creationData\": {\r\n      \"createOption\": \"Copy\",\r\n      \"sourceResourceId\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk\",\r\n      \"sourceUniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n    },\r\n    \"diskSizeGB\": 64,\r\n    \"encryption\": {\r\n      \"type\": \"EncryptionAtRestWithPlatformKey\"\r\n    },\r\n    \"incremental\": false,\r\n    \"networkAccessPolicy\": \"AllowAll\",\r\n    \"publicNetworkAccess\": \"Enabled\",\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\",\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"diskState\": \"Unattached\",\r\n    \"diskSizeBytes\": 68719476736,\r\n    \"uniqueId\": \"00000000-0000-0000-0000-000000000000\"\r\n  }\r\n}\r\n  },\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
+        body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"properties\": {\r\n    \"output\": {\"name\":\"testResource\",\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource\",\"type\":\"Microsoft.Compute/snapshots\",\"location\":\"eastus\",\"sku\":{\"name\":\"Standard_LRS\",\"tier\":\"Standard\"},\"properties\":{\"creationData\":{\"createOption\":\"Copy\",\"sourceResourceId\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk\",\"sourceUniqueId\":\"00000000-0000-0000-0000-000000000000\"},\"diskSizeGB\":64,\"encryption\":{\"type\":\"EncryptionAtRestWithPlatformKey\"},\"incremental\":false,\"networkAccessPolicy\":\"AllowAll\",\"publicNetworkAccess\":\"Enabled\",\"timeCreated\":\"2001-02-03T04:05:06Z\",\"provisioningState\":\"Succeeded\",\"diskState\":\"Unattached\",\"diskSizeBytes\":68719476736,\"uniqueId\":\"00000000-0000-0000-0000-000000000000\"}}\r\n  },\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
@@ -573,12 +573,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49991,Microsoft.Compute/GetOperation30Min;399991
+                - Microsoft.Compute/GetOperation3Min;49994,Microsoft.Compute/GetOperation30Min;399988
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 721.429596ms
+        duration: 6.542731982s
     - id: 11
       request:
         proto: HTTP/1.1
@@ -593,7 +593,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -623,12 +623,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;14988,Microsoft.Compute/LowCostGet30Min;119981
+                - Microsoft.Compute/LowCostGet3Min;14986,Microsoft.Compute/LowCostGet30Min;119959
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 880.572195ms
+        duration: 24.295237035s
     - id: 12
       request:
         proto: HTTP/1.1
@@ -643,7 +643,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/snapshots/testResource?api-version=2023-01-02
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -656,7 +656,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -664,7 +664,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-01-02
             Pragma:
                 - no-cache
             Server:
@@ -675,12 +675,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/DeleteDisks3Min;2998,Microsoft.Compute/DeleteDisks30Min;23998
+                - Microsoft.Compute/DeleteDisks3Min;2989,Microsoft.Compute/DeleteDisks30Min;23952
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 202 Accepted
         code: 202
-        duration: 1.169665294s
+        duration: 1.510696433s
     - id: 13
       request:
         proto: HTTP/1.1
@@ -695,7 +695,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -725,12 +725,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49990,Microsoft.Compute/GetOperation30Min;399990
+                - Microsoft.Compute/GetOperation3Min;49993,Microsoft.Compute/GetOperation30Min;399987
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 737.088996ms
+        duration: 1.296368886s
     - id: 14
       request:
         proto: HTTP/1.1
@@ -745,7 +745,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Snapshot/providers/Microsoft.Compute/disks/test-disk?api-version=2023-01-02
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -758,7 +758,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -766,7 +766,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2022-07-02
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-01-02
             Pragma:
                 - no-cache
             Server:
@@ -777,12 +777,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/DeleteDisks3Min;2997,Microsoft.Compute/DeleteDisks30Min;23997
+                - Microsoft.Compute/DeleteDisks3Min;2986,Microsoft.Compute/DeleteDisks30Min;23949
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 202 Accepted
         code: 202
-        duration: 1.231336095s
+        duration: 2.616891884s
     - id: 15
       request:
         proto: HTTP/1.1
@@ -797,7 +797,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2022-07-02
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/DiskOperations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-01-02
         method: GET
       response:
         proto: HTTP/2.0
@@ -827,12 +827,12 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;49989,Microsoft.Compute/GetOperation30Min;399989
+                - Microsoft.Compute/GetOperation3Min;49992,Microsoft.Compute/GetOperation30Min;399986
             X-Ms-Served-By:
                 - 00000000-0000-0000-0000-000000000000_133114072196709900
         status: 200 OK
         code: 200
-        duration: 736.133697ms
+        duration: 882.752966ms
     - id: 16
       request:
         proto: HTTP/1.1
@@ -868,7 +868,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTTkFQU0hPVC1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTTkFQU0hPVC1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=638306291798069953&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=ijDniCOl-4dUDR7TNFlsqLBPCGDjqnCsW5CpZjP3Q2pkRC32U1FCyhIEX7qNdYyMlk0q-SrUQaKIDBYj6lmW4wxj7Lyx1UEuwxJFyB5NEMgkMuE5xIt-NTq773njY9Mzh_QEXPiew_KlLVWvlxC9n6ez1SGLRKPf2u1S01fKd7Twt53f_p421cSm01TeeI8DG_25pT8OYsctFI3X4MgXvbOOJxOmy7jmIAgnwUhvQbns5zm4xs76gzTaxGK1UKX_G0G9CrSv6e3R2fAWmEtej68aWJBY6EIdvglq-YSRzypDsU5cggcW5KCUfWEarPYHzkpWxZejijTc1myZvfVPoQ&h=8un1zyZKfxULCGksbOlOolqQ0RpLt1ZopRP6dJMh8tg
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -877,4 +877,4 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 3.143724288s
+        duration: 2.570979919s

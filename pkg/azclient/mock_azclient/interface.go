@@ -29,6 +29,7 @@ import (
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	interfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
+	ipgroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	loadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	managedclusterclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
 	privateendpointclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
@@ -122,6 +123,20 @@ func (m *MockClientFactory) GetinterfaceclientInterface() interfaceclient.Interf
 func (mr *MockClientFactoryMockRecorder) GetinterfaceclientInterface() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetinterfaceclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetinterfaceclientInterface))
+}
+
+// GetipgroupclientInterface mocks base method.
+func (m *MockClientFactory) GetipgroupclientInterface() ipgroupclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetipgroupclientInterface")
+	ret0, _ := ret[0].(ipgroupclient.Interface)
+	return ret0
+}
+
+// GetipgroupclientInterface indicates an expected call of GetipgroupclientInterface.
+func (mr *MockClientFactoryMockRecorder) GetipgroupclientInterface() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetipgroupclientInterface", reflect.TypeOf((*MockClientFactory)(nil).GetipgroupclientInterface))
 }
 
 // GetloadbalancerclientInterface mocks base method.

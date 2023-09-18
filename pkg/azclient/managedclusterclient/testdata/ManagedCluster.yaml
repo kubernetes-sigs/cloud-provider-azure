@@ -49,7 +49,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 2.451323249s
+        duration: 8.215314549s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -70,7 +70,7 @@ interactions:
                 - "567"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -78,7 +78,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2871
+        content_length: 2944
         uncompressed: false
         body: |-
             {
@@ -91,11 +91,11 @@ interactions:
                "powerState": {
                 "code": "Running"
                },
-               "kubernetesVersion": "1.25.6",
-               "currentKubernetesVersion": "1.25.6",
+               "kubernetesVersion": "1.26.6",
+               "currentKubernetesVersion": "1.26.6",
                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+               "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                "agentPoolProfiles": [
                 {
                  "name": "agentpool1",
@@ -110,12 +110,12 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "orchestratorVersion": "1.25.6",
-                 "currentOrchestratorVersion": "1.25.6",
+                 "orchestratorVersion": "1.26.6",
+                 "currentOrchestratorVersion": "1.26.6",
                  "mode": "User",
                  "osType": "Linux",
                  "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                  "enableFIPS": false
                 }
                ],
@@ -158,6 +158,9 @@ interactions:
                 ]
                },
                "maxAgentPools": 100,
+               "autoUpgradeProfile": {
+                "nodeOSUpgradeChannel": "NodeImage"
+               },
                "securityProfile": {},
                "storageProfile": {
                 "diskCSIDriver": {
@@ -178,7 +181,7 @@ interactions:
               "identity": {
                "type": "SystemAssigned",
                "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "00000000-0000-0000-0000-000000000000"
+               "tenantId": "tenantid"
               },
               "sku": {
                "name": "Base",
@@ -187,26 +190,24 @@ interactions:
              }
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a54%3a51&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=n186IHhvrPOnzbwFXYDdO7qe4P_O2ZeD_Z7Vpt6hST9EJXVMpVQLSjuQZnpzcY-_AlyqRHyKJG-EurQox4Vi7h5OfXKGCEsWdO7E6yqotgkFWPXblqJotm496wa8c3B7SioERCO1Gd4aSCSc5qd5FgIE01uXCGAnFXFnPkauCg8v-LLN6Ldw9NTmVqJR6faSq_QSan5XM7ykYQL5UBpx9QafplAKeFTcHPYgcBYr4hyFUj8vp1-9kscTKwy6qVd0YiCaEVfxO5MvGPH2ySOwMgaIXwm45DE8idQ1a5X5z_jGvewqwqJy4RZVwwHyhI_Cb4SgJ_p4_VLXCUBJiFuXBA&h=nmPoJpbxqljs98e2o5Mvn9G96bnM09spB0NHSUsa2Dg
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2871"
+                - "2944"
             Content-Type:
                 - application/json
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 11.410005559s
+        duration: 43.448065039s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -221,7 +222,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a54%3a51&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=n186IHhvrPOnzbwFXYDdO7qe4P_O2ZeD_Z7Vpt6hST9EJXVMpVQLSjuQZnpzcY-_AlyqRHyKJG-EurQox4Vi7h5OfXKGCEsWdO7E6yqotgkFWPXblqJotm496wa8c3B7SioERCO1Gd4aSCSc5qd5FgIE01uXCGAnFXFnPkauCg8v-LLN6Ldw9NTmVqJR6faSq_QSan5XM7ykYQL5UBpx9QafplAKeFTcHPYgcBYr4hyFUj8vp1-9kscTKwy6qVd0YiCaEVfxO5MvGPH2ySOwMgaIXwm45DE8idQ1a5X5z_jGvewqwqJy4RZVwwHyhI_Cb4SgJ_p4_VLXCUBJiFuXBA&h=nmPoJpbxqljs98e2o5Mvn9G96bnM09spB0NHSUsa2Dg
         method: GET
       response:
         proto: HTTP/2.0
@@ -257,7 +258,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 746.501672ms
+        duration: 11.916355912s
     - id: 3
       request:
         proto: HTTP/1.1
@@ -272,7 +273,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -293,11 +294,11 @@ interactions:
                "powerState": {
                 "code": "Running"
                },
-               "kubernetesVersion": "1.25.6",
-               "currentKubernetesVersion": "1.25.6",
+               "kubernetesVersion": "1.26.6",
+               "currentKubernetesVersion": "1.26.6",
                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+               "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                "agentPoolProfiles": [
                 {
                  "name": "agentpool1",
@@ -312,12 +313,12 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "orchestratorVersion": "1.25.6",
-                 "currentOrchestratorVersion": "1.25.6",
+                 "orchestratorVersion": "1.26.6",
+                 "currentOrchestratorVersion": "1.26.6",
                  "mode": "User",
                  "osType": "Linux",
                  "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                  "enableFIPS": false
                 }
                ],
@@ -372,6 +373,9 @@ interactions:
                  "objectId": "00000000-0000-0000-0000-000000000000"
                 }
                },
+               "autoUpgradeProfile": {
+                "nodeOSUpgradeChannel": "NodeImage"
+               },
                "securityProfile": {},
                "storageProfile": {
                 "diskCSIDriver": {
@@ -392,7 +396,7 @@ interactions:
               "identity": {
                "type": "SystemAssigned",
                "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "00000000-0000-0000-0000-000000000000"
+               "tenantId": "tenantid"
               },
               "sku": {
                "name": "Base",
@@ -408,8 +412,6 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             Vary:
@@ -418,7 +420,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.202412467s
+        duration: 7.147063343s
     - id: 4
       request:
         proto: HTTP/1.1
@@ -435,7 +437,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -456,11 +458,11 @@ interactions:
                "powerState": {
                 "code": "Running"
                },
-               "kubernetesVersion": "1.25.6",
-               "currentKubernetesVersion": "1.25.6",
+               "kubernetesVersion": "1.26.6",
+               "currentKubernetesVersion": "1.26.6",
                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+               "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                "agentPoolProfiles": [
                 {
                  "name": "agentpool1",
@@ -475,12 +477,12 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "orchestratorVersion": "1.25.6",
-                 "currentOrchestratorVersion": "1.25.6",
+                 "orchestratorVersion": "1.26.6",
+                 "currentOrchestratorVersion": "1.26.6",
                  "mode": "User",
                  "osType": "Linux",
                  "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                  "enableFIPS": false
                 }
                ],
@@ -535,6 +537,9 @@ interactions:
                  "objectId": "00000000-0000-0000-0000-000000000000"
                 }
                },
+               "autoUpgradeProfile": {
+                "nodeOSUpgradeChannel": "NodeImage"
+               },
                "securityProfile": {},
                "storageProfile": {
                 "diskCSIDriver": {
@@ -555,7 +560,7 @@ interactions:
               "identity": {
                "type": "SystemAssigned",
                "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "00000000-0000-0000-0000-000000000000"
+               "tenantId": "tenantid"
               },
               "sku": {
                "name": "Base",
@@ -571,8 +576,6 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             Vary:
@@ -581,7 +584,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.426474226s
+        duration: 1.581736485s
     - id: 5
       request:
         proto: HTTP/1.1
@@ -598,7 +601,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -628,7 +631,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 240.995174ms
+        duration: 327.224546ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -649,7 +652,7 @@ interactions:
                 - "567"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -670,11 +673,11 @@ interactions:
                "powerState": {
                 "code": "Running"
                },
-               "kubernetesVersion": "1.25.6",
-               "currentKubernetesVersion": "1.25.6",
+               "kubernetesVersion": "1.26.6",
+               "currentKubernetesVersion": "1.26.6",
                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+               "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                "agentPoolProfiles": [
                 {
                  "name": "agentpool1",
@@ -689,12 +692,12 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "orchestratorVersion": "1.25.6",
-                 "currentOrchestratorVersion": "1.25.6",
+                 "orchestratorVersion": "1.26.6",
+                 "currentOrchestratorVersion": "1.26.6",
                  "mode": "User",
                  "osType": "Linux",
                  "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                  "enableFIPS": false
                 }
                ],
@@ -749,6 +752,9 @@ interactions:
                  "objectId": "00000000-0000-0000-0000-000000000000"
                 }
                },
+               "autoUpgradeProfile": {
+                "nodeOSUpgradeChannel": "NodeImage"
+               },
                "securityProfile": {},
                "storageProfile": {
                 "diskCSIDriver": {
@@ -769,7 +775,7 @@ interactions:
               "identity": {
                "type": "SystemAssigned",
                "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "00000000-0000-0000-0000-000000000000"
+               "tenantId": "tenantid"
               },
               "sku": {
                "name": "Base",
@@ -778,7 +784,7 @@ interactions:
              }
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a58%3a01&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=ONxcPYNhQeJ-U-VYTf-0psphxdnIt5oIXxkGp5muWc4u28vxmnlMbX5d2aKZzRFDRDYSNgkJUMn_NHJaza10OfP_1W2lEIue0c73T5fwNtqXIY6hQeKnVEAYjHwaKoA9A_oRPYi6KXXTrfmtXswOR3A4tzJhQ0uk2B0_Xh3lwZ0tCn6smLdsDcr-XoE0SPPajjM5aqVzK7Djf-gr3jUS1e2TPUtvXWe8bxD2nTZoaRY8hvxf_4TjJYwZRXWw7yucQxUk5e2r0bZ0NhYJV8MgHAiw87bDqNmwbtqM1xtlyiQKhTkStB0627RbuK9bm4GIQ1puxpTtSMwoIirZXKgmZw&h=GQ83gtgQtmPuk-1Q1jjROyymhpO0obOzgkz18u7nN5w
             Cache-Control:
                 - no-cache
             Content-Type:
@@ -787,8 +793,6 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             Vary:
@@ -797,7 +801,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 6.6446454s
+        duration: 9.088488533s
     - id: 7
       request:
         proto: HTTP/1.1
@@ -812,7 +816,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a58%3a01&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=ONxcPYNhQeJ-U-VYTf-0psphxdnIt5oIXxkGp5muWc4u28vxmnlMbX5d2aKZzRFDRDYSNgkJUMn_NHJaza10OfP_1W2lEIue0c73T5fwNtqXIY6hQeKnVEAYjHwaKoA9A_oRPYi6KXXTrfmtXswOR3A4tzJhQ0uk2B0_Xh3lwZ0tCn6smLdsDcr-XoE0SPPajjM5aqVzK7Djf-gr3jUS1e2TPUtvXWe8bxD2nTZoaRY8hvxf_4TjJYwZRXWw7yucQxUk5e2r0bZ0NhYJV8MgHAiw87bDqNmwbtqM1xtlyiQKhTkStB0627RbuK9bm4GIQ1puxpTtSMwoIirZXKgmZw&h=GQ83gtgQtmPuk-1Q1jjROyymhpO0obOzgkz18u7nN5w
         method: GET
       response:
         proto: HTTP/2.0
@@ -848,7 +852,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 809.936325ms
+        duration: 6.584162537s
     - id: 8
       request:
         proto: HTTP/1.1
@@ -863,7 +867,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -884,11 +888,11 @@ interactions:
                "powerState": {
                 "code": "Running"
                },
-               "kubernetesVersion": "1.25.6",
-               "currentKubernetesVersion": "1.25.6",
+               "kubernetesVersion": "1.26.6",
+               "currentKubernetesVersion": "1.26.6",
                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+               "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                "agentPoolProfiles": [
                 {
                  "name": "agentpool1",
@@ -903,12 +907,12 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "orchestratorVersion": "1.25.6",
-                 "currentOrchestratorVersion": "1.25.6",
+                 "orchestratorVersion": "1.26.6",
+                 "currentOrchestratorVersion": "1.26.6",
                  "mode": "User",
                  "osType": "Linux",
                  "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                  "enableFIPS": false
                 }
                ],
@@ -963,6 +967,9 @@ interactions:
                  "objectId": "00000000-0000-0000-0000-000000000000"
                 }
                },
+               "autoUpgradeProfile": {
+                "nodeOSUpgradeChannel": "NodeImage"
+               },
                "securityProfile": {},
                "storageProfile": {
                 "diskCSIDriver": {
@@ -983,7 +990,7 @@ interactions:
               "identity": {
                "type": "SystemAssigned",
                "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "00000000-0000-0000-0000-000000000000"
+               "tenantId": "tenantid"
               },
               "sku": {
                "name": "Base",
@@ -999,8 +1006,6 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             Vary:
@@ -1009,7 +1014,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.362617287s
+        duration: 1.698228803s
     - id: 9
       request:
         proto: HTTP/1.1
@@ -1026,7 +1031,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1049,11 +1054,11 @@ interactions:
                  "powerState": {
                   "code": "Running"
                  },
-                 "kubernetesVersion": "1.25.6",
-                 "currentKubernetesVersion": "1.25.6",
+                 "kubernetesVersion": "1.26.6",
+                 "currentKubernetesVersion": "1.26.6",
                  "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                 "fqdn": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.hcp.eastus.azmk8s.io",
-                 "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-m56p3nle.portal.hcp.eastus.azmk8s.io",
+                 "fqdn": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.hcp.eastus.azmk8s.io",
+                 "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-mt8uxwoe.portal.hcp.eastus.azmk8s.io",
                  "agentPoolProfiles": [
                   {
                    "name": "agentpool1",
@@ -1068,12 +1073,12 @@ interactions:
                    "powerState": {
                     "code": "Running"
                    },
-                   "orchestratorVersion": "1.25.6",
-                   "currentOrchestratorVersion": "1.25.6",
+                   "orchestratorVersion": "1.26.6",
+                   "currentOrchestratorVersion": "1.26.6",
                    "mode": "User",
                    "osType": "Linux",
                    "osSKU": "Ubuntu",
-                   "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202306.01.0",
+                   "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202308.28.0",
                    "enableFIPS": false
                   }
                  ],
@@ -1128,6 +1133,9 @@ interactions:
                    "objectId": "00000000-0000-0000-0000-000000000000"
                   }
                  },
+                 "autoUpgradeProfile": {
+                  "nodeOSUpgradeChannel": "NodeImage"
+                 },
                  "securityProfile": {},
                  "storageProfile": {
                   "diskCSIDriver": {
@@ -1148,7 +1156,7 @@ interactions:
                 "identity": {
                  "type": "SystemAssigned",
                  "principalId": "00000000-0000-0000-0000-000000000000",
-                 "tenantId": "00000000-0000-0000-0000-000000000000"
+                 "tenantId": "tenantid"
                 },
                 "sku": {
                  "name": "Base",
@@ -1166,8 +1174,6 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             Vary:
@@ -1176,7 +1182,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.369906881s
+        duration: 4.442299266s
     - id: 10
       request:
         proto: HTTP/1.1
@@ -1193,7 +1199,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1223,7 +1229,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 110.346653ms
+        duration: 1.714082391s
     - id: 11
       request:
         proto: HTTP/1.1
@@ -1240,7 +1246,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-07-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1253,7 +1259,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a59%3a45&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=d8kCldQRARTDIYONNCOPz9B1pTTce4ANhizBGMI1j9fo_58NP9YsKb6V2zwd777xTCZub3UwVxGzLmvxKa-3wk-LbOhzC6s5l_hPDDjFFDw_uczMbrNPCee461we2xpjZ0jw_A19pwh1lDvkhYVXNIcYMLyivioeizqT_urrmcQdBtBULtYonAV5Tq11wZMgbL8wLNN0y0arYBo2PPr0dl6liWorqz0t9TubLIYNRhu3ZPkHOZgL_XRf4qhjECl13Q7VjdYG4Q2wRxKLDhHuQyTEatuVYZYYe85V05p22krFHyGvuT6KWxgAIdXsjm7u5MZaGe-J45lW_Ol61v9CpA&h=8LuvPJs-eFTzOtscs5SY-Du9Py8VXO9IgH8qf_dw_J8
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1261,18 +1267,16 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operationresults/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operationresults/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a59%3a45&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=jGwKFkf3IpSV0YdXkFxMDdmnubfqTZnYrwYXmzZgvJy-rwSyXRZ_HBvQlsoFzFJjgZvs5dv9dXo4RHR3VZ-97RmA0VWIJ6GfxTLp9JfY3miwHt6LkJyZadwMhdk11L3wbjeepUoaxCmYNuH4Ko21mZdztn_ll2wmwsu2F_XNsgNvvvtDvdvsPimVS7eI1hwRqODZ70JClNviuy-mZCDOMJ1y7ysvFbcymatENXGgelVHZy2Ns2KA1HvRDATaO7CbSm_5tekySrA-GS-wy5AovFjiGAk2II0ScE7ngMYYPAYUQIaE4-aThvQJoq9T3qrz0UgvBL4qW6uX58TbV0jjOQ&h=Qq-i0Ny1Cubtb8-ksWE5--CEbS42WEh9cZZxK5js7g4
             Pragma:
                 - no-cache
-            Server:
-                - nginx
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 1.650114333s
+        duration: 2.043251779s
     - id: 12
       request:
         proto: HTTP/1.1
@@ -1287,7 +1291,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=2023-09-18T10%3a59%3a45&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=d8kCldQRARTDIYONNCOPz9B1pTTce4ANhizBGMI1j9fo_58NP9YsKb6V2zwd777xTCZub3UwVxGzLmvxKa-3wk-LbOhzC6s5l_hPDDjFFDw_uczMbrNPCee461we2xpjZ0jw_A19pwh1lDvkhYVXNIcYMLyivioeizqT_urrmcQdBtBULtYonAV5Tq11wZMgbL8wLNN0y0arYBo2PPr0dl6liWorqz0t9TubLIYNRhu3ZPkHOZgL_XRf4qhjECl13Q7VjdYG4Q2wRxKLDhHuQyTEatuVYZYYe85V05p22krFHyGvuT6KWxgAIdXsjm7u5MZaGe-J45lW_Ol61v9CpA&h=8LuvPJs-eFTzOtscs5SY-Du9Py8VXO9IgH8qf_dw_J8
         method: GET
       response:
         proto: HTTP/2.0
@@ -1323,7 +1327,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 762.923054ms
+        duration: 39.65479095s
     - id: 13
       request:
         proto: HTTP/1.1
@@ -1359,7 +1363,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=2023-09-18T11%3a03%3a53&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=INc6h1kCjJTJ_B91imOimHa3v0Kg-4S3ORKpdaKvqpfsJ_kCsQrZX1WyKJXvf4iVBXVxZ4q1ymQh9D_35Je5V_QH1TW55DWfbbVx2deGv0Zg5R8JA9OR3BFpmJTDdJ1T-SZ2W2FdzPstGbP8oxgBv6b9aTWxxCFWgIBHMIGuQzr96Frx-oVUjKqiFwOeMqYiUjNS8dI12wXrH3TcgUnWUQMehmcxIaEfJiye3ovvN_BiHg5mnB0PVbSHcTbW0OeqomrjCokpGGdNYVUOgzjF5lVmvNnnQvQOyIH8qIyNKs5q2EG0UKxYR7DpJUSb9jDv3o6B4dPbbWasu-DJAb3ygg&h=fPOnyth6jBN6tkrj4omih5McpMmDQEbbr-eHRikH4Ss
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1368,4 +1372,4 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 3.382691939s
+        duration: 51.684577242s

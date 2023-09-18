@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 

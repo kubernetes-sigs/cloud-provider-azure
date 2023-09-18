@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer/mock"
 )
 

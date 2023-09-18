@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
@@ -51,6 +52,7 @@ type ClientFactoryImpl struct {
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     diskclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
+	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
 	managedclusterclientInterface           managedclusterclient.Interface
 	privateendpointclientInterface          privateendpointclient.Interface
@@ -133,6 +135,20 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {ipgroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient Interface ipGroupRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	//add ratelimit policy
+	ratelimitOption = config.GetRateLimitConfig("ipGroupRateLimit")
+	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	ipgroupclientInterface, err := ipgroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +349,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
 		interfaceclientInterface:                interfaceclientInterface,
+		ipgroupclientInterface:                  ipgroupclientInterface,
 		loadbalancerclientInterface:             loadbalancerclientInterface,
 		managedclusterclientInterface:           managedclusterclientInterface,
 		privateendpointclientInterface:          privateendpointclientInterface,
@@ -364,6 +381,10 @@ func (factory *ClientFactoryImpl) GetdiskclientInterface() diskclient.Interface 
 
 func (factory *ClientFactoryImpl) GetinterfaceclientInterface() interfaceclient.Interface {
 	return factory.interfaceclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetipgroupclientInterface() ipgroupclient.Interface {
+	return factory.ipgroupclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetloadbalancerclientInterface() loadbalancerclient.Interface {
