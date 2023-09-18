@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
@@ -43,6 +44,7 @@ type ClientFactory interface {
 	GetdeploymentclientInterface() deploymentclient.Interface
 	GetdiskclientInterface() diskclient.Interface
 	GetinterfaceclientInterface() interfaceclient.Interface
+	GetipgroupclientInterface() ipgroupclient.Interface
 	GetloadbalancerclientInterface() loadbalancerclient.Interface
 	GetmanagedclusterclientInterface() managedclusterclient.Interface
 	GetprivateendpointclientInterface() privateendpointclient.Interface
