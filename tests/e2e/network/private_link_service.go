@@ -145,6 +145,35 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		Expect(*pls.Name).To(Equal(plsName))
 	})
 
+	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-resource-group'", func() {
+		By("creating a test resource group")
+		rg, cleanup := utils.CreateTestResourceGroup(tc)
+		defer cleanup(pointer.StringDeref(rg.Name, ""))
+
+		By("creating a test pls specifying the test resource group")
+		plsName := "testpls"
+		annotation := map[string]string{
+			consts.ServiceAnnotationLoadBalancerInternal: "true",
+			consts.ServiceAnnotationPLSCreation:          "true",
+			consts.ServiceAnnotationPLSName:              plsName,
+			consts.ServiceAnnotationPLSResourceGroup:     pointer.StringDeref(rg.Name, ""),
+		}
+
+		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, serviceName, ns.Name, labels, annotation, ports)
+		defer func() {
+			utils.Logf("cleaning up test service %s", serviceName)
+			err := utils.DeleteService(cs, ns.Name, serviceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
+		utils.Logf("Get Internal IP: %s", ip)
+
+		// get pls from azure client
+		pls := getPrivateLinkServiceFromIP(tc, ip, pointer.StringDeref(rg.Name, ""), "", plsName)
+		Expect(*pls.Name).To(Equal(plsName))
+	})
+
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-ip-configuration-subnet'", func() {
 		subnetName := "pls-subnet"
 		subnet, isNew := createNewSubnet(tc, subnetName)
