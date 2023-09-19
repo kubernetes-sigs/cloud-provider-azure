@@ -45,11 +45,15 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 9BDA4D1B172E4D4E883A45B6CF392F50 Ref B: TYO201100117047 Ref C: 2023-09-19T02:02:50Z'
         status: 201 Created
         code: 201
-        duration: 9.787573248s
+        duration: 3.268422321s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -70,7 +74,7 @@ interactions:
                 - "116"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -85,7 +89,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -96,16 +100,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 8D7181EFDFFF497E8A725AB7161AC6EA Ref B: TYO201100117047 Ref C: 2023-09-19T02:02:53Z'
         status: 201 Created
         code: 201
-        duration: 5.466189468s
+        duration: 4.473596272s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -120,7 +125,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -128,30 +133,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: CB4BF692E2614E16A42FEFF3665C4F6E Ref B: TYO201100117047 Ref C: 2023-09-19T02:02:58Z'
         status: 200 OK
         code: 200
-        duration: 935.920599ms
+        duration: 1.278242815s
     - id: 3
       request:
         proto: HTTP/1.1
@@ -166,7 +172,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,12 +180,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"172.174.27.209","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        content_length: 611
+        uncompressed: false
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"20.163.131.88","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "611"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -188,39 +196,38 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 533F6B8C61454D19955F3236EF436337 Ref B: TYO201100117047 Ref C: 2023-09-19T02:02:59Z'
         status: 200 OK
         code: 200
-        duration: 1.10079032s
+        duration: 448.167229ms
     - id: 4
       request:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 69
+        content_length: 68
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"ipAddresses":["172.174.27.209"]}}'
+        body: '{"location":"eastus","properties":{"ipAddresses":["20.163.131.88"]}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "69"
+                - "68"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -228,31 +235,33 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 459
+        content_length: 458
         uncompressed: false
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"172.174.27.209\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"20.163.131.88\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "459"
+                - "458"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 2EAE998EEAA34051B2860EE93C96BFCA Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:00Z'
         status: 201 Created
         code: 201
-        duration: 7.380506242s
+        duration: 6.850054222s
     - id: 5
       request:
         proto: HTTP/1.1
@@ -267,7 +276,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -275,29 +284,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 29
+        uncompressed: false
         body: "{\r\n  \"status\": \"Succeeded\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "29"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 4631EC58BA5D432497A314CB16D0CD99 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:17Z'
         status: 200 OK
         code: 200
-        duration: 1.792626742s
+        duration: 1.616749056s
     - id: 6
       request:
         proto: HTTP/1.1
@@ -312,7 +323,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -320,12 +331,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"172.174.27.209\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        content_length: 459
+        uncompressed: false
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"20.163.131.88\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -334,17 +347,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: BF6B7D51D6FF4145BF614DF838382D44 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:18Z'
         status: 200 OK
         code: 200
-        duration: 1.572144506s
+        duration: 1.016621157s
     - id: 7
       request:
         proto: HTTP/1.1
@@ -361,7 +374,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -369,12 +382,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"172.174.27.209\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        content_length: 459
+        uncompressed: false
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"20.163.131.88\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -383,17 +398,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: E4A6DD5896D04F579DF5080CD95F2FEE Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:19Z'
         status: 200 OK
         code: 200
-        duration: 1.545115027s
+        duration: 1.412303112s
     - id: 8
       request:
         proto: HTTP/1.1
@@ -410,7 +425,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResourcenotfound?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResourcenotfound?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -434,34 +449,38 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
+            X-Msedge-Ref:
+                - 'Ref A: 4C57FF4710D64AAB89945885F3D37AD3 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:21Z'
         status: 404 Not Found
         code: 404
-        duration: 351.385049ms
+        duration: 280.470089ms
     - id: 9
       request:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 69
+        content_length: 68
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"location":"eastus","properties":{"ipAddresses":["172.174.27.209"]}}'
+        body: '{"location":"eastus","properties":{"ipAddresses":["20.163.131.88"]}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "69"
+                - "68"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -469,31 +488,33 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"172.174.27.209\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        content_length: 458
+        uncompressed: false
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"20.163.131.88\"\r\n    ],\r\n    \"provisioningState\": \"Updating\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "458"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 441D2002F87E4EB8B81B3C9113D5CC7A Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:21Z'
         status: 200 OK
         code: 200
-        duration: 1.702345729s
+        duration: 2.085403813s
     - id: 10
       request:
         proto: HTTP/1.1
@@ -508,7 +529,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/nfvOperations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -516,29 +537,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 29
+        uncompressed: false
         body: "{\r\n  \"status\": \"Succeeded\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "29"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 78AEB89559FF4BCFA8318B1CAE81CE18 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:33Z'
         status: 200 OK
         code: 200
-        duration: 1.764552841s
+        duration: 970.53571ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -553,7 +576,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -561,12 +584,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"172.174.27.209\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
+        content_length: 459
+        uncompressed: false
+        body: "{\r\n  \"properties\": {\r\n    \"firewalls\": [],\r\n    \"firewallPolicies\": [],\r\n    \"ipAddresses\": [\r\n      \"20.163.131.88\"\r\n    ],\r\n    \"provisioningState\": \"Succeeded\"\r\n  },\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n  \"name\": \"testResource\",\r\n  \"type\": \"Microsoft.Network/IpGroups\",\r\n  \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n  \"location\": \"eastus\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "459"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -575,17 +600,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 5E09EDB7F97E4CB9968D8301FE5BD93F Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:34Z'
         status: 200 OK
         code: 200
-        duration: 1.140794923s
+        duration: 1.057473913s
     - id: 12
       request:
         proto: HTTP/1.1
@@ -602,7 +627,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -610,29 +635,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"properties\": {\r\n        \"firewalls\": [],\r\n        \"firewallPolicies\": [],\r\n        \"ipAddresses\": [\r\n          \"172.174.27.209\"\r\n        ],\r\n        \"provisioningState\": \"Succeeded\"\r\n      },\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n      \"name\": \"testResource\",\r\n      \"type\": \"Microsoft.Network/IpGroups\",\r\n      \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n      \"location\": \"eastus\"\r\n    }\r\n  ]\r\n}"
+        content_length: 544
+        uncompressed: false
+        body: "{\r\n  \"value\": [\r\n    {\r\n      \"properties\": {\r\n        \"firewalls\": [],\r\n        \"firewallPolicies\": [],\r\n        \"ipAddresses\": [\r\n          \"20.163.131.88\"\r\n        ],\r\n        \"provisioningState\": \"Succeeded\"\r\n      },\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource\",\r\n      \"name\": \"testResource\",\r\n      \"type\": \"Microsoft.Network/IpGroups\",\r\n      \"etag\": \"00000000-0000-0000-0000-000000000000\",\r\n      \"location\": \"eastus\"\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "544"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 61C34A637E444619833B50F957EF215B Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:35Z'
         status: 200 OK
         code: 200
-        duration: 2.43693424s
+        duration: 1.441597511s
     - id: 13
       request:
         proto: HTTP/1.1
@@ -649,7 +676,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroupnotfound/providers/Microsoft.Network/ipGroups?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroupnotfound/providers/Microsoft.Network/ipGroups?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -673,13 +700,17 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
+            X-Msedge-Ref:
+                - 'Ref A: A43D980795F5414A9CA5CDB45FE04288 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:36Z'
         status: 404 Not Found
         code: 404
-        duration: 933.866068ms
+        duration: 121.531651ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -696,7 +727,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/ipGroups/testResource?api-version=2023-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -716,15 +747,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 471A5284881C4973B08F409604C927AD Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:37Z'
         status: 200 OK
         code: 200
-        duration: 2.659661821s
+        duration: 6.041691379s
     - id: 15
       request:
         proto: HTTP/1.1
@@ -741,7 +774,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-IPGroup/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2023-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -756,7 +789,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -764,19 +797,20 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: D6C67286327444D2A0414D9DE00781FC Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:43Z'
         status: 202 Accepted
         code: 202
-        duration: 2.530231677s
+        duration: 1.300775801s
     - id: 16
       request:
         proto: HTTP/1.1
@@ -791,7 +825,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -799,30 +833,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 1AB9648B8D8E41E1A497FBD2B992B705 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:54Z'
         status: 200 OK
         code: 200
-        duration: 755.682848ms
+        duration: 274.959585ms
     - id: 17
       request:
         proto: HTTP/1.1
@@ -858,13 +893,17 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRJUEdST1VQLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&t=638306347961517159&c=MIIHADCCBeigAwIBAgITHgMhaM4gZ0HzxBWAuAAAAyFozjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMDMxNzU2WhcNMjQwNzI3MDMxNzU2WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOOzhNB70ZBwsbp8jfRR_PKOMG_uCDbegB2_gFDOKZMO_FN_JbJRPNh1h7ZNDoukj9oG4tI7KLdPeVJZlY-rrXNZ1uYNSQVjW_5Df4MuI-KyTpSFoCOp3TiwuAn-BOqW0MbJxIdEcFYpuGolWK8LFJxpm0yjCkOhdjDgZ4330_2_NIxXUjUwfP14yHf-Hj4MZrzErcHta1wJw_VR3KpxZ_AHpWoVqjotRTeBsvSM0ooxDMwWCEtBiuwlT_mknn_HjKB4gZJz__vVudNZOpMC9LfSwWD6ARuKpft-igloqK_8Renvbqzp8UUzhrGEqAiaiLIdpGEo_2Q-2htJ3trviRkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSoHbW7ynocEyY6SmRonoHwiWsl0DAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAKYeWfNeK4--RDWDXAAns3GQxhL134SJ84r6XxuYE2VaF-1rZtyO5_tXB2JqwHLAAGJYdb2twYqXxZR3p1gyudp9OCvlaHAqZ4ZP_2Spi2mNbemr8GEaopF7f3gXpstAzwJjvAOsaVuphy1hZP8Hk98jaNQ6_OJGTv66Vx2Y930Ckj29807E6IAvzrl8flblVq6UfKm0i6HpkaHFsPK0s9asWs8hyG8yjtPDLZi6XZNGDsOi5XLsxiBLHxi0Vuokek6OvcvkS_OIFZhdCTaa7mc15pRyBWlj7vXCyuyzz6zb55bwtTq-IRQql_cUiw3PTWWAves-Jjh5e-5XHHb8uA0&s=BXW9jpMJImyV5XgVVi7OpmD_Vy6iZ4p1USPE6M9XH8GajR16f3Sohj7v17CqiuIOlnONtVOeix-3Jj0IxNcd0a8e5PWRakAx8dHWYnkRxfCLxmgryEabJxsHXIFhrE8nuonXYMHF13WbIlCL6Pca5_6y8T4U7E3GuGPcN058O7NtBzCsuZ5Ek7HhWG70dWtHne5omvtyKaXVm3DdLtcpBL55LUV-9DvSCOQ0jLteJzdNLwLyGj6bj-9mFu_K3x4f0x3nL4MJdfm1JzUmDiIKoK1z-fjrMohIyJCN7wt3z55IePzDZddDXj4Q-iIYgKJGlOXWXseSQO3x0fmK9Go3Hw&h=VItteSVU90Dt8lFsZRC7gUUclJ1XUvboLtG3VKOXJsI
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRJUEdST1VQLUVBU1RVUyIsImpvYkxvY2F0aW9uIjoiZWFzdHVzIn0?api-version=2021-04-01&t=2023-09-19T02%3a03%3a59&c=MIIHADCCBeigAwIBAgITHgMiVmbNs9bo9g1GbQAAAyJWZjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMTgwNDI4WhcNMjQwNzI3MTgwNDI4WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMIcvxD_0PMhdmLk48iFdsDWY8xHwqf15PiuUxm56-DgFD_DTCio04a553Ilp6PhEzp-BqQUXZ8lOvewwSndfEiD0zKouzAK7ygeNzS10EFTSWbnBDNo4QPM7FM4bFhDUNl-AU1M7DrJCQPA8UGawTxFUgABTHaRYxMKeEyJ2IzdSmH0TjTgxv5pQDBP-QEJ-Rpdso9m_Yu2YfFRTCBiBNtQ4g-sojuHpOc3ULsGhK35Ua1gXYl44t0qnX1y-DiMbk0PPQ8_gop4DdSYd0NTBv-xBnqlom2ceJG8oCE4GCEXT3L6yOC3TvKvZ-7-r2cOWqPAolMtfZ4kIa7fp3zX-QUCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBS8HoebCKQVIYtc1_REbe-XAGi3HjAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAB6b3-2IDHqiKHidm1sv2adgnlW7o5teHg5_6JuYXETz89EHAOvxAis3i3YzHc79kO_nmk5RcVHDydZ-zI8JDlC8n3v75Zt4KNDYid-qMTOeyQogLcB2Cq3iRGRTjaG_abh0F1ifWL0QBhzujNxastu--5-ozxOHa7CTiseyWTxaCRv103DUxZ7-lNrBKHFJRQV_X5G_oVNKU2WvTmSTWNzCXpyLhKdoBAyf_4QsisR7IFsL1aNWE8fHvLUv96vSpwRelX1cVuab3bBG_qJTzD1TMk8V37gxq4OTAHXZOmheCepyVhUEawvCvCTaFwQf5kHPZFdLhd7qh8jEr2C06sM&s=HKnfeYNLOUZ-9Vcb3I11e7q3csqgbB_9QIRNEkRdjyGteU1Oypdn7clpvvpqvvEDJigZOJk0bjqW-lj6z_2HMHNdF7C7mHExf_FDOfetNtZooq0RMeAQ1heLAIlZwwRm4Mii2KCKlWap21z9E3Wo8RO-fn83mcLIN70GVqmoaPNawk0dqBugojtXeIqFIWFcNwZs4H7prhk6Y9aHslCPi5aFIsBmG_BFP2yEbO04yCHLWcIT2FKkTVku9nzQvF43K2lBb0SDRJF7Vkg1thWxqiGleHjONztZlw8OYhLE4sYSY22ZxV3omdR4ZqybFI0WEBsEGLOmZZ7ghXmAvt0TPQ&h=YZW0gDlmxs3flZSS869JKSISEURSxkjSmw3zsN2P488
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: CD5ADDE789C54609A72408DF810D3126 Ref B: TYO201100117047 Ref C: 2023-09-19T02:03:54Z'
         status: 202 Accepted
         code: 202
-        duration: 3.357758755s
+        duration: 4.80831875s

@@ -18,12 +18,12 @@ limitations under the License.
 package routetableclient
 
 import (
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3,packageAlias=armnetwork,clientName=RouteTablesClient,expand=false,rateLimitKey=routeTableRateLimit
+// +azure:client:verbs=createorupdate;delete,resource=RouteTable,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4,packageAlias=armnetwork,clientName=RouteTablesClient,expand=false,rateLimitKey=routeTableRateLimit
 type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.RouteTable]
 	utils.DeleteFunc[armnetwork.RouteTable]

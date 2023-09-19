@@ -45,11 +45,15 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: D7D14033300443D2A4E03CD8E0B63425 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:31Z'
         status: 201 Created
         code: 201
-        duration: 2.2424619s
+        duration: 3.635909558s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -70,7 +74,7 @@ interactions:
                 - "87"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -85,7 +89,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -96,16 +100,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 8A7AB2E00DF04C368527C6A17AABDFD8 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:35Z'
         status: 201 Created
         code: 201
-        duration: 4.727822851s
+        duration: 5.563439272s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -120,7 +125,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -128,30 +133,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 5E29C16A3CEB409F8F1182E05D0E3BA0 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:43Z'
         status: 200 OK
         code: 200
-        duration: 756.479982ms
+        duration: 833.886326ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -166,7 +172,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -174,12 +180,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 518
+        uncompressed: false
         body: '{"name":"testParentResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/virtualNetworks","location":"eastus","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","addressSpace":{"addressPrefixes":["10.1.0.0/16"]},"subnets":[],"virtualNetworkPeerings":[],"enableDdosProtection":false}}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "518"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -188,18 +196,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: B3652654B1134F478586F5DCB527304C Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:44Z'
         status: 200 OK
         code: 200
-        duration: 882.26498ms
+        duration: 1.073624209s
     - id: 4
       request:
         proto: HTTP/1.1
@@ -220,7 +227,7 @@ interactions:
                 - "46"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -235,7 +242,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -246,16 +253,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: D46F877D7D3542D28C162F582794BDB7 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:45Z'
         status: 201 Created
         code: 201
-        duration: 1.15171273s
+        duration: 1.027740736s
     - id: 5
       request:
         proto: HTTP/1.1
@@ -270,7 +278,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -278,30 +286,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: C121B8CBB19B49A5B46DB876744F9718 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:49Z'
         status: 200 OK
         code: 200
-        duration: 726.812248ms
+        duration: 299.488491ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -316,7 +325,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -324,12 +333,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 483
+        uncompressed: false
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "483"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -338,18 +349,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 9E7E6729604B4996AB1F27ABD6E04DBD Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:49Z'
         status: 200 OK
         code: 200
-        duration: 911.427635ms
+        duration: 986.488295ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -366,7 +376,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -374,12 +384,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 483
+        uncompressed: false
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "483"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -388,18 +400,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: C307274858F94F3A8270B6D809C441B2 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:50Z'
         status: 200 OK
         code: 200
-        duration: 904.344935ms
+        duration: 961.852117ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -416,7 +427,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResourcenotfound?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResourcenotfound?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -438,16 +449,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 7AD842CF640A4114BBE5ADB99846A01A Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:51Z'
         status: 404 Not Found
         code: 404
-        duration: 974.40813ms
+        duration: 1.629343358s
     - id: 9
       request:
         proto: HTTP/1.1
@@ -468,7 +480,7 @@ interactions:
                 - "46"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -476,34 +488,35 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 483
+        uncompressed: false
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "483"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 2B751B500FAF4EFEA265B4449AD0FC6C Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:53Z'
         status: 200 OK
         code: 200
-        duration: 1.40454588s
+        duration: 1.748603071s
     - id: 10
       request:
         proto: HTTP/1.1
@@ -518,7 +531,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -526,12 +539,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 483
+        uncompressed: false
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "483"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -540,18 +555,17 @@ interactions:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: E780C195073748CC847DBD1637CA8EB9 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:55Z'
         status: 200 OK
         code: 200
-        duration: 891.160499ms
+        duration: 619.359179ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -568,7 +582,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -576,30 +590,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 495
+        uncompressed: false
         body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","addressPrefix":"10.1.0.0/24","delegations":[],"privateEndpointNetworkPolicies":"Disabled","privateLinkServiceNetworkPolicies":"Enabled"},"type":"Microsoft.Network/virtualNetworks/subnets"}]}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "495"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 2C66A5A32BC342FD869363E4163F6F79 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:55Z'
         status: 200 OK
         code: 200
-        duration: 904.039799ms
+        duration: 455.173485ms
     - id: 12
       request:
         proto: HTTP/1.1
@@ -616,7 +631,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnetnotfound/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnetnotfound/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -640,13 +655,17 @@ interactions:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
+            X-Msedge-Ref:
+                - 'Ref A: C3036BF194BC47EF9B54F48FBB6BBF80 Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:56Z'
         status: 404 Not Found
         code: 404
-        duration: 97.967499ms
+        duration: 122.866854ms
     - id: 13
       request:
         proto: HTTP/1.1
@@ -663,7 +682,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource/subnets/testResource?api-version=2023-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -678,7 +697,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -686,19 +705,20 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 2C319A9E930544F8959058AB47C94EFE Ref B: TYO201100113037 Ref C: 2023-09-19T01:38:56Z'
         status: 202 Accepted
         code: 202
-        duration: 996.001499ms
+        duration: 1.393084035s
     - id: 14
       request:
         proto: HTTP/1.1
@@ -713,7 +733,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -721,30 +741,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: F51BB008D2C3409D9986EB5555B1D8EE Ref B: TYO201100113037 Ref C: 2023-09-19T01:39:07Z'
         status: 200 OK
         code: 200
-        duration: 726.756305ms
+        duration: 307.772897ms
     - id: 15
       request:
         proto: HTTP/1.1
@@ -761,7 +782,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Subnet/providers/Microsoft.Network/virtualNetworks/testParentResource?api-version=2023-04-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -776,7 +797,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -784,19 +805,20 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 0BBF27B08ABB427FB610B9D34A3D0084 Ref B: TYO201100113037 Ref C: 2023-09-19T01:39:08Z'
         status: 202 Accepted
         code: 202
-        duration: 1.317987504s
+        duration: 728.429951ms
     - id: 16
       request:
         proto: HTTP/1.1
@@ -811,7 +833,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2022-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -819,30 +841,31 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: -1
-        uncompressed: true
+        content_length: 22
+        uncompressed: false
         body: '{"status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache
+            Content-Length:
+                - "22"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
                 - "-1"
             Pragma:
                 - no-cache
-            Server:
-                - Microsoft-HTTPAPI/2.0
-                - Microsoft-HTTPAPI/2.0
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
-            Vary:
-                - Accept-Encoding
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 5138E00A8DD34B139FE7A3ECBD2BDC95 Ref B: TYO201100113037 Ref C: 2023-09-19T01:39:18Z'
         status: 200 OK
         code: 200
-        duration: 255.465801ms
+        duration: 1.231805993s
     - id: 17
       request:
         proto: HTTP/1.1
@@ -878,13 +901,17 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTVUJORVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTVUJORVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&t=638306843650019643&c=MIIHADCCBeigAwIBAgITfAOtZbVyhIaoXiQX9QAAA61ltTANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDUwHhcNMjMwODAyMTQ1NDA5WhcNMjQwNzI3MTQ1NDA5WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANQA35gS4wn0cANlmlnrdJ9IBU1aE-8EI1MYINCOUfFs-tm1yetu3MztHR_R1oMLS3u-W0fIdQKhPRs3jLbRX3PdqKRlNg6Xj2SKS_knzgi9EkbJTCcbzvr6-hYCotnkmzQ71vwTIpGBneJO1bmbXvWd6-aSebKaQS5t-hYyUWleJ0Q8O0aPEpGpbAAdaAexFfsFGz63lvaVsgwJKLGPowqYAghYNBTpEBPxb6Grd7ZC-gzZBL7FjBTy1yCOCqS3-jI_KRhTdgFnVVOMVudOgfZ-apeefg0vEAp4J6Juqv5NeNv-BgnY1ra64Wq08iXnDweyicXeZT8usRAZ7ESr_HkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9DTzFQS0lJTlRDQTAxLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA1LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MB0GA1UdDgQWBBQsFNk21ikHAEgHqLMy9ffGg_wlJDAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBR61hmFKHlscXYeYPjzS--iBUIWHTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAGpldslox7xUmN36iQjxMtFk50rqShFRiY69tsnUPZ47bZ2MXuwyoA3RXv6V9xzM35xPlacN1l8DiVUGlVKc7-DjgL9VJBLvD4EFOAJ-0I6xK1iYatmF1l-qTJDVeuvBzQA3ruagp4WrHkLfXF2_d_-ZDKQItUSzHS1N5F6Kurek0TEXHB-ZNM34W8tbreTLLqGxY6_M6rQlNFpIO_M1VXsBn7HivI2aTGbfyTrxU3gz6PP8XseOXA2jCCxvYm5SLY4P2jKF1H1zt3NIGuhb23yNPKXCOsJ7284R9GXFoCl0c8AFVRkkDyZs-KZp85_SMPVJ8FLP8h0JqyS0MmPk0q8&s=Rs56QKMD-Mp06moiOt3djNnB-NgAZZGuO_HxV9Q-BNaIWro18JXJQclfDkBul_PLI_BKR7ZU_y7PNZ-jrQbvjy270wXSEiLn6CQgUWo1e-jHdsRcPSLgmjImqaPr9jhGxmwHcEAsyHYPMlPAabqDyKOpNvpyHEsKVNO2-5TtUM0dyB79dE5zzBH5tc73i4yuclyg028ryletsLAi-mjSliZ2YQj0clKrXbtndHotgWrWKrTXv46aGJ36l_xbQKpunU4YOwZyWT_0cfYwkgajyEOdjR9B3-FjiuJ0Xk7vK5SD7SQZ2a5TsN7mwddnzlAoPy4MJQQ90bTaV8XsTv1V-Q&h=9FCKgbklEbMEAmNf3zTLHN_lG9QZ8als2v-day-SguA
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
+            X-Msedge-Ref:
+                - 'Ref A: 9D6ADF7ADB6E440CA4545344F261AD0B Ref B: TYO201100113037 Ref C: 2023-09-19T01:39:20Z'
         status: 202 Accepted
         code: 202
-        duration: 2.227972002s
+        duration: 4.905411295s
