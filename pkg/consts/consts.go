@@ -500,6 +500,9 @@ const (
 	// ServiceAnnotationPLSCreation determines whether a PLS needs to be created.
 	ServiceAnnotationPLSCreation = "service.beta.kubernetes.io/azure-pls-create"
 
+	// ServiceAnnotationPLSResourceGroup determines the resource group to create the PLS in.
+	ServiceAnnotationPLSResourceGroup = "service.beta.kubernetes.io/azure-pls-resource-group"
+
 	// ServiceAnnotationPLSName determines name of the PLS resource to create.
 	ServiceAnnotationPLSName = "service.beta.kubernetes.io/azure-pls-name"
 

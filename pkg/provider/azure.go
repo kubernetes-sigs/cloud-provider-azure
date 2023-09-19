@@ -433,7 +433,7 @@ type Cloud struct {
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
 	pipCache azcache.Resource
-	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
+	// use [resourceGroupName*LBFrontEndIpConfigurationID] as the key and search for PLS attached to the frontEnd
 	plsCache azcache.Resource
 	// a timed cache storing storage account properties to avoid querying storage account frequently
 	storageAccountCache azcache.Resource
