@@ -34,6 +34,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routeclient/mockrouteclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
@@ -590,6 +591,76 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		err := az.CreateOrUpdateVMSS(az.ResourceGroup, testVMSSName, compute.VirtualMachineScaleSet{})
 		assert.Equal(t, test.expectedErr, err)
 	}
+}
+
+func TestCreateOrUpdatePLS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		clientErr   *retry.Error
+		expectedErr error
+	}{
+		{
+			clientErr:   &retry.Error{HTTPStatusCode: http.StatusPreconditionFailed},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
+		},
+		{
+			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
+		},
+	}
+
+	for _, test := range tests {
+		az := GetTestCloud(ctrl)
+		az.pipCache.Set("rg*frontendID", "test")
+
+		mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+		mockPLSClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any(), gomock.Any()).Return(test.clientErr)
+		mockPLSClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PrivateLinkService{}, nil)
+
+		err := az.CreateOrUpdatePLS(&v1.Service{}, "rg", network.PrivateLinkService{
+			Name: pointer.String("pls"),
+			Etag: pointer.String("etag"),
+			PrivateLinkServiceProperties: &network.PrivateLinkServiceProperties{
+				LoadBalancerFrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+					{
+						ID: pointer.String("frontendID"),
+					},
+				},
+			},
+		})
+		assert.EqualError(t, test.expectedErr, err.Error())
+
+		// loadbalancer should be removed from cache if the etag is mismatch or the operation is canceled
+		pls, err := az.plsCache.GetWithDeepCopy("rg*frontendID", cache.CacheReadTypeDefault)
+		assert.NoError(t, err)
+		assert.Equal(t, consts.PrivateLinkServiceNotExistID, *pls.(*network.PrivateLinkService).ID)
+	}
+}
+
+func TestDeletePLS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+	mockPLSClient.EXPECT().Delete(gomock.Any(), "rg", "pls").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+
+	err := az.DeletePLS(&v1.Service{}, "rg", "pls", "frontendID")
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
+}
+
+func TestDeletePEConn(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+	mockPLSClient.EXPECT().DeletePEConnection(gomock.Any(), "rg", "pls", "peConn").Return(&retry.Error{HTTPStatusCode: http.StatusInternalServerError})
+
+	err := az.DeletePEConn(&v1.Service{}, "rg", "pls", "peConn")
+	assert.EqualError(t, fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 500, RawError: %w", error(nil)), fmt.Sprintf("%s", err.Error()))
 }
 
 func TestRequestBackoff(t *testing.T) {
