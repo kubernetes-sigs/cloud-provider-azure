@@ -18,6 +18,8 @@ limitations under the License.
 package loadbalancerclient
 
 import (
+	"context"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -29,4 +31,5 @@ type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.LoadBalancer]
 	utils.DeleteFunc[armnetwork.LoadBalancer]
 	utils.ListFunc[armnetwork.LoadBalancer]
+	MigrateToIPBased(ctx context.Context, groupName string, loadBalancerName string, options *armnetwork.LoadBalancersClientMigrateToIPBasedOptions) (armnetwork.LoadBalancersClientMigrateToIPBasedResponse, error)
 }
