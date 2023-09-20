@@ -109,3 +109,18 @@ func (mr *MockInterfaceMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), arg0, arg1)
 }
+
+// MigrateToIPBased mocks base method.
+func (m *MockInterface) MigrateToIPBased(arg0 context.Context, arg1, arg2 string, arg3 *armnetwork.LoadBalancersClientMigrateToIPBasedOptions) (armnetwork.LoadBalancersClientMigrateToIPBasedResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MigrateToIPBased", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(armnetwork.LoadBalancersClientMigrateToIPBasedResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MigrateToIPBased indicates an expected call of MigrateToIPBased.
+func (mr *MockInterfaceMockRecorder) MigrateToIPBased(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateToIPBased", reflect.TypeOf((*MockInterface)(nil).MigrateToIPBased), arg0, arg1, arg2, arg3)
+}
