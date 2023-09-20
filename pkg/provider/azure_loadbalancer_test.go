@@ -3055,7 +3055,7 @@ func getTCPResetTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingR
 func getTestRule(enableTCPReset bool, port int32, isIPv6 bool) network.LoadBalancingRule {
 	suffix := ""
 	if isIPv6 {
-		suffix = "-" + v6Suffix
+		suffix = "-" + consts.IPVersionIPv6String
 	}
 	expectedRules := network.LoadBalancingRule{
 		Name: pointer.String(fmt.Sprintf("atest1-TCP-%d", port) + suffix),
@@ -3089,7 +3089,7 @@ func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol, isIPv6,
 	suffix := ""
 	enableFloatingIP := true
 	if isIPv6 {
-		suffix = "-" + v6Suffix
+		suffix = "-" + consts.IPVersionIPv6String
 		if isInternal {
 			enableFloatingIP = false
 		}
@@ -3128,7 +3128,7 @@ func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol, isIPv6,
 func getFloatingIPTestRule(enableTCPReset, enableFloatingIP bool, port int32, isIPv6 bool) network.LoadBalancingRule {
 	suffix := ""
 	if isIPv6 {
-		suffix = "-" + v6Suffix
+		suffix = "-" + consts.IPVersionIPv6String
 	}
 	expectedRules := network.LoadBalancingRule{
 		Name: pointer.String(fmt.Sprintf("atest1-TCP-%d%s", port, suffix)),
@@ -9033,4 +9033,70 @@ func TestAddOrUpdateLBInList(t *testing.T) {
 
 	addOrUpdateLBInList(&existingLBs, &targetLB)
 	assert.Equal(t, expectedLBs, existingLBs)
+}
+
+func TestReconcileBackendPoolHosts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := getTestService("test", v1.ProtocolTCP, nil, false)
+	lbBackendPoolIDs := map[bool]string{false: "id"}
+	clusterName := "kubernetes"
+	ips := []string{"10.0.0.1"}
+	bp1 := buildTestLoadBalancerBackendPoolWithIPs(clusterName, ips)
+	bp2 := buildTestLoadBalancerBackendPoolWithIPs(clusterName, ips)
+	ips = []string{"10.0.0.2", "10.0.0.3"}
+	bp3 := buildTestLoadBalancerBackendPoolWithIPs(clusterName, ips)
+	lb1 := &network.LoadBalancer{
+		Name: pointer.String(clusterName),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			BackendAddressPools: &[]network.BackendAddressPool{bp1},
+		},
+	}
+	lb2 := &network.LoadBalancer{
+		Name: pointer.String("lb2"),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			BackendAddressPools: &[]network.BackendAddressPool{bp2},
+		},
+	}
+	expectedLB := &network.LoadBalancer{
+		Name: pointer.String(clusterName),
+		LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+			BackendAddressPools: &[]network.BackendAddressPool{bp3},
+		},
+	}
+	existingLBs := []network.LoadBalancer{*lb1, *lb2}
+
+	cloud := GetTestCloud(ctrl)
+	mockLBBackendPool := NewMockBackendPool(ctrl)
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), bp1).DoAndReturn(fakeEnsureHostsInPool())
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), bp2).Return(nil)
+	cloud.LoadBalancerBackendPool = mockLBBackendPool
+
+	var err error
+	lb1, err = cloud.reconcileBackendPoolHosts(lb1, existingLBs, &svc, []*v1.Node{}, clusterName, "vmss", lbBackendPoolIDs)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedLB, lb1)
+
+	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("error"))
+	_, err = cloud.reconcileBackendPoolHosts(lb1, existingLBs, &svc, []*v1.Node{}, clusterName, "vmss", lbBackendPoolIDs)
+	assert.Equal(t, errors.New("error"), err)
+}
+
+func fakeEnsureHostsInPool() func(*v1.Service, []*v1.Node, string, string, string, string, network.BackendAddressPool) error {
+	return func(svc *v1.Service, nodes []*v1.Node, lbBackendPoolID, vmSet, clusterName, lbName string, backendPool network.BackendAddressPool) error {
+		backendPool.LoadBalancerBackendAddresses = &[]network.LoadBalancerBackendAddress{
+			{
+				LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+					IPAddress: pointer.String("10.0.0.2"),
+				},
+			},
+			{
+				LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
+					IPAddress: pointer.String("10.0.0.3"),
+				},
+			},
+		}
+		return nil
+	}
 }

@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/pointer"
 
@@ -223,26 +224,6 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				u.removeOperation(tc.removeOperationServiceName)
 			}
 			time.Sleep(3 * time.Second)
-			//err := wait.PollUntilContextTimeout(context.Background(), time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			//	resultLen := 0
-			//	results.Range(func(key, value interface{}) bool {
-			//		resultLen++
-			//		return true
-			//	})
-			//	return resultLen == len(tc.expectedResult), nil
-			//})
-			//assert.NoError(t, err)
-
-			//actualResults := make(map[batchOperationResult]bool)
-			//results.Range(func(key, value interface{}) bool {
-			//	actualResults[key.(batchOperationResult)] = true
-			//	return true
-			//})
-
-			//err = wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			//	return assert.Equal(t, tc.expectedResult, actualResults, tc.name), nil
-			//})
-			//assert.NoError(t, err)
 		})
 	}
 }
@@ -262,9 +243,6 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 		putBackendPoolErr                  *retry.Error
 		expectedCreateOrUpdateBackendPools []network.BackendAddressPool
 		expectedBackendPools               []network.BackendAddressPool
-		//expectedResult                     map[batchOperationResult]bool
-		//expectedPoolNameToErrMsg           map[string]string
-		//expectedResultCount                int
 	}{
 		{
 			name:       "Retriable error when getting backend pool",
@@ -279,10 +257,6 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			expectedBackendPools: []network.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			//expectedResult: map[batchOperationResult]bool{
-			//	newBatchOperationResult("lb1/pool1", true, nil): true,
-			//},
-			//expectedResultCount: 1,
 		},
 		{
 			name:       "Retriable error when updating backend pool",
@@ -299,10 +273,6 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			expectedBackendPools: []network.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			//expectedResult: map[batchOperationResult]bool{
-			//	newBatchOperationResult("lb1/pool1", true, nil): true,
-			//},
-			//expectedResultCount: 1,
 		},
 		{
 			name:       "Non-retriable error when getting backend pool",
@@ -314,8 +284,6 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			expectedBackendPools: []network.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
 			},
-			//expectedPoolNameToErrMsg: map[string]string{"lb1/pool1": "Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"},
-			//expectedResultCount:      1,
 		},
 		{
 			name:       "Non-retriable error when updating backend pool",
@@ -328,8 +296,6 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			expectedCreateOrUpdateBackendPools: []network.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
 			},
-			//expectedPoolNameToErrMsg: map[string]string{"lb1/pool1": "Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: error"},
-			//expectedResultCount:      1,
 		},
 		{
 			name:       "Backend pool not found",
@@ -416,48 +382,12 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			defer cancel()
 			go u.run(ctx)
 
-			//results := sync.Map{}
 			for _, op := range tc.operations {
 				op := op
-				//go func() {
 				u.addOperation(op)
-				//result := op.wait()
-				//results.Store(result, true)
-				//}()
 				time.Sleep(100 * time.Millisecond)
 			}
 			time.Sleep(3 * time.Second)
-			//err := wait.PollUntilContextTimeout(context.Background(), time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			//	resultLen := 0
-			//	results.Range(func(key, value interface{}) bool {
-			//		resultLen++
-			//		return true
-			//	})
-			//	return resultLen == tc.expectedResultCount, nil
-			//})
-			//assert.NoError(t, err)
-
-			//actualResults := make(map[batchOperationResult]bool)
-			//poolNameToErrMsg := make(map[string]string)
-			//results.Range(func(key, value interface{}) bool {
-			//	actualResults[key.(batchOperationResult)] = true
-			//	if tc.getBackendPoolErr != nil && !tc.getBackendPoolErr.Retriable ||
-			//		tc.putBackendPoolErr != nil && !tc.putBackendPoolErr.Retriable {
-			//		poolNameToErrMsg[key.(batchOperationResult).name] = key.(batchOperationResult).err.Error()
-			//	}
-			//	return true
-			//})
-
-			//err = wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			//	if tc.expectedResult != nil {
-			//		return assert.Equal(t, tc.expectedResult, actualResults, tc.name), nil
-			//	}
-			//	if tc.expectedPoolNameToErrMsg != nil {
-			//		return assert.Equal(t, tc.expectedPoolNameToErrMsg, poolNameToErrMsg, tc.name), nil
-			//	}
-			//	return false, errors.New("unexpected result")
-			//})
-			//assert.NoError(t, err)
 		})
 	}
 }
@@ -603,4 +533,87 @@ func TestGetBackendPoolNamesAndIDsForService(t *testing.T) {
 	svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
 	_ = cloud.getBackendPoolNamesForService(&svc, "test")
 	_ = cloud.getBackendPoolIDsForService(&svc, "test", "lb")
+}
+
+func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		description string
+		existingEPS *discovery_v1.EndpointSlice
+		expectedErr error
+	}{
+		{
+			description: "should update backend pool as expected",
+			existingEPS: getTestEndpointSlice("eps1", "default", "svc1", "node2"),
+		},
+		{
+			description: "should report an error if failed to get the endpointslice",
+			expectedErr: errors.New("failed to find EndpointSlice for service default/svc1"),
+		},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			cloud := GetTestCloud(ctrl)
+			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", &serviceInfo{lbName: "lb1"})
+			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			var client kubernetes.Interface
+			if tc.existingEPS != nil {
+				client = fake.NewSimpleClientset(&svc, tc.existingEPS)
+			} else {
+				client = fake.NewSimpleClientset(&svc)
+			}
+			cloud.KubeClient = client
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
+			cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
+			cloud.MultipleStandardLoadBalancerConfigurations = []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "lb1",
+				},
+			}
+			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			cloud.nodePrivateIPs = map[string]sets.Set[string]{
+				"node1": sets.New[string]("10.0.0.1", "fd00::1"),
+				"node2": sets.New[string]("10.0.0.2", "fd00::2"),
+			}
+
+			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
+			existingBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::1"})
+			existingLB := network.LoadBalancer{
+				Name: pointer.String("lb1"),
+				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+					BackendAddressPools: &[]network.BackendAddressPool{
+						existingBackendPool,
+						existingBackendPoolIPv6,
+					},
+				},
+			}
+			expectedBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.2"})
+			expectedBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::2"})
+			mockLBClient := mockloadbalancerclient.NewMockInterface(ctrl)
+			if tc.existingEPS != nil {
+				mockLBClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), "lb1", "default-svc1", "").Return(existingBackendPool, nil)
+				mockLBClient.EXPECT().GetLBBackendPool(gomock.Any(), gomock.Any(), "lb1", "default-svc1-ipv6", "").Return(existingBackendPoolIPv6, nil)
+				mockLBClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), "lb1", "default-svc1", expectedBackendPool, "").Return(nil)
+				mockLBClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), "lb1", "default-svc1-ipv6", expectedBackendPoolIPv6, "").Return(nil)
+			}
+			cloud.LoadBalancerClient = mockLBClient
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cloud.backendPoolUpdater = u
+			go cloud.backendPoolUpdater.run(ctx)
+
+			err := cloud.checkAndApplyLocalServiceBackendPoolUpdates(existingLB, &svc)
+			if tc.expectedErr != nil {
+				assert.Equal(t, tc.expectedErr, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			time.Sleep(2 * time.Second)
+		})
+	}
 }
