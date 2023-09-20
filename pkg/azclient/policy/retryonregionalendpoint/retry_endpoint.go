@@ -17,7 +17,6 @@ limitations under the License.
 package retryonregionalendpoint
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -26,21 +25,46 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
 
-type RetryOnRegionalEndpointPolicy struct {
+type Policy struct {
 	regionalEndpoint string
 }
 
-func (c *RetryOnRegionalEndpointPolicy) Do(request *policy.Request) (*http.Response, error) {
+func NewPolicy(regionalEndpoint string) *Policy {
+	return &Policy{regionalEndpoint: regionalEndpoint}
+}
+
+// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
+// Issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1296
+// Send the request to the regional endpoint if the response contains error code "ResourceGroupNotFound".
+// Such situation also needs retrying that ContentLength is -1, StatusCode is 200 and an empty body is returned.
+func (c *Policy) Do(request *policy.Request) (*http.Response, error) {
 	response, err := request.Next()
-	switch true {
-	case response == nil,
-		err == nil,
-		request.Raw().Method != http.MethodGet,
-		response.StatusCode == http.StatusNotFound,
-		c.regionalEndpoint == "":
+	if err != nil || response == nil {
 		return response, err
 	}
+	bodyBytes, _ := io.ReadAll(response.Body)
+	bodyString := string(bodyBytes)
+	trimmed := strings.TrimSpace(bodyString)
 
+	if response.ContentLength == 0 || trimmed == "" || trimmed == "{}" { // empty body
+		if response.StatusCode < 200 || response.StatusCode >= 300 { // retry on 2xx status code
+			return response, err
+		}
+	} else { // non-empty body
+		var body map[string]map[string]interface{}
+		if unmarshalErr := json.Unmarshal([]byte(trimmed), &body); unmarshalErr != nil {
+			return response, err
+		}
+		if errSection, ok := body["error"]; !ok {
+			return response, err
+		} else if code, ok := errSection["code"]; !ok {
+			return response, err
+		} else if !strings.EqualFold(code.(string), "ResourceGroupNotFound") { // retry on ResourceGroupNotFound error code
+			return response, err
+		}
+	}
+
+	// retry on regional ARM host
 	currentHost := request.Raw().URL.Host
 	if request.Raw().Host != "" {
 		currentHost = request.Raw().Host
@@ -49,44 +73,20 @@ func (c *RetryOnRegionalEndpointPolicy) Do(request *policy.Request) (*http.Respo
 		return response, err
 	}
 
-	bodyBytes, _ := io.ReadAll(response.Body)
-	bodyString := string(bodyBytes)
-	trimmed := strings.TrimSpace(bodyString)
-
-	var retryNeeded bool
-	if (response.ContentLength == 0 || trimmed == "" || trimmed == "{}") && response.StatusCode >= 200 && response.StatusCode < 300 {
-		retryNeeded = true
+	regionalRequest := request.Clone(request.Raw().Context())
+	regionalRequest.Raw().URL.Host = c.regionalEndpoint
+	regionalRequest.Raw().Host = c.regionalEndpoint
+	rewindErr := request.RewindBody()
+	if rewindErr != nil {
+		return response, err
 	}
+	regionalResponse, regionalError := regionalRequest.Next()
 
-	// Hack: retry the regional ARM endpoint in case of ARM traffic split and arm resource group replication is too slow
-	// Empty content and 2xx http status code are returned in this case.
-	// Issue: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/1296
-	// Such situation also needs retrying that ContentLength is -1, StatusCode is 200 and an empty body is returned.
-	var body map[string]map[string]interface{}
-	if unmarshalErr := json.Unmarshal(bodyBytes, &body); unmarshalErr == nil {
-		if errSection, ok := body["error"]; ok {
-			if code, ok := errSection["code"]; ok {
-				if strings.EqualFold(code.(string), "ResourceGroupNotFound") {
-					retryNeeded = true
-				}
-			}
-		}
+	// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
+	// 1. the retry on regional ARM host approach is a hack.
+	// 2. the concatenated regional uri could be wrong as the rule is not officially declared by ARM.
+	if regionalResponse == nil || regionalResponse.StatusCode < 200 || regionalResponse.StatusCode > 299 {
+		return response, err
 	}
-	if retryNeeded {
-		regionalRequest := request.Clone(request.Raw().Context())
-		regionalRequest.Raw().URL.Host = c.regionalEndpoint
-		request.RewindBody()
-
-		regionalResponse, regionalError := regionalRequest.Next()
-
-		// only use the result if the regional request actually goes through and returns 2xx status code, for two reasons:
-		// 1. the retry on regional ARM host approach is a hack.
-		// 2. the concatenated regional uri could be wrong as the rule is not officially declared by ARM.
-		if regionalResponse == nil || regionalResponse.StatusCode > 299 {
-			return response, err
-		}
-		return regionalResponse, regionalError
-	}
-	response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-	return response, err
+	return regionalResponse, regionalError
 }
