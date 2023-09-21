@@ -20,15 +20,13 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 )
 
 type Etag struct {
-	azcore.ETag `json:"etag,omitempty"`
+	ETag azcore.ETag `json:"etag,omitempty"`
 }
 
 func AppendEtag(req *policy.Request) (*http.Response, error) {
@@ -45,7 +43,9 @@ func AppendEtag(req *policy.Request) (*http.Response, error) {
 		if etag.ETag != "" {
 			req.Raw().Header.Set("If-Match", string(etag.ETag))
 		}
-		req.SetBody(streaming.NopCloser(strings.NewReader(string(body))), "application/json")
+		if err = req.RewindBody(); err != nil {
+			return nil, err
+		}
 	}
 
 	return req.Next()

@@ -14,43 +14,64 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package etag_test
+package retryrepectthrottled_test
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/etag"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-var _ = Describe("Etag", func() {
-	Describe("AppendEtag", func() {
-		It("should append etag", func() {
+var _ = Describe("Throttle", func() {
+	Describe("Throttle", func() {
+		It("should respect retry-after", func() {
+			once := sync.Once{}
+			throttlePolicy := &retryrepectthrottled.ThrottlingPolicy{}
 			pipeline := runtime.NewPipeline("testmodule", "v0.1.0", runtime.PipelineOptions{}, &policy.ClientOptions{
 				PerCallPolicies: []policy.Policy{
-					utils.FuncPolicyWrapper(etag.AppendEtag),
+					throttlePolicy,
 					utils.FuncPolicyWrapper(
 						func(req *policy.Request) (*http.Response, error) {
-							Expect(req.Raw().Header.Get("If-Match")).To(Equal("etag"))
-							body, err := io.ReadAll(req.Body())
-							Expect(err).NotTo(HaveOccurred())
-							Expect(string(body)).To(Equal(`{"etag":"etag"}`))
-							return nil, nil
+							resp := &http.Response{
+								StatusCode: http.StatusOK,
+								Body:       http.NoBody,
+							}
+							once.Do(func() {
+								resp = &http.Response{
+									StatusCode: http.StatusTooManyRequests,
+									Body:       http.NoBody,
+									Header: http.Header{
+										"Retry-After": []string{"10"},
+									},
+								}
+							})
+							return resp, nil
 						},
 					),
 				},
 			})
 			req, err := runtime.NewRequest(context.Background(), http.MethodPut, "http://localhost:8080")
 			Expect(err).NotTo(HaveOccurred())
+			err = req.SetBody(streaming.NopCloser(strings.NewReader(`{"etag":"etag"}`)), "application/json")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = pipeline.Do(req)
+			Expect(err).To(HaveOccurred())
+			req, err = runtime.NewRequest(context.Background(), http.MethodPut, "http://localhost:8080")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = pipeline.Do(req)
+			Expect(err).To(HaveOccurred())
+			throttlePolicy.RetryAfterWriter = time.Now().Add(-time.Second * 10)
+			req, err = runtime.NewRequest(context.Background(), http.MethodPut, "http://localhost:8080")
 			err = req.SetBody(streaming.NopCloser(strings.NewReader(`{"etag":"etag"}`)), "application/json")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = pipeline.Do(req)
