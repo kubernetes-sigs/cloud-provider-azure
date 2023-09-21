@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -405,4 +406,47 @@ func TestListPIP(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestGetPrivateLinkService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	az := GetTestCloud(ctrl)
+	az.plsCache.Set("rg*frontendID", &network.PrivateLinkService{Name: pointer.String("pls")})
+
+	// cache hit
+	pls, err := az.getPrivateLinkService("rg", pointer.String("frontendID"), azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, "pls", *pls.Name)
+
+	// cache miss
+	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
+	mockPLSClient.EXPECT().List(gomock.Any(), "rg1").Return([]network.PrivateLinkService{
+		{
+			Name: pointer.String("pls1"),
+			PrivateLinkServiceProperties: &network.PrivateLinkServiceProperties{
+				LoadBalancerFrontendIPConfigurations: &[]network.FrontendIPConfiguration{
+					{
+						ID: pointer.String("frontendID1"),
+					},
+				},
+			},
+		},
+	}, nil)
+	pls, err = az.getPrivateLinkService("rg1", pointer.String("frontendID1"), azcache.CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, "pls1", *pls.Name)
+}
+
+func TestGetPLSCacheKey(t *testing.T) {
+	rg, frontendID := "rg", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/ipconfig"
+	assert.Equal(t, "rg*/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/ipconfig", getPLSCacheKey(rg, frontendID))
+}
+
+func TestParsePLSCacheKey(t *testing.T) {
+	key := "rg*/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/ipconfig"
+	rg, frontendID := parsePLSCacheKey(key)
+	assert.Equal(t, "rg", rg)
+	assert.Equal(t, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/ipconfig", frontendID)
 }
