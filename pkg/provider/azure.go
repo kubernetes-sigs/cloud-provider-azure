@@ -378,7 +378,7 @@ type Cloud struct {
 	// key: [resourceGroupName]
 	// Value: sync.Map of [pipName]*PublicIPAddress
 	pipCache *azcache.TimedCache
-	// use LB frontEndIpConfiguration ID as the key and search for PLS attached to the frontEnd
+	// use [resourceGroupName*LBFrontEndIpConfigurationID] as the key and search for PLS attached to the frontEnd
 	plsCache *azcache.TimedCache
 
 	// Add service lister to always get latest service
