@@ -2138,6 +2138,7 @@ func (az *Cloud) getExpectedLBRules(
 	// healthcheck proxy server serves http requests
 	// https://github.com/kubernetes/kubernetes/blob/7c013c3f64db33cf19f38bb2fc8d9182e42b0b7b/pkg/proxy/healthcheck/service_health.go#L236
 	var nodeEndpointHealthprobe *network.Probe
+	var nodeEndpointHealthprobeAdded bool
 	if servicehelpers.NeedsHealthCheck(service) && !(consts.IsPLSEnabled(service.Annotations) && consts.IsPLSProxyProtocolEnabled(service.Annotations)) {
 		podPresencePath, podPresencePort := servicehelpers.GetServiceHealthCheckPathPort(service)
 		lbRuleName := az.getLoadBalancerRuleName(service, v1.ProtocolTCP, podPresencePort)
@@ -2156,7 +2157,6 @@ func (az *Cloud) getExpectedLBRules(
 				ProbeThreshold:    numberOfProbes,
 			},
 		}
-		expectedProbes = append(expectedProbes, *nodeEndpointHealthprobe)
 	}
 
 	// In HA mode, lb forward traffic of all port to backend
@@ -2176,7 +2176,7 @@ func (az *Cloud) getExpectedLBRules(
 		if nodeEndpointHealthprobe == nil {
 			// use user customized health probe rule if any
 			for _, port := range service.Spec.Ports {
-				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName)
+				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nil)
 				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
@@ -2194,6 +2194,7 @@ func (az *Cloud) getExpectedLBRules(
 			props.Probe = &network.SubResource{
 				ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
 			}
+			expectedProbes = append(expectedProbes, *nodeEndpointHealthprobe)
 		}
 
 		expectedRules = append(expectedRules, network.LoadBalancingRule{
@@ -2237,22 +2238,24 @@ func (az *Cloud) getExpectedLBRules(
 					"rule-name", lbRuleName, "port", port.Port)
 			}
 			if !isNoHealthProbeRule {
-				if nodeEndpointHealthprobe == nil {
-					portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName)
-					if err != nil {
-						klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
-							"rule-name", lbRuleName, "port", port.Port)
-						return expectedProbes, expectedRules, err
+				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nodeEndpointHealthprobe)
+				if err != nil {
+					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
+						"rule-name", lbRuleName, "port", port.Port)
+					return expectedProbes, expectedRules, err
+				}
+				if portprobe != nil {
+					props.Probe = &network.SubResource{
+						ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
 					}
-					if portprobe != nil {
-						props.Probe = &network.SubResource{
-							ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *portprobe.Name)),
-						}
-						expectedProbes = append(expectedProbes, *portprobe)
-					}
-				} else {
+					expectedProbes = append(expectedProbes, *portprobe)
+				} else if nodeEndpointHealthprobe != nil {
 					props.Probe = &network.SubResource{
 						ID: pointer.String(az.getLoadBalancerProbeID(lbName, az.getLoadBalancerResourceGroup(), *nodeEndpointHealthprobe.Name)),
+					}
+					if !nodeEndpointHealthprobeAdded {
+						expectedProbes = append(expectedProbes, *nodeEndpointHealthprobe)
+						nodeEndpointHealthprobeAdded = true
 					}
 				}
 			}
