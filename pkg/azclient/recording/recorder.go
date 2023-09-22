@@ -64,6 +64,7 @@ var responseHeadersToRemove = []string{
 	"Retry-After",
 
 	"Content-Security-Policy-Report-Only",
+	"X-Msedge-Ref",
 }
 
 var (
