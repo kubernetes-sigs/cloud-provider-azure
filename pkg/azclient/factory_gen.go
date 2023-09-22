@@ -80,7 +80,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	var options *arm.ClientOptions
 	var err error
 
-	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient Interface availabilitySetRateLimit}
+	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient AvailabilitySet  Interface availabilitySetRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {deploymentclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient Interface deploymentRateLimit}
+	//initialize {deploymentclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient Deployment  Interface deploymentRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {diskclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient Interface diskRateLimit}
+	//initialize {diskclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient Disk  Interface diskRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {interfaceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient Interface interfaceRateLimit}
+	//initialize {interfaceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient Interface  Interface interfaceRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {ipgroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient Interface ipGroupRateLimit}
+	//initialize {ipgroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient IPGroup  Interface ipGroupRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {loadbalancerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient Interface loadBalancerRateLimit}
+	//initialize {loadbalancerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient LoadBalancer  Interface loadBalancerRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {managedclusterclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient Interface containerServiceRateLimit}
+	//initialize {managedclusterclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient ManagedCluster  Interface containerServiceRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {privateendpointclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient Interface privateEndpointRateLimit}
+	//initialize {privateendpointclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient PrivateEndpoint  Interface privateEndpointRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {privatelinkserviceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient Interface privateLinkServiceRateLimit}
+	//initialize {privatelinkserviceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient PrivateLinkService  Interface privateLinkServiceRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {privatezoneclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient Interface privateDNSRateLimit}
+	//initialize {privatezoneclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient PrivateZone  Interface privateDNSRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {publicipaddressclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient Interface publicIPAddressRateLimit}
+	//initialize {publicipaddressclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient PublicIPAddress  Interface publicIPAddressRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -237,7 +237,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {publicipprefixclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient Interface }
+	//initialize {publicipprefixclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient PublicIPPrefix  Interface }
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -248,7 +248,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {routetableclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient Interface routeTableRateLimit}
+	//initialize {routetableclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient RouteTable  Interface routeTableRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -262,7 +262,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {securitygroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient Interface securityGroupRateLimit}
+	//initialize {securitygroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient SecurityGroup  Interface securityGroupRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -276,7 +276,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {snapshotclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient Interface snapshotRateLimit}
+	//initialize {snapshotclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient Snapshot  Interface snapshotRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -290,7 +290,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {subnetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient Interface subnetsRateLimit}
+	//initialize {subnetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient VirtualNetwork Subnet Interface subnetsRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {virtualmachineclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient Interface virtualMachineRateLimit}
+	//initialize {virtualmachineclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient VirtualMachine  Interface virtualMachineRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {virtualmachinescalesetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient Interface virtualMachineSizesRateLimit}
+	//initialize {virtualmachinescalesetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient VirtualMachineScaleSet  Interface virtualMachineSizesRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -332,7 +332,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
-	//initialize {virtualmachinescalesetvmclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient Interface }
+	//initialize {virtualmachinescalesetvmclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient VirtualMachineScaleSet VirtualMachineScaleSetVM Interface }
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -367,78 +367,78 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}, nil
 }
 
-func (factory *ClientFactoryImpl) GetavailabilitysetclientInterface() availabilitysetclient.Interface {
+func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	return factory.availabilitysetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetdeploymentclientInterface() deploymentclient.Interface {
+func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interface {
 	return factory.deploymentclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetdiskclientInterface() diskclient.Interface {
+func (factory *ClientFactoryImpl) GetDiskClient() diskclient.Interface {
 	return factory.diskclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetinterfaceclientInterface() interfaceclient.Interface {
+func (factory *ClientFactoryImpl) GetInterfaceClient() interfaceclient.Interface {
 	return factory.interfaceclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetipgroupclientInterface() ipgroupclient.Interface {
+func (factory *ClientFactoryImpl) GetIPGroupClient() ipgroupclient.Interface {
 	return factory.ipgroupclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetloadbalancerclientInterface() loadbalancerclient.Interface {
+func (factory *ClientFactoryImpl) GetLoadBalancerClient() loadbalancerclient.Interface {
 	return factory.loadbalancerclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetmanagedclusterclientInterface() managedclusterclient.Interface {
+func (factory *ClientFactoryImpl) GetManagedClusterClient() managedclusterclient.Interface {
 	return factory.managedclusterclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivateendpointclientInterface() privateendpointclient.Interface {
+func (factory *ClientFactoryImpl) GetPrivateEndpointClient() privateendpointclient.Interface {
 	return factory.privateendpointclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivatelinkserviceclientInterface() privatelinkserviceclient.Interface {
+func (factory *ClientFactoryImpl) GetPrivateLinkServiceClient() privatelinkserviceclient.Interface {
 	return factory.privatelinkserviceclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetprivatezoneclientInterface() privatezoneclient.Interface {
+func (factory *ClientFactoryImpl) GetPrivateZoneClient() privatezoneclient.Interface {
 	return factory.privatezoneclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetpublicipaddressclientInterface() publicipaddressclient.Interface {
+func (factory *ClientFactoryImpl) GetPublicIPAddressClient() publicipaddressclient.Interface {
 	return factory.publicipaddressclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetpublicipprefixclientInterface() publicipprefixclient.Interface {
+func (factory *ClientFactoryImpl) GetPublicIPPrefixClient() publicipprefixclient.Interface {
 	return factory.publicipprefixclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetroutetableclientInterface() routetableclient.Interface {
+func (factory *ClientFactoryImpl) GetRouteTableClient() routetableclient.Interface {
 	return factory.routetableclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsecuritygroupclientInterface() securitygroupclient.Interface {
+func (factory *ClientFactoryImpl) GetSecurityGroupClient() securitygroupclient.Interface {
 	return factory.securitygroupclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsnapshotclientInterface() snapshotclient.Interface {
+func (factory *ClientFactoryImpl) GetSnapshotClient() snapshotclient.Interface {
 	return factory.snapshotclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetsubnetclientInterface() subnetclient.Interface {
+func (factory *ClientFactoryImpl) GetSubnetClient() subnetclient.Interface {
 	return factory.subnetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachineclientInterface() virtualmachineclient.Interface {
+func (factory *ClientFactoryImpl) GetVirtualMachineClient() virtualmachineclient.Interface {
 	return factory.virtualmachineclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachinescalesetclientInterface() virtualmachinescalesetclient.Interface {
+func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface {
 	return factory.virtualmachinescalesetclientInterface
 }
 
-func (factory *ClientFactoryImpl) GetvirtualmachinescalesetvmclientInterface() virtualmachinescalesetvmclient.Interface {
+func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface {
 	return factory.virtualmachinescalesetvmclientInterface
 }

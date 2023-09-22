@@ -40,23 +40,23 @@ import (
 )
 
 type ClientFactory interface {
-	GetavailabilitysetclientInterface() availabilitysetclient.Interface
-	GetdeploymentclientInterface() deploymentclient.Interface
-	GetdiskclientInterface() diskclient.Interface
-	GetinterfaceclientInterface() interfaceclient.Interface
-	GetipgroupclientInterface() ipgroupclient.Interface
-	GetloadbalancerclientInterface() loadbalancerclient.Interface
-	GetmanagedclusterclientInterface() managedclusterclient.Interface
-	GetprivateendpointclientInterface() privateendpointclient.Interface
-	GetprivatelinkserviceclientInterface() privatelinkserviceclient.Interface
-	GetprivatezoneclientInterface() privatezoneclient.Interface
-	GetpublicipaddressclientInterface() publicipaddressclient.Interface
-	GetpublicipprefixclientInterface() publicipprefixclient.Interface
-	GetroutetableclientInterface() routetableclient.Interface
-	GetsecuritygroupclientInterface() securitygroupclient.Interface
-	GetsnapshotclientInterface() snapshotclient.Interface
-	GetsubnetclientInterface() subnetclient.Interface
-	GetvirtualmachineclientInterface() virtualmachineclient.Interface
-	GetvirtualmachinescalesetclientInterface() virtualmachinescalesetclient.Interface
-	GetvirtualmachinescalesetvmclientInterface() virtualmachinescalesetvmclient.Interface
+	GetAvailabilitySetClient() availabilitysetclient.Interface
+	GetDeploymentClient() deploymentclient.Interface
+	GetDiskClient() diskclient.Interface
+	GetInterfaceClient() interfaceclient.Interface
+	GetIPGroupClient() ipgroupclient.Interface
+	GetLoadBalancerClient() loadbalancerclient.Interface
+	GetManagedClusterClient() managedclusterclient.Interface
+	GetPrivateEndpointClient() privateendpointclient.Interface
+	GetPrivateLinkServiceClient() privatelinkserviceclient.Interface
+	GetPrivateZoneClient() privatezoneclient.Interface
+	GetPublicIPAddressClient() publicipaddressclient.Interface
+	GetPublicIPPrefixClient() publicipprefixclient.Interface
+	GetRouteTableClient() routetableclient.Interface
+	GetSecurityGroupClient() securitygroupclient.Interface
+	GetSnapshotClient() snapshotclient.Interface
+	GetSubnetClient() subnetclient.Interface
+	GetVirtualMachineClient() virtualmachineclient.Interface
+	GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface
+	GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface
 }

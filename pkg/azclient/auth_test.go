@@ -55,6 +55,7 @@ var _ = Describe("Auth", Ordered, func() {
 				ClientOptions: azpolicy.ClientOptions{
 					Transport: httpRecorder.HTTPClient(),
 				},
+				AuxiliaryTenants: []string{tenantID},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			cred, err = authProvider.GetAzIdentity()

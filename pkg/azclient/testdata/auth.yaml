@@ -47,7 +47,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 678.830804ms
+        duration: 854.563415ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -94,7 +94,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 362.302803ms
+        duration: 223.319204ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -129,14 +129,14 @@ interactions:
         proto_minor: 1
         transfer_encoding: []
         trailer: {}
-        content_length: 1402
+        content_length: 1397
         uncompressed: false
         body: '{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}'
         headers:
             Cache-Control:
                 - no-store, no-cache
             Content-Length:
-                - "1402"
+                - "1397"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -153,4 +153,4 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 264.480502ms
+        duration: 384.950807ms

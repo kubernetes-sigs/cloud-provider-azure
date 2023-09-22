@@ -49,11 +49,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: D12AA9ED8BD549E18AC7B9C526D2093E Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:02Z'
         status: 201 Created
         code: 201
-        duration: 3.646929065s
+        duration: 3.141679048s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -74,7 +72,7 @@ interactions:
                 - "163"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -89,7 +87,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -106,11 +104,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 6B70AD82D70F4AFCBAF90F761B06B3BE Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:05Z'
         status: 201 Created
         code: 201
-        duration: 6.005995664s
+        duration: 1.448423638s
     - id: 2
       request:
         proto: HTTP/1.1
@@ -125,7 +121,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -153,11 +149,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: B429146C3DD6454E86BC16EF4C695652 Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:14Z'
         status: 200 OK
         code: 200
-        duration: 1.300789756s
+        duration: 772.976933ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -172,7 +166,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -202,11 +196,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: C9C684075E374B25B26F833583E9CCE3 Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:15Z'
         status: 200 OK
         code: 200
-        duration: 1.970513606s
+        duration: 446.363324ms
     - id: 4
       request:
         proto: HTTP/1.1
@@ -227,7 +219,7 @@ interactions:
                 - "609"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -237,12 +229,12 @@ interactions:
         trailer: {}
         content_length: 1461
         uncompressed: false
-        body: '{"name":"nic1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipConfigurations":[{"name":"ipConfig1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1/ipConfigurations/ipConfig1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkInterfaces/ipConfigurations","properties":{"provisioningState":"Succeeded","privateIPAddress":"10.1.0.4","privateIPAllocationMethod":"Dynamic","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"primary":true,"privateIPAddressVersion":"IPv4"}}],"dnsSettings":{"dnsServers":[],"appliedDnsServers":[],"internalDomainNameSuffix":"mv1ybm5nruoe5m2mfrbxlg0qsf.bx.internal.cloudapp.net"},"enableAcceleratedNetworking":false,"vnetEncryptionSupported":false,"enableIPForwarding":false,"disableTcpStateTracking":false,"hostedWorkloads":[],"tapConfigurations":[],"nicType":"Standard","allowPort25Out":true,"auxiliaryMode":"None","auxiliarySku":"None"},"type":"Microsoft.Network/networkInterfaces","location":"eastus","kind":"Regular"}'
+        body: '{"name":"nic1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipConfigurations":[{"name":"ipConfig1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1/ipConfigurations/ipConfig1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkInterfaces/ipConfigurations","properties":{"provisioningState":"Succeeded","privateIPAddress":"10.1.0.4","privateIPAllocationMethod":"Dynamic","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"primary":true,"privateIPAddressVersion":"IPv4"}}],"dnsSettings":{"dnsServers":[],"appliedDnsServers":[],"internalDomainNameSuffix":"w321noft21euxoykmubh2wi25a.bx.internal.cloudapp.net"},"enableAcceleratedNetworking":false,"vnetEncryptionSupported":false,"enableIPForwarding":false,"disableTcpStateTracking":false,"hostedWorkloads":[],"tapConfigurations":[],"nicType":"Standard","allowPort25Out":true,"auxiliaryMode":"None","auxiliarySku":"None"},"type":"Microsoft.Network/networkInterfaces","location":"eastus","kind":"Regular"}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -259,11 +251,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 1DAF738210AB47C6A90ADC172E3FAFD1 Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:17Z'
         status: 201 Created
         code: 201
-        duration: 4.788339557s
+        duration: 1.351455171s
     - id: 5
       request:
         proto: HTTP/1.1
@@ -278,7 +268,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -288,7 +278,7 @@ interactions:
         trailer: {}
         content_length: 1461
         uncompressed: false
-        body: '{"name":"nic1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipConfigurations":[{"name":"ipConfig1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1/ipConfigurations/ipConfig1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkInterfaces/ipConfigurations","properties":{"provisioningState":"Succeeded","privateIPAddress":"10.1.0.4","privateIPAllocationMethod":"Dynamic","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"primary":true,"privateIPAddressVersion":"IPv4"}}],"dnsSettings":{"dnsServers":[],"appliedDnsServers":[],"internalDomainNameSuffix":"mv1ybm5nruoe5m2mfrbxlg0qsf.bx.internal.cloudapp.net"},"enableAcceleratedNetworking":false,"vnetEncryptionSupported":false,"enableIPForwarding":false,"disableTcpStateTracking":false,"hostedWorkloads":[],"tapConfigurations":[],"nicType":"Standard","allowPort25Out":true,"auxiliaryMode":"None","auxiliarySku":"None"},"type":"Microsoft.Network/networkInterfaces","location":"eastus","kind":"Regular"}'
+        body: '{"name":"nic1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipConfigurations":[{"name":"ipConfig1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1/ipConfigurations/ipConfig1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/networkInterfaces/ipConfigurations","properties":{"provisioningState":"Succeeded","privateIPAddress":"10.1.0.4","privateIPAllocationMethod":"Dynamic","subnet":{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1/subnets/subnet1"},"primary":true,"privateIPAddressVersion":"IPv4"}}],"dnsSettings":{"dnsServers":[],"appliedDnsServers":[],"internalDomainNameSuffix":"w321noft21euxoykmubh2wi25a.bx.internal.cloudapp.net"},"enableAcceleratedNetworking":false,"vnetEncryptionSupported":false,"enableIPForwarding":false,"disableTcpStateTracking":false,"hostedWorkloads":[],"tapConfigurations":[],"nicType":"Standard","allowPort25Out":true,"auxiliaryMode":"None","auxiliarySku":"None"},"type":"Microsoft.Network/networkInterfaces","location":"eastus","kind":"Regular"}'
         headers:
             Cache-Control:
                 - no-cache
@@ -308,11 +298,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 8A38D541433A48A491359C920D6D49F6 Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:22Z'
         status: 200 OK
         code: 200
-        duration: 958.314287ms
+        duration: 853.671633ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -333,7 +321,7 @@ interactions:
                 - "675"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -341,18 +329,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1963
+        content_length: 1793
         uncompressed: false
-        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"identity\": {\r\n    \"type\": \"SystemAssigned\",\r\n    \"principalId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"tenantId\": \"tenantid\"\r\n  },\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Creating\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Creating\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-03-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-07-01
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1963"
+                - "1793"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -366,12 +354,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/PutVM3Min;2541,Microsoft.Compute/PutVM30Min;12711
-            X-Msedge-Ref:
-                - 'Ref A: 0C88E559BEA74D40929BD11BF20B9B70 Ref B: TYO201100116049 Ref C: 2023-09-19T01:54:23Z'
+                - Microsoft.Compute/PutVM3Min;2538,Microsoft.Compute/PutVM30Min;12688
         status: 201 Created
         code: 201
-        duration: 9.381393822s
+        duration: 4.773038254s
     - id: 7
       request:
         proto: HTTP/1.1
@@ -386,7 +372,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -415,12 +401,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;44965,Microsoft.Compute/GetOperation30Min;89429
-            X-Msedge-Ref:
-                - 'Ref A: 8546FA814C764998BEC05EEB87BE7020 Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:04Z'
+                - Microsoft.Compute/GetOperation3Min;44962,Microsoft.Compute/GetOperation30Min;89398
         status: 200 OK
         code: 200
-        duration: 392.596217ms
+        duration: 329.981423ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -435,7 +419,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -443,14 +427,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2114
+        content_length: 1944
         uncompressed: false
-        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"identity\": {\r\n    \"type\": \"SystemAssigned\",\r\n    \"principalId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"tenantId\": \"tenantid\"\r\n  },\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2114"
+                - "1944"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -464,12 +448,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;30355,Microsoft.Compute/LowCostGet30Min;242832
-            X-Msedge-Ref:
-                - 'Ref A: F7B5E93610E642C489B3A11FE51E291D Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:04Z'
+                - Microsoft.Compute/LowCostGet3Min;30685,Microsoft.Compute/LowCostGet30Min;245552
         status: 200 OK
         code: 200
-        duration: 1.172861276s
+        duration: 982.338169ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -490,7 +472,7 @@ interactions:
                 - "675"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-07-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -498,14 +480,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2113
+        content_length: 1943
         uncompressed: false
-        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"identity\": {\r\n    \"type\": \"SystemAssigned\",\r\n    \"principalId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"tenantId\": \"tenantid\"\r\n  },\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Updating\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Updating\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2113"
+                - "1943"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -519,12 +501,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/PutVM3Min;2542,Microsoft.Compute/PutVM30Min;12721
-            X-Msedge-Ref:
-                - 'Ref A: 4CC443FD101D4C38BEFB12A09BC4482D Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:05Z'
+                - Microsoft.Compute/PutVM3Min;2538,Microsoft.Compute/PutVM30Min;12693
         status: 200 OK
         code: 200
-        duration: 6.088210314s
+        duration: 1.72079552s
     - id: 10
       request:
         proto: HTTP/1.1
@@ -539,7 +519,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -547,14 +527,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2114
+        content_length: 1944
         uncompressed: false
-        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"identity\": {\r\n    \"type\": \"SystemAssigned\",\r\n    \"principalId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"tenantId\": \"tenantid\"\r\n  },\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
+        body: "{\r\n  \"name\": \"testResource\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n  \"type\": \"Microsoft.Compute/virtualMachines\",\r\n  \"location\": \"eastus\",\r\n  \"properties\": {\r\n    \"hardwareProfile\": {\r\n      \"vmSize\": \"Standard_F2s\"\r\n    },\r\n    \"provisioningState\": \"Succeeded\",\r\n    \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n    \"storageProfile\": {\r\n      \"imageReference\": {\r\n        \"publisher\": \"MicrosoftWindowsServer\",\r\n        \"offer\": \"WindowsServer\",\r\n        \"sku\": \"2019-Datacenter\",\r\n        \"version\": \"latest\",\r\n        \"exactVersion\": \"17763.4851.230905\"\r\n      },\r\n      \"osDisk\": {\r\n        \"osType\": \"Windows\",\r\n        \"name\": \"disk1\",\r\n        \"createOption\": \"FromImage\",\r\n        \"caching\": \"ReadWrite\",\r\n        \"managedDisk\": {\r\n          \"storageAccountType\": \"Standard_LRS\",\r\n          \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n        },\r\n        \"deleteOption\": \"Detach\",\r\n        \"diskSizeGB\": 127\r\n      },\r\n      \"dataDisks\": []\r\n    },\r\n    \"osProfile\": {\r\n      \"computerName\": \"sample-compute\",\r\n      \"adminUsername\": \"sample-user\",\r\n      \"windowsConfiguration\": {\r\n        \"provisionVMAgent\": true,\r\n        \"enableAutomaticUpdates\": true,\r\n        \"patchSettings\": {\r\n          \"patchMode\": \"AutomaticByOS\",\r\n          \"assessmentMode\": \"ImageDefault\"\r\n        },\r\n        \"enableVMAgentPlatformUpdates\": false\r\n      },\r\n      \"secrets\": [],\r\n      \"allowExtensionOperations\": true,\r\n      \"requireGuestProvisionSignal\": true\r\n    },\r\n    \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n    \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n  }\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2114"
+                - "1944"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -568,12 +548,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/LowCostGet3Min;30352,Microsoft.Compute/LowCostGet30Min;242829
-            X-Msedge-Ref:
-                - 'Ref A: 89487845B33C422F8E6D158E103BBC28 Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:11Z'
+                - Microsoft.Compute/LowCostGet3Min;30683,Microsoft.Compute/LowCostGet30Min;245550
         status: 200 OK
         code: 200
-        duration: 1.211154254s
+        duration: 411.140628ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -590,7 +568,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -598,14 +576,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 2371
+        content_length: 2181
         uncompressed: false
-        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testResource\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n      \"type\": \"Microsoft.Compute/virtualMachines\",\r\n      \"location\": \"eastus\",\r\n      \"identity\": {\r\n        \"type\": \"SystemAssigned\",\r\n        \"principalId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"tenantId\": \"tenantid\"\r\n      },\r\n      \"properties\": {\r\n        \"hardwareProfile\": {\r\n          \"vmSize\": \"Standard_F2s\"\r\n        },\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"storageProfile\": {\r\n          \"imageReference\": {\r\n            \"publisher\": \"MicrosoftWindowsServer\",\r\n            \"offer\": \"WindowsServer\",\r\n            \"sku\": \"2019-Datacenter\",\r\n            \"version\": \"latest\",\r\n            \"exactVersion\": \"17763.4851.230905\"\r\n          },\r\n          \"osDisk\": {\r\n            \"osType\": \"Windows\",\r\n            \"name\": \"disk1\",\r\n            \"createOption\": \"FromImage\",\r\n            \"caching\": \"ReadWrite\",\r\n            \"managedDisk\": {\r\n              \"storageAccountType\": \"Standard_LRS\",\r\n              \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n            },\r\n            \"deleteOption\": \"Detach\",\r\n            \"diskSizeGB\": 127\r\n          },\r\n          \"dataDisks\": []\r\n        },\r\n        \"osProfile\": {\r\n          \"computerName\": \"sample-compute\",\r\n          \"adminUsername\": \"sample-user\",\r\n          \"windowsConfiguration\": {\r\n            \"provisionVMAgent\": true,\r\n            \"enableAutomaticUpdates\": true,\r\n            \"patchSettings\": {\r\n              \"patchMode\": \"AutomaticByOS\",\r\n              \"assessmentMode\": \"ImageDefault\"\r\n            },\r\n            \"enableVMAgentPlatformUpdates\": false\r\n          },\r\n          \"secrets\": [],\r\n          \"allowExtensionOperations\": true,\r\n          \"requireGuestProvisionSignal\": true\r\n        },\r\n        \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n      }\r\n    }\r\n  ]\r\n}"
+        body: "{\r\n  \"value\": [\r\n    {\r\n      \"name\": \"testResource\",\r\n      \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource\",\r\n      \"type\": \"Microsoft.Compute/virtualMachines\",\r\n      \"location\": \"eastus\",\r\n      \"properties\": {\r\n        \"hardwareProfile\": {\r\n          \"vmSize\": \"Standard_F2s\"\r\n        },\r\n        \"provisioningState\": \"Succeeded\",\r\n        \"vmId\": \"00000000-0000-0000-0000-000000000000\",\r\n        \"storageProfile\": {\r\n          \"imageReference\": {\r\n            \"publisher\": \"MicrosoftWindowsServer\",\r\n            \"offer\": \"WindowsServer\",\r\n            \"sku\": \"2019-Datacenter\",\r\n            \"version\": \"latest\",\r\n            \"exactVersion\": \"17763.4851.230905\"\r\n          },\r\n          \"osDisk\": {\r\n            \"osType\": \"Windows\",\r\n            \"name\": \"disk1\",\r\n            \"createOption\": \"FromImage\",\r\n            \"caching\": \"ReadWrite\",\r\n            \"managedDisk\": {\r\n              \"storageAccountType\": \"Standard_LRS\",\r\n              \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/disks/disk1\"\r\n            },\r\n            \"deleteOption\": \"Detach\",\r\n            \"diskSizeGB\": 127\r\n          },\r\n          \"dataDisks\": []\r\n        },\r\n        \"osProfile\": {\r\n          \"computerName\": \"sample-compute\",\r\n          \"adminUsername\": \"sample-user\",\r\n          \"windowsConfiguration\": {\r\n            \"provisionVMAgent\": true,\r\n            \"enableAutomaticUpdates\": true,\r\n            \"patchSettings\": {\r\n              \"patchMode\": \"AutomaticByOS\",\r\n              \"assessmentMode\": \"ImageDefault\"\r\n            },\r\n            \"enableVMAgentPlatformUpdates\": false\r\n          },\r\n          \"secrets\": [],\r\n          \"allowExtensionOperations\": true,\r\n          \"requireGuestProvisionSignal\": true\r\n        },\r\n        \"networkProfile\": {\"networkInterfaces\":[{\"id\":\"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1\"}]},\r\n        \"timeCreated\": \"2001-02-03T04:05:06Z\"\r\n      }\r\n    }\r\n  ]\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "2371"
+                - "2181"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -619,12 +597,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/HighCostGet3Min;1061,Microsoft.Compute/HighCostGet30Min;5312
-            X-Msedge-Ref:
-                - 'Ref A: 998BC73B58A24E71917C915977F3E3A9 Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:13Z'
+                - Microsoft.Compute/HighCostGet3Min;1073,Microsoft.Compute/HighCostGet30Min;5371
         status: 200 OK
         code: 200
-        duration: 526.971607ms
+        duration: 1.0365827s
     - id: 12
       request:
         proto: HTTP/1.1
@@ -641,7 +617,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachinenotfound/providers/Microsoft.Compute/virtualMachines?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachinenotfound/providers/Microsoft.Compute/virtualMachines?api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -671,11 +647,9 @@ interactions:
                 - nosniff
             X-Ms-Failure-Cause:
                 - gateway
-            X-Msedge-Ref:
-                - 'Ref A: 621FE3904CD84E4C8B2EFF5538862048 Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:13Z'
         status: 404 Not Found
         code: 404
-        duration: 98.032848ms
+        duration: 80.597513ms
     - id: 13
       request:
         proto: HTTP/1.1
@@ -692,7 +666,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Compute/virtualMachines/testResource?api-version=2023-07-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -707,7 +681,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-03-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-07-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -715,7 +689,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-03-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&monitor=true&api-version=2023-07-01
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -725,12 +699,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/DeleteVM3Min;1820,Microsoft.Compute/DeleteVM30Min;9107
-            X-Msedge-Ref:
-                - 'Ref A: 0A3C10E3696A488495DA98E36151E5B5 Ref B: TYO201100116049 Ref C: 2023-09-19T01:56:13Z'
+                - Microsoft.Compute/DeleteVM3Min;1841,Microsoft.Compute/DeleteVM30Min;9204
         status: 202 Accepted
         code: 202
-        duration: 1.412176857s
+        duration: 884.090342ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -745,7 +717,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-03-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/locations/eastus/operations/00000000-0000-0000-0000-000000000000?p=00000000-0000-0000-0000-000000000000&api-version=2023-07-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -753,14 +725,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 184
+        content_length: 183
         uncompressed: false
         body: "{\r\n  \"startTime\": \"2001-02-03T04:05:06Z\",\r\n  \"endTime\": \"2001-02-03T04:05:06Z\",\r\n  \"status\": \"Succeeded\",\r\n  \"name\": \"00000000-0000-0000-0000-000000000000\"\r\n}"
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "184"
+                - "183"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -774,12 +746,10 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Resource:
-                - Microsoft.Compute/GetOperation3Min;44969,Microsoft.Compute/GetOperation30Min;89419
-            X-Msedge-Ref:
-                - 'Ref A: D3F7C850D7924CA1B1670DE3D36723C0 Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:26Z'
+                - Microsoft.Compute/GetOperation3Min;44950,Microsoft.Compute/GetOperation30Min;89600
         status: 200 OK
         code: 200
-        duration: 250.463816ms
+        duration: 345.316764ms
     - id: 15
       request:
         proto: HTTP/1.1
@@ -796,7 +766,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/networkInterfaces/nic1?api-version=2023-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -811,7 +781,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -819,7 +789,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -828,11 +798,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 51B6CEB84D084AA8952A47B77775E4B9 Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:26Z'
         status: 202 Accepted
         code: 202
-        duration: 1.202502025s
+        duration: 1.268526497s
     - id: 16
       request:
         proto: HTTP/1.1
@@ -847,7 +815,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -875,11 +843,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: D20E5E13A19547B4BABF20923FC3C1AB Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:31Z'
         status: 200 OK
         code: 200
-        duration: 1.338700706s
+        duration: 728.909179ms
     - id: 17
       request:
         proto: HTTP/1.1
@@ -896,7 +862,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-VirtualMachine/providers/Microsoft.Network/virtualNetworks/vnet1?api-version=2023-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -911,7 +877,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -919,7 +885,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -928,11 +894,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 70AB42C3DAF241FE9F8C9CFC40965D84 Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:33Z'
         status: 202 Accepted
         code: 202
-        duration: 1.922763967s
+        duration: 989.511747ms
     - id: 18
       request:
         proto: HTTP/1.1
@@ -947,7 +911,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-04-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -975,11 +939,9 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: 22F0306914B94BBCBE3BB265754392D5 Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:45Z'
         status: 200 OK
         code: 200
-        duration: 629.323063ms
+        duration: 290.757099ms
     - id: 19
       request:
         proto: HTTP/1.1
@@ -1015,7 +977,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=2023-09-19T01%3a57%3a50&c=MIIHADCCBeigAwIBAgITHgMiVmbNs9bo9g1GbQAAAyJWZjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMTgwNDI4WhcNMjQwNzI3MTgwNDI4WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMIcvxD_0PMhdmLk48iFdsDWY8xHwqf15PiuUxm56-DgFD_DTCio04a553Ilp6PhEzp-BqQUXZ8lOvewwSndfEiD0zKouzAK7ygeNzS10EFTSWbnBDNo4QPM7FM4bFhDUNl-AU1M7DrJCQPA8UGawTxFUgABTHaRYxMKeEyJ2IzdSmH0TjTgxv5pQDBP-QEJ-Rpdso9m_Yu2YfFRTCBiBNtQ4g-sojuHpOc3ULsGhK35Ua1gXYl44t0qnX1y-DiMbk0PPQ8_gop4DdSYd0NTBv-xBnqlom2ceJG8oCE4GCEXT3L6yOC3TvKvZ-7-r2cOWqPAolMtfZ4kIa7fp3zX-QUCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBS8HoebCKQVIYtc1_REbe-XAGi3HjAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAB6b3-2IDHqiKHidm1sv2adgnlW7o5teHg5_6JuYXETz89EHAOvxAis3i3YzHc79kO_nmk5RcVHDydZ-zI8JDlC8n3v75Zt4KNDYid-qMTOeyQogLcB2Cq3iRGRTjaG_abh0F1ifWL0QBhzujNxastu--5-ozxOHa7CTiseyWTxaCRv103DUxZ7-lNrBKHFJRQV_X5G_oVNKU2WvTmSTWNzCXpyLhKdoBAyf_4QsisR7IFsL1aNWE8fHvLUv96vSpwRelX1cVuab3bBG_qJTzD1TMk8V37gxq4OTAHXZOmheCepyVhUEawvCvCTaFwQf5kHPZFdLhd7qh8jEr2C06sM&s=Qov3XOicufwh1bsPElo4pdLOpr7t95Lbz0wSdOqmdcVVpZjgRgfOX-0DbVnELjDTPq5JgbscPvQSA2bBZmNX04f5HBQIdtXiKCYc6aZNUOKvENWTeFG9YLsKCgCVnBnapF5qvKZihlWcySSKDXKB2Qv1jFX31dzteaScQvmgEpEVWAqonGKQia5ahohvl2n5OAhIPM3IJC_t2SaSPxpLzZPVNTpZAK1mGwiegSBLUb-p-GfI_PpE2NWrd-nkLduRp0X5pWRO5jMcq6lyE0oLVKPd7tB9_qu3us1aTYayyhjNCada1Lki5GbkEI1IzOl1gWLy87w0Y0dvrO2qtSs2sg&h=dgPXVoZoGX1YL7IGV7P7mNvtD_CWM6FJTu8tvPJ-xuw
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRWSVJUVUFMTUFDSElORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=2023-09-22T06%3a26%3a17&c=MIIHADCCBeigAwIBAgITHgMiVmbNs9bo9g1GbQAAAyJWZjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjMwODAyMTgwNDI4WhcNMjQwNzI3MTgwNDI4WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMIcvxD_0PMhdmLk48iFdsDWY8xHwqf15PiuUxm56-DgFD_DTCio04a553Ilp6PhEzp-BqQUXZ8lOvewwSndfEiD0zKouzAK7ygeNzS10EFTSWbnBDNo4QPM7FM4bFhDUNl-AU1M7DrJCQPA8UGawTxFUgABTHaRYxMKeEyJ2IzdSmH0TjTgxv5pQDBP-QEJ-Rpdso9m_Yu2YfFRTCBiBNtQ4g-sojuHpOc3ULsGhK35Ua1gXYl44t0qnX1y-DiMbk0PPQ8_gop4DdSYd0NTBv-xBnqlom2ceJG8oCE4GCEXT3L6yOC3TvKvZ-7-r2cOWqPAolMtfZ4kIa7fp3zX-QUCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBS8HoebCKQVIYtc1_REbe-XAGi3HjAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAB6b3-2IDHqiKHidm1sv2adgnlW7o5teHg5_6JuYXETz89EHAOvxAis3i3YzHc79kO_nmk5RcVHDydZ-zI8JDlC8n3v75Zt4KNDYid-qMTOeyQogLcB2Cq3iRGRTjaG_abh0F1ifWL0QBhzujNxastu--5-ozxOHa7CTiseyWTxaCRv103DUxZ7-lNrBKHFJRQV_X5G_oVNKU2WvTmSTWNzCXpyLhKdoBAyf_4QsisR7IFsL1aNWE8fHvLUv96vSpwRelX1cVuab3bBG_qJTzD1TMk8V37gxq4OTAHXZOmheCepyVhUEawvCvCTaFwQf5kHPZFdLhd7qh8jEr2C06sM&s=sTxBfnf2CVcjG3bVlN14SzHenjPVSLjsX9NkidvY3MJCwD-vyJcFhrlHHOalFgLvAG0Eb0SNdZldEE53FJ8DaFA-5blGC7xvey9XMYU_HnD6FJmn2pDL1aPFbk2XzzNHjShYa4XYavvAY-RN6AsuoU0tppFmxxLs3x96q3orB1ojiATyDEUDRJwkBOIYDhFsHIYt8i958yY-pT88Ap9iap6BNy3wOlDU2uVRlOGu1zmySxKU44Ecm2L3XRUNXBQ32JJWcATFCPtav5iOLOMT1gF-HvG4QDgMRQVL3w7Z49_F7Sd9SJXb5bRB6W2GnELp3L6RBpAVASK_091O8BMk1w&h=SYC80TRy-9rZUvDEtL7Xlh0fIFjeYU26cUvdUMfT1b8
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1024,8 +986,6 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Msedge-Ref:
-                - 'Ref A: F90B90B9B45A43FE9F7351F9BC0E28DB Ref B: TYO201100116049 Ref C: 2023-09-19T01:57:45Z'
         status: 202 Accepted
         code: 202
-        duration: 4.739606238s
+        duration: 2.363723292s

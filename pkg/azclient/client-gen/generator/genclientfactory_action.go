@@ -31,6 +31,8 @@ import (
 type ClientEntryConfig struct {
 	PkgAlias          string
 	PkgPath           string
+	ResourceName      string
+	SubResourceName   string
 	InterfaceTypeName string
 	RateLimitKey      string
 }
@@ -57,6 +59,8 @@ func (generator *ClientFactoryGenerator) RegisterClient(_ *genall.GenerationCont
 	generator.clientRegistry[root.Name+typeName] = &ClientEntryConfig{
 		PkgAlias:          root.Name,
 		PkgPath:           root.PkgPath,
+		ResourceName:      markerConf.Resource,
+		SubResourceName:   markerConf.SubResource,
 		InterfaceTypeName: typeName,
 		RateLimitKey:      markerConf.RateLimitKey,
 	}
@@ -131,6 +135,27 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 		}
 		fmt.Println("Generated client factory mock")
 	}
+	{
+		var outContent bytes.Buffer
+		if err := FactoryTestCaseTemplate.Execute(&outContent, generator.clientRegistry); err != nil {
+			return err
+		}
+		file, err := os.Create("factory_test.go")
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		importList := make(map[string]map[string]struct{})
+		importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
+		importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
+
+		err = DumpToWriter(file, generator.headerText, importList, "azclient", &outContent)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Generated client factory test")
+
+	}
 	return nil
 }
 
@@ -188,7 +213,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 }
 
 {{range $key, $client := . }}
-func (factory *ClientFactoryImpl) Get{{.PkgAlias}}{{.InterfaceTypeName}}(){{.PkgAlias}}.{{.InterfaceTypeName}} {
+{{- $resource := .ResourceName}}
+{{ if (gt (len .SubResourceName) 0) }}
+{{ $resource = .SubResourceName}}
+{{ end -}}
+func (factory *ClientFactoryImpl) Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}} {
 	return factory.{{ $key }}
 }
 {{ end }}
@@ -198,7 +227,32 @@ var AbstractClientFactoryInterfaceTemplate = template.Must(template.New("object-
 	`
 type ClientFactory interface {
 	{{- range $key, $client := . }}
-	Get{{.PkgAlias}}{{.InterfaceTypeName}}() {{.PkgAlias}}.{{.InterfaceTypeName}}
+	{{$resource := $client.ResourceName }}
+	{{- if (gt (len $client.SubResourceName) 0) }}
+	{{- $resource = $client.SubResourceName -}}
+	{{- end -}}
+	Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}}
 	{{- end }}
 }
+`))
+
+var FactoryTestCaseTemplate = template.Must(template.New("factory-test-case").Parse(
+	`
+	var _ = Describe("Factory", func() {
+		When("config is nil", func() {
+			{{- range $key, $client := . }}
+			{{$resource := $client.ResourceName }}
+			{{- if (gt (len $client.SubResourceName) 0) }}
+			{{- $resource = $client.SubResourceName -}}
+			{{- end -}}
+			It("should create factory instance without painc - {{$resource}}", func() {
+				factory, err := NewClientFactory(nil, nil, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(factory).NotTo(BeNil())
+				client := factory.Get{{$resource}}Client()
+				Expect(client).NotTo(BeNil())
+			})
+			{{- end }}
+		})
+	})
 `))
