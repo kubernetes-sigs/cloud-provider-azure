@@ -138,9 +138,12 @@ func (az *Cloud) mapVMSetNameToLoadBalancerName(vmSetName, clusterName string) s
 
 // isControlPlaneNode returns true if the node has a control-plane role label.
 // The control-plane role is determined by looking for:
-// * a node-role.kubernetes.io/control-plane or node-role.kubernetes.io/master="" label
+// * a node-role.kubernetes.io/control-plane or node-role.kubernetes.io/controlplane or node-role.kubernetes.io/master="" label
 func isControlPlaneNode(node *v1.Node) bool {
 	if _, ok := node.Labels[consts.ControlPlaneNodeRoleLabel]; ok {
+		return true
+	}
+	if _, ok := node.Labels[consts.ControlPlaneAltNodeRoleLabel]; ok {
 		return true
 	}
 	// include master role labels for k8s < 1.19
