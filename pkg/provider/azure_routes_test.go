@@ -811,3 +811,26 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureRouteTableTagged(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cloud := GetTestCloud(ctrl)
+	cloud.Tags = "a=b,c=d"
+
+	expectedTags := map[string]*string{
+		"a": pointer.String("b"),
+		"c": pointer.String("d"),
+	}
+	rt := &network.RouteTable{}
+	tags, changed := cloud.ensureRouteTableTagged(rt)
+	assert.Equal(t, expectedTags, tags)
+	assert.True(t, changed)
+
+	cloud.RouteTableResourceGroup = "rg1"
+	rt = &network.RouteTable{}
+	tags, changed = cloud.ensureRouteTableTagged(rt)
+	assert.Nil(t, tags)
+	assert.False(t, changed)
+}
