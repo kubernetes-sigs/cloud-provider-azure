@@ -138,7 +138,7 @@ func GetMaster(cs clientset.Interface) (*v1.Node, error) {
 	return nil, fmt.Errorf("cannot obtain the master node")
 }
 
-// GetNodeList is a wapper around listing nodes
+// GetNodeList is a wrapper around listing nodes
 func getNodeList(cs clientset.Interface) (*v1.NodeList, error) {
 	var nodes *v1.NodeList
 	var err error
