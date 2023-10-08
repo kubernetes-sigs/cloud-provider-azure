@@ -2501,7 +2501,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			expectedGetInstanceID: "invalid",
 		},
 		{
-			description: "ensureVMSSInPool should report an error if failed to get instsance ID",
+			description: "ensureVMSSInPool should report an error if failed to get instance ID",
 			nodes: []*v1.Node{
 				{},
 			},
