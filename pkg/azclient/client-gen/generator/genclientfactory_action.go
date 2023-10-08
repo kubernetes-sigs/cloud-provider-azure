@@ -196,7 +196,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("{{.}}")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	{{- end }}	
 	{{$key}}, err := {{.PkgAlias}}.New(config.SubscriptionID, cred, options)
 	if err != nil {

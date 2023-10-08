@@ -73,6 +73,7 @@ var _ = Describe("Throttle", func() {
 			Expect(err).To(HaveOccurred())
 			throttlePolicy.RetryAfterWriter = time.Now().Add(-time.Second * 10)
 			req, err = runtime.NewRequest(context.Background(), http.MethodPut, "http://localhost:8080")
+			Expect(err).NotTo(HaveOccurred())
 			err = req.SetBody(streaming.NopCloser(strings.NewReader(`{"etag":"etag"}`)), "application/json")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = pipeline.Do(req)
