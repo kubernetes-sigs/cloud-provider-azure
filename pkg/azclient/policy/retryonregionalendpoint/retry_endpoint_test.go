@@ -45,13 +45,12 @@ var _ = Describe("RetryEndpoint", func() {
 									StatusCode: http.StatusOK,
 									Body:       http.NoBody,
 								}, nil
-							} else {
-								return &http.Response{
-									Request:    req.Raw(),
-									StatusCode: http.StatusOK,
-									Body:       streaming.NopCloser(strings.NewReader(`{"content":"content"}`)),
-								}, nil
 							}
+							return &http.Response{
+								Request:    req.Raw(),
+								StatusCode: http.StatusOK,
+								Body:       streaming.NopCloser(strings.NewReader(`{"content":"content"}`)),
+							}, nil
 						},
 					),
 				},
@@ -75,13 +74,12 @@ var _ = Describe("RetryEndpoint", func() {
 									ContentLength: 20,
 									Body:          streaming.NopCloser(strings.NewReader(`{"error":{"code":"ResourceGroupNotFound"}}`)),
 								}, nil
-							} else {
-								return &http.Response{
-									Request:    req.Raw(),
-									StatusCode: http.StatusOK,
-									Body:       streaming.NopCloser(strings.NewReader(`{"content":"content"}`)),
-								}, nil
 							}
+							return &http.Response{
+								Request:    req.Raw(),
+								StatusCode: http.StatusOK,
+								Body:       streaming.NopCloser(strings.NewReader(`{"content":"content"}`)),
+							}, nil
 						},
 					),
 				},

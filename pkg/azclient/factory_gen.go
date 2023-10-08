@@ -91,7 +91,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("availabilitySetRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -105,7 +107,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("deploymentRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	deploymentclientInterface, err := deploymentclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -119,7 +123,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("diskRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -133,7 +139,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("interfaceRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -147,7 +155,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("ipGroupRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	ipgroupclientInterface, err := ipgroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -161,7 +171,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("loadBalancerRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	loadbalancerclientInterface, err := loadbalancerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -175,7 +187,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("containerServiceRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	managedclusterclientInterface, err := managedclusterclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -189,7 +203,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("privateEndpointRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	privateendpointclientInterface, err := privateendpointclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -203,7 +219,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("privateLinkServiceRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	privatelinkserviceclientInterface, err := privatelinkserviceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -217,7 +235,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("privateDNSRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	privatezoneclientInterface, err := privatezoneclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -231,7 +251,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("publicIPAddressRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	publicipaddressclientInterface, err := publicipaddressclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -256,7 +278,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("routeTableRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	routetableclientInterface, err := routetableclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -270,7 +294,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("securityGroupRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	securitygroupclientInterface, err := securitygroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -284,7 +310,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("snapshotRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	snapshotclientInterface, err := snapshotclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -298,7 +326,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("subnetsRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -312,7 +342,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("virtualMachineRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	virtualmachineclientInterface, err := virtualmachineclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -326,7 +358,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("virtualMachineSizesRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	virtualmachinescalesetclientInterface, err := virtualmachinescalesetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
