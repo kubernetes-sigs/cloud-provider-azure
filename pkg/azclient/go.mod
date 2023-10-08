@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.28.0
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/time v0.3.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
@@ -35,7 +35,7 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.12.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
