@@ -17,7 +17,6 @@ limitations under the License.
 package utils
 
 import (
-	"math"
 	"net/http"
 	"time"
 
@@ -32,9 +31,9 @@ var TracingProvider tracing.Provider
 
 const (
 	DefaultMaxRetries    = 3
-	DefaultMaxRetryDelay = math.MaxInt64
+	DefaultMaxRetryDelay = 60 * time.Second
 	DefaultRetryDelay    = 5 * time.Second
-	DefaultTryTimeout    = 1 * time.Second
+	DefaultTryTimeout    = 10 * time.Second
 )
 
 func GetDefaultOption() *arm.ClientOptions {
