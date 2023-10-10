@@ -32,5 +32,5 @@ func (transport *ClosableTransport) ForceClose() error {
 }
 
 func (transport *ClosableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return transport.RoundTrip(req)
+	return transport.Transport.RoundTrip(req)
 }

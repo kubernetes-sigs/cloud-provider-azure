@@ -15,10 +15,10 @@ require (
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.28.0
 	golang.org/x/crypto v0.14.0
+	golang.org/x/sync v0.3.0
 	golang.org/x/time v0.3.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer v0.0.0-20230831215230-8f671efb7194
 )
 
 require (
@@ -34,7 +34,6 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.12.0 // indirect

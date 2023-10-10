@@ -119,5 +119,3 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 k8s.io/utils v0.0.0-20230505201702-9f6742963106 h1:EObNQ3TW2D+WptiYXlApGNLVy0zm/JIBVY9i+M4wpAU=
 k8s.io/utils v0.0.0-20230505201702-9f6742963106/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer v0.0.0-20230831215230-8f671efb7194 h1:AwE6AtU2YC+uYiMW1dkqHG5VNEvs9CmGHp/3owi6DKY=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer v0.0.0-20230831215230-8f671efb7194/go.mod h1:WNTQ5cYiK4CFDdh/Je8CD3z7BgHA/RrJ8wOns2qUwqM=
