@@ -18,6 +18,7 @@ package auth
 
 import (
 	"fmt"
+	"strings"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -77,7 +78,8 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		Expect(tag).NotTo(Equal(""))
 		Expect(err).NotTo(HaveOccurred())
 
-		podTemplate := createPodPullingFromACR(*registry.Name, image, tag)
+		acrImageURL := fmt.Sprintf("%s.azurecr.io/%s:%s", *registry.Name, image, tag)
+		podTemplate := createPodPullingFromACR(image, acrImageURL, "linux")
 		err = utils.CreatePod(cs, ns.Name, podTemplate)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -88,22 +90,67 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		err = utils.DockerLogout()
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("should be able to create an ACR cache and pull images from it", Label(utils.TestSuiteLabelOOTCredential), func() {
+		// This test involves a preview feature ACR: ACR cache
+		// https://learn.microsoft.com/en-us/azure/container-registry/tutorial-registry-cache
+		// The reason is that Windows test should be included but control-plane Node is Linux.
+		// So, it is hard to push a Windows image to ACR. With this new feature, the pushing can be skipped.
+		registry, err := tc.CreateContainerRegistry()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			err = tc.DeleteContainerRegistry(*registry.Name)
+			if err != nil {
+				utils.Logf("failed to cleanup registry with error: %w", err)
+			}
+		}()
+
+		// az acr login
+		Expect(registry.Name).NotTo(BeNil())
+		err = utils.AZACRLogin(*registry.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		testPull := func(imageURL, imageTag, os string) {
+			imageNameSlice := strings.Split(imageURL, "/")
+			imageName := imageNameSlice[len(imageNameSlice)-1]
+			acrImageURL := fmt.Sprintf("%s.azurecr.io/%s:%s", *registry.Name, imageName, imageTag)
+
+			err = utils.AZACRCacheCreate(*registry.Name, fmt.Sprintf("%s-cache-rule", imageName), imageURL, imageName)
+			Expect(err).NotTo(HaveOccurred())
+
+			podTemplate := createPodPullingFromACR(imageName, acrImageURL, os)
+			err = utils.CreatePod(cs, ns.Name, podTemplate)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := utils.WaitPodTo(v1.PodRunning, cs, podTemplate, ns.Name)
+			Expect(result).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		testPull("mcr.microsoft.com/mirror/docker/library/nginx", "1.25", "linux")
+		if tc.HasWindowsNodes {
+			Skip("Skipping Windows test before further verification")
+			testPull("mcr.microsoft.com/windows/nanoserver", "ltsc2019", "windows")
+		}
+	})
 })
 
-func createPodPullingFromACR(registryName, image, tag string) (result *v1.Pod) {
+func createPodPullingFromACR(imageName, acrImageURL string, os string) (result *v1.Pod) {
+	utils.Logf("Creating a Pod with ACR image URL %q", acrImageURL)
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-test", image),
+			Name: fmt.Sprintf("%s-test-%s", imageName, os),
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "test-app",
-					Image: registryName + ".azurecr.io/" + image + ":" + tag,
+					Image: acrImageURL,
 				},
 			},
 			NodeSelector: map[string]string{
-				v1.LabelOSStable: "linux",
+				v1.LabelOSStable: os,
 			},
 			Tolerations: []v1.Toleration{
 				{
