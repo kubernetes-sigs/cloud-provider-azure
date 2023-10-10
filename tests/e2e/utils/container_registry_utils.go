@@ -155,7 +155,7 @@ func AZACRLogin(acrName string) (err error) {
 	if output, err = cmd.Output(); err != nil {
 		return fmt.Errorf("az failed to account show with output: %s\n error: %w", string(output), err)
 	}
-	Logf("az account show success %q.", output)
+	Logf("az account show success.")
 
 	Logf("Attempting az acr login with azure cred.")
 	cmd = exec.Command("az", "acr", "login",
