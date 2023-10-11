@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the Disk
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.Disk, rerr error) {
-	var ops *armcompute.DisksClientGetOptions
 
-	resp, err := client.DisksClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.DisksClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}

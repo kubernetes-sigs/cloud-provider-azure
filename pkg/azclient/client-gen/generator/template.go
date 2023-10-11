@@ -124,12 +124,11 @@ var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").
 {{ end }}
 // Get gets the {{$resource}}
 func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with .SubResource}}parentResourceName string,{{end}} resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, rerr error) {
-	var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
-	{{if .Expand}}if expand != nil {
+	{{ if .Expand}}var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
+	if expand != nil {
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
-	}{{end}}
-
-	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, ops)
+	}{{- end}}
+	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}}ops{{else}}nil{{end}} )
 	if err != nil {
 		return nil, err
 	}

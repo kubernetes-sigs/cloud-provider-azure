@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the PrivateZone
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armprivatedns.PrivateZone, rerr error) {
-	var ops *armprivatedns.PrivateZonesClientGetOptions
 
-	resp, err := client.PrivateZonesClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.PrivateZonesClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}

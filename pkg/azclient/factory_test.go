@@ -129,6 +129,13 @@ var _ = Describe("Factory", func() {
 			client := factory.GetSnapshotClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - SSHPublicKeyResource", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetSSHPublicKeyResourceClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - Subnet", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
