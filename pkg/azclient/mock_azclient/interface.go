@@ -45,6 +45,7 @@ import (
 	virtualmachineclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	virtualmachinescalesetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	virtualmachinescalesetvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	virtualnetworkclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 )
 
 // MockClientFactory is a mock of ClientFactory interface.
@@ -348,4 +349,18 @@ func (m *MockClientFactory) GetVirtualMachineScaleSetVMClient() virtualmachinesc
 func (mr *MockClientFactoryMockRecorder) GetVirtualMachineScaleSetVMClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineScaleSetVMClient", reflect.TypeOf((*MockClientFactory)(nil).GetVirtualMachineScaleSetVMClient))
+}
+
+// GetVirtualNetworkClient mocks base method.
+func (m *MockClientFactory) GetVirtualNetworkClient() virtualnetworkclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVirtualNetworkClient")
+	ret0, _ := ret[0].(virtualnetworkclient.Interface)
+	return ret0
+}
+
+// GetVirtualNetworkClient indicates an expected call of GetVirtualNetworkClient.
+func (mr *MockClientFactoryMockRecorder) GetVirtualNetworkClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualNetworkClient", reflect.TypeOf((*MockClientFactory)(nil).GetVirtualNetworkClient))
 }

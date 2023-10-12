@@ -20,15 +20,16 @@ package sshpublickeyresourceclient
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var newResource = &armcompute.SSHPublicKeyResource{
 	Location: to.Ptr(location),
 }
+
 func init() {
 	additionalTestCases = func() {
 		When("create requests are raised", func() {

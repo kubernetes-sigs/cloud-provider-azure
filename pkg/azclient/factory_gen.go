@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 )
 
 type ClientFactoryImpl struct {
@@ -69,6 +70,7 @@ type ClientFactoryImpl struct {
 	virtualmachineclientInterface           virtualmachineclient.Interface
 	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
+	virtualnetworkclientInterface           virtualnetworkclient.Interface
 }
 
 func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory, error) {
@@ -390,6 +392,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
+	//initialize {virtualnetworkclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient VirtualNetwork  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	virtualnetworkclientInterface, err := virtualnetworkclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
 		cred:                cred, availabilitysetclientInterface: availabilitysetclientInterface,
@@ -412,6 +425,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		virtualmachineclientInterface:           virtualmachineclientInterface,
 		virtualmachinescalesetclientInterface:   virtualmachinescalesetclientInterface,
 		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
+		virtualnetworkclientInterface:           virtualnetworkclientInterface,
 	}, nil
 }
 
@@ -493,4 +507,8 @@ func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetClient() virtualmachi
 
 func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface {
 	return factory.virtualmachinescalesetvmclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetVirtualNetworkClient() virtualnetworkclient.Interface {
+	return factory.virtualnetworkclientInterface
 }
