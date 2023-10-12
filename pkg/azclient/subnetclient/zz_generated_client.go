@@ -49,7 +49,6 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 	if expand != nil {
 		ops = &armnetwork.SubnetsClientGetOptions{Expand: expand}
 	}
-
 	resp, err := client.SubnetsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, ops)
 	if err != nil {
 		return nil, err

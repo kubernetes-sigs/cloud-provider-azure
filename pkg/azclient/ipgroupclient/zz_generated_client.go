@@ -49,7 +49,6 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	if expand != nil {
 		ops = &armnetwork.IPGroupsClientGetOptions{Expand: expand}
 	}
-
 	resp, err := client.IPGroupsClient.Get(ctx, resourceGroupName, resourceName, ops)
 	if err != nil {
 		return nil, err

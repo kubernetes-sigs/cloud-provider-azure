@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the VirtualMachineScaleSet
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.VirtualMachineScaleSet, rerr error) {
-	var ops *armcompute.VirtualMachineScaleSetsClientGetOptions
 
-	resp, err := client.VirtualMachineScaleSetsClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.VirtualMachineScaleSetsClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}

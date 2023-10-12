@@ -33,10 +33,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 )
 
 type ClientFactory interface {
@@ -55,8 +57,10 @@ type ClientFactory interface {
 	GetRouteTableClient() routetableclient.Interface
 	GetSecurityGroupClient() securitygroupclient.Interface
 	GetSnapshotClient() snapshotclient.Interface
+	GetSSHPublicKeyResourceClient() sshpublickeyresourceclient.Interface
 	GetSubnetClient() subnetclient.Interface
 	GetVirtualMachineClient() virtualmachineclient.Interface
 	GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface
 	GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface
+	GetVirtualNetworkClient() virtualnetworkclient.Interface
 }

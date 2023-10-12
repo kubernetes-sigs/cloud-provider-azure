@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the Snapshot
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.Snapshot, rerr error) {
-	var ops *armcompute.SnapshotsClientGetOptions
 
-	resp, err := client.SnapshotsClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.SnapshotsClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}

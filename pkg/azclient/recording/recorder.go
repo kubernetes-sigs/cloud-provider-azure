@@ -233,6 +233,9 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if strings.Contains(i.Response.Body, "access_token") {
 			i.Response.Body = `{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}`
 		}
+		if strings.Contains(i.Response.Body, "-----BEGIN RSA PRIVATE KEY-----") {
+			i.Response.Body = "{\r\n  \"privateKey\": \"-----BEGIN RSA PRIVATE KEY-----\\r\\n\\r\\n-----END RSA PRIVATE KEY-----\\r\\n\",\r\n  \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\"\r\n}"
+		}
 		for _, header := range requestHeadersToRemove {
 			delete(i.Request.Headers, header)
 		}

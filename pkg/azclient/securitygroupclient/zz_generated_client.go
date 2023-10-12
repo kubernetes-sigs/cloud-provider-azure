@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the SecurityGroup
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armnetwork.SecurityGroup, rerr error) {
-	var ops *armnetwork.SecurityGroupsClientGetOptions
 
-	resp, err := client.SecurityGroupsClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.SecurityGroupsClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}

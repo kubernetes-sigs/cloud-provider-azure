@@ -45,9 +45,8 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 
 // Get gets the ManagedCluster
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcontainerservice.ManagedCluster, rerr error) {
-	var ops *armcontainerservice.ManagedClustersClientGetOptions
 
-	resp, err := client.ManagedClustersClient.Get(ctx, resourceGroupName, resourceName, ops)
+	resp, err := client.ManagedClustersClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
 	}
