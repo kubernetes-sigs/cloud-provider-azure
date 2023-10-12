@@ -21,8 +21,6 @@ import (
 	"net/http"
 )
 
-const rateLimitHeaderPrefix = "X-Ms-Ratelimit-Remaining-"
-
 type Options struct {
 	Transport *http.Transport
 

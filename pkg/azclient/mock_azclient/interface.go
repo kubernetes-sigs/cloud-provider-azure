@@ -37,6 +37,7 @@ import (
 	privatezoneclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
 	publicipaddressclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	publicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	resourcegroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	routetableclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	securitygroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	snapshotclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
@@ -237,6 +238,20 @@ func (m *MockClientFactory) GetPublicIPPrefixClient() publicipprefixclient.Inter
 func (mr *MockClientFactoryMockRecorder) GetPublicIPPrefixClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicIPPrefixClient", reflect.TypeOf((*MockClientFactory)(nil).GetPublicIPPrefixClient))
+}
+
+// GetResourceGroupClient mocks base method.
+func (m *MockClientFactory) GetResourceGroupClient() resourcegroupclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResourceGroupClient")
+	ret0, _ := ret[0].(resourcegroupclient.Interface)
+	return ret0
+}
+
+// GetResourceGroupClient indicates an expected call of GetResourceGroupClient.
+func (mr *MockClientFactoryMockRecorder) GetResourceGroupClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceGroupClient", reflect.TypeOf((*MockClientFactory)(nil).GetResourceGroupClient))
 }
 
 // GetRouteTableClient mocks base method.
