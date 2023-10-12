@@ -1207,7 +1207,7 @@ func (az *Cloud) updateNodeTaint(node *v1.Node) {
 				klog.Errorf("failed to add taint %s to the node %s", v1.TaintNodeOutOfService, node.Name)
 			}
 		} else {
-			klog.V(2).Infof("node %s is not ready but node shutdown taint is not added, skip adding node out-of-service taint", node.Name)
+			klog.V(2).Infof("node %s is not ready but either shutdown taint is missing or out-of-service taint is already added, skip adding node out-of-service taint", node.Name)
 		}
 	}
 }
