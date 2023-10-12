@@ -786,10 +786,10 @@ func TestGetPowerStatusByNodeName(t *testing.T) {
 			expectedPowerState: "Running",
 		},
 		{
-			description:        "GetPowerStatusByNodeName should return vmPowerStateStopped when the vm.InstanceView.Statuses is nil",
+			description:        "GetPowerStatusByNodeName should return vmPowerStateUnknown when the vm.InstanceView.Statuses is nil",
 			vmList:             []string{"vmss-vm-000001"},
 			nilStatus:          true,
-			expectedPowerState: vmPowerStateStopped,
+			expectedPowerState: vmPowerStateUnknown,
 		},
 	}
 
