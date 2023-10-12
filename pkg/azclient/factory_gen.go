@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
@@ -62,6 +63,7 @@ type ClientFactoryImpl struct {
 	privatezoneclientInterface              privatezoneclient.Interface
 	publicipaddressclientInterface          publicipaddressclient.Interface
 	publicipprefixclientInterface           publicipprefixclient.Interface
+	resourcegroupclientInterface            resourcegroupclient.Interface
 	routetableclientInterface               routetableclient.Interface
 	securitygroupclientInterface            securitygroupclient.Interface
 	snapshotclientInterface                 snapshotclient.Interface
@@ -274,6 +276,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
+	//initialize {resourcegroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient ResourceGroup  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	resourcegroupclientInterface, err := resourcegroupclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
 	//initialize {routetableclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient RouteTable  Interface routeTableRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
@@ -417,6 +430,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		privatezoneclientInterface:              privatezoneclientInterface,
 		publicipaddressclientInterface:          publicipaddressclientInterface,
 		publicipprefixclientInterface:           publicipprefixclientInterface,
+		resourcegroupclientInterface:            resourcegroupclientInterface,
 		routetableclientInterface:               routetableclientInterface,
 		securitygroupclientInterface:            securitygroupclientInterface,
 		snapshotclientInterface:                 snapshotclientInterface,
@@ -475,6 +489,10 @@ func (factory *ClientFactoryImpl) GetPublicIPAddressClient() publicipaddressclie
 
 func (factory *ClientFactoryImpl) GetPublicIPPrefixClient() publicipprefixclient.Interface {
 	return factory.publicipprefixclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetResourceGroupClient() resourcegroupclient.Interface {
+	return factory.resourcegroupclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetRouteTableClient() routetableclient.Interface {

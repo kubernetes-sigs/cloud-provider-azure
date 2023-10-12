@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func NewHostScopedTransport(ctx context.Context, transportFactory func() *transportChannPool) *hostScopedTransport {
+func NewHostScopedTransport(ctx context.Context, transportFactory func() *transportChannPool) Transport {
 	ctx, cancelFn := context.WithCancel(ctx)
 	transport := &hostScopedTransport{
 		ctx:              ctx,

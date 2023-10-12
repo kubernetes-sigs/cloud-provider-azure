@@ -51,26 +51,31 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 	for _, verb := range markerConf.Verbs {
 		switch true {
 		case strings.EqualFold(FuncCreateOrUpdate, verb):
+			importList["context"] = make(map[string]struct{})
 			if err := CreateOrUpdateFuncTemplate.Execute(&outContent, markerConf); err != nil {
 				root.AddError(err)
 				return err
 			}
 		case strings.EqualFold(FuncDelete, verb):
+			importList["context"] = make(map[string]struct{})
 			if err := DeleteFuncTemplate.Execute(&outContent, markerConf); err != nil {
 				root.AddError(err)
 				return err
 			}
 		case strings.EqualFold(FuncListByRG, verb):
+			importList["context"] = make(map[string]struct{})
 			if err := ListByRGFuncTemplate.Execute(&outContent, markerConf); err != nil {
 				root.AddError(err)
 				return err
 			}
 		case strings.EqualFold(FuncList, verb):
+			importList["context"] = make(map[string]struct{})
 			if err := ListFuncTemplate.Execute(&outContent, markerConf); err != nil {
 				root.AddError(err)
 				return err
 			}
 		case strings.EqualFold(FuncGet, verb):
+			importList["context"] = make(map[string]struct{})
 			if err := GetFuncTemplate.Execute(&outContent, markerConf); err != nil {
 				root.AddError(err)
 				return err
@@ -81,7 +86,6 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 	if outContent.Len() <= 0 {
 		return nil
 	}
-	importList["context"] = make(map[string]struct{})
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})

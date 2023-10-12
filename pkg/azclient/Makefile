@@ -74,6 +74,7 @@ generate: install-dependencies build generatecode generateimpl vet-all
 generatecode: build ## Generate client
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 --package-alias armcontainerservice --resource ManagedCluster --client-name ManagedClustersClient  --ratelimitkey containerServiceRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias resources --resource Deployment --client-name DeploymentsClient --verbs delete --ratelimitkey deploymentRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias resources --resource ResourceGroup --client-name ResourceGroupsClient 
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource Disk --client-name DisksClient --ratelimitkey diskRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource AvailabilitySet --client-name AvailabilitySetsClient --verbs get,list --ratelimitkey availabilitySetRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 --package-alias armcompute --resource VirtualMachine --client-name VirtualMachinesClient --verbs createorupdate,delete,list --expand --ratelimitkey virtualMachineRateLimit

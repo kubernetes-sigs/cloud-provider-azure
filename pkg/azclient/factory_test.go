@@ -108,6 +108,13 @@ var _ = Describe("Factory", func() {
 			client := factory.GetPublicIPPrefixClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - ResourceGroup", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetResourceGroupClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - RouteTable", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
