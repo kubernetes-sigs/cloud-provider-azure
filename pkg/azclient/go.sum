@@ -6,6 +6,8 @@ github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 h1:sXr+ck84g/ZlZUOZiNELInm
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0/go.mod h1:okt5dMMTOFjX/aovMlrjvvXoPMBVSPzk9185BT0+eZM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.2.0 h1:PutmjTnIYf/rM5OlNGpAXcL+b2Fa2ErD5IsOjXEHYyg=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.2.0/go.mod h1:c3iwOnL5Xq5K9ZOvxBrfZYD4pBDNTGK5b7ptkHN6SDs=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.1.0 h1:zNRn2I3iU121imRC3rsOdHU4VtSpjSNxptaN/RGzezE=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.1.0/go.mod h1:mOqRa1TUUCeeUeAeN94y07sf5qLn6YPodIm/uMr4xYE=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.3.0 h1:U73ZEM5QTwb7x/VrXLTi+sb6Aw9DqFJxOpWuj+pDPfk=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.3.0/go.mod h1:WpiaNrHqgIy+P5gTYbOA/JuMmxq7uq8onUvVBybjIlI=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/internal v1.1.2 h1:mLY+pNLjCUeKhgnAJWAKhEUQM+RJQo2H1fuGSw1Ky1E=
