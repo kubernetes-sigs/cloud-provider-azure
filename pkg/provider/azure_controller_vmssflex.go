@@ -131,6 +131,12 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		return nil
 	}
 
+	vmState := strings.ToLower(pointer.StringDeref(vm.ProvisioningState, ""))
+	if vmState == vmPowerStateDeallocated || vmState == vmPowerStateDeallocating {
+		klog.Warningf("vm(%s) is in state(%s), skip detach disk", vmName, vmState)
+		return nil
+	}
+
 	nodeResourceGroup, err := fs.GetNodeResourceGroup(vmName)
 	if err != nil {
 		return err

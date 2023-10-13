@@ -161,6 +161,12 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 		return nil
 	}
 
+	vmState := strings.ToLower(pointer.StringDeref(vm.ProvisioningState, ""))
+	if vmState == vmPowerStateDeallocated || vmState == vmPowerStateDeallocating {
+		klog.Warningf("vm(%s) is in state(%s), skip detach disk", nodeName, vmState)
+		return nil
+	}
+
 	vmName := mapNodeNameToVMName(nodeName)
 	nodeResourceGroup, err := as.GetNodeResourceGroup(vmName)
 	if err != nil {
