@@ -41,6 +41,8 @@ const (
 	defaultReportDir            = "_report/"
 	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
 	clusterProvisioningToolCAPZ = "capz"
+	//nolint:gosec // G101 ignore this!
+	testOOTCredentialProvider = "TEST_ACR_CREDENTIAL_PROVIDER"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -63,14 +65,16 @@ func TestAzureTest(t *testing.T) {
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 	suiteConfig.Timeout = 0
 
+	labelFilters := []string{suiteConfig.LabelFilter}
 	if strings.EqualFold(os.Getenv(clusterProvisioningToolKey), clusterProvisioningToolCAPZ) {
-		additionalFilter := "!SLBOutbound"
-		if suiteConfig.LabelFilter == "" {
-			suiteConfig.LabelFilter = additionalFilter
-		} else {
-			suiteConfig.LabelFilter = suiteConfig.LabelFilter + " && " + additionalFilter
-		}
+		labelFilters = append(labelFilters, "!SLBOutbound")
 	}
+
+	if !strings.EqualFold(os.Getenv(testOOTCredentialProvider), utils.TrueValue) {
+		labelFilters = append(labelFilters, "!OOT-Credential")
+	}
+
+	suiteConfig.LabelFilter = strings.Join(labelFilters, " && ")
 
 	reporterConfig.Verbose = true
 	reporterConfig.JUnitReport = path.Join(reportDir, fmt.Sprintf("junit_%02d.xml", GinkgoParallelProcess()))
