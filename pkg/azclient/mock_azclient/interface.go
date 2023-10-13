@@ -37,6 +37,7 @@ import (
 	privatezoneclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
 	publicipaddressclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	publicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	registryclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	resourcegroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	routetableclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	securitygroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
@@ -238,6 +239,20 @@ func (m *MockClientFactory) GetPublicIPPrefixClient() publicipprefixclient.Inter
 func (mr *MockClientFactoryMockRecorder) GetPublicIPPrefixClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicIPPrefixClient", reflect.TypeOf((*MockClientFactory)(nil).GetPublicIPPrefixClient))
+}
+
+// GetRegistryClient mocks base method.
+func (m *MockClientFactory) GetRegistryClient() registryclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRegistryClient")
+	ret0, _ := ret[0].(registryclient.Interface)
+	return ret0
+}
+
+// GetRegistryClient indicates an expected call of GetRegistryClient.
+func (mr *MockClientFactoryMockRecorder) GetRegistryClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRegistryClient", reflect.TypeOf((*MockClientFactory)(nil).GetRegistryClient))
 }
 
 // GetResourceGroupClient mocks base method.
