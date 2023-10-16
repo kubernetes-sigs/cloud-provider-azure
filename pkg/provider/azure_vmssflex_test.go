@@ -552,12 +552,12 @@ func TestGetPowerStatusByNodeNameVmssFlex(t *testing.T) {
 			expectedErr:                    cloudprovider.InstanceNotFound,
 		},
 		{
-			description:                    "GetPowerStatusByNodeName should return stopped if the node powerstate is nil",
+			description:                    "GetPowerStatusByNodeName should return unknown if the node powerstate is nil",
 			nodeName:                       "vmssflex1000003",
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
-			expectedPowerStatus:            "stopped",
+			expectedPowerStatus:            "unknown",
 			expectedErr:                    nil,
 		},
 	}
