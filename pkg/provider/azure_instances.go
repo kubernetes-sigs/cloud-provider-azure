@@ -37,6 +37,7 @@ const (
 	vmPowerStateStopped      = "stopped"
 	vmPowerStateDeallocated  = "deallocated"
 	vmPowerStateDeallocating = "deallocating"
+	vmPowerStateUnknown      = "unknown"
 
 	// nodeNameEnvironmentName is the environment variable name for getting node name.
 	// It is only used for out-of-tree cloud provider.
