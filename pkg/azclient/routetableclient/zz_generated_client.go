@@ -43,6 +43,17 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	return &Client{client}, nil
 }
 
+// Get gets the RouteTable
+func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armnetwork.RouteTable, rerr error) {
+
+	resp, err := client.RouteTablesClient.Get(ctx, resourceGroupName, resourceName, nil)
+	if err != nil {
+		return nil, err
+	}
+	//handle statuscode
+	return &resp.RouteTable, nil
+}
+
 // CreateOrUpdate creates or updates a RouteTable.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.RouteTable) (*armnetwork.RouteTable, error) {
 	resp, err := utils.NewPollerWrapper(client.RouteTablesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -59,4 +70,17 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
+}
+
+// List gets a list of RouteTable in the resource group.
+func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.RouteTable, rerr error) {
+	pager := client.RouteTablesClient.NewListPager(resourceGroupName, nil)
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
 }

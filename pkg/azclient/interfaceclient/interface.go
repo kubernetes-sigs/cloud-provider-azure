@@ -28,7 +28,8 @@ import (
 // +azure:client:verbs=get;createorupdate;delete;list,resource=Interface,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4,packageAlias=armnetwork,clientName=InterfacesClient,expand=true,rateLimitKey=interfaceRateLimit
 type Interface interface {
 	// GetVirtualMachineScaleSetNetworkInterface gets a network.Interface of VMSS VM.
-	GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, virtualmachineIndex string, networkInterfaceName string, options *armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceOptions) (armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse, error)
+	GetVirtualMachineScaleSetNetworkInterface(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, virtualmachineIndex string, networkInterfaceName string) (*armnetwork.Interface, error)
+	ListVirtualMachineScaleSetNetworkInterfaces(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string) ([]*armnetwork.Interface, error)
 	utils.GetWithExpandFunc[armnetwork.Interface]
 	utils.CreateOrUpdateFunc[armnetwork.Interface]
 	utils.DeleteFunc[armnetwork.Interface]

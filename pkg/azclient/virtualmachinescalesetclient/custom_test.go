@@ -27,6 +27,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -38,6 +39,12 @@ var (
 
 func init() {
 	additionalTestCases = func() {
+		When("get a non existing resource", func() {
+			It("should return error", func(ctx context.Context) {
+				_, err := realClient.Get(ctx, resourceGroupName, resourceName, nil)
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {

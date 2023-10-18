@@ -50,21 +50,6 @@ var _ = Describe("VirtualMachineScaleSetsClient", Ordered, func() {
 		})
 	})
 
-	When("get requests are raised", func() {
-		It("should not return error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, resourceName)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(newResource).NotTo(BeNil())
-		})
-	})
-	When("invalid get requests are raised", func() {
-		It("should return 404 error", func(ctx context.Context) {
-			newResource, err := realClient.Get(ctx, resourceGroupName, resourceName+"notfound")
-			Expect(err).To(HaveOccurred())
-			Expect(newResource).To(BeNil())
-		})
-	})
-
 	When("update requests are raised", func() {
 		It("should not return error", func(ctx context.Context) {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)
