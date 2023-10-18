@@ -96,18 +96,18 @@ func (mr *MockInterfaceMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *go
 }
 
 // GetVirtualMachineScaleSetNetworkInterface mocks base method.
-func (m *MockInterface) GetVirtualMachineScaleSetNetworkInterface(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 *armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceOptions) (armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse, error) {
+func (m *MockInterface) GetVirtualMachineScaleSetNetworkInterface(arg0 context.Context, arg1, arg2, arg3, arg4 string) (*armnetwork.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVirtualMachineScaleSetNetworkInterface", arg0, arg1, arg2, arg3, arg4, arg5)
-	ret0, _ := ret[0].(armnetwork.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse)
+	ret := m.ctrl.Call(m, "GetVirtualMachineScaleSetNetworkInterface", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(*armnetwork.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVirtualMachineScaleSetNetworkInterface indicates an expected call of GetVirtualMachineScaleSetNetworkInterface.
-func (mr *MockInterfaceMockRecorder) GetVirtualMachineScaleSetNetworkInterface(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetVirtualMachineScaleSetNetworkInterface(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineScaleSetNetworkInterface", reflect.TypeOf((*MockInterface)(nil).GetVirtualMachineScaleSetNetworkInterface), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineScaleSetNetworkInterface", reflect.TypeOf((*MockInterface)(nil).GetVirtualMachineScaleSetNetworkInterface), arg0, arg1, arg2, arg3, arg4)
 }
 
 // List mocks base method.
@@ -123,4 +123,19 @@ func (m *MockInterface) List(arg0 context.Context, arg1 string) ([]*armnetwork.I
 func (mr *MockInterfaceMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), arg0, arg1)
+}
+
+// ListVirtualMachineScaleSetNetworkInterfaces mocks base method.
+func (m *MockInterface) ListVirtualMachineScaleSetNetworkInterfaces(arg0 context.Context, arg1, arg2 string) ([]*armnetwork.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVirtualMachineScaleSetNetworkInterfaces", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*armnetwork.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVirtualMachineScaleSetNetworkInterfaces indicates an expected call of ListVirtualMachineScaleSetNetworkInterfaces.
+func (mr *MockInterfaceMockRecorder) ListVirtualMachineScaleSetNetworkInterfaces(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVirtualMachineScaleSetNetworkInterfaces", reflect.TypeOf((*MockInterface)(nil).ListVirtualMachineScaleSetNetworkInterfaces), arg0, arg1, arg2)
 }

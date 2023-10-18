@@ -43,17 +43,6 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	return &Client{client}, nil
 }
 
-// Get gets the VirtualMachineScaleSet
-func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.VirtualMachineScaleSet, rerr error) {
-
-	resp, err := client.VirtualMachineScaleSetsClient.Get(ctx, resourceGroupName, resourceName, nil)
-	if err != nil {
-		return nil, err
-	}
-	//handle statuscode
-	return &resp.VirtualMachineScaleSet, nil
-}
-
 // CreateOrUpdate creates or updates a VirtualMachineScaleSet.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.VirtualMachineScaleSet) (*armcompute.VirtualMachineScaleSet, error) {
 	resp, err := utils.NewPollerWrapper(client.VirtualMachineScaleSetsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)

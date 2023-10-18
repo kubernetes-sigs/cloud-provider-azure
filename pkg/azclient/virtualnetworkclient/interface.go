@@ -18,6 +18,8 @@ limitations under the License.
 package virtualnetworkclient
 
 import (
+	"context"
+
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -29,4 +31,5 @@ type Interface interface {
 	utils.CreateOrUpdateFunc[armnetwork.VirtualNetwork]
 	utils.DeleteFunc[armnetwork.VirtualNetwork]
 	utils.ListFunc[armnetwork.VirtualNetwork]
+	CheckIPAddressAvailability(ctx context.Context, resourceGroupName string, virtualNetworkName string, ipAddress string) (*armnetwork.IPAddressAvailabilityResult, error)
 }
