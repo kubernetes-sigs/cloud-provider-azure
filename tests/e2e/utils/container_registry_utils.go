@@ -70,6 +70,32 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 	return nil
 }
 
+func AZACRLogin() (err error) {
+	authConfig, err := azureAuthConfigFromTestProfile()
+	if err != nil {
+		return err
+	}
+
+	Logf("Attempting az login with azure cred.")
+	//nolint:gosec // G204 ignore this!
+	cmd := exec.Command("az", "login", "--service-principal",
+		"--username", authConfig.AADClientID,
+		"--password", authConfig.AADClientSecret,
+		"--tenant", authConfig.TenantID)
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("az failed to login with error: %w", err)
+	}
+	Logf("az login success.")
+
+	cmd = exec.Command("az", "account", "show")
+	var output []byte
+	if output, err = cmd.Output(); err != nil {
+		return fmt.Errorf("az failed to account show with output: %s\n error: %w", string(output), err)
+	}
+	Logf("az account show success.")
+	return nil
+}
+
 // PushImageToACR pull an image from Docker Hub and push
 // it to the given azure container registry
 func (tc *AzureTestClient) PushImageToACR(registryName, image string) (string, error) {

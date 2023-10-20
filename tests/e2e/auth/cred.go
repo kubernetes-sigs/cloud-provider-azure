@@ -111,7 +111,8 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 			imageNameSlice := strings.Split(imageURL, "/")
 			imageName := imageNameSlice[len(imageNameSlice)-1]
 			acrImageURL := fmt.Sprintf("%s.azurecr.io/%s:%s", *registry.Name, imageName, imageTag)
-
+			err = utils.AZACRLogin()
+			Expect(err).NotTo(HaveOccurred())
 			err = utils.AZACRCacheCreate(*registry.Name, fmt.Sprintf("%s-cache-rule", imageName), imageURL, imageName)
 			Expect(err).NotTo(HaveOccurred())
 
