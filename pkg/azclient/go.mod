@@ -14,7 +14,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.1
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.0
+	github.com/onsi/gomega v1.28.1
 	golang.org/x/crypto v0.14.0
 	golang.org/x/sync v0.4.0
 	golang.org/x/time v0.3.0
@@ -28,7 +28,7 @@ require (
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230602010524-ada837c32108 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
