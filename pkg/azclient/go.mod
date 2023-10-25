@@ -14,7 +14,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.1
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.1
+	github.com/onsi/gomega v1.29.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/sync v0.4.0
 	golang.org/x/time v0.3.0
