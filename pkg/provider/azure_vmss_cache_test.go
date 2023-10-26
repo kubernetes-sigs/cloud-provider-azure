@@ -18,17 +18,20 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssvmclient/mockvmssvmclient"
@@ -322,6 +325,17 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 	}
 }
 
+func buildTestNICWithVMName(vmName string) network.Interface {
+	return network.Interface{
+		Name: &vmName,
+		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
+			VirtualMachine: &network.SubResource{
+				ID: pointer.String(fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)),
+			},
+		},
+	}
+}
+
 func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -336,28 +350,53 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 		testVM2,
 	}
 
+	testVM1NIC := buildTestNICWithVMName("testvm1")
+	testVM2NIC := buildTestNICWithVMName("testvm2")
+	testVM3NIC := buildTestNICWithVMName("testvm3")
+	testVM3NIC.VirtualMachine = nil
+
 	testCases := []struct {
 		description                 string
 		ipConfigurationID           string
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
 		vmListErr                   *retry.Error
+		nicGetErr                   *retry.Error
+		expectedNIC                 string
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
 	}{
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssFlex for vmss flex node",
 			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig",
-			vmListErr:                nil,
+			expectedNIC:              "testvm1",
 			expectedVMManagementType: ManagedByVmssFlex,
-			expectedErr:              nil,
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByAvSet for availabilityset node",
 			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-nic/ipConfigurations/pipConfig",
-			vmListErr:                nil,
 			expectedVMManagementType: ManagedByAvSet,
-			expectedErr:              nil,
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByAvSet for availabilityset node from nic.VirtualMachine.ID",
+			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-interface/ipConfigurations/pipConfig",
+			expectedNIC:              "testvm2",
+			expectedVMManagementType: ManagedByAvSet,
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return an error if nic.VirtualMachine.ID is empty",
+			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-interface/ipConfigurations/pipConfig",
+			expectedNIC:              "testvm3",
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm3-interface/ipConfigurations/pipConfig: %w", errors.New("failed to get vm ID of nic testvm3")),
+		},
+		{
+			description:              "getVMManagementTypeByIPConfigurationID should return an error if failed to get nic",
+			ipConfigurationID:        "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig",
+			expectedNIC:              "testvm1",
+			nicGetErr:                &retry.Error{RawError: fmt.Errorf("failed to get nic")},
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("failed to get vm name by ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic/ipConfigurations/pipConfig: %w", errors.New("failed to get interface of name testvm1-nic: Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: failed to get nic")),
 		},
 		{
 			description:              "getVMManagementTypeByIPConfigurationID should return ManagedByVmssUniform for vmss uniform node",
@@ -393,6 +432,22 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 
 		mockVMClient := ss.cloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
 		mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+
+		if tc.expectedNIC != "" {
+			mockNICClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
+			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, nicName string, expand string) (network.Interface, *retry.Error) {
+				switch tc.expectedNIC {
+				case "testvm1":
+					return testVM1NIC, tc.nicGetErr
+				case "testvm2":
+					return testVM2NIC, tc.nicGetErr
+				case "testvm3":
+					return testVM3NIC, tc.nicGetErr
+				default:
+					return network.Interface{}, retry.NewError(false, errors.New("failed to get nic"))
+				}
+			})
+		}
 
 		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(tc.ipConfigurationID, azcache.CacheReadTypeDefault)
 		assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)

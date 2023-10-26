@@ -536,3 +536,18 @@ func (az *Cloud) fillSubnet(subnet *network.Subnet, subnetName string) error {
 	}
 	return nil
 }
+
+// getResourceGroupAndNameFromNICID parses the ip configuration ID to get the resource group and nic name.
+func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string, error) {
+	matches := nicIDRE.FindStringSubmatch(ipConfigurationID)
+	if len(matches) != 3 {
+		klog.V(4).Infof("Can not extract nic name from ipConfigurationID (%s)", ipConfigurationID)
+		return "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
+	}
+
+	nicResourceGroup, nicName := matches[1], matches[2]
+	if nicResourceGroup == "" || nicName == "" {
+		return "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
+	}
+	return nicResourceGroup, nicName, nil
+}
