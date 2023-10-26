@@ -31,4 +31,5 @@ type Interface interface {
 	Create(ctx context.Context, resourceGroupName string, resourceName string, resourceParam armcontainerregistry.Registry) (*armcontainerregistry.Registry, error)
 	utils.DeleteFunc[armcontainerregistry.Registry]
 	utils.ListFunc[armcontainerregistry.Registry]
+	ImportImage(ctx context.Context, resourceGroup string, resourceName string, param armcontainerregistry.ImportImageParameters) error
 }

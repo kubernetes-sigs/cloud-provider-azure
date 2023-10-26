@@ -34,3 +34,8 @@ func (client *Client) Create(ctx context.Context, resourceGroupName string, reso
 	}
 	return nil, nil
 }
+
+func (client *Client) ImportImage(ctx context.Context, resourceGroup string, resourceName string, param armcontainerregistry.ImportImageParameters) error {
+	_, err := utils.NewPollerWrapper(client.RegistriesClient.BeginImportImage(ctx, resourceGroup, resourceName, param, nil)).WaitforPollerResp(ctx)
+	return err
+}

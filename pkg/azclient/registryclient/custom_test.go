@@ -40,6 +40,18 @@ func init() {
 				Expect(*registry.Name).To(Equal(resourceName))
 			})
 		})
+		When("import image from public repo", func() {
+			It("should return without error", func() {
+				err := realClient.ImportImage(context.Background(), resourceGroupName, resourceName, armcontainerregistry.ImportImageParameters{
+					Source: &armcontainerregistry.ImportSource{
+						RegistryURI: to.Ptr("registry.hub.docker.com"),
+						SourceImage: to.Ptr("library/nginx"),
+					},
+					TargetTags: []*string{to.Ptr("test:latest")},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
