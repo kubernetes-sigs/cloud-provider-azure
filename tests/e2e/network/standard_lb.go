@@ -21,8 +21,8 @@ import (
 	"os"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -87,7 +87,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should add all nodes in different agent pools to backends", Label(utils.TestSuiteLabelMultiNodePools), Label(utils.TestSuiteLabelNonMultiSLB), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 
@@ -109,18 +109,18 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		isVMSS := len(vmsses) != 0
 
 		ipcIDs := []string{}
-		for i := range *lb.BackendAddressPools {
-			backendAddressPool := (*lb.BackendAddressPools)[i]
+		for i := range lb.Properties.BackendAddressPools {
+			backendAddressPool := (lb.Properties.BackendAddressPools)[i]
 			if (os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool") ||
 				strings.Contains(*backendAddressPool.Name, "outboundBackendPool") {
 				continue
 			}
-			if backendAddressPool.BackendIPConfigurations == nil {
+			if backendAddressPool.Properties.BackendIPConfigurations == nil {
 				utils.Logf("BackendIPConfigurations is nil for backendAddressPool %q", *backendAddressPool.Name)
 				continue
 			}
-			for j := range *backendAddressPool.BackendIPConfigurations {
-				ipc := (*backendAddressPool.BackendIPConfigurations)[j]
+			for j := range backendAddressPool.Properties.BackendIPConfigurations {
+				ipc := (backendAddressPool.Properties.BackendIPConfigurations)[j]
 				if ipc.ID != nil {
 					if utils.IsAutoscalingAKSCluster() && strings.Contains(*ipc.ID, utils.SystemPool) {
 						continue
@@ -139,7 +139,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		utils.Logf("got BackendIPConfigurations IDs: %q", ipcIDs)
 
 		if isVMSS {
-			allVMs := []azcompute.VirtualMachineScaleSetVM{}
+			allVMs := []*azcompute.VirtualMachineScaleSetVM{}
 			for _, vmss := range vmsses {
 				if strings.Contains(*vmss.ID, "control-plane") || strings.Contains(*vmss.ID, "master") {
 					continue
@@ -169,7 +169,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			// AvSet VMs, standalone VMs, VMSS Flex VMs
 			vms, err := utils.ListVMs(tc)
 			Expect(err).NotTo(HaveOccurred())
-			for _, vm := range *vms {
+			for _, vm := range vms {
 				if strings.Contains(*vm.ID, "control-plane") || strings.Contains(*vm.ID, "master") {
 					continue
 				}
@@ -177,7 +177,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 				vmName := vmID[strings.LastIndex(vmID, "/")+1:]
 				utils.Logf("Checking VM %q", vmName)
 
-				nic := (*vm.NetworkProfile.NetworkInterfaces)[0].ID
+				nic := vm.Properties.NetworkProfile.NetworkInterfaces[0].ID
 				found := false
 				for _, ipcID := range ipcIDs {
 					if strings.Contains(strings.ToLower(ipcID), strings.ToLower(*nic)) {
@@ -192,7 +192,7 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 	})
 
 	It("should make outbound IP of pod same as in SLB's outbound rules", Label(utils.TestSuiteLabelSLBOutbound), func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("only test standard load balancer")
 		}
 
@@ -202,11 +202,11 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		publicIP := publicIPs[0]
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, rgName, rgName)
 
-		Expect(lb.OutboundRules).NotTo(BeNil())
+		Expect(lb.Properties.OutboundRules).NotTo(BeNil())
 		var fipConfigIDs []string
-		for _, outboundRule := range *lb.OutboundRules {
-			Expect(outboundRule.FrontendIPConfigurations).NotTo(BeNil())
-			for _, fipConfig := range *outboundRule.FrontendIPConfigurations {
+		for _, outboundRule := range lb.Properties.OutboundRules {
+			Expect(outboundRule.Properties.FrontendIPConfigurations).NotTo(BeNil())
+			for _, fipConfig := range outboundRule.Properties.FrontendIPConfigurations {
 				fipConfigIDs = append(fipConfigIDs, *fipConfig.ID)
 			}
 		}
@@ -218,8 +218,8 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		outboundRuleIPs := make(map[string]bool)
 		for _, fipConfigID := range fipConfigIDs {
 			for _, pip := range pips {
-				if strings.EqualFold(*pip.IPConfiguration.ID, fipConfigID) {
-					outboundRuleIPs[*pip.IPAddress] = true
+				if strings.EqualFold(*pip.Properties.IPConfiguration.ID, fipConfigID) {
+					outboundRuleIPs[*pip.Properties.IPAddress] = true
 					break
 				}
 			}

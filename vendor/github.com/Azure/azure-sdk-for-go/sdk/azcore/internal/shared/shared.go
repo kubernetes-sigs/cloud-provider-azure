@@ -8,12 +8,14 @@ package shared
 
 import (
 	"context"
-	"errors"
-	"io"
+	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/internal/errorinfo"
 )
 
 // CtxWithHTTPHeaderKey is used as a context key for adding/retrieving http.Header.
@@ -22,8 +24,8 @@ type CtxWithHTTPHeaderKey struct{}
 // CtxWithRetryOptionsKey is used as a context key for adding/retrieving RetryOptions.
 type CtxWithRetryOptionsKey struct{}
 
-// CtxIncludeResponseKey is used as a context key for retrieving the raw response.
-type CtxIncludeResponseKey struct{}
+// CtxWithCaptureResponse is used as a context key for retrieving the raw response.
+type CtxWithCaptureResponse struct{}
 
 // Delay waits for the duration to elapse or the context to be cancelled.
 func Delay(ctx context.Context, delay time.Duration) error {
@@ -61,71 +63,6 @@ func TypeOfT[T any]() reflect.Type {
 	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
-// BytesSetter abstracts replacing a byte slice on some type.
-type BytesSetter interface {
-	Set(b []byte)
-}
-
-// NewNopClosingBytesReader creates a new *NopClosingBytesReader for the specified slice.
-func NewNopClosingBytesReader(data []byte) *NopClosingBytesReader {
-	return &NopClosingBytesReader{s: data}
-}
-
-// NopClosingBytesReader is an io.ReadSeekCloser around a byte slice.
-// It also provides direct access to the byte slice to avoid rereading.
-type NopClosingBytesReader struct {
-	s []byte
-	i int64
-}
-
-// Bytes returns the underlying byte slice.
-func (r *NopClosingBytesReader) Bytes() []byte {
-	return r.s
-}
-
-// Close implements the io.Closer interface.
-func (*NopClosingBytesReader) Close() error {
-	return nil
-}
-
-// Read implements the io.Reader interface.
-func (r *NopClosingBytesReader) Read(b []byte) (n int, err error) {
-	if r.i >= int64(len(r.s)) {
-		return 0, io.EOF
-	}
-	n = copy(b, r.s[r.i:])
-	r.i += int64(n)
-	return
-}
-
-// Set replaces the existing byte slice with the specified byte slice and resets the reader.
-func (r *NopClosingBytesReader) Set(b []byte) {
-	r.s = b
-	r.i = 0
-}
-
-// Seek implements the io.Seeker interface.
-func (r *NopClosingBytesReader) Seek(offset int64, whence int) (int64, error) {
-	var i int64
-	switch whence {
-	case io.SeekStart:
-		i = offset
-	case io.SeekCurrent:
-		i = r.i + offset
-	case io.SeekEnd:
-		i = int64(len(r.s)) + offset
-	default:
-		return 0, errors.New("nopClosingBytesReader: invalid whence")
-	}
-	if i < 0 {
-		return 0, errors.New("nopClosingBytesReader: negative position")
-	}
-	r.i = i
-	return i, nil
-}
-
-var _ BytesSetter = (*NopClosingBytesReader)(nil)
-
 // TransportFunc is a helper to use a first-class func to satisfy the Transporter interface.
 type TransportFunc func(*http.Request) (*http.Response, error)
 
@@ -133,3 +70,59 @@ type TransportFunc func(*http.Request) (*http.Response, error)
 func (pf TransportFunc) Do(req *http.Request) (*http.Response, error) {
 	return pf(req)
 }
+
+// ValidateModVer verifies that moduleVersion is a valid semver 2.0 string.
+func ValidateModVer(moduleVersion string) error {
+	modVerRegx := regexp.MustCompile(`^v\d+\.\d+\.\d+(?:-[a-zA-Z0-9_.-]+)?$`)
+	if !modVerRegx.MatchString(moduleVersion) {
+		return fmt.Errorf("malformed moduleVersion param value %s", moduleVersion)
+	}
+	return nil
+}
+
+// ExtractModuleName returns "module", "package.Client" from "module/package.Client" or
+// "package", "package.Client" from "package.Client" when there's no "module/" prefix.
+// If clientName is malformed, an error is returned.
+func ExtractModuleName(clientName string) (string, string, error) {
+	// uses unnamed capturing for "module", "package.Client", and "package"
+	regex, err := regexp.Compile(`^(?:([a-z0-9]+)/)?(([a-z0-9]+)\.(?:[A-Za-z0-9]+))$`)
+	if err != nil {
+		return "", "", err
+	}
+
+	matches := regex.FindStringSubmatch(clientName)
+	if len(matches) < 4 {
+		return "", "", fmt.Errorf("malformed clientName %s", clientName)
+	}
+
+	// the first match is the entire string, the second is "module", the third is
+	// "package.Client" and the fourth is "package".
+	// if there was no "module/" prefix, the second match will be the empty string
+	if matches[1] != "" {
+		return matches[1], matches[2], nil
+	}
+	return matches[3], matches[2], nil
+}
+
+// NonRetriableError marks the specified error as non-retriable.
+func NonRetriableError(err error) error {
+	return &nonRetriableError{err}
+}
+
+type nonRetriableError struct {
+	error
+}
+
+func (p *nonRetriableError) Error() string {
+	return p.error.Error()
+}
+
+func (*nonRetriableError) NonRetriable() {
+	// marker method
+}
+
+func (p *nonRetriableError) Unwrap() error {
+	return p.error
+}
+
+var _ errorinfo.NonRetriable = (*nonRetriableError)(nil)

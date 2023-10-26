@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
+	resources "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -29,35 +29,23 @@ import (
 )
 
 // CreateTestResourceGroup create a test rg
-func CreateTestResourceGroup(tc *AzureTestClient) (*resources.Group, func(string)) {
+func CreateTestResourceGroup(tc *AzureTestClient) (*resources.ResourceGroup, func(string)) {
 	gc := tc.createResourceGroupClient()
 	rgName := pointer.String("e2e-" + string(uuid.NewUUID())[0:4])
 	rg, err := gc.CreateOrUpdate(context.Background(), *rgName, createTestTemplate(tc, rgName))
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("resource group %s created", *rgName))
 
-	return &rg, func(rgName string) {
+	return rg, func(rgName string) {
 		Logf("cleaning up test resource group %s", rgName)
-		future, err := gc.Delete(context.Background(), rgName)
+		err := gc.Delete(context.Background(), rgName)
 		Expect(err).NotTo(HaveOccurred())
-		err = WaitForDeleteResourceGroupCompletion(gc, future, rgName)
-		Expect(err).NotTo(HaveOccurred())
+
 	}
 }
 
-// WaitForDeleteResourceGroupCompletion waits for delete group operations to finish
-func WaitForDeleteResourceGroupCompletion(gc *resources.GroupsClient, future resources.GroupsDeleteFuture, rgName string) error {
-	err := future.WaitForCompletionRef(context.Background(), gc.Client)
-	if err != nil {
-		return err
-	}
-
-	Logf("finished deleting group '%s'", rgName)
-	return nil
-}
-
-func createTestTemplate(tc *AzureTestClient, name *string) resources.Group {
-	return resources.Group{
+func createTestTemplate(tc *AzureTestClient, name *string) resources.ResourceGroup {
+	return resources.ResourceGroup{
 		Name:     name,
 		Location: pointer.String(tc.location),
 	}

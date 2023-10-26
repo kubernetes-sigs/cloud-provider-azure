@@ -21,36 +21,34 @@ import (
 	"fmt"
 	"os/exec"
 
-	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	acr "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/utils/pointer"
 )
 
 // CreateContainerRegistry creates a test acr
-func (tc *AzureTestClient) CreateContainerRegistry() (registry acr.Registry, err error) {
+func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
 	acrClient := tc.createACRClient()
 	rgName, location := tc.GetResourceGroup(), tc.GetLocation()
 	acrName := "e2eacr" + string(uuid.NewUUID())[0:4]
 	template := acr.Registry{
-		Sku: &acr.Sku{
-			Name: "Basic",
-			Tier: "SkuTierBasic",
+		SKU: &acr.SKU{
+			Name: to.Ptr(acr.SKUNameBasic),
+			Tier: to.Ptr(acr.SKUTierBasic),
 		},
 		Name:     pointer.String(acrName),
 		Location: pointer.String(location),
 	}
 
 	Logf("Creating acr %s in resource group %s.", acrName, rgName)
-	future, err := acrClient.Create(context.Background(), rgName, acrName, template)
+	registry, err := acrClient.Create(context.Background(), rgName, acrName, template)
 	if err != nil {
 		return acr.Registry{}, err
 	}
-	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
-	if err != nil {
-		return acr.Registry{}, err
-	}
-	return future.Result(*acrClient)
+
+	return *registry, nil
 }
 
 // DeleteContainerRegistry deletes an existing acr
@@ -59,11 +57,7 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 	rgName := tc.GetResourceGroup()
 
 	Logf("Deleting acr %s in resource group %s.", registryName, rgName)
-	future, err := acrClient.Delete(context.Background(), rgName, registryName)
-	if err != nil {
-		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %w", registryName, rgName, err)
-	}
-	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
+	err = acrClient.Delete(context.Background(), rgName, registryName)
 	if err != nil {
 		return fmt.Errorf("failed to delete acr %s in resource group %s with error: %w", registryName, rgName, err)
 	}
@@ -71,7 +65,7 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 }
 
 func AZACRLogin() (err error) {
-	authConfig, err := azureAuthConfigFromTestProfile()
+	authConfig, _, _, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return err
 	}
@@ -102,20 +96,16 @@ func (tc *AzureTestClient) PushImageToACR(registryName, image string) (string, e
 	acrClient := tc.createACRClient()
 	rgName := tc.GetResourceGroup()
 
-	future, err := acrClient.ImportImage(context.Background(), rgName, registryName, acr.ImportImageParameters{
+	err := acrClient.ImportImage(context.Background(), rgName, registryName, acr.ImportImageParameters{
 		Source: &acr.ImportSource{
 			RegistryURI: pointer.String("docker.io"),
 			SourceImage: pointer.String("library/" + image + ":latest"),
 		},
-		TargetTags: &[]string{
-			image + ":latest",
+		TargetTags: []*string{
+			to.Ptr(image + ":latest"),
 		},
-		Mode: acr.NoForce,
+		Mode: to.Ptr(acr.ImportModeNoForce),
 	})
-	if err != nil {
-		return "", fmt.Errorf("failed to import image %s from docker hub to acr %s with error: %w", image, registryName, err)
-	}
-	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
 	if err != nil {
 		return "", fmt.Errorf("failed to import image %s from docker hub to acr %s with error: %w", image, registryName, err)
 	}

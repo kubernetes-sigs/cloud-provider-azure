@@ -17,7 +17,7 @@ limitations under the License.
 package node
 
 import (
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -62,10 +62,10 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil || vmss.OrchestrationMode == compute.Flexible {
+		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == compute.OrchestrationModeFlexible {
 			Skip("skip non-VMSS or VMSS Flex")
 		}
-		numInstance := *vmss.Sku.Capacity
+		numInstance := *vmss.SKU.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
 		originalNodes, err := utils.GetAgentNodes(k8sCli)
@@ -87,7 +87,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
+			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)
@@ -98,10 +98,10 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 		By("fetch VMSS")
 		vmss, err := utils.FindTestVMSS(azCli, azCli.GetResourceGroup())
 		Expect(err).NotTo(HaveOccurred())
-		if vmss == nil || vmss.OrchestrationMode == compute.Flexible {
+		if vmss == nil || vmss.Properties == nil || vmss.Properties.OrchestrationMode == nil || *vmss.Properties.OrchestrationMode == compute.OrchestrationModeFlexible {
 			Skip("skip non-VMSS or VMSS Flex")
 		}
-		numInstance := *vmss.Sku.Capacity
+		numInstance := *vmss.SKU.Capacity
 		utils.Logf("Current VMSS %q sku capacity: %d", *vmss.Name, numInstance)
 		expectedCap := map[string]int64{*vmss.Name: numInstance}
 		originalNodes, err := utils.GetAgentNodes(k8sCli)
@@ -123,7 +123,7 @@ var _ = Describe("Lifecycle of VMSS", Label(utils.TestSuiteLabelVMSS, utils.Test
 
 			vmssAfterTest, err := utils.GetVMSS(azCli, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.Sku.Capacity)
+			utils.Logf("VMSS %q sku capacity after the test: %d", *vmssAfterTest.Name, *vmssAfterTest.SKU.Capacity)
 		}()
 
 		err = utils.ValidateClusterNodesMatchVMSSInstances(azCli, expectedCap, originalNodes)

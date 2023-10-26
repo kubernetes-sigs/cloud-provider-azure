@@ -20,27 +20,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 )
 
 // ListVMs returns all VMs in the resource group
-func ListVMs(tc *AzureTestClient) (*[]compute.VirtualMachine, error) {
+func ListVMs(tc *AzureTestClient) ([]*armcompute.VirtualMachine, error) {
 	vmClient := tc.createVMClient()
 
-	list, err := vmClient.List(context.Background(), tc.GetResourceGroup(), "")
+	list, err := vmClient.List(context.Background(), tc.GetResourceGroup())
 	if err != nil {
 		return nil, err
 	}
-
-	res := list.Values()
-	return &res, nil
+	return list, nil
 }
 
 // GetVMComputerName returns the corresponding node name of the VM
-func GetVMComputerName(vm compute.VirtualMachine) (string, error) {
-	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
+func GetVMComputerName(vm *armcompute.VirtualMachine) (string, error) {
+	if vm.Properties != nil && vm.Properties.OSProfile == nil || vm.Properties.OSProfile.ComputerName == nil {
 		return "", fmt.Errorf("cannot find computer name from vm %s", *vm.Name)
 	}
 
-	return *vm.OsProfile.ComputerName, nil
+	return *vm.Properties.OSProfile.ComputerName, nil
 }

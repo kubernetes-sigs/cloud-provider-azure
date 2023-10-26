@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -56,7 +56,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 	}}
 
 	BeforeEach(func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("private link service only works with standard load balancer")
 		}
 		var err error
@@ -116,13 +116,13 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.IPConfigurations).NotTo(BeNil())
-		Expect(len(*pls.IPConfigurations)).To(Equal(1))
-		Expect((*pls.IPConfigurations)[0].PrivateIPAllocationMethod).To(Equal(network.Dynamic))
-		Expect(pls.Fqdns == nil || len(*pls.Fqdns) == 0).To(BeTrue())
-		Expect(pls.EnableProxyProtocol == nil || !*pls.EnableProxyProtocol).To(BeTrue())
-		Expect(pls.Visibility == nil || len(*pls.Visibility.Subscriptions) == 0).To(BeTrue())
-		Expect(pls.AutoApproval == nil || len(*pls.AutoApproval.Subscriptions) == 0).To(BeTrue())
+		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
+		Expect(len(pls.Properties.IPConfigurations)).To(Equal(1))
+		Expect(*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod).To(Equal(network.IPAllocationMethodDynamic))
+		Expect(pls.Properties.Fqdns == nil || len(pls.Properties.Fqdns) == 0).To(BeTrue())
+		Expect(pls.Properties.EnableProxyProtocol == nil || !*pls.Properties.EnableProxyProtocol).To(BeTrue())
+		Expect(pls.Properties.Visibility == nil || len(pls.Properties.Visibility.Subscriptions) == 0).To(BeTrue())
+		Expect(pls.Properties.AutoApproval == nil || len(pls.Properties.AutoApproval.Subscriptions) == 0).To(BeTrue())
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-name'", func() {
@@ -212,9 +212,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.IPConfigurations).NotTo(BeNil())
-		Expect(len(*pls.IPConfigurations)).To(Equal(1))
-		Expect(strings.EqualFold(*(*pls.IPConfigurations)[0].Subnet.ID, newSubnetID)).To(BeTrue())
+		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
+		Expect(len(pls.Properties.IPConfigurations)).To(Equal(1))
+		Expect(strings.EqualFold(*(pls.Properties.IPConfigurations)[0].Properties.Subnet.ID, newSubnetID)).To(BeTrue())
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address-count'", func() {
@@ -238,8 +238,8 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.IPConfigurations).NotTo(BeNil())
-		Expect(len(*pls.IPConfigurations)).To(Equal(ipConfigCount))
+		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
+		Expect(len(pls.Properties.IPConfigurations)).To(Equal(ipConfigCount))
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-ip-configuration-ip-address'", func() {
@@ -263,7 +263,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(selectedIPs)).NotTo(BeZero())
 		selectedIP := selectedIPs[0]
-		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = selectedIP
+		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = *selectedIP
 		utils.Logf("Now update private link service's static ip to %s", selectedIP)
 
 		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
@@ -273,7 +273,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		ips, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+		ips, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip = ips[0]
@@ -281,10 +281,10 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		// wait and check pls is updated also
 		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
 			pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-			return pls.IPConfigurations != nil &&
-				len(*pls.IPConfigurations) == 1 &&
-				(*pls.IPConfigurations)[0].PrivateIPAllocationMethod == network.Static &&
-				*(*pls.IPConfigurations)[0].PrivateIPAddress == selectedIP, nil
+			return pls.Properties.IPConfigurations != nil &&
+				len(pls.Properties.IPConfigurations) == 1 &&
+				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod == network.IPAllocationMethodStatic &&
+				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAddress == *selectedIP, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -314,10 +314,10 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.Fqdns).NotTo(BeNil())
+		Expect(pls.Properties.Fqdns).NotTo(BeNil())
 		actualFqdns := make(map[string]bool)
-		for _, f := range *pls.Fqdns {
-			actualFqdns[f] = true
+		for _, f := range pls.Properties.Fqdns {
+			actualFqdns[*f] = true
 		}
 		Expect(actualFqdns).To(Equal(expectedFqdns))
 	})
@@ -342,8 +342,8 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.EnableProxyProtocol).NotTo(BeNil())
-		Expect(*pls.EnableProxyProtocol).To(BeTrue())
+		Expect(pls.Properties.EnableProxyProtocol).NotTo(BeNil())
+		Expect(*pls.Properties.EnableProxyProtocol).To(BeTrue())
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-pls-visibility'", func() {
@@ -371,11 +371,11 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.Visibility).NotTo(BeNil())
-		Expect(pls.Visibility.Subscriptions).NotTo(BeNil())
+		Expect(pls.Properties.Visibility).NotTo(BeNil())
+		Expect(pls.Properties.Visibility.Subscriptions).NotTo(BeNil())
 		actualVis := make(map[string]bool)
-		for _, v := range *pls.Visibility.Subscriptions {
-			actualVis[v] = true
+		for _, v := range pls.Properties.Visibility.Subscriptions {
+			actualVis[*v] = true
 		}
 		Expect(actualVis).To(Equal(expectedVis))
 	})
@@ -406,11 +406,11 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.AutoApproval).NotTo(BeNil())
-		Expect(pls.AutoApproval.Subscriptions).NotTo(BeNil())
+		Expect(pls.Properties.AutoApproval).NotTo(BeNil())
+		Expect(pls.Properties.AutoApproval.Subscriptions).NotTo(BeNil())
 		actualAutoApp := make(map[string]bool)
-		for _, v := range *pls.AutoApproval.Subscriptions {
-			actualAutoApp[v] = true
+		for _, v := range pls.Properties.AutoApproval.Subscriptions {
+			actualAutoApp[*v] = true
 		}
 		Expect(actualAutoApp).To(Equal(expectedAutoApp))
 	})
@@ -466,9 +466,9 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-		Expect(pls.IPConfigurations).NotTo(BeNil())
+		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
 		// Verify it's still the configuration from service1
-		Expect(len(*pls.IPConfigurations)).To(Equal(ipAddrCount))
+		Expect(len(pls.Properties.IPConfigurations)).To(Equal(ipAddrCount))
 	})
 })
 
@@ -481,7 +481,7 @@ func updateServiceAnnotation(service *v1.Service, annotation map[string]string) 
 	return
 }
 
-func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip, plsResourceGroup, lbResourceGroup, plsName string) *network.PrivateLinkService {
+func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip *string, plsResourceGroup, lbResourceGroup, plsName string) *network.PrivateLinkService {
 	if lbResourceGroup == "" {
 		lbResourceGroup = tc.GetResourceGroup()
 	}
@@ -492,9 +492,9 @@ func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip, plsResourceGroup
 	utils.Logf("Looking for internal load balancer frontend config ID with private ip as frontend")
 	var lbFipConfigName string
 	for _, lb := range lbList {
-		for _, fipconfig := range *lb.FrontendIPConfigurations {
-			if fipconfig.PrivateIPAddress != nil &&
-				*fipconfig.PrivateIPAddress == ip {
+		for _, fipconfig := range lb.Properties.FrontendIPConfigurations {
+			if fipconfig.Properties.PrivateIPAddress != nil &&
+				*fipconfig.Properties.PrivateIPAddress == *ip {
 				lbFipConfigName = *fipconfig.Name
 				break
 			}
@@ -511,7 +511,7 @@ func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip, plsResourceGroup
 	}
 
 	utils.Logf("Getting private link service(%s) from rg(%s)", plsName, plsResourceGroup)
-	var pls network.PrivateLinkService
+	var pls *network.PrivateLinkService
 	err = wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
 		pls, err = tc.GetPrivateLinkService(plsResourceGroup, plsName)
 		if err != nil {
@@ -525,5 +525,5 @@ func getPrivateLinkServiceFromIP(tc *utils.AzureTestClient, ip, plsResourceGroup
 	Expect(err).NotTo(HaveOccurred())
 
 	utils.Logf("Successfully obtained private link service")
-	return &pls
+	return pls
 }

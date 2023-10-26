@@ -19,6 +19,7 @@ package utils
 import (
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,24 +55,24 @@ func TestPrefixIntArray2String(t *testing.T) {
 func TestGetNextSubnet(t *testing.T) {
 	tests := []struct {
 		vNetCIDR     string
-		existSubnets []string
+		existSubnets []*string
 		resultIP     string
 		resultMask   []byte
 	}{
 		{
 			vNetCIDR: "10.24.0.0/16",
-			existSubnets: []string{
-				"10.24.0.0/24",
-				"10.24.1.0/24",
+			existSubnets: []*string{
+				to.Ptr("10.24.0.0/24"),
+				to.Ptr("10.24.1.0/24"),
 			},
 			resultIP:   "10.24.2.0",
 			resultMask: []byte{255, 255, 255, 0},
 		},
 		{
 			vNetCIDR: "2001:1234:5678:9a00::/56",
-			existSubnets: []string{
-				"2001:1234:5678:9abc::/64",
-				"2001:1234:5678:9abd::/64",
+			existSubnets: []*string{
+				to.Ptr("2001:1234:5678:9abc::/64"),
+				to.Ptr("2001:1234:5678:9abd::/64"),
 			},
 			resultIP:   "2001:1234:5678:9aff::",
 			resultMask: []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
@@ -79,7 +80,8 @@ func TestGetNextSubnet(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		cidr, err := getNextSubnet(tc.vNetCIDR, tc.existSubnets)
+		tc := tc
+		cidr, err := getNextSubnet(&tc.vNetCIDR, tc.existSubnets)
 		assert.Empty(t, err)
 		assert.Equal(t, tc.resultIP, cidr.IP.String())
 		assert.Equal(t, tc.resultMask, []byte(cidr.Mask))

@@ -29,6 +29,7 @@ import (
 	autorest "github.com/Azure/go-autorest/autorest"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "github.com/golang/mock/gomock"
+
 	armclient "sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )

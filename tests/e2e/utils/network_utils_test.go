@@ -19,7 +19,8 @@ package utils
 import (
 	"testing"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/pointer"
 )
@@ -28,52 +29,52 @@ func TestSelectSubnets(t *testing.T) {
 	testcases := []struct {
 		desc            string
 		ipFamily        IPFamily
-		vNetSubnets     *[]aznetwork.Subnet
-		expectedSubnets []string
+		vNetSubnets     []*aznetwork.Subnet
+		expectedSubnets []*string
 	}{
 		{
 			"only control-plane subnet",
 			IPv4,
-			&[]aznetwork.Subnet{
+			[]*aznetwork.Subnet{
 				{Name: pointer.String("control-plane")},
 			},
-			[]string{},
+			[]*string{},
 		},
 		{
 			"IPv4",
 			IPv4,
-			&[]aznetwork.Subnet{
-				{Name: pointer.String("subnet0"), SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{AddressPrefix: pointer.String("10.0.0.0/24")}},
+			[]*aznetwork.Subnet{
+				{Name: pointer.String("subnet0"), Properties: &aznetwork.SubnetPropertiesFormat{AddressPrefix: pointer.String("10.0.0.0/24")}},
 			},
-			[]string{"10.0.0.0/24"},
+			[]*string{to.Ptr("10.0.0.0/24")},
 		},
 		{
 			"IPv6",
 			IPv6,
-			&[]aznetwork.Subnet{
+			[]*aznetwork.Subnet{
 				{
 					Name: pointer.String("subnet0"),
-					SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
+					Properties: &aznetwork.SubnetPropertiesFormat{
 						AddressPrefix:   pointer.String("10.0.0.0/24"),
-						AddressPrefixes: &[]string{"10.0.0.0/24", "2001::1/96"},
+						AddressPrefixes: []*string{to.Ptr("10.0.0.0/24"), to.Ptr("2001::1/96")},
 					},
 				},
 			},
-			[]string{"2001::1/96"},
+			[]*string{to.Ptr("2001::1/96")},
 		},
 		{
 			"DualStack",
 			DualStack,
-			&[]aznetwork.Subnet{
+			[]*aznetwork.Subnet{
 				{
 					Name: pointer.String("subnet0"),
-					SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
+					Properties: &aznetwork.SubnetPropertiesFormat{
 						AddressPrefix:   pointer.String("10.0.0.0/24"),
-						AddressPrefixes: &[]string{"10.0.0.0/24", "2001::1/96"},
+						AddressPrefixes: []*string{to.Ptr("10.0.0.0/24"), to.Ptr("2001::1/96")},
 					},
 				},
 			},
-			[]string{"10.0.0.0/24", "2001::1/96"},
+			[]*string{to.Ptr("10.0.0.0/24"), to.Ptr("2001::1/96")},
 		},
 	}
 

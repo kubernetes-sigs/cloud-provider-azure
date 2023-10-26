@@ -17,13 +17,9 @@ limitations under the License.
 package utils
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/Azure/go-autorest/autorest/adal"
-	"github.com/Azure/go-autorest/autorest/azure"
-
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
 
 // Environmental variables for validating Azure resource status.
@@ -37,59 +33,19 @@ const (
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
 )
 
-// AzureAuthConfig holds auth related part of cloud config
-// Only consider servicePrinciple now
-type AzureAuthConfig struct {
-	// The AAD Tenant ID for the Subscription that the cluster is deployed in
-	TenantID string
-	// The ClientID for an AAD application with RBAC access to talk to Azure RM APIs
-	AADClientID string
-	// The ClientSecret for an AAD application with RBAC access to talk to Azure RM APIs
-	AADClientSecret string
-	// The ID of the Azure Subscription that the cluster is deployed in
-	SubscriptionID string
-	// The Environment represents a set of endpoints for each of Azure's Clouds.
-	Environment azure.Environment
-}
-
-// getServicePrincipalToken creates a new service principal token based on the configuration
-func getServicePrincipalToken(config *AzureAuthConfig) (*adal.ServicePrincipalToken, error) {
-	oauthConfig, err := adal.NewOAuthConfig(config.Environment.ActiveDirectoryEndpoint, config.TenantID)
-	if err != nil {
-		return nil, fmt.Errorf("creating the OAuth config: %w", err)
-	}
-
-	if len(config.AADClientSecret) > 0 {
-		klog.V(2).Infoln("azure: using client_id+client_secret to retrieve access token")
-		return adal.NewServicePrincipalToken(
-			*oauthConfig,
-			config.AADClientID,
-			config.AADClientSecret,
-			config.Environment.ServiceManagementEndpoint)
-	}
-
-	return nil, fmt.Errorf("No credentials provided for AAD application %s", config.AADClientID)
-}
-
 // azureAuthConfigFromTestProfile obtains azure config from Environment
-func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
-	var env azure.Environment
+func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMClientConfig, *azclient.ClientFactoryConfig, error) {
 	envStr := os.Getenv(ClusterEnvironment)
 	if len(envStr) == 0 {
-		env = azure.PublicCloud
-	} else {
-		var err error
-		env, err = azure.EnvironmentFromName(envStr)
-		if err != nil {
-			return nil, err
-		}
+		envStr = "AZUREPUBLICCLOUD"
 	}
-	c := &AzureAuthConfig{
-		TenantID:        os.Getenv(TenantIDEnv),
-		AADClientID:     os.Getenv(ServicePrincipleIDEnv),
-		AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
-		SubscriptionID:  os.Getenv(SubscriptionEnv),
-		Environment:     env,
-	}
-	return c, nil
+	return &azclient.AzureAuthConfig{
+			TenantID:        os.Getenv(TenantIDEnv),
+			AADClientID:     os.Getenv(ServicePrincipleIDEnv),
+			AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
+		}, &azclient.ARMClientConfig{
+			Cloud: envStr,
+		}, &azclient.ClientFactoryConfig{
+			SubscriptionID: os.Getenv(SubscriptionEnv),
+		}, nil
 }
