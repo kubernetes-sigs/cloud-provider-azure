@@ -95,6 +95,20 @@ func (mr *MockInterfaceMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), arg0, arg1, arg2)
 }
 
+// ImportImage mocks base method.
+func (m *MockInterface) ImportImage(arg0 context.Context, arg1, arg2 string, arg3 armcontainerregistry.ImportImageParameters) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ImportImage", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ImportImage indicates an expected call of ImportImage.
+func (mr *MockInterfaceMockRecorder) ImportImage(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportImage", reflect.TypeOf((*MockInterface)(nil).ImportImage), arg0, arg1, arg2, arg3)
+}
+
 // List mocks base method.
 func (m *MockInterface) List(arg0 context.Context, arg1 string) ([]*armcontainerregistry.Registry, error) {
 	m.ctrl.T.Helper()
