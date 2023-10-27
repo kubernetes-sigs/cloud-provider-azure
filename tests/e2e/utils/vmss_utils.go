@@ -23,7 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -41,18 +42,17 @@ func FindTestVMSS(tc *AzureTestClient, rgName string) (*azcompute.VirtualMachine
 
 	vmssClient := tc.createVMSSClient()
 
-	list, err := vmssClient.List(context.Background(), rgName)
+	vmssList, err := vmssClient.List(context.Background(), rgName)
 	if err != nil {
 		return nil, err
 	}
 
-	vmssList := list.Values()
 	for i := range vmssList {
 		vmss := vmssList[i]
 		if IsAutoscalingAKSCluster() && vmss.Name != nil && strings.Contains(*vmss.Name, SystemPool) {
 			continue
 		}
-		return &vmss, nil
+		return vmss, nil
 	}
 	return nil, nil
 }
@@ -71,14 +71,14 @@ func ScaleVMSS(tc *AzureTestClient, vmssName string, instanceCount int64) (err e
 
 	vmssClient := tc.createVMSSClient()
 
-	vmss, err := vmssClient.Get(context.Background(), rgName, vmssName, azcompute.UserData)
+	vmss, err := vmssClient.Get(context.Background(), rgName, vmssName, to.Ptr(azcompute.ExpandTypesForGetVMScaleSetsUserData))
 	if err != nil {
 		return err
 	}
 	parameters := azcompute.VirtualMachineScaleSet{
 		Location: vmss.Location,
-		Sku: &azcompute.Sku{
-			Name:     vmss.Sku.Name,
+		SKU: &azcompute.SKU{
+			Name:     vmss.SKU.Name,
 			Capacity: pointer.Int64(instanceCount),
 		},
 	}
@@ -104,7 +104,7 @@ func IsNodeInVMSS(tc *AzureTestClient, nodeName, vmssName string) (bool, error) 
 		return false, fmt.Errorf("failed to find any VM in VMSS %s", vmssName)
 	}
 
-	var vmsInVMSS []azcompute.VirtualMachineScaleSetVM
+	var vmsInVMSS []*azcompute.VirtualMachineScaleSetVM
 	for _, vm := range vms {
 		vmssNameMatches := vmssVMRE.FindStringSubmatch(*vm.ID)
 		if len(vmssNameMatches) != 2 {
@@ -117,7 +117,7 @@ func IsNodeInVMSS(tc *AzureTestClient, nodeName, vmssName string) (bool, error) 
 	}
 
 	for _, vmInVMSS := range vmsInVMSS {
-		if vmInVMSS.OsProfile != nil && vmInVMSS.OsProfile.ComputerName != nil && strings.EqualFold(nodeName, *vmInVMSS.OsProfile.ComputerName) {
+		if vmInVMSS.Properties != nil && vmInVMSS.Properties.OSProfile != nil && vmInVMSS.Properties.OSProfile.ComputerName != nil && strings.EqualFold(nodeName, *vmInVMSS.Properties.OSProfile.ComputerName) {
 			return true, nil
 		}
 	}
@@ -268,8 +268,8 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 				continue
 			}
 
-			actualCap[*vmss.Name] = *vmss.Sku.Capacity
-			if cap != *vmss.Sku.Capacity {
+			actualCap[*vmss.Name] = *vmss.SKU.Capacity
+			if cap != *vmss.SKU.Capacity {
 				if !strings.Contains(os.Getenv(AKSClusterType), "autoscaling") {
 					Logf("It is not an autoscaling cluster and vmss SKU capacity does not equal expectedCap")
 					capMatch = false
@@ -278,7 +278,7 @@ func ValidateClusterNodesMatchVMSSInstances(tc *AzureTestClient, expectedCap map
 				if cap != int64(originalNodeSet.Intersection(vmssInstanceSet).Len()) {
 					// For autoscaling cluster, simply comparing the capacity may not work since if the number of current nodes is lower than the "minCount", a new node may be created after scaling down.
 					// In this situation, we compare the expected capacity with the length of intersection between original nodes and current nodes.
-					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.Sku.Capacity)
+					Logf("VMSS %q sku capacity is expected to be %d, but actually %d", *vmss.Name, cap, *vmss.SKU.Capacity)
 					capMatch = false
 					break
 				}
@@ -325,26 +325,25 @@ func ValidateVMSSNodeLabels(tc *AzureTestClient, vmss *azcompute.VirtualMachineS
 }
 
 // ListVMSSVMs returns the VM list of the given VMSS
-func ListVMSSVMs(tc *AzureTestClient, vmssName string) ([]azcompute.VirtualMachineScaleSetVM, error) {
+func ListVMSSVMs(tc *AzureTestClient, vmssName string) ([]*azcompute.VirtualMachineScaleSetVM, error) {
 	vmssVMClient := tc.createVMSSVMClient()
 
-	list, err := vmssVMClient.List(context.Background(), tc.GetResourceGroup(), vmssName, "", "", "")
+	list, err := vmssVMClient.List(context.Background(), tc.GetResourceGroup(), vmssName)
 	if err != nil {
 		return nil, err
 	}
 
-	res := list.Values()
-	return res, nil
+	return list, nil
 }
 
 // GetVMSS gets VMSS object with vmssName.
-func GetVMSS(tc *AzureTestClient, vmssName string) (azcompute.VirtualMachineScaleSet, error) {
+func GetVMSS(tc *AzureTestClient, vmssName string) (*azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
-	return vmssClient.Get(context.Background(), tc.GetResourceGroup(), vmssName, "")
+	return vmssClient.Get(context.Background(), tc.GetResourceGroup(), vmssName, nil)
 }
 
 // ListUniformVMSSes returns the list of scale sets
-func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet, error) {
+func ListUniformVMSSes(tc *AzureTestClient) ([]*azcompute.VirtualMachineScaleSet, error) {
 	vmssClient := tc.createVMSSClient()
 
 	list, err := vmssClient.List(context.Background(), tc.GetResourceGroup())
@@ -352,14 +351,13 @@ func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet,
 		return nil, err
 	}
 
-	res := list.Values()
-	vmssUniforms := make([]azcompute.VirtualMachineScaleSet, 0)
-	for i := range res {
-		vmssUniform := res[i]
+	vmssUniforms := make([]*azcompute.VirtualMachineScaleSet, 0)
+	for i := range list {
+		vmssUniform := list[i]
 		if IsAutoscalingAKSCluster() && vmssUniform.Name != nil && strings.Contains(*vmssUniform.Name, SystemPool) {
 			continue
 		}
-		if vmssUniform.OrchestrationMode == "" || vmssUniform.OrchestrationMode == azcompute.Uniform {
+		if vmssUniform.Properties.OrchestrationMode == nil || *vmssUniform.Properties.OrchestrationMode == "" || *vmssUniform.Properties.OrchestrationMode == azcompute.OrchestrationModeUniform {
 			vmssUniforms = append(vmssUniforms, vmssUniform)
 		}
 	}
@@ -367,15 +365,15 @@ func ListUniformVMSSes(tc *AzureTestClient) ([]azcompute.VirtualMachineScaleSet,
 }
 
 // GetVMSSVMComputerName returns the corresponding node name of the VMSS VM
-func GetVMSSVMComputerName(vm azcompute.VirtualMachineScaleSetVM) (string, error) {
-	if vm.OsProfile == nil || vm.OsProfile.ComputerName == nil {
+func GetVMSSVMComputerName(vm *azcompute.VirtualMachineScaleSetVM) (string, error) {
+	if vm.Properties == nil || vm.Properties.OSProfile == nil || vm.Properties.OSProfile.ComputerName == nil {
 		return "", fmt.Errorf("cannot find computer name from vmss vm %s", *vm.Name)
 	}
 
-	return *vm.OsProfile.ComputerName, nil
+	return *vm.Properties.OSProfile.ComputerName, nil
 }
 
 // IsSpotVMSS checks whether the vmss support azure spot vm instance
-func IsSpotVMSS(vmss azcompute.VirtualMachineScaleSet) bool {
-	return vmss.VirtualMachineProfile.Priority == azcompute.Spot
+func IsSpotVMSS(vmss *azcompute.VirtualMachineScaleSet) bool {
+	return *vmss.Properties.VirtualMachineProfile.Priority == azcompute.VirtualMachinePriorityTypesSpot
 }

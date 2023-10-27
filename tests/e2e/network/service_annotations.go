@@ -27,7 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -180,16 +181,16 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		By("Create PIPs")
 		ipNameBase := fmt.Sprintf("%s-public-IP-%s", basename, uuid.NewUUID()[0:4])
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
-		pipNames, targetIPs := []string{}, []string{}
+		pipNames, targetIPs := []*string{}, []*string{}
 		deleteFuncs := []func(){}
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
-			targetIPs = append(targetIPs, targetIP)
+			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
 		if v6Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, true)
-			targetIPs = append(targetIPs, targetIP)
+			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
 		defer func() {
@@ -221,7 +222,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Check if PIP DNS label is not tagged onto the user-assigned pip")
 		for _, pipName := range pipNames {
-			deleted, err := ifPIPDNSLabelDeleted(tc, pipName)
+			deleted, err := ifPIPDNSLabelDeleted(tc, *pipName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deleted).To(BeTrue())
 		}
@@ -275,26 +276,26 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		var newSubnetCIDRs []*net.IPNet
-		for _, existingSubnet := range *vNet.Subnets {
+		for _, existingSubnet := range vNet.Properties.Subnets {
 			if *existingSubnet.Name != subnetName {
 				continue
 			}
 			utils.Logf("Test subnet have existed, skip creating")
-			if existingSubnet.AddressPrefix != nil {
+			if existingSubnet.Properties.AddressPrefix != nil {
 				// IPv4 picks the only AddressPrefix.
-				_, newSubnetCIDR, err := net.ParseCIDR(*existingSubnet.AddressPrefix)
+				_, newSubnetCIDR, err := net.ParseCIDR(*existingSubnet.Properties.AddressPrefix)
 				Expect(err).NotTo(HaveOccurred())
 				newSubnetCIDRs = append(newSubnetCIDRs, newSubnetCIDR)
 			} else {
-				Expect(existingSubnet.AddressPrefixes).NotTo(BeNil(),
+				Expect(existingSubnet.Properties.AddressPrefixes).NotTo(BeNil(),
 					"subnet AddressPrefix and AddressPrefixes shouldn't be both nil")
 
 				expectedAddrPrefixPickedCount := 1
 				if tc.IPFamily == utils.DualStack {
 					expectedAddrPrefixPickedCount = 2
 				}
-				for _, addrPrefix := range *existingSubnet.AddressPrefixes {
-					_, newSubnetCIDR, err := net.ParseCIDR(addrPrefix)
+				for _, addrPrefix := range existingSubnet.Properties.AddressPrefixes {
+					_, newSubnetCIDR, err := net.ParseCIDR(*addrPrefix)
 					Expect(err).NotTo(HaveOccurred(), "failed to parse CIDR %q", addrPrefix)
 					newSubnetCIDRs = append(newSubnetCIDRs, newSubnetCIDR)
 				}
@@ -311,7 +312,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			for _, newSubnetCIDR := range newSubnetCIDRs {
 				newSubnetCIDRStrs = append(newSubnetCIDRStrs, newSubnetCIDR.String())
 			}
-			_, err = tc.CreateSubnet(vNet, &subnetName, &newSubnetCIDRStrs, false)
+			_, err = tc.CreateSubnet(vNet, &subnetName, to.SliceOfPtrs(newSubnetCIDRStrs...), false)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
@@ -339,7 +340,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		for _, ip := range ips {
 			contains := false
 			for _, newSubnetCIDR := range newSubnetCIDRs {
-				if newSubnetCIDR.Contains(net.ParseIP(ip)) {
+				if newSubnetCIDR.Contains(net.ParseIP(*ip)) {
 					contains = true
 					break
 				}
@@ -349,7 +350,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-enable-high-availability-ports'", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("azure-load-balancer-enable-high-availability-ports only work with Standard Load Balancer")
 		}
 
@@ -369,10 +370,10 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		lb := getAzureInternalLoadBalancerFromPrivateIP(tc, ip, "")
 
-		Expect(len(*lb.LoadBalancingRules)).To(Equal(len(ips)))
-		rule := (*lb.LoadBalancingRules)[0]
-		Expect(*rule.FrontendPort).To(Equal(int32(0)))
-		Expect(*rule.BackendPort).To(Equal(int32(0)))
+		Expect(len(lb.Properties.LoadBalancingRules)).To(Equal(len(ips)))
+		rule := (lb.Properties.LoadBalancingRules)[0]
+		Expect(*rule.Properties.FrontendPort).To(Equal(int32(0)))
+		Expect(*rule.Properties.BackendPort).To(Equal(int32(0)))
 	})
 
 	It("should support service annotation 'service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout'", func() {
@@ -394,9 +395,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		lb := getAzureLoadBalancerFromPIP(tc, publicIP, tc.GetResourceGroup(), "")
 
 		var idleTimeout *int32
-		for _, rule := range *lb.LoadBalancingRules {
-			if rule.IdleTimeoutInMinutes != nil {
-				idleTimeout = rule.IdleTimeoutInMinutes
+		for _, rule := range lb.Properties.LoadBalancingRules {
+			if rule.Properties.IdleTimeoutInMinutes != nil {
+				idleTimeout = rule.Properties.IdleTimeoutInMinutes
 			}
 		}
 		Expect(*idleTimeout).To(Equal(int32(5)))
@@ -408,7 +409,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		defer cleanup(pointer.StringDeref(rg.Name, ""))
 
 		By("creating test PIP in the test resource group")
-		pips := []string{}
+		pips := []*string{}
 		testPIPNames := []string{}
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		createPIPInRG := func(isIPv6 bool) {
@@ -416,8 +417,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			pip, err := utils.WaitCreatePIP(tc, testPIPName, *rg.Name, defaultPublicIPAddress(testPIPName, isIPv6))
 			Expect(err).NotTo(HaveOccurred())
 			testPIPNames = append(testPIPNames, testPIPName)
-			Expect(pip.PublicIPAddressPropertiesFormat).NotTo(BeNil())
-			pips = append(pips, pointer.StringDeref(pip.IPAddress, ""))
+			Expect(pip.Properties).NotTo(BeNil())
+			pips = append(pips, pip.Properties.IPAddress)
 		}
 		if v4Enabled {
 			createPIPInRG(false)
@@ -519,16 +520,17 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			}
 
 			utils.Logf("Checking additionalPIP in nsg")
-			ipList := append(ips, additionalPIPs...)
+			ipList := append(ips, to.SliceOfPtrs(additionalPIPs...)...)
 			port := fmt.Sprintf("%d", serverPort)
 			nsgs, err := tc.GetClusterSecurityGroups()
 			if err != nil {
 				return false, err
 			}
 			utils.Logf("ipList %q", ipList)
-			ipListV4, ipListV6 := []string{}, []string{}
+			ipListV4, ipListV6 := []*string{}, []*string{}
 			for _, ip := range ipList {
-				if net.ParseIP(ip).To4() != nil {
+				ip := ip
+				if net.ParseIP(*ip).To4() != nil {
 					ipListV4 = append(ipListV4, ip)
 				} else {
 					ipListV6 = append(ipListV6, ip)
@@ -628,7 +630,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, targetIPs1)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, to.SliceOfPtrs(targetIPs1...))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Updating the service to refer to the second service")
@@ -645,12 +647,12 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for service IP to be updated")
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, targetIPs2)
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, to.SliceOfPtrs(targetIPs2...))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-pip-prefix-id`", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("pip-prefix-id only work with Standard Load Balancer")
 		}
 
@@ -717,16 +719,16 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Waiting for the service to expose")
 		{
-			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
 			Expect(err).NotTo(HaveOccurred())
 			for _, ip := range ips {
-				isIPv6 := net.ParseIP(ip).To4() == nil
+				isIPv6 := net.ParseIP(*ip).To4() == nil
 				pip, err := utils.WaitGetPIPByPrefix(tc, prefixNames1[isIPv6], true)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(pip.IPAddress).NotTo(BeNil())
-				Expect(pointer.StringDeref(pip.PublicIPPrefix.ID, "")).To(Equal(prefixIDs1[isIPv6]))
-				Expect(ip).To(Equal(pointer.StringDeref(pip.IPAddress, "")))
+				Expect(pip.Properties.IPAddress).NotTo(BeNil())
+				Expect(pointer.StringDeref(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs1[isIPv6]))
+				Expect(*ip).To(Equal(pointer.StringDeref(pip.Properties.IPAddress, "")))
 			}
 		}
 
@@ -754,9 +756,9 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				pip, err := utils.WaitGetPIPByPrefix(tc, prefixNames2[isIPv6], true)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(pip.IPAddress).NotTo(BeNil())
-				Expect(pointer.StringDeref(pip.PublicIPPrefix.ID, "")).To(Equal(prefixIDs2[isIPv6]))
-				pipAddrs = append(pipAddrs, pointer.StringDeref(pip.IPAddress, ""))
+				Expect(pip.Properties.IPAddress).NotTo(BeNil())
+				Expect(pointer.StringDeref(pip.Properties.PublicIPPrefix.ID, "")).To(Equal(prefixIDs2[isIPv6]))
+				pipAddrs = append(pipAddrs, pointer.StringDeref(pip.Properties.IPAddress, ""))
 			}
 			if v4Enabled {
 				doPIPByPrefix(false)
@@ -765,7 +767,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				doPIPByPrefix(true)
 			}
 
-			_, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, pipAddrs)
+			_, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, to.SliceOfPtrs(pipAddrs...))
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -796,7 +798,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(len(publicIPs)).NotTo(BeZero())
 		ids := []string{}
 		for _, publicIP := range publicIPs {
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, *publicIP, tc.GetResourceGroup(), false)
 			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 			ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
@@ -813,8 +815,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
-			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+			for i := range lb.Properties.Probes {
+				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
@@ -824,7 +826,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 				for _, id := range ids {
 					if id == probeSplitID {
-						targetProbes = append(targetProbes, &probe)
+						targetProbes = append(targetProbes, probe)
 					}
 				}
 			}
@@ -836,16 +838,16 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Validating health probe configs")
 		for _, probe := range targetProbes {
-			if probe.ProbeThreshold != nil {
+			if probe.Properties.ProbeThreshold != nil {
 				utils.Logf("Validating health probe config numberOfProbes")
-				Expect(*probe.ProbeThreshold).To(Equal(int32(3)))
+				Expect(*probe.Properties.ProbeThreshold).To(Equal(int32(3)))
 			}
-			if probe.IntervalInSeconds != nil {
+			if probe.Properties.IntervalInSeconds != nil {
 				utils.Logf("Validating health probe config intervalInSeconds")
-				Expect(*probe.IntervalInSeconds).To(Equal(int32(10)))
+				Expect(*probe.Properties.IntervalInSeconds).To(Equal(int32(10)))
 			}
 			utils.Logf("Validating health probe config ProbeProtocolHTTP")
-			Expect(probe.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*probe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
 		}
 	})
 
@@ -870,7 +872,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		Expect(len(publicIPs)).NotTo(BeZero())
 		ids := []string{}
 		for _, publicIP := range publicIPs {
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, *publicIP, tc.GetResourceGroup(), false)
 			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 			ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
@@ -887,8 +889,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
-			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+			for i := range lb.Properties.Probes {
+				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
@@ -898,7 +900,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 				for _, id := range ids {
 					if id == probeSplitID {
-						targetProbes = append(targetProbes, &probe)
+						targetProbes = append(targetProbes, probe)
 					}
 				}
 			}
@@ -910,16 +912,16 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 
 		By("Validating health probe configs")
 		for _, probe := range targetProbes {
-			if probe.ProbeThreshold != nil {
+			if probe.Properties.ProbeThreshold != nil {
 				utils.Logf("Validating health probe config numberOfProbes")
-				Expect(*probe.ProbeThreshold).To(Equal(int32(3)))
+				Expect(*probe.Properties.ProbeThreshold).To(Equal(int32(3)))
 			}
-			if probe.IntervalInSeconds != nil {
+			if probe.Properties.IntervalInSeconds != nil {
 				utils.Logf("Validating health probe config intervalInSeconds")
-				Expect(*probe.IntervalInSeconds).To(Equal(int32(10)))
+				Expect(*probe.Properties.IntervalInSeconds).To(Equal(int32(10)))
 			}
 			utils.Logf("Validating health probe config ProbeProtocolHTTP")
-			Expect(probe.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*probe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
 		}
 
 		By("Changing ExternalTrafficPolicy of the service to Local")
@@ -957,8 +959,8 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		err = wait.PollImmediate(5*time.Second, 300*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
-			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+			for i := range lb.Properties.Probes {
+				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
 				probeSplit := strings.Split(*probe.Name, "-")
 				Expect(len(probeSplit)).NotTo(Equal(0))
@@ -968,7 +970,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				}
 				for _, id := range ids {
 					if id == probeSplitID {
-						targetProbes = append(targetProbes, &probe)
+						targetProbes = append(targetProbes, probe)
 					}
 				}
 			}
@@ -980,15 +982,15 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			By("Validating health probe configs")
 			for _, probe := range targetProbes {
 				utils.Logf("Validating health probe config numberOfProbes")
-				if probe.ProbeThreshold == nil || *probe.ProbeThreshold != int32(5) {
+				if probe.Properties.ProbeThreshold == nil || *probe.Properties.ProbeThreshold != int32(5) {
 					return false, nil
 				}
 				utils.Logf("Validating health probe config intervalInSeconds")
-				if probe.IntervalInSeconds == nil || *probe.IntervalInSeconds != int32(15) {
+				if probe.Properties.IntervalInSeconds == nil || *probe.Properties.IntervalInSeconds != int32(15) {
 					return false, nil
 				}
 				utils.Logf("Validating health probe config ProbeProtocolHTTP")
-				if !strings.EqualFold(string(probe.Protocol), string(network.ProbeProtocolHTTP)) {
+				if !strings.EqualFold(string(*probe.Properties.Protocol), string(network.ProbeProtocolHTTP)) {
 					return false, nil
 				}
 			}
@@ -1024,7 +1026,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		}()
 		Expect(len(publicIPs)).NotTo(BeZero())
 		for _, publicIP := range publicIPs {
-			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
+			pipFrontendConfigID := getPIPFrontendConfigurationID(tc, *publicIP, tc.GetResourceGroup(), false)
 			pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 			Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 		}
@@ -1040,10 +1042,10 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
 			lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 			targetProbes = []*network.Probe{}
-			for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-				probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+			for i := range lb.Properties.Probes {
+				probe := (lb.Properties.Probes)[i]
 				utils.Logf("One probe of LB is %q", *probe.Name)
-				targetProbes = append(targetProbes, &probe)
+				targetProbes = append(targetProbes, probe)
 			}
 			return len(targetProbes) == expectedTargetProbesCount, nil
 		})
@@ -1053,11 +1055,11 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		var numberOfProbes *int32
 		var intervalInSeconds *int32
 		for _, probe := range targetProbes {
-			if probe.ProbeThreshold != nil {
-				numberOfProbes = probe.ProbeThreshold
+			if probe.Properties.ProbeThreshold != nil {
+				numberOfProbes = probe.Properties.ProbeThreshold
 			}
-			if probe.IntervalInSeconds != nil {
-				intervalInSeconds = probe.IntervalInSeconds
+			if probe.Properties.IntervalInSeconds != nil {
+				intervalInSeconds = probe.Properties.IntervalInSeconds
 			}
 		}
 		utils.Logf("Validating health probe config numberOfProbes")
@@ -1067,7 +1069,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		utils.Logf("Validating health probe config protocol")
 		Expect((len(targetProbes))).To(Equal(expectedTargetProbesCount))
 		for _, targetProbe := range targetProbes {
-			Expect(targetProbe.Protocol).To(Equal(network.ProbeProtocolHTTP))
+			Expect(*targetProbe.Properties.Protocol).To(Equal(network.ProbeProtocolHTTP))
 		}
 	})
 
@@ -1119,7 +1121,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			pipAddr := pointer.StringDeref(pip.IPAddress, "")
+			pipAddr := pointer.StringDeref(pip.Properties.IPAddress, "")
 			utils.Logf("Created pip with address %s", pipAddr)
 			annotation[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6]] = pipAddr
 			return pipAddr, cleanup
@@ -1148,7 +1150,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v4Enabled {
 			found := false
 			for _, ip := range ips {
-				if ip == pipAddrV4 {
+				if *ip == pipAddrV4 {
 					found = true
 					break
 				}
@@ -1158,7 +1160,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		if v6Enabled {
 			found := false
 			for _, ip := range ips {
-				if ip == pipAddrV6 {
+				if *ip == pipAddrV6 {
 					found = true
 					break
 				}
@@ -1219,7 +1221,7 @@ var _ = Describe("Multiple VMSS", Label(utils.TestSuiteLabelMultiNodePools, util
 	})
 
 	It("should support service annotation `service.beta.kubernetes.io/azure-load-balancer-mode`", func() {
-		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.PublicIPAddressSkuNameStandard)) {
+		if !strings.EqualFold(os.Getenv(utils.LoadBalancerSkuEnv), string(network.LoadBalancerSKUNameStandard)) {
 			Skip("service.beta.kubernetes.io/azure-load-balancer-mode only works for basic load balancer")
 		}
 
@@ -1353,7 +1355,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			//wait and get service's public IP Address
 			utils.Logf("Waiting service to expose...")
-			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+			publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(publicIPs)).NotTo(BeZero())
 			// create service with given annotation and wait it to expose
@@ -1363,11 +1365,13 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 				err := utils.DeleteService(cs, ns.Name, serviceName)
 				Expect(err).NotTo(HaveOccurred())
 				for _, ip := range publicIPs {
-					By(fmt.Sprintf("Cleaning up public IP %q", ip))
+					By(fmt.Sprintf("Cleaning up public IP %q", *ip))
 					pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), ip)
 					Expect(err).NotTo(HaveOccurred())
-					err = utils.DeletePIPWithRetry(tc, pointer.StringDeref(pip.Name, ""), tc.GetResourceGroup())
-					Expect(err).NotTo(HaveOccurred())
+					if pip != nil {
+						err = utils.DeletePIPWithRetry(tc, pointer.StringDeref(pip.Name, ""), tc.GetResourceGroup())
+						Expect(err).NotTo(HaveOccurred())
+					}
 				}
 			}()
 
@@ -1401,7 +1405,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			ids := []string{}
 			for _, publicIP := range publicIPs {
-				pipFrontendConfigID := getPIPFrontendConfigurationID(tc, publicIP, tc.GetResourceGroup(), false)
+				pipFrontendConfigID := getPIPFrontendConfigurationID(tc, *publicIP, tc.GetResourceGroup(), false)
 				pipFrontendConfigIDSplit := strings.Split(pipFrontendConfigID, "/")
 				Expect(len(pipFrontendConfigIDSplit)).NotTo(Equal(0))
 				ids = append(ids, pipFrontendConfigIDSplit[len(pipFrontendConfigIDSplit)-1])
@@ -1418,7 +1422,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 				utils.Logf("Checking port %d", port)
 				match := true
 				for _, targetProbe := range targetProbes {
-					if *(targetProbe.Port) != port {
+					if *(targetProbe.Properties.Port) != port {
 						match = false
 						break
 					}
@@ -1429,15 +1433,15 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb = getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 				targetProbes = []*network.Probe{}
-				for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-					probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				for i := range lb.Properties.Probes {
+					probe := (lb.Properties.Probes)[i]
 					utils.Logf("One probe of LB is %q", *probe.Name)
 					probeSplit := strings.Split(*probe.Name, "-")
 					Expect(len(probeSplit)).NotTo(Equal(0))
 					for _, id := range ids {
 						utils.Logf("ID %q", id)
 						if id == probeSplit[0] {
-							targetProbes = append(targetProbes, &probe)
+							targetProbes = append(targetProbes, probe)
 						}
 					}
 				}
@@ -1468,15 +1472,15 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 			err = wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
 				lb := getAzureLoadBalancerFromPIP(tc, publicIPs[0], tc.GetResourceGroup(), "")
 				targetProbes = []*network.Probe{}
-				for i := range *lb.LoadBalancerPropertiesFormat.Probes {
-					probe := (*lb.LoadBalancerPropertiesFormat.Probes)[i]
+				for i := range lb.Properties.Probes {
+					probe := (lb.Properties.Probes)[i]
 					utils.Logf("One probe of LB is %q", *probe.Name)
 					probeSplit := strings.Split(*probe.Name, "-")
 					Expect(len(probeSplit)).NotTo(Equal(0))
 					for _, id := range ids {
 						utils.Logf("ID %q", id)
 						if id == probeSplit[0] {
-							targetProbes = append(targetProbes, &probe)
+							targetProbes = append(targetProbes, probe)
 						}
 					}
 				}
@@ -1560,12 +1564,12 @@ func getFrontendConfigurationIDFromPIP(tc *utils.AzureTestClient, pip, pipResour
 	utils.Logf("Getting public IP frontend configuration ID")
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
-		if ip.PublicIPAddressPropertiesFormat != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
-			*ip.PublicIPAddressPropertiesFormat.IPAddress == pip {
-			ipConfig := pointer.StringDeref(ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID, "")
+		if ip.Properties != nil &&
+			ip.Properties.IPAddress != nil &&
+			ip.Properties.IPConfiguration != nil &&
+			ip.Properties.IPConfiguration.ID != nil &&
+			*ip.Properties.IPAddress == pip {
+			ipConfig := pointer.StringDeref(ip.Properties.IPConfiguration.ID, "")
 			utils.Logf("Found pip %q with ipConfig %q", pip, ipConfig)
 			pipFrontendConfigurationID = ipConfig
 			break
@@ -1575,8 +1579,8 @@ func getFrontendConfigurationIDFromPIP(tc *utils.AzureTestClient, pip, pipResour
 	return pipFrontendConfigurationID
 }
 
-func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
-	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, pip, pipResourceGroup, true)
+func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip *string, pipResourceGroup, lbResourceGroup string) *network.LoadBalancer {
+	pipFrontendConfigurationID := getPIPFrontendConfigurationID(tc, *pip, pipResourceGroup, true)
 	Expect(pipFrontendConfigurationID).NotTo(Equal(""))
 
 	utils.Logf("Getting loadBalancer name from pipFrontendConfigurationID")
@@ -1592,12 +1596,12 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip, pipResourceGrou
 	}
 	lb, err := tc.GetLoadBalancer(lbResourceGroup, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(lb.LoadBalancingRules).NotTo(BeNil())
+	Expect(lb.Properties.LoadBalancingRules).NotTo(BeNil())
 
-	return &lb
+	return lb
 }
 
-func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamily utils.IPFamily, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort, customizeFuncs ...func(*v1.Service) error) []string {
+func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamily utils.IPFamily, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort, customizeFuncs ...func(*v1.Service) error) []*string {
 	utils.Logf("Creating service " + serviceName + " in namespace " + nsName)
 	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, nsName, ports)
 	for _, customizeFunc := range customizeFuncs {
@@ -1610,7 +1614,7 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamil
 
 	//wait and get service's IP Address
 	utils.Logf("Waiting service to expose...")
-	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ipFamily, nsName, serviceName, []string{})
+	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, ipFamily, nsName, serviceName, []*string{})
 	Expect(err).NotTo(HaveOccurred())
 
 	return publicIPs
@@ -1686,7 +1690,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 
 	//wait and get service's public IP Address
 	By("Waiting for service exposure")
-	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns, serviceName, []string{})
+	publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns, serviceName, []*string{})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(publicIPs)).NotTo(BeZero())
 	publicIP := publicIPs[0]
@@ -1699,12 +1703,12 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	By("Getting public IP frontend configuration ID")
 	var pipFrontendConfigurationID string
 	for _, ip := range pipList {
-		if ip.PublicIPAddressPropertiesFormat != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPAddress != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPConfiguration != nil &&
-			ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID != nil &&
-			*ip.PublicIPAddressPropertiesFormat.IPAddress == publicIP {
-			pipFrontendConfigurationID = *ip.PublicIPAddressPropertiesFormat.IPConfiguration.ID
+		if ip.Properties != nil &&
+			ip.Properties.IPAddress != nil &&
+			ip.Properties.IPConfiguration != nil &&
+			ip.Properties.IPConfiguration.ID != nil &&
+			*ip.Properties.IPAddress == *publicIP {
+			pipFrontendConfigurationID = *ip.Properties.IPConfiguration.ID
 			break
 		}
 	}
@@ -1722,33 +1726,33 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	By("Getting loadBalancer")
 	lb, err := tc.GetLoadBalancer(resourceGroupName, loadBalancerName)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(lb.BackendAddressPools).NotTo(BeNil())
-	Expect(lb.LoadBalancingRules).NotTo(BeNil())
+	Expect(lb.Properties.BackendAddressPools).NotTo(BeNil())
+	Expect(lb.Properties.LoadBalancingRules).NotTo(BeNil())
 
-	if lb.Sku != nil && lb.Sku.Name == network.LoadBalancerSkuNameStandard {
+	if lb.SKU != nil && *lb.SKU.Name == network.LoadBalancerSKUNameStandard {
 		Skip("azure-load-balancer-mode is not working for standard load balancer")
 	}
 
 	By("Getting loadBalancer backendPoolID")
 	backendPoolID := ""
-	for _, rule := range *lb.LoadBalancingRules {
-		if rule.FrontendIPConfiguration != nil &&
-			rule.FrontendIPConfiguration.ID != nil &&
-			strings.EqualFold(*rule.FrontendIPConfiguration.ID, pipFrontendConfigurationID) {
-			Expect(rule.BackendAddressPool).NotTo(BeNil())
-			Expect(rule.BackendAddressPool.ID).NotTo(BeNil())
-			backendPoolID = *rule.BackendAddressPool.ID
+	for _, rule := range lb.Properties.LoadBalancingRules {
+		if rule.Properties.FrontendIPConfiguration != nil &&
+			rule.Properties.FrontendIPConfiguration.ID != nil &&
+			strings.EqualFold(*rule.Properties.FrontendIPConfiguration.ID, pipFrontendConfigurationID) {
+			Expect(rule.Properties.BackendAddressPool).NotTo(BeNil())
+			Expect(rule.Properties.BackendAddressPool.ID).NotTo(BeNil())
+			backendPoolID = *rule.Properties.BackendAddressPool.ID
 		}
 	}
 	Expect(backendPoolID).NotTo(Equal(""))
 
 	By("Validating loadBalancer backendPool")
-	for _, pool := range *lb.BackendAddressPools {
-		if pool.ID == nil || pool.BackendIPConfigurations == nil || !strings.EqualFold(*pool.ID, backendPoolID) {
+	for _, pool := range lb.Properties.BackendAddressPools {
+		if pool.ID == nil || pool.Properties.BackendIPConfigurations == nil || !strings.EqualFold(*pool.ID, backendPoolID) {
 			continue
 		}
 
-		for _, ipConfig := range *pool.BackendIPConfigurations {
+		for _, ipConfig := range pool.Properties.BackendIPConfigurations {
 			if ipConfig.ID == nil {
 				continue
 			}
@@ -1779,7 +1783,7 @@ func testPIPTagAnnotationWithTags(
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting service to expose...")
-	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+	ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
 	Expect(err).NotTo(HaveOccurred())
 
 	defer func() {
@@ -1799,8 +1803,8 @@ func testPIPTagAnnotationWithTags(
 	var targetPIPs []network.PublicIPAddress
 	for _, pip := range pips {
 		for _, ip := range ips {
-			if strings.EqualFold(pointer.StringDeref(pip.IPAddress, ""), ip) {
-				targetPIPs = append(targetPIPs, pip)
+			if strings.EqualFold(pointer.StringDeref(pip.Properties.IPAddress, ""), *ip) {
+				targetPIPs = append(targetPIPs, *pip)
 				err := waitComparePIPTags(tc, expectedTags, pointer.StringDeref(pip.Name, ""))
 				Expect(err).NotTo(HaveOccurred())
 				break

@@ -20,33 +20,31 @@ import (
 	"context"
 	"fmt"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"k8s.io/utils/pointer"
 
 	providerazure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 // ListRouteTables returns the list of all route tables in the resource group
-func ListRouteTables(tc *AzureTestClient) (*[]aznetwork.RouteTable, error) {
+func ListRouteTables(tc *AzureTestClient) ([]*aznetwork.RouteTable, error) {
 	routeTableClient := tc.createRouteTableClient()
 
 	list, err := routeTableClient.List(context.Background(), tc.GetResourceGroup())
 	if err != nil {
 		return nil, err
 	}
-
-	res := list.Values()
-	return &res, nil
+	return list, nil
 }
 
 // GetNodesInRouteTable returns all the nodes in the route table
 func GetNodesInRouteTable(routeTable aznetwork.RouteTable) (map[string]interface{}, error) {
-	if routeTable.Routes == nil || len(*routeTable.Routes) == 0 {
+	if routeTable.Properties == nil || len(routeTable.Properties.Routes) == 0 {
 		return nil, fmt.Errorf("cannot obtained routes in route table %s", *routeTable.Name)
 	}
 
 	routeSet := make(map[string]interface{})
-	for _, route := range *routeTable.Routes {
+	for _, route := range routeTable.Properties.Routes {
 		routeSet[string(providerazure.MapRouteNameToNodeName(true, pointer.StringDeref(route.Name, "")))] = true
 	}
 

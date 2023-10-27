@@ -27,7 +27,7 @@ const (
 	leastPrefix = 24
 )
 
-func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
+func getNextSubnet(vnetCIDR *string, existSubnets []*string) (*net.IPNet, error) {
 	// Filter existSubnets with IP family
 	isIPv6, err := isCIDRIPv6(vnetCIDR)
 	if err != nil {
@@ -40,14 +40,14 @@ func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
 			return nil, err
 		}
 		if isSubnetIPv6 == isIPv6 {
-			existSubnetsWithSameIPFamily = append(existSubnetsWithSameIPFamily, subnet)
+			existSubnetsWithSameIPFamily = append(existSubnetsWithSameIPFamily, *subnet)
 		}
 	}
 
 	// IPv6
 	// TODO: A better solution to replace this hack.
 	if isIPv6 {
-		ip, ipNet, _ := net.ParseCIDR(vnetCIDR)
+		ip, ipNet, _ := net.ParseCIDR(*vnetCIDR)
 		mask := ipNet.Mask
 		pos := 0
 		for i := range ip {
@@ -79,7 +79,7 @@ func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
 		}
 		if !found {
 			return nil, fmt.Errorf("failed to find the next subnet: vnetCIDR: %s, existsSubnets: %v",
-				vnetCIDR, existSubnets)
+				*vnetCIDR, existSubnets)
 		}
 		// Prefix length can only be 64 in case of IPv6 address prefixes in subnets.
 		_, nextSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/64", ip))
@@ -87,7 +87,7 @@ func getNextSubnet(vnetCIDR string, existSubnets []string) (*net.IPNet, error) {
 	}
 
 	// IPv4
-	intIPArray, vNetMask, err := cidrString2intArray(vnetCIDR)
+	intIPArray, vNetMask, err := cidrString2intArray(*vnetCIDR)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected vnet address CIDR: %w", err)
 	}

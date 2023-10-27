@@ -22,13 +22,21 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
-	azauth "github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2015-07-01/authorization"
-	azcompute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	azresources "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-05-01/resources"
-	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/azure"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
 )
 
 var (
@@ -39,15 +47,11 @@ var (
 
 // AzureTestClient configs Azure specific clients
 type AzureTestClient struct {
-	location       string
-	resourceGroup  string
-	authConfig     AzureAuthConfig
-	networkClient  aznetwork.BaseClient
-	resourceClient azresources.BaseClient
-	acrClient      acr.BaseClient
-	authClient     azauth.BaseClient
-	computeClient  azcompute.BaseClient
-
+	location        string
+	resourceGroup   string
+	authConfig      *azclient.AzureAuthConfig
+	client          azclient.ClientFactory
+	azFactoryConfig *azclient.ClientFactoryConfig
 	IPFamily        IPFamily
 	HasWindowsNodes bool
 }
@@ -55,29 +59,26 @@ type AzureTestClient struct {
 // CreateAzureTestClient makes a new AzureTestClient
 // Only consider PublicCloud Environment
 func CreateAzureTestClient() (*AzureTestClient, error) {
-	authConfig, err := azureAuthConfigFromTestProfile()
+	authConfig, armclientConfig, clientFactoryConfig, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return nil, err
 	}
-	servicePrincipleToken, err := getServicePrincipalToken(authConfig)
+	clientOption, err := azclient.GetDefaultAuthClientOption(armclientConfig)
 	if err != nil {
 		return nil, err
 	}
-	baseClient := aznetwork.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
-	baseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
-
-	resourceBaseClient := azresources.BaseClient(baseClient)
-	resourceBaseClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
-
-	acrClient := acr.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
-	acrClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
-
-	authClient := azauth.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
-	authClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
-
-	computeClient := azcompute.NewWithBaseURI(azure.PublicCloud.TokenAudience, authConfig.SubscriptionID)
-	computeClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipleToken)
-
+	authProvider, err := azclient.NewAuthProvider(*authConfig, clientOption)
+	if err != nil {
+		return nil, err
+	}
+	cred, err := authProvider.GetAzIdentity()
+	if err != nil {
+		return nil, err
+	}
+	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cred)
+	if err != nil {
+		return nil, err
+	}
 	kubeClient, err := CreateKubeClientSet()
 	if err != nil {
 		return nil, err
@@ -113,14 +114,11 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	c := &AzureTestClient{
 		location:        location,
 		resourceGroup:   resourceGroup,
-		authConfig:      *authConfig,
-		networkClient:   baseClient,
-		resourceClient:  resourceBaseClient,
-		acrClient:       acrClient,
-		authClient:      authClient,
-		computeClient:   computeClient,
 		IPFamily:        ipFamily,
 		HasWindowsNodes: hasWindowsNodes,
+		authConfig:      authConfig,
+		azFactoryConfig: clientFactoryConfig,
+		client:          azFactory,
 	}
 
 	return c, nil
@@ -137,78 +135,78 @@ func (tc *AzureTestClient) GetLocation() string {
 }
 
 // GetAuthConfig gets the authorization configuration information
-func (tc *AzureTestClient) GetAuthConfig() AzureAuthConfig {
-	return tc.authConfig
+func (tc *AzureTestClient) GetSubscriptionID() string {
+	return tc.azFactoryConfig.SubscriptionID
 }
 
 // CreateSubnetsClient generates subnet client with the same baseclient as azure test client
-func (tc *AzureTestClient) createSubnetsClient() *aznetwork.SubnetsClient {
-	return &aznetwork.SubnetsClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createSubnetsClient() subnetclient.Interface {
+	return tc.client.GetSubnetClient()
 }
 
 // CreateVirtualNetworksClient generates virtual network client with the same baseclient as azure test client
-func (tc *AzureTestClient) createVirtualNetworksClient() *aznetwork.VirtualNetworksClient {
-	return &aznetwork.VirtualNetworksClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createVirtualNetworksClient() virtualnetworkclient.Interface {
+	return tc.client.GetVirtualNetworkClient()
 }
 
 // CreateSecurityGroupsClient generates security group client with the same baseclient as azure test client
-func (tc *AzureTestClient) CreateSecurityGroupsClient() *aznetwork.SecurityGroupsClient {
-	return &aznetwork.SecurityGroupsClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) CreateSecurityGroupsClient() securitygroupclient.Interface {
+	return tc.client.GetSecurityGroupClient()
 }
 
 // createPublicIPAddressesClient generates public IP addresses client with the same baseclient as azure test client
-func (tc *AzureTestClient) createPublicIPAddressesClient() *aznetwork.PublicIPAddressesClient {
-	return &aznetwork.PublicIPAddressesClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createPublicIPAddressesClient() publicipaddressclient.Interface {
+	return tc.client.GetPublicIPAddressClient()
 }
 
 // createPublicIPPrefixesClient generates public IP prefixes client with the same baseclient as azure test client
-func (tc *AzureTestClient) createPublicIPPrefixesClient() *aznetwork.PublicIPPrefixesClient {
-	return &aznetwork.PublicIPPrefixesClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createPublicIPPrefixesClient() publicipprefixclient.Interface {
+	return tc.client.GetPublicIPPrefixClient()
 }
 
 // createLoadBalancerClient generates loadbalancer client with the same baseclient as azure test client
-func (tc *AzureTestClient) createLoadBalancerClient() *aznetwork.LoadBalancersClient {
-	return &aznetwork.LoadBalancersClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createLoadBalancerClient() loadbalancerclient.Interface {
+	return tc.client.GetLoadBalancerClient()
 }
 
 // createPrivateLinkServiceClient generates private link service client with the same baseclient as azure test client
-func (tc *AzureTestClient) createPrivateLinkServiceClient() *aznetwork.PrivateLinkServicesClient {
-	return &aznetwork.PrivateLinkServicesClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createPrivateLinkServiceClient() privatelinkserviceclient.Interface {
+	return tc.client.GetPrivateLinkServiceClient()
 }
 
 // createInterfacesClient generates network interface client with the same baseclient as azure test client
-func (tc *AzureTestClient) createInterfacesClient() *aznetwork.InterfacesClient {
-	return &aznetwork.InterfacesClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createInterfacesClient() interfaceclient.Interface {
+	return tc.client.GetInterfaceClient()
 }
 
 // createResourceGroupClient generates resource group client with the same baseclient as azure test client
-func (tc *AzureTestClient) createResourceGroupClient() *azresources.GroupsClient {
-	return &azresources.GroupsClient{BaseClient: tc.resourceClient}
+func (tc *AzureTestClient) createResourceGroupClient() resourcegroupclient.Interface {
+	return tc.client.GetResourceGroupClient()
 }
 
 // createACRClient generates ACR client with the same baseclient as azure test client
-func (tc *AzureTestClient) createACRClient() *acr.RegistriesClient {
-	return &acr.RegistriesClient{BaseClient: tc.acrClient}
+func (tc *AzureTestClient) createACRClient() registryclient.Interface {
+	return tc.client.GetRegistryClient()
 }
 
 // createVMSSClient generates VMSS client with the same baseclient as azure test client
-func (tc *AzureTestClient) createVMSSClient() *azcompute.VirtualMachineScaleSetsClient {
-	return &azcompute.VirtualMachineScaleSetsClient{BaseClient: tc.computeClient}
+func (tc *AzureTestClient) createVMSSClient() virtualmachinescalesetclient.Interface {
+	return tc.client.GetVirtualMachineScaleSetClient()
 }
 
 // createVMSSVMClient generates VMSS VM client with the same baseclient as azure test client
-func (tc *AzureTestClient) createVMSSVMClient() *azcompute.VirtualMachineScaleSetVMsClient {
-	return &azcompute.VirtualMachineScaleSetVMsClient{BaseClient: tc.computeClient}
+func (tc *AzureTestClient) createVMSSVMClient() virtualmachinescalesetvmclient.Interface {
+	return tc.client.GetVirtualMachineScaleSetVMClient()
 }
 
 // createVMSSVMClient generates route table client with the same baseclient as azure test client
-func (tc *AzureTestClient) createRouteTableClient() *aznetwork.RouteTablesClient {
-	return &aznetwork.RouteTablesClient{BaseClient: tc.networkClient}
+func (tc *AzureTestClient) createRouteTableClient() routetableclient.Interface {
+	return tc.client.GetRouteTableClient()
 }
 
 // createVMClient generates virtual machine client with the same baseclient as azure test client
-func (tc *AzureTestClient) createVMClient() *azcompute.VirtualMachinesClient {
-	return &azcompute.VirtualMachinesClient{BaseClient: tc.computeClient}
+func (tc *AzureTestClient) createVMClient() virtualmachineclient.Interface {
+	return tc.client.GetVirtualMachineClient()
 }
 
 // getResourceGroupFromProviderID gets the resource group name in the provider ID.

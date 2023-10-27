@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -82,16 +82,15 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 	It("should set node provider id correctly", func() {
 		utils.Logf("getting meta info of test environment")
-		authConfig := tc.GetAuthConfig()
-		subscriptionID := authConfig.SubscriptionID
+		subscriptionID := tc.GetSubscriptionID()
 		rgName := tc.GetResourceGroup()
 
 		utils.Logf("getting VMs")
 		vms, err := utils.ListVMs(tc)
 		Expect(err).NotTo(HaveOccurred())
 
-		if vms != nil && len(*vms) != 0 {
-			for _, vm := range *vms {
+		if len(vms) != 0 {
+			for _, vm := range vms {
 				nodeName, err := utils.GetVMComputerName(vm)
 				utils.Logf("nodeName: %s", nodeName)
 				Expect(err).NotTo(HaveOccurred())
@@ -146,7 +145,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		vmasVMs, err := utils.ListVMs(tc)
 		Expect(err).NotTo(HaveOccurred())
 
-		for _, vmasVM := range *vmasVMs {
+		for _, vmasVM := range vmasVMs {
 			nodeName, err := utils.GetVMComputerName(vmasVM)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -171,8 +170,8 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 				nic, err := utils.GetNICByID(nicID, vmasNICs)
 				Expect(err).NotTo(HaveOccurred())
 
-				for _, ipConfig := range *nic.IPConfigurations {
-					if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+				for _, ipConfig := range nic.Properties.IPConfigurations {
+					if strings.EqualFold(*ipConfig.Properties.PrivateIPAddress, privateIP) {
 						found = true
 						break Loop
 					}
@@ -186,8 +185,8 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("getting all NICs of VMSSes")
-		var vmssAllNics []network.Interface
-		vmssVMs := make([]compute.VirtualMachineScaleSetVM, 0)
+		var vmssAllNics []*network.Interface
+		vmssVMs := make([]*compute.VirtualMachineScaleSetVM, 0)
 		for _, vmss := range vmsses {
 			vmssVMList, err := utils.ListVMSSVMs(tc, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
@@ -196,7 +195,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 			vmssNics, err := utils.ListVMSSNICs(tc, *vmss.Name)
 			Expect(err).NotTo(HaveOccurred())
 
-			vmssAllNics = append(vmssAllNics, *vmssNics...)
+			vmssAllNics = append(vmssAllNics, vmssNics...)
 		}
 
 		utils.Logf("getting all NICs of VMSS VMs")
@@ -223,11 +222,11 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 		VMSSLoop:
 			for nicID := range nicIDs {
-				nic, err := utils.GetNICByID(nicID, &vmssAllNics)
+				nic, err := utils.GetNICByID(nicID, vmssAllNics)
 				Expect(err).NotTo(HaveOccurred())
 
-				for _, ipConfig := range *nic.IPConfigurations {
-					if strings.EqualFold(*ipConfig.PrivateIPAddress, privateIP) {
+				for _, ipConfig := range nic.Properties.IPConfigurations {
+					if strings.EqualFold(*ipConfig.Properties.PrivateIPAddress, privateIP) {
 						found = true
 						break VMSSLoop
 					}
@@ -241,7 +240,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 		utils.Logf("getting route table")
 		routeTables, err := utils.ListRouteTables(tc)
 		Expect(err).NotTo(HaveOccurred())
-		if len(*routeTables) == 0 {
+		if len(routeTables) == 0 {
 			Skip("Skip because there's no routeTables, only test cluster with Kubenet network")
 		}
 
@@ -255,8 +254,8 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 		// Considering the route reconciling interval, the timeout is set to interval + 10s.
 		err = wait.PollImmediate(5*time.Second, consts.DefaultRouteUpdateIntervalInSeconds*time.Second+10*time.Second, func() (bool, error) {
-			for _, routeTable := range *routeTables {
-				routeSet, err := utils.GetNodesInRouteTable(routeTable)
+			for _, routeTable := range routeTables {
+				routeSet, err := utils.GetNodesInRouteTable(*routeTable)
 				if err != nil {
 					return false, err
 				}
@@ -331,7 +330,7 @@ var _ = Describe("Azure nodes", func() {
 		}
 
 		utils.Logf("scaling VMSS")
-		count := *vmss.Sku.Capacity
+		count := *vmss.SKU.Capacity
 		err = utils.ScaleVMSS(tc, *vmss.Name, int64(vmssScaleUpCelling))
 
 		defer func() {
@@ -412,10 +411,10 @@ var _ = Describe("Azure nodes", func() {
 		Expect(targetNIC).NotTo(BeNil())
 		utils.Logf("found NIC %s of node %s", *targetNIC.Name, nodeNotInRGMaster.Name)
 
-		for _, nicIPConfigs := range *targetNIC.IPConfigurations {
-			if nicIPConfigs.LoadBalancerBackendAddressPools != nil {
-				for _, nicBackendPool := range *nicIPConfigs.LoadBalancerBackendAddressPools {
-					for _, lbBackendPool := range *lb.BackendAddressPools {
+		for _, nicIPConfigs := range targetNIC.Properties.IPConfigurations {
+			if nicIPConfigs.Properties.LoadBalancerBackendAddressPools != nil {
+				for _, nicBackendPool := range nicIPConfigs.Properties.LoadBalancerBackendAddressPools {
+					for _, lbBackendPool := range lb.Properties.BackendAddressPools {
 						Expect(*lbBackendPool.ID).NotTo(Equal(*nicBackendPool.ID))
 					}
 				}

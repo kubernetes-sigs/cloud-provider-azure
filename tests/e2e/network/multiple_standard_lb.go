@@ -90,14 +90,14 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			Skip("This test is not supported for AKS CCM.")
 		}
 
-		var svcIPs []string
+		var svcIPs []*string
 		svcCount := 2
 		for i := 0; i < svcCount; i++ {
 			svcName := fmt.Sprintf("%s-%d", testServiceName, i)
 			svc1 := utils.CreateLoadBalancerServiceManifest(svcName, nil, labels, ns.Name, ports)
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []string{})
+			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []*string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 			svcIPs = append(svcIPs, ips[0])
@@ -113,8 +113,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		for _, svcIP := range svcIPs {
 			lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
 			lbName := pointer.StringDeref(lb.Name, "")
-			for _, bp := range *lb.BackendAddressPools {
-				for _, a := range *bp.LoadBalancerBackendAddresses {
+			for _, bp := range lb.Properties.BackendAddressPools {
+				for _, a := range bp.Properties.LoadBalancerBackendAddresses {
 					nodeName := pointer.StringDeref(a.Name, "")
 					expectedVMSSName := lbNameToExpectedVMSetNameMap[lbName]
 					if nodeName == "" || !strings.HasPrefix(nodeName, expectedVMSSName) {
@@ -126,7 +126,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	})
 
 	It("should arrange services across load balancers correctly", func() {
-		var svcIPs []string
+		var svcIPs []*string
 		svcCount := 2
 		var svc *v1.Service
 		By(fmt.Sprintf("Creating %d services", svcCount))
@@ -135,7 +135,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			svc = utils.CreateLoadBalancerServiceManifest(svcName, nil, labels, ns.Name, ports)
 			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []string{})
+			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []*string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(ips)).NotTo(BeZero())
 			svcIPs = append(svcIPs, ips[0])
@@ -153,11 +153,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		svcWithLabel := utils.CreateLoadBalancerServiceManifest("svc-with-label", nil, l, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svcWithLabel, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		svsWithLabel, err := utils.WaitServiceExposure(cs, ns.Name, "svc-with-label", []string{})
+		svsWithLabel, err := utils.WaitServiceExposure(cs, ns.Name, "svc-with-label", []*string{})
 		Expect(err).NotTo(HaveOccurred())
 		svcIP := svsWithLabel.Status.LoadBalancer.Ingress[0].IP
-		svcIPs = append(svcIPs, svcIP)
-		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+		svcIPs = append(svcIPs, &svcIP)
+		lb := getAzureLoadBalancerFromPIP(tc, &svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
 		Expect(pointer.StringDeref(lb.Name, "")).To(Equal("lb-2"))
 
 		By("Checking the load balancer count to equal 3")
@@ -185,7 +185,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []string{})
+		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 
@@ -269,7 +269,7 @@ func getDeploymentPodsNodeNames(kubeClient clientset.Interface, namespace, deplo
 	return res, nil
 }
 
-func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expectedLBName, bpName string, svcIPs []string, expectedCount int) error {
+func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expectedLBName, bpName string, svcIPs []*string, expectedCount int) error {
 	for _, svcIP := range svcIPs {
 		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
 		lbName := pointer.StringDeref(lb.Name, "")
@@ -278,12 +278,12 @@ func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expected
 		}
 
 		var found bool
-		for _, bp := range *lb.BackendAddressPools {
+		for _, bp := range lb.Properties.BackendAddressPools {
 			if strings.HasPrefix(strings.ToLower(pointer.StringDeref(bp.Name, "")), strings.ToLower(bpName)) {
 				found = true
 			}
-			if len(*bp.LoadBalancerBackendAddresses) != expectedCount {
-				return fmt.Errorf("expected node count %d, actual %d", expectedCount, len(*bp.LoadBalancerBackendAddresses))
+			if len(bp.Properties.LoadBalancerBackendAddresses) != expectedCount {
+				return fmt.Errorf("expected node count %d, actual %d", expectedCount, len(bp.Properties.LoadBalancerBackendAddresses))
 			}
 		}
 		if !found {
@@ -293,7 +293,7 @@ func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expected
 	return nil
 }
 
-func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []string) sets.Set[string] {
+func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[string] {
 	lbNames := sets.New[string]()
 	for _, svcIP := range pips {
 		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
@@ -303,7 +303,7 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []string) sets.Set[stri
 	return lbNames
 }
 
-func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Duration, expectedCount int, svcIPs []string) (sets.Set[string], error) {
+func waitLBCountEqualTo(tc *utils.AzureTestClient, interval, timeout time.Duration, expectedCount int, svcIPs []*string) (sets.Set[string], error) {
 	var lbNames sets.Set[string]
 	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
 		lbNames = getLBsFromPublicIPs(tc, svcIPs)

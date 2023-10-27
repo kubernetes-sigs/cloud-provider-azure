@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,10 +118,10 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(result).To(BeTrue())
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("Validating External domain name %q", ips))
+		By(fmt.Sprintf("Validating External domain name %+v", ips))
 		Expect(len(ports)).NotTo(BeZero())
 		for _, ip := range ips {
-			err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, ip, int(ports[0].Port), v1.ProtocolTCP)
+			err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, *ip, int(ports[0].Port), v1.ProtocolTCP)
 			Expect(err).NotTo(HaveOccurred(), "Fail to get response from the domain name %q", ip)
 		}
 
@@ -204,7 +204,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
 
 		By("Waiting for the service to be exposed")
-		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []string{})
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating if the corresponding IP prefix existing in nsg")
@@ -213,12 +213,12 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 		var found bool
 		for _, nsg := range nsgs {
-			rules := nsg.SecurityRules
+			rules := nsg.Properties.SecurityRules
 			if rules == nil {
 				continue
 			}
-			for _, rule := range *rules {
-				if rule.SourceAddressPrefix != nil && strings.Contains(*rule.SourceAddressPrefix, "AzureCloud") {
+			for _, rule := range rules {
+				if rule.Properties.SourceAddressPrefix != nil && strings.Contains(*rule.Properties.SourceAddressPrefix, "AzureCloud") {
 					found = true
 					break
 				}
@@ -241,7 +241,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to expose")
-		internalIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []string{})
+		internalIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if there is a deny_all rule")
@@ -300,7 +300,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		for _, port := range service.Spec.Ports {
 			for _, internalIP := range internalIPs {
 				utils.Logf("checking the connectivity of addr %s:%d with protocol %v", internalIP, int(port.Port), port.Protocol)
-				err := utils.ValidateServiceConnectivity(ns.Name, agnhostPod, internalIP, int(port.Port), port.Protocol)
+				err := utils.ValidateServiceConnectivity(ns.Name, agnhostPod, *internalIP, int(port.Port), port.Protocol)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		}
@@ -320,16 +320,16 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		By("Creating public IPs with tags")
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		ipNameBase := basename + "-public-IP-disable-floating-ip"
-		targetIPs := []string{}
+		targetIPs := []*string{}
 		deleteFuncs := []func(){}
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
-			targetIPs = append(targetIPs, targetIP)
+			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
 		if v6Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, true)
-			targetIPs = append(targetIPs, targetIP)
+			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
 		defer func() {
@@ -359,14 +359,18 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		nsgs, err := tc.GetClusterSecurityGroups()
 		Expect(err).NotTo(HaveOccurred())
 		for _, nsg := range nsgs {
-			if nsg.SecurityRules == nil {
+			if nsg.Properties.SecurityRules == nil {
 				continue
 			}
 
 			for _, targetIP := range targetIPs {
 				contains := false
-				for _, securityRules := range *nsg.SecurityRules {
-					if slices.Contains(*securityRules.DestinationAddressPrefixes, targetIP) {
+				for _, securityRules := range nsg.Properties.SecurityRules {
+					var prefixes []string
+					for _, item := range securityRules.Properties.DestinationAddressPrefixes {
+						prefixes = append(prefixes, *item)
+					}
+					if slices.Contains(prefixes, *targetIP) {
 						contains = true
 						break
 					}
@@ -377,19 +381,19 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 	})
 })
 
-func validateUnsharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []string, port string) bool {
+func validateUnsharedSecurityRuleExists(nsgs []*aznetwork.SecurityGroup, ips []*string, port string) bool {
 	for _, nsg := range nsgs {
-		if nsg.SecurityRules == nil {
+		if nsg.Properties.SecurityRules == nil {
 			continue
 		}
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
 			utils.Logf("Checking IP %q", ip)
-			for _, securityRule := range *nsg.SecurityRules {
+			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
-				if strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) &&
-					strings.EqualFold(pointer.StringDeref(securityRule.DestinationPortRange, ""), port) {
+				if strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), *ip) &&
+					strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), port) {
 					utils.Logf("Found")
 					count++
 					break
@@ -403,10 +407,10 @@ func validateUnsharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []st
 	return false
 }
 
-func validateSharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []string, port string) bool {
-	ipsV4, ipsV6 := []string{}, []string{}
+func validateSharedSecurityRuleExists(nsgs []*aznetwork.SecurityGroup, ips []*string, port string) bool {
+	ipsV4, ipsV6 := []*string{}, []*string{}
 	for _, ip := range ips {
-		if net.ParseIP(ip).To4() != nil {
+		if net.ParseIP(*ip).To4() != nil {
 			ipsV4 = append(ipsV4, ip)
 		} else {
 			ipsV6 = append(ipsV6, ip)
@@ -417,23 +421,27 @@ func validateSharedSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []stri
 	return v4Exist && v6Exist
 }
 
-func validateSharedSecurityRuleExistsSingleStack(nsgs []aznetwork.SecurityGroup, ips []string, port string, isIPv6 bool) bool {
+func validateSharedSecurityRuleExistsSingleStack(nsgs []*aznetwork.SecurityGroup, ips []*string, port string, isIPv6 bool) bool {
 	if len(ips) == 0 {
 		return true
 	}
 	utils.Logf("validateSharedSecurityRuleExists for isIPv6 %t", isIPv6)
 	for _, nsg := range nsgs {
-		if nsg.SecurityRules == nil {
+		if nsg.Properties.SecurityRules == nil {
 			continue
 		}
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
-		for _, securityRule := range *nsg.SecurityRules {
+		for _, securityRule := range nsg.Properties.SecurityRules {
 			utils.Logf("Checking security rule %q DestinationPortRange %q DestinationAddressPrefixes %q",
-				pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.DestinationPortRange, ""), *securityRule.DestinationAddressPrefixes)
-			if strings.EqualFold(pointer.StringDeref(securityRule.DestinationPortRange, ""), port) {
+				pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), securityRule.Properties.DestinationAddressPrefixes)
+			if strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), port) {
 				found := true
 				for _, ip := range ips {
-					if !utils.StringInSlice(ip, *securityRule.DestinationAddressPrefixes) {
+					var prefixes []string
+					for _, item := range securityRule.Properties.DestinationAddressPrefixes {
+						prefixes = append(prefixes, *item)
+					}
+					if !utils.StringInSlice(*ip, prefixes) {
 						found = false
 						break
 					}
@@ -448,10 +456,11 @@ func validateSharedSecurityRuleExistsSingleStack(nsgs []aznetwork.SecurityGroup,
 	return false
 }
 
-func validateLoadBalancerSourceRangesRuleExists(nsgs []aznetwork.SecurityGroup, ips, sourceAddressPrefixes, ipRangesSuffixes []string) bool {
-	ipsV4, ipsV6 := []string{}, []string{}
+func validateLoadBalancerSourceRangesRuleExists(nsgs []*aznetwork.SecurityGroup, ips []*string, sourceAddressPrefixes, ipRangesSuffixes []string) bool {
+	ipsV4, ipsV6 := []*string{}, []*string{}
 	for _, ip := range ips {
-		if net.ParseIP(ip).To4() != nil {
+		ip := ip
+		if net.ParseIP(*ip).To4() != nil {
 			ipsV4 = append(ipsV4, ip)
 		} else {
 			ipsV6 = append(ipsV6, ip)
@@ -463,7 +472,7 @@ func validateLoadBalancerSourceRangesRuleExists(nsgs []aznetwork.SecurityGroup, 
 	return v4Exist && v6Exist
 }
 
-func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []aznetwork.SecurityGroup, ips, sourceAddressPrefixes, ipRangesSuffixes []string, isDualStack, isIPv6 bool) bool {
+func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []*aznetwork.SecurityGroup, ips []*string, sourceAddressPrefixes, ipRangesSuffixes []string, isDualStack, isIPv6 bool) bool {
 	if len(ips) == 0 {
 		return true
 	}
@@ -472,20 +481,20 @@ func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []aznetwork.Secu
 		return false
 	}
 	for _, nsg := range nsgs {
-		if nsg.SecurityRules == nil {
+		if nsg.Properties.SecurityRules == nil {
 			continue
 		}
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
 			utils.Logf("Checking IP %q", ip)
-			for _, securityRule := range *nsg.SecurityRules {
+			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q access %q DestinationAddressPrefix %q SourceAddressPrefix %q",
-					pointer.StringDeref(securityRule.Name, ""), securityRule.Access,
-					pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), pointer.StringDeref(securityRule.SourceAddressPrefix, ""))
+					pointer.StringDeref(securityRule.Name, ""), *securityRule.Properties.Access,
+					pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), pointer.StringDeref(securityRule.Properties.SourceAddressPrefix, ""))
 				found := false
-				if securityRule.Access == aznetwork.SecurityRuleAccessAllow &&
-					strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) {
+				if *securityRule.Properties.Access == aznetwork.SecurityRuleAccessAllow &&
+					strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), *ip) {
 					for i := range sourceAddressPrefixes {
 						sourceAddressPrefix := sourceAddressPrefixes[i]
 						ipRangesSuffix := ipRangesSuffixes[i]
@@ -493,7 +502,7 @@ func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []aznetwork.Secu
 							ipRangesSuffix = ipRangesSuffixes[i] + utils.Suffixes[isIPv6]
 						}
 						if strings.HasSuffix(pointer.StringDeref(securityRule.Name, ""), ipRangesSuffix) &&
-							strings.EqualFold(pointer.StringDeref(securityRule.SourceAddressPrefix, ""), sourceAddressPrefix) {
+							strings.EqualFold(pointer.StringDeref(securityRule.Properties.SourceAddressPrefix, ""), sourceAddressPrefix) {
 							utils.Logf("Found")
 							count++
 							found = true
@@ -514,10 +523,11 @@ func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []aznetwork.Secu
 	return false
 }
 
-func validateDenyAllSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []string) bool {
-	ipsV4, ipsV6 := []string{}, []string{}
+func validateDenyAllSecurityRuleExists(nsgs []*aznetwork.SecurityGroup, ips []*string) bool {
+	ipsV4, ipsV6 := []*string{}, []*string{}
 	for _, ip := range ips {
-		if net.ParseIP(ip).To4() != nil {
+		ip := ip
+		if net.ParseIP(*ip).To4() != nil {
 			ipsV4 = append(ipsV4, ip)
 		} else {
 			ipsV6 = append(ipsV6, ip)
@@ -529,30 +539,30 @@ func validateDenyAllSecurityRuleExists(nsgs []aznetwork.SecurityGroup, ips []str
 	return v4Exist && v6Exist
 }
 
-func validateDenyAllSecurityRuleExistsSingleStack(nsgs []aznetwork.SecurityGroup, ips []string, isDualStack, isIPv6 bool) bool {
+func validateDenyAllSecurityRuleExistsSingleStack(nsgs []*aznetwork.SecurityGroup, ips []*string, isDualStack, isIPv6 bool) bool {
 	if len(ips) == 0 {
 		return true
 	}
 	utils.Logf("validateDenyAllSecurityRuleExists for isIPv6 %t", isIPv6)
 	for _, nsg := range nsgs {
-		if nsg.SecurityRules == nil {
+		if nsg.Properties.SecurityRules == nil {
 			continue
 		}
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
 			utils.Logf("Checking IP %q", ip)
-			for _, securityRule := range *nsg.SecurityRules {
+			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q DestinationAddressPrefix %q SourceAddressPrefix %q",
-					pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), pointer.StringDeref(securityRule.SourceAddressPrefix, ""))
+					pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), pointer.StringDeref(securityRule.Properties.SourceAddressPrefix, ""))
 				denyAllSuffix := "deny_all"
 				if isDualStack {
 					denyAllSuffix = "deny_all" + utils.Suffixes[isIPv6]
 				}
-				if securityRule.Access == aznetwork.SecurityRuleAccessDeny &&
-					strings.EqualFold(pointer.StringDeref(securityRule.DestinationAddressPrefix, ""), ip) &&
+				if *securityRule.Properties.Access == aznetwork.SecurityRuleAccessDeny &&
+					strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), *ip) &&
 					strings.HasSuffix(pointer.StringDeref(securityRule.Name, ""), denyAllSuffix) &&
-					strings.EqualFold(pointer.StringDeref(securityRule.SourceAddressPrefix, ""), "*") {
+					strings.EqualFold(pointer.StringDeref(securityRule.Properties.SourceAddressPrefix, ""), "*") {
 					utils.Logf("Found")
 					count++
 					break
