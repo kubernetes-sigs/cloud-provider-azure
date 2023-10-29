@@ -96,7 +96,7 @@ azure-cloud-node-manager \
 
 It is recommended to run azure-cloud-controller-manager as a Deployment with multiple replicas, or directly with kubelet as static Pods on each control plane Node. See [here](examples/out-of-tree/cloud-controller-manager.yaml) for an example.
 
-Get more detail at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
+Get more details at [Deploy Cloud Controller Manager](http://kubernetes-sigs.github.io/cloud-provider-azure/install/azure-ccm/).
 
 ## E2E tests
 
