@@ -31,7 +31,7 @@ TEST_E2E_ARGS ?= '--ginkgo.focus=Port\sforwarding'
 # Generate all combination of all OS, ARCH, and OSVERSIONS for iteration
 
 ALL_ARCH.linux = amd64 arm arm64
-# as windows server core does not support arm64 windows image, trakced by the following link,
+# as windows server core does not support arm64 windows image, tracked by the following link,
 # and only 1809 has arm64 nanoserver support, we support here only amd64 windows image
 # https://github.com/microsoft/Windows-Containers/issues/195
 ALL_ARCH.windows = amd64
