@@ -600,7 +600,9 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
-	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, false, nil).AnyTimes()
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
+		return false, false, lb, nil
+	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockLBBackendPool.EXPECT().GetBackendPrivateIPs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
@@ -3444,9 +3446,11 @@ func TestReconcileLoadBalancer(t *testing.T) {
 
 			mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
 			if test.shouldRefreshLBAfterReconcileBackendPools {
-				mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, true, nil)
+				mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, &test.expectedLB, test.expectedError)
 			}
-			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, false, nil).AnyTimes()
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
+				return false, false, lb, nil
+			}).AnyTimes()
 			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			lb, rerr := az.reconcileLoadBalancer("testCluster", &service, clusterResources.nodes, test.wantLb)

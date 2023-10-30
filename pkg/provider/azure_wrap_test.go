@@ -347,7 +347,7 @@ func TestGetPublicIPAddress(t *testing.T) {
 			if test.expectPIPList {
 				mockPIPsClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return(test.existingPIPs, nil).MaxTimes(2)
 			}
-			pip, pipExists, err := az.getPublicIPAddress(az.ResourceGroup, "pip", azcache.CacheReadTypeDefault)
+			pip, pipExists, err := az.getPublicIPAddress(az.ResourceGroup, "PIP", azcache.CacheReadTypeDefault)
 			assert.Equal(t, test.expectedPIP, pip)
 			assert.Equal(t, test.expectExists, pipExists)
 			assert.NoError(t, err)
