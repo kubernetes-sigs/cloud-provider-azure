@@ -107,7 +107,7 @@ func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt
 	}
 
 	pips := cached.(*sync.Map)
-	pip, ok := pips.Load(pipName)
+	pip, ok := pips.Load(strings.ToLower(pipName))
 	if !ok {
 		// pip not found, refresh cache and retry
 		cached, err = az.pipCache.Get(pipResourceGroup, azcache.CacheReadTypeForceRefresh)
@@ -115,7 +115,7 @@ func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string, crt
 			return network.PublicIPAddress{}, false, err
 		}
 		pips = cached.(*sync.Map)
-		pip, ok = pips.Load(pipName)
+		pip, ok = pips.Load(strings.ToLower(pipName))
 		if !ok {
 			return network.PublicIPAddress{}, false, nil
 		}
@@ -330,7 +330,7 @@ func (az *Cloud) newPIPCache() (*azcache.TimedCache, error) {
 		pipMap := &sync.Map{}
 		for _, pip := range pipList {
 			pip := pip
-			pipMap.Store(pointer.StringDeref(pip.Name, ""), &pip)
+			pipMap.Store(strings.ToLower(pointer.StringDeref(pip.Name, "")), &pip)
 		}
 		return pipMap, nil
 	}

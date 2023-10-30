@@ -1620,24 +1620,18 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 
 	// reconcile the load balancer's backend pool configuration.
 	if wantLb {
-		preConfig, changed, shouldRefreshLB, err := az.LoadBalancerBackendPool.ReconcileBackendPools(clusterName, service, lb)
+		var (
+			preConfig, backendPoolsUpdated bool
+			err                            error
+		)
+		preConfig, backendPoolsUpdated, lb, err = az.LoadBalancerBackendPool.ReconcileBackendPools(clusterName, service, lb)
 		if err != nil {
 			return lb, err
 		}
-		if changed {
+		if backendPoolsUpdated {
 			dirtyLb = true
 		}
 		isBackendPoolPreConfigured = preConfig
-
-		// If the LB is changed, refresh it to avoid etag mismatch error
-		// later when create or update the LB.
-		if shouldRefreshLB {
-			klog.V(4).Infof("reconcileLoadBalancer for service(%s): refreshing load balancer %s", serviceName, lbName)
-			lb, _, err = az.getAzureLoadBalancer(lbName, azcache.CacheReadTypeForceRefresh)
-			if err != nil {
-				return lb, fmt.Errorf("reconcileLoadBalancer for service (%s): failed to get load balancer %s: %w", serviceName, lbName, err)
-			}
-		}
 	}
 
 	// reconcile the load balancer's frontend IP configurations.
