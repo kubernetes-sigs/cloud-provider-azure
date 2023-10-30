@@ -24,6 +24,13 @@ import (
 
 var _ = Describe("Factory", func() {
 	When("config is nil", func() {
+		It("should create factory instance without painc - Account", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetAccountClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - AvailabilitySet", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())

@@ -18,6 +18,7 @@
 package azclient
 
 import (
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
@@ -44,6 +45,7 @@ import (
 )
 
 type ClientFactory interface {
+	GetAccountClient() accountclient.Interface
 	GetAvailabilitySetClient() availabilitysetclient.Interface
 	GetDeploymentClient() deploymentclient.Interface
 	GetDiskClient() diskclient.Interface

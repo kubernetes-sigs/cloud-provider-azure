@@ -18,6 +18,8 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.1.0/go.mod h1:y2zXtLSMM/X5Mfawq0lOftpWn3f4V6OCsRdINsvWBPI=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.1.1 h1:7CBQ+Ei8SP2c6ydQTGCCrS35bDxgTMfoP2miAwK++OU=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.1.1/go.mod h1:c/wcGeGx5FUPbM/JltUYHZcKmigwyVLJlDq+4HdtXaw=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.4.0 h1:YLeqNPz/6sJC4fGNUofP+I9QZrMQBvL6lKpCzeu/3Ms=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.4.0/go.mod h1:ZU9DiYactg7wOCuFWHM57mhIuudyXIVdcM+3uZP6kS0=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1 h1:WpB/QDNLpMw72xHJc34BNNykqSOeEJDAWkhf0u12/Jk=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1/go.mod h1:wP83P5OoQ5p6ip3ScPr0BAq0BvuPAvacpEuSzyouqAI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
