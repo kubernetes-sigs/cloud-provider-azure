@@ -204,7 +204,7 @@ The following annotations can be used to customize probe configuration per servi
 | service.beta.kubernetes.io/port_{port}_health-probe_num-of-probe | service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe | Number of consecutive probe failures before the port is considered unhealthy |
 | service.beta.kubernetes.io/port_{port}_health-probe_interval     | service.beta.kubernetes.io/azure-load-balancer-health-probe-interval     | The amount of time between probe attempts                                    |
 
-For following manifest, probe rule for port httpsserver is different from the one for httpserver because annoations for port httpsserver are specified.
+For following manifest, probe rule for port httpsserver is different from the one for httpserver because annotations for port httpsserver are specified.
 
 ```yaml
 apiVersion: v1
