@@ -17,6 +17,7 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -808,7 +809,7 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 			vmListErr:                      nil,
 			expectedNodeName:               "",
 			expectedVMSetName:              "",
-			expectedErr:                    fmt.Errorf("invalid ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig"),
+			expectedErr:                    fmt.Errorf("failed to get resource group and name from ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig: %w", errors.New("invalid ip config ID /subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces//ipConfigurations/pipConfig")),
 		},
 	}
 

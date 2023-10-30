@@ -384,33 +384,16 @@ func (fs *FlexScaleSet) GetNodeNameByIPConfigurationID(ipConfigurationID string)
 }
 
 func (fs *FlexScaleSet) getNodeInformationByIPConfigurationID(ipConfigurationID string) (string, string, string, error) {
-	matches := nicIDRE.FindStringSubmatch(ipConfigurationID)
-	if len(matches) != 3 {
-		klog.V(4).Infof("Can not extract nic name from ipConfigurationID (%s)", ipConfigurationID)
-		return "", "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
-	}
-
-	nicResourceGroup, nicName := matches[1], matches[2]
-	if nicResourceGroup == "" || nicName == "" {
-		return "", "", "", fmt.Errorf("invalid ip config ID %s", ipConfigurationID)
+	nicResourceGroup, nicName, err := getResourceGroupAndNameFromNICID(ipConfigurationID)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get resource group and name from ip config ID %s: %w", ipConfigurationID, err)
 	}
 
 	// get vmName by nic name
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-	nic, rerr := fs.InterfacesClient.Get(ctx, nicResourceGroup, nicName, "")
-	if rerr != nil {
-		return "", "", "", fmt.Errorf("getNodeInformationByIPConfigurationID(%s): failed to get interface of name %s: %w", ipConfigurationID, nicName, rerr.Error())
+	vmName, err := fs.GetVMNameByIPConfigurationName(nicResourceGroup, nicName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get vm name of ip config ID %s", ipConfigurationID)
 	}
-	if nic.InterfacePropertiesFormat == nil || nic.InterfacePropertiesFormat.VirtualMachine == nil || nic.InterfacePropertiesFormat.VirtualMachine.ID == nil {
-		return "", "", "", fmt.Errorf("failed to get vm ID of ip config ID %s", ipConfigurationID)
-	}
-	vmID := pointer.StringDeref(nic.InterfacePropertiesFormat.VirtualMachine.ID, "")
-	matches = vmIDRE.FindStringSubmatch(vmID)
-	if len(matches) != 2 {
-		return "", "", "", fmt.Errorf("invalid virtual machine ID %s", vmID)
-	}
-	vmName := matches[1]
 
 	nodeName, err := fs.getNodeNameByVMName(vmName)
 	if err != nil {
