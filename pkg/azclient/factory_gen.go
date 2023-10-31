@@ -23,6 +23,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
@@ -52,6 +53,7 @@ import (
 type ClientFactoryImpl struct {
 	*ClientFactoryConfig
 	cred                                    azcore.TokenCredential
+	accountclientInterface                  accountclient.Interface
 	availabilitysetclientInterface          availabilitysetclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     diskclient.Interface
@@ -88,7 +90,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	var options *arm.ClientOptions
 	var err error
 
-	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient AvailabilitySet  Interface availabilitySetRateLimit}
+	//initialize {accountclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient Account  Interface }
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
@@ -96,6 +98,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	var ratelimitOption *ratelimit.Config
 	var rateLimitPolicy policy.Policy
+
+	accountclientInterface, err := accountclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient AvailabilitySet  Interface availabilitySetRateLimit}
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("availabilitySetRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
@@ -431,7 +444,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
-		cred:                cred, availabilitysetclientInterface: availabilitysetclientInterface,
+		cred:                cred,
+		accountclientInterface: accountclientInterface,
+		availabilitysetclientInterface:          availabilitysetclientInterface,
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
 		interfaceclientInterface:                interfaceclientInterface,
@@ -455,6 +470,10 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
 		virtualnetworkclientInterface:           virtualnetworkclientInterface,
 	}, nil
+}
+
+func (factory *ClientFactoryImpl) GetAccountClient() accountclient.Interface {
+	return factory.accountclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {

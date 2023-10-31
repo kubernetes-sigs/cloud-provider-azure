@@ -25,6 +25,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 
+	accountclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	availabilitysetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
@@ -71,6 +72,20 @@ func NewMockClientFactory(ctrl *gomock.Controller) *MockClientFactory {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockClientFactory) EXPECT() *MockClientFactoryMockRecorder {
 	return m.recorder
+}
+
+// GetAccountClient mocks base method.
+func (m *MockClientFactory) GetAccountClient() accountclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAccountClient")
+	ret0, _ := ret[0].(accountclient.Interface)
+	return ret0
+}
+
+// GetAccountClient indicates an expected call of GetAccountClient.
+func (mr *MockClientFactoryMockRecorder) GetAccountClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountClient", reflect.TypeOf((*MockClientFactory)(nil).GetAccountClient))
 }
 
 // GetAvailabilitySetClient mocks base method.
