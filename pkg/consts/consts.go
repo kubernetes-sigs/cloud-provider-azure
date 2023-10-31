@@ -563,3 +563,12 @@ const (
 
 	ServiceNameLabel = "kubernetes.io/service-name"
 )
+
+// Load Balancer health probe mode
+const (
+	ClusterServiceLoadBalancerHealthProbeModeServiceNodePort = "servicenodeport"
+	ClusterServiceLoadBalancerHealthProbeModeShared          = "shared"
+	ClusterServiceLoadBalancerHealthProbeDefaultPort         = 10256
+	ClusterServiceLoadBalancerHealthProbeDefaultPath         = "/healthz"
+	SharedProbeName                                          = "cluster-service-shared-health-probe"
+)

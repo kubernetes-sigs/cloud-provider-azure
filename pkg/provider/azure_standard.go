@@ -345,12 +345,6 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6
 	return getResourceByIPFamily(pipName, isDualStack, isIPv6), nil
 }
 
-// TODO: UT
-func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
-	prefix := az.getRulePrefix(service)
-	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))
-}
-
 func publicIPOwnsFrontendIP(service *v1.Service, fip *network.FrontendIPConfiguration, pip *network.PublicIPAddress) bool {
 	if pip != nil &&
 		pip.ID != nil &&

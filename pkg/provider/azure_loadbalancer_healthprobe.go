@@ -22,17 +22,37 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
+func (az *Cloud) buildClusterServiceSharedProbe() *network.Probe {
+	return &network.Probe{
+		Name: pointer.String(consts.SharedProbeName),
+		ProbePropertiesFormat: &network.ProbePropertiesFormat{
+			Protocol:          network.ProbeProtocolHTTP,
+			Port:              pointer.Int32(az.ClusterServiceSharedLoadBalancerHealthProbePort),
+			RequestPath:       pointer.String(az.ClusterServiceSharedLoadBalancerHealthProbePath),
+			IntervalInSeconds: pointer.Int32(consts.HealthProbeDefaultProbeInterval),
+			ProbeThreshold:    pointer.Int32(consts.HealthProbeDefaultNumOfProbe),
+		},
+	}
+}
+
 // buildHealthProbeRulesForPort
 // for following sku: basic loadbalancer vs standard load balancer
 // for following protocols: TCP HTTP HTTPS(SLB only)
 // return nil if no new probe is added
-func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port v1.ServicePort, lbrule string, healthCheckNodePortProbe *network.Probe) (*network.Probe, error) {
+func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port v1.ServicePort, lbrule string, healthCheckNodePortProbe *network.Probe, useSharedProbe bool) (*network.Probe, error) {
+	if useSharedProbe {
+		klog.V(4).Infof("skip creating health probe for port %s because the shared probe is used", port.Port)
+		return nil, nil
+	}
+
 	if port.Protocol == v1.ProtocolUDP || port.Protocol == v1.ProtocolSCTP {
 		return nil, nil
 	}
