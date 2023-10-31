@@ -387,3 +387,12 @@ func isBackendPoolOnSameLB(newBackendPoolID string, existingBackendPools []strin
 
 	return true, "", nil
 }
+
+func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
+	if !strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyTypeLocal)) &&
+		rule == consts.SharedProbeName {
+		return true
+	}
+	prefix := az.getRulePrefix(service)
+	return strings.HasPrefix(strings.ToUpper(rule), strings.ToUpper(prefix))
+}

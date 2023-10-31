@@ -407,3 +407,22 @@ func TestIsBackendPoolOnSameLB(t *testing.T) {
 		assert.Equal(t, test.expectedLBName, lbName)
 	}
 }
+
+func TestServiceOwnsRuleSharedProbe(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		desc string
+	}{
+		{
+			desc: "should count in the shared probe",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			svc := getTestService("test", v1.ProtocolTCP, nil, false)
+			assert.True(t, az.serviceOwnsRule(&svc, consts.SharedProbeName))
+		})
+	}
+}
