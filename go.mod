@@ -32,7 +32,7 @@ require (
 	k8s.io/apimachinery v0.28.3
 	k8s.io/apiserver v0.28.3
 	k8s.io/client-go v0.28.3
-	k8s.io/cloud-provider v0.28.2
+	k8s.io/cloud-provider v0.28.3
 	k8s.io/component-base v0.28.3
 	k8s.io/component-helpers v0.28.3
 	k8s.io/controller-manager v0.28.3
