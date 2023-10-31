@@ -443,9 +443,9 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}
 
 	return &ClientFactoryImpl{
-		ClientFactoryConfig: config,
-		cred:                cred,
-		accountclientInterface: accountclientInterface,
+		ClientFactoryConfig:                     config,
+		cred:                                    cred,
+		accountclientInterface:                  accountclientInterface,
 		availabilitysetclientInterface:          availabilitysetclientInterface,
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
