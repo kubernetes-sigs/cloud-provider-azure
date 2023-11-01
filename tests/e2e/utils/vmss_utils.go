@@ -351,7 +351,7 @@ func ListUniformVMSSes(tc *AzureTestClient) ([]*azcompute.VirtualMachineScaleSet
 		return nil, err
 	}
 
-	vmssUniforms := make([]*azcompute.VirtualMachineScaleSet, 0)
+	var vmssUniforms []*azcompute.VirtualMachineScaleSet
 	for i := range list {
 		vmssUniform := list[i]
 		if IsAutoscalingAKSCluster() && vmssUniform.Name != nil && strings.Contains(*vmssUniform.Name, SystemPool) {
