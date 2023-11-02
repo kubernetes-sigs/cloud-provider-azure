@@ -36,7 +36,7 @@ require (
 	k8s.io/component-base v0.28.3
 	k8s.io/component-helpers v0.28.3
 	k8s.io/controller-manager v0.28.3
-	k8s.io/klog/v2 v2.100.1
+	k8s.io/klog/v2 v2.110.1
 	k8s.io/kubelet v0.28.3
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20231026070501-3da8dcab4c0d
