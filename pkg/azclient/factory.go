@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -49,6 +50,7 @@ type ClientFactory interface {
 	GetAvailabilitySetClient() availabilitysetclient.Interface
 	GetDeploymentClient() deploymentclient.Interface
 	GetDiskClient() diskclient.Interface
+	GetFileShareClient() fileshareclient.Interface
 	GetInterfaceClient() interfaceclient.Interface
 	GetIPGroupClient() ipgroupclient.Interface
 	GetLoadBalancerClient() loadbalancerclient.Interface
