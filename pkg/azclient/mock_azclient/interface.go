@@ -42,10 +42,12 @@ import (
 	registryclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	resourcegroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	routetableclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
+	secretclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	securitygroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	snapshotclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	sshpublickeyresourceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	subnetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	vaultclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient"
 	virtualmachineclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	virtualmachinescalesetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	virtualmachinescalesetvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
@@ -327,6 +329,20 @@ func (mr *MockClientFactoryMockRecorder) GetSSHPublicKeyResourceClient() *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSSHPublicKeyResourceClient", reflect.TypeOf((*MockClientFactory)(nil).GetSSHPublicKeyResourceClient))
 }
 
+// GetSecretClient mocks base method.
+func (m *MockClientFactory) GetSecretClient() secretclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSecretClient")
+	ret0, _ := ret[0].(secretclient.Interface)
+	return ret0
+}
+
+// GetSecretClient indicates an expected call of GetSecretClient.
+func (mr *MockClientFactoryMockRecorder) GetSecretClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecretClient", reflect.TypeOf((*MockClientFactory)(nil).GetSecretClient))
+}
+
 // GetSecurityGroupClient mocks base method.
 func (m *MockClientFactory) GetSecurityGroupClient() securitygroupclient.Interface {
 	m.ctrl.T.Helper()
@@ -367,6 +383,20 @@ func (m *MockClientFactory) GetSubnetClient() subnetclient.Interface {
 func (mr *MockClientFactoryMockRecorder) GetSubnetClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnetClient", reflect.TypeOf((*MockClientFactory)(nil).GetSubnetClient))
+}
+
+// GetVaultClient mocks base method.
+func (m *MockClientFactory) GetVaultClient() vaultclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVaultClient")
+	ret0, _ := ret[0].(vaultclient.Interface)
+	return ret0
+}
+
+// GetVaultClient indicates an expected call of GetVaultClient.
+func (mr *MockClientFactoryMockRecorder) GetVaultClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVaultClient", reflect.TypeOf((*MockClientFactory)(nil).GetVaultClient))
 }
 
 // GetVirtualMachineClient mocks base method.

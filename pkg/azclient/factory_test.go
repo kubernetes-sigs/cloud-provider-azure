@@ -143,6 +143,13 @@ var _ = Describe("Factory", func() {
 			client := factory.GetRouteTableClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - Secret", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetSecretClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - SecurityGroup", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -169,6 +176,13 @@ var _ = Describe("Factory", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(factory).NotTo(BeNil())
 			client := factory.GetSubnetClient()
+			Expect(client).NotTo(BeNil())
+		})
+		It("should create factory instance without painc - Vault", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetVaultClient()
 			Expect(client).NotTo(BeNil())
 		})
 		It("should create factory instance without painc - VirtualMachine", func() {
