@@ -50,6 +50,7 @@ cloudControllerManager:
     effect: NoExecute
   nodeSelector:
     node-role.kubernetes.io/control-plane: ""
+  federatedTokenPath: "/var/run/secrets/azure/tokens"
 cloudNodeManager:
   enabled: true
   imageRepository: "mcr.microsoft.com/oss/kubernetes"

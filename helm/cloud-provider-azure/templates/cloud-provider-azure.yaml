@@ -293,6 +293,11 @@ spec:
             - name: msi
               mountPath: /var/lib/waagent/ManagedIdentity-Settings
               readOnly: true
+              {{- if .Values.cloudControllerManager.federatedTokenPath }}
+            - name: projectedToken
+              mountPath: {{ .Values.cloudControllerManager.federatedTokenPath }}
+              readOnly: true
+              {{ end }}
       volumes:
         - name: etc-kubernetes
           hostPath:
@@ -303,6 +308,16 @@ spec:
         - name: msi
           hostPath:
             path: /var/lib/waagent/ManagedIdentity-Settings
+        {{- if .Values.cloudControllerManager.federatedTokenPath }}
+        - name: azure-identity-token
+          projected:
+            defaultMode: 420
+            sources:
+              - serviceAccountToken:
+                  audience: api://AzureADTokenExchange
+                  expirationSeconds: 3600
+                  path: azure-identity-token
+        {{ end }}
 {{- end }}
 {{- if .Values.cloudNodeManager.enabled }}
 ---
