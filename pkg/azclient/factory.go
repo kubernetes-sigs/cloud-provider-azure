@@ -35,10 +35,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
@@ -63,10 +65,12 @@ type ClientFactory interface {
 	GetRegistryClient() registryclient.Interface
 	GetResourceGroupClient() resourcegroupclient.Interface
 	GetRouteTableClient() routetableclient.Interface
+	GetSecretClient() secretclient.Interface
 	GetSecurityGroupClient() securitygroupclient.Interface
 	GetSnapshotClient() snapshotclient.Interface
 	GetSSHPublicKeyResourceClient() sshpublickeyresourceclient.Interface
 	GetSubnetClient() subnetclient.Interface
+	GetVaultClient() vaultclient.Interface
 	GetVirtualMachineClient() virtualmachineclient.Interface
 	GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface
 	GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface

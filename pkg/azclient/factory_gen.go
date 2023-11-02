@@ -41,10 +41,12 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
@@ -71,10 +73,12 @@ type ClientFactoryImpl struct {
 	registryclientInterface                 registryclient.Interface
 	resourcegroupclientInterface            resourcegroupclient.Interface
 	routetableclientInterface               routetableclient.Interface
+	secretclientInterface                   secretclient.Interface
 	securitygroupclientInterface            securitygroupclient.Interface
 	snapshotclientInterface                 snapshotclient.Interface
 	sshpublickeyresourceclientInterface     sshpublickeyresourceclient.Interface
 	subnetclientInterface                   subnetclient.Interface
+	vaultclientInterface                    vaultclient.Interface
 	virtualmachineclientInterface           virtualmachineclient.Interface
 	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
@@ -342,6 +346,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
+	//initialize {secretclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient Vault Secret Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	secretclientInterface, err := secretclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
 	//initialize {securitygroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient SecurityGroup  Interface securityGroupRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
@@ -397,6 +412,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
 	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {vaultclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient Vault  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	vaultclientInterface, err := vaultclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -474,10 +500,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		registryclientInterface:                 registryclientInterface,
 		resourcegroupclientInterface:            resourcegroupclientInterface,
 		routetableclientInterface:               routetableclientInterface,
+		secretclientInterface:                   secretclientInterface,
 		securitygroupclientInterface:            securitygroupclientInterface,
 		snapshotclientInterface:                 snapshotclientInterface,
 		sshpublickeyresourceclientInterface:     sshpublickeyresourceclientInterface,
 		subnetclientInterface:                   subnetclientInterface,
+		vaultclientInterface:                    vaultclientInterface,
 		virtualmachineclientInterface:           virtualmachineclientInterface,
 		virtualmachinescalesetclientInterface:   virtualmachinescalesetclientInterface,
 		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
@@ -553,6 +581,10 @@ func (factory *ClientFactoryImpl) GetRouteTableClient() routetableclient.Interfa
 	return factory.routetableclientInterface
 }
 
+func (factory *ClientFactoryImpl) GetSecretClient() secretclient.Interface {
+	return factory.secretclientInterface
+}
+
 func (factory *ClientFactoryImpl) GetSecurityGroupClient() securitygroupclient.Interface {
 	return factory.securitygroupclientInterface
 }
@@ -567,6 +599,10 @@ func (factory *ClientFactoryImpl) GetSSHPublicKeyResourceClient() sshpublickeyre
 
 func (factory *ClientFactoryImpl) GetSubnetClient() subnetclient.Interface {
 	return factory.subnetclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetVaultClient() vaultclient.Interface {
+	return factory.vaultclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetVirtualMachineClient() virtualmachineclient.Interface {
