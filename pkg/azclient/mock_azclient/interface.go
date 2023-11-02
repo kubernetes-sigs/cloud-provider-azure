@@ -29,6 +29,7 @@ import (
 	availabilitysetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	fileshareclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	interfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	ipgroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	loadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -128,6 +129,20 @@ func (m *MockClientFactory) GetDiskClient() diskclient.Interface {
 func (mr *MockClientFactoryMockRecorder) GetDiskClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClient", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClient))
+}
+
+// GetFileShareClient mocks base method.
+func (m *MockClientFactory) GetFileShareClient() fileshareclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileShareClient")
+	ret0, _ := ret[0].(fileshareclient.Interface)
+	return ret0
+}
+
+// GetFileShareClient indicates an expected call of GetFileShareClient.
+func (mr *MockClientFactoryMockRecorder) GetFileShareClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShareClient", reflect.TypeOf((*MockClientFactory)(nil).GetFileShareClient))
 }
 
 // GetIPGroupClient mocks base method.

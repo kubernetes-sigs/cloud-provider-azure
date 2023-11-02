@@ -52,6 +52,13 @@ var _ = Describe("Factory", func() {
 			client := factory.GetDiskClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - FileShare", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetFileShareClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - Interface", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())

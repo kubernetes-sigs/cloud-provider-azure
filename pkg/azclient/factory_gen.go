@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -57,6 +58,7 @@ type ClientFactoryImpl struct {
 	availabilitysetclientInterface          availabilitysetclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     diskclient.Interface
+	fileshareclientInterface                fileshareclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
@@ -148,6 +150,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
 	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {fileshareclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient Account FileShare Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	fileshareclientInterface, err := fileshareclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -443,12 +456,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}
 
 	return &ClientFactoryImpl{
-		ClientFactoryConfig:                     config,
-		cred:                                    cred,
-		accountclientInterface:                  accountclientInterface,
+		ClientFactoryConfig: config,
+		cred:                cred, accountclientInterface: accountclientInterface,
 		availabilitysetclientInterface:          availabilitysetclientInterface,
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
+		fileshareclientInterface:                fileshareclientInterface,
 		interfaceclientInterface:                interfaceclientInterface,
 		ipgroupclientInterface:                  ipgroupclientInterface,
 		loadbalancerclientInterface:             loadbalancerclientInterface,
@@ -486,6 +499,10 @@ func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interfa
 
 func (factory *ClientFactoryImpl) GetDiskClient() diskclient.Interface {
 	return factory.diskclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetFileShareClient() fileshareclient.Interface {
+	return factory.fileshareclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetInterfaceClient() interfaceclient.Interface {
