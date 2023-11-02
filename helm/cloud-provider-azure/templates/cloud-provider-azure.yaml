@@ -294,7 +294,7 @@ spec:
               mountPath: /var/lib/waagent/ManagedIdentity-Settings
               readOnly: true
               {{- if .Values.cloudControllerManager.federatedTokenPath }}
-            - name: projectedToken
+            - name: azure-identity-token
               mountPath: {{ .Values.cloudControllerManager.federatedTokenPath }}
               readOnly: true
               {{ end }}
