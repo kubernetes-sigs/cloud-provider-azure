@@ -20,6 +20,8 @@ package azclient
 import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
@@ -50,6 +52,8 @@ import (
 type ClientFactory interface {
 	GetAccountClient() accountclient.Interface
 	GetAvailabilitySetClient() availabilitysetclient.Interface
+	GetBlobContainerClient() blobcontainerclient.Interface
+	GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface
 	GetDeploymentClient() deploymentclient.Interface
 	GetDiskClient() diskclient.Interface
 	GetFileShareClient() fileshareclient.Interface

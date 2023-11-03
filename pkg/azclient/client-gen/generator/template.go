@@ -19,7 +19,7 @@ package generator
 import "html/template"
 
 type ClientGenConfig struct {
-	Verbs        []string
+	Verbs        []string `marker:",optional"`
 	Resource     string
 	SubResource  string `marker:"subResource,optional"`
 	PackageName  string

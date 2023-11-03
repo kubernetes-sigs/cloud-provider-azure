@@ -25,6 +25,8 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
@@ -58,6 +60,8 @@ type ClientFactoryImpl struct {
 	cred                                    azcore.TokenCredential
 	accountclientInterface                  accountclient.Interface
 	availabilitysetclientInterface          availabilitysetclient.Interface
+	blobcontainerclientInterface            blobcontainerclient.Interface
+	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     diskclient.Interface
 	fileshareclientInterface                fileshareclient.Interface
@@ -122,6 +126,28 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
 	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {blobcontainerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient Account BlobContainer Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	blobcontainerclientInterface, err := blobcontainerclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {blobservicepropertiesclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient BlobServiceProperties  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	blobservicepropertiesclientInterface, err := blobservicepropertiesclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -485,6 +511,8 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		ClientFactoryConfig: config,
 		cred:                cred, accountclientInterface: accountclientInterface,
 		availabilitysetclientInterface:          availabilitysetclientInterface,
+		blobcontainerclientInterface:            blobcontainerclientInterface,
+		blobservicepropertiesclientInterface:    blobservicepropertiesclientInterface,
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
 		fileshareclientInterface:                fileshareclientInterface,
@@ -519,6 +547,14 @@ func (factory *ClientFactoryImpl) GetAccountClient() accountclient.Interface {
 
 func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	return factory.availabilitysetclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetBlobContainerClient() blobcontainerclient.Interface {
+	return factory.blobcontainerclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
+	return factory.blobservicepropertiesclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interface {
