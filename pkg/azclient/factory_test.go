@@ -38,6 +38,20 @@ var _ = Describe("Factory", func() {
 			client := factory.GetAvailabilitySetClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - BlobContainer", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetBlobContainerClient()
+			Expect(client).NotTo(BeNil())
+		})
+		It("should create factory instance without painc - BlobServiceProperties", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetBlobServicePropertiesClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - Deployment", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())

@@ -79,6 +79,7 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 			break
 		}
 		if _, markedForGeneration := pkgMakers[enableClientGenMarker.Name]; !markedForGeneration {
+			fmt.Println("Ignored pkg", root.Name)
 			continue
 		}
 		fmt.Println("Generate code for pkg ", root.PkgPath)

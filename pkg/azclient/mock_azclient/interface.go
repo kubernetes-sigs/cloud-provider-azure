@@ -27,6 +27,8 @@ import (
 
 	accountclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	availabilitysetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	blobcontainerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
+	blobservicepropertiesclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	deploymentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	diskclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
 	fileshareclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
@@ -103,6 +105,34 @@ func (m *MockClientFactory) GetAvailabilitySetClient() availabilitysetclient.Int
 func (mr *MockClientFactoryMockRecorder) GetAvailabilitySetClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAvailabilitySetClient", reflect.TypeOf((*MockClientFactory)(nil).GetAvailabilitySetClient))
+}
+
+// GetBlobContainerClient mocks base method.
+func (m *MockClientFactory) GetBlobContainerClient() blobcontainerclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlobContainerClient")
+	ret0, _ := ret[0].(blobcontainerclient.Interface)
+	return ret0
+}
+
+// GetBlobContainerClient indicates an expected call of GetBlobContainerClient.
+func (mr *MockClientFactoryMockRecorder) GetBlobContainerClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobContainerClient", reflect.TypeOf((*MockClientFactory)(nil).GetBlobContainerClient))
+}
+
+// GetBlobServicePropertiesClient mocks base method.
+func (m *MockClientFactory) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlobServicePropertiesClient")
+	ret0, _ := ret[0].(blobservicepropertiesclient.Interface)
+	return ret0
+}
+
+// GetBlobServicePropertiesClient indicates an expected call of GetBlobServicePropertiesClient.
+func (mr *MockClientFactoryMockRecorder) GetBlobServicePropertiesClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobServicePropertiesClient", reflect.TypeOf((*MockClientFactory)(nil).GetBlobServicePropertiesClient))
 }
 
 // GetDeploymentClient mocks base method.
