@@ -3022,6 +3022,33 @@ func TestReconcileLoadBalancerRuleCommon(t *testing.T) {
 	}
 }
 
+func TestGetExpectedLBRulesSharedProbe(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, tc := range []struct {
+		desc string
+	}{
+		{
+			desc: "getExpectedLBRules should return a shared rule for a cluster service when shared probe is enabled",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			az.ClusterServiceLoadBalancerHealthProbeMode = consts.ClusterServiceLoadBalancerHealthProbeModeShared
+			svc := getTestService("test1", v1.ProtocolTCP, nil, false, 80, 81)
+
+			probe, lbrule, err := az.getExpectedLBRules(&svc, "frontendIPConfigID", "backendPoolID", "lbname", consts.IPVersionIPv4)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, len(probe))
+			assert.Equal(t, *az.buildClusterServiceSharedProbe(), probe[0])
+			assert.Equal(t, 2, len(lbrule))
+			assert.Equal(t, "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/cluster-service-shared-health-probe", *lbrule[0].Probe.ID)
+			assert.Equal(t, "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lbname/probes/cluster-service-shared-health-probe", *lbrule[1].Probe.ID)
+		})
+	}
+}
+
 // getDefaultTestRules returns dualstack rules.
 func getDefaultTestRules(enableTCPReset bool) map[bool][]network.LoadBalancingRule {
 	return map[bool][]network.LoadBalancingRule{
