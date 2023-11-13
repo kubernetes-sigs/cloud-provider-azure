@@ -420,7 +420,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for the service to be exposed")
-		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []*string{})
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []string{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Validating if the corresponding IP prefix existing in nsg")
@@ -431,13 +431,13 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 
 		for _, nsg := range nsgs {
 
-			rules := nsg.Properties.SecurityRules
+			rules := nsg.SecurityRules
 			if rules == nil {
 				continue
 			}
-			for _, rule := range rules {
-				if rule.Properties.SourceAddressPrefix != nil {
-					sources = append(sources, *rule.Properties.SourceAddressPrefix)
+			for _, rule := range *rules {
+				if rule.SourceAddressPrefix != nil {
+					sources = append(sources, *rule.SourceAddressPrefix)
 				}
 			}
 		}
