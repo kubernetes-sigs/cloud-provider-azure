@@ -122,6 +122,13 @@ var _ = Describe("Factory", func() {
 			client := factory.GetPrivateZoneClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - Provider", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetProviderClient()
+			Expect(client).NotTo(BeNil())
+		})
 		It("should create factory instance without painc - PublicIPAddress", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())

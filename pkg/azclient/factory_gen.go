@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
@@ -72,6 +73,7 @@ type ClientFactoryImpl struct {
 	privateendpointclientInterface          privateendpointclient.Interface
 	privatelinkserviceclientInterface       privatelinkserviceclient.Interface
 	privatezoneclientInterface              privatezoneclient.Interface
+	providerclientInterface                 providerclient.Interface
 	publicipaddressclientInterface          publicipaddressclient.Interface
 	publicipprefixclientInterface           publicipprefixclient.Interface
 	registryclientInterface                 registryclient.Interface
@@ -307,6 +309,17 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
+	//initialize {providerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient Provider  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	providerclientInterface, err := providerclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
 	//initialize {publicipaddressclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient PublicIPAddress  Interface publicIPAddressRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
@@ -523,6 +536,7 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		privateendpointclientInterface:          privateendpointclientInterface,
 		privatelinkserviceclientInterface:       privatelinkserviceclientInterface,
 		privatezoneclientInterface:              privatezoneclientInterface,
+		providerclientInterface:                 providerclientInterface,
 		publicipaddressclientInterface:          publicipaddressclientInterface,
 		publicipprefixclientInterface:           publicipprefixclientInterface,
 		registryclientInterface:                 registryclientInterface,
@@ -595,6 +609,10 @@ func (factory *ClientFactoryImpl) GetPrivateLinkServiceClient() privatelinkservi
 
 func (factory *ClientFactoryImpl) GetPrivateZoneClient() privatezoneclient.Interface {
 	return factory.privatezoneclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetProviderClient() providerclient.Interface {
+	return factory.providerclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetPublicIPAddressClient() publicipaddressclient.Interface {

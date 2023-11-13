@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
@@ -64,6 +65,7 @@ type ClientFactory interface {
 	GetPrivateEndpointClient() privateendpointclient.Interface
 	GetPrivateLinkServiceClient() privatelinkserviceclient.Interface
 	GetPrivateZoneClient() privatezoneclient.Interface
+	GetProviderClient() providerclient.Interface
 	GetPublicIPAddressClient() publicipaddressclient.Interface
 	GetPublicIPPrefixClient() publicipprefixclient.Interface
 	GetRegistryClient() registryclient.Interface

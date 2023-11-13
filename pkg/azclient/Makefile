@@ -101,6 +101,8 @@ generatecode: build ## Generate client
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource BlobServiceProperties --client-name BlobServicesClient
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault --package-alias armkeyvault --resource Vault --subresource Secret --client-name SecretsClient --verbs get,createorupdate,delete,list
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault --package-alias armkeyvault --resource Vault --client-name VaultsClient --verbs get,createorupdate,delete,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias armresources --resource Provider --client-name ProvidersClient 
+
 
 .PHONY: generateimpl
 generateimpl: build ## Generate client
