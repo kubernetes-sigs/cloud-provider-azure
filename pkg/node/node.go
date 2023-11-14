@@ -17,7 +17,6 @@ limitations under the License.
 package node
 
 import (
-	"bytes"
 	"context"
 
 	v1 "k8s.io/api/core/v1"
@@ -35,10 +34,10 @@ type IMDSNodeProvider struct {
 
 // NewIMDSNodeProvider creates a new IMDSNodeProvider.
 func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
-	az, err := azureprovider.NewCloud(ctx, bytes.NewBuffer([]byte(`{
-			"useInstanceMetadata": true,
-			"vmType": "vmss"
-		}`)), false)
+	az, err := azureprovider.NewCloud(ctx, &azureprovider.Config{
+		UseInstanceMetadata: true,
+		VMType:              "vmss",
+	}, false)
 	if err != nil {
 		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
 	}
