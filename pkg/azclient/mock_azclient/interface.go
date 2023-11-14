@@ -39,6 +39,7 @@ import (
 	privateendpointclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	privatelinkserviceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	privatezoneclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
+	providerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient"
 	publicipaddressclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	publicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	registryclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
@@ -273,6 +274,20 @@ func (m *MockClientFactory) GetPrivateZoneClient() privatezoneclient.Interface {
 func (mr *MockClientFactoryMockRecorder) GetPrivateZoneClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrivateZoneClient", reflect.TypeOf((*MockClientFactory)(nil).GetPrivateZoneClient))
+}
+
+// GetProviderClient mocks base method.
+func (m *MockClientFactory) GetProviderClient() providerclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProviderClient")
+	ret0, _ := ret[0].(providerclient.Interface)
+	return ret0
+}
+
+// GetProviderClient indicates an expected call of GetProviderClient.
+func (mr *MockClientFactoryMockRecorder) GetProviderClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderClient", reflect.TypeOf((*MockClientFactory)(nil).GetProviderClient))
 }
 
 // GetPublicIPAddressClient mocks base method.
