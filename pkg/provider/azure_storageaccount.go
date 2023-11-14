@@ -19,11 +19,14 @@ package provider
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
@@ -41,6 +44,7 @@ import (
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
 const privateDNSZoneNameFmt = "privatelink.%s.%s"
+const DefaultTokenAudience = "api://AzureADTokenExchange"
 
 type StorageType string
 
@@ -127,6 +131,65 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 		}
 	}
 	return accounts, nil
+}
+
+// serviceAccountToken represents the service account token sent from NodePublishVolume Request.
+// ref: https://kubernetes-csi.github.io/docs/token-requests.html
+type serviceAccountToken struct {
+	APIAzureADTokenExchange struct {
+		Token               string    `json:"token"`
+		ExpirationTimestamp time.Time `json:"expirationTimestamp"`
+	} `json:"api://AzureADTokenExchange"`
+}
+
+// parseServiceAccountToken parses the bound service account token from the token passed from NodePublishVolume Request.
+func parseServiceAccountToken(tokenStr string) (string, error) {
+	if len(tokenStr) == 0 {
+		return "", fmt.Errorf("service account token is empty")
+	}
+	token := serviceAccountToken{}
+	if err := json.Unmarshal([]byte(tokenStr), &token); err != nil {
+		return "", fmt.Errorf("failed to unmarshal service account tokens, error: %w", err)
+	}
+	if token.APIAzureADTokenExchange.Token == "" {
+		return "", fmt.Errorf("token for audience %s not found", DefaultTokenAudience)
+	}
+	return token.APIAzureADTokenExchange.Token, nil
+}
+
+func (az *Cloud) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context, subsID, accountName, rgName, clientID, tenantID, serviceAccountToken string) (string, error) {
+	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(context.Context) (string, error) {
+		return parseServiceAccountToken(serviceAccountToken)
+	}, &azidentity.ClientAssertionCredentialOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
+	}
+
+	clientFactory, err := armstorage.NewClientFactory(subsID, cred, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create storage client factory, error: %w", err)
+	}
+
+	result, err := clientFactory.NewAccountsClient().ListKeys(ctx, rgName, accountName, &armstorage.AccountsClientListKeysOptions{Expand: nil})
+	if err != nil {
+		return "", fmt.Errorf("failed to list keys, error: %w", err)
+	}
+	if result.Keys == nil {
+		return "", fmt.Errorf("failed to list keys, empty keys")
+	}
+
+	for _, k := range result.Keys {
+		if k != nil && k.Value != nil && *k.Value != "" {
+			v := *k.Value
+			if ind := strings.LastIndex(v, " "); ind >= 0 {
+				v = v[(ind + 1):]
+			}
+			// get first key
+			return v, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to list keys, found no key")
 }
 
 // GetStorageAccesskey gets the storage account access key
