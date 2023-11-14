@@ -386,7 +386,7 @@ func TestDeleteManagedDisk(t *testing.T) {
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, *test.existedDisk.Name)
 		if test.diskState == "attaching" {
-			managedDiskController.common.diskStateMap.Store(strings.ToLower(diskURI), test.diskState)
+			managedDiskController.diskStateMap.Store(strings.ToLower(diskURI), test.diskState)
 		}
 
 		mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)

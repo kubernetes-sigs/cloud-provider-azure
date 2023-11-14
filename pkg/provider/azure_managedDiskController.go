@@ -39,7 +39,7 @@ import (
 
 // ManagedDiskController : managed disk controller struct
 type ManagedDiskController struct {
-	common *controllerCommon
+	*controllerCommon
 }
 
 // ManagedDiskOptions specifies the options of managed disks.
@@ -99,7 +99,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 
 	var createZones []string
 	if len(options.AvailabilityZone) > 0 {
-		requestedZone := c.common.cloud.GetZoneID(options.AvailabilityZone)
+		requestedZone := c.cloud.GetZoneID(options.AvailabilityZone)
 		if requestedZone != "" {
 			createZones = append(createZones, requestedZone)
 		}
@@ -121,14 +121,14 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 	diskSizeGB := int32(options.SizeGB)
 	diskSku := options.StorageAccountType
 
-	rg := c.common.cloud.ResourceGroup
+	rg := c.cloud.ResourceGroup
 	if options.ResourceGroup != "" {
 		rg = options.ResourceGroup
 	}
-	if options.SubscriptionID != "" && !strings.EqualFold(options.SubscriptionID, c.common.cloud.SubscriptionID) && options.ResourceGroup == "" {
+	if options.SubscriptionID != "" && !strings.EqualFold(options.SubscriptionID, c.cloud.SubscriptionID) && options.ResourceGroup == "" {
 		return "", fmt.Errorf("resourceGroup must be specified when subscriptionID(%s) is not empty", options.SubscriptionID)
 	}
-	subsID := c.common.cloud.SubscriptionID
+	subsID := c.cloud.SubscriptionID
 	if options.SubscriptionID != "" {
 		subsID = options.SubscriptionID
 	}
@@ -229,7 +229,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		diskProperties.MaxShares = &options.MaxShares
 	}
 
-	location := c.common.cloud.Location
+	location := c.cloud.Location
 	if options.Location != "" {
 		location = options.Location
 	}
@@ -242,10 +242,10 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		DiskProperties: &diskProperties,
 	}
 
-	if c.common.cloud.HasExtendedLocation() {
+	if c.cloud.HasExtendedLocation() {
 		model.ExtendedLocation = &compute.ExtendedLocation{
-			Name: pointer.String(c.common.cloud.ExtendedLocationName),
-			Type: compute.ExtendedLocationTypes(c.common.cloud.ExtendedLocationType),
+			Name: pointer.String(c.cloud.ExtendedLocationName),
+			Type: compute.ExtendedLocationTypes(c.cloud.ExtendedLocationType),
 		}
 	}
 
@@ -253,7 +253,7 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		model.Zones = &createZones
 	}
 
-	if rerr := c.common.cloud.DisksClient.CreateOrUpdate(ctx, subsID, rg, options.DiskName, model); rerr != nil {
+	if rerr := c.cloud.DisksClient.CreateOrUpdate(ctx, subsID, rg, options.DiskName, model); rerr != nil {
 		return "", rerr.Error()
 	}
 
@@ -296,12 +296,12 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 		return err
 	}
 
-	if state, ok := c.common.diskStateMap.Load(strings.ToLower(diskURI)); ok {
+	if state, ok := c.diskStateMap.Load(strings.ToLower(diskURI)); ok {
 		return fmt.Errorf("failed to delete disk(%s) since it's in %s state", diskURI, state.(string))
 	}
 
 	diskName := path.Base(diskURI)
-	disk, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
+	disk, rerr := c.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.V(2).Infof("azureDisk - disk(%s) is already deleted", diskURI)
@@ -316,7 +316,7 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 		return fmt.Errorf("disk(%s) already attached to node(%s), could not be deleted", diskURI, *disk.ManagedBy)
 	}
 
-	if rerr := c.common.cloud.DisksClient.Delete(ctx, subsID, resourceGroup, diskName); rerr != nil {
+	if rerr := c.cloud.DisksClient.Delete(ctx, subsID, resourceGroup, diskName); rerr != nil {
 		return rerr.Error()
 	}
 	// We don't need poll here, k8s will immediately stop referencing the disk
@@ -329,7 +329,7 @@ func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI s
 
 // GetDisk return: disk provisionState, diskID, error
 func (c *ManagedDiskController) GetDisk(ctx context.Context, subsID, resourceGroup, diskName string) (string, string, error) {
-	result, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
+	result, rerr := c.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		return "", "", rerr.Error()
 	}
@@ -348,7 +348,7 @@ func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, 
 		return oldSize, err
 	}
 
-	result, rerr := c.common.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
+	result, rerr := c.cloud.DisksClient.Get(ctx, subsID, resourceGroup, diskName)
 	if rerr != nil {
 		return oldSize, rerr.Error()
 	}
@@ -381,7 +381,7 @@ func (c *ManagedDiskController) ResizeDisk(ctx context.Context, diskURI string, 
 		},
 	}
 
-	if rerr := c.common.cloud.DisksClient.Update(ctx, subsID, resourceGroup, diskName, diskParameter); rerr != nil {
+	if rerr := c.cloud.DisksClient.Update(ctx, subsID, resourceGroup, diskName, diskParameter); rerr != nil {
 		return oldSize, rerr.Error()
 	}
 

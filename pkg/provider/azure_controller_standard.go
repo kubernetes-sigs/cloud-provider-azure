@@ -265,7 +265,7 @@ func (as *availabilitySet) UpdateVMAsync(ctx context.Context, nodeName types.Nod
 }
 
 func (as *availabilitySet) updateCache(nodeName string, vm *compute.VirtualMachine) {
-	if as.common.DisableUpdateCache {
+	if as.ManagedDiskController.DisableUpdateCache {
 		return
 	}
 	as.cloud.vmCache.Update(nodeName, vm)
