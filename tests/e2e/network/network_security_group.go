@@ -392,9 +392,20 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			return true
 		}
 
-		allowedIPRanges := []string{
-			"10.20.0.0/16",
-			"192.168.0.1/32",
+		var allowedIPRanges []string
+
+		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		if v4Enabled {
+			allowedIPRanges = append(allowedIPRanges,
+				"10.20.0.0/16",
+				"192.168.0.1/32",
+			)
+		}
+		if v6Enabled {
+			allowedIPRanges = append(allowedIPRanges,
+				"2c0f:fe40:8000::/48",
+				"2c0f:feb0::/43",
+			)
 		}
 
 		ipFamilyPolicy := v1.IPFamilyPolicyPreferDualStack
