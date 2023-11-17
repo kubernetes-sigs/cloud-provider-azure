@@ -751,7 +751,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 
-	if err := initDiskControllers(az); err != nil {
+	if err := InitDiskControllers(az); err != nil {
 		return err
 	}
 
@@ -1180,7 +1180,7 @@ func (az *Cloud) ProviderName() string {
 	return consts.CloudProviderName
 }
 
-func initDiskControllers(az *Cloud) error {
+func InitDiskControllers(az *Cloud) error {
 	// Common controller contains the function
 	// needed by both blob disk and managed disk controllers
 

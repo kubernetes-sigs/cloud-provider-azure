@@ -625,7 +625,7 @@ func TestAddStorageAccountTags(t *testing.T) {
 	defer cancel()
 
 	cloud := &Cloud{}
-	_ = initDiskControllers(cloud)
+	_ = InitDiskControllers(cloud)
 
 	tests := []struct {
 		name           string
@@ -698,7 +698,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 	defer cancel()
 
 	cloud := &Cloud{}
-	_ = initDiskControllers(cloud)
+	_ = InitDiskControllers(cloud)
 
 	tests := []struct {
 		name           string
