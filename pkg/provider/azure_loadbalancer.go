@@ -1532,6 +1532,7 @@ func (az *Cloud) findFrontendIPConfigsOfService(
 // of the corresponding load balancer configuration. It also checks if there is a configuration
 // named <clustername>. If not, an error will be reported.
 func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
+
 	lbs *[]network.LoadBalancer,
 	service *v1.Service,
 	clusterName string,
