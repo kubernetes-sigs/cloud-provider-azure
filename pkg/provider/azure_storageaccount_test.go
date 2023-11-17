@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -614,6 +615,153 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 			assert.Equal(t, err.RawError.Error(), test.expectedErr, err.RawError.Error(), test.name)
 		}
 	}
+}
+
+func TestAddStorageAccountTags(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	cloud := &Cloud{}
+	_ = initDiskControllers(cloud)
+
+	tests := []struct {
+		name           string
+		subsID         string
+		resourceGroup  string
+		account        string
+		tags           map[string]*string
+		parallelThread int
+		expectedErr    *retry.Error
+	}{
+		{
+			name:        "no tags update",
+			account:     "account",
+			expectedErr: nil,
+		},
+		{
+			name:        "tags update",
+			account:     "account",
+			tags:        map[string]*string{"key": pointer.String("value")},
+			expectedErr: nil,
+		},
+		{
+			name:           "tags update in parallel",
+			account:        "account",
+			tags:           map[string]*string{"key": pointer.String("value")},
+			parallelThread: 10,
+			expectedErr:    nil,
+		},
+	}
+
+	getter := func(key string) (interface{}, error) { return nil, nil }
+	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+
+	for _, test := range tests {
+		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
+		cloud.StorageAccountClient = mockStorageAccountsClient
+		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{}, nil).AnyTimes()
+
+		parallelThread := 1
+		if test.parallelThread > 1 {
+			parallelThread = test.parallelThread
+		}
+		if len(test.tags) > 0 {
+			mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(parallelThread)
+		}
+
+		if parallelThread > 1 {
+			var wg sync.WaitGroup
+			wg.Add(parallelThread)
+			for i := 0; i < parallelThread; i++ {
+				go func() {
+					defer wg.Done()
+					err := cloud.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
+					assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+				}()
+			}
+			wg.Wait()
+		} else {
+			err := cloud.AddStorageAccountTags(ctx, test.subsID, test.resourceGroup, test.account, test.tags)
+			assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+		}
+	}
+}
+
+func TestRemoveStorageAccountTags(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	cloud := &Cloud{}
+	_ = initDiskControllers(cloud)
+
+	tests := []struct {
+		name           string
+		subsID         string
+		resourceGroup  string
+		account        string
+		key            string
+		parallelThread int
+		expectedErr    *retry.Error
+	}{
+		{
+			name:        "no tag removal",
+			account:     "account",
+			expectedErr: nil,
+		},
+		{
+			name:        "one tag removal",
+			account:     "account",
+			key:         "key",
+			expectedErr: nil,
+		},
+		{
+			name:           "one tag removal in parallel",
+			account:        "account",
+			key:            "key",
+			parallelThread: 10,
+			expectedErr:    nil,
+		},
+	}
+
+	getter := func(key string) (interface{}, error) { return nil, nil }
+	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+
+	for _, test := range tests {
+		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
+		cloud.StorageAccountClient = mockStorageAccountsClient
+		mockStorageAccountsClient.EXPECT().GetProperties(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.Account{Tags: map[string]*string{"key": pointer.String("value")}}, nil).AnyTimes()
+
+		parallelThread := 1
+		if test.parallelThread > 1 {
+			parallelThread = test.parallelThread
+		}
+		if len(test.key) > 0 {
+			mockStorageAccountsClient.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+		}
+
+		if parallelThread > 1 {
+			var wg sync.WaitGroup
+			wg.Add(parallelThread)
+			for i := 0; i < parallelThread; i++ {
+				go func() {
+					defer wg.Done()
+					err := cloud.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
+					assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+				}()
+			}
+			wg.Wait()
+		} else {
+			err := cloud.RemoveStorageAccountTag(ctx, test.subsID, test.resourceGroup, test.account, test.key)
+			assert.Equal(t, err, test.expectedErr, fmt.Sprintf("returned error: %v", err), test.name)
+		}
+	}
+
 }
 
 func TestIsPrivateEndpointAsExpected(t *testing.T) {
