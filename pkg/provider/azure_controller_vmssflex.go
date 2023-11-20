@@ -264,7 +264,7 @@ func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeNa
 }
 
 func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine) error {
-	if fs.common.DisableUpdateCache {
+	if fs.ManagedDiskController.DisableUpdateCache {
 		return nil
 	}
 	if vm == nil {

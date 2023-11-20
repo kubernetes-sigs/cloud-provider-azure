@@ -442,7 +442,6 @@ type Cloud struct {
 	serviceReconcileLock sync.Mutex
 
 	*ManagedDiskController
-	*controllerCommon
 
 	// multipleStandardLoadBalancerConfigurationsSynced make sure the `reconcileMultipleStandardLoadBalancerConfigurations`
 	// runs only once every time the cloud provide restarts.
@@ -616,27 +615,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 
-	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureAuthConfig, env, env.ServiceManagementEndpoint)
-	if errors.Is(err, ratelimitconfig.ErrorNoAuth) {
-		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
-		if fromSecret {
-			err := fmt.Errorf("no credentials provided for Azure cloud provider")
-			klog.Fatal(err)
-			return err
-		}
-
-		// No credentials provided, useInstanceMetadata should be enabled for Kubelet.
-		// TODO(feiskyer): print different error message for Kubelet and controller-manager, as they're
-		// requiring different credential settings.
-		if !config.UseInstanceMetadata && config.CloudConfigType == cloudConfigTypeFile {
-			return fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
-		}
-
-		klog.V(2).Infof("Azure cloud provider is starting without credentials")
-	} else if err != nil {
-		return err
-	}
-
 	// Initialize rate limiting config options.
 	ratelimitconfig.InitializeCloudProviderRateLimitConfig(&config.CloudProviderRateLimitConfig)
 
@@ -651,18 +629,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
 	az.Metadata, err = NewInstanceMetadataService(consts.ImdsServer)
-	if err != nil {
-		return err
-	}
-
-	// No credentials provided, InstanceMetadataService would be used for getting Azure resources.
-	// Note that this only applies to Kubelet, controller-manager should configure credentials for managing Azure resources.
-	if servicePrincipalToken == nil {
-		return nil
-	}
-
-	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
-	err = az.configureMultiTenantClients(servicePrincipalToken)
 	if err != nil {
 		return err
 	}
@@ -699,6 +665,38 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 			return err
 		}
 	}
+	servicePrincipalToken, err := ratelimitconfig.GetServicePrincipalToken(&config.AzureAuthConfig, env, env.ServiceManagementEndpoint)
+	if errors.Is(err, ratelimitconfig.ErrorNoAuth) {
+		// Only controller-manager would lazy-initialize from secret, and credentials are required for such case.
+		if fromSecret {
+			err := fmt.Errorf("no credentials provided for Azure cloud provider")
+			klog.Fatal(err)
+			return err
+		}
+
+		// No credentials provided, useInstanceMetadata should be enabled for Kubelet.
+		// TODO(feiskyer): print different error message for Kubelet and controller-manager, as they're
+		// requiring different credential settings.
+		if !config.UseInstanceMetadata && config.CloudConfigType == cloudConfigTypeFile {
+			return fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
+		}
+
+		klog.V(2).Infof("Azure cloud provider is starting without credentials")
+	} else if err != nil {
+		return err
+	}
+	// No credentials provided, InstanceMetadataService would be used for getting Azure resources.
+	// Note that this only applies to Kubelet, controller-manager should configure credentials for managing Azure resources.
+	if servicePrincipalToken == nil {
+		return nil
+	}
+
+	// If uses network resources in different AAD Tenant, then prepare corresponding Service Principal Token for VM/VMSS client and network resources client
+	multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, err := az.getAuthTokenInMultiTenantEnv(servicePrincipalToken)
+	if err != nil {
+		return err
+	}
+	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
 
 	err = az.initCaches()
 	if err != nil {
@@ -708,6 +706,24 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	if err := InitDiskControllers(az); err != nil {
 		return err
 	}
+	// Common controller contains the function
+	// needed by both blob disk and managed disk controllers
+	qps := float32(ratelimitconfig.DefaultAtachDetachDiskQPS)
+	bucket := ratelimitconfig.DefaultAtachDetachDiskBucket
+	if az.Config.AttachDetachDiskRateLimit != nil {
+		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
+		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
+	}
+	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
+
+	common := &controllerCommon{
+		cloud:                        az,
+		lockMap:                      newLockMap(),
+		diskOpRateLimiter:            flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
+		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
+	}
+
+	az.ManagedDiskController = &ManagedDiskController{common}
 
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
@@ -855,23 +871,21 @@ func (az *Cloud) setLBDefaults(config *Config) error {
 	return nil
 }
 
-func (az *Cloud) configureMultiTenantClients(servicePrincipalToken *adal.ServicePrincipalToken) error {
+func (az *Cloud) getAuthTokenInMultiTenantEnv(servicePrincipalToken *adal.ServicePrincipalToken) (*adal.MultiTenantServicePrincipalToken, *adal.ServicePrincipalToken, error) {
 	var err error
 	var multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken
 	var networkResourceServicePrincipalToken *adal.ServicePrincipalToken
 	if az.Config.UsesNetworkResourceInDifferentTenant() {
 		multiTenantServicePrincipalToken, err = ratelimitconfig.GetMultiTenantServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		networkResourceServicePrincipalToken, err = ratelimitconfig.GetNetworkResourceServicePrincipalToken(&az.Config.AzureAuthConfig, &az.Environment)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 	}
-
-	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
-	return nil
+	return multiTenantServicePrincipalToken, networkResourceServicePrincipalToken, nil
 }
 
 func (az *Cloud) setCloudProviderBackoffDefaults(config *Config) wait.Backoff {
@@ -1153,8 +1167,7 @@ func InitDiskControllers(az *Cloud) error {
 		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
 	}
 
-	az.ManagedDiskController = &ManagedDiskController{common: common}
-	az.controllerCommon = common
+	az.ManagedDiskController = &ManagedDiskController{common}
 
 	return nil
 }
