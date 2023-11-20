@@ -52,3 +52,11 @@ func (client *Client) Delete(ctx context.Context, resourceGroupName string, reso
 	_, err := client.AccountsClient.Delete(ctx, resourceGroupName, resourceName, nil)
 	return err
 }
+
+func (client *Client) ListKeys(ctx context.Context, resourceGroupName string, accountName string) ([]*armstorage.AccountKey, error) {
+	resp, err := client.AccountsClient.ListKeys(ctx, resourceGroupName, accountName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Keys, nil
+}

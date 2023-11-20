@@ -109,3 +109,18 @@ func (mr *MockInterfaceMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), arg0, arg1)
 }
+
+// ListKeys mocks base method.
+func (m *MockInterface) ListKeys(arg0 context.Context, arg1, arg2 string) ([]*armstorage.AccountKey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListKeys", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*armstorage.AccountKey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListKeys indicates an expected call of ListKeys.
+func (mr *MockInterfaceMockRecorder) ListKeys(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListKeys", reflect.TypeOf((*MockInterface)(nil).ListKeys), arg0, arg1, arg2)
+}
