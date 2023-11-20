@@ -31,4 +31,5 @@ type Interface interface {
 	Create(ctx context.Context, resourceGroupName string, accountName string, resource *armstorage.AccountCreateParameters) (*armstorage.Account, error)
 	GetProperties(ctx context.Context, resourceGroupName string, accountName string, options *armstorage.AccountsClientGetPropertiesOptions) (*armstorage.Account, error)
 	Delete(ctx context.Context, resourceGroupName string, accountName string) error
+	ListKeys(ctx context.Context, resourceGroupName string, accountName string) ([]*armstorage.AccountKey, error)
 }

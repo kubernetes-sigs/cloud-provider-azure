@@ -85,6 +85,14 @@ func init() {
 				Expect(newResource).To(BeNil())
 			})
 		})
+
+		When("listkeys requests are raised", func() {
+			It("should not return error", func(ctx context.Context) {
+				keys, err := realClient.ListKeys(ctx, resourceGroupName, resourceName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(keys).To(HaveLen(2))
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
