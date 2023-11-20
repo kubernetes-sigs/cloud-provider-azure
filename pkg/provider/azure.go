@@ -27,12 +27,9 @@ import (
 	"sync"
 	"time"
 
-	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -50,7 +47,9 @@ import (
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/containerserviceclient"
@@ -79,10 +78,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	ratelimitconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/taints"
-
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -340,12 +338,6 @@ type MultipleStandardLoadBalancerConfigurationStatus struct {
 	ActiveNodes sets.Set[string] `json:"activeNodes" yaml:"activeNodes"`
 }
 
-type InitSecretConfig struct {
-	SecretName      string `json:"secretName,omitempty" yaml:"secretName,omitempty"`
-	SecretNamespace string `json:"secretNamespace,omitempty" yaml:"secretNamespace,omitempty"`
-	CloudConfigKey  string `json:"cloudConfigKey,omitempty" yaml:"cloudConfigKey,omitempty"`
-}
-
 // HasExtendedLocation returns true if extendedlocation prop are specified.
 func (config *Config) HasExtendedLocation() bool {
 	return config.ExtendedLocationName != "" && config.ExtendedLocationType != ""
@@ -363,7 +355,6 @@ var (
 // Cloud holds the config and clients
 type Cloud struct {
 	Config
-	InitSecretConfig
 	Environment azure.Environment
 
 	RoutesClient                    routeclient.Interface
@@ -465,11 +456,23 @@ type Cloud struct {
 }
 
 // NewCloud returns a Cloud with initialized clients
-func NewCloud(ctx context.Context, configReader io.Reader, callFromCCM bool) (cloudprovider.Interface, error) {
-	az, err := NewCloudWithoutFeatureGates(ctx, configReader, callFromCCM)
+func NewCloud(ctx context.Context, config *Config, callFromCCM bool) (cloudprovider.Interface, error) {
+	az := &Cloud{
+		nodeNames:                  sets.New[string](),
+		nodeZones:                  map[string]sets.Set[string]{},
+		nodeResourceGroups:         map[string]string{},
+		unmanagedNodes:             sets.New[string](),
+		routeCIDRs:                 map[string]string{},
+		excludeLoadBalancerNodes:   sets.New[string](),
+		nodePrivateIPs:             map[string]sets.Set[string]{},
+		nodePrivateIPToNodeNameMap: map[string]string{},
+	}
+
+	err := az.InitializeCloudFromConfig(ctx, config, false, callFromCCM)
 	if err != nil {
 		return nil, err
 	}
+
 	az.ipv6DualStackEnabled = true
 
 	return az, nil
@@ -481,6 +484,7 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 		err   error
 	)
 
+	var configValue *Config
 	if configFilePath != "" {
 		var config *os.File
 		config, err = os.Open(configFilePath)
@@ -490,12 +494,12 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 		}
 
 		defer config.Close()
-		cloud, err = NewCloud(ctx, config, calFromCCM)
-	} else {
-		// Pass explicit nil so plugins can actually check for nil. See
-		// "Why is my nil error value not equal to nil?" in golang.org/doc/faq.
-		cloud, err = NewCloud(ctx, nil, false)
+		configValue, err = ParseConfig(config)
+		if err != nil {
+			klog.Fatalf("Failed to parse Azure cloud provider config: %v", err)
+		}
 	}
+	cloud, err = NewCloud(ctx, configValue, calFromCCM && configFilePath != "")
 
 	if err != nil {
 		return nil, fmt.Errorf("could not init cloud provider azure: %w", err)
@@ -507,73 +511,23 @@ func NewCloudFromConfigFile(ctx context.Context, configFilePath string, calFromC
 	return cloud, nil
 }
 
-func (az *Cloud) configSecretMetadata(secretName, secretNamespace, cloudConfigKey string) {
-	if secretName == "" {
-		secretName = consts.DefaultCloudProviderConfigSecName
-	}
-	if secretNamespace == "" {
-		secretNamespace = consts.DefaultCloudProviderConfigSecNamespace
-	}
-	if cloudConfigKey == "" {
-		cloudConfigKey = consts.DefaultCloudProviderConfigSecKey
-	}
-
-	az.InitSecretConfig = InitSecretConfig{
-		SecretName:      secretName,
-		SecretNamespace: secretNamespace,
-		CloudConfigKey:  cloudConfigKey,
-	}
-}
-
 func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.ControllerClientBuilder, secretName, secretNamespace, cloudConfigKey string) (cloudprovider.Interface, error) {
-	az := &Cloud{
-		nodeNames:                  sets.New[string](),
-		nodeZones:                  map[string]sets.Set[string]{},
-		nodeResourceGroups:         map[string]string{},
-		unmanagedNodes:             sets.New[string](),
-		routeCIDRs:                 map[string]string{},
-		excludeLoadBalancerNodes:   sets.New[string](),
-		nodePrivateIPs:             map[string]sets.Set[string]{},
-		nodePrivateIPToNodeNameMap: map[string]string{},
+	config, err := configloader.Load[Config](ctx, &configloader.K8sSecretLoaderConfig{
+		K8sSecretConfig: configloader.K8sSecretConfig{
+			SecretName:      secretName,
+			SecretNamespace: secretNamespace,
+			CloudConfigKey:  cloudConfigKey,
+		},
+		KubeClient: clientBuilder.ClientOrDie("cloud-provider-azure"),
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("NewCloudFromSecret: failed to get config from secret %s/%s: %w", secretNamespace, secretName, err)
 	}
-
-	az.configSecretMetadata(secretName, secretNamespace, cloudConfigKey)
-
+	az, err := NewCloud(ctx, config, true)
+	if err != nil {
+		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %w", secretNamespace, secretName, err)
+	}
 	az.Initialize(clientBuilder, wait.NeverStop)
-
-	err := az.InitializeCloudFromSecret(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("NewCloudFromSecret: failed to initialize cloud from secret %s/%s: %w", az.SecretNamespace, az.SecretName, err)
-	}
-
-	az.ipv6DualStackEnabled = true
-
-	return az, nil
-}
-
-// NewCloudWithoutFeatureGates returns a Cloud without trying to wire the feature gates.  This is used by the unit tests
-// that don't load the actual features being used in the cluster.
-func NewCloudWithoutFeatureGates(ctx context.Context, configReader io.Reader, callFromCCM bool) (*Cloud, error) {
-	config, err := ParseConfig(configReader)
-	if err != nil {
-		return nil, err
-	}
-
-	az := &Cloud{
-		nodeNames:                  sets.New[string](),
-		nodeZones:                  map[string]sets.Set[string]{},
-		nodeResourceGroups:         map[string]string{},
-		unmanagedNodes:             sets.New[string](),
-		routeCIDRs:                 map[string]string{},
-		excludeLoadBalancerNodes:   sets.New[string](),
-		nodePrivateIPs:             map[string]sets.Set[string]{},
-		nodePrivateIPToNodeNameMap: map[string]string{},
-	}
-
-	err = az.InitializeCloudFromConfig(ctx, config, false, callFromCCM)
-	if err != nil {
-		return nil, err
-	}
 
 	return az, nil
 }

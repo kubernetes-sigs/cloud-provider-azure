@@ -18,7 +18,6 @@ package node
 
 import (
 	"context"
-	"os"
 	"runtime"
 
 	v1 "k8s.io/api/core/v1"
@@ -37,24 +36,10 @@ type ARMNodeProvider struct {
 // NewARMNodeProvider creates a new ARMNodeProvider.
 func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNodeProvider {
 	var err error
-	var configFile *os.File
 	var az cloudprovider.Interface
-
-	if cloudConfigFilePath != "" {
-		configFile, err = os.Open(cloudConfigFilePath)
-		if err != nil {
-			klog.Fatalf("Could not open cloud config file %s: %#v", cloudConfigFilePath, err)
-		}
-		defer configFile.Close()
-
-		az, err = azureprovider.NewCloud(ctx, configFile, false)
-
-		if err != nil {
-			klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
-		}
-
-	} else {
-		klog.Fatal("Cloud config file path is empty, use --cloud-config argument when using ARM node provider.")
+	az, err = azureprovider.NewCloudFromConfigFile(ctx, cloudConfigFilePath, false)
+	if err != nil {
+		klog.Fatalf("Failed to initialize Azure cloud provider: %v", err)
 	}
 
 	return &ARMNodeProvider{
