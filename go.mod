@@ -24,10 +24,10 @@ require (
 	k8s.io/api v0.26.11
 	k8s.io/apimachinery v0.26.11
 	k8s.io/apiserver v0.26.10
-	k8s.io/client-go v0.26.10
+	k8s.io/client-go v0.26.11
 	k8s.io/cloud-provider v0.26.10
 	k8s.io/component-base v0.26.10
-	k8s.io/component-helpers v0.26.10
+	k8s.io/component-helpers v0.26.11
 	k8s.io/controller-manager v0.26.10
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kubelet v0.26.10
@@ -114,7 +114,7 @@ require (
 	golang.org/x/oauth2 v0.11.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/term v0.14.0 // indirect
-	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
