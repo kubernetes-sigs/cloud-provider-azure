@@ -24,8 +24,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/client-go/tools/cache"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/config"
@@ -67,7 +69,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
-			if err := Run(c, wait.NeverStop); err != nil {
+			if err := Run(context.Background(), c); err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
@@ -98,41 +100,37 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 }
 
 // Run runs the ExternalCMServer.  This should never exit.
-func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
+func Run(ctx context.Context, c *cloudnodeconfig.Config) error {
 	// To help debugging, immediately log version and nodeName
 	klog.Infof("Version: %+v", version.Get())
 	klog.Infof("NodeName: %s", c.NodeName)
+	defer utilruntime.HandleCrash()
 
-	// Start the controller manager HTTP server
-	var checks []healthz.HealthChecker
-	healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
 	if c.SecureServing != nil {
+		// Start the controller manager HTTP server
+		var checks []healthz.HealthChecker
+		healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
+		healthzHandler.AddHealthChecker(controllerhealthz.NamedPingChecker(c.NodeName))
 		unsecuredMux := genericcontrollermanager.NewBaseHandler(&config.DebuggingConfiguration{}, healthzHandler)
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
-		if _, _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
+		if _, _, err := c.SecureServing.Serve(handler, 0, ctx.Done()); err != nil {
 			return err
 		}
+		return nil
 	}
 
-	run := func(ctx context.Context) {
-		if err := startControllers(ctx, c, ctx.Done(), healthzHandler); err != nil {
-			klog.Fatalf("error running controllers: %v", err)
-		}
-	}
-
-	run(context.TODO())
-	panic("unreachable")
-}
-
-// startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	klog.V(1).Infof("Starting cloud-node-manager...")
-
+	// If apiserver is not running we should wait for some time and fail only then. This is particularly
+	// important when we start node manager before apiserver starts.
+	if err := genericcontrollermanager.WaitForAPIServer(c.VersionedClient, 10*time.Second); err != nil {
+		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
+	}
+	nodeInformer := c.SharedInformers.Core().V1().Nodes()
 	// Start the CloudNodeController
 	nodeController := nodemanager.NewCloudNodeController(
 		c.NodeName,
-		c.SharedInformers.Core().V1().Nodes(),
+		nodeInformer.Lister(),
 		// cloud node controller uses existing cluster role from node-controller
 		c.ClientBuilder.ClientOrDie("node-controller"),
 		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath),
@@ -140,20 +138,26 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-c
 		c.WaitForRoutes,
 		c.EnableDeprecatedBetaTopologyLabels)
 
-	go nodeController.Run(stopCh)
-
-	check := controllerhealthz.NamedPingChecker(c.NodeName)
-	healthzHandler.AddHealthChecker(check)
-
-	klog.Infof("Started cloud-node-manager")
-
-	// If apiserver is not running we should wait for some time and fail only then. This is particularly
-	// important when we start node manager before apiserver starts.
-	if err := genericcontrollermanager.WaitForAPIServer(c.VersionedClient, 10*time.Second); err != nil {
-		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
+	// Use shared informer to listen to add/update of nodes. Note that any nodes
+	// that exist before node controller starts will show up in the update method
+	_, err := nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { nodeController.AddCloudNode(ctx, obj) },
+		UpdateFunc: func(oldObj, newObj interface{}) { nodeController.UpdateCloudNode(ctx, oldObj, newObj) },
+	})
+	if err != nil {
+		klog.Fatalf("Failed to register event handler with shared informer: %v", err)
+		return err
 	}
 
-	c.SharedInformers.Start(stopCh)
+	c.SharedInformers.Start(ctx.Done())
+	defer c.SharedInformers.Shutdown()
+	c.SharedInformers.WaitForCacheSync(ctx.Done())
+	klog.Infof("Started cloud-node-manager")
+	// The following loops run communicate with the APIServer with a worst case complexity
+	// of O(num_nodes) per cycle. These functions are justified here because these events fire
+	// very infrequently. DO NOT MODIFY this to perform frequent operations.
 
-	select {}
+	// Start a loop to periodically update the node addresses obtained from the cloud
+	wait.UntilWithContext(ctx, func(ctx context.Context) { nodeController.UpdateNodeStatus(ctx) }, c.NodeStatusUpdateFrequency.Duration)
+	return nil
 }
