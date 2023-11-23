@@ -20,11 +20,14 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	acr "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/pointer"
 )
 
@@ -35,18 +38,33 @@ func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
 	acrName := "e2eacr" + string(uuid.NewUUID())[0:4]
 	template := acr.Registry{
 		SKU: &acr.SKU{
-			Name: to.Ptr(acr.SKUNameBasic),
-			Tier: to.Ptr(acr.SKUTierBasic),
+			Name: to.Ptr(acr.SKUNameStandard),
+			Tier: to.Ptr(acr.SKUTierStandard),
 		},
 		Name:     pointer.String(acrName),
 		Location: pointer.String(location),
 	}
 
-	Logf("Creating acr %s in resource group %s.", acrName, rgName)
+	Logf("Creating ACR %s in resource group %s.", acrName, rgName)
 	registry, err := acrClient.Create(context.Background(), rgName, acrName, template)
 	if err != nil {
 		return acr.Registry{}, err
 	}
+
+	if err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		Logf("One try")
+		_, err := acrClient.Get(ctx, rgName, acrName)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}); err != nil {
+		return acr.Registry{}, err
+	}
+	Logf("Created ACR %s in resource group %s.", acrName, rgName)
 
 	return *registry, nil
 }

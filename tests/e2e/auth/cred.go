@@ -17,15 +17,18 @@ limitations under the License.
 package auth
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -88,7 +91,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should be able to create an ACR cache and pull images from it", Label(utils.TestSuiteLabelOOTCredential), func() {
+	It("should be able to create an ACR cache and pull images from it", func() {
 		if os.Getenv(utils.AKSTestCCM) != "" {
 			Skip("Skip the test for AKS pipeline for now")
 		}
@@ -113,7 +116,18 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 			acrImageURL := fmt.Sprintf("%s.azurecr.io/%s:%s", *registry.Name, imageName, imageTag)
 			err = utils.AZACRLogin()
 			Expect(err).NotTo(HaveOccurred())
-			err = utils.AZACRCacheCreate(*registry.Name, fmt.Sprintf("%s-cache-rule", imageName), imageURL, imageName)
+
+			ruleName := fmt.Sprintf("%s-cache-rule", imageName)
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+				if err := utils.AZACRCacheCreate(*registry.Name, ruleName, imageURL, imageName); err != nil {
+					if strings.Contains(err.Error(), "not found") {
+						utils.Logf("ACR cache rule %q not found, retrying...", ruleName)
+						return false, nil
+					}
+					return false, err
+				}
+				return true, nil
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			podTemplate := createPodPullingFromACR(imageName, acrImageURL, os)
