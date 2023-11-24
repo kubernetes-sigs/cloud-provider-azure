@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/golang/mock/gomock"
@@ -77,7 +78,9 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az = &Cloud{
 		Config: Config{
 			AzureAuthConfig: config.AzureAuthConfig{
-				TenantID:       "tenant",
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					TenantID: "tenant",
+				},
 				SubscriptionID: "subscription",
 			},
 			ResourceGroup:                            "rg",

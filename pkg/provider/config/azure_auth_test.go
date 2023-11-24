@@ -27,31 +27,40 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 var (
 	CrossTenantNetworkResourceNegativeConfig = []*AzureAuthConfig{
 		{
-			TenantID:        "TenantID",
-			AADClientID:     "AADClientID",
-			AADClientSecret: "AADClientSecret",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				TenantID:        "TenantID",
+				AADClientID:     "AADClientID",
+				AADClientSecret: "AADClientSecret",
+			},
 		},
 		{
-			TenantID:                      "TenantID",
-			AADClientID:                   "AADClientID",
-			AADClientSecret:               "AADClientSecret",
-			NetworkResourceTenantID:       "NetworkResourceTenantID",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+
+				TenantID:                "TenantID",
+				AADClientID:             "AADClientID",
+				AADClientSecret:         "AADClientSecret",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 			IdentitySystem:                consts.ADFSIdentitySystem,
 		},
 		{
-			TenantID:                      "TenantID",
-			AADClientID:                   "AADClientID",
-			AADClientSecret:               "AADClientSecret",
-			NetworkResourceTenantID:       "NetworkResourceTenantID",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+
+				TenantID:                    "TenantID",
+				AADClientID:                 "AADClientID",
+				AADClientSecret:             "AADClientSecret",
+				NetworkResourceTenantID:     "NetworkResourceTenantID",
+				UseManagedIdentityExtension: true,
+			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-			UseManagedIdentityExtension:   true,
 		},
 	}
 
@@ -64,17 +73,21 @@ var (
 func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 	configs := []*AzureAuthConfig{
 		{
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
+			},
 		},
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
-			TenantID:                    "TenantID",
-			AADClientID:                 "AADClientID",
-			AADClientSecret:             "AADClientSecret",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
+				TenantID:                    "TenantID",
+				AADClientID:                 "AADClientID",
+				AADClientSecret:             "AADClientSecret",
+			},
 		},
 	}
 	env := &azure.PublicCloud
@@ -113,17 +126,21 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 func TestGetServicePrincipalTokenFromMSIWithIdentityResourceID(t *testing.T) {
 	configs := []*AzureAuthConfig{
 		{
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+			},
 		},
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
-			TenantID:                    "TenantID",
-			AADClientID:                 "AADClientID",
-			AADClientSecret:             "AADClientSecret",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+				TenantID:                    "TenantID",
+				AADClientID:                 "AADClientID",
+				AADClientSecret:             "AADClientSecret",
+			},
 		},
 	}
 	env := &azure.PublicCloud
@@ -162,15 +179,19 @@ func TestGetServicePrincipalTokenFromMSIWithIdentityResourceID(t *testing.T) {
 func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 	configs := []*AzureAuthConfig{
 		{
-			UseManagedIdentityExtension: true,
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+			},
 		},
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
-			UseManagedIdentityExtension: true,
-			TenantID:                    "TenantID",
-			AADClientID:                 "AADClientID",
-			AADClientSecret:             "AADClientSecret",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				TenantID:                    "TenantID",
+				AADClientID:                 "AADClientID",
+				AADClientSecret:             "AADClientSecret",
+			},
 		},
 	}
 	env := &azure.PublicCloud
@@ -208,10 +229,12 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 
 func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:                              "TenantID",
-		AADClientID:                           "AADClientID",
-		AADFederatedTokenFile:                 "/tmp/federated-token",
-		UseFederatedWorkloadIdentityExtension: true,
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:                              "TenantID",
+			AADClientID:                           "AADClientID",
+			AADFederatedTokenFile:                 "/tmp/federated-token",
+			UseFederatedWorkloadIdentityExtension: true,
+		},
 	}
 	env := &azure.PublicCloud
 
@@ -240,9 +263,11 @@ func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
 
 func TestGetServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:        "TenantID",
-		AADClientID:     "AADClientID",
-		AADClientSecret: "AADClientSecret",
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:        "TenantID",
+			AADClientID:     "AADClientID",
+			AADClientSecret: "AADClientSecret",
+		},
 	}
 	env := &azure.PublicCloud
 
@@ -260,10 +285,12 @@ func TestGetServicePrincipalToken(t *testing.T) {
 
 func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:                      "TenantID",
-		AADClientID:                   "AADClientID",
-		AADClientSecret:               "AADClientSecret",
-		NetworkResourceTenantID:       "NetworkResourceTenantID",
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:                "TenantID",
+			AADClientID:             "AADClientID",
+			AADClientSecret:         "AADClientSecret",
+			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
 	env := &azure.PublicCloud
@@ -282,10 +309,12 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 
 func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:              "TenantID",
-		AADClientID:           "AADClientID",
-		AADClientCertPath:     "./testdata/test.pfx",
-		AADClientCertPassword: "id",
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:              "TenantID",
+			AADClientID:           "AADClientID",
+			AADClientCertPath:     "./testdata/test.pfx",
+			AADClientCertPassword: "id",
+		},
 	}
 	env := &azure.PublicCloud
 	token, err := GetServicePrincipalToken(config, env, "")
@@ -312,10 +341,12 @@ func TestGetMultiTenantServicePrincipalTokenNegative(t *testing.T) {
 
 func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:                      "TenantID",
-		AADClientID:                   "AADClientID",
-		AADClientSecret:               "AADClientSecret",
-		NetworkResourceTenantID:       "NetworkResourceTenantID",
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:                "TenantID",
+			AADClientID:             "AADClientID",
+			AADClientSecret:         "AADClientSecret",
+			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
 	env := &azure.PublicCloud
@@ -409,10 +440,12 @@ func TestAzureStackOverrides(t *testing.T) {
 
 func TestUsesNetworkResourceInDifferentTenant(t *testing.T) {
 	config := &AzureAuthConfig{
-		TenantID:                      "TenantID",
-		AADClientID:                   "AADClientID",
-		AADClientSecret:               "AADClientSecret",
-		NetworkResourceTenantID:       "NetworkTenantID",
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			TenantID:                "TenantID",
+			AADClientID:             "AADClientID",
+			AADClientSecret:         "AADClientSecret",
+			NetworkResourceTenantID: "NetworkTenantID",
+		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
 
