@@ -1113,12 +1113,17 @@ func (az *Cloud) Instances() (cloudprovider.Instances, bool) {
 	return az, true
 }
 
-// InstancesV2 returns an instancesV2 interface. Also returns true if the interface is supported, false otherwise.
+// InstancesV2 is an implementation for instances and should only be implemented by external cloud providers.
+// Implementing InstancesV2 is behaviorally identical to Instances but is optimized to significantly reduce
+// API calls to the cloud provider when registering and syncing nodes. Implementation of this interface will
+// disable calls to the Zones interface. Also returns true if the interface is supported, false otherwise.
 func (az *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
 	return az, true
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
+// DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
+// This interface will not be called if InstancesV2 is enabled.
 func (az *Cloud) Zones() (cloudprovider.Zones, bool) {
 	if az.isStackCloud() {
 		// Azure stack does not support zones at this point

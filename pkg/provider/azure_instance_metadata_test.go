@@ -17,6 +17,10 @@ limitations under the License.
 package provider
 
 import (
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -84,6 +88,62 @@ func TestFillNetInterfacePublicIPs(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			fillNetInterfacePublicIPs(tc.publicIPs, tc.netInterface)
 			assert.Equal(t, tc.expectedNetInterface, tc.netInterface)
+		})
+	}
+}
+
+func TestGetPlatformSubFaultDomain(t *testing.T) {
+	for _, testCase := range []struct {
+		description string
+		nilCompute  bool
+		expectedErr error
+	}{
+		{
+			description: "GetPlatformSubFaultDomain should parse the correct platformSubFaultDomain",
+		},
+		{
+			description: "GetPlatformSubFaultDomain should report an error if the compute is nil",
+			nilCompute:  true,
+			expectedErr: errors.New("failure of getting compute information from instance metadata"),
+		},
+	} {
+		t.Run(testCase.description, func(t *testing.T) {
+			cloud := &Cloud{
+				Config: Config{
+					Location:            "eastus",
+					UseInstanceMetadata: true,
+				},
+			}
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
+			}
+
+			respString := `{"compute":{"zone":"1", "platformFaultDomain":"1", "location":"westus", "platformSubFaultDomain": "2"}}`
+			if testCase.nilCompute {
+				respString = "{}"
+			}
+			mux := http.NewServeMux()
+			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, respString)
+			}))
+			go func() {
+				_ = http.Serve(listener, mux)
+			}()
+			defer listener.Close()
+
+			cloud.Metadata, err = NewInstanceMetadataService("http://" + listener.Addr().String() + "/")
+			if err != nil {
+				t.Errorf("Test [%s] unexpected error: %v", testCase.description, err)
+			}
+
+			fd, err := cloud.GetPlatformSubFaultDomain()
+			if testCase.expectedErr != nil {
+				assert.Equal(t, testCase.expectedErr, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, "2", fd)
+			}
 		})
 	}
 }

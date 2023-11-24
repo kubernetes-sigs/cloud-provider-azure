@@ -37,6 +37,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
 
+var _ cloudprovider.Routes = (*Cloud)(nil)
+
 // routeOperation defines the allowed operations for route updating.
 type routeOperation string
 
@@ -275,6 +277,7 @@ func (d *delayedRouteUpdater) addOperation(operation batchOperation) batchOperat
 func (d *delayedRouteUpdater) removeOperation(name string) {}
 
 // ListRoutes lists all managed routes that belong to the specified clusterName
+// implements cloudprovider.Routes.ListRoutes
 func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
 	klog.V(10).Infof("ListRoutes: START clusterName=%q", clusterName)
 	routeTable, existsRouteTable, err := az.getRouteTable(azcache.CacheReadTypeDefault)
@@ -367,6 +370,7 @@ func (az *Cloud) createRouteTable() error {
 // CreateRoute creates the described managed route
 // route.Name will be ignored, although the cloud-provider may use nameHint
 // to create a more user-meaningful name.
+// implements cloudprovider.Routes.CreateRoute
 func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint string, kubeRoute *cloudprovider.Route) error {
 	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
@@ -442,6 +446,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
+// implements cloudprovider.Routes.DeleteRoute
 func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
 	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
