@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
@@ -34,6 +33,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -165,20 +165,17 @@ func (az *Cloud) GetStorageAccesskeyFromServiceAccountToken(ctx context.Context,
 		return "", fmt.Errorf("failed to create client assertion credential, error: %w", err)
 	}
 
-	clientFactory, err := armstorage.NewClientFactory(subsID, cred, nil)
+	client, err := accountclient.New(subsID, cred, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create storage client factory, error: %w", err)
+		return "", fmt.Errorf("failed to create storage account client, error: %w", err)
 	}
 
-	result, err := clientFactory.NewAccountsClient().ListKeys(ctx, rgName, accountName, &armstorage.AccountsClientListKeysOptions{Expand: nil})
+	keys, err := client.ListKeys(ctx, rgName, accountName)
 	if err != nil {
 		return "", fmt.Errorf("failed to list keys, error: %w", err)
 	}
-	if result.Keys == nil {
-		return "", fmt.Errorf("failed to list keys, empty keys")
-	}
 
-	for _, k := range result.Keys {
+	for _, k := range keys {
 		if k != nil && k.Value != nil && *k.Value != "" {
 			v := *k.Value
 			if ind := strings.LastIndex(v, " "); ind >= 0 {
@@ -689,16 +686,11 @@ func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourc
 
 // AddStorageAccountTags add tags to storage account
 func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) *retry.Error {
-	// add lock to avoid concurrent update on the cache
-	az.lockMap.LockEntry(account)
-	defer az.lockMap.UnlockEntry(account)
-
 	result, rerr := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
 	if rerr != nil {
 		return rerr
 	}
 
-	originalLen := len(result.Tags)
 	newTags := result.Tags
 	if newTags == nil {
 		newTags = make(map[string]*string)
@@ -709,11 +701,10 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 		newTags[k] = v
 	}
 
-	if len(newTags) > originalLen {
+	if len(newTags) > len(result.Tags) {
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := storage.AccountUpdateParameters{Tags: newTags}
-		klog.V(2).Infof("update storage account(%s) with tags(%+v)", account, newTags)
 		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
 	}
 	return nil
@@ -721,10 +712,6 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 
 // RemoveStorageAccountTag remove tag from storage account
 func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) *retry.Error {
-	// add lock to avoid concurrent update on the cache
-	az.lockMap.LockEntry(account)
-	defer az.lockMap.UnlockEntry(account)
-
 	result, rerr := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
 	if rerr != nil {
 		return rerr
