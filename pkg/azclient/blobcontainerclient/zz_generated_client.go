@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armstorage.BlobContainersClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,12 +41,16 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the BlobContainer
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armstorage.BlobContainer, rerr error) {
 
+	ctx = utils.ContextWithClientName(ctx, "BlobContainersClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.BlobContainersClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
 	if err != nil {
 		return nil, err

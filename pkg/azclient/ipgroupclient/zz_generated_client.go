@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armnetwork.IPGroupsClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,7 +41,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the IPGroup
@@ -49,6 +50,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	if expand != nil {
 		ops = &armnetwork.IPGroupsClientGetOptions{Expand: expand}
 	}
+	ctx = utils.ContextWithClientName(ctx, "IPGroupsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.IPGroupsClient.Get(ctx, resourceGroupName, resourceName, ops)
 	if err != nil {
 		return nil, err
@@ -59,6 +64,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // CreateOrUpdate creates or updates a IPGroup.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.IPGroup) (*armnetwork.IPGroup, error) {
+	ctx = utils.ContextWithClientName(ctx, "IPGroupsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.IPGroupsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -71,12 +80,20 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 
 // Delete deletes a IPGroup by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "IPGroupsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 
 // List gets a list of IPGroup in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.IPGroup, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "IPGroupsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.IPGroupsClient.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armprivatedns.PrivateZonesClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,12 +41,16 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the PrivateZone
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armprivatedns.PrivateZone, rerr error) {
 
+	ctx = utils.ContextWithClientName(ctx, "PrivateZonesClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.PrivateZonesClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -56,6 +61,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // CreateOrUpdate creates or updates a PrivateZone.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armprivatedns.PrivateZone) (*armprivatedns.PrivateZone, error) {
+	ctx = utils.ContextWithClientName(ctx, "PrivateZonesClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.PrivateZonesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
