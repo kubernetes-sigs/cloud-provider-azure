@@ -2132,6 +2132,8 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb
 }
 
 func (az *Cloud) reconcileLBProbes(lb *network.LoadBalancer, service *v1.Service, serviceName string, wantLb bool, expectedProbes []network.Probe) bool {
+	expectedProbes, _ = az.keepSharedProbe(service, *lb, expectedProbes, wantLb)
+
 	// remove unwanted probes
 	dirtyProbes := false
 	var updatedProbes []network.Probe
