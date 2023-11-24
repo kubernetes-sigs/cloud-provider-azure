@@ -38,17 +38,17 @@ type FileLoaderConfig struct {
 // * file   : The values are read from local cloud-config file.
 // * secret : The values from secret would override all configures from local cloud-config file.
 // * merge  : The values from secret would override only configurations that are explicitly set in the secret. This is the default value.
-type cloudConfigType string
+type CloudConfigType string
 
 const (
-	CloudConfigTypeFile   cloudConfigType = "file"
-	CloudConfigTypeSecret cloudConfigType = "secret"
-	CloudConfigTypeMerge  cloudConfigType = "merge"
+	CloudConfigTypeFile   CloudConfigType = "file"
+	CloudConfigTypeSecret CloudConfigType = "secret"
+	CloudConfigTypeMerge  CloudConfigType = "merge"
 )
 
 type ConfigMergeConfig struct {
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
-	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
+	CloudConfigType CloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
 }
 
 func Load[Type any](ctx context.Context, secretLoaderConfig *K8sSecretLoaderConfig, fileLoaderConfig *FileLoaderConfig) (*Type, error) {
