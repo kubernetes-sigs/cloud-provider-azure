@@ -291,3 +291,42 @@ func findProbe(probes []network.Probe, probe network.Probe) bool {
 	}
 	return false
 }
+
+// keepSharedProbe ensures the shared probe will not be removed if there are more than 1 service referencing it.
+func (az *Cloud) keepSharedProbe(
+	service *v1.Service,
+	lb network.LoadBalancer,
+	expectedProbes []network.Probe,
+	wantLB bool,
+) ([]network.Probe, error) {
+	var shouldConsiderRemoveSharedProbe bool
+	if !wantLB {
+		shouldConsiderRemoveSharedProbe = true
+	}
+
+	if lb.LoadBalancerPropertiesFormat != nil && lb.Probes != nil {
+		for _, probe := range *lb.Probes {
+			if strings.EqualFold(pointer.StringDeref(probe.Name, ""), consts.SharedProbeName) {
+				if !az.useSharedLoadBalancerHealthProbeMode() {
+					shouldConsiderRemoveSharedProbe = true
+				}
+				if probe.ProbePropertiesFormat != nil && probe.LoadBalancingRules != nil {
+					for _, rule := range *probe.LoadBalancingRules {
+						ruleName, err := getLastSegment(*rule.ID, "/")
+						if err != nil {
+							klog.Errorf("failed to parse load balancing rule name %s attached to health probe %s", *rule.ID, *probe.ID)
+							return []network.Probe{}, err
+						}
+						if !az.serviceOwnsRule(service, ruleName) && shouldConsiderRemoveSharedProbe {
+							klog.V(4).Infof("there are load balancing rule %s of another service referencing the health probe %s, so the health probe should not be removed", *rule.ID, *probe.ID)
+							sharedProbe := az.buildClusterServiceSharedProbe()
+							expectedProbes = append(expectedProbes, *sharedProbe)
+							return expectedProbes, nil
+						}
+					}
+				}
+			}
+		}
+	}
+	return expectedProbes, nil
+}

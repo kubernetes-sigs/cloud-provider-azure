@@ -118,7 +118,7 @@ function create_workload_cluster() {
   echo "Get kubeconfig and store it locally."
   kubectl --context=kind-"${MANAGEMENT_CLUSTER_NAME}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json | jq -r .data.value | base64 --decode > ./"${CLUSTER_NAME}"-kubeconfig
   echo "Waiting for the control plane nodes to show up"
-  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes | grep master; do sleep 1; done"
+  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes | grep -E 'master|control-plane'; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the control plane nodes"
     return 124
