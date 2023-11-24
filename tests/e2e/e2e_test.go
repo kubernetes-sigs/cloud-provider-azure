@@ -42,8 +42,6 @@ const (
 	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
 	clusterProvisioningToolCAPZ = "capz"
 	testMultiSLB                = "TEST_MULTI_SLB"
-	//nolint:gosec // G101 ignore this!
-	testOOTCredentialProvider = "TEST_ACR_CREDENTIAL_PROVIDER"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -82,10 +80,6 @@ func TestAzureTest(t *testing.T) {
 		multiSLBFilter = "!Non-Multi-Slb"
 	}
 	labelFilters = append(labelFilters, multiSLBFilter)
-
-	if !strings.EqualFold(os.Getenv(testOOTCredentialProvider), utils.TrueValue) {
-		labelFilters = append(labelFilters, "!OOT-Credential")
-	}
 
 	suiteConfig.LabelFilter = strings.Join(labelFilters, " && ")
 
