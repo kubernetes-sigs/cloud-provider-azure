@@ -18,46 +18,35 @@ package configloader
 
 import (
 	"context"
-	"io"
 	"os"
 )
 
 type FileLoader[Type any] struct {
 	filePath string
-	ConfigLoader[Type]
+	configLoader[Type]
 	decoderFactory[Type]
 }
 
-func NewFileLoader[Type any](filePath string, loader ConfigLoader[Type], decoder decoderFactory[Type]) ConfigLoader[Type] {
+// newFileLoader creates a FileLoader with the specified file path and loader.
+// decoderFactory is a function that creates a new loader from the content of the file. it should never be nil.
+func newFileLoader[Type any](filePath string, loader configLoader[Type], decoder decoderFactory[Type]) configLoader[Type] {
 	return &FileLoader[Type]{
 		filePath:       filePath,
-		ConfigLoader:   loader,
+		configLoader:   loader,
 		decoderFactory: decoder,
 	}
 }
 
 func (f *FileLoader[Type]) Load(ctx context.Context) (*Type, error) {
-	if f.ConfigLoader == nil {
-		f.ConfigLoader = NewEmptyLoader[Type](nil)
+	if f.configLoader == nil {
+		f.configLoader = newEmptyLoader[Type](nil)
 	}
 
-	var content []byte
-	if err := func() error {
-		file, err := os.Open(f.filePath)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		content, err = io.ReadAll(file)
-		if err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
+	content, err := os.ReadFile(f.filePath)
+	if err != nil {
 		return nil, err
 	}
 
-	loader := f.decoderFactory(content, f.ConfigLoader)
+	loader := f.decoderFactory(content, f.configLoader)
 	return loader.Load(ctx)
 }

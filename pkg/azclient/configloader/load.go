@@ -18,13 +18,12 @@ package configloader
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	clientset "k8s.io/client-go/kubernetes"
 )
 
-type decoderFactory[Type any] func(content []byte, loader ConfigLoader[Type]) ConfigLoader[Type]
+type decoderFactory[Type any] func(content []byte, loader configLoader[Type]) configLoader[Type]
 type K8sSecretLoaderConfig struct {
 	K8sSecretConfig
 	KubeClient clientset.Interface
@@ -52,31 +51,28 @@ type ConfigMergeConfig struct {
 }
 
 func Load[Type any](ctx context.Context, secretLoaderConfig *K8sSecretLoaderConfig, fileLoaderConfig *FileLoaderConfig) (*Type, error) {
-
-	if fileLoaderConfig == nil {
-		return nil, fmt.Errorf("config file load config is nil")
+	configloader := newEmptyLoader[Type](nil)
+	var loadConfig *ConfigMergeConfig
+	var err error
+	if fileLoaderConfig != nil {
+		loadConfigloader := newEmptyLoader[ConfigMergeConfig](&ConfigMergeConfig{CloudConfigType: CloudConfigTypeMerge})
+		loadConfigloader = newFileLoader(fileLoaderConfig.FilePath, loadConfigloader, newYamlByteLoader[ConfigMergeConfig])
+		//by default the config load type  is merge
+		loadConfig, err = loadConfigloader.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		configloader = newFileLoader(fileLoaderConfig.FilePath, nil, newYamlByteLoader[Type])
+		if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeFile)) {
+			return configloader.Load(ctx)
+		}
 	}
-	//by default the config load type  is merge
-	loadConfigloader := NewEmptyLoader[ConfigMergeConfig](&ConfigMergeConfig{CloudConfigType: CloudConfigTypeMerge})
-	loadConfigloader = NewFileLoader(fileLoaderConfig.FilePath, loadConfigloader, NewYamlByteLoader[ConfigMergeConfig])
-	loadConfig, err := loadConfigloader.Load(ctx)
-	if err != nil {
-		return nil, err
+	if secretLoaderConfig != nil {
+		if loadConfig != nil && strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeSecret)) {
+			configloader = newK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, nil, newYamlByteLoader[Type])
+		} else {
+			configloader = newK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, configloader, newYamlByteLoader[Type])
+		}
 	}
-
-	configloader := NewFileLoader(fileLoaderConfig.FilePath, nil, NewYamlByteLoader[Type])
-	if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeFile)) {
-		return configloader.Load(ctx)
-	}
-
-	if secretLoaderConfig == nil {
-		return nil, fmt.Errorf("secret load config is nil")
-	}
-
-	if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeSecret)) {
-		configloader = NewK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, nil, NewYamlByteLoader[Type])
-		return configloader.Load(ctx)
-	}
-	configloader = NewK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, configloader, NewYamlByteLoader[Type])
 	return configloader.Load(ctx)
 }
