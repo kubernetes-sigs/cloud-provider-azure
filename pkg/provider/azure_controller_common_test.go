@@ -294,7 +294,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				}()
 			}
 
-			lun, err := testCloud.AttachDisk(ctx, true, test.diskName, diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk)
+			lun, err := testCloud.AttachDisk(ctx, true, test.diskName, diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk, nil)
 
 			assert.Equal(t, tt.expectedLun, lun, "TestCase[%d]: %s", i, tt.desc)
 			assert.Equal(t, tt.expectErr, err != nil, "TestCase[%d]: %s, return error: %v", i, tt.desc, err)
@@ -515,7 +515,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
-		lun, err := common.AttachDisk(ctx, true, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk)
+		lun, err := common.AttachDisk(ctx, true, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk, nil)
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 	}
@@ -711,17 +711,28 @@ func TestSetDiskLun(t *testing.T) {
 		nodeName        string
 		diskURI         string
 		diskMap         map[string]*AttachDiskOptions
+		occupiedLuns    []int
 		isDataDisksFull bool
 		expectedErr     bool
 		expectedLun     int32
 	}{
 		{
-			desc:        "the minimal LUN shall be returned if there's enough room for extra disks",
-			nodeName:    "nodeName",
-			diskURI:     "diskURI",
-			diskMap:     map[string]*AttachDiskOptions{"diskURI": {}},
-			expectedLun: 3,
-			expectedErr: false,
+			desc:         "the minimal LUN shall be returned if there's enough room for extra disks",
+			nodeName:     "nodeName",
+			diskURI:      "diskURI",
+			occupiedLuns: []int{0, 1, 2},
+			diskMap:      map[string]*AttachDiskOptions{"diskURI": {}},
+			expectedLun:  3,
+			expectedErr:  false,
+		},
+		{
+			desc:         "occupied LUNs shall be skipped",
+			nodeName:     "nodeName",
+			diskURI:      "diskURI",
+			occupiedLuns: []int{0, 1, 2, 3},
+			diskMap:      map[string]*AttachDiskOptions{"diskURI": {}},
+			expectedLun:  4,
+			expectedErr:  false,
 		},
 		{
 			desc:            "LUN -1 and error shall be returned if there's no available LUN",
@@ -755,7 +766,7 @@ func TestSetDiskLun(t *testing.T) {
 			mockVMsClient.EXPECT().Get(gomock.Any(), testCloud.ResourceGroup, *vm.Name, gomock.Any()).Return(vm, nil).AnyTimes()
 		}
 
-		lun, err := common.SetDiskLun(types.NodeName(test.nodeName), test.diskURI, test.diskMap)
+		lun, err := common.SetDiskLun(types.NodeName(test.nodeName), test.diskURI, test.diskMap, test.occupiedLuns)
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 	}
