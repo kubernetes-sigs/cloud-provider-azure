@@ -29,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	cloudprovider "k8s.io/cloud-provider"
 	cloudvolume "k8s.io/cloud-provider/volume"
 	volumehelpers "k8s.io/cloud-provider/volume/helpers"
 	"k8s.io/klog/v2"
@@ -36,6 +37,8 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
+
+var _ cloudprovider.PVLabeler = (*Cloud)(nil)
 
 // ManagedDiskController : managed disk controller struct
 type ManagedDiskController struct {
@@ -400,6 +403,7 @@ func getInfoFromDiskURI(diskURI string) (string, string, error) {
 	return fields[4], fields[2], nil
 }
 
+// PVLabeler is an abstract, pluggable interface for fetching labels for volumes
 // GetLabelsForVolume implements PVLabeler.GetLabelsForVolume
 func (c *Cloud) GetLabelsForVolume(ctx context.Context, pv *v1.PersistentVolume) (map[string]string, error) {
 	// Ignore if not AzureDisk.

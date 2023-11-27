@@ -51,6 +51,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
+var _ cloudprovider.LoadBalancer = (*Cloud)(nil)
+
 // Since public IP is not a part of the load balancer on Azure,
 // there is a chance that we could orphan public IP resources while we delete the load balancer (kubernetes/kubernetes#80571).
 // We need to make sure the existence of the load balancer depends on the load balancer resource and public IP resource on Azure.
@@ -78,8 +80,11 @@ func (az *Cloud) existsPip(clusterName string, service *v1.Service) bool {
 	return true
 }
 
-// GetLoadBalancer returns whether the specified load balancer and its components exist, and
+// GetLoadBalancer returns whether the specified load balancer exists, and
 // if so, what its status is.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager.
+// TODO: Break this up into different interfaces (LB, etc) when we have more than one type of service
 func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	existingLBs, err := az.ListLB(service)
 	if err != nil {
@@ -181,6 +186,15 @@ func (az *Cloud) reconcileService(ctx context.Context, clusterName string, servi
 }
 
 // EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager.
+//
+// Implementations may return a (possibly wrapped) api.RetryError to enforce
+// backing off at a fixed duration. This can be used for cases like when the
+// load balancer is not ready yet (e.g., it is still being provisioned) and
+// polling at a fixed rate is preferred over backing off exponentially in
+// order to minimize latency.
 func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	// When a client updates the internal load balancer annotation,
 	// the service may be switched from an internal LB to a public one, or vice versa.
@@ -229,6 +243,9 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
@@ -281,6 +298,8 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // This construction is useful because many cloud providers' load balancers
 // have multiple underlying components, meaning a Get could say that the LB
 // doesn't exist even if some part of it is still laying around.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
@@ -333,7 +352,8 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 	return nil
 }
 
-// GetLoadBalancerName returns the LoadBalancer name.
+// GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
+// *v1.Service parameter as read-only and not modify it.
 func (az *Cloud) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
 	return cloudprovider.DefaultLoadBalancerName(service)
 }
