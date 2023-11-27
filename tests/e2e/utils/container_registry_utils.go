@@ -52,10 +52,9 @@ func (tc *AzureTestClient) CreateContainerRegistry() (acr.Registry, error) {
 	}
 
 	if err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		Logf("One try")
 		_, err := acrClient.Get(ctx, rgName, acrName)
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not be found") {
 				return false, nil
 			}
 			return false, err
@@ -138,7 +137,7 @@ func AZACRCacheCreate(acrName, ruleName, imageURL, imageName string) (err error)
 		"-n", ruleName,
 		"-s", imageURL,
 		"-t", imageName)
-	if output, err := cmd.Output(); err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("az acr cache create failed with output %s\n error: %w", string(output), err)
 	}
 	Logf("az acr cache create success.")
