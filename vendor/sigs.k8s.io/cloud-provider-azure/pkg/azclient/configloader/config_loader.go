@@ -20,6 +20,6 @@ import (
 	"context"
 )
 
-type ConfigLoader[Type any] interface {
+type configLoader[Type any] interface {
 	Load(ctx context.Context) (*Type, error)
 }

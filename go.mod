@@ -40,7 +40,7 @@ require (
 	k8s.io/kubelet v0.28.4
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20231026070501-3da8dcab4c0d
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231114011710-4192b264611a
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231127051539-860b1f095d2b
 	sigs.k8s.io/yaml v1.4.0
 )
 

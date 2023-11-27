@@ -1465,7 +1465,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231114011710-4192b264611a
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231127051539-860b1f095d2b
 ## explicit; go 1.20
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 # sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd

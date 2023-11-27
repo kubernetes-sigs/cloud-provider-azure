@@ -25,9 +25,9 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 )
 
-type K8sSecretLoader[Type any] struct {
+type k8sSecretLoader[Type any] struct {
 	KubeClient clientset.Interface
-	ConfigLoader[Type]
+	configLoader[Type]
 	*K8sSecretConfig
 	decoderFactory[Type]
 }
@@ -50,7 +50,10 @@ type K8sSecretConfig struct {
 	CloudConfigKey  string `json:"cloudConfigKey,omitempty" yaml:"cloudConfigKey,omitempty"`
 }
 
-func NewK8sSecretLoader[Type any](config *K8sSecretConfig, KubeClient kubernetes.Interface, loader ConfigLoader[Type], decoder decoderFactory[Type]) ConfigLoader[Type] {
+// newK8sSecretLoader returns a config loader which load config from k8s secret.
+// If KubeClient is nil, it will return nil.
+// decoderFactory is a function that creates a new loader from the content of the secret. it should never be nil.
+func newK8sSecretLoader[Type any](config *K8sSecretConfig, KubeClient kubernetes.Interface, loader configLoader[Type], decoder decoderFactory[Type]) configLoader[Type] {
 	if KubeClient == nil {
 		return nil
 	}
@@ -66,17 +69,17 @@ func NewK8sSecretLoader[Type any](config *K8sSecretConfig, KubeClient kubernetes
 	if config.CloudConfigKey == "" {
 		config.CloudConfigKey = DefaultCloudProviderConfigSecKey
 	}
-	return &K8sSecretLoader[Type]{
-		ConfigLoader:    loader,
+	return &k8sSecretLoader[Type]{
+		configLoader:    loader,
 		K8sSecretConfig: config,
 		decoderFactory:  decoder,
 		KubeClient:      KubeClient,
 	}
 }
 
-func (k *K8sSecretLoader[Type]) Load(ctx context.Context) (*Type, error) {
-	if k.ConfigLoader == nil {
-		k.ConfigLoader = NewEmptyLoader[Type](nil)
+func (k *k8sSecretLoader[Type]) Load(ctx context.Context) (*Type, error) {
+	if k.configLoader == nil {
+		k.configLoader = newEmptyLoader[Type](nil)
 	}
 
 	if k.KubeClient == nil {
@@ -95,6 +98,6 @@ func (k *K8sSecretLoader[Type]) Load(ctx context.Context) (*Type, error) {
 	if content, ok = secret.Data[k.CloudConfigKey]; !ok {
 		return nil, ErrNoData
 	}
-	loader := k.decoderFactory([]byte(content), k.ConfigLoader)
+	loader := k.decoderFactory([]byte(content), k.configLoader)
 	return loader.Load(ctx)
 }
