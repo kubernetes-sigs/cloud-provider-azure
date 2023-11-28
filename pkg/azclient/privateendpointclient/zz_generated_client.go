@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armnetwork.PrivateEndpointsClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,7 +41,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the PrivateEndpoint
@@ -49,6 +50,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	if expand != nil {
 		ops = &armnetwork.PrivateEndpointsClientGetOptions{Expand: expand}
 	}
+	ctx = utils.ContextWithClientName(ctx, "PrivateEndpointsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.PrivateEndpointsClient.Get(ctx, resourceGroupName, resourceName, ops)
 	if err != nil {
 		return nil, err
@@ -59,6 +64,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // CreateOrUpdate creates or updates a PrivateEndpoint.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.PrivateEndpoint) (*armnetwork.PrivateEndpoint, error) {
+	ctx = utils.ContextWithClientName(ctx, "PrivateEndpointsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.PrivateEndpointsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err

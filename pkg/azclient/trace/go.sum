@@ -27,5 +27,7 @@ golang.org/x/text v0.13.0 h1:ablQoSUd0tRdKxZewP80B+BaqeKJuVhuRxj/dkrun3k=
 golang.org/x/text v0.13.0/go.mod h1:TvPlkZtksWOMsz7fbANvkp4WM8x/WCo/om8BMLbz+aE=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+k8s.io/klog/v2 v2.110.1 h1:U/Af64HJf7FcwMcXyKm2RPM22WZzyR7OSpYj5tg3cL0=
+k8s.io/klog/v2 v2.110.1/go.mod h1:YGtd1984u+GgbuZ7e08/yBuAfKLSO0+uR1Fhi6ExXjo=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230912015011-ab8ef32c681c h1:KG6xdrlGx+vSAyPkr3nJGrwABkXwBo+/sUY7MlMjCLw=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230912015011-ab8ef32c681c/go.mod h1:AZLaj6qF1cfYQx4qVh2SSmc0MeMlQ1UqusYWMCVB+p8=

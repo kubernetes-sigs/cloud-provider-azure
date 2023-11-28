@@ -32,6 +32,7 @@ type ClientGenConfig struct {
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
 type Client struct{
 	*{{.PackageAlias}}.{{.ClientName}}
+	subscriptionID string
 }
 `))
 
@@ -45,7 +46,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{ client, subscriptionID }, nil
 }
 `))
 
@@ -56,6 +57,10 @@ var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-
 {{ end }}
 // CreateOrUpdate creates or updates a {{$resource}}.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (*{{.PackageAlias}}.{{$resource}}, error) {
+	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName,{{with .SubResource}}parentResourceName,{{end}} resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -74,6 +79,10 @@ var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-f
 {{ end }}
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.{{.ClientName}}.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -93,6 +102,10 @@ var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func"
 {{ end }}
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.{{.ClientName}}.NewListPager(resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -112,6 +125,10 @@ var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-f
 {{ end }}
 // Delete deletes a {{$resource}} by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
@@ -128,6 +145,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 	if expand != nil {
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
 	}{{- end}}
+	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}}ops{{else}}nil{{end}} )
 	if err != nil {
 		return nil, err

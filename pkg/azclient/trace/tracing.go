@@ -27,6 +27,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
@@ -63,9 +64,17 @@ func NewOtlpSpan(ctx context.Context, spanName string, options *tracing.SpanOpti
 
 	ctx, span = tracer.Start(ctx, spanName, trace.WithAttributes(traceAttributes...))
 
+	var (
+		requestMethod  = "TODO"
+		resourceGroup  = "TODO"
+		subscriptionID = "TODO"
+		metricsSpan    = metrics.Default().NewSpan(spanName, requestMethod, resourceGroup, subscriptionID)
+	)
+
 	return ctx, tracing.NewSpan(
 		tracing.SpanImpl{
 			End: func() {
+				metricsSpan.Observe(context.Background(), nil)
 				span.End()
 			},
 			SetAttributes: func(attributes ...tracing.Attribute) {
