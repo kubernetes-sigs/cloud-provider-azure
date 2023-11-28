@@ -40,11 +40,11 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 		envStr = "AZUREPUBLICCLOUD"
 	}
 	return &azclient.AzureAuthConfig{
-			TenantID:        os.Getenv(TenantIDEnv),
 			AADClientID:     os.Getenv(ServicePrincipleIDEnv),
 			AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
 		}, &azclient.ARMClientConfig{
-			Cloud: envStr,
+			Cloud:    envStr,
+			TenantID: os.Getenv(TenantIDEnv),
 		}, &azclient.ClientFactoryConfig{
 			SubscriptionID: os.Getenv(SubscriptionEnv),
 		}, nil

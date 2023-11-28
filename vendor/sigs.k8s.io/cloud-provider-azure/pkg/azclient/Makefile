@@ -94,8 +94,15 @@ generatecode: build ## Generate client
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 --package-alias armnetwork --resource SecurityGroup --client-name SecurityGroupsClient --verbs get,createorupdate,delete,list --ratelimitkey securityGroupRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 --package-alias armnetwork --resource PrivateLinkService --client-name PrivateLinkServicesClient --verbs get,createorupdate,delete,list --expand --ratelimitkey privateLinkServiceRateLimit
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 --package-alias armnetwork --resource IPGroup --client-name IPGroupsClient --verbs get,createorupdate,delete,listbyrg --expand --ratelimitkey ipGroupRateLimit
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource Account --client-name AccountsClient --verbs listbyrg --expand
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns --package-alias armprivatedns --resource PrivateZone --client-name PrivateZonesClient  --verbs get,createorupdate --ratelimitkey privateDNSRateLimit
-##  $(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource FileShare --client-name FileSharesClient --expand
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource Account --subresource FileShare --client-name FileSharesClient --verbs get,createorupdate,delete,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource Account --subresource BlobContainer --client-name BlobContainersClient --verbs get,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage --package-alias armstorage --resource BlobServiceProperties --client-name BlobServicesClient
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault --package-alias armkeyvault --resource Vault --subresource Secret --client-name SecretsClient --verbs get,createorupdate,delete,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault --package-alias armkeyvault --resource Vault --client-name VaultsClient --verbs get,createorupdate,delete,list
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias armresources --resource Provider --client-name ProvidersClient 
+
 
 .PHONY: generateimpl
 generateimpl: build ## Generate client

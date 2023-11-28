@@ -82,7 +82,7 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 }
 
 func AZACRLogin() (err error) {
-	authConfig, _, _, err := azureAuthConfigFromTestProfile()
+	authConfig, armConfig, _, err := azureAuthConfigFromTestProfile()
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func AZACRLogin() (err error) {
 	cmd := exec.Command("az", "login", "--service-principal",
 		"--username", authConfig.AADClientID,
 		"--password", authConfig.AADClientSecret,
-		"--tenant", authConfig.TenantID)
+		"--tenant", armConfig.TenantID)
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("az failed to login with error: %w", err)
 	}

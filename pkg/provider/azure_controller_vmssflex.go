@@ -59,9 +59,8 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 				if *disk.Lun == opt.lun {
 					attached = true
 					break
-				} else {
-					return nil, fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diskURI, nodeName, *disk.Lun, opt.lun)
 				}
+				return nil, fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diskURI, nodeName, *disk.Lun, opt.lun)
 			}
 		}
 		if attached {
@@ -101,11 +100,11 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 		},
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%s)", nodeResourceGroup, vmName, diskMap)
+	klog.V(2).Infof("azureDisk - update: rg(%s) vm(%s) - attach disk list(%+v)", nodeResourceGroup, vmName, diskMap)
 
 	future, rerr := fs.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, *vm.Name, newVM, "attach_disk")
 	if rerr != nil {
-		klog.Errorf("azureDisk - attach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
+		klog.Errorf("azureDisk - attach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
 			disks := fs.filterNonExistingDisks(ctx, *newVM.VirtualMachineProperties.StorageProfile.DataDisks)
@@ -114,7 +113,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 		}
 	}
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%s) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
+	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - attach disk list(%+v) returned with %v", nodeResourceGroup, vmName, diskMap, rerr)
 	if rerr != nil {
 		return future, rerr.Error()
 	}
@@ -191,7 +190,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		}
 	}()
 
-	klog.V(2).Infof("azureDisk - update(%s): vm(%s) - detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
+	klog.V(2).Infof("azureDisk - update(%s): vm(%s) node(%s)- detach disk list(%s)", nodeResourceGroup, vmName, nodeName, diskMap)
 
 	result, rerr = fs.VirtualMachinesClient.Update(ctx, nodeResourceGroup, *vm.Name, newVM, "detach_disk")
 	if rerr != nil {

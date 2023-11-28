@@ -30,7 +30,7 @@ import (
 type fakePlugin struct {
 }
 
-func (f *fakePlugin) GetCredentials(ctx context.Context, image string, args []string) (*v1.CredentialProviderResponse, error) {
+func (f *fakePlugin) GetCredentials(_ context.Context, _ string, _ []string) (*v1.CredentialProviderResponse, error) {
 	return &v1.CredentialProviderResponse{
 		CacheKeyType:  v1.RegistryPluginCacheKeyType,
 		CacheDuration: &metav1.Duration{Duration: 10 * time.Minute},

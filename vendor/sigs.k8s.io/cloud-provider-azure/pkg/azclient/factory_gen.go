@@ -23,9 +23,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -34,15 +38,18 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
@@ -52,9 +59,13 @@ import (
 type ClientFactoryImpl struct {
 	*ClientFactoryConfig
 	cred                                    azcore.TokenCredential
+	accountclientInterface                  accountclient.Interface
 	availabilitysetclientInterface          availabilitysetclient.Interface
+	blobcontainerclientInterface            blobcontainerclient.Interface
+	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
 	diskclientInterface                     diskclient.Interface
+	fileshareclientInterface                fileshareclient.Interface
 	interfaceclientInterface                interfaceclient.Interface
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
@@ -62,22 +73,25 @@ type ClientFactoryImpl struct {
 	privateendpointclientInterface          privateendpointclient.Interface
 	privatelinkserviceclientInterface       privatelinkserviceclient.Interface
 	privatezoneclientInterface              privatezoneclient.Interface
+	providerclientInterface                 providerclient.Interface
 	publicipaddressclientInterface          publicipaddressclient.Interface
 	publicipprefixclientInterface           publicipprefixclient.Interface
 	registryclientInterface                 registryclient.Interface
 	resourcegroupclientInterface            resourcegroupclient.Interface
 	routetableclientInterface               routetableclient.Interface
+	secretclientInterface                   secretclient.Interface
 	securitygroupclientInterface            securitygroupclient.Interface
 	snapshotclientInterface                 snapshotclient.Interface
 	sshpublickeyresourceclientInterface     sshpublickeyresourceclient.Interface
 	subnetclientInterface                   subnetclient.Interface
+	vaultclientInterface                    vaultclient.Interface
 	virtualmachineclientInterface           virtualmachineclient.Interface
 	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
 	virtualnetworkclientInterface           virtualnetworkclient.Interface
 }
 
-func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory, error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory, error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -88,21 +102,71 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	var options *arm.ClientOptions
 	var err error
 
+	//initialize {accountclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient Account  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	var ratelimitOption *ratelimit.Config
+	var rateLimitPolicy policy.Policy
+
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	accountclientInterface, err := accountclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
 	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient AvailabilitySet  Interface availabilitySetRateLimit}
 	options, err = GetDefaultResourceClientOption(armConfig, config)
 	if err != nil {
 		return nil, err
 	}
-
-	var ratelimitOption *ratelimit.Config
-	var rateLimitPolicy policy.Policy
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("availabilitySetRateLimit")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {blobcontainerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient Account BlobContainer Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	blobcontainerclientInterface, err := blobcontainerclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {blobservicepropertiesclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient BlobServiceProperties  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	blobservicepropertiesclientInterface, err := blobservicepropertiesclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +181,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	deploymentclientInterface, err := deploymentclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -134,7 +203,27 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {fileshareclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient Account FileShare Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	fileshareclientInterface, err := fileshareclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +238,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -166,6 +260,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	ipgroupclientInterface, err := ipgroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -181,6 +280,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	loadbalancerclientInterface, err := loadbalancerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -198,6 +302,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	managedclusterclientInterface, err := managedclusterclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -213,6 +322,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	privateendpointclientInterface, err := privateendpointclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -230,6 +344,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	privatelinkserviceclientInterface, err := privatelinkserviceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -246,7 +365,27 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	privatezoneclientInterface, err := privatezoneclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {providerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient Provider  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	providerclientInterface, err := providerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +401,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	publicipaddressclientInterface, err := publicipaddressclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -272,7 +416,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	publicipprefixclientInterface, err := publicipprefixclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -283,7 +431,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	registryclientInterface, err := registryclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -294,7 +446,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	resourcegroupclientInterface, err := resourcegroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -311,7 +467,27 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	routetableclientInterface, err := routetableclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {secretclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient Vault Secret Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	secretclientInterface, err := secretclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +502,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	securitygroupclientInterface, err := securitygroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -343,6 +524,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	snapshotclientInterface, err := snapshotclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -353,7 +539,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	sshpublickeyresourceclientInterface, err := sshpublickeyresourceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -370,7 +560,27 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize {vaultclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient Vault  Interface }
+	options, err = GetDefaultResourceClientOption(armConfig, config)
+	if err != nil {
+		return nil, err
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	vaultclientInterface, err := vaultclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +595,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	virtualmachineclientInterface, err := virtualmachineclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -402,6 +617,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualmachinescalesetclientInterface, err := virtualmachinescalesetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -412,7 +632,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualmachinescalesetvmclientInterface, err := virtualmachinescalesetvmclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -423,7 +647,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualnetworkclientInterface, err := virtualnetworkclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -431,9 +659,13 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	return &ClientFactoryImpl{
 		ClientFactoryConfig: config,
-		cred:                cred, availabilitysetclientInterface: availabilitysetclientInterface,
+		cred:                cred, accountclientInterface: accountclientInterface,
+		availabilitysetclientInterface:          availabilitysetclientInterface,
+		blobcontainerclientInterface:            blobcontainerclientInterface,
+		blobservicepropertiesclientInterface:    blobservicepropertiesclientInterface,
 		deploymentclientInterface:               deploymentclientInterface,
 		diskclientInterface:                     diskclientInterface,
+		fileshareclientInterface:                fileshareclientInterface,
 		interfaceclientInterface:                interfaceclientInterface,
 		ipgroupclientInterface:                  ipgroupclientInterface,
 		loadbalancerclientInterface:             loadbalancerclientInterface,
@@ -441,15 +673,18 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		privateendpointclientInterface:          privateendpointclientInterface,
 		privatelinkserviceclientInterface:       privatelinkserviceclientInterface,
 		privatezoneclientInterface:              privatezoneclientInterface,
+		providerclientInterface:                 providerclientInterface,
 		publicipaddressclientInterface:          publicipaddressclientInterface,
 		publicipprefixclientInterface:           publicipprefixclientInterface,
 		registryclientInterface:                 registryclientInterface,
 		resourcegroupclientInterface:            resourcegroupclientInterface,
 		routetableclientInterface:               routetableclientInterface,
+		secretclientInterface:                   secretclientInterface,
 		securitygroupclientInterface:            securitygroupclientInterface,
 		snapshotclientInterface:                 snapshotclientInterface,
 		sshpublickeyresourceclientInterface:     sshpublickeyresourceclientInterface,
 		subnetclientInterface:                   subnetclientInterface,
+		vaultclientInterface:                    vaultclientInterface,
 		virtualmachineclientInterface:           virtualmachineclientInterface,
 		virtualmachinescalesetclientInterface:   virtualmachinescalesetclientInterface,
 		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
@@ -457,8 +692,20 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	}, nil
 }
 
+func (factory *ClientFactoryImpl) GetAccountClient() accountclient.Interface {
+	return factory.accountclientInterface
+}
+
 func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	return factory.availabilitysetclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetBlobContainerClient() blobcontainerclient.Interface {
+	return factory.blobcontainerclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
+	return factory.blobservicepropertiesclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interface {
@@ -467,6 +714,10 @@ func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interfa
 
 func (factory *ClientFactoryImpl) GetDiskClient() diskclient.Interface {
 	return factory.diskclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetFileShareClient() fileshareclient.Interface {
+	return factory.fileshareclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetInterfaceClient() interfaceclient.Interface {
@@ -497,6 +748,10 @@ func (factory *ClientFactoryImpl) GetPrivateZoneClient() privatezoneclient.Inter
 	return factory.privatezoneclientInterface
 }
 
+func (factory *ClientFactoryImpl) GetProviderClient() providerclient.Interface {
+	return factory.providerclientInterface
+}
+
 func (factory *ClientFactoryImpl) GetPublicIPAddressClient() publicipaddressclient.Interface {
 	return factory.publicipaddressclientInterface
 }
@@ -517,6 +772,10 @@ func (factory *ClientFactoryImpl) GetRouteTableClient() routetableclient.Interfa
 	return factory.routetableclientInterface
 }
 
+func (factory *ClientFactoryImpl) GetSecretClient() secretclient.Interface {
+	return factory.secretclientInterface
+}
+
 func (factory *ClientFactoryImpl) GetSecurityGroupClient() securitygroupclient.Interface {
 	return factory.securitygroupclientInterface
 }
@@ -531,6 +790,10 @@ func (factory *ClientFactoryImpl) GetSSHPublicKeyResourceClient() sshpublickeyre
 
 func (factory *ClientFactoryImpl) GetSubnetClient() subnetclient.Interface {
 	return factory.subnetclientInterface
+}
+
+func (factory *ClientFactoryImpl) GetVaultClient() vaultclient.Interface {
+	return factory.vaultclientInterface
 }
 
 func (factory *ClientFactoryImpl) GetVirtualMachineClient() virtualmachineclient.Interface {

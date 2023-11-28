@@ -984,7 +984,7 @@ func (as *availabilitySet) EnsureHostsInPool(service *v1.Service, nodes []*v1.No
 
 // EnsureBackendPoolDeleted ensures the loadBalancer backendAddressPools deleted from the specified nodes.
 // backendPoolIDs are the IDs of the backendpools to be deleted.
-func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, deleteFromVMSet bool) (bool, error) {
+func (as *availabilitySet) EnsureBackendPoolDeleted(service *v1.Service, backendPoolIDs []string, vmSetName string, backendAddressPools *[]network.BackendAddressPool, _ bool) (bool, error) {
 	// Returns nil if backend address pools already deleted.
 	if backendAddressPools == nil {
 		return false, nil
@@ -1276,7 +1276,7 @@ func (as *availabilitySet) GetNodeCIDRMasksByProviderID(providerID string) (int,
 }
 
 // EnsureBackendPoolDeletedFromVMSets ensures the loadBalancer backendAddressPools deleted from the specified VMAS
-func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(vmasNamesMap map[string]bool, backendPoolIDs []string) error {
+func (as *availabilitySet) EnsureBackendPoolDeletedFromVMSets(_ map[string]bool, _ []string) error {
 	return nil
 }
 

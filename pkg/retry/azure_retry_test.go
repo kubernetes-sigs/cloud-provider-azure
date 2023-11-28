@@ -53,26 +53,6 @@ func TestWithRetriableHTTPStatusCodes(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
-func TestIsNonRetriableError(t *testing.T) {
-	// false case
-	bo := &Backoff{Factor: 1.0, Steps: 3}
-	ret := bo.isNonRetriableError(nil)
-	assert.Equal(t, false, ret)
-
-	// true case
-	errs := []string{"error1", "error2"}
-	bo2 := bo
-	bo2.NonRetriableErrors = errs
-	rerr := &Error{
-		Retriable:      false,
-		HTTPStatusCode: 429,
-		RawError:       fmt.Errorf("error1"),
-	}
-
-	ret = bo2.isNonRetriableError(rerr)
-	assert.Equal(t, true, ret)
-}
-
 func TestJitterWithNegativeMaxFactor(t *testing.T) {
 	// jitter := duration + time.Duration(rand.Float64()*maxFactor*float64(duration))
 	// If maxFactor is 0.0 or less than 0.0, a suggested default value will be chosen.

@@ -144,7 +144,7 @@ func (az *Cloud) GetZoneID(zoneLabel string) string {
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
 // If the node is not running with availability zones, then it will fall back to fault domain.
-func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
+func (az *Cloud) GetZone(_ context.Context) (cloudprovider.Zone, error) {
 	if az.UseInstanceMetadata {
 		metadata, err := az.Metadata.GetMetadata(azcache.CacheReadTypeUnsafe)
 		if err != nil {
@@ -211,7 +211,7 @@ func (az *Cloud) GetZoneByProviderID(ctx context.Context, providerID string) (cl
 // does not initialize node data.
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
-func (az *Cloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
+func (az *Cloud) GetZoneByNodeName(_ context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
 	// Returns "" for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	unmanaged, err := az.IsNodeUnmanaged(string(nodeName))
 	if err != nil {

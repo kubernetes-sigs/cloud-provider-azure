@@ -819,41 +819,6 @@ func TestDisksAreAttached(t *testing.T) {
 	}
 }
 
-func TestFilteredDetachingDisks(t *testing.T) {
-
-	disks := []compute.DataDisk{
-		{
-			Name:         pointer.String("DiskName1"),
-			ToBeDetached: pointer.Bool(false),
-			ManagedDisk: &compute.ManagedDiskParameters{
-				ID: pointer.String("ManagedID"),
-			},
-		},
-		{
-			Name:         pointer.String("DiskName2"),
-			ToBeDetached: pointer.Bool(true),
-		},
-		{
-			Name:         pointer.String("DiskName3"),
-			ToBeDetached: nil,
-		},
-		{
-			Name:         pointer.String("DiskName4"),
-			ToBeDetached: nil,
-		},
-	}
-
-	filteredDisks := filterDetachingDisks(disks)
-	assert.Equal(t, 3, len(filteredDisks))
-	assert.Equal(t, "DiskName1", *filteredDisks[0].Name)
-	assert.Equal(t, "ManagedID", *filteredDisks[0].ManagedDisk.ID)
-	assert.Equal(t, "DiskName3", *filteredDisks[1].Name)
-
-	disks = []compute.DataDisk{}
-	filteredDisks = filterDetachingDisks(disks)
-	assert.Equal(t, 0, len(filteredDisks))
-}
-
 func TestGetValidCreationData(t *testing.T) {
 	sourceResourceSnapshotID := "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.Compute/snapshots/xxx"
 	sourceResourceVolumeID := "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.Compute/disks/xxx"
@@ -1032,64 +997,6 @@ func TestCheckDiskExists(t *testing.T) {
 		assert.Equal(t, test.expectedResult, exist, "TestCase[%d]", i, exist)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d], return error: %v", i, err)
 	}
-}
-
-func TestFilterNonExistingDisks(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
-
-	testCloud := GetTestCloud(ctrl)
-	common := &controllerCommon{
-		cloud:   testCloud,
-		lockMap: newLockMap(),
-	}
-	// create a new disk before running test
-	diskURIPrefix := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/",
-		testCloud.SubscriptionID, testCloud.ResourceGroup)
-	newDiskName := "newdisk"
-	newDiskURI := diskURIPrefix + newDiskName
-
-	mockDisksClient := testCloud.DisksClient.(*mockdiskclient.MockInterface)
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, newDiskName).Return(compute.Disk{}, nil).AnyTimes()
-	mockDisksClient.EXPECT().Get(gomock.Any(), testCloud.SubscriptionID, testCloud.ResourceGroup, gomock.Not(newDiskName)).Return(compute.Disk{}, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
-
-	disks := []compute.DataDisk{
-		{
-			Name: &newDiskName,
-			ManagedDisk: &compute.ManagedDiskParameters{
-				ID: &newDiskURI,
-			},
-		},
-		{
-			Name: pointer.String("DiskName2"),
-			ManagedDisk: &compute.ManagedDiskParameters{
-				ID: pointer.String(diskURIPrefix + "DiskName2"),
-			},
-		},
-		{
-			Name: pointer.String("DiskName3"),
-			ManagedDisk: &compute.ManagedDiskParameters{
-				ID: pointer.String(diskURIPrefix + "DiskName3"),
-			},
-		},
-		{
-			Name: pointer.String("DiskName4"),
-			ManagedDisk: &compute.ManagedDiskParameters{
-				ID: pointer.String(diskURIPrefix + "DiskName4"),
-			},
-		},
-	}
-
-	filteredDisks := common.filterNonExistingDisks(ctx, disks)
-	assert.Equal(t, 1, len(filteredDisks))
-	assert.Equal(t, newDiskName, *filteredDisks[0].Name)
-
-	disks = []compute.DataDisk{}
-	filteredDisks = filterDetachingDisks(disks)
-	assert.Equal(t, 0, len(filteredDisks))
 }
 
 func TestFilterNonExistingDisksWithSpecialHTTPStatusCode(t *testing.T) {

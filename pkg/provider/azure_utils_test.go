@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/subnetclient/mocksubnetclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -69,7 +68,7 @@ func TestConcurrentLockEntry(t *testing.T) {
 	testLockMap.UnlockEntry("entry1")
 }
 
-func (lm *lockMap) lockAndCallback(t *testing.T, entry string, callbackChan chan<- interface{}) {
+func (lm *lockMap) lockAndCallback(_ *testing.T, entry string, callbackChan chan<- interface{}) {
 	lm.LockEntry(entry)
 	callbackChan <- true
 }
@@ -504,50 +503,6 @@ func TestIsNodeInVMSSVMCache(t *testing.T) {
 			result := isNodeInVMSSVMCache(test.nodeName, test.vmssVMCache)
 			assert.Equal(t, test.expectedResult, result)
 		})
-	}
-}
-
-func TestExtractVmssVMName(t *testing.T) {
-	cases := []struct {
-		description        string
-		vmName             string
-		expectError        bool
-		expectedScaleSet   string
-		expectedInstanceID string
-	}{
-		{
-			description: "wrong vmss VM name should report error",
-			vmName:      "vm1234",
-			expectError: true,
-		},
-		{
-			description: "wrong VM name separator should report error",
-			vmName:      "vm-1234",
-			expectError: true,
-		},
-		{
-			description:        "correct vmss VM name should return correct ScaleSet and instanceID",
-			vmName:             "vm_1234",
-			expectedScaleSet:   "vm",
-			expectedInstanceID: "1234",
-		},
-		{
-			description:        "correct vmss VM name with Extra Separator should return correct ScaleSet and instanceID",
-			vmName:             "vm_test_1234",
-			expectedScaleSet:   "vm_test",
-			expectedInstanceID: "1234",
-		},
-	}
-
-	for _, c := range cases {
-		ssName, instanceID, err := extractVmssVMName(c.vmName)
-		if c.expectError {
-			assert.Error(t, err, c.description)
-			continue
-		}
-
-		assert.Equal(t, c.expectedScaleSet, ssName, c.description)
-		assert.Equal(t, c.expectedInstanceID, instanceID, c.description)
 	}
 }
 
@@ -987,6 +942,7 @@ func TestIsFIPIPv6(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			isIPv6, err := az.isFIPIPv6(&tc.svc, "rg", tc.fip)
@@ -1009,56 +965,6 @@ func TestGetResourceIDPrefix(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			prefix := getResourceIDPrefix(tc.id)
 			assert.Equal(t, tc.expectedPrefix, prefix)
-		})
-	}
-}
-
-func TestFillSubnet(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	testcases := []struct {
-		desc           string
-		subnetName     string
-		subnet         *network.Subnet
-		expectedTimes  int
-		expectedSubnet *network.Subnet
-	}{
-		{
-			desc:          "empty subnet",
-			subnetName:    "subnet0",
-			subnet:        &network.Subnet{},
-			expectedTimes: 1,
-			expectedSubnet: &network.Subnet{
-				Name: pointer.String("subnet0"),
-				ID:   pointer.String("subnet-id0"),
-			},
-		},
-		{
-			desc:       "filled subnet",
-			subnetName: "subnet1",
-			subnet: &network.Subnet{
-				Name: pointer.String("subnet1"),
-				ID:   pointer.String("subnet-id1"),
-			},
-			expectedTimes: 0,
-			expectedSubnet: &network.Subnet{
-				Name: pointer.String("subnet1"),
-				ID:   pointer.String("subnet-id1"),
-			},
-		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.desc, func(t *testing.T) {
-			az := GetTestCloud(ctrl)
-			mockSubnetsClient := az.SubnetsClient.(*mocksubnetclient.MockInterface)
-			mockSubnetsClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), tc.subnetName, gomock.Any()).
-				Return(*tc.expectedSubnet, nil).Times(tc.expectedTimes)
-
-			err := az.fillSubnet(tc.subnet, tc.subnetName)
-			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedSubnet, tc.subnet)
 		})
 	}
 }

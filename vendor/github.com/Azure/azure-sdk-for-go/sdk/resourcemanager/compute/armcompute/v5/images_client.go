@@ -33,7 +33,7 @@ type ImagesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewImagesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*ImagesClient, error) {
-	cl, err := arm.NewClient(moduleName+".ImagesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +59,14 @@ func (client *ImagesClient) BeginCreateOrUpdate(ctx context.Context, resourceGro
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[ImagesClientCreateOrUpdateResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[ImagesClientCreateOrUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[ImagesClientCreateOrUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[ImagesClientCreateOrUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -72,6 +76,10 @@ func (client *ImagesClient) BeginCreateOrUpdate(ctx context.Context, resourceGro
 // Generated from API version 2023-07-01
 func (client *ImagesClient) createOrUpdate(ctx context.Context, resourceGroupName string, imageName string, parameters Image, options *ImagesClientBeginCreateOrUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "ImagesClient.BeginCreateOrUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, imageName, parameters, options)
 	if err != nil {
 		return nil, err
@@ -129,10 +137,14 @@ func (client *ImagesClient) BeginDelete(ctx context.Context, resourceGroupName s
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[ImagesClientDeleteResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[ImagesClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[ImagesClientDeleteResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[ImagesClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -142,6 +154,10 @@ func (client *ImagesClient) BeginDelete(ctx context.Context, resourceGroupName s
 // Generated from API version 2023-07-01
 func (client *ImagesClient) deleteOperation(ctx context.Context, resourceGroupName string, imageName string, options *ImagesClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
+	const operationName = "ImagesClient.BeginDelete"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.deleteCreateRequest(ctx, resourceGroupName, imageName, options)
 	if err != nil {
 		return nil, err
@@ -192,6 +208,10 @@ func (client *ImagesClient) deleteCreateRequest(ctx context.Context, resourceGro
 //   - options - ImagesClientGetOptions contains the optional parameters for the ImagesClient.Get method.
 func (client *ImagesClient) Get(ctx context.Context, resourceGroupName string, imageName string, options *ImagesClientGetOptions) (ImagesClientGetResponse, error) {
 	var err error
+	const operationName = "ImagesClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, imageName, options)
 	if err != nil {
 		return ImagesClientGetResponse{}, err
@@ -257,25 +277,20 @@ func (client *ImagesClient) NewListPager(options *ImagesClientListOptions) *runt
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *ImagesClientListResponse) (ImagesClientListResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listCreateRequest(ctx, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "ImagesClient.NewListPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listCreateRequest(ctx, options)
+			}, nil)
 			if err != nil {
 				return ImagesClientListResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return ImagesClientListResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return ImagesClientListResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
@@ -319,25 +334,20 @@ func (client *ImagesClient) NewListByResourceGroupPager(resourceGroupName string
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *ImagesClientListByResourceGroupResponse) (ImagesClientListByResourceGroupResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listByResourceGroupCreateRequest(ctx, resourceGroupName, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "ImagesClient.NewListByResourceGroupPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listByResourceGroupCreateRequest(ctx, resourceGroupName, options)
+			}, nil)
 			if err != nil {
 				return ImagesClientListByResourceGroupResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return ImagesClientListByResourceGroupResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return ImagesClientListByResourceGroupResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listByResourceGroupHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
@@ -386,10 +396,14 @@ func (client *ImagesClient) BeginUpdate(ctx context.Context, resourceGroupName s
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[ImagesClientUpdateResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[ImagesClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[ImagesClientUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[ImagesClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -399,6 +413,10 @@ func (client *ImagesClient) BeginUpdate(ctx context.Context, resourceGroupName s
 // Generated from API version 2023-07-01
 func (client *ImagesClient) update(ctx context.Context, resourceGroupName string, imageName string, parameters ImageUpdate, options *ImagesClientBeginUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "ImagesClient.BeginUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.updateCreateRequest(ctx, resourceGroupName, imageName, parameters, options)
 	if err != nil {
 		return nil, err

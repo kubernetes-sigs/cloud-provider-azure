@@ -33,7 +33,7 @@ type CommunityGalleriesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewCommunityGalleriesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*CommunityGalleriesClient, error) {
-	cl, err := arm.NewClient(moduleName+".CommunityGalleriesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +53,10 @@ func NewCommunityGalleriesClient(subscriptionID string, credential azcore.TokenC
 //   - options - CommunityGalleriesClientGetOptions contains the optional parameters for the CommunityGalleriesClient.Get method.
 func (client *CommunityGalleriesClient) Get(ctx context.Context, location string, publicGalleryName string, options *CommunityGalleriesClientGetOptions) (CommunityGalleriesClientGetResponse, error) {
 	var err error
+	const operationName = "CommunityGalleriesClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, location, publicGalleryName, options)
 	if err != nil {
 		return CommunityGalleriesClientGetResponse{}, err

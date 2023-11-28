@@ -322,20 +322,6 @@ func isNodeInVMSSVMCache(nodeName string, vmssVMCache azcache.Resource) bool {
 	return isInCache
 }
 
-func extractVmssVMName(name string) (string, string, error) {
-	split := strings.SplitAfter(name, consts.VMSSNameSeparator)
-	if len(split) < 2 {
-		klog.V(3).Infof("Failed to extract vmssVMName %q", name)
-		return "", "", ErrorNotVmssInstance
-	}
-
-	ssName := strings.Join(split[0:len(split)-1], "")
-	// removing the trailing `vmssNameSeparator` since we used SplitAfter
-	ssName = ssName[:len(ssName)-1]
-	instanceID := split[len(split)-1]
-	return ssName, instanceID, nil
-}
-
 // isServiceDualStack checks if a Service is dual-stack or not.
 func isServiceDualStack(svc *v1.Service) bool {
 	return len(svc.Spec.IPFamilies) == 2
@@ -460,7 +446,7 @@ func getResourceByIPFamily(resource string, isDualStack, isIPv6 bool) string {
 
 // isFIPIPv6 checks if the frontend IP configuration is of IPv6.
 // NOTICE: isFIPIPv6 assumes the FIP is owned by the Service and it is the primary Service.
-func (az *Cloud) isFIPIPv6(service *v1.Service, pipRG string, fip *network.FrontendIPConfiguration) (bool, error) {
+func (az *Cloud) isFIPIPv6(service *v1.Service, _ string, fip *network.FrontendIPConfiguration) (bool, error) {
 	isDualStack := isServiceDualStack(service)
 	if !isDualStack {
 		return service.Spec.IPFamilies[0] == v1.IPv6Protocol, nil
@@ -475,24 +461,6 @@ func getResourceIDPrefix(id string) string {
 		return id // Should not happen
 	}
 	return id[:idx]
-}
-
-// fillSubnet fills subnet value into the variable.
-func (az *Cloud) fillSubnet(subnet *network.Subnet, subnetName string) error {
-	if subnet == nil {
-		return fmt.Errorf("subnet is nil, should not happen")
-	}
-	if subnet.ID == nil {
-		curSubnet, existsSubnet, err := az.getSubnet(az.VnetName, subnetName)
-		if err != nil {
-			return err
-		}
-		if !existsSubnet {
-			return fmt.Errorf("failed to get subnet: %s/%s", az.VnetName, subnetName)
-		}
-		*subnet = curSubnet
-	}
-	return nil
 }
 
 func getLBNameFromBackendPoolID(backendPoolID string) (string, error) {

@@ -33,7 +33,7 @@ type VirtualMachineScaleSetRollingUpgradesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewVirtualMachineScaleSetRollingUpgradesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*VirtualMachineScaleSetRollingUpgradesClient, error) {
-	cl, err := arm.NewClient(moduleName+".VirtualMachineScaleSetRollingUpgradesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -58,10 +58,14 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginCancel(ctx conte
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[VirtualMachineScaleSetRollingUpgradesClientCancelResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[VirtualMachineScaleSetRollingUpgradesClientCancelResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[VirtualMachineScaleSetRollingUpgradesClientCancelResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[VirtualMachineScaleSetRollingUpgradesClientCancelResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -71,6 +75,10 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginCancel(ctx conte
 // Generated from API version 2023-07-01
 func (client *VirtualMachineScaleSetRollingUpgradesClient) cancel(ctx context.Context, resourceGroupName string, vmScaleSetName string, options *VirtualMachineScaleSetRollingUpgradesClientBeginCancelOptions) (*http.Response, error) {
 	var err error
+	const operationName = "VirtualMachineScaleSetRollingUpgradesClient.BeginCancel"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.cancelCreateRequest(ctx, resourceGroupName, vmScaleSetName, options)
 	if err != nil {
 		return nil, err
@@ -122,6 +130,10 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) cancelCreateRequest(c
 //     method.
 func (client *VirtualMachineScaleSetRollingUpgradesClient) GetLatest(ctx context.Context, resourceGroupName string, vmScaleSetName string, options *VirtualMachineScaleSetRollingUpgradesClientGetLatestOptions) (VirtualMachineScaleSetRollingUpgradesClientGetLatestResponse, error) {
 	var err error
+	const operationName = "VirtualMachineScaleSetRollingUpgradesClient.GetLatest"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getLatestCreateRequest(ctx, resourceGroupName, vmScaleSetName, options)
 	if err != nil {
 		return VirtualMachineScaleSetRollingUpgradesClientGetLatestResponse{}, err
@@ -189,10 +201,14 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginStartExtensionUp
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[VirtualMachineScaleSetRollingUpgradesClientStartExtensionUpgradeResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[VirtualMachineScaleSetRollingUpgradesClientStartExtensionUpgradeResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[VirtualMachineScaleSetRollingUpgradesClientStartExtensionUpgradeResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[VirtualMachineScaleSetRollingUpgradesClientStartExtensionUpgradeResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -204,6 +220,10 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginStartExtensionUp
 // Generated from API version 2023-07-01
 func (client *VirtualMachineScaleSetRollingUpgradesClient) startExtensionUpgrade(ctx context.Context, resourceGroupName string, vmScaleSetName string, options *VirtualMachineScaleSetRollingUpgradesClientBeginStartExtensionUpgradeOptions) (*http.Response, error) {
 	var err error
+	const operationName = "VirtualMachineScaleSetRollingUpgradesClient.BeginStartExtensionUpgrade"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.startExtensionUpgradeCreateRequest(ctx, resourceGroupName, vmScaleSetName, options)
 	if err != nil {
 		return nil, err
@@ -261,10 +281,14 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginStartOSUpgrade(c
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[VirtualMachineScaleSetRollingUpgradesClientStartOSUpgradeResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[VirtualMachineScaleSetRollingUpgradesClientStartOSUpgradeResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[VirtualMachineScaleSetRollingUpgradesClientStartOSUpgradeResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[VirtualMachineScaleSetRollingUpgradesClientStartOSUpgradeResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -276,6 +300,10 @@ func (client *VirtualMachineScaleSetRollingUpgradesClient) BeginStartOSUpgrade(c
 // Generated from API version 2023-07-01
 func (client *VirtualMachineScaleSetRollingUpgradesClient) startOSUpgrade(ctx context.Context, resourceGroupName string, vmScaleSetName string, options *VirtualMachineScaleSetRollingUpgradesClientBeginStartOSUpgradeOptions) (*http.Response, error) {
 	var err error
+	const operationName = "VirtualMachineScaleSetRollingUpgradesClient.BeginStartOSUpgrade"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.startOSUpgradeCreateRequest(ctx, resourceGroupName, vmScaleSetName, options)
 	if err != nil {
 		return nil, err

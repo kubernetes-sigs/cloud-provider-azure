@@ -231,7 +231,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalFalse, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.PrintCreateSVCSuccessfully(testServiceName, ns.Name)
 
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		targetIPs := []*string{}
@@ -282,7 +282,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service = updateServiceLBIPs(service, true, ips1)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.PrintCreateSVCSuccessfully(testServiceName, ns.Name)
 
 		defer func() {
 			By("Cleaning up")
@@ -321,7 +321,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationLoadBalancerInternalTrue, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + testServiceName + " in namespace " + ns.Name)
+		utils.PrintCreateSVCSuccessfully(testServiceName, ns.Name)
 
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}

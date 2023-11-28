@@ -303,7 +303,7 @@ func (az *Cloud) MigrateToIPBasedBackendPoolAndWaitForCompletion(
 			}
 
 			if countIPsOnBackendPool(bp) != nicsCount {
-				klog.V(4).Infof("MigrateToIPBasedBackendPoolAndWaitForCompletion: Expected IPs %s, current IPs %d, will retry in 5s", nicsCount, countIPsOnBackendPool(bp))
+				klog.V(4).Infof("MigrateToIPBasedBackendPoolAndWaitForCompletion: Expected IPs %d, current IPs %d, will retry in 5s", nicsCount, countIPsOnBackendPool(bp))
 				return false, nil
 			}
 			succeeded[bpName] = true

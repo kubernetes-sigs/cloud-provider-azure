@@ -555,7 +555,7 @@ func (fs *FlexScaleSet) EnsureHostInPool(service *v1.Service, nodeName types.Nod
 
 }
 
-func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
+func (fs *FlexScaleSet) ensureVMSSFlexInPool(_ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
 	klog.V(2).Infof("ensureVMSSFlexInPool: ensuring VMSS Flex with backendPoolID %s", backendPoolID)
 	vmssFlexIDsMap := make(map[string]bool)
 
@@ -584,12 +584,12 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.No
 			// in this scenario the vmSetName is an empty string and the name of vmss should be obtained from the provider IDs of nodes
 			vmssFlexID, err := fs.getNodeVmssFlexID(node.Name)
 			if err != nil {
-				klog.Error("ensureVMSSFlexInPool: failed to get VMSS Flex ID of node: %s, will skip checking and continue", node.Name)
+				klog.Errorf("ensureVMSSFlexInPool: failed to get VMSS Flex ID of node: %s, will skip checking and continue", node.Name)
 				continue
 			}
 			resourceGroupName, err := fs.GetNodeResourceGroup(node.Name)
 			if err != nil {
-				klog.Error("ensureVMSSFlexInPool: failed to get resource group of node: %s, will skip checking and continue", node.Name)
+				klog.Errorf("ensureVMSSFlexInPool: failed to get resource group of node: %s, will skip checking and continue", node.Name)
 				continue
 			}
 
@@ -601,7 +601,7 @@ func (fs *FlexScaleSet) ensureVMSSFlexInPool(service *v1.Service, nodes []*v1.No
 	} else {
 		vmssFlexID, err := fs.getVmssFlexIDByName(vmSetNameOfLB)
 		if err != nil {
-			klog.Error("ensureVMSSFlexInPool: failed to get VMSS Flex ID of vmSet: %s, ", vmSetNameOfLB)
+			klog.Errorf("ensureVMSSFlexInPool: failed to get VMSS Flex ID of vmSet: %s", vmSetNameOfLB)
 			return err
 		}
 		vmssFlexIDsMap[vmssFlexID] = true

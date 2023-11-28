@@ -47,6 +47,7 @@ type StorageType string
 const (
 	StorageTypeBlob StorageType = "blob"
 	StorageTypeFile StorageType = "file"
+	blobNameSuffix              = "-blob"
 )
 
 // AccountOptions contains the fields which are used to create storage account.
@@ -481,7 +482,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		// Create private endpoint
 		privateEndpointName := accountName + "-pvtendpoint"
 		if accountOptions.StorageType == StorageTypeBlob {
-			privateEndpointName = privateEndpointName + "-blob"
+			privateEndpointName = privateEndpointName + blobNameSuffix
 		}
 		if err := az.createPrivateEndpoint(ctx, accountName, storageAccount.ID, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location, accountOptions.StorageType); err != nil {
 			return "", "", fmt.Errorf("create private endpoint for storage account(%s), resourceGroup(%s): %w", accountName, vnetResourceGroup, err)
@@ -490,7 +491,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		// Create dns zone group
 		dnsZoneGroupName := accountName + "-dnszonegroup"
 		if accountOptions.StorageType == StorageTypeBlob {
-			dnsZoneGroupName = dnsZoneGroupName + "-blob"
+			dnsZoneGroupName = dnsZoneGroupName + blobNameSuffix
 		}
 		if err := az.createPrivateDNSZoneGroup(ctx, dnsZoneGroupName, privateEndpointName, vnetResourceGroup, vnetName, privateDNSZoneName); err != nil {
 			return "", "", fmt.Errorf("create private DNS zone group - privateEndpoint(%s), vNetName(%s), resourceGroup(%s): %w", privateEndpointName, vnetName, vnetResourceGroup, err)
@@ -526,7 +527,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 	//Create private endpoint
 	privateLinkServiceConnectionName := accountName + "-pvtsvcconn"
 	if storageType == StorageTypeBlob {
-		privateLinkServiceConnectionName = privateLinkServiceConnectionName + "-blob"
+		privateLinkServiceConnectionName = privateLinkServiceConnectionName + blobNameSuffix
 	}
 	privateLinkServiceConnection := network.PrivateLinkServiceConnection{
 		Name: &privateLinkServiceConnectionName,

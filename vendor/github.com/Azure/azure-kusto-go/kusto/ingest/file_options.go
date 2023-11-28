@@ -119,7 +119,8 @@ func Table(name string) FileOption {
 	}
 }
 
-// DontCompress sets whether to compress the data.
+// DontCompress sets whether to compress the data. 	In streaming - do not pass DontCompress if file is not already compressed.
+
 func DontCompress() FileOption {
 	return option{
 		run: func(p *properties.All) error {
@@ -144,7 +145,7 @@ func backOff(off *backoff.ExponentialBackOff) FileOption {
 	}
 }
 
-// FlushImmediately tells Kusto to flush on write.
+// FlushImmediately  the service batching manager will not aggregate this file, thus overriding the batching policy
 func FlushImmediately() FileOption {
 	return option{
 		run: func(p *properties.All) error {
@@ -154,6 +155,19 @@ func FlushImmediately() FileOption {
 		clientScopes: QueuedClient | ManagedClient,
 		sourceScope:  FromFile | FromReader | FromBlob,
 		name:         "FlushImmediately",
+	}
+}
+
+// IgnoreFirstRecord tells Kusto to flush on write.
+func IgnoreFirstRecord() FileOption {
+	return option{
+		run: func(p *properties.All) error {
+			p.Ingestion.Additional.IgnoreFirstRecord = true
+			return nil
+		},
+		clientScopes: QueuedClient | ManagedClient,
+		sourceScope:  FromFile | FromReader | FromBlob,
+		name:         "IgnoreFirstRecord",
 	}
 }
 
@@ -205,6 +219,11 @@ const (
 	// SingleJSON indicates the source is a single JSON value -- newlines are regular whitespace.
 	SingleJSON DataFormat = properties.SingleJSON
 )
+
+// InferFormatFromFileName looks at the file name and tries to discern what the file format is
+func InferFormatFromFileName(fName string) DataFormat {
+	return properties.DataFormatDiscovery(fName)
+}
 
 // IngestionMapping provides runtime mapping of the data being imported to the fields in the table.
 // "ref" will be JSON encoded, so it can be any type that can be JSON marshalled. If you pass a string
@@ -439,5 +458,19 @@ func ClientRequestId(clientRequestId string) FileOption {
 		sourceScope:  FromFile | FromReader | FromBlob,
 		clientScopes: StreamingClient | ManagedClient,
 		name:         "ClientRequestId",
+	}
+}
+
+// RawDataSize is the uncompressed data size. Should be used to comunicate the file size to the service for efficient ingestion.
+// Also used by managed client in the decision to use queued ingestion instead of streaming (if > 4mb)
+func RawDataSize(size int64) FileOption {
+	return option{
+		run: func(p *properties.All) error {
+			p.Ingestion.RawDataSize = size
+			return nil
+		},
+		sourceScope:  FromFile | FromReader | FromBlob,
+		clientScopes: StreamingClient | ManagedClient | QueuedClient,
+		name:         "RawDataSize",
 	}
 }

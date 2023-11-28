@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armcompute.VirtualMachinesClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,11 +41,15 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // CreateOrUpdate creates or updates a VirtualMachine.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.VirtualMachine) (*armcompute.VirtualMachine, error) {
+	ctx = utils.ContextWithClientName(ctx, "VirtualMachinesClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.VirtualMachinesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -57,12 +62,20 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 
 // Delete deletes a VirtualMachine by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "VirtualMachinesClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 
 // List gets a list of VirtualMachine in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachine, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "VirtualMachinesClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

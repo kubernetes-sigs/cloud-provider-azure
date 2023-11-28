@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armcompute.VirtualMachineScaleSetVMsClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,12 +41,16 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the VirtualMachineScaleSetVM
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armcompute.VirtualMachineScaleSetVM, rerr error) {
 
+	ctx = utils.ContextWithClientName(ctx, "VirtualMachineScaleSetVMsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.VirtualMachineScaleSetVMsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -56,6 +61,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 
 // Delete deletes a VirtualMachineScaleSetVM by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "VirtualMachineScaleSetVMsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }

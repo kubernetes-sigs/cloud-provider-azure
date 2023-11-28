@@ -32,7 +32,7 @@ type RegistriesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewRegistriesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*RegistriesClient, error) {
-	cl, err := arm.NewClient(moduleName+".RegistriesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +53,10 @@ func NewRegistriesClient(subscriptionID string, credential azcore.TokenCredentia
 //     method.
 func (client *RegistriesClient) CheckNameAvailability(ctx context.Context, registryNameCheckRequest RegistryNameCheckRequest, options *RegistriesClientCheckNameAvailabilityOptions) (RegistriesClientCheckNameAvailabilityResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.CheckNameAvailability"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.checkNameAvailabilityCreateRequest(ctx, registryNameCheckRequest, options)
 	if err != nil {
 		return RegistriesClientCheckNameAvailabilityResponse{}, err
@@ -72,6 +76,9 @@ func (client *RegistriesClient) CheckNameAvailability(ctx context.Context, regis
 // checkNameAvailabilityCreateRequest creates the CheckNameAvailability request.
 func (client *RegistriesClient) checkNameAvailabilityCreateRequest(ctx context.Context, registryNameCheckRequest RegistryNameCheckRequest, options *RegistriesClientCheckNameAvailabilityOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/providers/Microsoft.ContainerRegistry/checkNameAvailability"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	req, err := runtime.NewRequest(ctx, http.MethodPost, runtime.JoinPaths(client.internal.Endpoint(), urlPath))
 	if err != nil {
@@ -112,10 +119,13 @@ func (client *RegistriesClient) BeginCreate(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientCreateResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientCreateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientCreateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -125,6 +135,10 @@ func (client *RegistriesClient) BeginCreate(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *RegistriesClient) create(ctx context.Context, resourceGroupName string, registryName string, registry Registry, options *RegistriesClientBeginCreateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginCreate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.createCreateRequest(ctx, resourceGroupName, registryName, registry, options)
 	if err != nil {
 		return nil, err
@@ -143,6 +157,9 @@ func (client *RegistriesClient) create(ctx context.Context, resourceGroupName st
 // createCreateRequest creates the Create request.
 func (client *RegistriesClient) createCreateRequest(ctx context.Context, resourceGroupName string, registryName string, registry Registry, options *RegistriesClientBeginCreateOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -181,10 +198,13 @@ func (client *RegistriesClient) BeginDelete(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientDeleteResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientDeleteResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -194,6 +214,10 @@ func (client *RegistriesClient) BeginDelete(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *RegistriesClient) deleteOperation(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginDelete"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.deleteCreateRequest(ctx, resourceGroupName, registryName, options)
 	if err != nil {
 		return nil, err
@@ -212,6 +236,9 @@ func (client *RegistriesClient) deleteOperation(ctx context.Context, resourceGro
 // deleteCreateRequest creates the Delete request.
 func (client *RegistriesClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientBeginDeleteOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -248,10 +275,13 @@ func (client *RegistriesClient) BeginGenerateCredentials(ctx context.Context, re
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientGenerateCredentialsResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientGenerateCredentialsResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientGenerateCredentialsResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -261,6 +291,10 @@ func (client *RegistriesClient) BeginGenerateCredentials(ctx context.Context, re
 // Generated from API version 2023-07-01
 func (client *RegistriesClient) generateCredentials(ctx context.Context, resourceGroupName string, registryName string, generateCredentialsParameters GenerateCredentialsParameters, options *RegistriesClientBeginGenerateCredentialsOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginGenerateCredentials"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.generateCredentialsCreateRequest(ctx, resourceGroupName, registryName, generateCredentialsParameters, options)
 	if err != nil {
 		return nil, err
@@ -279,6 +313,9 @@ func (client *RegistriesClient) generateCredentials(ctx context.Context, resourc
 // generateCredentialsCreateRequest creates the GenerateCredentials request.
 func (client *RegistriesClient) generateCredentialsCreateRequest(ctx context.Context, resourceGroupName string, registryName string, generateCredentialsParameters GenerateCredentialsParameters, options *RegistriesClientBeginGenerateCredentialsOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/generateCredentials"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -311,6 +348,10 @@ func (client *RegistriesClient) generateCredentialsCreateRequest(ctx context.Con
 //   - options - RegistriesClientGetOptions contains the optional parameters for the RegistriesClient.Get method.
 func (client *RegistriesClient) Get(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientGetOptions) (RegistriesClientGetResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, registryName, options)
 	if err != nil {
 		return RegistriesClientGetResponse{}, err
@@ -330,6 +371,9 @@ func (client *RegistriesClient) Get(ctx context.Context, resourceGroupName strin
 // getCreateRequest creates the Get request.
 func (client *RegistriesClient) getCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientGetOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -369,6 +413,10 @@ func (client *RegistriesClient) getHandleResponse(resp *http.Response) (Registri
 //     method.
 func (client *RegistriesClient) GetBuildSourceUploadURL(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientGetBuildSourceUploadURLOptions) (RegistriesClientGetBuildSourceUploadURLResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.GetBuildSourceUploadURL"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getBuildSourceUploadURLCreateRequest(ctx, resourceGroupName, registryName, options)
 	if err != nil {
 		return RegistriesClientGetBuildSourceUploadURLResponse{}, err
@@ -388,6 +436,9 @@ func (client *RegistriesClient) GetBuildSourceUploadURL(ctx context.Context, res
 // getBuildSourceUploadURLCreateRequest creates the GetBuildSourceUploadURL request.
 func (client *RegistriesClient) getBuildSourceUploadURLCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientGetBuildSourceUploadURLOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/listBuildSourceUploadUrl"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -428,6 +479,10 @@ func (client *RegistriesClient) getBuildSourceUploadURLHandleResponse(resp *http
 //     method.
 func (client *RegistriesClient) GetPrivateLinkResource(ctx context.Context, resourceGroupName string, registryName string, groupName string, options *RegistriesClientGetPrivateLinkResourceOptions) (RegistriesClientGetPrivateLinkResourceResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.GetPrivateLinkResource"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getPrivateLinkResourceCreateRequest(ctx, resourceGroupName, registryName, groupName, options)
 	if err != nil {
 		return RegistriesClientGetPrivateLinkResourceResponse{}, err
@@ -447,6 +502,9 @@ func (client *RegistriesClient) GetPrivateLinkResource(ctx context.Context, reso
 // getPrivateLinkResourceCreateRequest creates the GetPrivateLinkResource request.
 func (client *RegistriesClient) getPrivateLinkResourceCreateRequest(ctx context.Context, resourceGroupName string, registryName string, groupName string, options *RegistriesClientGetPrivateLinkResourceOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/privateLinkResources/{groupName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -497,10 +555,13 @@ func (client *RegistriesClient) BeginImportImage(ctx context.Context, resourceGr
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientImportImageResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientImportImageResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientImportImageResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -510,6 +571,10 @@ func (client *RegistriesClient) BeginImportImage(ctx context.Context, resourceGr
 // Generated from API version 2023-07-01
 func (client *RegistriesClient) importImage(ctx context.Context, resourceGroupName string, registryName string, parameters ImportImageParameters, options *RegistriesClientBeginImportImageOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginImportImage"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.importImageCreateRequest(ctx, resourceGroupName, registryName, parameters, options)
 	if err != nil {
 		return nil, err
@@ -528,6 +593,9 @@ func (client *RegistriesClient) importImage(ctx context.Context, resourceGroupNa
 // importImageCreateRequest creates the ImportImage request.
 func (client *RegistriesClient) importImageCreateRequest(ctx context.Context, resourceGroupName string, registryName string, parameters ImportImageParameters, options *RegistriesClientBeginImportImageOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/importImage"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -560,31 +628,29 @@ func (client *RegistriesClient) NewListPager(options *RegistriesClientListOption
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *RegistriesClientListResponse) (RegistriesClientListResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listCreateRequest(ctx, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "RegistriesClient.NewListPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listCreateRequest(ctx, options)
+			}, nil)
 			if err != nil {
 				return RegistriesClientListResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return RegistriesClientListResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return RegistriesClientListResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
 // listCreateRequest creates the List request.
 func (client *RegistriesClient) listCreateRequest(ctx context.Context, options *RegistriesClientListOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/providers/Microsoft.ContainerRegistry/registries"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	req, err := runtime.NewRequest(ctx, http.MethodGet, runtime.JoinPaths(client.internal.Endpoint(), urlPath))
 	if err != nil {
@@ -618,31 +684,29 @@ func (client *RegistriesClient) NewListByResourceGroupPager(resourceGroupName st
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *RegistriesClientListByResourceGroupResponse) (RegistriesClientListByResourceGroupResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listByResourceGroupCreateRequest(ctx, resourceGroupName, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "RegistriesClient.NewListByResourceGroupPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listByResourceGroupCreateRequest(ctx, resourceGroupName, options)
+			}, nil)
 			if err != nil {
 				return RegistriesClientListByResourceGroupResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return RegistriesClientListByResourceGroupResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return RegistriesClientListByResourceGroupResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listByResourceGroupHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
 // listByResourceGroupCreateRequest creates the ListByResourceGroup request.
 func (client *RegistriesClient) listByResourceGroupCreateRequest(ctx context.Context, resourceGroupName string, options *RegistriesClientListByResourceGroupOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -678,6 +742,10 @@ func (client *RegistriesClient) listByResourceGroupHandleResponse(resp *http.Res
 //     method.
 func (client *RegistriesClient) ListCredentials(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientListCredentialsOptions) (RegistriesClientListCredentialsResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.ListCredentials"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.listCredentialsCreateRequest(ctx, resourceGroupName, registryName, options)
 	if err != nil {
 		return RegistriesClientListCredentialsResponse{}, err
@@ -697,6 +765,9 @@ func (client *RegistriesClient) ListCredentials(ctx context.Context, resourceGro
 // listCredentialsCreateRequest creates the ListCredentials request.
 func (client *RegistriesClient) listCredentialsCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientListCredentialsOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/listCredentials"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -739,31 +810,29 @@ func (client *RegistriesClient) NewListPrivateLinkResourcesPager(resourceGroupNa
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *RegistriesClientListPrivateLinkResourcesResponse) (RegistriesClientListPrivateLinkResourcesResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listPrivateLinkResourcesCreateRequest(ctx, resourceGroupName, registryName, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "RegistriesClient.NewListPrivateLinkResourcesPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listPrivateLinkResourcesCreateRequest(ctx, resourceGroupName, registryName, options)
+			}, nil)
 			if err != nil {
 				return RegistriesClientListPrivateLinkResourcesResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return RegistriesClientListPrivateLinkResourcesResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return RegistriesClientListPrivateLinkResourcesResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listPrivateLinkResourcesHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
 // listPrivateLinkResourcesCreateRequest creates the ListPrivateLinkResources request.
 func (client *RegistriesClient) listPrivateLinkResourcesCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientListPrivateLinkResourcesOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/privateLinkResources"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -802,6 +871,10 @@ func (client *RegistriesClient) listPrivateLinkResourcesHandleResponse(resp *htt
 //   - options - RegistriesClientListUsagesOptions contains the optional parameters for the RegistriesClient.ListUsages method.
 func (client *RegistriesClient) ListUsages(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientListUsagesOptions) (RegistriesClientListUsagesResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.ListUsages"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.listUsagesCreateRequest(ctx, resourceGroupName, registryName, options)
 	if err != nil {
 		return RegistriesClientListUsagesResponse{}, err
@@ -821,6 +894,9 @@ func (client *RegistriesClient) ListUsages(ctx context.Context, resourceGroupNam
 // listUsagesCreateRequest creates the ListUsages request.
 func (client *RegistriesClient) listUsagesCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *RegistriesClientListUsagesOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/listUsages"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -861,6 +937,10 @@ func (client *RegistriesClient) listUsagesHandleResponse(resp *http.Response) (R
 //     method.
 func (client *RegistriesClient) RegenerateCredential(ctx context.Context, resourceGroupName string, registryName string, regenerateCredentialParameters RegenerateCredentialParameters, options *RegistriesClientRegenerateCredentialOptions) (RegistriesClientRegenerateCredentialResponse, error) {
 	var err error
+	const operationName = "RegistriesClient.RegenerateCredential"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.regenerateCredentialCreateRequest(ctx, resourceGroupName, registryName, regenerateCredentialParameters, options)
 	if err != nil {
 		return RegistriesClientRegenerateCredentialResponse{}, err
@@ -880,6 +960,9 @@ func (client *RegistriesClient) RegenerateCredential(ctx context.Context, resour
 // regenerateCredentialCreateRequest creates the RegenerateCredential request.
 func (client *RegistriesClient) regenerateCredentialCreateRequest(ctx context.Context, resourceGroupName string, registryName string, regenerateCredentialParameters RegenerateCredentialParameters, options *RegistriesClientRegenerateCredentialOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/regenerateCredential"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -927,10 +1010,14 @@ func (client *RegistriesClient) BeginScheduleRun(ctx context.Context, resourceGr
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[RegistriesClientScheduleRunResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientScheduleRunResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientScheduleRunResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientScheduleRunResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -940,6 +1027,10 @@ func (client *RegistriesClient) BeginScheduleRun(ctx context.Context, resourceGr
 // Generated from API version 2019-06-01-preview
 func (client *RegistriesClient) scheduleRun(ctx context.Context, resourceGroupName string, registryName string, runRequest RunRequestClassification, options *RegistriesClientBeginScheduleRunOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginScheduleRun"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.scheduleRunCreateRequest(ctx, resourceGroupName, registryName, runRequest, options)
 	if err != nil {
 		return nil, err
@@ -958,6 +1049,9 @@ func (client *RegistriesClient) scheduleRun(ctx context.Context, resourceGroupNa
 // scheduleRunCreateRequest creates the ScheduleRun request.
 func (client *RegistriesClient) scheduleRunCreateRequest(ctx context.Context, resourceGroupName string, registryName string, runRequest RunRequestClassification, options *RegistriesClientBeginScheduleRunOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/scheduleRun"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -997,10 +1091,13 @@ func (client *RegistriesClient) BeginUpdate(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RegistriesClientUpdateResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RegistriesClientUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RegistriesClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -1010,6 +1107,10 @@ func (client *RegistriesClient) BeginUpdate(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *RegistriesClient) update(ctx context.Context, resourceGroupName string, registryName string, registryUpdateParameters RegistryUpdateParameters, options *RegistriesClientBeginUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RegistriesClient.BeginUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.updateCreateRequest(ctx, resourceGroupName, registryName, registryUpdateParameters, options)
 	if err != nil {
 		return nil, err
@@ -1028,6 +1129,9 @@ func (client *RegistriesClient) update(ctx context.Context, resourceGroupName st
 // updateCreateRequest creates the Update request.
 func (client *RegistriesClient) updateCreateRequest(ctx context.Context, resourceGroupName string, registryName string, registryUpdateParameters RegistryUpdateParameters, options *RegistriesClientBeginUpdateOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")

@@ -140,7 +140,7 @@ func receiveChallengeFromLoginServer(serverAddress, scheme string) (*authDirecti
 }
 
 func performTokenExchange(
-	serverAddress string,
+	_ string,
 	directive *authDirective,
 	tenant string,
 	accessToken string) (string, error) {
@@ -236,9 +236,8 @@ func parseAssignments(statements string) (*map[string]string, error) {
 			} else if statements[commaIndex] != ',' {
 				// expect comma immediately after close quote
 				return nil, errorMsg
-			} else {
-				cursor = commaIndex + 1
 			}
+			cursor = commaIndex + 1
 		} else {
 			commaIndex := nextOccurrence(statements, cursor, ",")
 			endStatements := commaIndex == -1

@@ -33,7 +33,7 @@ type VirtualMachineSizesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewVirtualMachineSizesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*VirtualMachineSizesClient, error) {
-	cl, err := arm.NewClient(moduleName+".VirtualMachineSizesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +56,7 @@ func (client *VirtualMachineSizesClient) NewListPager(location string, options *
 			return false
 		},
 		Fetcher: func(ctx context.Context, page *VirtualMachineSizesClientListResponse) (VirtualMachineSizesClientListResponse, error) {
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "VirtualMachineSizesClient.NewListPager")
 			req, err := client.listCreateRequest(ctx, location, options)
 			if err != nil {
 				return VirtualMachineSizesClientListResponse{}, err
@@ -69,6 +70,7 @@ func (client *VirtualMachineSizesClient) NewListPager(location string, options *
 			}
 			return client.listHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 

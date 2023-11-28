@@ -118,21 +118,16 @@ func AzureCloudConfigOverrideFromEnv(config *cloud.Configuration) (*cloud.Config
 	return config, nil
 }
 
+// GetAzureCloudConfig returns the cloud configuration for the given ARMClientConfig.
 func GetAzureCloudConfig(armConfig *ARMClientConfig) (*cloud.Configuration, error) {
-	var config *cloud.Configuration
-	var err error
 	if armConfig == nil {
-		config = &cloud.AzurePublic
-	} else {
-		config = AzureCloudConfigFromName(armConfig.Cloud)
-		if armConfig.ResourceManagerEndpoint != "" {
-			config, err = AzureCloudConfigFromURL(armConfig.ResourceManagerEndpoint)
-			if err != nil {
-				return nil, err
-			}
-		}
+		return &cloud.AzurePublic, nil
 	}
-	return AzureCloudConfigOverrideFromEnv(config)
+	if armConfig.ResourceManagerEndpoint != "" {
+		return AzureCloudConfigFromURL(armConfig.ResourceManagerEndpoint)
+	}
+
+	return AzureCloudConfigOverrideFromEnv(AzureCloudConfigFromName(armConfig.Cloud))
 }
 
 // Environment represents a set of endpoints for each of Azure's Clouds.

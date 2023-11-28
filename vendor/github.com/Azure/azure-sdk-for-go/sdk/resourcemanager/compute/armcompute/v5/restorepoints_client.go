@@ -33,7 +33,7 @@ type RestorePointsClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewRestorePointsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*RestorePointsClient, error) {
-	cl, err := arm.NewClient(moduleName+".RestorePointsClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +60,14 @@ func (client *RestorePointsClient) BeginCreate(ctx context.Context, resourceGrou
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[RestorePointsClientCreateResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RestorePointsClientCreateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RestorePointsClientCreateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RestorePointsClientCreateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -73,6 +77,10 @@ func (client *RestorePointsClient) BeginCreate(ctx context.Context, resourceGrou
 // Generated from API version 2023-07-01
 func (client *RestorePointsClient) create(ctx context.Context, resourceGroupName string, restorePointCollectionName string, restorePointName string, parameters RestorePoint, options *RestorePointsClientBeginCreateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RestorePointsClient.BeginCreate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.createCreateRequest(ctx, resourceGroupName, restorePointCollectionName, restorePointName, parameters, options)
 	if err != nil {
 		return nil, err
@@ -136,10 +144,14 @@ func (client *RestorePointsClient) BeginDelete(ctx context.Context, resourceGrou
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[RestorePointsClientDeleteResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[RestorePointsClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[RestorePointsClientDeleteResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[RestorePointsClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -149,6 +161,10 @@ func (client *RestorePointsClient) BeginDelete(ctx context.Context, resourceGrou
 // Generated from API version 2023-07-01
 func (client *RestorePointsClient) deleteOperation(ctx context.Context, resourceGroupName string, restorePointCollectionName string, restorePointName string, options *RestorePointsClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
+	const operationName = "RestorePointsClient.BeginDelete"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.deleteCreateRequest(ctx, resourceGroupName, restorePointCollectionName, restorePointName, options)
 	if err != nil {
 		return nil, err
@@ -204,6 +220,10 @@ func (client *RestorePointsClient) deleteCreateRequest(ctx context.Context, reso
 //   - options - RestorePointsClientGetOptions contains the optional parameters for the RestorePointsClient.Get method.
 func (client *RestorePointsClient) Get(ctx context.Context, resourceGroupName string, restorePointCollectionName string, restorePointName string, options *RestorePointsClientGetOptions) (RestorePointsClientGetResponse, error) {
 	var err error
+	const operationName = "RestorePointsClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, restorePointCollectionName, restorePointName, options)
 	if err != nil {
 		return RestorePointsClientGetResponse{}, err

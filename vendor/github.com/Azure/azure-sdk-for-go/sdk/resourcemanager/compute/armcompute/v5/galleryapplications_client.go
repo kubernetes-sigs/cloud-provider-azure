@@ -33,7 +33,7 @@ type GalleryApplicationsClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewGalleryApplicationsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*GalleryApplicationsClient, error) {
-	cl, err := arm.NewClient(moduleName+".GalleryApplicationsClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +62,14 @@ func (client *GalleryApplicationsClient) BeginCreateOrUpdate(ctx context.Context
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[GalleryApplicationsClientCreateOrUpdateResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[GalleryApplicationsClientCreateOrUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[GalleryApplicationsClientCreateOrUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[GalleryApplicationsClientCreateOrUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -75,6 +79,10 @@ func (client *GalleryApplicationsClient) BeginCreateOrUpdate(ctx context.Context
 // Generated from API version 2022-03-03
 func (client *GalleryApplicationsClient) createOrUpdate(ctx context.Context, resourceGroupName string, galleryName string, galleryApplicationName string, galleryApplication GalleryApplication, options *GalleryApplicationsClientBeginCreateOrUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "GalleryApplicationsClient.BeginCreateOrUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.createOrUpdateCreateRequest(ctx, resourceGroupName, galleryName, galleryApplicationName, galleryApplication, options)
 	if err != nil {
 		return nil, err
@@ -138,10 +146,14 @@ func (client *GalleryApplicationsClient) BeginDelete(ctx context.Context, resour
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[GalleryApplicationsClientDeleteResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[GalleryApplicationsClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[GalleryApplicationsClientDeleteResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[GalleryApplicationsClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -151,6 +163,10 @@ func (client *GalleryApplicationsClient) BeginDelete(ctx context.Context, resour
 // Generated from API version 2022-03-03
 func (client *GalleryApplicationsClient) deleteOperation(ctx context.Context, resourceGroupName string, galleryName string, galleryApplicationName string, options *GalleryApplicationsClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
+	const operationName = "GalleryApplicationsClient.BeginDelete"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.deleteCreateRequest(ctx, resourceGroupName, galleryName, galleryApplicationName, options)
 	if err != nil {
 		return nil, err
@@ -206,6 +222,10 @@ func (client *GalleryApplicationsClient) deleteCreateRequest(ctx context.Context
 //   - options - GalleryApplicationsClientGetOptions contains the optional parameters for the GalleryApplicationsClient.Get method.
 func (client *GalleryApplicationsClient) Get(ctx context.Context, resourceGroupName string, galleryName string, galleryApplicationName string, options *GalleryApplicationsClientGetOptions) (GalleryApplicationsClientGetResponse, error) {
 	var err error
+	const operationName = "GalleryApplicationsClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, galleryName, galleryApplicationName, options)
 	if err != nil {
 		return GalleryApplicationsClientGetResponse{}, err
@@ -274,25 +294,20 @@ func (client *GalleryApplicationsClient) NewListByGalleryPager(resourceGroupName
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *GalleryApplicationsClientListByGalleryResponse) (GalleryApplicationsClientListByGalleryResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listByGalleryCreateRequest(ctx, resourceGroupName, galleryName, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "GalleryApplicationsClient.NewListByGalleryPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listByGalleryCreateRequest(ctx, resourceGroupName, galleryName, options)
+			}, nil)
 			if err != nil {
 				return GalleryApplicationsClientListByGalleryResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return GalleryApplicationsClientListByGalleryResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return GalleryApplicationsClientListByGalleryResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listByGalleryHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
@@ -349,10 +364,14 @@ func (client *GalleryApplicationsClient) BeginUpdate(ctx context.Context, resour
 		if err != nil {
 			return nil, err
 		}
-		poller, err := runtime.NewPoller[GalleryApplicationsClientUpdateResponse](resp, client.internal.Pipeline(), nil)
+		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[GalleryApplicationsClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[GalleryApplicationsClientUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[GalleryApplicationsClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -362,6 +381,10 @@ func (client *GalleryApplicationsClient) BeginUpdate(ctx context.Context, resour
 // Generated from API version 2022-03-03
 func (client *GalleryApplicationsClient) update(ctx context.Context, resourceGroupName string, galleryName string, galleryApplicationName string, galleryApplication GalleryApplicationUpdate, options *GalleryApplicationsClientBeginUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "GalleryApplicationsClient.BeginUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.updateCreateRequest(ctx, resourceGroupName, galleryName, galleryApplicationName, galleryApplication, options)
 	if err != nil {
 		return nil, err

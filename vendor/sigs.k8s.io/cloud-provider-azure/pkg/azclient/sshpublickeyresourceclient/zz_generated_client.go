@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armcompute.SSHPublicKeysClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,12 +41,16 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the SSHPublicKeyResource
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.SSHPublicKeyResource, rerr error) {
 
+	ctx = utils.ContextWithClientName(ctx, "SSHPublicKeysClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.SSHPublicKeysClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -56,6 +61,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // List gets a list of SSHPublicKeyResource in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.SSHPublicKeyResource, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "SSHPublicKeysClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.SSHPublicKeysClient.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

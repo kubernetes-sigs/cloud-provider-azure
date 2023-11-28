@@ -79,11 +79,10 @@ func startWatchingOrDie(watcher *fsnotify.Watcher, path string, maxRetries int) 
 				klog.Warningf("RunFileWatcherOrDie: failed to watch %s: %s, will retry", path, err.Error())
 				time.Sleep(time.Second)
 				continue
-			} else {
-				klog.Errorf("RunFileWatcherOrDie: failed to watch %s after %d times retry", maxRetries)
-				_ = watcher.Close()
-				os.Exit(1)
 			}
+			klog.Errorf("RunFileWatcherOrDie: failed to watch %s after %d times retry", path, maxRetries)
+			_ = watcher.Close()
+			os.Exit(1)
 		}
 
 		break

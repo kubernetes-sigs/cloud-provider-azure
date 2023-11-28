@@ -197,11 +197,11 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		annotation := map[string]string{
 			consts.ServiceAnnotationAllowedServiceTags: "AzureCloud",
 		}
-		utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
+		utils.Logf("Creating service "+serviceName, ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 
 		By("Waiting for the service to be exposed")
 		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []*string{})

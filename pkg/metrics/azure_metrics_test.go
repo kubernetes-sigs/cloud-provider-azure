@@ -33,11 +33,11 @@ type FakeLogger struct {
 	errorBuffer bytes.Buffer
 }
 
-func (logger *FakeLogger) Init(info logr.RuntimeInfo) {}
-func (logger *FakeLogger) Enabled(lvl int) bool {
+func (logger *FakeLogger) Init(_ logr.RuntimeInfo) {}
+func (logger *FakeLogger) Enabled(_ int) bool {
 	return true
 }
-func (logger *FakeLogger) Info(lvl int, msg string, keysAndValues ...interface{}) {
+func (logger *FakeLogger) Info(_ int, _ string, keysAndValues ...interface{}) {
 	// test result_code
 	for i := 0; i < len(keysAndValues); i += 2 {
 		var v interface{}
@@ -53,13 +53,13 @@ func (logger *FakeLogger) Info(lvl int, msg string, keysAndValues ...interface{}
 		}
 	}
 }
-func (logger *FakeLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+func (logger *FakeLogger) Error(_ error, msg string, _ ...interface{}) {
 	logger.errorBuffer.WriteString(msg)
 }
-func (logger *FakeLogger) WithValues(keysAndValues ...interface{}) logr.LogSink {
+func (logger *FakeLogger) WithValues(_ ...interface{}) logr.LogSink {
 	return logger
 }
-func (logger *FakeLogger) WithName(name string) logr.LogSink {
+func (logger *FakeLogger) WithName(_ string) logr.LogSink {
 	return logger
 }
 

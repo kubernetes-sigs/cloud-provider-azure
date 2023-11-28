@@ -267,7 +267,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, async bool, diskName,
 		return -1, err
 	}
 
-	klog.V(2).Infof("Trying to attach volume %s lun %d to node %s, diskMap len:%d, %s", diskURI, lun, nodeName, len(diskMap), diskMap)
+	klog.V(2).Infof("Trying to attach volume %s lun %d to node %s, diskMap len:%d, %+v", diskURI, lun, nodeName, len(diskMap), diskMap)
 	if len(diskMap) == 0 {
 		if !c.DisableDiskLunCheck {
 			// always check disk lun after disk attach complete
@@ -667,20 +667,6 @@ func (c *controllerCommon) DisksAreAttached(diskNames []string, nodeName types.N
 	}
 
 	return attached, nil
-}
-
-func filterDetachingDisks(unfilteredDisks []compute.DataDisk) []compute.DataDisk {
-	filteredDisks := []compute.DataDisk{}
-	for _, disk := range unfilteredDisks {
-		if disk.ToBeDetached != nil && *disk.ToBeDetached {
-			if disk.Name != nil {
-				klog.V(2).Infof("Filtering disk: %s with ToBeDetached flag set.", *disk.Name)
-			}
-		} else {
-			filteredDisks = append(filteredDisks, disk)
-		}
-	}
-	return filteredDisks
 }
 
 func (c *controllerCommon) filterNonExistingDisks(ctx context.Context, unfilteredDisks []compute.DataDisk) []compute.DataDisk {

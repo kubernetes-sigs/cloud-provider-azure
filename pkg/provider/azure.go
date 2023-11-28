@@ -871,7 +871,7 @@ func (az *Cloud) setLBDefaults(config *Config) error {
 	return nil
 }
 
-func (az *Cloud) getAuthTokenInMultiTenantEnv(servicePrincipalToken *adal.ServicePrincipalToken) (*adal.MultiTenantServicePrincipalToken, *adal.ServicePrincipalToken, error) {
+func (az *Cloud) getAuthTokenInMultiTenantEnv(_ *adal.ServicePrincipalToken) (*adal.MultiTenantServicePrincipalToken, *adal.ServicePrincipalToken, error) {
 	var err error
 	var multiTenantServicePrincipalToken *adal.MultiTenantServicePrincipalToken
 	var networkResourceServicePrincipalToken *adal.ServicePrincipalToken
@@ -1096,7 +1096,7 @@ func (az *Cloud) isStackCloud() bool {
 }
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
-func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
+func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
 	az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
 	az.eventBroadcaster = record.NewBroadcaster()
 	az.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: az.KubeClient.CoreV1().Events("")})

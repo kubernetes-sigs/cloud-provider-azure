@@ -33,7 +33,7 @@ type LogAnalyticsClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewLogAnalyticsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*LogAnalyticsClient, error) {
-	cl, err := arm.NewClient(moduleName+".LogAnalyticsClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +61,13 @@ func (client *LogAnalyticsClient) BeginExportRequestRateByInterval(ctx context.C
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[LogAnalyticsClientExportRequestRateByIntervalResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[LogAnalyticsClientExportRequestRateByIntervalResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[LogAnalyticsClientExportRequestRateByIntervalResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -75,6 +78,10 @@ func (client *LogAnalyticsClient) BeginExportRequestRateByInterval(ctx context.C
 // Generated from API version 2023-07-01
 func (client *LogAnalyticsClient) exportRequestRateByInterval(ctx context.Context, location string, parameters RequestRateByIntervalInput, options *LogAnalyticsClientBeginExportRequestRateByIntervalOptions) (*http.Response, error) {
 	var err error
+	const operationName = "LogAnalyticsClient.BeginExportRequestRateByInterval"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.exportRequestRateByIntervalCreateRequest(ctx, location, parameters, options)
 	if err != nil {
 		return nil, err
@@ -132,10 +139,13 @@ func (client *LogAnalyticsClient) BeginExportThrottledRequests(ctx context.Conte
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[LogAnalyticsClientExportThrottledRequestsResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[LogAnalyticsClientExportThrottledRequestsResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[LogAnalyticsClientExportThrottledRequestsResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -145,6 +155,10 @@ func (client *LogAnalyticsClient) BeginExportThrottledRequests(ctx context.Conte
 // Generated from API version 2023-07-01
 func (client *LogAnalyticsClient) exportThrottledRequests(ctx context.Context, location string, parameters ThrottledRequestsInput, options *LogAnalyticsClientBeginExportThrottledRequestsOptions) (*http.Response, error) {
 	var err error
+	const operationName = "LogAnalyticsClient.BeginExportThrottledRequests"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.exportThrottledRequestsCreateRequest(ctx, location, parameters, options)
 	if err != nil {
 		return nil, err

@@ -85,7 +85,7 @@ func (az *Cloud) existsPip(clusterName string, service *v1.Service) bool {
 // Implementations must treat the *v1.Service parameter as read-only and not modify it.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager.
 // TODO: Break this up into different interfaces (LB, etc) when we have more than one type of service
-func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+func (az *Cloud) GetLoadBalancer(_ context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	existingLBs, err := az.ListLB(service)
 	if err != nil {
 		return nil, az.existsPip(clusterName, service), err
@@ -121,7 +121,7 @@ func getPublicIPDomainNameLabel(service *v1.Service) (string, bool) {
 }
 
 // reconcileService reconcile the LoadBalancer service. It returns LoadBalancerStatus on success.
-func (az *Cloud) reconcileService(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+func (az *Cloud) reconcileService(_ context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	serviceName := getServiceName(service)
 	resourceBaseName := az.GetLoadBalancerName(context.TODO(), "", service)
 	klog.V(2).Infof("reconcileService: Start reconciling Service %q with its resource basename %q", serviceName, resourceBaseName)
@@ -300,7 +300,7 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // doesn't exist even if some part of it is still laying around.
 // Implementations must treat the *v1.Service parameter as read-only and not modify it.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
-func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+func (az *Cloud) EnsureLoadBalancerDeleted(_ context.Context, clusterName string, service *v1.Service) error {
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
 	defer az.serviceReconcileLock.Unlock()
@@ -354,7 +354,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
 // *v1.Service parameter as read-only and not modify it.
-func (az *Cloud) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
+func (az *Cloud) GetLoadBalancerName(_ context.Context, _ string, service *v1.Service) string {
 	return cloudprovider.DefaultLoadBalancerName(service)
 }
 
@@ -1561,7 +1561,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 
 	svcs, err := az.KubeClient.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		klog.Errorf("reconcileMultipleStandardLoadBalancerConfigurations: failed to list all load balancer services: %w", err)
+		klog.Errorf("reconcileMultipleStandardLoadBalancerConfigurations: failed to list all load balancer services: %V", err)
 		return fmt.Errorf("failed to list all load balancer services: %w", err)
 	}
 	rulePrefixToSVCNameMap := make(map[string]string)
@@ -3025,11 +3025,11 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup,
 							if len(existingPrefixes) == 1 {
 								shouldDeleteNSGRule = true
 								break //shared nsg rule has only one entry and entry owned by deleted svc has been found. skip the rest of the entries
-							} else {
-								newDestinations := append(existingPrefixes[:addressIndex], existingPrefixes[addressIndex+1:]...)
-								sharedRule.DestinationAddressPrefixes = &newDestinations
-								updatedRules[sharedIndex] = sharedRule
 							}
+							newDestinations := append(existingPrefixes[:addressIndex], existingPrefixes[addressIndex+1:]...)
+							sharedRule.DestinationAddressPrefixes = &newDestinations
+							updatedRules[sharedIndex] = sharedRule
+
 							dirtySg = true
 						}
 					}
@@ -3331,9 +3331,7 @@ func deduplicate(collection *[]string) *[]string {
 	result := make([]string, 0, len(*collection))
 
 	for _, v := range *collection {
-		if seen[v] {
-			// skip this element
-		} else {
+		if !seen[v] {
 			seen[v] = true
 			result = append(result, v)
 		}
@@ -3908,27 +3906,6 @@ func useSharedSecurityRule(service *v1.Service) bool {
 	return false
 }
 
-func getServiceTags(service *v1.Service) []string {
-	if service == nil {
-		return nil
-	}
-
-	if serviceTags, found := service.Annotations[consts.ServiceAnnotationAllowedServiceTags]; found {
-		result := []string{}
-		tags := strings.Split(strings.TrimSpace(serviceTags), ",")
-		for _, tag := range tags {
-			serviceTag := strings.TrimSpace(tag)
-			if serviceTag != "" {
-				result = append(result, serviceTag)
-			}
-		}
-
-		return result
-	}
-
-	return nil
-}
-
 // serviceOwnsPublicIP checks if the service owns the pip and if the pip is user-created.
 // The pip is user-created if and only if there is no service tags.
 // The service owns the pip if:
@@ -4071,8 +4048,8 @@ func bindServicesToPIP(pip *network.PublicIPAddress, incomingServiceNames []stri
 	return addedNew, nil
 }
 
-func unbindServiceFromPIP(pip *network.PublicIPAddress, service *v1.Service,
-	serviceName, clusterName string, isUserAssignedPIP bool) error {
+func unbindServiceFromPIP(pip *network.PublicIPAddress, _ *v1.Service,
+	serviceName, _ string, isUserAssignedPIP bool) error {
 	if pip == nil || pip.Tags == nil {
 		return fmt.Errorf("nil public IP or tags")
 	}

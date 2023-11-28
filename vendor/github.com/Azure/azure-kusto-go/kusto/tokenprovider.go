@@ -3,10 +3,11 @@ package kusto
 import (
 	"context"
 	"fmt"
-	"github.com/Azure/azure-kusto-go/kusto/utils"
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"github.com/Azure/azure-kusto-go/kusto/utils"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -112,6 +113,9 @@ func getCommonCloudInfo(kcsb *ConnectionStringBuilder, http func() *http.Client)
 		cliOpts = &azcore.ClientOptions{
 			Transport: client,
 		}
+	}
+	if cliOpts.Transport == nil {
+		cliOpts.Transport = client
 	}
 	if isEmpty(cliOpts.Cloud.ActiveDirectoryAuthorityHost) {
 		cliOpts.Cloud.ActiveDirectoryAuthorityHost = cloud.LoginEndpoint

@@ -18,10 +18,8 @@ package ipam
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
-	"time"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -309,17 +307,6 @@ func (ca *cloudCIDRAllocator) insertNodeToProcessing(nodeName string) bool {
 	return true
 }
 
-func nodeUpdateRetryTimeout(count int) time.Duration {
-	timeout := updateRetryTimeout
-	for i := 0; i < count && timeout < maxUpdateRetryTimeout; i++ {
-		timeout *= 2
-	}
-	if timeout > maxUpdateRetryTimeout {
-		timeout = maxUpdateRetryTimeout
-	}
-	return time.Duration(timeout.Nanoseconds()/2 + rand.Int63n(timeout.Nanoseconds())) // #nosec G404
-}
-
 func (ca *cloudCIDRAllocator) removeNodeFromProcessing(nodeName string) {
 	ca.lock.Lock()
 	defer ca.lock.Unlock()
@@ -425,7 +412,7 @@ func (ca *cloudCIDRAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) erro
 		if apierrors.IsNotFound(err) {
 			return nil // node no longer available, skip processing
 		}
-		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDR: %w", data.nodeName, err)
+		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDR: %s", data.nodeName, err)
 		return err
 	}
 

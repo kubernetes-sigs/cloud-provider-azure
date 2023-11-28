@@ -32,7 +32,7 @@ type CacheRulesClient struct {
 //   - credential - used to authorize requests. Usually a credential from azidentity.
 //   - options - pass nil to accept the default values.
 func NewCacheRulesClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*CacheRulesClient, error) {
-	cl, err := arm.NewClient(moduleName+".CacheRulesClient", moduleVersion, credential, options)
+	cl, err := arm.NewClient(moduleName, moduleVersion, credential, options)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +60,13 @@ func (client *CacheRulesClient) BeginCreate(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[CacheRulesClientCreateResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[CacheRulesClientCreateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[CacheRulesClientCreateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -73,6 +76,10 @@ func (client *CacheRulesClient) BeginCreate(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *CacheRulesClient) create(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, cacheRuleCreateParameters CacheRule, options *CacheRulesClientBeginCreateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "CacheRulesClient.BeginCreate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.createCreateRequest(ctx, resourceGroupName, registryName, cacheRuleName, cacheRuleCreateParameters, options)
 	if err != nil {
 		return nil, err
@@ -91,6 +98,9 @@ func (client *CacheRulesClient) create(ctx context.Context, resourceGroupName st
 // createCreateRequest creates the Create request.
 func (client *CacheRulesClient) createCreateRequest(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, cacheRuleCreateParameters CacheRule, options *CacheRulesClientBeginCreateOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/cacheRules/{cacheRuleName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -134,10 +144,13 @@ func (client *CacheRulesClient) BeginDelete(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[CacheRulesClientDeleteResponse]{
 			FinalStateVia: runtime.FinalStateViaLocation,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[CacheRulesClientDeleteResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[CacheRulesClientDeleteResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -147,6 +160,10 @@ func (client *CacheRulesClient) BeginDelete(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *CacheRulesClient) deleteOperation(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, options *CacheRulesClientBeginDeleteOptions) (*http.Response, error) {
 	var err error
+	const operationName = "CacheRulesClient.BeginDelete"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.deleteCreateRequest(ctx, resourceGroupName, registryName, cacheRuleName, options)
 	if err != nil {
 		return nil, err
@@ -165,6 +182,9 @@ func (client *CacheRulesClient) deleteOperation(ctx context.Context, resourceGro
 // deleteCreateRequest creates the Delete request.
 func (client *CacheRulesClient) deleteCreateRequest(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, options *CacheRulesClientBeginDeleteOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/cacheRules/{cacheRuleName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -199,6 +219,10 @@ func (client *CacheRulesClient) deleteCreateRequest(ctx context.Context, resourc
 //   - options - CacheRulesClientGetOptions contains the optional parameters for the CacheRulesClient.Get method.
 func (client *CacheRulesClient) Get(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, options *CacheRulesClientGetOptions) (CacheRulesClientGetResponse, error) {
 	var err error
+	const operationName = "CacheRulesClient.Get"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.getCreateRequest(ctx, resourceGroupName, registryName, cacheRuleName, options)
 	if err != nil {
 		return CacheRulesClientGetResponse{}, err
@@ -218,6 +242,9 @@ func (client *CacheRulesClient) Get(ctx context.Context, resourceGroupName strin
 // getCreateRequest creates the Get request.
 func (client *CacheRulesClient) getCreateRequest(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, options *CacheRulesClientGetOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/cacheRules/{cacheRuleName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -263,31 +290,29 @@ func (client *CacheRulesClient) NewListPager(resourceGroupName string, registryN
 			return page.NextLink != nil && len(*page.NextLink) > 0
 		},
 		Fetcher: func(ctx context.Context, page *CacheRulesClientListResponse) (CacheRulesClientListResponse, error) {
-			var req *policy.Request
-			var err error
-			if page == nil {
-				req, err = client.listCreateRequest(ctx, resourceGroupName, registryName, options)
-			} else {
-				req, err = runtime.NewRequest(ctx, http.MethodGet, *page.NextLink)
+			ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, "CacheRulesClient.NewListPager")
+			nextLink := ""
+			if page != nil {
+				nextLink = *page.NextLink
 			}
+			resp, err := runtime.FetcherForNextLink(ctx, client.internal.Pipeline(), nextLink, func(ctx context.Context) (*policy.Request, error) {
+				return client.listCreateRequest(ctx, resourceGroupName, registryName, options)
+			}, nil)
 			if err != nil {
 				return CacheRulesClientListResponse{}, err
-			}
-			resp, err := client.internal.Pipeline().Do(req)
-			if err != nil {
-				return CacheRulesClientListResponse{}, err
-			}
-			if !runtime.HasStatusCode(resp, http.StatusOK) {
-				return CacheRulesClientListResponse{}, runtime.NewResponseError(resp)
 			}
 			return client.listHandleResponse(resp)
 		},
+		Tracer: client.internal.Tracer(),
 	})
 }
 
 // listCreateRequest creates the List request.
 func (client *CacheRulesClient) listCreateRequest(ctx context.Context, resourceGroupName string, registryName string, options *CacheRulesClientListOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/cacheRules"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")
@@ -334,10 +359,13 @@ func (client *CacheRulesClient) BeginUpdate(ctx context.Context, resourceGroupNa
 		}
 		poller, err := runtime.NewPoller(resp, client.internal.Pipeline(), &runtime.NewPollerOptions[CacheRulesClientUpdateResponse]{
 			FinalStateVia: runtime.FinalStateViaAzureAsyncOp,
+			Tracer:        client.internal.Tracer(),
 		})
 		return poller, err
 	} else {
-		return runtime.NewPollerFromResumeToken[CacheRulesClientUpdateResponse](options.ResumeToken, client.internal.Pipeline(), nil)
+		return runtime.NewPollerFromResumeToken(options.ResumeToken, client.internal.Pipeline(), &runtime.NewPollerFromResumeTokenOptions[CacheRulesClientUpdateResponse]{
+			Tracer: client.internal.Tracer(),
+		})
 	}
 }
 
@@ -347,6 +375,10 @@ func (client *CacheRulesClient) BeginUpdate(ctx context.Context, resourceGroupNa
 // Generated from API version 2023-07-01
 func (client *CacheRulesClient) update(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, cacheRuleUpdateParameters CacheRuleUpdateParameters, options *CacheRulesClientBeginUpdateOptions) (*http.Response, error) {
 	var err error
+	const operationName = "CacheRulesClient.BeginUpdate"
+	ctx = context.WithValue(ctx, runtime.CtxAPINameKey{}, operationName)
+	ctx, endSpan := runtime.StartSpan(ctx, operationName, client.internal.Tracer(), nil)
+	defer func() { endSpan(err) }()
 	req, err := client.updateCreateRequest(ctx, resourceGroupName, registryName, cacheRuleName, cacheRuleUpdateParameters, options)
 	if err != nil {
 		return nil, err
@@ -365,6 +397,9 @@ func (client *CacheRulesClient) update(ctx context.Context, resourceGroupName st
 // updateCreateRequest creates the Update request.
 func (client *CacheRulesClient) updateCreateRequest(ctx context.Context, resourceGroupName string, registryName string, cacheRuleName string, cacheRuleUpdateParameters CacheRuleUpdateParameters, options *CacheRulesClientBeginUpdateOptions) (*policy.Request, error) {
 	urlPath := "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerRegistry/registries/{registryName}/cacheRules/{cacheRuleName}"
+	if client.subscriptionID == "" {
+		return nil, errors.New("parameter client.subscriptionID cannot be empty")
+	}
 	urlPath = strings.ReplaceAll(urlPath, "{subscriptionId}", url.PathEscape(client.subscriptionID))
 	if resourceGroupName == "" {
 		return nil, errors.New("parameter resourceGroupName cannot be empty")

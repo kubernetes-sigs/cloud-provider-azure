@@ -93,7 +93,7 @@ func (d *delayedRouteUpdater) run(ctx context.Context) {
 		d.updateRoutes()
 		return false, nil
 	})
-	klog.Info("delayedRouteUpdater: stopped due to %s", err.Error())
+	klog.Infof("delayedRouteUpdater: stopped due to %s", err.Error())
 }
 
 // updateRoutes invokes route table client to update all routes.
@@ -274,11 +274,11 @@ func (d *delayedRouteUpdater) addOperation(operation batchOperation) batchOperat
 	return operation
 }
 
-func (d *delayedRouteUpdater) removeOperation(name string) {}
+func (d *delayedRouteUpdater) removeOperation(_ string) {}
 
 // ListRoutes lists all managed routes that belong to the specified clusterName
 // implements cloudprovider.Routes.ListRoutes
-func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
+func (az *Cloud) ListRoutes(_ context.Context, clusterName string) ([]*cloudprovider.Route, error) {
 	klog.V(10).Infof("ListRoutes: START clusterName=%q", clusterName)
 	routeTable, existsRouteTable, err := az.getRouteTable(azcache.CacheReadTypeDefault)
 	routes, err := processRoutes(az.ipv6DualStackEnabled, routeTable, existsRouteTable, err)
@@ -371,7 +371,7 @@ func (az *Cloud) createRouteTable() error {
 // route.Name will be ignored, although the cloud-provider may use nameHint
 // to create a more user-meaningful name.
 // implements cloudprovider.Routes.CreateRoute
-func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint string, kubeRoute *cloudprovider.Route) error {
+func (az *Cloud) CreateRoute(_ context.Context, clusterName string, _ string, kubeRoute *cloudprovider.Route) error {
 	mc := metrics.NewMetricContext("routes", "create_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {
@@ -447,7 +447,7 @@ func (az *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint s
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
 // implements cloudprovider.Routes.DeleteRoute
-func (az *Cloud) DeleteRoute(ctx context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
+func (az *Cloud) DeleteRoute(_ context.Context, clusterName string, kubeRoute *cloudprovider.Route) error {
 	mc := metrics.NewMetricContext("routes", "delete_route", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), string(kubeRoute.TargetNode))
 	isOperationSucceeded := false
 	defer func() {

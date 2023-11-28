@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armcompute.SnapshotsClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,12 +41,16 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the Snapshot
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.Snapshot, rerr error) {
 
+	ctx = utils.ContextWithClientName(ctx, "SnapshotsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.SnapshotsClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -56,6 +61,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 
 // CreateOrUpdate creates or updates a Snapshot.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.Snapshot) (*armcompute.Snapshot, error) {
+	ctx = utils.ContextWithClientName(ctx, "SnapshotsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.SnapshotsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -68,6 +77,10 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 
 // Delete deletes a Snapshot by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "SnapshotsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }

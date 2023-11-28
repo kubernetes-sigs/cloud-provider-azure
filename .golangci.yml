@@ -1,6 +1,6 @@
 run:
   timeout: 30m
-  go: '1.20'
+  go: '1.21'
   tests: true
   skip-dirs:
     - vendor
@@ -8,20 +8,19 @@ linters:
   disable-all: true
   enable:
     - errcheck
-    - goconst
-    - gofmt
-    - goimports
-    - revive
-    - gosec
     - gosimple
     - govet
     - ineffassign
+    - staticcheck
+    - unused
+    - goconst
+    - goimports
+    - revive
+    - gosec
     - misspell
     - nakedret
-    - staticcheck
     - typecheck
     - unconvert
-    - unused
     - asasalint
     - asciicheck
     - bidichk
@@ -43,3 +42,7 @@ linters-settings:
       - G114
   goimports:
     local-prefixes: sigs.k8s.io/cloud-provider-azure
+  goconst:
+    min-occurrences: 10
+
+  

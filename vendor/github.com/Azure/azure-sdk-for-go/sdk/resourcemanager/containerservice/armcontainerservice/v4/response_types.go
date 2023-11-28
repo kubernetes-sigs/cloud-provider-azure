@@ -311,3 +311,32 @@ type SnapshotsClientUpdateTagsResponse struct {
 	// A node pool snapshot resource.
 	Snapshot
 }
+
+// TrustedAccessRoleBindingsClientCreateOrUpdateResponse contains the response from method TrustedAccessRoleBindingsClient.BeginCreateOrUpdate.
+type TrustedAccessRoleBindingsClientCreateOrUpdateResponse struct {
+	// Defines binding between a resource and role
+	TrustedAccessRoleBinding
+}
+
+// TrustedAccessRoleBindingsClientDeleteResponse contains the response from method TrustedAccessRoleBindingsClient.BeginDelete.
+type TrustedAccessRoleBindingsClientDeleteResponse struct {
+	// placeholder for future response values
+}
+
+// TrustedAccessRoleBindingsClientGetResponse contains the response from method TrustedAccessRoleBindingsClient.Get.
+type TrustedAccessRoleBindingsClientGetResponse struct {
+	// Defines binding between a resource and role
+	TrustedAccessRoleBinding
+}
+
+// TrustedAccessRoleBindingsClientListResponse contains the response from method TrustedAccessRoleBindingsClient.NewListPager.
+type TrustedAccessRoleBindingsClientListResponse struct {
+	// List of trusted access role bindings
+	TrustedAccessRoleBindingListResult
+}
+
+// TrustedAccessRolesClientListResponse contains the response from method TrustedAccessRolesClient.NewListPager.
+type TrustedAccessRolesClientListResponse struct {
+	// List of trusted access roles
+	TrustedAccessRoleListResult
+}

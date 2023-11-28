@@ -327,3 +327,34 @@ type SnapshotsClientListOptions struct {
 type SnapshotsClientUpdateTagsOptions struct {
 	// placeholder for future optional parameters
 }
+
+// TrustedAccessRoleBindingsClientBeginCreateOrUpdateOptions contains the optional parameters for the TrustedAccessRoleBindingsClient.BeginCreateOrUpdate
+// method.
+type TrustedAccessRoleBindingsClientBeginCreateOrUpdateOptions struct {
+	// Resumes the LRO from the provided token.
+	ResumeToken string
+}
+
+// TrustedAccessRoleBindingsClientBeginDeleteOptions contains the optional parameters for the TrustedAccessRoleBindingsClient.BeginDelete
+// method.
+type TrustedAccessRoleBindingsClientBeginDeleteOptions struct {
+	// Resumes the LRO from the provided token.
+	ResumeToken string
+}
+
+// TrustedAccessRoleBindingsClientGetOptions contains the optional parameters for the TrustedAccessRoleBindingsClient.Get
+// method.
+type TrustedAccessRoleBindingsClientGetOptions struct {
+	// placeholder for future optional parameters
+}
+
+// TrustedAccessRoleBindingsClientListOptions contains the optional parameters for the TrustedAccessRoleBindingsClient.NewListPager
+// method.
+type TrustedAccessRoleBindingsClientListOptions struct {
+	// placeholder for future optional parameters
+}
+
+// TrustedAccessRolesClientListOptions contains the optional parameters for the TrustedAccessRolesClient.NewListPager method.
+type TrustedAccessRolesClientListOptions struct {
+	// placeholder for future optional parameters
+}

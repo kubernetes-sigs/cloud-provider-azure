@@ -29,6 +29,7 @@ import (
 
 type Client struct {
 	*armnetwork.SubnetsClient
+	subscriptionID string
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
@@ -40,7 +41,7 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client}, nil
+	return &Client{client, subscriptionID}, nil
 }
 
 // Get gets the Subnet
@@ -49,6 +50,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 	if expand != nil {
 		ops = &armnetwork.SubnetsClientGetOptions{Expand: expand}
 	}
+	ctx = utils.ContextWithClientName(ctx, "SubnetsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Get")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := client.SubnetsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, ops)
 	if err != nil {
 		return nil, err
@@ -59,6 +64,10 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 
 // CreateOrUpdate creates or updates a Subnet.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armnetwork.Subnet) (*armnetwork.Subnet, error) {
+	ctx = utils.ContextWithClientName(ctx, "SubnetsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	resp, err := utils.NewPollerWrapper(client.SubnetsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -71,12 +80,20 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 
 // Delete deletes a Subnet by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) error {
+	ctx = utils.ContextWithClientName(ctx, "SubnetsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 
 // List gets a list of Subnet in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armnetwork.Subnet, rerr error) {
+	ctx = utils.ContextWithClientName(ctx, "SubnetsClient")
+	ctx = utils.ContextWithRequestMethod(ctx, "List")
+	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
+	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
 	pager := client.SubnetsClient.NewListPager(resourceGroupName, parentResourceName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

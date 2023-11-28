@@ -39,3 +39,7 @@ func log(level string, format string, args ...interface{}) {
 func Logf(format string, args ...interface{}) {
 	log("INFO", format, args...)
 }
+
+func PrintCreateSVCSuccessfully(svc string, ns string) {
+	Logf("Successfully created LoadBalancer service " + svc + " in namespace " + ns)
+}
