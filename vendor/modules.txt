@@ -85,7 +85,7 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.1.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns
-# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.1.1
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources
 # github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.6.1
