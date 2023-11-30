@@ -51,6 +51,7 @@ type AzureTestClient struct {
 	resourceGroup   string
 	authConfig      *azclient.AzureAuthConfig
 	client          azclient.ClientFactory
+	registryClient  registryclient.Interface
 	azFactoryConfig *azclient.ClientFactoryConfig
 	IPFamily        IPFamily
 	HasWindowsNodes bool
@@ -76,6 +77,15 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		return nil, err
 	}
 	azFactory, err := azclient.NewClientFactory(clientFactoryConfig, armclientConfig, cred)
+	if err != nil {
+		return nil, err
+	}
+	options, err := azclient.GetDefaultResourceClientOption(armclientConfig, clientFactoryConfig)
+	if err != nil {
+		return nil, err
+	}
+	options.Retry.TryTimeout = 0
+	registryClient, err := registryclient.New(clientFactoryConfig.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +129,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 		authConfig:      authConfig,
 		azFactoryConfig: clientFactoryConfig,
 		client:          azFactory,
+		registryClient:  registryClient,
 	}
 
 	return c, nil
@@ -186,7 +197,7 @@ func (tc *AzureTestClient) createResourceGroupClient() resourcegroupclient.Inter
 
 // createACRClient generates ACR client with the same baseclient as azure test client
 func (tc *AzureTestClient) createACRClient() registryclient.Interface {
-	return tc.client.GetRegistryClient()
+	return tc.registryClient
 }
 
 // createVMSSClient generates VMSS client with the same baseclient as azure test client
