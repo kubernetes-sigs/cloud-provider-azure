@@ -33,7 +33,6 @@ const (
 	DefaultMaxRetries    = 3
 	DefaultMaxRetryDelay = 60 * time.Second
 	DefaultRetryDelay    = 5 * time.Second
-	DefaultTryTimeout    = 10 * time.Second
 )
 
 func GetDefaultOption() *arm.ClientOptions {
@@ -43,7 +42,6 @@ func GetDefaultOption() *arm.ClientOptions {
 				RetryDelay:    DefaultRetryDelay,
 				MaxRetryDelay: DefaultMaxRetryDelay,
 				MaxRetries:    DefaultMaxRetries,
-				TryTimeout:    DefaultTryTimeout,
 				StatusCodes:   retryrepectthrottled.GetRetriableStatusCode(),
 			},
 			PerRetryPolicies: []policy.Policy{
