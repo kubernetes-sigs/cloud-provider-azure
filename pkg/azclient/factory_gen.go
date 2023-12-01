@@ -91,7 +91,7 @@ type ClientFactoryImpl struct {
 	virtualnetworkclientInterface           virtualnetworkclient.Interface
 }
 
-func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory, error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory, error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -107,10 +107,14 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
 	var ratelimitOption *ratelimit.Config
 	var rateLimitPolicy policy.Policy
 
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	accountclientInterface, err := accountclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -127,6 +131,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -137,7 +146,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	blobcontainerclientInterface, err := blobcontainerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -148,7 +161,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	blobservicepropertiesclientInterface, err := blobservicepropertiesclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -164,6 +181,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	deploymentclientInterface, err := deploymentclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -181,6 +203,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -191,7 +218,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	fileshareclientInterface, err := fileshareclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -207,6 +238,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -224,6 +260,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	ipgroupclientInterface, err := ipgroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -239,6 +280,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	loadbalancerclientInterface, err := loadbalancerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -256,6 +302,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	managedclusterclientInterface, err := managedclusterclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -271,6 +322,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	privateendpointclientInterface, err := privateendpointclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -288,6 +344,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	privatelinkserviceclientInterface, err := privatelinkserviceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -304,6 +365,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	privatezoneclientInterface, err := privatezoneclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -314,7 +380,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	providerclientInterface, err := providerclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -331,6 +401,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	publicipaddressclientInterface, err := publicipaddressclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -341,7 +416,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	publicipprefixclientInterface, err := publicipprefixclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -352,7 +431,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	registryclientInterface, err := registryclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -363,7 +446,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	resourcegroupclientInterface, err := resourcegroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -380,6 +467,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	routetableclientInterface, err := routetableclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -390,7 +482,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	secretclientInterface, err := secretclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -406,6 +502,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	securitygroupclientInterface, err := securitygroupclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -423,6 +524,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	snapshotclientInterface, err := snapshotclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -433,7 +539,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	sshpublickeyresourceclientInterface, err := sshpublickeyresourceclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -450,6 +560,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -460,7 +575,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	vaultclientInterface, err := vaultclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -476,6 +595,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
 	}
 	virtualmachineclientInterface, err := virtualmachineclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
@@ -493,6 +617,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualmachinescalesetclientInterface, err := virtualmachinescalesetclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -503,7 +632,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualmachinescalesetvmclientInterface, err := virtualmachinescalesetvmclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
@@ -514,7 +647,11 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	virtualnetworkclientInterface, err := virtualnetworkclient.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err

@@ -169,7 +169,7 @@ type ClientFactoryImpl struct {
 	{{end -}}
 }
 
-func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential) (ClientFactory,error) {
+func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory,error) {
 	if config == nil {
 		config = &ClientFactoryConfig{}
 	}
@@ -187,19 +187,24 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 	if err != nil {
 		return nil, err
 	}
-	{{with $rateLimitPolicyNotDefined}}
+	{{- with $rateLimitPolicyNotDefined}}
 	var ratelimitOption *ratelimit.Config
 	var rateLimitPolicy policy.Policy
 	{{ $rateLimitPolicyNotDefined = false -}}
 	{{end -}}
-	{{with $client.RateLimitKey -}}
+	{{with $client.RateLimitKey}}
 	//add ratelimit policy
 	ratelimitOption = config.GetRateLimitConfig("{{.}}")
 	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
-	{{- end }}	
+	{{- end }}
+	for _, optionMutFn := range clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
 	{{$key}}, err := {{.PkgAlias}}.New(config.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, err
