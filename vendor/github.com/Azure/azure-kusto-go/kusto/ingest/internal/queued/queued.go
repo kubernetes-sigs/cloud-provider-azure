@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
+	"github.com/Azure/azure-kusto-go/kusto/ingest/ingestoptions"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/gzip"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/properties"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/resources"
@@ -151,24 +152,9 @@ func (i *Ingestion) Reader(ctx context.Context, reader io.Reader, props properti
 		return "", errors.ES(errors.OpFileIngest, errors.KBlobstore, "no Kusto queue resources are defined, there is no queue to upload to").SetNoRetry()
 	}
 
-	shouldCompress := true
-	if props.Source.OriginalSource != "" {
-		shouldCompress = utils.CompressionDiscovery(props.Source.OriginalSource) == properties.CTNone
-	}
-	if props.Source.DontCompress {
-		shouldCompress = false
-	}
-
-	extension := "gz"
-	if !shouldCompress {
-		if props.Source.OriginalSource != "" {
-			extension = filepath.Ext(props.Source.OriginalSource)
-		} else {
-			extension = props.Ingestion.Additional.Format.String() // Best effort
-		}
-	}
-
-	blobName := fmt.Sprintf("%s_%s_%s_%s.%s", i.db, i.table, nower(), filepath.Base(uuid.New().String()), extension)
+	compression := utils.CompressionDiscovery(props.Source.OriginalSource)
+	shouldCompress := ShouldCompress(&props, compression)
+	blobName := GenBlobName(i.db, i.table, nower(), filepath.Base(uuid.New().String()), filepath.Base(props.Source.OriginalSource), compression, shouldCompress, props.Ingestion.Additional.Format.String())
 
 	size := int64(0)
 
@@ -332,10 +318,8 @@ var nower = time.Now
 // error if there was one.
 func (i *Ingestion) localToBlob(ctx context.Context, from string, client *azblob.Client, container string, props *properties.All) (string, int64, error) {
 	compression := utils.CompressionDiscovery(from)
-	blobName := fmt.Sprintf("%s_%s_%s_%s_%s", i.db, i.table, nower(), filepath.Base(uuid.New().String()), filepath.Base(from))
-	if compression == properties.CTNone {
-		blobName = blobName + ".gz"
-	}
+	shouldCompress := ShouldCompress(props, compression)
+	blobName := GenBlobName(i.db, i.table, nower(), filepath.Base(uuid.New().String()), filepath.Base(from), compression, shouldCompress, props.Ingestion.Additional.Format.String())
 
 	file, err := os.Open(from)
 	if err != nil {
@@ -356,7 +340,7 @@ func (i *Ingestion) localToBlob(ctx context.Context, from string, client *azblob
 		).SetNoRetry()
 	}
 
-	if compression == properties.CTNone && !props.Source.DontCompress {
+	if shouldCompress {
 		gstream := gzip.New()
 		gstream.Reset(file)
 
@@ -394,6 +378,43 @@ func (i *Ingestion) localToBlob(ctx context.Context, from string, client *azblob
 	}
 
 	return fullUrl(client, container, blobName), stat.Size(), nil
+}
+
+func GenBlobName(databaseName string, tableName string, time time.Time, guid string, fileName string, compressionFileExtension ingestoptions.CompressionType, shouldCompress bool, dataFormat string) string {
+	extension := "gz"
+	if !shouldCompress {
+		if compressionFileExtension == ingestoptions.CTNone {
+			extension = dataFormat
+		} else {
+			extension = compressionFileExtension.String()
+		}
+
+		extension = dataFormat
+	}
+
+	blobName := fmt.Sprintf("%s_%s_%s_%s_%s.%s", databaseName, tableName, time, guid, fileName, extension)
+
+	return blobName
+}
+
+// Do not compress if user specified in DontCompress or CompressionType,
+// if the file extension shows compression, or if the format is binary.
+func ShouldCompress(props *properties.All, compressionFileExtension ingestoptions.CompressionType) bool {
+	if props.Source.DontCompress {
+		return false
+	}
+
+	if props.Source.CompressionType != ingestoptions.CTUnknown {
+		if props.Source.CompressionType != ingestoptions.CTNone {
+			return false
+		}
+	} else {
+		if compressionFileExtension != ingestoptions.CTUnknown && compressionFileExtension != ingestoptions.CTNone {
+			return false
+		}
+	}
+
+	return props.Ingestion.Additional.Format.ShouldCompress()
 }
 
 // This allows mocking the stat func later on
