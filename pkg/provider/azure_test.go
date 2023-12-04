@@ -45,6 +45,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
@@ -3846,7 +3847,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 				Cloud: "AZUREPUBLICCLOUD",
 			},
 		},
-		CloudConfigType: cloudConfigTypeFile,
+		CloudConfigType: configloader.CloudConfigTypeFile,
 	}
 	err = az.InitializeCloudFromConfig(context.Background(), &config, false, true)
 	expectedErr = fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")

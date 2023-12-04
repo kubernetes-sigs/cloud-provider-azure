@@ -112,7 +112,7 @@ type Config struct {
 	ratelimitconfig.CloudProviderRateLimitConfig `json:",inline" yaml:",inline"`
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
-	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
+	CloudConfigType configloader.CloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
 
 	// The name of the resource group that the cluster is deployed in
 	ResourceGroup string `json:"resourceGroup,omitempty" yaml:"resourceGroup,omitempty"`
@@ -565,12 +565,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 
 	if config.CloudConfigType == "" {
 		// The default cloud config type is cloudConfigTypeMerge.
-		config.CloudConfigType = cloudConfigTypeMerge
+		config.CloudConfigType = configloader.CloudConfigTypeMerge
 	} else {
 		supportedCloudConfigTypes := sets.New(
-			string(cloudConfigTypeMerge),
-			string(cloudConfigTypeFile),
-			string(cloudConfigTypeSecret))
+			string(configloader.CloudConfigTypeMerge),
+			string(configloader.CloudConfigTypeFile),
+			string(configloader.CloudConfigTypeSecret))
 		if !supportedCloudConfigTypes.Has(string(config.CloudConfigType)) {
 			return fmt.Errorf("cloudConfigType %v is not supported, supported values are %v", config.CloudConfigType, supportedCloudConfigTypes.UnsortedList())
 		}
@@ -677,7 +677,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		// No credentials provided, useInstanceMetadata should be enabled for Kubelet.
 		// TODO(feiskyer): print different error message for Kubelet and controller-manager, as they're
 		// requiring different credential settings.
-		if !config.UseInstanceMetadata && config.CloudConfigType == cloudConfigTypeFile {
+		if !config.UseInstanceMetadata && config.CloudConfigType == configloader.CloudConfigTypeFile {
 			return fmt.Errorf("useInstanceMetadata must be enabled without Azure credentials")
 		}
 

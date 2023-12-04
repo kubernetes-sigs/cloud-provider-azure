@@ -20,19 +20,19 @@ import (
 	"context"
 )
 
-type EmptyLoader[Type any] struct {
+type emptyLoader[Type any] struct {
 	Data *Type
 }
 
-func (e *EmptyLoader[Type]) Load(ctx context.Context) (*Type, error) {
+func (e *emptyLoader[Type]) Load(ctx context.Context) (*Type, error) {
 	return e.Data, nil
 }
 
-func NewEmptyLoader[Type any](config *Type) ConfigLoader[Type] {
+func newEmptyLoader[Type any](config *Type) configLoader[Type] {
 	if config == nil {
 		config = new(Type)
 	}
-	return &EmptyLoader[Type]{
+	return &emptyLoader[Type]{
 		Data: config,
 	}
 }

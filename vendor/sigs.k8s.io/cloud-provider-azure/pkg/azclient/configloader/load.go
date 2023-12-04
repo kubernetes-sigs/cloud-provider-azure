@@ -18,13 +18,12 @@ package configloader
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	clientset "k8s.io/client-go/kubernetes"
 )
 
-type decoderFactory[Type any] func(content []byte, loader ConfigLoader[Type]) ConfigLoader[Type]
+type decoderFactory[Type any] func(content []byte, loader configLoader[Type]) configLoader[Type]
 type K8sSecretLoaderConfig struct {
 	K8sSecretConfig
 	KubeClient clientset.Interface
@@ -38,45 +37,42 @@ type FileLoaderConfig struct {
 // * file   : The values are read from local cloud-config file.
 // * secret : The values from secret would override all configures from local cloud-config file.
 // * merge  : The values from secret would override only configurations that are explicitly set in the secret. This is the default value.
-type cloudConfigType string
+type CloudConfigType string
 
 const (
-	CloudConfigTypeFile   cloudConfigType = "file"
-	CloudConfigTypeSecret cloudConfigType = "secret"
-	CloudConfigTypeMerge  cloudConfigType = "merge"
+	CloudConfigTypeFile   CloudConfigType = "file"
+	CloudConfigTypeSecret CloudConfigType = "secret"
+	CloudConfigTypeMerge  CloudConfigType = "merge"
 )
 
 type ConfigMergeConfig struct {
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
-	CloudConfigType cloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
+	CloudConfigType CloudConfigType `json:"cloudConfigType,omitempty" yaml:"cloudConfigType,omitempty"`
 }
 
 func Load[Type any](ctx context.Context, secretLoaderConfig *K8sSecretLoaderConfig, fileLoaderConfig *FileLoaderConfig) (*Type, error) {
-
-	if fileLoaderConfig == nil {
-		return nil, fmt.Errorf("config file load config is nil")
+	configloader := newEmptyLoader[Type](nil)
+	var loadConfig *ConfigMergeConfig
+	var err error
+	if fileLoaderConfig != nil {
+		loadConfigloader := newEmptyLoader[ConfigMergeConfig](&ConfigMergeConfig{CloudConfigType: CloudConfigTypeMerge})
+		loadConfigloader = newFileLoader(fileLoaderConfig.FilePath, loadConfigloader, newYamlByteLoader[ConfigMergeConfig])
+		//by default the config load type  is merge
+		loadConfig, err = loadConfigloader.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		configloader = newFileLoader(fileLoaderConfig.FilePath, nil, newYamlByteLoader[Type])
+		if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeFile)) {
+			return configloader.Load(ctx)
+		}
 	}
-	//by default the config load type  is merge
-	loadConfigloader := NewEmptyLoader[ConfigMergeConfig](&ConfigMergeConfig{CloudConfigType: CloudConfigTypeMerge})
-	loadConfigloader = NewFileLoader(fileLoaderConfig.FilePath, loadConfigloader, NewYamlByteLoader[ConfigMergeConfig])
-	loadConfig, err := loadConfigloader.Load(ctx)
-	if err != nil {
-		return nil, err
+	if secretLoaderConfig != nil {
+		if loadConfig != nil && strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeSecret)) {
+			configloader = newK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, nil, newYamlByteLoader[Type])
+		} else {
+			configloader = newK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, configloader, newYamlByteLoader[Type])
+		}
 	}
-
-	configloader := NewFileLoader(fileLoaderConfig.FilePath, nil, NewYamlByteLoader[Type])
-	if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeFile)) {
-		return configloader.Load(ctx)
-	}
-
-	if secretLoaderConfig == nil {
-		return nil, fmt.Errorf("secret load config is nil")
-	}
-
-	if strings.EqualFold(string(loadConfig.CloudConfigType), string(CloudConfigTypeSecret)) {
-		configloader = NewK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, nil, NewYamlByteLoader[Type])
-		return configloader.Load(ctx)
-	}
-	configloader = NewK8sSecretLoader(&secretLoaderConfig.K8sSecretConfig, secretLoaderConfig.KubeClient, configloader, NewYamlByteLoader[Type])
 	return configloader.Load(ctx)
 }
