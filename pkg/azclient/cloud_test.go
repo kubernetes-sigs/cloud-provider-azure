@@ -130,6 +130,7 @@ var _ = Describe("Cloud", func() {
 				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(nil)
 				Expect(err).To(HaveOccurred())
 				Expect(cloudConfig).To(BeNil())
+				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
 		When("the environment is set,file is empty", func() {
@@ -138,6 +139,7 @@ var _ = Describe("Cloud", func() {
 				cloudConfig, err := azclient.AzureCloudConfigOverrideFromEnv(nil)
 				Expect(err).To(HaveOccurred())
 				Expect(cloudConfig).To(BeNil())
+				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
 		When("the environment is set,file is correct", func() {
@@ -160,6 +162,7 @@ var _ = Describe("Cloud", func() {
 				Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(Equal("https://login.chinacloudapi.cn"))
 				Expect(cloudConfig.Services).NotTo(BeEmpty())
 				Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(Equal("https://management.core.chinacloudapi.cn/"))
+				os.Unsetenv(azclient.EnvironmentFilepathName)
 			})
 		})
 	})

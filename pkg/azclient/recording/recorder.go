@@ -216,6 +216,7 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if !strings.EqualFold(clientID, "clientid") {
 			i.Request.URL = strings.Replace(i.Request.URL, clientID, "clientid", -1)
 			i.Request.Body = strings.Replace(i.Request.Body, clientID, "clientid", -1)
+			i.Request.Form.Set("client_id", "clientid")
 			i.Response.Body = strings.Replace(i.Response.Body, clientID, "clientid", -1)
 			if i.Request.Form.Has("client_id") {
 				i.Request.Form.Set("client_id", clientID)
@@ -299,4 +300,8 @@ func (r *Recorder) ClientSecret() string {
 
 func (r *Recorder) Stop() error {
 	return r.rec.Stop()
+}
+
+func (r *Recorder) IsNewCassette() bool {
+	return r.rec.IsNewCassette()
 }

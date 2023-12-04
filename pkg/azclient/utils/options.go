@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 
@@ -37,20 +38,25 @@ const (
 
 func GetDefaultOption() *arm.ClientOptions {
 	return &arm.ClientOptions{
-		ClientOptions: policy.ClientOptions{
-			Retry: policy.RetryOptions{
-				RetryDelay:    DefaultRetryDelay,
-				MaxRetryDelay: DefaultMaxRetryDelay,
-				MaxRetries:    DefaultMaxRetries,
-				StatusCodes:   retryrepectthrottled.GetRetriableStatusCode(),
-			},
-			PerRetryPolicies: []policy.Policy{
-				retryrepectthrottled.NewThrottlingPolicy(),
-			},
-			Transport: &http.Client{
-				Transport: DefaultTransport,
-			},
-			TracingProvider: TracingProvider,
+		ClientOptions: GetDefaultAzCoreClientOption(),
+	}
+}
+
+func GetDefaultAzCoreClientOption() policy.ClientOptions {
+	return policy.ClientOptions{
+		Retry: policy.RetryOptions{
+			RetryDelay:    DefaultRetryDelay,
+			MaxRetryDelay: DefaultMaxRetryDelay,
+			MaxRetries:    DefaultMaxRetries,
+			StatusCodes:   retryrepectthrottled.GetRetriableStatusCode(),
 		},
+		PerRetryPolicies: []policy.Policy{
+			retryrepectthrottled.NewThrottlingPolicy(),
+		},
+		Transport: &http.Client{
+			Transport: DefaultTransport,
+		},
+		TracingProvider: TracingProvider,
+		Cloud:           cloud.AzurePublic,
 	}
 }

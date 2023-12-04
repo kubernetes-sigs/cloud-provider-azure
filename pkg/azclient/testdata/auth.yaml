@@ -13,7 +13,9 @@ interactions:
         remote_addr: ""
         request_uri: ""
         body: ""
-        form: {}
+        form:
+            client_id:
+                - 2cb66ba2-e03b-4c9b-99ce-3a22b7bdf8e6
         headers: {}
         url: https://login.microsoftonline.com/common/discovery/instance?api-version=1.1&authorization_endpoint=https%3A%2F%2Flogin.microsoftonline.com%2Ftenantid%2Foauth2%2Fv2.0%2Fauthorize
         method: GET
@@ -47,7 +49,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 854.563415ms
+        duration: 1.044373004s
     - id: 1
       request:
         proto: HTTP/1.1
@@ -60,7 +62,9 @@ interactions:
         remote_addr: ""
         request_uri: ""
         body: ""
-        form: {}
+        form:
+            client_id:
+                - 2cb66ba2-e03b-4c9b-99ce-3a22b7bdf8e6
         headers: {}
         url: https://login.microsoftonline.com/tenantid/v2.0/.well-known/openid-configuration
         method: GET
@@ -94,7 +98,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 223.319204ms
+        duration: 261.900201ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -129,14 +133,14 @@ interactions:
         proto_minor: 1
         transfer_encoding: []
         trailer: {}
-        content_length: 1397
+        content_length: 1421
         uncompressed: false
         body: '{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}'
         headers:
             Cache-Control:
                 - no-store, no-cache
             Content-Length:
-                - "1397"
+                - "1421"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -153,4 +157,4 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 384.950807ms
+        duration: 312.224101ms
