@@ -47,6 +47,8 @@ const (
 	caDeploymentName                = "cluster-autoscaler"
 	balanceNodeGroupsFlag           = "--balance-similar-node-groups=true"
 	clusterAutoscalerDeploymentName = "cluster-autoscaler"
+
+	deploymentSuffix = "-deployment"
 )
 
 // Cluster autoscaling cannot run in parallel, since multiple threads will infect the count of nodes
@@ -128,7 +130,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 	It("should scale up or down if deployment replicas leave nodes busy or idle", func() {
 		utils.Logf("Create a deployment that will trigger a scale up operation")
 		replicas := podCount + 1
-		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
+
+		deployment := createDeploymentManifest(basename+deploymentSuffix, replicas, map[string]string{"app": basename}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -143,7 +146,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 	It("should scale up, deploy a statefulset with disks attached, scale down, and certain pods + disks should be evicted to a new node", func() {
 		By("Creating a deployment that will trigger a scale up operation")
 		replicas := podCount + 1
-		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		deployment := createDeploymentManifest(basename+deploymentSuffix, replicas, map[string]string{"app": basename + deploymentSuffix}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -222,7 +225,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		By("Saturating the free space")
-		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		deploymentName := basename + deploymentSuffix
+		deployment := createDeploymentManifest(deploymentName, podCount, map[string]string{"app": deploymentName}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -235,7 +239,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		By("Scaling out 10 new nodes")
 		cpu := nodes[0].Status.Capacity[v1.ResourceCPU]
 		scaleUpPodSize := int64(float64(cpu.MilliValue()) / 1.8)
-		scaleUpDeployment := createDeploymentManifest(basename+"-deployment1", 10, map[string]string{"app": basename + "-deployment1"}, scaleUpPodSize, false)
+		scaleUpDeployment := createDeploymentManifest(deploymentName, 10, map[string]string{"app": deploymentName}, scaleUpPodSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), scaleUpDeployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), scaleUpDeployment.Name, metav1.DeleteOptions{})
@@ -261,7 +265,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		By("Saturating the free space")
-		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		deployment := createDeploymentManifest(basename+deploymentSuffix, podCount, map[string]string{"app": basename + deploymentSuffix}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -308,7 +312,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		By("Saturating the free space")
-		deployment := createDeploymentManifest(basename+"-deployment", podCount, map[string]string{"app": basename + "-deployment"}, podSize, false)
+		deployment := createDeploymentManifest(basename+deploymentSuffix, podCount, map[string]string{"app": basename + deploymentSuffix}, podSize, false)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -371,7 +375,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 
 		utils.Logf("Create a deployment that will trigger a scale up operation")
 		replicas := podCount + 1
-		deployment := createDeploymentManifest(basename+"-deployment", replicas, map[string]string{"app": basename}, podSize, false)
+		deployment := createDeploymentManifest(basename+deploymentSuffix, replicas, map[string]string{"app": basename}, podSize, false)
 		_, err = cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
@@ -400,7 +404,7 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		replicas := initNodeCount + 1
-		deployment := createDeploymentManifest(basename+"-deployment", int32(replicas), map[string]string{"app": basename}, gpuCap, true)
+		deployment := createDeploymentManifest(basename+deploymentSuffix, int32(replicas), map[string]string{"app": basename}, gpuCap, true)
 		_, err := cs.AppsV1().Deployments(ns.Name).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		defer func() {
 			err := cs.AppsV1().Deployments(ns.Name).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})

@@ -23,5 +23,5 @@ import (
 	"github.com/spf13/pflag"
 )
 
-func (o *CloudNodeManagerOptions) addOSFlags(fs *pflag.FlagSet) {
+func (o *CloudNodeManagerOptions) addOSFlags(_ *pflag.FlagSet) {
 }

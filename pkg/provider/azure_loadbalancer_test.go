@@ -63,6 +63,14 @@ const LBInUseRawError = `{
   	}
 }`
 
+const (
+	expectedPIPID  = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"
+	rgprefix       = "/subscriptions/subscription/resourceGroups/rg"
+	resourcesuffix = "/providers/Microsoft.Network/publicIPAddresses/pip1"
+	ipv6Suffix     = "-IPv6"
+	svcPrefix      = "aservice1-"
+)
+
 func TestExistsPip(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -669,8 +677,8 @@ func TestSubnet(t *testing.T) {
 			expected: pointer.String("subnet"),
 		},
 	} {
-		real := getInternalSubnet(c.service)
-		assert.Equal(t, c.expected, real, fmt.Sprintf("TestCase[%d]: %s", i, c.desc))
+		realValue := getInternalSubnet(c.service)
+		assert.Equal(t, c.expected, realValue, fmt.Sprintf("TestCase[%d]: %s", i, c.desc))
 	}
 }
 
@@ -1058,8 +1066,8 @@ func TestGetPublicIPAddressResourceGroup(t *testing.T) {
 		t.Run(c.desc, func(t *testing.T) {
 			s := &v1.Service{}
 			s.Annotations = c.annotations
-			real := az.getPublicIPAddressResourceGroup(s)
-			assert.Equal(t, c.expected, real, "TestCase[%d]: %s", i, c.desc)
+			realValue := az.getPublicIPAddressResourceGroup(s)
+			assert.Equal(t, c.expected, realValue, "TestCase[%d]: %s", i, c.desc)
 		})
 	}
 }
@@ -1601,63 +1609,6 @@ func TestAreIpTagsEquivalent(t *testing.T) {
 	}
 }
 
-func TestGetServiceTags(t *testing.T) {
-	tests := []struct {
-		desc     string
-		service  *v1.Service
-		expected []string
-	}{
-		{
-			desc:     "nil should be returned when service is nil",
-			service:  nil,
-			expected: nil,
-		},
-		{
-			desc:     "nil should be returned when service has no annotations",
-			service:  &v1.Service{},
-			expected: nil,
-		},
-		{
-			desc: "single tag should be returned when service has set one annotations",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTags: "tag1",
-					},
-				},
-			},
-			expected: []string{"tag1"},
-		},
-		{
-			desc: "multiple tags should be returned when service has set multi-annotations",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTags: "tag1, tag2",
-					},
-				},
-			},
-			expected: []string{"tag1", "tag2"},
-		},
-		{
-			desc: "correct tags should be returned when comma or spaces are included in the annotations",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTags: ", tag1, ",
-					},
-				},
-			},
-			expected: []string{"tag1"},
-		},
-	}
-
-	for i, c := range tests {
-		tags := getServiceTags(c.service)
-		assert.Equal(t, tags, c.expected, "TestCase[%d]: %s", i, c.desc)
-	}
-}
-
 func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1822,6 +1773,7 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 			},
 		},
 	} {
+		tc := tc
 		t.Run(tc.description, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			cloud.LoadBalancerSku = "Standard"
@@ -3114,7 +3066,7 @@ func getTestRule(enableTCPReset bool, port int32, isIPv6 bool) network.LoadBalan
 	return expectedRules
 }
 
-func getHATestRules(enableTCPReset, hasProbe bool, protocol v1.Protocol, isIPv6, isInternal bool) []network.LoadBalancingRule {
+func getHATestRules(_, hasProbe bool, protocol v1.Protocol, isIPv6, isInternal bool) []network.LoadBalancingRule {
 	suffix := ""
 	enableFloatingIP := true
 	if isIPv6 {
@@ -3256,9 +3208,9 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 	caser := cases.Title(language.English)
 	lb := getTestLoadBalancer(name, rgName, clusterName, identifier, service, lbSku)
 	*lb.LoadBalancerPropertiesFormat.FrontendIPConfigurations = append(*lb.LoadBalancerPropertiesFormat.FrontendIPConfigurations, network.FrontendIPConfiguration{
-		Name: pointer.String(*identifier + "-IPv6"),
+		Name: pointer.String(*identifier + ipv6Suffix),
 		ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
-			"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier + "-IPv6"),
+			"Microsoft.Network/loadBalancers/" + *name + "/frontendIPConfigurations/" + *identifier + ipv6Suffix),
 		FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
 			PublicIPAddress: &network.PublicIPAddress{
 				ID: pointer.String("testCluster-aservice1-IPv6"),
@@ -3266,11 +3218,11 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 		},
 	})
 	*lb.LoadBalancerPropertiesFormat.BackendAddressPools = append(*lb.LoadBalancerPropertiesFormat.BackendAddressPools, network.BackendAddressPool{
-		Name: pointer.String(*clusterName + "-IPv6"),
+		Name: pointer.String(*clusterName + ipv6Suffix),
 	})
 	*lb.LoadBalancerPropertiesFormat.Probes = append(*lb.LoadBalancerPropertiesFormat.Probes, network.Probe{
 		Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
-			"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv6"),
+			"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + ipv6Suffix),
 		ProbePropertiesFormat: &network.ProbePropertiesFormat{
 			Port:              pointer.Int32(10080),
 			Protocol:          network.ProbeProtocolTCP,
@@ -3280,7 +3232,7 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 	})
 	*lb.LoadBalancerPropertiesFormat.LoadBalancingRules = append(*lb.LoadBalancerPropertiesFormat.LoadBalancingRules, network.LoadBalancingRule{
 		Name: pointer.String(*identifier + "-" + string(service.Spec.Ports[0].Protocol) +
-			"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + "-IPv6"),
+			"-" + strconv.Itoa(int(service.Spec.Ports[0].Port)) + ipv6Suffix),
 		LoadBalancingRulePropertiesFormat: &network.LoadBalancingRulePropertiesFormat{
 			Protocol: network.TransportProtocol(caser.String((strings.ToLower(string(service.Spec.Ports[0].Protocol))))),
 			FrontendIPConfiguration: &network.SubResource{
@@ -3289,7 +3241,7 @@ func getTestLoadBalancerDualStack(name, rgName, clusterName, identifier *string,
 			},
 			BackendAddressPool: &network.SubResource{
 				ID: pointer.String("/subscriptions/subscription/resourceGroups/" + *rgName + "/providers/" +
-					"Microsoft.Network/loadBalancers/" + *name + "/backendAddressPools/" + *clusterName + "-IPv6"),
+					"Microsoft.Network/loadBalancers/" + *name + "/backendAddressPools/" + *clusterName + ipv6Suffix),
 			},
 			LoadDistribution:     network.LoadDistribution("Default"),
 			FrontendPort:         pointer.Int32(service.Spec.Ports[0].Port),
@@ -3369,29 +3321,29 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 		}
 		modifiedLbs[i].Probes = &[]network.Probe{
 			{
-				Name: pointer.String("aservice1-" + string(service3.Spec.Ports[0].Protocol) +
+				Name: pointer.String(svcPrefix + string(service3.Spec.Ports[0].Protocol) +
 					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port))),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
 					Port: pointer.Int32(10080),
 				},
 			},
 			{
-				Name: pointer.String("aservice1-" + string(service3.Spec.Ports[0].Protocol) +
+				Name: pointer.String(svcPrefix + string(service3.Spec.Ports[0].Protocol) +
 					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port))),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
 					Port: pointer.Int32(10081),
 				},
 			},
 			{
-				Name: pointer.String("aservice1-" + string(service3.Spec.Ports[0].Protocol) +
-					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port)) + "-IPv6"),
+				Name: pointer.String(svcPrefix + string(service3.Spec.Ports[0].Protocol) +
+					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port)) + ipv6Suffix),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
 					Port: pointer.Int32(10080),
 				},
 			},
 			{
-				Name: pointer.String("aservice1-" + string(service3.Spec.Ports[0].Protocol) +
-					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port)) + "-IPv6"),
+				Name: pointer.String(svcPrefix + string(service3.Spec.Ports[0].Protocol) +
+					"-" + strconv.Itoa(int(service3.Spec.Ports[0].Port)) + ipv6Suffix),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
 					Port: pointer.Int32(10081),
 				},
@@ -3464,29 +3416,29 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 	existingSLB.Probes = &[]network.Probe{
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
 				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10080),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
 				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10081),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
-				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
+				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10080),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
-				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
+				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10081),
 			},
@@ -3565,29 +3517,29 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 	slb5.Probes = &[]network.Probe{
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
 				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10080),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
 				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10081),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
-				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
+				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10080),
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service4.Spec.Ports[0].Protocol) +
-				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(service4.Spec.Ports[0].Protocol) +
+				"-" + strconv.Itoa(int(service4.Spec.Ports[0].Port)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port: pointer.Int32(10081),
 			},
@@ -3696,7 +3648,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 	expectedLB7.Probes = &[]network.Probe{
 		{
-			Name: pointer.String("aservice1-" + string(v1.ProtocolTCP) +
+			Name: pointer.String(svcPrefix + string(v1.ProtocolTCP) +
 				"-" + strconv.Itoa(int(service7.Spec.HealthCheckNodePort))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port:              pointer.Int32(10081),
@@ -3707,8 +3659,8 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(v1.ProtocolTCP) +
-				"-" + strconv.Itoa(int(service7.Spec.HealthCheckNodePort)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(v1.ProtocolTCP) +
+				"-" + strconv.Itoa(int(service7.Spec.HealthCheckNodePort)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port:              pointer.Int32(10081),
 				RequestPath:       pointer.String("/healthz"),
@@ -3744,7 +3696,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 	expectedLB8.Probes = &[]network.Probe{
 		{
-			Name: pointer.String("aservice1-" + string(service8.Spec.Ports[0].Protocol) +
+			Name: pointer.String(svcPrefix + string(service8.Spec.Ports[0].Protocol) +
 				"-" + strconv.Itoa(int(service7.Spec.Ports[0].Port))),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port:              pointer.Int32(10080),
@@ -3754,8 +3706,8 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			},
 		},
 		{
-			Name: pointer.String("aservice1-" + string(service8.Spec.Ports[0].Protocol) +
-				"-" + strconv.Itoa(int(service7.Spec.Ports[0].Port)) + "-IPv6"),
+			Name: pointer.String(svcPrefix + string(service8.Spec.Ports[0].Protocol) +
+				"-" + strconv.Itoa(int(service7.Spec.Ports[0].Port)) + ipv6Suffix),
 			ProbePropertiesFormat: &network.ProbePropertiesFormat{
 				Port:              pointer.Int32(10080),
 				Protocol:          network.ProbeProtocolTCP,
@@ -3896,6 +3848,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 
 	for _, test := range testCases {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			az.Config.LoadBalancerSku = test.loadBalancerSku
@@ -5800,8 +5753,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{{Name: pointer.String("pip1")}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
@@ -5816,7 +5768,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{{Name: pointer.String("pip1-IPv6")}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1-IPv6"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
+				ID: pointer.String(rgprefix +
 					"/providers/Microsoft.Network/publicIPAddresses/pip1-IPv6"),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv6,
@@ -5845,8 +5797,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("newdns"),
@@ -5871,8 +5822,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings:            nil,
 					PublicIPAddressVersion: network.IPv4,
@@ -5895,8 +5845,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("previousdns"),
@@ -5917,8 +5866,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("newdns"),
@@ -5946,8 +5894,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("newdns"),
@@ -5980,8 +5927,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			}},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					DNSSettings: &network.PublicIPAddressDNSSettings{
 						DomainNameLabel: pointer.String("newdns"),
@@ -6018,8 +5964,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			existingPIPs: []network.PublicIPAddress{
 				{
 					Name: pointer.String("pip1"),
-					ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-						"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+					ID:   pointer.String(expectedPIPID),
 					Tags: map[string]*string{
 						consts.ServiceUsingDNSKey: pointer.String("default/test1"),
 						consts.ServiceTagKey:      pointer.String("default/test1"),
@@ -6035,8 +5980,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				Tags: map[string]*string{
 					consts.ServiceUsingDNSKey: pointer.String("default/test1"),
 					consts.ServiceTagKey:      pointer.String("default/test1"),
@@ -6058,8 +6002,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
@@ -6084,8 +6027,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			},
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv6,
 					PublicIPAllocationMethod: network.Static,
@@ -6101,8 +6043,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
 				Tags: map[string]*string{"a": pointer.String("c")},
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion:   network.IPv4,
 					PublicIPAllocationMethod: network.Static,
@@ -6129,8 +6070,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			expectedPIP: &network.PublicIPAddress{
 				Name: pointer.String("pip1"),
 				Tags: map[string]*string{"a": pointer.String("b")},
-				ID: pointer.String("/subscriptions/subscription/resourceGroups/rg" +
-					"/providers/Microsoft.Network/publicIPAddresses/pip1"),
+				ID:   pointer.String(expectedPIPID),
 				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 					PublicIPAddressVersion: network.IPv4,
 					IPAddress:              pointer.String("1.2.3.4"),
@@ -6175,7 +6115,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					basicPIP = &test.existingPIPs[0]
 				}
 
-				basicPIP.ID = pointer.String("/subscriptions/subscription/resourceGroups/rg" +
+				basicPIP.ID = pointer.String(rgprefix +
 					"/providers/Microsoft.Network/publicIPAddresses/" + test.pipName)
 
 				if basicPIP.PublicIPAddressPropertiesFormat == nil {
@@ -8165,6 +8105,7 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 			expectedLBs: []string{"a", "c"},
 		},
 	} {
+		tc := tc
 		t.Run(tc.description, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			az.MultipleStandardLoadBalancerConfigurations = tc.lbConfigs
@@ -8680,6 +8621,7 @@ func TestGetFrontendIPConfigNames(t *testing.T) {
 	}
 
 	for _, c := range cases {
+		c := c
 		t.Run(c.description, func(t *testing.T) {
 			if c.useStandardLB {
 				az.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
@@ -8986,6 +8928,7 @@ func TestServiceOwnsFrontendIP(t *testing.T) {
 	}
 
 	for _, test := range testCases {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			if test.existingPIPs != nil {
@@ -9358,6 +9301,7 @@ func TestReconcileMultipleStandardLoadBalancerNodes(t *testing.T) {
 			},
 		},
 	} {
+		tc := tc
 		t.Run(tc.description, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			ss, _ := NewTestScaleSet(ctrl)

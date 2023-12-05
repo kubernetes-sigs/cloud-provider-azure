@@ -1598,6 +1598,10 @@ func TestReconcileSecurityWithSourceRanges(t *testing.T) {
 	validateSecurityGroupDualStack(t, az, sg, svc)
 }
 
+var (
+	errPreconditionFailedEtagMismatch = fmt.Errorf("PreconditionFailedEtagMismatch")
+)
+
 func TestReconcileSecurityGroupEtagMismatch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

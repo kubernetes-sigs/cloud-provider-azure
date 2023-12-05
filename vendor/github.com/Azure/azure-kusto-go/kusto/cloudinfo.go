@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -16,7 +17,7 @@ import (
 // information needed for connection string builder to provide all the requisite information
 
 const (
-	metadataPath                  = "v1/rest/auth/metadata"
+	metadataPath                  = "/v1/rest/auth/metadata"
 	defaultAuthEnvVarName         = "AadAuthorityUri"
 	defaultKustoClientAppId       = "db662dc1-0cfe-4e1c-a843-19a68e65be58"
 	defaultPublicLoginUrl         = "https://login.microsoftonline.com"
@@ -64,8 +65,10 @@ func GetMetadata(kustoUri string, httpClient *http.Client) (CloudInfo, error) {
 		if err != nil {
 			return CloudInfo{}, err
 		}
-
-		u.Path = metadataPath
+		if !strings.HasPrefix(u.Path, "/") {
+			u.Path = "/" + u.Path
+		}
+		u = u.JoinPath(metadataPath)
 		// TODO should we make this timeout configurable.
 		req, err := http.NewRequest("GET", u.String(), nil)
 
@@ -79,7 +82,7 @@ func GetMetadata(kustoUri string, httpClient *http.Client) (CloudInfo, error) {
 		}
 
 		// Handle internal server error as a special case and return as an error (to be consistent with other SDK's)
-		if resp.StatusCode >= http.StatusInternalServerError {
+		if resp.StatusCode >= 300 && resp.StatusCode != 404 {
 			return CloudInfo{}, kustoErrors.E(kustoErrors.OpCloudInfo, kustoErrors.KHTTPError, fmt.Errorf("error %s when querying endpoint %s",
 				resp.Status, u.String()),
 			)

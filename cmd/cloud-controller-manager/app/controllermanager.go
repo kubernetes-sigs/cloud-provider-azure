@@ -185,51 +185,50 @@ func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconf
 			}
 
 			panic("unreachable")
+		}
+		var updateCh chan struct{}
+
+		cloudConfigFile := c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile
+		if cloudConfigFile != "" {
+			klog.V(1).Infof("RunWrapper: using dynamic initialization from config file %s, starting the file watcher", cloudConfigFile)
+			updateCh = dynamic.RunFileWatcherOrDie(cloudConfigFile)
 		} else {
-			var updateCh chan struct{}
+			klog.V(1).Infof("RunWrapper: using dynamic initialization from secret %s/%s, starting the secret watcher", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
+			updateCh = dynamic.RunSecretWatcherOrDie(c)
+		}
 
-			cloudConfigFile := c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile
-			if cloudConfigFile != "" {
-				klog.V(1).Infof("RunWrapper: using dynamic initialization from config file %s, starting the file watcher", cloudConfigFile)
-				updateCh = dynamic.RunFileWatcherOrDie(cloudConfigFile)
-			} else {
-				klog.V(1).Infof("RunWrapper: using dynamic initialization from secret %s/%s, starting the secret watcher", c.DynamicReloadingConfig.CloudConfigSecretNamespace, c.DynamicReloadingConfig.CloudConfigSecretName)
-				updateCh = dynamic.RunSecretWatcherOrDie(c)
-			}
+		errCh := make(chan error, 1)
+		cancelFunc := runAsync(s, errCh, h)
+		for {
+			select {
+			case <-updateCh:
+				klog.V(2).Info("RunWrapper: detected the cloud config has been updated, re-constructing the cloud controller manager")
 
-			errCh := make(chan error, 1)
-			cancelFunc := runAsync(s, errCh, h)
-			for {
-				select {
-				case <-updateCh:
-					klog.V(2).Info("RunWrapper: detected the cloud config has been updated, re-constructing the cloud controller manager")
+				// stop the previous goroutines
+				cancelFunc()
 
-					// stop the previous goroutines
-					cancelFunc()
-
-					var (
-						shouldRemainStopped bool
-						err                 error
-					)
-					if cloudConfigFile != "" {
-						// start new goroutines if needed when using config file
-						shouldRemainStopped, err = shouldDisableCloudProvider(cloudConfigFile)
-						if err != nil {
-							klog.Fatalf("RunWrapper: failed to determine if it is needed to restart all controllers: %s", err.Error())
-						}
+				var (
+					shouldRemainStopped bool
+					err                 error
+				)
+				if cloudConfigFile != "" {
+					// start new goroutines if needed when using config file
+					shouldRemainStopped, err = shouldDisableCloudProvider(cloudConfigFile)
+					if err != nil {
+						klog.Fatalf("RunWrapper: failed to determine if it is needed to restart all controllers: %s", err.Error())
 					}
-
-					if !shouldRemainStopped {
-						klog.Info("RunWrapper: restarting all controllers")
-						cancelFunc = runAsync(s, errCh, h)
-					} else {
-						klog.Warningf("All controllers are stopped!")
-					}
-
-				case err := <-errCh:
-					klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
-					os.Exit(1)
 				}
+
+				if !shouldRemainStopped {
+					klog.Info("RunWrapper: restarting all controllers")
+					cancelFunc = runAsync(s, errCh, h)
+				} else {
+					klog.Warningf("All controllers are stopped!")
+				}
+
+			case err := <-errCh:
+				klog.Errorf("RunWrapper: failed to start cloud controller manager: %v", err)
+				os.Exit(1)
 			}
 		}
 	}

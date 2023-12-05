@@ -34,30 +34,34 @@ import (
 var (
 	CrossTenantNetworkResourceNegativeConfig = []*AzureAuthConfig{
 		{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
 			AzureAuthConfig: azclient.AzureAuthConfig{
-				TenantID:        "TenantID",
 				AADClientID:     "AADClientID",
 				AADClientSecret: "AADClientSecret",
 			},
 		},
 		{
-			AzureAuthConfig: azclient.AzureAuthConfig{
-
+			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID:                "TenantID",
-				AADClientID:             "AADClientID",
-				AADClientSecret:         "AADClientSecret",
 				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:     "AADClientID",
+				AADClientSecret: "AADClientSecret",
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 			IdentitySystem:                consts.ADFSIdentitySystem,
 		},
 		{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
 			AzureAuthConfig: azclient.AzureAuthConfig{
-
-				TenantID:                    "TenantID",
 				AADClientID:                 "AADClientID",
 				AADClientSecret:             "AADClientSecret",
-				NetworkResourceTenantID:     "NetworkResourceTenantID",
 				UseManagedIdentityExtension: true,
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
@@ -81,10 +85,12 @@ func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
 			AzureAuthConfig: azclient.AzureAuthConfig{
 				UseManagedIdentityExtension: true,
 				UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
-				TenantID:                    "TenantID",
 				AADClientID:                 "AADClientID",
 				AADClientSecret:             "AADClientSecret",
 			},
@@ -134,10 +140,12 @@ func TestGetServicePrincipalTokenFromMSIWithIdentityResourceID(t *testing.T) {
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
 			AzureAuthConfig: azclient.AzureAuthConfig{
 				UseManagedIdentityExtension: true,
 				UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
-				TenantID:                    "TenantID",
 				AADClientID:                 "AADClientID",
 				AADClientSecret:             "AADClientSecret",
 			},
@@ -186,9 +194,11 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 		// The Azure service principal is ignored when
 		// UseManagedIdentityExtension is set to true
 		{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
 			AzureAuthConfig: azclient.AzureAuthConfig{
 				UseManagedIdentityExtension: true,
-				TenantID:                    "TenantID",
 				AADClientID:                 "AADClientID",
 				AADClientSecret:             "AADClientSecret",
 			},
@@ -229,8 +239,10 @@ func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
 
 func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
 	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID: "TenantID",
+		},
 		AzureAuthConfig: azclient.AzureAuthConfig{
-			TenantID:                              "TenantID",
 			AADClientID:                           "AADClientID",
 			AADFederatedTokenFile:                 "/tmp/federated-token",
 			UseFederatedWorkloadIdentityExtension: true,
@@ -263,8 +275,10 @@ func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
 
 func TestGetServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID: "TenantID",
+		},
 		AzureAuthConfig: azclient.AzureAuthConfig{
-			TenantID:        "TenantID",
 			AADClientID:     "AADClientID",
 			AADClientSecret: "AADClientSecret",
 		},
@@ -285,11 +299,13 @@ func TestGetServicePrincipalToken(t *testing.T) {
 
 func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
-		AzureAuthConfig: azclient.AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
 			TenantID:                "TenantID",
-			AADClientID:             "AADClientID",
-			AADClientSecret:         "AADClientSecret",
 			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:     "AADClientID",
+			AADClientSecret: "AADClientSecret",
 		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
@@ -309,8 +325,10 @@ func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
 
 func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
 	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID: "TenantID",
+		},
 		AzureAuthConfig: azclient.AzureAuthConfig{
-			TenantID:              "TenantID",
 			AADClientID:           "AADClientID",
 			AADClientCertPath:     "./testdata/test.pfx",
 			AADClientCertPassword: "id",
@@ -341,11 +359,13 @@ func TestGetMultiTenantServicePrincipalTokenNegative(t *testing.T) {
 
 func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 	config := &AzureAuthConfig{
-		AzureAuthConfig: azclient.AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
 			TenantID:                "TenantID",
-			AADClientID:             "AADClientID",
-			AADClientSecret:         "AADClientSecret",
 			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:     "AADClientID",
+			AADClientSecret: "AADClientSecret",
 		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
@@ -440,11 +460,13 @@ func TestAzureStackOverrides(t *testing.T) {
 
 func TestUsesNetworkResourceInDifferentTenant(t *testing.T) {
 	config := &AzureAuthConfig{
-		AzureAuthConfig: azclient.AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
 			TenantID:                "TenantID",
-			AADClientID:             "AADClientID",
-			AADClientSecret:         "AADClientSecret",
-			NetworkResourceTenantID: "NetworkTenantID",
+			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:     "AADClientID",
+			AADClientSecret: "AADClientSecret",
 		},
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}

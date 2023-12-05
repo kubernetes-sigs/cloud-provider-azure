@@ -93,7 +93,7 @@ func newAcrProviderFromConfigReader(configReader io.Reader) (*acrProvider, error
 	}, nil
 }
 
-func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []string) (*v1.CredentialProviderResponse, error) {
+func (a *acrProvider) GetCredentials(_ context.Context, image string, _ []string) (*v1.CredentialProviderResponse, error) {
 	loginServer := a.parseACRLoginServerFromImage(image)
 	if loginServer == "" {
 		klog.V(2).Infof("image(%s) is not from ACR, return empty authentication", image)
@@ -119,7 +119,7 @@ func (a *acrProvider) GetCredentials(ctx context.Context, image string, args []s
 	if a.config.UseManagedIdentityExtension {
 		username, password, err := a.getFromACR(loginServer)
 		if err != nil {
-			klog.Errorf("error getting credentials from ACR for %s: %w", loginServer, err)
+			klog.Errorf("error getting credentials from ACR for %s: %s", loginServer, err)
 			return nil, err
 		}
 

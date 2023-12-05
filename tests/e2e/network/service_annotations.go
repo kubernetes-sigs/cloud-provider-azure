@@ -444,7 +444,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 		service = updateServiceLBIPs(service, false, pips)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+		utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 
 		//wait and get service's public IP Address
 		By("Waiting service to expose...")
@@ -930,7 +930,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			expectedTargetProbesLocalCount = 2
 		}
 		var service *v1.Service
-		utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
+		utils.Logf("Updating service "+serviceName, ns.Name)
 		retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 			if err != nil {
@@ -941,7 +941,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			return err
 		})
 		Expect(retryErr).NotTo(HaveOccurred())
-		utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+		utils.Logf("Successfully updated LoadBalancer service "+serviceName, ns.Name)
 
 		By("Getting updated service object from server")
 		retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -1347,11 +1347,11 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 		It("Should not have error occurred", func() {
 			By("Getting the service")
 			annotation := map[string]string{}
-			utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
+			utils.Logf("Creating service "+serviceName, ns.Name)
 			service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
 			service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+			utils.PrintCreateSVCSuccessfully(serviceName, ns.Name)
 
 			//wait and get service's public IP Address
 			utils.Logf("Waiting service to expose...")
@@ -1377,7 +1377,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			By("Changing ExternalTrafficPolicy of the service to Local")
 
-			utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
+			utils.Logf("Updating service "+serviceName, ns.Name)
 			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 				if err != nil {
@@ -1388,7 +1388,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 				return err
 			})
 			Expect(retryErr).NotTo(HaveOccurred())
-			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+			utils.Logf("Successfully updated LoadBalancer service "+serviceName, ns.Name)
 
 			By("Getting updated service object from server")
 			retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -1451,7 +1451,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 
 			var nodeHealthCheckPort = service.Spec.HealthCheckNodePort
 			By("Changing ExternalTrafficPolicy of the service to Cluster")
-			utils.Logf("Updating service " + serviceName + " in namespace " + ns.Name)
+			utils.Logf("Updating service "+serviceName, ns.Name)
 			retryErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 				if err != nil {
@@ -1462,7 +1462,7 @@ var _ = Describe("Multi-ports service", Label(utils.TestSuiteLabelMultiPorts), f
 				return err
 			})
 			Expect(retryErr).NotTo(HaveOccurred())
-			utils.Logf("Successfully updated LoadBalancer service " + serviceName + " in namespace " + ns.Name)
+			utils.Logf("Successfully updated LoadBalancer service "+serviceName, ns.Name)
 
 			//wait for backend update
 			expectedTargetProbesCount = 2
@@ -1602,7 +1602,7 @@ func getAzureLoadBalancerFromPIP(tc *utils.AzureTestClient, pip *string, pipReso
 }
 
 func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamily utils.IPFamily, serviceName, nsName string, labels, annotation map[string]string, ports []v1.ServicePort, customizeFuncs ...func(*v1.Service) error) []*string {
-	utils.Logf("Creating service " + serviceName + " in namespace " + nsName)
+	utils.Logf("Creating service "+serviceName, nsName)
 	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, nsName, ports)
 	for _, customizeFunc := range customizeFuncs {
 		err := customizeFunc(service)
@@ -1610,7 +1610,7 @@ func createAndExposeDefaultServiceWithAnnotation(cs clientset.Interface, ipFamil
 	}
 	_, err := cs.CoreV1().Services(nsName).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + nsName)
+	utils.PrintCreateSVCSuccessfully(serviceName, nsName)
 
 	//wait and get service's IP Address
 	utils.Logf("Waiting service to expose...")
@@ -1686,7 +1686,7 @@ func validateLoadBalancerBackendPools(tc *utils.AzureTestClient, vmssName string
 	service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns, ports)
 	_, err := cs.CoreV1().Services(ns).Create(context.TODO(), service, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	utils.Logf("Successfully created LoadBalancer service " + serviceName + " in namespace " + ns)
+	utils.PrintCreateSVCSuccessfully(serviceName, ns)
 
 	//wait and get service's public IP Address
 	By("Waiting for service exposure")

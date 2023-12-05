@@ -19,6 +19,6 @@ limitations under the License.
 
 package app
 
-func initForOS(service bool) error {
+func initForOS(_ bool) error {
 	return nil
 }

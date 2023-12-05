@@ -49,7 +49,7 @@ func (az *Cloud) buildClusterServiceSharedProbe() *network.Probe {
 // return nil if no new probe is added
 func (az *Cloud) buildHealthProbeRulesForPort(serviceManifest *v1.Service, port v1.ServicePort, lbrule string, healthCheckNodePortProbe *network.Probe, useSharedProbe bool) (*network.Probe, error) {
 	if useSharedProbe {
-		klog.V(4).Infof("skip creating health probe for port %s because the shared probe is used", port.Port)
+		klog.V(4).Infof("skip creating health probe for port %d because the shared probe is used", port.Port)
 		return nil, nil
 	}
 

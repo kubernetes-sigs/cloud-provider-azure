@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodeipam/ipam"
 )
 
-func startCloudNodeController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeController(_ context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	// Start the CloudNodeController
 	nodeController, err := nodecontroller.NewCloudNodeController(
 		completedConfig.SharedInformers.Core().V1().Nodes(),
@@ -63,7 +63,7 @@ func startCloudNodeController(ctx context.Context, controllerContext genericcont
 	return nil, true, nil
 }
 
-func startCloudNodeLifecycleController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startCloudNodeLifecycleController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
 	// Start the cloudNodeLifecycleController
 	cloudNodeLifecycleController, err := nodelifecyclecontroller.NewCloudNodeLifecycleController(
 		completedConfig.SharedInformers.Core().V1().Nodes(),
@@ -82,7 +82,7 @@ func startCloudNodeLifecycleController(ctx context.Context, controllerContext ge
 	return nil, true, nil
 }
 
-func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startServiceController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
 	// Start the service controller
 	serviceController, err := servicecontroller.New(
 		cloud,
@@ -103,7 +103,7 @@ func startServiceController(ctx context.Context, controllerContext genericcontro
 	return nil, true, nil
 }
 
-func startRouteController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startRouteController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, _ <-chan struct{}) (http.Handler, bool, error) {
 	if !completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes {
 		klog.Infof("Will not configure cloud provider routes, --configure-cloud-routes: %v.", completedConfig.ComponentConfig.KubeCloudShared.ConfigureCloudRoutes)
 		return nil, false, nil
@@ -144,7 +144,7 @@ func startRouteController(ctx context.Context, controllerContext genericcontroll
 	return nil, true, nil
 }
 
-func startNodeIpamController(ctx context.Context, controllerContext genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
+func startNodeIpamController(_ context.Context, _ genericcontrollermanager.ControllerContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface, stopCh <-chan struct{}) (http.Handler, bool, error) {
 	var serviceCIDR *net.IPNet
 	var secondaryServiceCIDR *net.IPNet
 

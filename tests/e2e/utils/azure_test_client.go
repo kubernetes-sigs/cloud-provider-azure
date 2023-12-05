@@ -63,11 +63,7 @@ func CreateAzureTestClient() (*AzureTestClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	clientOption, err := azclient.GetDefaultAuthClientOption(armclientConfig)
-	if err != nil {
-		return nil, err
-	}
-	authProvider, err := azclient.NewAuthProvider(*authConfig, clientOption)
+	authProvider, err := azclient.NewAuthProvider(armclientConfig, authConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,84 @@
 # Release History
 
+## 1.1.0 (2023-07-13)
+
+### Features Added
+
+* Added [Blob Batch API](https://learn.microsoft.com/rest/api/storageservices/blob-batch).
+* Added support for bearer challenge for identity based managed disks.
+* Added support for GetAccountInfo to container and blob level clients.
+* Added [UploadBlobFromURL API](https://learn.microsoft.com/rest/api/storageservices/put-blob-from-url).
+* Added support for CopySourceAuthorization to appendblob.AppendBlockFromURL
+* Added support for tag permission in Container SAS.
+
+### Bugs Fixed
+
+* Fixed time formatting for the conditional request headers. Fixes [#20475](https://github.com/Azure/azure-sdk-for-go/issues/20475).
+* Fixed an issue where passing a blob tags map of length 0 would result in the x-ms-tags header to be sent to the service with an empty string as value.
+
+* Fixed block size and number of blocks calculation in `UploadBuffer` and `UploadFile`. Fixes [#20735](https://github.com/Azure/azure-sdk-for-go/issues/20735).
+
+### Other Changes
+
+* Add `dragonfly` to the list of build constraints for `blockblob`.
+* Updating version of azcore to 1.6.0 and azidentity to 1.3.0
+
+## 1.1.0-beta.1 (2023-05-09)
+
+### Features Added
+
+* Added [Blob Batch API](https://learn.microsoft.com/rest/api/storageservices/blob-batch).
+* Added support for bearer challenge for identity based managed disks.
+* Added support for GetAccountInfo to container and blob level clients. 
+* Added [UploadBlobFromURL API](https://learn.microsoft.com/rest/api/storageservices/put-blob-from-url).
+* Added support for CopySourceAuthorization to appendblob.AppendBlockFromURL
+* Added support for tag permission in Container SAS. 
+
+### Bugs Fixed
+
+* Fixed time formatting for the conditional request headers. Fixes [#20475](https://github.com/Azure/azure-sdk-for-go/issues/20475).
+* Fixed an issue where passing a blob tags map of length 0 would result in the x-ms-tags header to be sent to the service with an empty string as value.
+
+## 1.0.0 (2023-02-07)
+
+### Features Added
+
+* Add support to log calculated block size and count during uploads
+* Added MissingSharedKeyCredential error type for cleaner UX. Related to [#19864](https://github.com/Azure/azure-sdk-for-go/issues/19864).
+
+### Breaking Changes
+
+* Changed API signatures to map correctly to Azure Storage REST APIs, These changes impact:
+  * `blob.GetSASURL()`
+  * `blockblob.StageBlockFromURL()`
+  * `container.SetAccessPolicy()`
+  * `container.GetSASURL()`
+  * `service.GetSASURL()`
+  * `service.FilterBlobs()`
+  * `lease.AcquireLease()` (blobs and containers)
+  * `lease.ChangeLease()` (blobs and containers)
+* Type name changes:
+  * `CpkInfo` -> `CPKInfo`
+  * `CpkScopeInfo` -> `CPKScopeInfo`
+  * `RuleId` -> `RuleID`
+  * `PolicyId` -> `PolicyID`
+  * `CorsRule` -> `CORSRule`
+* Remove `AccountServices` it is now hardcoded to blobs
+
+### Bugs Fixed
+
+* Fixed encoding issues seen in FilterBlobs. Fixes [#17421](https://github.com/Azure/azure-sdk-for-go/issues/17421).
+* Fixing inconsistency seen with Metadata and ORS response. Fixes [#19688](https://github.com/Azure/azure-sdk-for-go/issues/19688).
+* Fixed endless loop during pagination issue [#19773](https://github.com/Azure/azure-sdk-for-go/pull/19773).
+
+### Other Changes
+
+* Exported some missing types in the `blob`, `container` and `service` packages. Fixes [#19775](https://github.com/Azure/azure-sdk-for-go/issues/19775).
+* SAS changes [#19781](https://github.com/Azure/azure-sdk-for-go/pull/19781):
+  * AccountSASPermissions: SetImmutabilityPolicy support
+  * ContainerSASPermissions: Move support
+  * Validations to ensure correct sas perm ordering
+
 ## 0.6.1 (2022-12-09)
 
 ### Bugs Fixed

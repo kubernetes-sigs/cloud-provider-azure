@@ -283,8 +283,8 @@ func TestNormalizeAzureRegion(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		real := NormalizeAzureRegion(test.region)
-		assert.Equal(t, test.expected, real, "test[%d]: NormalizeAzureRegion(%q) != %q", i, test.region, test.expected)
+		realValue := NormalizeAzureRegion(test.region)
+		assert.Equal(t, test.expected, realValue, "test[%d]: NormalizeAzureRegion(%q) != %q", i, test.region, test.expected)
 	}
 }
 

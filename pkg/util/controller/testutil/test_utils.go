@@ -122,7 +122,7 @@ func (m *FakeNodeHandler) Create(_ context.Context, node *v1.Node, _ metav1.Crea
 }
 
 // Get returns a Node from the fake store.
-func (m *FakeNodeHandler) Get(_ context.Context, name string, opts metav1.GetOptions) (*v1.Node, error) {
+func (m *FakeNodeHandler) Get(_ context.Context, name string, _ metav1.GetOptions) (*v1.Node, error) {
 	m.lock.Lock()
 	defer func() {
 		m.RequestCount++
@@ -144,7 +144,7 @@ func (m *FakeNodeHandler) Get(_ context.Context, name string, opts metav1.GetOpt
 }
 
 // List returns a list of Nodes from the fake store.
-func (m *FakeNodeHandler) List(_ context.Context, opts metav1.ListOptions) (*v1.NodeList, error) {
+func (m *FakeNodeHandler) List(_ context.Context, _ metav1.ListOptions) (*v1.NodeList, error) {
 	m.lock.Lock()
 	defer func() {
 		m.RequestCount++
@@ -174,7 +174,7 @@ func (m *FakeNodeHandler) List(_ context.Context, opts metav1.ListOptions) (*v1.
 }
 
 // Delete deletes a Node from the fake store.
-func (m *FakeNodeHandler) Delete(_ context.Context, id string, opt metav1.DeleteOptions) error {
+func (m *FakeNodeHandler) Delete(_ context.Context, id string, _ metav1.DeleteOptions) error {
 	m.lock.Lock()
 	defer func() {
 		m.RequestCount++
@@ -188,7 +188,7 @@ func (m *FakeNodeHandler) Delete(_ context.Context, id string, opt metav1.Delete
 }
 
 // DeleteCollection deletes a collection of Nodes from the fake store.
-func (m *FakeNodeHandler) DeleteCollection(_ context.Context, opt metav1.DeleteOptions, listOpts metav1.ListOptions) error {
+func (m *FakeNodeHandler) DeleteCollection(_ context.Context, _ metav1.DeleteOptions, _ metav1.ListOptions) error {
 	return nil
 }
 
@@ -261,12 +261,12 @@ func (m *FakeNodeHandler) PatchStatus(ctx context.Context, nodeName string, data
 }
 
 // Watch watches Nodes in a fake store.
-func (m *FakeNodeHandler) Watch(_ context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+func (m *FakeNodeHandler) Watch(_ context.Context, _ metav1.ListOptions) (watch.Interface, error) {
 	return watch.NewFake(), nil
 }
 
 // Patch patches a Node in the fake store.
-func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchType, data []byte, _ metav1.PatchOptions, subresources ...string) (*v1.Node, error) {
+func (m *FakeNodeHandler) Patch(_ context.Context, name string, pt types.PatchType, data []byte, _ metav1.PatchOptions, _ ...string) (*v1.Node, error) {
 	m.lock.Lock()
 	defer func() {
 		m.RequestCount++
@@ -366,11 +366,11 @@ func (f *FakeRecorder) Eventf(obj runtime.Object, eventtype, reason, messageFmt 
 }
 
 // AnnotatedEventf emits a fake formatted event to the fake recorder
-func (f *FakeRecorder) AnnotatedEventf(obj runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
+func (f *FakeRecorder) AnnotatedEventf(obj runtime.Object, _ map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
 	f.Eventf(obj, eventtype, reason, messageFmt, args...)
 }
 
-func (f *FakeRecorder) generateEvent(obj runtime.Object, timestamp metav1.Time, eventtype, reason, message string) {
+func (f *FakeRecorder) generateEvent(obj runtime.Object, _ metav1.Time, eventtype, reason, message string) {
 	f.Lock()
 	defer f.Unlock()
 	ref, err := ref.GetReference(scheme.Scheme, obj)

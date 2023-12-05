@@ -16,6 +16,9 @@ import (
 // UploadResponse contains the response from method Client.Upload.
 type UploadResponse = generated.BlockBlobClientUploadResponse
 
+// UploadBlobFromURLResponse contains the response from the method Client.UploadBlobFromURL
+type UploadBlobFromURLResponse = generated.BlockBlobClientPutBlobFromURLResponse
+
 // StageBlockResponse contains the response from method Client.StageBlock.
 type StageBlockResponse = generated.BlockBlobClientStageBlockResponse
 
@@ -110,5 +113,5 @@ type UploadBufferResponse = uploadFromReaderResponse
 // UploadStreamResponse contains the response from method Client.CommitBlockList.
 type UploadStreamResponse = CommitBlockListResponse
 
-// SetExpiryResponse contains the response from method BlobClient.SetExpiry.
+// SetExpiryResponse contains the response from method Client.SetExpiry.
 type SetExpiryResponse = generated.BlobClientSetExpiryResponse

@@ -351,8 +351,8 @@ func TestIsThrottled(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		real := test.err.IsThrottled()
-		assert.Equal(t, test.expected, real)
+		realValue := test.err.IsThrottled()
+		assert.Equal(t, test.expected, realValue)
 	}
 }
 

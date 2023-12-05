@@ -103,14 +103,14 @@ func TestIsNodeUnmanaged(t *testing.T) {
 			}
 		}
 
-		real, err := az.IsNodeUnmanaged(test.node)
+		realValue, err := az.IsNodeUnmanaged(test.node)
 		if test.expectErr {
 			assert.Error(t, err, test.name)
 			continue
 		}
 
 		assert.NoError(t, err, test.name)
-		assert.Equal(t, test.expected, real, test.name)
+		assert.Equal(t, test.expected, realValue, test.name)
 	}
 }
 
@@ -197,13 +197,13 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		real, err := ConvertResourceGroupNameToLower(test.resourceID)
+		realValue, err := ConvertResourceGroupNameToLower(test.resourceID)
 		if test.expectError {
 			assert.NotNil(t, err, test.desc)
 			continue
 		}
 
 		assert.Nil(t, err, test.desc)
-		assert.Equal(t, test.expected, real, test.desc)
+		assert.Equal(t, test.expected, realValue, test.desc)
 	}
 }

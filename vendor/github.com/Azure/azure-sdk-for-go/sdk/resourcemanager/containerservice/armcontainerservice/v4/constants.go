@@ -9,8 +9,8 @@
 package armcontainerservice
 
 const (
-	moduleName    = "armcontainerservice"
-	moduleVersion = "v4.4.0"
+	moduleName    = "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
+	moduleVersion = "v4.6.0"
 )
 
 // AgentPoolMode - A cluster must have at least one 'System' Agent Pool at all times. For additional information on agent
@@ -48,6 +48,24 @@ func PossibleAgentPoolTypeValues() []AgentPoolType {
 	return []AgentPoolType{
 		AgentPoolTypeAvailabilitySet,
 		AgentPoolTypeVirtualMachineScaleSets,
+	}
+}
+
+// BackendPoolType - The type of the managed inbound Load Balancer BackendPool.
+type BackendPoolType string
+
+const (
+	// BackendPoolTypeNodeIP - The type of the managed inbound Load Balancer BackendPool. https://cloud-provider-azure.sigs.k8s.io/topics/loadbalancer/#configure-load-balancer-backend.
+	BackendPoolTypeNodeIP BackendPoolType = "NodeIP"
+	// BackendPoolTypeNodeIPConfiguration - The type of the managed inbound Load Balancer BackendPool. https://cloud-provider-azure.sigs.k8s.io/topics/loadbalancer/#configure-load-balancer-backend.
+	BackendPoolTypeNodeIPConfiguration BackendPoolType = "NodeIPConfiguration"
+)
+
+// PossibleBackendPoolTypeValues returns the possible values for the BackendPoolType const type.
+func PossibleBackendPoolTypeValues() []BackendPoolType {
+	return []BackendPoolType{
+		BackendPoolTypeNodeIP,
+		BackendPoolTypeNodeIPConfiguration,
 	}
 }
 
@@ -641,6 +659,24 @@ func PossiblePrivateEndpointConnectionProvisioningStateValues() []PrivateEndpoin
 	}
 }
 
+// Protocol - The network protocol of the port.
+type Protocol string
+
+const (
+	// ProtocolTCP - TCP protocol.
+	ProtocolTCP Protocol = "TCP"
+	// ProtocolUDP - UDP protocol.
+	ProtocolUDP Protocol = "UDP"
+)
+
+// PossibleProtocolValues returns the possible values for the Protocol const type.
+func PossibleProtocolValues() []Protocol {
+	return []Protocol{
+		ProtocolTCP,
+		ProtocolUDP,
+	}
+}
+
 // PublicNetworkAccess - Allow or deny public network access for AKS
 type PublicNetworkAccess string
 
@@ -772,6 +808,28 @@ const (
 func PossibleSnapshotTypeValues() []SnapshotType {
 	return []SnapshotType{
 		SnapshotTypeNodePool,
+	}
+}
+
+// TrustedAccessRoleBindingProvisioningState - The current provisioning state of trusted access role binding.
+type TrustedAccessRoleBindingProvisioningState string
+
+const (
+	TrustedAccessRoleBindingProvisioningStateCanceled  TrustedAccessRoleBindingProvisioningState = "Canceled"
+	TrustedAccessRoleBindingProvisioningStateDeleting  TrustedAccessRoleBindingProvisioningState = "Deleting"
+	TrustedAccessRoleBindingProvisioningStateFailed    TrustedAccessRoleBindingProvisioningState = "Failed"
+	TrustedAccessRoleBindingProvisioningStateSucceeded TrustedAccessRoleBindingProvisioningState = "Succeeded"
+	TrustedAccessRoleBindingProvisioningStateUpdating  TrustedAccessRoleBindingProvisioningState = "Updating"
+)
+
+// PossibleTrustedAccessRoleBindingProvisioningStateValues returns the possible values for the TrustedAccessRoleBindingProvisioningState const type.
+func PossibleTrustedAccessRoleBindingProvisioningStateValues() []TrustedAccessRoleBindingProvisioningState {
+	return []TrustedAccessRoleBindingProvisioningState{
+		TrustedAccessRoleBindingProvisioningStateCanceled,
+		TrustedAccessRoleBindingProvisioningStateDeleting,
+		TrustedAccessRoleBindingProvisioningStateFailed,
+		TrustedAccessRoleBindingProvisioningStateSucceeded,
+		TrustedAccessRoleBindingProvisioningStateUpdating,
 	}
 }
 

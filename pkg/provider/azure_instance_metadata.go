@@ -177,7 +177,7 @@ func (ims *InstanceMetadataService) getMetadata(key string) (interface{}, error)
 	return instanceMetadata, nil
 }
 
-func (ims *InstanceMetadataService) getInstanceMetadata(key string) (*InstanceMetadata, error) {
+func (ims *InstanceMetadataService) getInstanceMetadata(_ string) (*InstanceMetadata, error) {
 	req, err := http.NewRequest("GET", ims.imdsServer+consts.ImdsInstanceURI, nil)
 	if err != nil {
 		return nil, err

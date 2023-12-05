@@ -1,21 +1,26 @@
 package ingest
 
 import (
+	// "bytes"
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 
+	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
-	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/conn"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/gzip"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/properties"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/queued"
+	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/utils"
+
 	"github.com/google/uuid"
 )
 
 type streamIngestor interface {
 	io.Closer
-	StreamIngest(ctx context.Context, db, table string, payload io.Reader, format properties.DataFormat, mappingName string, clientRequestId string) error
+	StreamIngest(ctx context.Context, db, table string, payload io.Reader, format kusto.DataFormatForStreaming, mappingName string, clientRequestId string, isBlobUri bool) error
 }
 
 // Streaming provides data ingestion from external sources into Kusto.
@@ -26,13 +31,15 @@ type Streaming struct {
 	streamConn streamIngestor
 }
 
-var FileIsBlobErr = errors.ES(errors.OpIngestStream, errors.KClientArgs, "blobstore paths are not supported for streaming")
+type blobUri struct {
+	SourceUri string `json:"sourceUri"`
+}
 
 // NewStreaming is the constructor for Streaming.
 // More information can be found here:
 // https://docs.microsoft.com/en-us/azure/kusto/management/create-ingestion-mapping-command
 func NewStreaming(client QueryClient, db, table string) (*Streaming, error) {
-	streamConn, err := conn.New(client.Endpoint(), client.Auth(), client.HttpClient())
+	streamConn, err := kusto.NewConn(removeIngestPrefix(client.Endpoint()), client.Auth(), client.HttpClient(), client.ClientDetails())
 	if err != nil {
 		return nil, err
 	}
@@ -51,48 +58,56 @@ func NewStreaming(client QueryClient, db, table string) (*Streaming, error) {
 // This method is thread-safe.
 func (i *Streaming) FromFile(ctx context.Context, fPath string, options ...FileOption) (*Result, error) {
 	props := i.newProp()
-	file, err := prepFileAndProps(fPath, &props, options, StreamingClient)
+	file, err, local := prepFileAndProps(fPath, &props, options, StreamingClient)
+
 	if err != nil {
 		return nil, err
-	}
-
-	return streamImpl(i.streamConn, ctx, file, props)
-}
-
-func prepFileAndProps(fPath string, props *properties.All, options []FileOption, client ClientScope) (*os.File, error) {
-	local, err := queued.IsLocalPath(fPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, option := range options {
-		err := option.Run(props, client, FromFile)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	if !local {
-		return nil, FileIsBlobErr
+		return streamImpl(i.streamConn, ctx, generateBlobUriPayloadReader(fPath), props, true)
+	}
+
+	defer file.Close()
+	return streamImpl(i.streamConn, ctx, file, props, false)
+}
+
+// Returns the opened file, err, boolean indicator if its a local file
+func prepFileAndProps(fPath string, props *properties.All, options []FileOption, client ClientScope) (*os.File, error, bool) {
+	var err error
+	for _, option := range options {
+		err := option.Run(props, client, FromFile)
+		if err != nil {
+			return nil, err, true
+		}
+	}
+
+	local, err := queued.IsLocalPath(fPath)
+	if err != nil {
+		return nil, err, local
 	}
 
 	props.Source.OriginalSource = fPath
 
-	compression := queued.CompressionDiscovery(fPath)
+	if !local {
+		return nil, nil, false
+	}
+
+	compression := utils.CompressionDiscovery(fPath)
 	if compression != properties.CTNone {
 		props.Source.DontCompress = true
 	}
 
 	err = queued.CompleteFormatFromFileName(props, fPath)
 	if err != nil {
-		return nil, err
+		return nil, err, true
 	}
 
 	file, err := os.Open(fPath)
 	if err != nil {
-		return nil, err
+		return nil, err, true
 	}
-	return file, nil
+	return file, nil, true
 }
 
 // FromReader allows uploading a data file for Kusto from an io.Reader. The content is uploaded to Blobstore and
@@ -108,12 +123,12 @@ func (i *Streaming) FromReader(ctx context.Context, reader io.Reader, options ..
 		}
 	}
 
-	return streamImpl(i.streamConn, ctx, reader, props)
+	return streamImpl(i.streamConn, ctx, reader, props, false)
 }
 
-func streamImpl(c streamIngestor, ctx context.Context, payload io.Reader, props properties.All) (*Result, error) {
+func streamImpl(c streamIngestor, ctx context.Context, payload io.Reader, props properties.All, isBlobUri bool) (*Result, error) {
 	compress := !props.Source.DontCompress
-	if compress {
+	if compress && !isBlobUri {
 		payload = gzip.Compress(payload)
 	}
 
@@ -123,7 +138,8 @@ func streamImpl(c streamIngestor, ctx context.Context, payload io.Reader, props 
 
 	err := c.StreamIngest(ctx, props.Ingestion.DatabaseName, props.Ingestion.TableName, payload, props.Ingestion.Additional.Format,
 		props.Ingestion.Additional.IngestionMappingRef,
-		props.Streaming.ClientRequestId)
+		props.Streaming.ClientRequestId,
+		isBlobUri)
 
 	if err != nil {
 		if e, ok := errors.GetKustoError(err); ok {
@@ -158,4 +174,14 @@ func (i *Streaming) newProp() properties.All {
 
 func (i *Streaming) Close() error {
 	return i.streamConn.Close()
+}
+
+func generateBlobUriPayloadReader(fPath string) io.Reader {
+	buf := new(bytes.Buffer)
+	json.NewEncoder(buf).Encode(
+		blobUri{
+			SourceUri: fPath,
+		},
+	)
+	return io.NopCloser(buf)
 }

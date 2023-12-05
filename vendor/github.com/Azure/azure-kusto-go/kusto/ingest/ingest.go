@@ -7,8 +7,9 @@ import (
 	"io"
 	"sync"
 
+	"github.com/Azure/azure-kusto-go/kusto"
+
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
-	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/conn"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/properties"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/queued"
 	"github.com/Azure/azure-kusto-go/kusto/ingest/internal/resources"
@@ -32,7 +33,7 @@ type Ingestion struct {
 	fs queued.Queued
 
 	connMu     sync.Mutex
-	streamConn *conn.Conn
+	streamConn streamIngestor
 
 	bufferSize int
 	maxBuffers int
@@ -162,7 +163,6 @@ func (i *Ingestion) fromFile(ctx context.Context, fPath string, options []FileOp
 	if local {
 		err = i.fs.Local(ctx, fPath, props)
 	} else {
-
 		err = i.fs.Blob(ctx, fPath, 0, props)
 	}
 
@@ -198,7 +198,7 @@ func (i *Ingestion) fromReader(ctx context.Context, reader io.Reader, options []
 	return result, nil
 }
 
-// Deprecated: Stream usea streaming ingest client instead - `ingest.NewStreaming`.
+// Deprecated: Stream use a streaming ingest client instead - `ingest.NewStreaming`.
 // takes a payload that is encoded in format with a server stored mappingName, compresses it and uploads it to Kusto.
 // More information can be found here:
 // https://docs.microsoft.com/en-us/azure/kusto/management/create-ingestion-mapping-command
@@ -220,12 +220,12 @@ func (i *Ingestion) Stream(ctx context.Context, payload []byte, format DataForma
 		},
 	}
 
-	_, err = streamImpl(c, ctx, bytes.NewReader(payload), props)
+	_, err = streamImpl(c, ctx, bytes.NewReader(payload), props, false)
 
 	return err
 }
 
-func (i *Ingestion) getStreamConn() (*conn.Conn, error) {
+func (i *Ingestion) getStreamConn() (streamIngestor, error) {
 	i.connMu.Lock()
 	defer i.connMu.Unlock()
 
@@ -233,7 +233,7 @@ func (i *Ingestion) getStreamConn() (*conn.Conn, error) {
 		return i.streamConn, nil
 	}
 
-	sc, err := conn.New(i.client.Endpoint(), i.client.Auth(), i.client.HttpClient())
+	sc, err := kusto.NewConn(removeIngestPrefix(i.client.Endpoint()), i.client.Auth(), i.client.HttpClient(), i.client.ClientDetails())
 	if err != nil {
 		return nil, err
 	}
