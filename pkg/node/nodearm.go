@@ -20,7 +20,6 @@ import (
 	"context"
 	"runtime"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -30,7 +29,7 @@ import (
 
 // ARMNodeProvider implements nodemanager.NodeProvider.
 type ARMNodeProvider struct {
-	azure *azureprovider.Cloud
+	*azureprovider.Cloud
 }
 
 // NewARMNodeProvider creates a new ARMNodeProvider.
@@ -43,32 +42,19 @@ func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNod
 	}
 
 	return &ARMNodeProvider{
-		azure: az.(*azureprovider.Cloud),
+		az.(*azureprovider.Cloud),
 	}
-}
-
-// NodeAddresses returns the addresses of the specified instance.
-func (np *ARMNodeProvider) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
-	return np.azure.NodeAddresses(ctx, name)
 }
 
 // InstanceID returns the cloud provider ID of the specified instance.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 func (np *ARMNodeProvider) InstanceID(ctx context.Context, name types.NodeName) (string, error) {
-	instanceID, err := np.azure.InstanceID(ctx, name)
+	instanceID, err := np.Cloud.InstanceID(ctx, name)
 	if err != nil {
 		return "", err
 	}
 
-	return np.azure.ProviderName() + "://" + instanceID, nil
-}
-
-// InstanceType returns the type of the specified instance.
-// Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
-// (Implementer Note): This is used by kubelet. Kubelet will label the node. Real log from kubelet:
-// Adding node label from cloud provider: beta.kubernetes.io/instance-type=[value]
-func (np *ARMNodeProvider) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
-	return np.azure.InstanceType(ctx, name)
+	return np.Cloud.ProviderName() + "://" + instanceID, nil
 }
 
 // GetZone returns the Zone containing the current failure zone and locality region that the program is running in
@@ -77,10 +63,10 @@ func (np *ARMNodeProvider) InstanceType(ctx context.Context, name types.NodeName
 func (np *ARMNodeProvider) GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error) {
 	// Needed for cloud-node-manager on windows nodes where hostname of the pod is different from node name
 	if runtime.GOOS == "windows" {
-		return np.azure.GetZoneByNodeName(ctx, name)
+		return np.Cloud.GetZoneByNodeName(ctx, name)
 	}
 
-	return np.azure.GetZone(ctx)
+	return np.Cloud.GetZone(ctx)
 }
 
 // GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
