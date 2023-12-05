@@ -14,42 +14,10 @@ import (
 
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
+
+	"github.com/Azure/azure-kusto-go/kusto/ingest/ingestoptions"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
-)
-
-// CompressionType is a file's compression type.
-type CompressionType int8
-
-// String implements fmt.Stringer.
-func (c CompressionType) String() string {
-	switch c {
-	case GZIP:
-		return "gzip"
-	case ZIP:
-		return "zip"
-	}
-	return "unknown compression type"
-}
-
-// MarshalJSON implements json.Marshaler.MarshalJSON.
-func (c CompressionType) MarshalJSON() ([]byte, error) {
-	if c == 0 {
-		return nil, fmt.Errorf("CTUnknown is an invalid compression type")
-	}
-	return []byte(fmt.Sprintf("%q", c.String())), nil
-}
-
-//goland:noinspection GoUnusedConst - Part of the API
-const (
-	// CTUnknown indicates that that the compression type was unset.
-	CTUnknown CompressionType = 0
-	// CTNone indicates that the file was not compressed.
-	CTNone CompressionType = 1
-	// GZIP indicates that the file is GZIP compressed.
-	GZIP CompressionType = 2
-	// ZIP indicates that the file is ZIP compressed.
-	ZIP CompressionType = 3
 )
 
 // DataFormat indicates what type of encoding format was used for source data.
@@ -105,27 +73,28 @@ type dfDescriptor struct {
 	jsonName         string
 	detectableExt    string
 	validMappingKind bool
+	shouldCompress   bool
 }
 
 var dfDescriptions = []dfDescriptor{
-	{"", "", "", false},
-	{"Avro", "avro", ".avro", true},
-	{"ApacheAvro", "avro", "", false},
-	{"Csv", "csv", ".csv", true},
-	{"Json", "json", ".json", true},
-	{"MultiJson", "multijson", "", false},
-	{"Orc", "orc", ".orc", true},
-	{"Parquet", "parquet", ".parquet", true},
-	{"Psv", "psv", ".psv", false},
-	{"Raw", "raw", ".raw", false},
-	{"Scsv", "scsv", ".scsv", false},
-	{"Sohsv", "sohsv", ".sohsv", false},
-	{"SStream", "sstream", ".ss", false},
-	{"Tsv", "tsv", ".tsv", false},
-	{"Tsve", "tsve", ".tsve", false},
-	{"Txt", "txt", ".txt", false},
-	{"W3cLogFile", "w3clogfile", ".w3clogfile", false},
-	{"SingleJson", "singlejson", "", false},
+	{"", "", "", false, true},
+	{"Avro", "avro", ".avro", true, false},
+	{"ApacheAvro", "avro", "", false, false},
+	{"Csv", "csv", ".csv", true, true},
+	{"Json", "json", ".json", true, true},
+	{"MultiJson", "multijson", "", false, true},
+	{"Orc", "orc", ".orc", true, false},
+	{"Parquet", "parquet", ".parquet", true, false},
+	{"Psv", "psv", ".psv", false, true},
+	{"Raw", "raw", ".raw", false, true},
+	{"Scsv", "scsv", ".scsv", false, true},
+	{"Sohsv", "sohsv", ".sohsv", false, true},
+	{"SStream", "sstream", ".ss", false, true},
+	{"Tsv", "tsv", ".tsv", false, true},
+	{"Tsve", "tsve", ".tsve", false, true},
+	{"Txt", "txt", ".txt", false, true},
+	{"W3cLogFile", "w3clogfile", ".w3clogfile", false, true},
+	{"SingleJson", "singlejson", "", false, true},
 }
 
 // IngestionReportLevel defines which ingestion statuses are reported by the DM.
@@ -194,11 +163,19 @@ func (d DataFormat) MarshalJSON() ([]byte, error) {
 
 // IsValidMappingKind returns true if a dataformat can be used as a MappingKind.
 func (d DataFormat) IsValidMappingKind() bool {
-	if d > 0 && int(d) < len(dfDescriptions) {
+	if int(d) < len(dfDescriptions) {
 		return dfDescriptions[d].validMappingKind
 	}
 
 	return false
+}
+
+func (d DataFormat) ShouldCompress() bool {
+	if d > 0 && int(d) < len(dfDescriptions) {
+		return dfDescriptions[d].shouldCompress
+	}
+
+	return true
 }
 
 // DataFormatDiscovery looks at the file name and tries to discern what the file format is.
@@ -229,7 +206,7 @@ func DataFormatDiscovery(fName string) DataFormat {
 type All struct {
 	// Ingestion is a set of properties that are used across all ingestion methods.
 	Ingestion Ingestion
-	// Source provides options that are used when doing an ingestion on a filesystem.
+	// Source provides options that are used to operate on the source data.
 	Source SourceOptions
 	// Streaming provides options that are used when doing an ingestion from a stream.
 	Streaming Streaming
@@ -243,13 +220,13 @@ type ManagedStreaming struct {
 	Backoff backoff.BackOff
 }
 
-// Streaming provides options that are used when doing an ingestion from a stream.
+// Streaming provides options that are used when doing a streaming ingestion.
 type Streaming struct {
 	// ClientRequestID is the client request ID to use for the ingestion.
 	ClientRequestId string
 }
 
-// SourceOptions are options that the user provides about the source file that is going to be uploaded.
+// SourceOptions are options that the user provides about the source that is going to be uploaded.
 type SourceOptions struct {
 	// ID allows someone to set the UUID for upload themselves. We aren't providing this option at this time, but here
 	// when we do.
@@ -263,6 +240,9 @@ type SourceOptions struct {
 
 	// OriginalSource is the path to the original source file, used for deletion.
 	OriginalSource string
+
+	// CompressionType is the type of compression used on the file.
+	CompressionType ingestoptions.CompressionType
 }
 
 // Ingestion is a JSON serializable set of options that must be provided to the service.
