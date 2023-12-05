@@ -119,7 +119,7 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 
 	// ClientCertificateCredential is used for client certificate
 	var clientCertificateCredential azcore.TokenCredential
-	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
+	if len(config.AADClientCertPath) > 0 {
 		credOptions := &azidentity.ClientCertificateCredentialOptions{
 			ClientOptions:        *clientOption,
 			SendCertificateChain: true,
