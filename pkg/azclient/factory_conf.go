@@ -19,6 +19,7 @@ package azclient
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
@@ -53,17 +54,23 @@ type ClientFactoryConfig struct {
 }
 
 func GetDefaultResourceClientOption(armConfig *ARMClientConfig, factoryConfig *ClientFactoryConfig) (*policy.ClientOptions, error) {
-	//Get default settings
-	options, err := NewClientOptionFromARMClientConfig(armConfig)
+	armClientOption := policy.ClientOptions{}
+	options, err := GetAzCoreClientOption(armConfig)
 	if err != nil {
 		return nil, err
 	}
+	armClientOption.ClientOptions = *options
+
+	if armConfig != nil && armConfig.NetworkResourceTenantID != "" && !strings.EqualFold(armConfig.NetworkResourceTenantID, armConfig.GetTenantID()) {
+		armClientOption.AuxiliaryTenants = []string{armConfig.NetworkResourceTenantID}
+	}
+
 	if factoryConfig != nil {
 		//Set retry
 		if !factoryConfig.CloudProviderBackoff {
 			options.Retry.MaxRetries = 0
 		}
 	}
-	options.Transport = DefaultResourceClientTransport
-	return options, err
+	armClientOption.ClientOptions.Transport = DefaultResourceClientTransport
+	return &armClientOption, err
 }

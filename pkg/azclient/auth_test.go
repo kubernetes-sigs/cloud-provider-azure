@@ -18,9 +18,9 @@ package azclient_test
 
 import (
 	"context"
+	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	azpolicy "github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -43,20 +43,26 @@ var _ = Describe("Auth", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		tenantID = httpRecorder.TenantID()
 		clientID = httpRecorder.ClientID()
+		if !httpRecorder.IsNewCassette() {
+			os.Unsetenv("AZURE_TENANT_ID")
+			os.Unsetenv("AZURE_CLIENT_ID")
+			os.Unsetenv("AZURE_CLIENT_SECRET")
+			os.Unsetenv("AZURE_SUBSCRIPTION_ID")
+		}
 	})
 
 	When("AADClientSecret is set", func() {
 		It("should return a valid token", func() {
-			authProvider, err = azclient.NewAuthProvider(azclient.AzureAuthConfig{
-				TenantID:        tenantID,
-				AADClientID:     clientID,
-				AADClientSecret: httpRecorder.ClientSecret(),
-			}, &arm.ClientOptions{
-				ClientOptions: azpolicy.ClientOptions{
-					Transport: httpRecorder.HTTPClient(),
+			authProvider, err = azclient.NewAuthProvider(
+				&azclient.ARMClientConfig{
+					TenantID: tenantID,
 				},
-				AuxiliaryTenants: []string{tenantID},
-			})
+				&azclient.AzureAuthConfig{
+					AADClientID:     clientID,
+					AADClientSecret: httpRecorder.ClientSecret(),
+				}, func(option *azpolicy.ClientOptions) {
+					option.Transport = httpRecorder.HTTPClient()
+				})
 			Expect(err).NotTo(HaveOccurred())
 			cred, err = authProvider.GetAzIdentity()
 			Expect(err).NotTo(HaveOccurred())
