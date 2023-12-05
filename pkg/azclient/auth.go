@@ -17,8 +17,6 @@ limitations under the License.
 package azclient
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
 	"fmt"
 	"os"
 	"strings"
@@ -26,7 +24,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"golang.org/x/crypto/pkcs12"
 )
 
 var (
@@ -128,11 +125,11 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := azidentity.ParseCertificates(certData, []byte(config.AADClientCertPassword))
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
-		clientCertificateCredential, err = azidentity.NewClientCertificateCredential(armConfig.GetTenantID(), config.GetAADClientID(), []*x509.Certificate{certificate}, privateKey, credOptions)
+		clientCertificateCredential, err = azidentity.NewClientCertificateCredential(armConfig.GetTenantID(), config.GetAADClientID(), certificate, privateKey, credOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -161,21 +158,6 @@ func (factory *AuthProvider) GetAzIdentity() (azcore.TokenCredential, error) {
 	default:
 		return nil, ErrorNoAuth
 	}
-}
-
-// decodePkcs12 decodes a PKCS#12 client certificate by extracting the public certificate and
-// the private RSA key
-func decodePkcs12(pkcs []byte, password string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	privateKey, certificate, err := pkcs12.Decode(pkcs, password)
-	if err != nil {
-		return nil, nil, fmt.Errorf("decoding the PKCS#12 client certificate: %w", err)
-	}
-	rsaPrivateKey, isRsaKey := privateKey.(*rsa.PrivateKey)
-	if !isRsaKey {
-		return nil, nil, fmt.Errorf("PKCS#12 certificate must contain a RSA private key")
-	}
-
-	return certificate, rsaPrivateKey, nil
 }
 
 func (factory *AuthProvider) GetNetworkAzIdentity() (azcore.TokenCredential, error) {
