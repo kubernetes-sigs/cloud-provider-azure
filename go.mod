@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.21
 
 require (
-	github.com/Azure/azure-kusto-go v0.14.2
+	github.com/Azure/azure-kusto-go v0.15.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.3.0
