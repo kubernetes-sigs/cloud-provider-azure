@@ -1622,7 +1622,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTag: "tag1",
+						consts.ServiceAnnotationAllowedServiceTags: "tag1",
 					},
 				},
 			},
@@ -1633,7 +1633,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTag: "tag1, tag2",
+						consts.ServiceAnnotationAllowedServiceTags: "tag1, tag2",
 					},
 				},
 			},
@@ -1644,7 +1644,7 @@ func TestGetServiceTags(t *testing.T) {
 			service: &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						consts.ServiceAnnotationAllowedServiceTag: ", tag1, ",
+						consts.ServiceAnnotationAllowedServiceTags: ", tag1, ",
 					},
 				},
 			},
@@ -4314,7 +4314,7 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 		},
 		{
 			desc:    "reconcileSecurityGroup shall not create unwanted security rules if there is service tags",
-			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationAllowedServiceTag: "tag"}, false, 80),
+			service: getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationAllowedServiceTags: "tag"}, false, 80),
 			wantLb:  true,
 			lbIPs:   &[]string{"1.1.1.1"},
 			existingSgs: map[string]network.SecurityGroup{"nsg": {
@@ -4524,6 +4524,316 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges annotation is set for IPv4",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges: "10.10.10.0/24,192.168.0.1/32",
+			}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-10.10.10.0_24"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("10.10.10.0/24"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(501),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges annotation is set for IPv6",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges: "2001:0db8:85a3::/64,2607:f0d0:1002:0051::/64",
+			}, true, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2", "fd12:3456:789a:1::1"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-2001.db8.85a3.._64"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                 network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:          pointer.String("*"),
+								DestinationPortRange:     pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:      pointer.String("2001:db8:85a3::/64"),
+								DestinationAddressPrefix: pointer.String("fd12:3456:789a:1::1"),
+								Access:                   network.SecurityRuleAccessAllow,
+								Priority:                 pointer.Int32(500),
+								Direction:                network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-2607.f0d0.1002.51.._64"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                 network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:          pointer.String("*"),
+								DestinationPortRange:     pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:      pointer.String("2607:f0d0:1002:51::/64"),
+								DestinationAddressPrefix: pointer.String("fd12:3456:789a:1::1"),
+								Access:                   network.SecurityRuleAccessAllow,
+								Priority:                 pointer.Int32(501),
+								Direction:                network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges annotation is set for both IPv4 and IPv6",
+			service: getTestServiceDualStack("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges: "10.10.10.0/24,2607:f0d0:1002:0051::/64",
+			}, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2", "fd12:3456:789a:1::1"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-10.10.10.0_24"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("10.10.10.0/24"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-2607.f0d0.1002.51.._64-IPv6"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                 network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:          pointer.String("*"),
+								DestinationPortRange:     pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:      pointer.String("2607:f0d0:1002:51::/64"),
+								DestinationAddressPrefix: pointer.String("fd12:3456:789a:1::1"),
+								Access:                   network.SecurityRuleAccessAllow,
+								Priority:                 pointer.Int32(501),
+								Direction:                network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges and serviceTags annotation is set",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32",
+				consts.ServiceAnnotationAllowedServiceTags: "foo,bar",
+			}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-10.10.10.0_24"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("10.10.10.0/24"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(501),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-foo"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("foo"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(502),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-bar"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("bar"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(503),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "reconcileSecurityGroup shall create/update/delete sgs while allowedIPRanges and serviceTags annotation is set",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32",
+				consts.ServiceAnnotationAllowedServiceTags: "foo,bar",
+			}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							// will be kept
+							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							// will be removed: no longer in allowedIPRanges
+							Name: pointer.String("asvc-TCP-80-192.168.0.5_32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("192.168.0.5/32"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(501),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-10.10.10.0_24"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("10.10.10.0/24"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(501),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-foo"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("foo"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(502),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-bar"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("bar"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(503),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range testCases {
@@ -4606,6 +4916,102 @@ func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
 	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIPs, nil, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSg, *sg)
+}
+
+func TestReconcileSecurityGroup(t *testing.T) {
+	var (
+		clusterName = "testCluster"
+		lbIPs       = []string{"10.0.0.1", "10.0.0.2"}
+		lbName      = "lb-name"
+	)
+
+	t.Run("with spec.loadBalancerSourceRanges and IPRanges annotation specified", func(t *testing.T) {
+		var (
+			ctrl = gomock.NewController(t)
+			az   = GetTestCloud(ctrl)
+			svc  = v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:                     v1.ServiceTypeLoadBalancer,
+					LoadBalancerSourceRanges: []string{"10.10.10.0/24"},
+					IPFamilies: []v1.IPFamily{
+						v1.IPv4Protocol,
+						v1.IPv6Protocol,
+					},
+					Ports: []v1.ServicePort{
+						{
+							Name:     "http",
+							Port:     80,
+							Protocol: v1.ProtocolTCP,
+						},
+					},
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-svc",
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAllowedIPRanges: "192.168.0.1/32",
+					},
+				},
+			}
+		)
+		defer ctrl.Finish()
+
+		mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
+		mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(network.SecurityGroup{
+			Name: pointer.String("nsg"),
+			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+				SecurityRules: &[]network.SecurityRule{},
+			},
+		}, nil)
+		_, err := az.reconcileSecurityGroup(clusterName, &svc, &lbIPs, &lbName, true)
+		assert.Error(t, err)
+		assert.EqualError(t, err, fmt.Sprintf(
+			"both of spec.loadBalancerSourceRanges and annotation %s are specified for service %s, which is not allowed",
+			consts.ServiceAnnotationAllowedIPRanges, svc.Name,
+		))
+	})
+
+	t.Run("with spec.loadBalancerSourceRanges and ServiceTags annotation specified", func(t *testing.T) {
+		var (
+			ctrl = gomock.NewController(t)
+			az   = GetTestCloud(ctrl)
+			svc  = v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:                     v1.ServiceTypeLoadBalancer,
+					LoadBalancerSourceRanges: []string{"10.10.10.0/24"},
+					IPFamilies: []v1.IPFamily{
+						v1.IPv4Protocol,
+						v1.IPv6Protocol,
+					},
+					Ports: []v1.ServicePort{
+						{
+							Name:     "http",
+							Port:     80,
+							Protocol: v1.ProtocolTCP,
+						},
+					},
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-svc",
+					Annotations: map[string]string{
+						consts.ServiceAnnotationAllowedServiceTags: "foo,bar",
+					},
+				},
+			}
+		)
+		defer ctrl.Finish()
+
+		mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
+		mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(network.SecurityGroup{
+			Name: pointer.String("nsg"),
+			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+				SecurityRules: &[]network.SecurityRule{},
+			},
+		}, nil)
+		mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+		_, err := az.reconcileSecurityGroup(clusterName, &svc, &lbIPs, &lbName, true)
+		assert.NoError(t, err)
+	})
 }
 
 func TestSafeDeletePublicIP(t *testing.T) {

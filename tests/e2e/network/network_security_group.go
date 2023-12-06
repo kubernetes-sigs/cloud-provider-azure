@@ -195,7 +195,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 	It("can set source IP prefixes automatically according to corresponding service tag", func() {
 		By("Creating service and wait it to expose")
 		annotation := map[string]string{
-			consts.ServiceAnnotationAllowedServiceTag: "AzureCloud",
+			consts.ServiceAnnotationAllowedServiceTags: "AzureCloud",
 		}
 		utils.Logf("Creating service " + serviceName + " in namespace " + ns.Name)
 		service := utils.CreateLoadBalancerServiceManifest(serviceName, annotation, labels, ns.Name, ports)
@@ -374,6 +374,85 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				Expect(contains).To(BeFalse())
 			}
 		}
+	})
+
+	It("should support service annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`", func() {
+
+		// isSuperSet returns true if set1 is a superset of set2.
+		isSuperSet := func(set1, set2 []string) bool {
+			s1 := map[string]bool{}
+			for _, s := range set1 {
+				s1[s] = true
+			}
+			for _, s := range set2 {
+				if !s1[s] {
+					return false
+				}
+			}
+			return true
+		}
+
+		var allowedIPRanges []string
+
+		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		if v4Enabled {
+			allowedIPRanges = append(allowedIPRanges,
+				"10.20.0.0/16",
+				"192.168.0.1/32",
+			)
+		}
+		if v6Enabled {
+			allowedIPRanges = append(allowedIPRanges,
+				"2c0f:fe40:8000::/48",
+				"2c0f:feb0::/43",
+			)
+		}
+
+		ipFamilyPolicy := v1.IPFamilyPolicyPreferDualStack
+		svc := v1.Service{
+			Spec: v1.ServiceSpec{
+				Ports:          ports,
+				Type:           v1.ServiceTypeLoadBalancer,
+				Selector:       labels,
+				IPFamilyPolicy: &ipFamilyPolicy,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					consts.ServiceAnnotationAllowedIPRanges: strings.Join(allowedIPRanges, ","),
+				},
+				Labels: labels,
+			},
+		}
+
+		By("Creating load balancer service with allowed IP ranges")
+		_, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the service to be exposed")
+		_, err = utils.WaitServiceExposure(cs, ns.Name, serviceName, []string{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Validating if the corresponding IP prefix existing in nsg")
+		nsgs, err := tc.GetClusterSecurityGroups()
+		Expect(err).NotTo(HaveOccurred())
+
+		var sources []string
+
+		for _, nsg := range nsgs {
+
+			rules := nsg.SecurityRules
+			if rules == nil {
+				continue
+			}
+			for _, rule := range *rules {
+				if rule.SourceAddressPrefix != nil {
+					sources = append(sources, *rule.SourceAddressPrefix)
+				}
+			}
+		}
+		Expect(isSuperSet(sources, allowedIPRanges)).To(BeTrue(), "Expected %v to be a superset of %v", sources, allowedIPRanges)
 	})
 })
 
