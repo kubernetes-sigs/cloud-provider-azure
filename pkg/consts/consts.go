@@ -286,6 +286,8 @@ const (
 	ServiceAnnotationAllowedServiceTags = "service.beta.kubernetes.io/azure-allowed-service-tags"
 
 	// ServiceAnnotationAllowedIPRanges is the annotation used on the service
+	// to specify a list of allowed IP Ranges separated by comma.
+	// It is compatible with both IPv4 and IPV6 CIDR formats.
 	ServiceAnnotationAllowedIPRanges = "service.beta.kubernetes.io/azure-allowed-ip-ranges"
 
 	// ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges  denies all traffic to the load balancer except those
