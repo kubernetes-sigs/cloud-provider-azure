@@ -38,13 +38,13 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	"k8s.io/utils/strings/slices"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
@@ -2493,36 +2493,50 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		}
 	}
 
-	sourceRanges, err := servicehelpers.GetLoadBalancerSourceRanges(service)
+	accessControl, err := loadbalancer.NewAccessControl(service)
 	if err != nil {
+		klog.ErrorS(err, "Failed to parse access control configuration for service", "service", service.Name)
 		return nil, err
 	}
-	serviceTags := getServiceTags(service)
-	if len(serviceTags) != 0 {
-		delete(sourceRanges, consts.DefaultLoadBalancerSourceRanges)
+
+	var (
+		sourceRanges          = accessControl.SourceRanges()
+		allowedServiceTags    = accessControl.AllowedServiceTags()
+		allowedIPRanges       = accessControl.AllowedIPRanges()
+		sourceAddressPrefixes = map[bool][]string{
+			false: accessControl.IPV4Sources(),
+			true:  accessControl.IPV6Sources(),
+		}
+	)
+
+	if len(sourceRanges) != 0 && len(allowedIPRanges) != 0 {
+		// Block the service and return error if both of spec.loadBalancerSourceRanges and annotation are specified
+		klog.Errorf("Service %s is using both of spec.loadBalancerSourceRanges and annotation %s.", service.Name, consts.ServiceAnnotationAllowedIPRanges)
+		return nil, fmt.Errorf(
+			"both of spec.loadBalancerSourceRanges and annotation %s are specified for service %s, which is not allowed",
+			consts.ServiceAnnotationAllowedIPRanges, service.Name,
+		)
+	}
+	if len(sourceRanges) != 0 && len(allowedServiceTags) != 0 {
+		// Suggesting to use aks custom annotation instead of spec.loadBalancerSourceRanges
+		klog.Warningf(
+			"Service %s is using both of spec.loadBalancerSourceRanges and annotation %s.",
+			service.Name, consts.ServiceAnnotationAllowedServiceTags,
+		)
+		az.Event(service, v1.EventTypeWarning, "ConflictConfiguration", fmt.Sprintf(
+			"Please use annotation %s instead of spec.loadBalancerSourceRanges while using %s annotation at the same time.",
+			consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationAllowedServiceTags,
+		))
 	}
 
-	sourceAddressPrefixes := map[bool][]string{}
-	if (sourceRanges == nil || servicehelpers.IsAllowAll(sourceRanges)) && len(serviceTags) == 0 {
-		if !requiresInternalLoadBalancer(service) || len(service.Spec.LoadBalancerSourceRanges) > 0 {
-			sourceAddressPrefixes[false] = []string{"Internet"}
-			sourceAddressPrefixes[true] = []string{"Internet"}
-		}
-	} else {
-		for _, ip := range sourceRanges {
-			if ip == nil {
-				continue
-			}
-			isIPv6 := net.ParseIP(ip.IP.String()).To4() == nil
-			sourceAddressPrefixes[isIPv6] = append(sourceAddressPrefixes[isIPv6], ip.String())
-		}
-		sourceAddressPrefixes[false] = append(sourceAddressPrefixes[false], serviceTags...)
-		sourceAddressPrefixes[true] = append(sourceAddressPrefixes[true], serviceTags...)
-	}
-
-	expectedSecurityRules := []network.SecurityRule{}
+	var expectedSecurityRules []network.SecurityRule
 	handleSecurityRules := func(isIPv6 bool) error {
-		expectedSecurityRulesSingleStack, err := az.getExpectedSecurityRules(wantLb, ports, sourceAddressPrefixes[isIPv6], service, destinationIPAddresses[isIPv6], sourceRanges, backendIPAddresses[isIPv6], disableFloatingIP, isIPv6)
+		expectedSecurityRulesSingleStack, err := az.getExpectedSecurityRules(
+			wantLb, ports,
+			sourceAddressPrefixes[isIPv6], service,
+			destinationIPAddresses[isIPv6], sourceRanges,
+			backendIPAddresses[isIPv6], disableFloatingIP, isIPv6,
+		)
 		expectedSecurityRules = append(expectedSecurityRules, expectedSecurityRulesSingleStack...)
 		return err
 	}
@@ -2706,7 +2720,16 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup,
 	return dirtySg, updatedRules, nil
 }
 
-func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, sourceAddressPrefixes []string, service *v1.Service, destinationIPAddresses []string, sourceRanges utilnet.IPNetSet, backendIPAddresses []string, disableFloatingIP, isIPv6 bool) ([]network.SecurityRule, error) {
+func (az *Cloud) getExpectedSecurityRules(
+	wantLb bool,
+	ports []v1.ServicePort,
+	sourceAddressPrefixes []string,
+	service *v1.Service,
+	destinationIPAddresses []string,
+	sourceRanges []netip.Prefix,
+	backendIPAddresses []string,
+	disableFloatingIP, isIPv6 bool,
+) ([]network.SecurityRule, error) {
 	expectedSecurityRules := []network.SecurityRule{}
 
 	if wantLb {
@@ -2749,7 +2772,7 @@ func (az *Cloud) getExpectedSecurityRules(wantLb bool, ports []v1.ServicePort, s
 		}
 
 		shouldAddDenyRule := false
-		if len(sourceRanges) > 0 && !servicehelpers.IsAllowAll(sourceRanges) {
+		if len(sourceRanges) > 0 && !loadbalancer.IsCIDRsAllowAll(sourceRanges) {
 			if v, ok := service.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, consts.TrueAnnotationValue) {
 				shouldAddDenyRule = true
 			}
@@ -3509,7 +3532,7 @@ func getServiceTags(service *v1.Service) []string {
 		return nil
 	}
 
-	if serviceTags, found := service.Annotations[consts.ServiceAnnotationAllowedServiceTag]; found {
+	if serviceTags, found := service.Annotations[consts.ServiceAnnotationAllowedServiceTags]; found {
 		result := []string{}
 		tags := strings.Split(strings.TrimSpace(serviceTags), ",")
 		for _, tag := range tags {
