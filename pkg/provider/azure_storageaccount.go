@@ -686,11 +686,16 @@ func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourc
 
 // AddStorageAccountTags add tags to storage account
 func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGroup, account string, tags map[string]*string) *retry.Error {
+	// add lock to avoid concurrent update on the cache
+	az.lockMap.LockEntry(account)
+	defer az.lockMap.UnlockEntry(account)
+
 	result, rerr := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
 	if rerr != nil {
 		return rerr
 	}
 
+	originalLen := len(result.Tags)
 	newTags := result.Tags
 	if newTags == nil {
 		newTags = make(map[string]*string)
@@ -701,10 +706,11 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 		newTags[k] = v
 	}
 
-	if len(newTags) > len(result.Tags) {
+	if len(newTags) > originalLen {
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := storage.AccountUpdateParameters{Tags: newTags}
+		klog.V(2).Infof("update storage account(%s) with tags(%+v)", account, newTags)
 		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
 	}
 	return nil
@@ -712,6 +718,10 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 
 // RemoveStorageAccountTag remove tag from storage account
 func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGroup, account, key string) *retry.Error {
+	// add lock to avoid concurrent update on the cache
+	az.lockMap.LockEntry(account)
+	defer az.lockMap.UnlockEntry(account)
+
 	result, rerr := az.getStorageAccountWithCache(ctx, subsID, resourceGroup, account)
 	if rerr != nil {
 		return rerr
