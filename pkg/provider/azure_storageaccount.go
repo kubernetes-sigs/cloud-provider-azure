@@ -44,7 +44,7 @@ import (
 const SkipMatchingTag = "skip-matching"
 const LocationGlobal = "global"
 const privateDNSZoneNameFmt = "privatelink.%s.%s"
-const DefaultTokenAudience = "api://AzureADTokenExchange"
+const DefaultTokenAudience = "api://AzureADTokenExchange" //nolint:gosec // G101 ignore this!
 
 type StorageType string
 
@@ -139,8 +139,7 @@ type serviceAccountToken struct {
 	APIAzureADTokenExchange struct {
 		Token               string    `json:"token"`
 		ExpirationTimestamp time.Time `json:"expirationTimestamp"`
-	} `json:"api://AzureADTokenExchange"` //nolint:gosec // G101 ignore this!
-
+	} `json:"api://AzureADTokenExchange"`
 }
 
 // parseServiceAccountToken parses the bound service account token from the token passed from NodePublishVolume Request.
