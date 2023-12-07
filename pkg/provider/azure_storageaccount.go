@@ -139,7 +139,8 @@ type serviceAccountToken struct {
 	APIAzureADTokenExchange struct {
 		Token               string    `json:"token"`
 		ExpirationTimestamp time.Time `json:"expirationTimestamp"`
-	} `json:"api://AzureADTokenExchange"`
+	} `json:"api://AzureADTokenExchange"` //nolint:gosec // G101 ignore this!
+
 }
 
 // parseServiceAccountToken parses the bound service account token from the token passed from NodePublishVolume Request.
