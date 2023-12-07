@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armprivatedns.PrivateZone = &armprivatedns.PrivateZone{}
 
 var _ = Describe("PrivateZonesClient", Ordered, func() {

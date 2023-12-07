@@ -63,12 +63,12 @@ vet: golangci-lint ## Run go vet against code.
 .PHONY: build
 TYPESCAFFOLD = $(LOCALBIN)/typescaffold
 CLIENTGEN = $(LOCALBIN)/client-gen
-build: fmt vet ## Build manager binary.
+build: ## Build manager binary.
 	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/client-gen ./cmd/client-gen/ ;popd
 	pushd client-gen; CGO_ENABLED=0 go build -o ../bin/typescaffold ./cmd/typescaffold/;popd
 
 .PHONY: generate
-generate: install-dependencies build generatecode generateimpl vet-all
+generate: install-dependencies build generatecode generateimpl fmt vet-all
 
 .PHONY: generatecode
 generatecode: build ## Generate client

@@ -29,13 +29,9 @@ import (
 // generateClient writes out the build tag, package declaration, and imports
 func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
 	var importList = make(map[string]map[string]struct{})
-
-	aliasMap, ok := importList[markerConf.PackageName]
-	if !ok {
-		aliasMap = make(map[string]struct{})
-		importList[markerConf.PackageName] = aliasMap
-	}
+	aliasMap := make(map[string]struct{})
 	aliasMap[markerConf.PackageAlias] = struct{}{}
+	importList[markerConf.PackageName] = aliasMap
 
 	var outContent bytes.Buffer
 	if err := ClientTemplate.Execute(&outContent, markerConf); err != nil {

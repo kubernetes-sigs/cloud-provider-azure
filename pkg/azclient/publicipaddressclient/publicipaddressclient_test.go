@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armnetwork.PublicIPAddress = &armnetwork.PublicIPAddress{}
 
 var _ = Describe("PublicIPAddressesClient", Ordered, func() {

@@ -125,14 +125,6 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 	if err := factoryGenerator.Generate(ctx); err != nil {
 		return err
 	}
-	fmt.Println("format code")
-	//nolint:gosec // G204 ignore this!
-	cmd = exec.Command("goimports", "-local", "sigs.k8s.io/cloud-provider-azure/pkg/azclient", "-w", ".")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
 
 	fmt.Println("Run go test ")
 

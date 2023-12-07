@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armnetwork.LoadBalancer = &armnetwork.LoadBalancer{}
 
 var _ = Describe("LoadBalancersClient", Ordered, func() {

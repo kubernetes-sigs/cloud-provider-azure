@@ -94,6 +94,21 @@ func (mr *MockClientFactoryMockRecorder) GetAccountClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountClient", reflect.TypeOf((*MockClientFactory)(nil).GetAccountClient))
 }
 
+// GetAccountClientForSub mocks base method.
+func (m *MockClientFactory) GetAccountClientForSub(arg0 string) (accountclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAccountClientForSub", arg0)
+	ret0, _ := ret[0].(accountclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAccountClientForSub indicates an expected call of GetAccountClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetAccountClientForSub(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetAccountClientForSub), arg0)
+}
+
 // GetAvailabilitySetClient mocks base method.
 func (m *MockClientFactory) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	m.ctrl.T.Helper()
@@ -120,6 +135,21 @@ func (m *MockClientFactory) GetBlobContainerClient() blobcontainerclient.Interfa
 func (mr *MockClientFactoryMockRecorder) GetBlobContainerClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobContainerClient", reflect.TypeOf((*MockClientFactory)(nil).GetBlobContainerClient))
+}
+
+// GetBlobContainerClientForSub mocks base method.
+func (m *MockClientFactory) GetBlobContainerClientForSub(arg0 string) (blobcontainerclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlobContainerClientForSub", arg0)
+	ret0, _ := ret[0].(blobcontainerclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlobContainerClientForSub indicates an expected call of GetBlobContainerClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetBlobContainerClientForSub(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlobContainerClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetBlobContainerClientForSub), arg0)
 }
 
 // GetBlobServicePropertiesClient mocks base method.
@@ -164,6 +194,21 @@ func (mr *MockClientFactoryMockRecorder) GetDiskClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClient", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClient))
 }
 
+// GetDiskClientForSub mocks base method.
+func (m *MockClientFactory) GetDiskClientForSub(arg0 string) (diskclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDiskClientForSub", arg0)
+	ret0, _ := ret[0].(diskclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDiskClientForSub indicates an expected call of GetDiskClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetDiskClientForSub(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDiskClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetDiskClientForSub), arg0)
+}
+
 // GetFileShareClient mocks base method.
 func (m *MockClientFactory) GetFileShareClient() fileshareclient.Interface {
 	m.ctrl.T.Helper()
@@ -176,6 +221,21 @@ func (m *MockClientFactory) GetFileShareClient() fileshareclient.Interface {
 func (mr *MockClientFactoryMockRecorder) GetFileShareClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShareClient", reflect.TypeOf((*MockClientFactory)(nil).GetFileShareClient))
+}
+
+// GetFileShareClientForSub mocks base method.
+func (m *MockClientFactory) GetFileShareClientForSub(arg0 string) (fileshareclient.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileShareClientForSub", arg0)
+	ret0, _ := ret[0].(fileshareclient.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFileShareClientForSub indicates an expected call of GetFileShareClientForSub.
+func (mr *MockClientFactoryMockRecorder) GetFileShareClientForSub(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShareClientForSub", reflect.TypeOf((*MockClientFactory)(nil).GetFileShareClientForSub), arg0)
 }
 
 // GetIPGroupClient mocks base method.

@@ -29,12 +29,10 @@ import (
 )
 
 type ClientEntryConfig struct {
+	ClientGenConfig
 	PkgAlias          string
 	PkgPath           string
-	ResourceName      string
-	SubResourceName   string
 	InterfaceTypeName string
-	RateLimitKey      string
 }
 
 type ClientFactoryGenerator struct {
@@ -57,12 +55,10 @@ func (generator *ClientFactoryGenerator) RegisterClient(_ *genall.GenerationCont
 	}
 
 	generator.clientRegistry[root.Name+typeName] = &ClientEntryConfig{
+		ClientGenConfig:   markerConf,
 		PkgAlias:          root.Name,
 		PkgPath:           root.PkgPath,
-		ResourceName:      markerConf.Resource,
-		SubResourceName:   markerConf.SubResource,
 		InterfaceTypeName: typeName,
-		RateLimitKey:      markerConf.RateLimitKey,
 	}
 	return nil
 }
@@ -98,10 +94,16 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 		for k, v := range generator.importList {
 			importList[k] = v
 		}
+		for _, v := range generator.clientRegistry {
+			if v.ClientGenConfig.CrossSubFactory {
+				importList["sync"] = map[string]struct{}{}
+				importList["strings"] = map[string]struct{}{}
+				break
+			}
+		}
 
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
-		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"] = make(map[string]struct{})
 		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"] = make(map[string]struct{})
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azidentity"] = make(map[string]struct{})
 
@@ -162,10 +164,16 @@ func (generator *ClientFactoryGenerator) Generate(_ *genall.GenerationContext) e
 var AbstractClientFactoryImplTemplate = template.Must(template.New("object-factory-impl").Parse(
 	`
 type ClientFactoryImpl struct {
-	*ClientFactoryConfig
+	armConfig     *ARMClientConfig
+	facotryConfig *ClientFactoryConfig
 	cred               azcore.TokenCredential
-	{{ range $key, $client := . -}}
+	clientOptionsMutFn []func(option *arm.ClientOptions)
+	{{range $key, $client := . -}}
+	{{ if $client.CrossSubFactory -}}
+	{{ $key }} sync.Map
+	{{ else -}}
 	{{ $key }} {{.PkgAlias}}.{{.InterfaceTypeName}} 
+	{{end -}}
 	{{end -}}
 }
 
@@ -177,56 +185,84 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		cred = &azidentity.DefaultAzureCredential{}
 	}
 
-	var options *arm.ClientOptions
 	var err error 
 
-	{{ $rateLimitPolicyNotDefined := true -}}
+	factory := &ClientFactoryImpl{
+		armConfig: 	   armConfig,
+		facotryConfig: config,
+		cred:          cred,
+		clientOptionsMutFn: clientOptionsMutFn,
+	}
 	{{range $key, $client := . }}
-	//initialize {{$client}}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
+	{{- $resource := .Resource}}
+	{{- if (gt (len .SubResource) 0) }}
+	{{- $resource = .SubResource}}
+	{{- end }}
+	//initialize {{.PkgAlias}}
+	{{ if $client.CrossSubFactory -}}
+	_, err = factory.Get{{$resource}}ClientForSub(config.SubscriptionID)
+	{{ else -}}
+	factory.{{$key}}, err = factory.create{{$resource}}Client(config.SubscriptionID)
+	{{ end -}}
 	if err != nil {
 		return nil, err
 	}
-	{{- with $rateLimitPolicyNotDefined}}
-	var ratelimitOption *ratelimit.Config
-	var rateLimitPolicy policy.Policy
-	{{ $rateLimitPolicyNotDefined = false -}}
 	{{end -}}
+	return factory, nil
+}
+
+{{range $key, $client := . }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+func (factory *ClientFactoryImpl) create{{$resource}}Client(subscription string)({{.PkgAlias}}.{{.InterfaceTypeName}},error) {
+	//initialize {{.PkgAlias}}
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
 	{{with $client.RateLimitKey}}
 	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("{{.}}")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("{{.}}")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
 	{{- end }}
-	for _, optionMutFn := range clientOptionsMutFn {
+	for _, optionMutFn := range factory.clientOptionsMutFn {
 		if optionMutFn != nil {
 			optionMutFn(options)
 		}
 	}
-	{{$key}}, err := {{.PkgAlias}}.New(config.SubscriptionID, cred, options)
+	return {{.PkgAlias}}.New(subscription, factory.cred, options)
+}
+{{ if $client.CrossSubFactory }}
+func (factory *ClientFactoryImpl) Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}} {
+	clientImp,_:= factory.{{ $key }}.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.({{.PkgAlias}}.{{.InterfaceTypeName}})
+}
+func (factory *ClientFactoryImpl) Get{{$resource}}ClientForSub(subscriptionID string)({{.PkgAlias}}.{{.InterfaceTypeName}},error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp,loaded:= factory.{{ $key }}.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.({{.PkgAlias}}.{{.InterfaceTypeName}}), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once. 
+	clientImp, err := factory.create{{$resource}}Client(subscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	{{end}}
-	return &ClientFactoryImpl{
-		ClientFactoryConfig: config,
-		cred:                cred,
-		{{- range $key, $client := . -}}
-		{{ $key }} : {{ $key }},
-		{{end -}}
-	}, nil
+	factory.{{ $key }}.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.({{.PkgAlias}}.{{.InterfaceTypeName}}), nil
 }
-
-{{range $key, $client := . }}
-{{- $resource := .ResourceName}}
-{{ if (gt (len .SubResourceName) 0) }}
-{{ $resource = .SubResourceName}}
-{{ end -}}
+{{- else }}
 func (factory *ClientFactoryImpl) Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}} {
 	return factory.{{ $key }}
 }
+{{ end }}
 {{ end }}
 `))
 
@@ -234,11 +270,14 @@ var AbstractClientFactoryInterfaceTemplate = template.Must(template.New("object-
 	`
 type ClientFactory interface {
 	{{- range $key, $client := . }}
-	{{$resource := $client.ResourceName }}
-	{{- if (gt (len $client.SubResourceName) 0) }}
-	{{- $resource = $client.SubResourceName -}}
+	{{$resource := $client.Resource }}
+	{{- if (gt (len $client.SubResource) 0) }}
+	{{- $resource = $client.SubResource -}}
 	{{- end -}}
 	Get{{$resource}}Client(){{.PkgAlias}}.{{.InterfaceTypeName}}
+	{{- if .CrossSubFactory }}
+	Get{{$resource}}ClientForSub(subscriptionID string)({{.PkgAlias}}.{{.InterfaceTypeName}},error)
+	{{- end }}
 	{{- end }}
 }
 `))
@@ -248,9 +287,9 @@ var FactoryTestCaseTemplate = template.Must(template.New("factory-test-case").Pa
 	var _ = Describe("Factory", func() {
 		When("config is nil", func() {
 			{{- range $key, $client := . }}
-			{{$resource := $client.ResourceName }}
-			{{- if (gt (len $client.SubResourceName) 0) }}
-			{{- $resource = $client.SubResourceName -}}
+			{{$resource := $client.Resource }}
+			{{- if (gt (len $client.SubResource) 0) }}
+			{{- $resource = $client.SubResource -}}
 			{{- end -}}
 			It("should create factory instance without painc - {{$resource}}", func() {
 				factory, err := NewClientFactory(nil, nil, nil)
