@@ -14,35 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package loadbalancer
+package iputil
 
 import (
 	"fmt"
 	"net/netip"
 )
 
-const (
-	IPv4AllowedAll = "0.0.0.0/0"
-	IPv6AllowedAll = "::/0"
-)
-
-// IsCIDRsAllowAll return true if the given IP Ranges covers all IPs.
-// It returns false if the given IP Ranges is empty.
-func IsCIDRsAllowAll(cidrs []netip.Prefix) bool {
-	for _, cidr := range cidrs {
-		if cidr.String() == IPv4AllowedAll || cidr.String() == IPv6AllowedAll {
+func IsPrefixesAllowAll(prefixes []netip.Prefix) bool {
+	for _, p := range prefixes {
+		if p.Bits() == 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func ParseCIDRs(parts []string) ([]netip.Prefix, error) {
+func ParsePrefixes(vs []string) ([]netip.Prefix, error) {
 	var rv []netip.Prefix
-	for _, part := range parts {
-		prefix, err := netip.ParsePrefix(part)
+	for _, v := range vs {
+		prefix, err := netip.ParsePrefix(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid IP range %s: %w", part, err)
+			return nil, fmt.Errorf("invalid CIDR `%s`: %w", v, err)
 		}
 		rv = append(rv, prefix)
 	}
