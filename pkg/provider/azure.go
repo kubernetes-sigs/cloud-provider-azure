@@ -49,6 +49,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/blobclient"
@@ -382,6 +383,8 @@ type Cloud struct {
 	PrivateLinkServiceClient        privatelinkserviceclient.Interface
 	containerServiceClient          containerserviceclient.Interface
 	deploymentClient                deploymentclient.Interface
+	ComputeClientFactory            azclient.ClientFactory
+	NetworkClientFactory            azclient.ClientFactory
 
 	ResourceRequestBackoff  wait.Backoff
 	Metadata                *InstanceMetadataService
