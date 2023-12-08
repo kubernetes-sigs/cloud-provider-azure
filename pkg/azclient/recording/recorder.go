@@ -216,10 +216,9 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if !strings.EqualFold(clientID, "clientid") {
 			i.Request.URL = strings.Replace(i.Request.URL, clientID, "clientid", -1)
 			i.Request.Body = strings.Replace(i.Request.Body, clientID, "clientid", -1)
-			i.Request.Form.Set("client_id", "clientid")
 			i.Response.Body = strings.Replace(i.Response.Body, clientID, "clientid", -1)
 			if i.Request.Form.Has("client_id") {
-				i.Request.Form.Set("client_id", clientID)
+				i.Request.Form.Set("client_id", "clientid")
 			}
 		}
 
@@ -236,6 +235,14 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		}
 		if strings.Contains(i.Response.Body, "-----BEGIN RSA PRIVATE KEY-----") {
 			i.Response.Body = "{\r\n  \"privateKey\": \"-----BEGIN RSA PRIVATE KEY-----\\r\\n\\r\\n-----END RSA PRIVATE KEY-----\\r\\n\",\r\n  \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\"\r\n}"
+		}
+		if strings.Contains(i.Response.Body, "skiptoken") {
+			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
+			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
+		}
+		if strings.Contains(i.Request.RequestURI, "skiptoken") {
+			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
+			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
 		}
 		for _, header := range requestHeadersToRemove {
 			delete(i.Request.Headers, header)

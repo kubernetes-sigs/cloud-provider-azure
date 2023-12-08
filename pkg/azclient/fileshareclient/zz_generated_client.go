@@ -22,6 +22,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -30,19 +32,27 @@ import (
 type Client struct {
 	*armstorage.FileSharesClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armstorage.NewFileSharesClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		FileSharesClient: client,
+		subscriptionID:   subscriptionID,
+		tracer:           tr,
+	}, nil
 }
+
+const GetOperationName = "FileSharesClient.Get"
 
 // Get gets the FileShare
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armstorage.FileShare, rerr error) {
@@ -51,6 +61,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.FileSharesClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
 	if err != nil {
 		return nil, err

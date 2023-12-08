@@ -13,9 +13,7 @@ interactions:
         remote_addr: ""
         request_uri: ""
         body: ""
-        form:
-            client_id:
-                - 2cb66ba2-e03b-4c9b-99ce-3a22b7bdf8e6
+        form: {}
         headers: {}
         url: https://login.microsoftonline.com/common/discovery/instance?api-version=1.1&authorization_endpoint=https%3A%2F%2Flogin.microsoftonline.com%2Ftenantid%2Foauth2%2Fv2.0%2Fauthorize
         method: GET
@@ -49,7 +47,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 1.044373004s
+        duration: 827.56526ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -62,9 +60,7 @@ interactions:
         remote_addr: ""
         request_uri: ""
         body: ""
-        form:
-            client_id:
-                - 2cb66ba2-e03b-4c9b-99ce-3a22b7bdf8e6
+        form: {}
         headers: {}
         url: https://login.microsoftonline.com/tenantid/v2.0/.well-known/openid-configuration
         method: GET
@@ -98,7 +94,7 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 261.900201ms
+        duration: 236.939232ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -113,7 +109,7 @@ interactions:
         body: client_id=clientid&client_secret=clientsecret&grant_type=client_credentials&scope=https%3A%2F%2Fmanagement.azure.com%2F.default+openid+offline_access+profile
         form:
             client_id:
-                - 2cb66ba2-e03b-4c9b-99ce-3a22b7bdf8e6
+                - clientid
             client_secret:
                 - clientsecret
             grant_type:
@@ -157,4 +153,4 @@ interactions:
                 - "0"
         status: 200 OK
         code: 200
-        duration: 312.224101ms
+        duration: 328.289105ms

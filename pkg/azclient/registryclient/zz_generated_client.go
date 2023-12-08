@@ -22,6 +22,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armcontainerregistry "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -30,19 +32,27 @@ import (
 type Client struct {
 	*armcontainerregistry.RegistriesClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armcontainerregistry.NewRegistriesClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		RegistriesClient: client,
+		subscriptionID:   subscriptionID,
+		tracer:           tr,
+	}, nil
 }
+
+const GetOperationName = "RegistriesClient.Get"
 
 // Get gets the Registry
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcontainerregistry.Registry, rerr error) {
@@ -51,6 +61,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.RegistriesClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -59,15 +71,21 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	return &resp.Registry, nil
 }
 
+const DeleteOperationName = "RegistriesClient.Delete"
+
 // Delete deletes a Registry by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	ctx = utils.ContextWithClientName(ctx, "RegistriesClient")
 	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
-	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(err)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
+
+const ListOperationName = "RegistriesClient.List"
 
 // List gets a list of Registry in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcontainerregistry.Registry, rerr error) {
@@ -75,6 +93,8 @@ func (client *Client) List(ctx context.Context, resourceGroupName string) (resul
 	ctx = utils.ContextWithRequestMethod(ctx, "List")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	pager := client.RegistriesClient.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
