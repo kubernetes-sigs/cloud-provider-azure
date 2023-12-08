@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armnetwork.IPGroup = &armnetwork.IPGroup{}
 
 var _ = Describe("IPGroupsClient", Ordered, func() {

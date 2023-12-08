@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armcompute.Disk = &armcompute.Disk{}
 
 var _ = Describe("DisksClient", Ordered, func() {

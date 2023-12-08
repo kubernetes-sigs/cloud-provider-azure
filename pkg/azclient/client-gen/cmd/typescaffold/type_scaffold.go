@@ -29,15 +29,16 @@ import (
 )
 
 type TypeScaffoldOptions struct {
-	Resource     string
-	SubResource  string
-	Package      string
-	PackageAlias string
-	ClientName   string
-	PropertyName string
-	Verbs        []string
-	Expand       bool
-	RateLimitKey string
+	Resource        string
+	SubResource     string
+	Package         string
+	PackageAlias    string
+	ClientName      string
+	PropertyName    string
+	Verbs           []string
+	Expand          bool
+	RateLimitKey    string
+	CrossSubFactory bool
 }
 
 var (
@@ -191,7 +192,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&scaffoldOptions.Expand, "expand", false, "get support expand params")
 	rootCmd.Flags().StringVar(&scaffoldOptions.SubResource, "subresource", "", "subresource name")
 	rootCmd.Flags().StringVar(&scaffoldOptions.RateLimitKey, "ratelimitkey", "", "ratelimit config key")
-
+	rootCmd.Flags().BoolVar(&scaffoldOptions.CrossSubFactory, "cross-sub-factory-support", false, "cross sub factory support")
 	err := rootCmd.Execute()
 	if err != nil {
 		fmt.Printf("failed to generate interface %s\n", err.Error())

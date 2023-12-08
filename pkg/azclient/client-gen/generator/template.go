@@ -19,14 +19,15 @@ package generator
 import "html/template"
 
 type ClientGenConfig struct {
-	Verbs        []string `marker:",optional"`
-	Resource     string
-	SubResource  string `marker:"subResource,optional"`
-	PackageName  string
-	PackageAlias string
-	ClientName   string
-	Expand       bool   `marker:"expand,optional"`
-	RateLimitKey string `marker:"rateLimitKey,optional"`
+	Verbs           []string `marker:",optional"`
+	Resource        string
+	SubResource     string `marker:"subResource,optional"`
+	PackageName     string
+	PackageAlias    string
+	ClientName      string
+	Expand          bool   `marker:"expand,optional"`
+	RateLimitKey    string `marker:"rateLimitKey,optional"`
+	CrossSubFactory bool   `marker:"crossSubFactory,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
@@ -161,11 +162,9 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 var ImportTemplate = template.Must(template.New("import").Parse(
 	`
 import (
-  {{ range $package, $Entry := . }}
-  {{- range $alias, $flag := $Entry }}
-  {{- $alias }} 
-  {{- end }} "{{$package}}"
-  {{ end }}
+	{{ range $package, $Entry := . }}
+	{{- range $alias, $flag := $Entry}}{{$alias}} {{end}}"{{$package}}"
+	{{ end -}}
 )
 `))
 
@@ -253,7 +252,6 @@ var TestCaseTemplate = template.Must(template.New("object-scaffolding-test-case"
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 {{if or $HasCreateOrUpdate}}var newResource *{{.PackageAlias}}.{{$resource}} = &{{.PackageAlias}}.{{$resource}}{} {{- end }}
 
 var _ = Describe("{{.ClientName}}", Ordered, func() {

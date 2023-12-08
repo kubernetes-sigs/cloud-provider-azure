@@ -72,6 +72,7 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ st
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
 	importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
@@ -81,13 +82,13 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ st
 
 func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ string, markerConf ClientGenConfig, headerText string) error {
 	var importList = make(map[string]map[string]struct{})
-
-	aliasMap, ok := importList[markerConf.PackageName]
-	if !ok {
-		aliasMap = make(map[string]struct{})
-		importList[markerConf.PackageName] = aliasMap
+	for _, verb := range markerConf.Verbs {
+		if strings.EqualFold(FuncCreateOrUpdate, verb) {
+			aliasMap := make(map[string]struct{})
+			aliasMap[markerConf.PackageAlias] = struct{}{}
+			importList[markerConf.PackageName] = aliasMap
+		}
 	}
-	aliasMap[markerConf.PackageAlias] = struct{}{}
 	if len(markerConf.Verbs) > 0 {
 		importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
 	}
@@ -101,7 +102,6 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 	}
 
 	importList["context"] = make(map[string]struct{})
-	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
 	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, &outContent)
 }
@@ -113,13 +113,9 @@ func generateTestCaseCustom(ctx *genall.GenerationContext, root *loader.Package,
 	}
 
 	var importList = make(map[string]map[string]struct{})
-
-	aliasMap, ok := importList[markerConf.PackageName]
-	if !ok {
-		aliasMap = make(map[string]struct{})
-		importList[markerConf.PackageName] = aliasMap
-	}
+	aliasMap := make(map[string]struct{})
 	aliasMap[markerConf.PackageAlias] = struct{}{}
+	importList[markerConf.PackageName] = aliasMap
 
 	var outContent bytes.Buffer
 	if err := TestCaseCustomTemplate.Execute(&outContent, markerConf); err != nil {

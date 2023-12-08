@@ -52,12 +52,16 @@ import (
 
 type ClientFactory interface {
 	GetAccountClient() accountclient.Interface
+	GetAccountClientForSub(subscriptionID string) (accountclient.Interface, error)
 	GetAvailabilitySetClient() availabilitysetclient.Interface
 	GetBlobContainerClient() blobcontainerclient.Interface
+	GetBlobContainerClientForSub(subscriptionID string) (blobcontainerclient.Interface, error)
 	GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface
 	GetDeploymentClient() deploymentclient.Interface
 	GetDiskClient() diskclient.Interface
+	GetDiskClientForSub(subscriptionID string) (diskclient.Interface, error)
 	GetFileShareClient() fileshareclient.Interface
+	GetFileShareClientForSub(subscriptionID string) (fileshareclient.Interface, error)
 	GetInterfaceClient() interfaceclient.Interface
 	GetIPGroupClient() ipgroupclient.Interface
 	GetLoadBalancerClient() loadbalancerclient.Interface

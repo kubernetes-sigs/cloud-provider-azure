@@ -28,7 +28,6 @@ import (
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
-
 var newResource *armnetwork.Subnet = &armnetwork.Subnet{}
 
 var _ = Describe("SubnetsClient", Ordered, func() {
