@@ -27,7 +27,6 @@ import (
 
 	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage"
 	gomock "github.com/golang/mock/gomock"
-
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 

@@ -27,7 +27,6 @@ import (
 
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	gomock "github.com/golang/mock/gomock"
-
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 

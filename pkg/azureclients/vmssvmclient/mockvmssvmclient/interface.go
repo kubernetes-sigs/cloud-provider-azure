@@ -28,7 +28,6 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	azure "github.com/Azure/go-autorest/autorest/azure"
 	gomock "github.com/golang/mock/gomock"
-
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
