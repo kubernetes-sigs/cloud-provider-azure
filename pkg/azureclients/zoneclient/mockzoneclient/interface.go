@@ -26,7 +26,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-
 	retry "sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
