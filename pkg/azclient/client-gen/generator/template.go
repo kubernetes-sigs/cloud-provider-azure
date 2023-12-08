@@ -34,6 +34,7 @@ var ClientTemplate = template.Must(template.New("object-scaffolding-client-struc
 type Client struct{
 	*{{.PackageAlias}}.{{.ClientName}}
 	subscriptionID string
+	tracer tracing.Tracer
 }
 `))
 
@@ -42,26 +43,34 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := {{.PackageAlias}}.New{{.ClientName}}(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{ client, subscriptionID }, nil
+	return &Client{ 
+		{{.ClientName}}: client, 
+		subscriptionID:  subscriptionID,
+		tracer:          tr, 
+	}, nil
 }
 `))
 
 var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-create-func").Parse(`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+const CreateOrUpdateOperationName = "{{.ClientName}}.Create"
 // CreateOrUpdate creates or updates a {{$resource}}.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (*{{.PackageAlias}}.{{$resource}}, error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (result *{{.PackageAlias}}.{{$resource}},err error) {
 	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
 	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
+	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName,{{with .SubResource}}parentResourceName,{{end}} resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -74,16 +83,19 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 `))
 
 var ListByRGFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
 	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
 	ctx = utils.ContextWithRequestMethod(ctx, "List")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	pager := client.{{.ClientName}}.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -97,16 +109,19 @@ func (client *Client) List(ctx context.Context, resourceGroupName string{{with .
 `))
 
 var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func").Parse(`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, rerr error) {
 	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
 	ctx = utils.ContextWithRequestMethod(ctx, "List")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	pager := client.{{.ClientName}}.NewListPager(resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
@@ -120,26 +135,30 @@ func (client *Client) List(ctx context.Context, resourceGroupName string{{with .
 `))
 
 var DeleteFuncTemplate = template.Must(template.New("object-scaffolding-delete-func").Parse(`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+const DeleteOperationName = "{{.ClientName}}.Delete"
 // Delete deletes a {{$resource}} by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) (err error) {
 	ctx = utils.ContextWithClientName(ctx, "{{.ClientName}}")
 	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
-	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(err)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
 `))
 
 var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").Parse(`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
+const GetOperationName = "{{.ClientName}}.Get"
 // Get gets the {{$resource}}
 func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with .SubResource}}parentResourceName string,{{end}} resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, rerr error) {
 	{{ if .Expand}}var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
@@ -150,6 +169,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}}ops{{else}}nil{{end}} )
 	if err != nil {
 		return nil, err
@@ -175,10 +196,10 @@ type ImportStatement struct {
 
 var TestSuiteTemplate = template.Must(template.New("object-scaffolding-test-suite").Parse(
 	`
-{{ $resource := .Resource}}
-{{ if (gt (len .SubResource) 0) }}
-{{ $resource = .SubResource}}
-{{ end }}
+{{- $resource := .Resource}}
+{{- if (gt (len .SubResource) 0) }}
+{{- $resource = .SubResource}}
+{{- end }}
 func TestClient(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Client Suite")
@@ -203,12 +224,14 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
 			Transport: recorder.HTTPClient(),
+			TracingProvider: utils.TracingProvider,
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
 			Transport: recorder.HTTPClient(),
+
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())

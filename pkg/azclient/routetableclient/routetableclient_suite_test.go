@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 func TestClient(t *testing.T) {
@@ -54,7 +55,8 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	cred := recorder.TokenCredential()
 	resourceGroupClient, err = armresources.NewResourceGroupsClient(subscriptionID, cred, &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
-			Transport: recorder.HTTPClient(),
+			Transport:       recorder.HTTPClient(),
+			TracingProvider: utils.TracingProvider,
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())

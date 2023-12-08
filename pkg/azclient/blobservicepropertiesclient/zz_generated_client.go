@@ -20,6 +20,7 @@ package blobservicepropertiesclient
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armstorage "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -28,16 +29,22 @@ import (
 type Client struct {
 	*armstorage.BlobServicesClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armstorage.NewBlobServicesClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		BlobServicesClient: client,
+		subscriptionID:     subscriptionID,
+		tracer:             tr,
+	}, nil
 }

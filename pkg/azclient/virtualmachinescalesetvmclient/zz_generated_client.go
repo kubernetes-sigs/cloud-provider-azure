@@ -22,6 +22,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -30,19 +32,27 @@ import (
 type Client struct {
 	*armcompute.VirtualMachineScaleSetVMsClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armcompute.NewVirtualMachineScaleSetVMsClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		VirtualMachineScaleSetVMsClient: client,
+		subscriptionID:                  subscriptionID,
+		tracer:                          tr,
+	}, nil
 }
+
+const GetOperationName = "VirtualMachineScaleSetVMsClient.Get"
 
 // Get gets the VirtualMachineScaleSetVM
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armcompute.VirtualMachineScaleSetVM, rerr error) {
@@ -51,6 +61,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.VirtualMachineScaleSetVMsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -59,12 +71,16 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, parentR
 	return &resp.VirtualMachineScaleSetVM, nil
 }
 
+const DeleteOperationName = "VirtualMachineScaleSetVMsClient.Delete"
+
 // Delete deletes a VirtualMachineScaleSetVM by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (err error) {
 	ctx = utils.ContextWithClientName(ctx, "VirtualMachineScaleSetVMsClient")
 	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
-	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(err)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, parentResourceName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
