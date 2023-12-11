@@ -41,7 +41,6 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
@@ -722,7 +721,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 	common := &controllerCommon{
 		cloud:                        az,
 		lockMap:                      newLockMap(),
-		diskOpRateLimiter:            flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
 		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
 	}
 
@@ -1171,7 +1169,6 @@ func InitDiskControllers(az *Cloud) error {
 	common := &controllerCommon{
 		cloud:                        az,
 		lockMap:                      newLockMap(),
-		diskOpRateLimiter:            flowcontrol.NewTokenBucketRateLimiter(qps, bucket),
 		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
 	}
 

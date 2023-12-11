@@ -36,7 +36,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/flowcontrol"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
@@ -294,7 +293,7 @@ func TestCommonAttachDisk(t *testing.T) {
 				}()
 			}
 
-			lun, err := testCloud.AttachDisk(ctx, true, test.diskName, diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk, nil)
+			lun, err := testCloud.AttachDisk(ctx, test.diskName, diskURI, tt.nodeName, compute.CachingTypesReadOnly, tt.existedDisk, nil)
 
 			assert.Equal(t, tt.expectedLun, lun, "TestCase[%d]: %s", i, tt.desc)
 			assert.Equal(t, tt.expectErr, err != nil, "TestCase[%d]: %s, return error: %v", i, tt.desc, err)
@@ -497,9 +496,8 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 		}
 
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 			testCloud.SubscriptionID, testCloud.ResourceGroup, test.diskName)
@@ -515,7 +513,7 @@ func TestCommonAttachDiskWithVMSS(t *testing.T) {
 			mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
-		lun, err := common.AttachDisk(ctx, true, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk, nil)
+		lun, err := common.AttachDisk(ctx, "test", diskURI, test.nodeName, compute.CachingTypesReadOnly, test.existedDisk, nil)
 		assert.Equal(t, test.expectedLun, lun, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, return error: %v", i, test.desc, err)
 	}
@@ -559,9 +557,8 @@ func TestCommonDetachDisk(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/disk-name",
 			testCloud.SubscriptionID, testCloud.ResourceGroup)
@@ -626,9 +623,8 @@ func TestCommonUpdateVM(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, test.vmList, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -686,9 +682,8 @@ func TestGetDiskLun(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -756,9 +751,8 @@ func TestSetDiskLun(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{test.nodeName: "PowerState/Running"}, test.isDataDisksFull)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -802,9 +796,8 @@ func TestDisksAreAttached(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
 		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -1114,9 +1107,8 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
@@ -1191,9 +1183,8 @@ func TestDetachDiskRequestFuncs(t *testing.T) {
 	for i, test := range testCases {
 		testCloud := GetTestCloud(ctrl)
 		common := &controllerCommon{
-			cloud:             testCloud,
-			lockMap:           newLockMap(),
-			diskOpRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10, 20),
+			cloud:   testCloud,
+			lockMap: newLockMap(),
 		}
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
