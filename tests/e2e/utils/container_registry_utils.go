@@ -130,16 +130,27 @@ func (tc *AzureTestClient) PushImageToACR(registryName, image string) (string, e
 }
 
 // AZACRCacheCreate enables acr cache for a image.
-func AZACRCacheCreate(acrName, ruleName, imageURL, imageName string) (err error) {
+func AZACRCacheCreate(acrName, ruleName, imageURL, imageName, rg string) (err error) {
+	printAZVersion()
 	Logf("Attempting az acr cache create for image URL %q.", imageURL)
 	cmd := exec.Command("az", "acr", "cache", "create",
 		"-r", acrName,
 		"-n", ruleName,
 		"-s", imageURL,
-		"-t", imageName)
+		"-t", imageName,
+		"-g", rg)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("az acr cache create failed with output %s\n error: %w", string(output), err)
 	}
 	Logf("az acr cache create success.")
 	return nil
+}
+
+func printAZVersion() {
+	cmd := exec.Command("az", "version")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		Logf("az version failed with output %s\n error: %w", string(output), err)
+	}
+	Logf("az version success: %s", string(output))
 }

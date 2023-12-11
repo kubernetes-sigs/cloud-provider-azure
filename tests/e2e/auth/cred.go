@@ -119,7 +119,7 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 
 			ruleName := fmt.Sprintf("%s-cache-rule", imageName)
 			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-				if err := utils.AZACRCacheCreate(*registry.Name, ruleName, imageURL, imageName); err != nil {
+				if err := utils.AZACRCacheCreate(*registry.Name, ruleName, imageURL, imageName, tc.GetResourceGroup()); err != nil {
 					if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not be found") {
 						utils.Logf("ACR cache rule %q not found, retrying...", ruleName)
 						return false, nil
