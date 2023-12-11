@@ -1472,6 +1472,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit/flowcontrol
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled
