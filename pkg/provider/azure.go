@@ -279,7 +279,7 @@ type Config struct {
 
 	// ClusterServiceLoadBalancerHealthProbeMode determines the health probe mode for cluster service load balancer.
 	// Supported values are `shared` and `servicenodeport`.
-	// `unshared`: the health probe will be created against each port of each service by watching the backend application (default).
+	// `servicenodeport`: the health probe will be created against each port of each service by watching the backend application (default).
 	// `shared`: all cluster services shares one HTTP probe targeting the kube-proxy on the node (<nodeIP>/healthz:10256).
 	ClusterServiceLoadBalancerHealthProbeMode string `json:"clusterServiceLoadBalancerHealthProbeMode,omitempty" yaml:"clusterServiceLoadBalancerHealthProbeMode,omitempty"`
 	// ClusterServiceSharedLoadBalancerHealthProbePort defines the target port of the shared health probe. Default to 10256.
@@ -603,13 +603,11 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 			return fmt.Errorf("clusterServiceLoadBalancerHealthProbeMode %s is not supported, supported values are %v", config.ClusterServiceLoadBalancerHealthProbeMode, supportedClusterServiceLoadBalancerHealthProbeModes.UnsortedList())
 		}
 	}
-	if strings.EqualFold(config.ClusterServiceLoadBalancerHealthProbeMode, consts.ClusterServiceLoadBalancerHealthProbeModeShared) {
-		if config.ClusterServiceSharedLoadBalancerHealthProbePort == 0 {
-			config.ClusterServiceSharedLoadBalancerHealthProbePort = consts.ClusterServiceLoadBalancerHealthProbeDefaultPort
-		}
-		if config.ClusterServiceSharedLoadBalancerHealthProbePath == "" {
-			config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
-		}
+	if config.ClusterServiceSharedLoadBalancerHealthProbePort == 0 {
+		config.ClusterServiceSharedLoadBalancerHealthProbePort = consts.ClusterServiceLoadBalancerHealthProbeDefaultPort
+	}
+	if config.ClusterServiceSharedLoadBalancerHealthProbePath == "" {
+		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
 	env, err := ratelimitconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)
