@@ -63,7 +63,7 @@ source "${REPO_ROOT}/hack/ensure-clusterctl.sh"
 function init_and_wait_capz() {
   echo "Initializing CAPZ"
   kubectl create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
-  "${CLUSTERCTL}" init --infrastructure azure
+  "${CLUSTERCTL}" init --infrastructure azure --addon helm
   echo "Waiting for the CAPZ components to be Ready"
   kubectl wait --for=condition=Available --timeout=5m -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure
   sleep 10

@@ -20,7 +20,7 @@ set -o pipefail
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 TOOLS_BIN="${REPO_ROOT}/bin"
 CLUSTERCTL="${TOOLS_BIN}/clusterctl"
-MINIMUM_CLUSTERCTL_VERSION=v1.1.1
+MINIMUM_CLUSTERCTL_VERSION=v1.6.0
 goarch="$(go env GOARCH)"
 goos="$(go env GOOS)"
 

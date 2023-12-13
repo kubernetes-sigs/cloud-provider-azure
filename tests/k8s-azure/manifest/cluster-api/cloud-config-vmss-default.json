@@ -26,5 +26,6 @@
   "vmssFlexCacheTTLInSeconds": 300,
   "vmssFlexVMCacheTTLInSeconds": 300,
   "putVMSSVMBatchSize": ${PUT_VMSS_VM_BATCH_SIZE},
-  "enableVmssFlexNodes": ${ENABLE_VMSS_FLEX}
+  "enableVmssFlexNodes": ${ENABLE_VMSS_FLEX},
+  "clusterServiceLoadBalancerHealthProbeMode": "${HEALTH_PROBE_MODE}"
 }

@@ -42,6 +42,7 @@ const (
 	clusterProvisioningToolKey  = "CLUSTER_PROVISIONING_TOOL"
 	clusterProvisioningToolCAPZ = "capz"
 	testMultiSLB                = "TEST_MULTI_SLB"
+	healthProbeMode             = "HEALTH_PROBE_MODE"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -80,6 +81,14 @@ func TestAzureTest(t *testing.T) {
 		multiSLBFilter = "!Non-Multi-Slb"
 	}
 	labelFilters = append(labelFilters, multiSLBFilter)
+
+	var sharedProbeFilter string
+	if strings.EqualFold(os.Getenv(healthProbeMode), "shared") {
+		sharedProbeFilter = "Shared-Health-Probe"
+	} else {
+		sharedProbeFilter = "!Shared-Health-Probe"
+	}
+	labelFilters = append(labelFilters, sharedProbeFilter)
 
 	suiteConfig.LabelFilter = strings.Join(labelFilters, " && ")
 
