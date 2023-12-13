@@ -118,7 +118,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(result).To(BeTrue())
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("Validating External domain name %+v", ips))
+		By(fmt.Sprintf("Validating External domain name %v", utils.StrPtrSliceToStrSlice(ips)))
 		Expect(len(ports)).NotTo(BeZero())
 		for _, ip := range ips {
 			err = utils.ValidateServiceConnectivity(ns.Name, agnhostPod, *ip, int(ports[0].Port), v1.ProtocolTCP)
@@ -299,7 +299,7 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		Expect(err).NotTo(HaveOccurred())
 		for _, port := range service.Spec.Ports {
 			for _, internalIP := range internalIPs {
-				utils.Logf("checking the connectivity of addr %s:%d with protocol %v", internalIP, int(port.Port), port.Protocol)
+				utils.Logf("checking the connectivity of addr %s:%d with protocol %v", *internalIP, int(port.Port), port.Protocol)
 				err := utils.ValidateServiceConnectivity(ns.Name, agnhostPod, *internalIP, int(port.Port), port.Protocol)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -468,7 +468,7 @@ func validateUnsharedSecurityRuleExists(nsgs []*aznetwork.SecurityGroup, ips []*
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
-			utils.Logf("Checking IP %q", ip)
+			utils.Logf("Checking IP %q", *ip)
 			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
 				if strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), *ip) &&
@@ -512,7 +512,7 @@ func validateSharedSecurityRuleExistsSingleStack(nsgs []*aznetwork.SecurityGroup
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		for _, securityRule := range nsg.Properties.SecurityRules {
 			utils.Logf("Checking security rule %q DestinationPortRange %q DestinationAddressPrefixes %q",
-				pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), securityRule.Properties.DestinationAddressPrefixes)
+				pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), utils.StrPtrSliceToStrSlice(securityRule.Properties.DestinationAddressPrefixes))
 			if strings.EqualFold(pointer.StringDeref(securityRule.Properties.DestinationPortRange, ""), port) {
 				found := true
 				for _, ip := range ips {
@@ -566,7 +566,7 @@ func validateLoadBalancerSourceRangesRuleExistsSingleStack(nsgs []*aznetwork.Sec
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
-			utils.Logf("Checking IP %q", ip)
+			utils.Logf("Checking IP %q", *ip)
 			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q access %q DestinationAddressPrefix %q SourceAddressPrefix %q",
 					pointer.StringDeref(securityRule.Name, ""), *securityRule.Properties.Access,
@@ -630,7 +630,7 @@ func validateDenyAllSecurityRuleExistsSingleStack(nsgs []*aznetwork.SecurityGrou
 		utils.Logf("Checking nsg %q", pointer.StringDeref(nsg.Name, ""))
 		count := 0
 		for _, ip := range ips {
-			utils.Logf("Checking IP %q", ip)
+			utils.Logf("Checking IP %q", *ip)
 			for _, securityRule := range nsg.Properties.SecurityRules {
 				utils.Logf("Checking security rule %q DestinationAddressPrefix %q SourceAddressPrefix %q",
 					pointer.StringDeref(securityRule.Name, ""), pointer.StringDeref(securityRule.Properties.DestinationAddressPrefix, ""), pointer.StringDeref(securityRule.Properties.SourceAddressPrefix, ""))

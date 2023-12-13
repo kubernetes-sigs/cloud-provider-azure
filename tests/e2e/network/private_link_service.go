@@ -112,7 +112,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}()
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
-		utils.Logf("Get Internal IP: %s", ip)
+		utils.Logf("Get Internal IP: %s", *ip)
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
@@ -142,7 +142,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}()
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
-		utils.Logf("Get Internal IP: %s", ip)
+		utils.Logf("Get Internal IP: %s", *ip)
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", plsName)
@@ -264,7 +264,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		Expect(len(selectedIPs)).NotTo(BeZero())
 		selectedIP := selectedIPs[0]
 		annotation[consts.ServiceAnnotationPLSIpConfigurationIPAddress] = *selectedIP
-		utils.Logf("Now update private link service's static ip to %s", selectedIP)
+		utils.Logf("Now update private link service's static ip to %s", *selectedIP)
 
 		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -430,7 +430,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		}()
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
-		utils.Logf("Successfully created %s in namespace %s with IP %s", svc1, ns.Name, ip)
+		utils.Logf("Successfully created %s in namespace %s with IP %s", svc1, ns.Name, *ip)
 
 		deployName0 := "pls-deploy0"
 		utils.Logf("Creating deployment %s", deployName0)
@@ -462,7 +462,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		Expect(err).NotTo(HaveOccurred())
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svc2, ips)
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created %s in namespace %s with IPs %q", svc2, ns.Name, ips)
+		utils.Logf("Successfully created %s in namespace %s with IPs %v", svc2, ns.Name, utils.StrPtrSliceToStrSlice(ips))
 
 		// get pls from azure client
 		pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")

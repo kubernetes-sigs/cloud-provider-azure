@@ -88,7 +88,7 @@ func (azureTestClient *AzureTestClient) GetClusterVirtualNetwork() (virtualNetwo
 
 // CreateSubnet creates a new subnet in the specified virtual network.
 func (azureTestClient *AzureTestClient) CreateSubnet(vnet *aznetwork.VirtualNetwork, subnetName *string, prefixes []*string, waitUntilComplete bool) (*aznetwork.Subnet, error) {
-	Logf("creating a new subnet %s, %v", *subnetName, prefixes)
+	Logf("creating a new subnet %s, %v", *subnetName, StrPtrSliceToStrSlice(prefixes))
 	subnetParameter := *vnet.Properties.Subnets[0]
 	subnetParameter.Name = subnetName
 	if len(prefixes) == 1 {
@@ -142,12 +142,12 @@ func (azureTestClient *AzureTestClient) DeleteSubnet(vnetName string, subnetName
 
 			Logf("subnet %s still exists with IP config IDs %q, will retry", subnetName, ipConfigIDs)
 			return false, nil
-		} else if strings.Contains(err.Error(), "StatusCode=404") {
+		} else if strings.Contains(err.Error(), "StatusCode=404") || strings.Contains(err.Error(), "NotFound") {
 			Logf("subnet %s has been deleted", subnetName)
 			return true, nil
 		}
-		Logf("encountered unexpected error %w while getting subnet %s", err, subnetName)
-		return true, nil
+		Logf("encountered unexpected error %v while getting subnet %q", err, subnetName)
+		return false, nil
 	})
 }
 

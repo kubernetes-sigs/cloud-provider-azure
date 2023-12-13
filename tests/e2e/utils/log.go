@@ -41,5 +41,5 @@ func Logf(format string, args ...interface{}) {
 }
 
 func PrintCreateSVCSuccessfully(svc string, ns string) {
-	Logf("Successfully created LoadBalancer service " + svc + " in namespace " + ns)
+	Logf("Successfully created LoadBalancer service %q in namespace %q", svc, ns)
 }
