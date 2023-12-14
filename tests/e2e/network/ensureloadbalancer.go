@@ -262,7 +262,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(utils.CompareStrings(ips1, targetIPs)).To(BeFalse())
 
 		By("Updating service to bound to specific public IP")
-		utils.Logf("will update IPs to %s", targetIPs)
+		utils.Logf("will update IPs to %v", utils.StrPtrSliceToStrSlice(targetIPs))
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		service = updateServiceLBIPs(service, false, targetIPs)
 
@@ -290,7 +290,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
-		By(fmt.Sprintf("Waiting for exposure of internal service with specific IPs %+v", ips1))
+		By(fmt.Sprintf("Waiting for exposure of internal service with specific IPs %v", utils.StrPtrSliceToStrSlice(ips1)))
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, ips1)
 		Expect(err).NotTo(HaveOccurred())
 		list, errList := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
@@ -304,7 +304,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Updating internal service private IP")
-		utils.Logf("will update IPs to %q", ips2)
+		utils.Logf("will update IPs to %v", utils.StrPtrSliceToStrSlice(ips2))
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		service = updateServiceLBIPs(service, true, ips2)
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
@@ -358,7 +358,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		}
 
 		By("Updating service to bound to specific public IP")
-		utils.Logf("will update IPs to %q", targetIPs)
+		utils.Logf("will update IPs to %v", utils.StrPtrSliceToStrSlice(targetIPs))
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		service = updateServiceLBIPs(service, false, targetIPs)
 
@@ -391,7 +391,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service = updateServiceLBIPs(service, false, targetIPs)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Successfully created LoadBalancer service %s in namespace %s", testServiceName, ns.Name)
+		utils.PrintCreateSVCSuccessfully(testServiceName, ns.Name)
 
 		defer func() {
 			By("Cleaning up")
@@ -513,7 +513,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		for _, serviceName := range serviceNames {
 			_, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, targetIPs)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("Successfully created LoadBalancer Service %q in namespace %s with IPs: %v", serviceName, ns.Name, targetIPs)
+			utils.Logf("Successfully created LoadBalancer Service %q in namespace %s with IPs: %v", serviceName, ns.Name, utils.StrPtrSliceToStrSlice(targetIPs))
 		}
 	})
 
@@ -575,7 +575,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		for _, serviceName := range serviceNames {
 			_, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, sharedIPs)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("Successfully created LoadBalancer Service %q in namespace %q with IPs %q", serviceName, ns.Name, sharedIPs)
+			utils.Logf("Successfully created LoadBalancer Service %q in namespace %q with IPs %v", serviceName, ns.Name, utils.StrPtrSliceToStrSlice(sharedIPs))
 		}
 
 		By("Deleting one Service and check if the other service works well")
@@ -670,7 +670,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		for _, serviceName := range serviceNames {
 			_, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, serviceName, sharedIPs)
 			Expect(err).NotTo(HaveOccurred())
-			utils.Logf("Successfully created LoadBalancer Service %q in namespace %q with IPs %q", serviceName, ns.Name, sharedIPs)
+			utils.Logf("Successfully created LoadBalancer Service %q in namespace %q with IPs %v", serviceName, ns.Name, utils.StrPtrSliceToStrSlice(sharedIPs))
 		}
 	})
 

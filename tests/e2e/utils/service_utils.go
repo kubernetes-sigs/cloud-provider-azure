@@ -151,7 +151,7 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily
 	// should test connectivity as well.
 	for _, port := range service.Spec.Ports {
 		for _, ip := range ips {
-			Logf("checking the connectivity of address %s %d with protocol %v", ip, int(port.Port), port.Protocol)
+			Logf("checking the connectivity of address %q %d with protocol %v", *ip, int(port.Port), port.Protocol)
 			if err := ValidateServiceConnectivity(namespace, ExecAgnhostPod, *ip, int(port.Port), port.Protocol); err != nil {
 				return ips, err
 			}
@@ -198,7 +198,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		}
 		if len(targetIPs) != 0 {
 			if !CompareStrings(externalIPs, targetIPs) {
-				Logf("expected IPs are %v, current IPs are %v, retry in 10 seconds", targetIPs, externalIPs)
+				Logf("expected IPs are %v, current IPs are %v, retry in 10 seconds", StrPtrSliceToStrSlice(targetIPs), StrPtrSliceToStrSlice(externalIPs))
 				return false, nil
 			}
 		}
@@ -210,7 +210,7 @@ func WaitServiceExposure(cs clientset.Interface, namespace string, name string, 
 		return nil, err
 	}
 
-	Logf("Exposure successfully, get external ip: %s", externalIPs)
+	Logf("Exposure successfully, get external IPs: %v", StrPtrSliceToStrSlice(externalIPs))
 	return service, nil
 }
 

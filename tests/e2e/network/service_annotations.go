@@ -333,7 +333,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			err := utils.DeleteService(cs, ns.Name, serviceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		utils.Logf("Get External IPs: %q", ips)
+		utils.Logf("Get External IPs: %v", utils.StrPtrSliceToStrSlice(ips))
 
 		By("Validating external ip in target subnet")
 		Expect(len(ips)).NotTo(BeZero())
@@ -526,7 +526,7 @@ var _ = Describe("Service with annotation", Label(utils.TestSuiteLabelServiceAnn
 			if err != nil {
 				return false, err
 			}
-			utils.Logf("ipList %q", ipList)
+			utils.Logf("ipList %v", utils.StrPtrSliceToStrSlice(ipList))
 			ipListV4, ipListV6 := []*string{}, []*string{}
 			for _, ip := range ipList {
 				ip := ip

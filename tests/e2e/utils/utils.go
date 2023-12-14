@@ -202,6 +202,14 @@ func CompareStrings(s0, s1 []*string) bool {
 	return ss0.Equal(ss1)
 }
 
+func StrPtrSliceToStrSlice(s []*string) []string {
+	res := []string{}
+	for _, str := range s {
+		res = append(res, *str)
+	}
+	return res
+}
+
 func DeepCopyMap(m map[string]string) map[string]string {
 	newMap := make(map[string]string)
 	for k, v := range m {
