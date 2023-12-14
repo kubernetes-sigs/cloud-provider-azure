@@ -10,9 +10,9 @@ require (
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/octago/sflags v0.2.0
 	github.com/spf13/pflag v1.0.5
-	k8s.io/apimachinery v0.28.4
+	k8s.io/apimachinery v0.29.0
 	k8s.io/klog v1.0.0
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/kubetest2 v0.0.0-20220728001911-c76fb417aa01
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.3.1 // indirect
@@ -49,5 +49,5 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/klog/v2 v2.100.1 // indirect
+	k8s.io/klog/v2 v2.110.1 // indirect
 )
