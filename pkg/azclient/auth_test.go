@@ -64,8 +64,7 @@ var _ = Describe("Auth", Ordered, func() {
 					option.Transport = httpRecorder.HTTPClient()
 				})
 			Expect(err).NotTo(HaveOccurred())
-			cred, err = authProvider.GetAzIdentity()
-			Expect(err).NotTo(HaveOccurred())
+			cred = authProvider.GetAzIdentity()
 			Expect(cred).NotTo(BeNil())
 			token, err := cred.GetToken(context.Background(), azpolicy.TokenRequestOptions{
 				Scopes:   []string{"https://management.azure.com/.default"},
