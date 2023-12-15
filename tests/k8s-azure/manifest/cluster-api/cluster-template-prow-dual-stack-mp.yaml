@@ -130,11 +130,7 @@ spec:
     mounts:
     - - LABEL=etcd_disk
       - /var/lib/etcddisk
-    postKubeadmCommands:
-    - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-    - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-      /etc/resolv.conf
-    - systemctl restart systemd-resolved
+    postKubeadmCommands: []
     preKubeadmCommands: []
   machineTemplate:
     infrastructureRef:
@@ -157,10 +153,13 @@ spec:
         lun: 0
         nameSuffix: etcddisk
       enableIPForwarding: true
+      identity: UserAssigned
       osDisk:
         diskSizeGB: 128
         osType: Linux
       sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+      userAssignedIdentities:
+      - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG:=capz-ci}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${USER_IDENTITY:=cloud-provider-user-identity}
       vmSize: ${AZURE_CONTROL_PLANE_MACHINE_TYPE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -212,12 +211,15 @@ spec:
   template:
     spec:
       enableIPForwarding: true
+      identity: UserAssigned
       osDisk:
         diskSizeGB: 30
         managedDisk:
           storageAccountType: Premium_LRS
         osType: Linux
       sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+      userAssignedIdentities:
+      - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG:=capz-ci}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${USER_IDENTITY:=cloud-provider-user-identity}
       vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
@@ -242,11 +244,6 @@ spec:
             azure-container-registry-config: /etc/kubernetes/azure.json
             cloud-provider: external
           name: '{{ ds.meta_data["local_hostname"] }}'
-      postKubeadmCommands:
-      - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-      - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-        /etc/resolv.conf
-      - systemctl restart systemd-resolved
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachinePool
@@ -314,11 +311,6 @@ spec:
         cloud-provider: azure
         cluster-dns: '[fd00::10]'
       name: '{{ ds.meta_data["local_hostname"] }}'
-  postKubeadmCommands:
-  - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-  - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-    /etc/resolv.conf
-  - systemctl restart systemd-resolved
 ---
 apiVersion: addons.cluster.x-k8s.io/v1alpha1
 kind: HelmChartProxy
@@ -333,7 +325,7 @@ spec:
   namespace: tigera-operator
   releaseName: projectcalico
   repoURL: https://docs.tigera.io/calico/charts
-  valuesTemplate: |-
+  valuesTemplate: |
     installation:
       cni:
         type: Calico
@@ -353,3 +345,31 @@ spec:
           encapsulation: None
           natOutgoing: Enabled
           nodeSelector: all()
+      registry: mcr.microsoft.com/oss
+    # Image and registry configuration for the tigera/operator pod.
+    tigeraOperator:
+      image: tigera/operator
+      registry: mcr.microsoft.com/oss
+    calicoctl:
+      image: mcr.microsoft.com/oss/calico/ctl
+  version: ${CALICO_VERSION}
+---
+apiVersion: addons.cluster.x-k8s.io/v1alpha1
+kind: HelmChartProxy
+metadata:
+  name: azuredisk-csi-driver-chart
+  namespace: default
+spec:
+  chartName: azuredisk-csi-driver
+  clusterSelector:
+    matchLabels:
+      azuredisk-csi: "true"
+  namespace: kube-system
+  releaseName: azuredisk-csi-driver-oot
+  repoURL: https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/charts
+  valuesTemplate: |-
+    controller:
+      replicas: 1
+      runOnControlPlane: true
+    windows:
+      useHostProcessContainers: {{ hasKey .Cluster.metadata.labels "cni-windows" }}
