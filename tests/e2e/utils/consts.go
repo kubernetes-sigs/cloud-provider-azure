@@ -40,6 +40,7 @@ const (
 	TestSuiteLabelNonMultiSLB        = "Non-Multi-Slb"
 	TestSuiteLabelMultiSLB           = "Multi-SLB"
 	TestSuiteUnmanagedNode           = "Unmanaged-Node"
+	TestSuiteLabelSharedHealthProbe  = "Shared-Health-Probe"
 
 	// If "TEST_CCM" is true, the test is running on a CAPZ cluster.
 	CAPZTestCCM = "TEST_CCM"
