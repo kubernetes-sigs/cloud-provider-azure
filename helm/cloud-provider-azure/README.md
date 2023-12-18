@@ -129,19 +129,24 @@ The following configuration is made available for advanced users. There are no d
 
 ## optional cloud-node-manager configuration
 
-| configuration value | description |
-| --- | --- |
-| `cloudNodeManager.imageTag` | `"v1.23.11"` | container image tag for the Azure `cloud-node-manager` runtime |
-| `cloudNodeManager.cloudConfig` | The path to the cloud config file to be used when using ARM (i.e., when `cloudNodeManager.useInstanceMetadata=false`) to fetch node information. |
-| `cloudNodeManager.kubeAPIBurst` | Burst to use while talking with kubernetes apiserver. |
-| `cloudNodeManager.kubeAPIContentType` | Content type of requests sent to apiserver. |
-| `cloudNodeManager.kubeAPIQPS` | QPS to use while talking with kubernetes apiserver. |
-| `cloudNodeManager.kubeconfig` | Path to kubeconfig file with authorization and master location information. |
-| `cloudNodeManager.master` | The address of the Kubernetes API server (overrides any value in kubeconfig). |
-| `cloudNodeManager.minResyncPeriod` | The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod. |
-| `cloudNodeManager.nodeStatusUpdateFrequency` | Specifies how often the controller updates nodes' status. |
-| `cloudNodeManager.waitRoutes` | Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin. |
-| `cloudNodeManager.useInstanceMetadata` | Should use Instance Metadata Service for fetching node information; if false will use ARM instead. |
+| configuration value                             | description                                                                                                                                      |
+|-------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cloudNodeManager.imageTag`                     | `"v1.23.11"`                                                                                                                                     | container image tag for the Azure `cloud-node-manager` runtime |
+| `cloudNodeManager.cloudConfig`                  | The path to the cloud config file to be used when using ARM (i.e., when `cloudNodeManager.useInstanceMetadata=false`) to fetch node information. |
+| `cloudNodeManager.kubeAPIBurst`                 | Burst to use while talking with kubernetes apiserver.                                                                                            |
+| `cloudNodeManager.kubeAPIContentType`           | Content type of requests sent to apiserver.                                                                                                      |
+| `cloudNodeManager.kubeAPIQPS`                   | QPS to use while talking with kubernetes apiserver.                                                                                              |
+| `cloudNodeManager.kubeconfig`                   | Path to kubeconfig file with authorization and master location information.                                                                      |
+| `cloudNodeManager.master`                       | The address of the Kubernetes API server (overrides any value in kubeconfig).                                                                    |
+| `cloudNodeManager.minResyncPeriod`              | The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod.                                                    |
+| `cloudNodeManager.nodeStatusUpdateFrequency`    | Specifies how often the controller updates nodes' status.                                                                                        |
+| `cloudNodeManager.waitRoutes`                   | Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin.                       |
+| `cloudNodeManager.useInstanceMetadata`          | Should use Instance Metadata Service for fetching node information; if false will use ARM instead.                                               |
+| `cloudNodeManager.enableHealthProbeProxy`       | Enable health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                              |
+| `cloudNodeManager.healthProbePort`              | Port for health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                            |
+| `cloudNodeManager.targetPort`                   | Target port for health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                                     |
+| `cloudNodeManager.healthProbeProxyImage`        | Container image name for the health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                        |
+| `cloudNodeManager.healthProbeProxyImageWindows` | Windows container image name for the health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                |
 
 # Maintaining the Repo
 

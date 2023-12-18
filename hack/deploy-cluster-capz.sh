@@ -37,20 +37,19 @@ export WORKER_MACHINE_COUNT="${WORKER_MACHINE_COUNT:-2}"
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:-Standard_D4s_v3}"
 export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:-Standard_D2s_v3}"
 export AZURE_LOCATION="${AZURE_LOCATION:-westus2}"
-export AZURE_CLOUD_CONTROLLER_MANAGER_IMG="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.23.1}"
-export AZURE_CLOUD_NODE_MANAGER_IMG="${AZURE_CLOUD_NODE_MANAGER_IMG:-mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.23.1}"
-export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.25.0}"
-export USE_IN_TREE_CLOUD_PROVIDER="${USE_IN_TREE_CLOUD_PROVIDER:-false}"
+export AZURE_CLOUD_CONTROLLER_MANAGER_IMG_REGISTRY="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_REGISTRY:-mcr.microsoft.com/oss/kubernetes}"
+export AZURE_CLOUD_CONTROLLER_MANAGER_IMG_NAME="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_NAME:-azure-cloud-controller-manager}"
+export AZURE_CLOUD_CONTROLLER_MANAGER_IMG_TAG="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_TAG:-v1.28.4}"
+export AZURE_CLOUD_NODE_MANAGER_IMG_REGISTRY="${AZURE_CLOUD_NODE_MANAGER_IMG_REGISTRY:-mcr.microsoft.com/oss/kubernetes}"
+export AZURE_CLOUD_NODE_MANAGER_IMG_NAME="${AZURE_CLOUD_NODE_MANAGER_IMG_NAME:-azure-cloud-node-manager}"
+export AZURE_CLOUD_NODE_MANAGER_IMG_TAG="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG:-v1.28.4}"
+export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.28.0}"
 export EXP_MACHINE_POOL=true
 export EXP_CLUSTER_RESOURCE_SET=true
 
 export AZURE_LOADBALANCER_SKU="${AZURE_LOADBALANCER_SKU:-Standard}"
 export LB_BACKEND_POOL_CONFIG_TYPE="${LB_BACKEND_POOL_CONFIG_TYPE:-nodeIPConfiguration}"
 export PUT_VMSS_VM_BATCH_SIZE="${PUT_VMSS_VM_BATCH_SIZE:-0}"
-
-if [[ "${USE_IN_TREE_CLOUD_PROVIDER}" == "true" ]]; then
-  WORKLOAD_CLUSTER_TEMPLATE="${WORKLOAD_CLUSTER_TEMPLATE_DIR}/vmss-multi-nodepool-in-tree.yaml"
-fi
 
 if [ "${AZURE_SSH_PUBLIC_KEY}" ]; then
   AZURE_SSH_PUBLIC_KEY_B64="$(echo -n "${AZURE_SSH_PUBLIC_KEY}" | base64 | tr -d '\n')"
@@ -123,6 +122,21 @@ function create_workload_cluster() {
     echo "Timeout waiting for the control plane nodes"
     return 124
   fi
+
+  echo "Installing cloud provider azure"
+
+  helm install cloud-provider-azure ../helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
+    --kubeconfig ./"${CLUSTER_NAME}"-kubeconfig \
+    --set infra.clusterName="${CLUSTER_NAME}" \
+    --set cloudControllerManager.enableDynamicReloading=true \
+    --set cloudControllerManager.replicas=1 \
+    --set cloudControllerManager.logVerbosity=4 \
+    --set-string cloudControllerManager.imageRepository="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_REGISTRY}" \
+    --set-string cloudControllerManager.imageName="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_NAME}" \
+    --set-string cloudControllerManager.imageTag="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_TAG}" \
+    --set-string cloudNodeManager.imageTag="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG}" \
+    --set cloudNodeManager.enableHealthProbeProxy=true
+
   echo "Run \"kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
 }
 
