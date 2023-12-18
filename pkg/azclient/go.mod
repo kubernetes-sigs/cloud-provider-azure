@@ -17,7 +17,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/onsi/ginkgo/v2 v2.13.2
 	github.com/onsi/gomega v1.30.0
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/time v0.5.0
 	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
