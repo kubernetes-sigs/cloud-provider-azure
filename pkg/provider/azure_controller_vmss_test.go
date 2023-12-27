@@ -138,14 +138,14 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		diskMap := map[string]*AttachDiskOptions{}
 		for i, diskName := range test.disks {
 			options := AttachDiskOptions{
-				lun:                     int32(i),
-				diskName:                diskName,
-				cachingMode:             compute.CachingTypesReadWrite,
-				diskEncryptionSetID:     "",
-				writeAcceleratorEnabled: true,
+				Lun:                     int32(i),
+				DiskName:                diskName,
+				CachingMode:             compute.CachingTypesReadWrite,
+				DiskEncryptionSetID:     "",
+				WriteAcceleratorEnabled: true,
 			}
 			if test.inconsistentLUN {
-				options.lun = 63
+				options.Lun = 63
 			}
 
 			diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",

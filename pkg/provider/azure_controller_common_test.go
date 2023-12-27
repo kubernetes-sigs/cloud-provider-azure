@@ -1113,7 +1113,7 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 		for i := 1; i <= test.diskNum; i++ {
 			diskURI := fmt.Sprintf("%s%d", test.diskURI, i)
 			diskName := fmt.Sprintf("%s%d", test.diskName, i)
-			attachDiskOptions := &AttachDiskOptions{diskName: diskName}
+			attachDiskOptions := &AttachDiskOptions{DiskName: diskName}
 			_, err := common.insertAttachDiskRequest(diskURI, test.nodeName, attachDiskOptions)
 			assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s", i, test.desc)
 			if test.duplicateDiskRequest {
@@ -1127,7 +1127,7 @@ func TestAttachDiskRequestFuncs(t *testing.T) {
 		assert.Equal(t, test.diskNum, len(diskMap), "TestCase[%d]: %s", i, test.desc)
 		for diskURI, opt := range diskMap {
 			assert.Equal(t, strings.Contains(diskURI, test.diskURI), true, "TestCase[%d]: %s", i, test.desc)
-			assert.Equal(t, strings.Contains(opt.diskName, test.diskName), true, "TestCase[%d]: %s", i, test.desc)
+			assert.Equal(t, strings.Contains(opt.DiskName, test.diskName), true, "TestCase[%d]: %s", i, test.desc)
 		}
 	}
 }

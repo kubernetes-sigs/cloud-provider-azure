@@ -109,14 +109,14 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
 
 		options := AttachDiskOptions{
-			lun:                     1,
-			diskName:                "diskname",
-			cachingMode:             compute.CachingTypesReadOnly,
-			diskEncryptionSetID:     "",
-			writeAcceleratorEnabled: false,
+			Lun:                     1,
+			DiskName:                "diskname",
+			CachingMode:             compute.CachingTypesReadOnly,
+			DiskEncryptionSetID:     "",
+			WriteAcceleratorEnabled: false,
 		}
 		if tc.inconsistentLUN {
-			options.lun = 63
+			options.Lun = 63
 		}
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,

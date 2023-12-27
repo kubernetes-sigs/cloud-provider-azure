@@ -62,40 +62,40 @@ func (ss *ScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName, dis
 		attached := false
 		for _, disk := range *storageProfile.DataDisks {
 			if disk.ManagedDisk != nil && strings.EqualFold(*disk.ManagedDisk.ID, diskURI) && disk.Lun != nil {
-				if *disk.Lun == opt.lun {
+				if *disk.Lun == opt.Lun {
 					attached = true
 					break
 				}
-				return nil, fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diskURI, nodeName, *disk.Lun, opt.lun)
+				return nil, fmt.Errorf("disk(%s) already attached to node(%s) on LUN(%d), but target LUN is %d", diskURI, nodeName, *disk.Lun, opt.Lun)
 
 			}
 		}
 		if attached {
-			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diskURI, nodeName, opt.lun)
+			klog.V(2).Infof("azureDisk - disk(%s) already attached to node(%s) on LUN(%d)", diskURI, nodeName, opt.Lun)
 			continue
 		}
 
 		managedDisk := &compute.ManagedDiskParameters{ID: &diskURI}
-		if opt.diskEncryptionSetID == "" {
+		if opt.DiskEncryptionSetID == "" {
 			if storageProfile.OsDisk != nil &&
 				storageProfile.OsDisk.ManagedDisk != nil &&
 				storageProfile.OsDisk.ManagedDisk.DiskEncryptionSet != nil &&
 				storageProfile.OsDisk.ManagedDisk.DiskEncryptionSet.ID != nil {
 				// set diskEncryptionSet as value of os disk by default
-				opt.diskEncryptionSetID = *storageProfile.OsDisk.ManagedDisk.DiskEncryptionSet.ID
+				opt.DiskEncryptionSetID = *storageProfile.OsDisk.ManagedDisk.DiskEncryptionSet.ID
 			}
 		}
-		if opt.diskEncryptionSetID != "" {
-			managedDisk.DiskEncryptionSet = &compute.DiskEncryptionSetParameters{ID: &opt.diskEncryptionSetID}
+		if opt.DiskEncryptionSetID != "" {
+			managedDisk.DiskEncryptionSet = &compute.DiskEncryptionSetParameters{ID: &opt.DiskEncryptionSetID}
 		}
 		disks = append(disks,
 			compute.DataDisk{
-				Name:                    &opt.diskName,
-				Lun:                     &opt.lun,
-				Caching:                 opt.cachingMode,
+				Name:                    &opt.DiskName,
+				Lun:                     &opt.Lun,
+				Caching:                 opt.CachingMode,
 				CreateOption:            "attach",
 				ManagedDisk:             managedDisk,
-				WriteAcceleratorEnabled: pointer.Bool(opt.writeAcceleratorEnabled),
+				WriteAcceleratorEnabled: pointer.Bool(opt.WriteAcceleratorEnabled),
 			})
 	}
 
