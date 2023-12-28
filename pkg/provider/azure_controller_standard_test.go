@@ -118,14 +118,14 @@ func TestStandardAttachDisk(t *testing.T) {
 		}
 
 		options := AttachDiskOptions{
-			lun:                     0,
-			diskName:                "disk-name2",
-			cachingMode:             compute.CachingTypesReadOnly,
-			diskEncryptionSetID:     "",
-			writeAcceleratorEnabled: false,
+			Lun:                     0,
+			DiskName:                "disk-name2",
+			CachingMode:             compute.CachingTypesReadOnly,
+			DiskEncryptionSetID:     "",
+			WriteAcceleratorEnabled: false,
 		}
 		if test.inconsistentLUN {
-			options.lun = 63
+			options.Lun = 63
 		}
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,

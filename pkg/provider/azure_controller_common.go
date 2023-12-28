@@ -111,11 +111,11 @@ type controllerCommon struct {
 
 // AttachDiskOptions attach disk options
 type AttachDiskOptions struct {
-	cachingMode             compute.CachingTypes
-	diskName                string
-	diskEncryptionSetID     string
-	writeAcceleratorEnabled bool
-	lun                     int32
+	CachingMode             compute.CachingTypes
+	DiskName                string
+	DiskEncryptionSetID     string
+	WriteAcceleratorEnabled bool
+	Lun                     int32
 }
 
 // ExtendedLocation contains additional info about the location of resources.
@@ -227,11 +227,11 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, diskName, diskURI str
 	}
 
 	options := AttachDiskOptions{
-		lun:                     -1,
-		diskName:                diskName,
-		cachingMode:             cachingMode,
-		diskEncryptionSetID:     diskEncryptionSetID,
-		writeAcceleratorEnabled: writeAcceleratorEnabled,
+		Lun:                     -1,
+		DiskName:                diskName,
+		CachingMode:             cachingMode,
+		DiskEncryptionSetID:     diskEncryptionSetID,
+		WriteAcceleratorEnabled: writeAcceleratorEnabled,
 	}
 	node := strings.ToLower(string(nodeName))
 	diskuri := strings.ToLower(diskURI)
@@ -611,7 +611,7 @@ func (c *controllerCommon) SetDiskLun(nodeName types.NodeName, diskURI string, d
 		if strings.EqualFold(uri, diskURI) {
 			lun = diskLuns[count]
 		}
-		opt.lun = diskLuns[count]
+		opt.Lun = diskLuns[count]
 		count++
 	}
 	if lun < 0 {
