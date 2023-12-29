@@ -126,43 +126,6 @@ type ExtendedLocation struct {
 	Type string `json:"type,omitempty"`
 }
 
-// getNodeVMSet gets the VMSet interface based on config.VMType and the real virtual machine type.
-func (c *controllerCommon) getNodeVMSet(nodeName types.NodeName, crt azcache.AzureCacheReadType) (VMSet, error) {
-	// 1. vmType is standard or vmssflex, return cloud.VMSet directly.
-	// 1.1 all the nodes in the cluster are avset nodes.
-	// 1.2 all the nodes in the cluster are vmssflex nodes.
-	if c.cloud.VMType == consts.VMTypeStandard || c.cloud.VMType == consts.VMTypeVmssFlex {
-		return c.cloud.VMSet, nil
-	}
-
-	// 2. vmType is Virtual Machine Scale Set (vmss), convert vmSet to ScaleSet.
-	// 2.1 all the nodes in the cluster are vmss uniform nodes.
-	// 2.2 mix node: the nodes in the cluster can be any of avset nodes, vmss uniform nodes and vmssflex nodes.
-	ss, ok := c.cloud.VMSet.(*ScaleSet)
-	if !ok {
-		return nil, fmt.Errorf("error of converting vmSet (%q) to ScaleSet with vmType %q", c.cloud.VMSet, c.cloud.VMType)
-	}
-
-	vmManagementType, err := ss.getVMManagementTypeByNodeName(mapNodeNameToVMName(nodeName), crt)
-	if err != nil {
-		return nil, fmt.Errorf("getNodeVMSet: failed to check the node %s management type: %w", mapNodeNameToVMName(nodeName), err)
-	}
-	// 3. If the node is managed by availability set, then return ss.availabilitySet.
-	if vmManagementType == ManagedByAvSet {
-		// vm is managed by availability set.
-		return ss.availabilitySet, nil
-	}
-	if vmManagementType == ManagedByVmssFlex {
-		// 4. If the node is managed by vmss flex, then return ss.flexScaleSet.
-		// vm is managed by vmss flex.
-		return ss.flexScaleSet, nil
-	}
-
-	// 5. Node is managed by vmss
-	return ss, nil
-
-}
-
 // AttachDisk attaches a disk to vm
 // occupiedLuns is used to avoid conflict with other disk attach in k8s VolumeAttachments
 // return (lun, error)
@@ -175,7 +138,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, diskName, diskURI str
 	// don't check disk state when GetDisk is throttled
 	if disk != nil {
 		if disk.ManagedBy != nil && (disk.MaxShares == nil || *disk.MaxShares <= 1) {
-			vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+			vmset, err := c.cloud.GetNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
 			if err != nil {
 				return -1, err
 			}
@@ -276,7 +239,7 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, diskName, diskURI str
 		return lun, nil
 	}
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	vmset, err := c.cloud.GetNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return -1, err
 	}
@@ -395,7 +358,7 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 		return fmt.Errorf("failed to get azure instance id for node %q: %w", nodeName, err)
 	}
 
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	vmset, err := c.cloud.GetNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return err
 	}
@@ -452,7 +415,7 @@ func (c *controllerCommon) DetachDisk(ctx context.Context, diskName, diskURI str
 
 // UpdateVM updates a vm
 func (c *controllerCommon) UpdateVM(ctx context.Context, nodeName types.NodeName) error {
-	vmset, err := c.getNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
+	vmset, err := c.cloud.GetNodeVMSet(nodeName, azcache.CacheReadTypeUnsafe)
 	if err != nil {
 		return err
 	}
@@ -515,7 +478,7 @@ func (c *controllerCommon) cleanDetachDiskRequests(nodeName string) (map[string]
 
 // GetNodeDataDisks invokes vmSet interfaces to get data disks for the node.
 func (c *controllerCommon) GetNodeDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
-	vmset, err := c.getNodeVMSet(nodeName, crt)
+	vmset, err := c.cloud.GetNodeVMSet(nodeName, crt)
 	if err != nil {
 		return nil, nil, err
 	}
