@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -698,6 +699,42 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 	az.configAzureClients(servicePrincipalToken, multiTenantServicePrincipalToken, networkResourceServicePrincipalToken)
+
+	if az.ComputeClientFactory == nil {
+		authProvider, err := azclient.NewAuthProvider(&az.ARMClientConfig, &az.AzureAuthConfig.AzureAuthConfig)
+		if err != nil {
+			return err
+		}
+		var cred azcore.TokenCredential
+		cred, err = authProvider.GetAzIdentity()
+		if err != nil {
+			return err
+		}
+		if authProvider.IsMultiTenantModeEnabled() {
+			multiTenantCred, err := authProvider.GetMultiTenantIdentity()
+			if err != nil {
+				return err
+			}
+
+			networkTenantCred, err := authProvider.GetNetworkAzIdentity()
+			if err != nil {
+				return err
+			}
+			az.NetworkClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
+				SubscriptionID: az.NetworkResourceSubscriptionID,
+			}, &az.ARMClientConfig, networkTenantCred)
+			if err != nil {
+				return err
+			}
+			cred = multiTenantCred
+		}
+		az.ComputeClientFactory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{
+			SubscriptionID: az.SubscriptionID,
+		}, &az.ARMClientConfig, cred)
+		if err != nil {
+			return err
+		}
+	}
 
 	err = az.initCaches()
 	if err != nil {

@@ -45,6 +45,8 @@ import (
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
@@ -2656,6 +2658,8 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 		excludeLoadBalancerNodes: sets.New[string](),
 		routeCIDRs:               map[string]string{},
 		ZoneClient:               mockzoneclient.NewMockInterface(ctrl),
+		ComputeClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
+		NetworkClientFactory:     mock_azclient.NewMockClientFactory(ctrl),
 	}
 	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
 	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
