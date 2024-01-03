@@ -95,6 +95,21 @@ func (mr *MockInterfaceMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), arg0, arg1, arg2, arg3)
 }
 
+// InstanceView mocks base method.
+func (m *MockInterface) InstanceView(arg0 context.Context, arg1, arg2 string) (*armcompute.VirtualMachineInstanceView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstanceView", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*armcompute.VirtualMachineInstanceView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InstanceView indicates an expected call of InstanceView.
+func (mr *MockInterfaceMockRecorder) InstanceView(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceView", reflect.TypeOf((*MockInterface)(nil).InstanceView), arg0, arg1, arg2)
+}
+
 // List mocks base method.
 func (m *MockInterface) List(arg0 context.Context, arg1 string) ([]*armcompute.VirtualMachine, error) {
 	m.ctrl.T.Helper()
@@ -108,4 +123,19 @@ func (m *MockInterface) List(arg0 context.Context, arg1 string) ([]*armcompute.V
 func (mr *MockInterfaceMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), arg0, arg1)
+}
+
+// ListVMInstanceView mocks base method.
+func (m *MockInterface) ListVMInstanceView(arg0 context.Context, arg1 string) ([]*armcompute.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVMInstanceView", arg0, arg1)
+	ret0, _ := ret[0].([]*armcompute.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVMInstanceView indicates an expected call of ListVMInstanceView.
+func (mr *MockInterfaceMockRecorder) ListVMInstanceView(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVMInstanceView", reflect.TypeOf((*MockInterface)(nil).ListVMInstanceView), arg0, arg1)
 }

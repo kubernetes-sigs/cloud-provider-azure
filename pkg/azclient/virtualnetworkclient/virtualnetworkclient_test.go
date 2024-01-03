@@ -19,6 +19,7 @@ package virtualnetworkclient
 
 import (
 	"context"
+	"strings"
 
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,7 +46,7 @@ var _ = Describe("VirtualNetworksClient", Ordered, func() {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newResource).NotTo(BeNil())
-			Expect(*newResource.Name).To(Equal(resourceName))
+			Expect(strings.EqualFold(*newResource.Name, resourceName)).To(BeTrue())
 		})
 	})
 

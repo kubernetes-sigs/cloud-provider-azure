@@ -56,6 +56,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient"
 )
 
 type ClientFactoryImpl struct {
@@ -93,6 +94,7 @@ type ClientFactoryImpl struct {
 	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
 	virtualnetworkclientInterface           virtualnetworkclient.Interface
+	virtualnetworklinkclientInterface       virtualnetworklinkclient.Interface
 }
 
 func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory, error) {
@@ -288,6 +290,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 
 	//initialize virtualnetworkclient
 	factory.virtualnetworkclientInterface, err = factory.createVirtualNetworkClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualnetworklinkclient
+	factory.virtualnetworklinkclientInterface, err = factory.createVirtualNetworkLinkClient(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1032,4 +1040,29 @@ func (factory *ClientFactoryImpl) createVirtualNetworkClient(subscription string
 
 func (factory *ClientFactoryImpl) GetVirtualNetworkClient() virtualnetworkclient.Interface {
 	return factory.virtualnetworkclientInterface
+}
+
+func (factory *ClientFactoryImpl) createVirtualNetworkLinkClient(subscription string) (virtualnetworklinkclient.Interface, error) {
+	//initialize virtualnetworklinkclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateDNSZoneGroupRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualnetworklinkclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetVirtualNetworkLinkClient() virtualnetworklinkclient.Interface {
+	return factory.virtualnetworklinkclientInterface
 }

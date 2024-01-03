@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient"
 )
 
 type ClientFactory interface {
@@ -85,4 +86,5 @@ type ClientFactory interface {
 	GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface
 	GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface
 	GetVirtualNetworkClient() virtualnetworkclient.Interface
+	GetVirtualNetworkLinkClient() virtualnetworklinkclient.Interface
 }

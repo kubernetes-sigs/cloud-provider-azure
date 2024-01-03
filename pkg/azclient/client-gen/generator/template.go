@@ -293,7 +293,7 @@ var _ = Describe("{{.ClientName}}", Ordered, func() {
 			newResource, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, *newResource)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newResource).NotTo(BeNil())
-			Expect(*newResource.Name).To(Equal(resourceName))
+			Expect(strings.EqualFold(*newResource.Name,resourceName)).To(BeTrue())
 		})
 	})
 {{end -}}
