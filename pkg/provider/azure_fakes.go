@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
 	"github.com/golang/mock/gomock"
@@ -117,6 +118,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.VirtualMachineScaleSetVMsClient = mockvmssvmclient.NewMockInterface(ctrl)
 	az.VirtualMachinesClient = mockvmclient.NewMockInterface(ctrl)
 	az.PrivateLinkServiceClient = mockprivatelinkserviceclient.NewMockInterface(ctrl)
+	az.ComputeClientFactory = mock_azclient.NewMockClientFactory(ctrl)
 	az.VMSet, _ = newAvailabilitySet(az)
 	az.vmCache, _ = az.newVMCache()
 	az.lbCache, _ = az.newLBCache()

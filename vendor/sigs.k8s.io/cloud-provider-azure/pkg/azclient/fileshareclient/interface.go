@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get,resource=Account,subResource=FileShare,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileSharesClient,expand=false
+// +azure:client:verbs=get,resource=Account,subResource=FileShare,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage,packageAlias=armstorage,clientName=FileSharesClient,expand=false,crossSubFactory=true
 type Interface interface {
 	utils.SubResourceGetFunc[armstorage.FileShare]
 	Create(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armstorage.FileShare) (*armstorage.FileShare, error)

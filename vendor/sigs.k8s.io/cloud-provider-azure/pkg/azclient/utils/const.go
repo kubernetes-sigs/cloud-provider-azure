@@ -18,7 +18,7 @@ package utils
 
 const (
 	AzureClientID           = "AZURE_CLIENT_ID"
-	AzureClientSecret       = "AZURE_CLIENT_SECRET"
+	AzureClientSecret       = "AZURE_CLIENT_SECRET" //nolint:gosec
 	AzureFederatedTokenFile = "AZURE_FEDERATED_TOKEN_FILE"
 	AzureTenantID           = "AZURE_TENANT_ID"
 )

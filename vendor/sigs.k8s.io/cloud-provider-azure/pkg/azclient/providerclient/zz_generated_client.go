@@ -20,6 +20,7 @@ package providerclient
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armresources "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -28,16 +29,22 @@ import (
 type Client struct {
 	*armresources.ProvidersClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armresources.NewProvidersClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		ProvidersClient: client,
+		subscriptionID:  subscriptionID,
+		tracer:          tr,
+	}, nil
 }

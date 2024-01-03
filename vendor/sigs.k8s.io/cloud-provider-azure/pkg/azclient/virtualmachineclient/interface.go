@@ -18,6 +18,8 @@ limitations under the License.
 package virtualmachineclient
 
 import (
+	"context"
+
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -29,4 +31,6 @@ type Interface interface {
 	utils.CreateOrUpdateFunc[armcompute.VirtualMachine]
 	utils.DeleteFunc[armcompute.VirtualMachine]
 	utils.ListFunc[armcompute.VirtualMachine]
+	InstanceView(ctx context.Context, resourceGroupName string, vmName string) (*armcompute.VirtualMachineInstanceView, error)
+	ListVMInstanceView(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachine, rerr error)
 }
