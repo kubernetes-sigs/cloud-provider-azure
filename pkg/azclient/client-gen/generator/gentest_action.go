@@ -88,6 +88,7 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 			aliasMap := make(map[string]struct{})
 			aliasMap[markerConf.PackageAlias] = struct{}{}
 			importList[markerConf.PackageName] = aliasMap
+			importList["strings"] = make(map[string]struct{})
 		}
 	}
 	if len(markerConf.Verbs) > 0 {

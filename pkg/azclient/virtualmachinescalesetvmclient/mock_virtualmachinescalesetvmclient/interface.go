@@ -80,6 +80,21 @@ func (mr *MockInterfaceMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), arg0, arg1, arg2, arg3)
 }
 
+// GetInstanceView mocks base method.
+func (m *MockInterface) GetInstanceView(arg0 context.Context, arg1, arg2, arg3 string) (*armcompute.VirtualMachineScaleSetVMInstanceView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInstanceView", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*armcompute.VirtualMachineScaleSetVMInstanceView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInstanceView indicates an expected call of GetInstanceView.
+func (mr *MockInterfaceMockRecorder) GetInstanceView(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInstanceView", reflect.TypeOf((*MockInterface)(nil).GetInstanceView), arg0, arg1, arg2, arg3)
+}
+
 // List mocks base method.
 func (m *MockInterface) List(arg0 context.Context, arg1, arg2 string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
 	m.ctrl.T.Helper()
@@ -93,6 +108,21 @@ func (m *MockInterface) List(arg0 context.Context, arg1, arg2 string) ([]*armcom
 func (mr *MockInterfaceMockRecorder) List(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), arg0, arg1, arg2)
+}
+
+// ListVMInstanceView mocks base method.
+func (m *MockInterface) ListVMInstanceView(arg0 context.Context, arg1, arg2 string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVMInstanceView", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*armcompute.VirtualMachineScaleSetVM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVMInstanceView indicates an expected call of ListVMInstanceView.
+func (mr *MockInterfaceMockRecorder) ListVMInstanceView(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVMInstanceView", reflect.TypeOf((*MockInterface)(nil).ListVMInstanceView), arg0, arg1, arg2)
 }
 
 // Update mocks base method.

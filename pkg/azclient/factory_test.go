@@ -234,5 +234,12 @@ var _ = Describe("Factory", func() {
 			client := factory.GetVirtualNetworkClient()
 			Expect(client).NotTo(BeNil())
 		})
+		It("should create factory instance without painc - VirtualNetworkLink", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(factory).NotTo(BeNil())
+			client := factory.GetVirtualNetworkLinkClient()
+			Expect(client).NotTo(BeNil())
+		})
 	})
 })

@@ -240,10 +240,15 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
 			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
 		}
+		if strings.Contains(i.Request.URL, "skiptoken") {
+			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
+			i.Request.URL = string(re.ReplaceAll([]byte(i.Request.URL), []byte("skiptoken=skiptoken")))
+		}
 		if strings.Contains(i.Request.RequestURI, "skiptoken") {
-			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
+			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
 			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
 		}
+
 		for _, header := range requestHeadersToRemove {
 			delete(i.Request.Headers, header)
 		}
