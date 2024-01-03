@@ -22,6 +22,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armkeyvault "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -30,19 +32,27 @@ import (
 type Client struct {
 	*armkeyvault.VaultsClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armkeyvault.NewVaultsClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		VaultsClient:   client,
+		subscriptionID: subscriptionID,
+		tracer:         tr,
+	}, nil
 }
+
+const GetOperationName = "VaultsClient.Get"
 
 // Get gets the Vault
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armkeyvault.Vault, rerr error) {
@@ -51,6 +61,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.VaultsClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -59,12 +71,16 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	return &resp.Vault, nil
 }
 
+const ListOperationName = "VaultsClient.List"
+
 // List gets a list of Vault in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armkeyvault.Vault, rerr error) {
 	ctx = utils.ContextWithClientName(ctx, "VaultsClient")
 	ctx = utils.ContextWithRequestMethod(ctx, "List")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	pager := client.VaultsClient.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

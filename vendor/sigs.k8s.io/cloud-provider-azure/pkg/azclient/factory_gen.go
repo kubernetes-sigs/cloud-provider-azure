@@ -18,9 +18,11 @@
 package azclient
 
 import (
+	"strings"
+	"sync"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
@@ -54,18 +56,21 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient"
 )
 
 type ClientFactoryImpl struct {
-	*ClientFactoryConfig
+	armConfig                               *ARMClientConfig
+	facotryConfig                           *ClientFactoryConfig
 	cred                                    azcore.TokenCredential
-	accountclientInterface                  accountclient.Interface
+	clientOptionsMutFn                      []func(option *arm.ClientOptions)
+	accountclientInterface                  sync.Map
 	availabilitysetclientInterface          availabilitysetclient.Interface
-	blobcontainerclientInterface            blobcontainerclient.Interface
+	blobcontainerclientInterface            sync.Map
 	blobservicepropertiesclientInterface    blobservicepropertiesclient.Interface
 	deploymentclientInterface               deploymentclient.Interface
-	diskclientInterface                     diskclient.Interface
-	fileshareclientInterface                fileshareclient.Interface
+	diskclientInterface                     sync.Map
+	fileshareclientInterface                sync.Map
 	interfaceclientInterface                interfaceclient.Interface
 	ipgroupclientInterface                  ipgroupclient.Interface
 	loadbalancerclientInterface             loadbalancerclient.Interface
@@ -89,6 +94,7 @@ type ClientFactoryImpl struct {
 	virtualmachinescalesetclientInterface   virtualmachinescalesetclient.Interface
 	virtualmachinescalesetvmclientInterface virtualmachinescalesetvmclient.Interface
 	virtualnetworkclientInterface           virtualnetworkclient.Interface
+	virtualnetworklinkclientInterface       virtualnetworklinkclient.Interface
 }
 
 func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, cred azcore.TokenCredential, clientOptionsMutFn ...func(option *arm.ClientOptions)) (ClientFactory, error) {
@@ -99,715 +105,964 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		cred = &azidentity.DefaultAzureCredential{}
 	}
 
-	var options *arm.ClientOptions
 	var err error
 
-	//initialize {accountclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient Account  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
+	factory := &ClientFactoryImpl{
+		armConfig:          armConfig,
+		facotryConfig:      config,
+		cred:               cred,
+		clientOptionsMutFn: clientOptionsMutFn,
+	}
+
+	//initialize accountclient
+	_, err = factory.GetAccountClientForSub(config.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	var ratelimitOption *ratelimit.Config
-	var rateLimitPolicy policy.Policy
 
-	for _, optionMutFn := range clientOptionsMutFn {
+	//initialize availabilitysetclient
+	factory.availabilitysetclientInterface, err = factory.createAvailabilitySetClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize blobcontainerclient
+	_, err = factory.GetBlobContainerClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize blobservicepropertiesclient
+	factory.blobservicepropertiesclientInterface, err = factory.createBlobServicePropertiesClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize deploymentclient
+	factory.deploymentclientInterface, err = factory.createDeploymentClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize diskclient
+	_, err = factory.GetDiskClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize fileshareclient
+	_, err = factory.GetFileShareClientForSub(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize interfaceclient
+	factory.interfaceclientInterface, err = factory.createInterfaceClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize ipgroupclient
+	factory.ipgroupclientInterface, err = factory.createIPGroupClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize loadbalancerclient
+	factory.loadbalancerclientInterface, err = factory.createLoadBalancerClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize managedclusterclient
+	factory.managedclusterclientInterface, err = factory.createManagedClusterClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize privateendpointclient
+	factory.privateendpointclientInterface, err = factory.createPrivateEndpointClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize privatelinkserviceclient
+	factory.privatelinkserviceclientInterface, err = factory.createPrivateLinkServiceClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize privatezoneclient
+	factory.privatezoneclientInterface, err = factory.createPrivateZoneClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize providerclient
+	factory.providerclientInterface, err = factory.createProviderClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize publicipaddressclient
+	factory.publicipaddressclientInterface, err = factory.createPublicIPAddressClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize publicipprefixclient
+	factory.publicipprefixclientInterface, err = factory.createPublicIPPrefixClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize registryclient
+	factory.registryclientInterface, err = factory.createRegistryClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize resourcegroupclient
+	factory.resourcegroupclientInterface, err = factory.createResourceGroupClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize routetableclient
+	factory.routetableclientInterface, err = factory.createRouteTableClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize secretclient
+	factory.secretclientInterface, err = factory.createSecretClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize securitygroupclient
+	factory.securitygroupclientInterface, err = factory.createSecurityGroupClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize snapshotclient
+	factory.snapshotclientInterface, err = factory.createSnapshotClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize sshpublickeyresourceclient
+	factory.sshpublickeyresourceclientInterface, err = factory.createSSHPublicKeyResourceClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize subnetclient
+	factory.subnetclientInterface, err = factory.createSubnetClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize vaultclient
+	factory.vaultclientInterface, err = factory.createVaultClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualmachineclient
+	factory.virtualmachineclientInterface, err = factory.createVirtualMachineClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualmachinescalesetclient
+	factory.virtualmachinescalesetclientInterface, err = factory.createVirtualMachineScaleSetClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualmachinescalesetvmclient
+	factory.virtualmachinescalesetvmclientInterface, err = factory.createVirtualMachineScaleSetVMClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualnetworkclient
+	factory.virtualnetworkclientInterface, err = factory.createVirtualNetworkClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	//initialize virtualnetworklinkclient
+	factory.virtualnetworklinkclientInterface, err = factory.createVirtualNetworkLinkClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	return factory, nil
+}
+
+func (factory *ClientFactoryImpl) createAccountClient(subscription string) (accountclient.Interface, error) {
+	//initialize accountclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
 		if optionMutFn != nil {
 			optionMutFn(options)
 		}
 	}
-	accountclientInterface, err := accountclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {availabilitysetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/availabilitysetclient AvailabilitySet  Interface availabilitySetRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("availabilitySetRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	availabilitysetclientInterface, err := availabilitysetclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {blobcontainerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobcontainerclient Account BlobContainer Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	blobcontainerclientInterface, err := blobcontainerclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {blobservicepropertiesclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/blobservicepropertiesclient BlobServiceProperties  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	blobservicepropertiesclientInterface, err := blobservicepropertiesclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {deploymentclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/deploymentclient Deployment  Interface deploymentRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("deploymentRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	deploymentclientInterface, err := deploymentclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {diskclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/diskclient Disk  Interface diskRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("diskRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	diskclientInterface, err := diskclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {fileshareclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/fileshareclient Account FileShare Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	fileshareclientInterface, err := fileshareclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {interfaceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient Interface  Interface interfaceRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("interfaceRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	interfaceclientInterface, err := interfaceclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {ipgroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/ipgroupclient IPGroup  Interface ipGroupRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("ipGroupRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	ipgroupclientInterface, err := ipgroupclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {loadbalancerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient LoadBalancer  Interface loadBalancerRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("loadBalancerRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	loadbalancerclientInterface, err := loadbalancerclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {managedclusterclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/managedclusterclient ManagedCluster  Interface containerServiceRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("containerServiceRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	managedclusterclientInterface, err := managedclusterclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {privateendpointclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privateendpointclient PrivateEndpoint  Interface privateEndpointRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("privateEndpointRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	privateendpointclientInterface, err := privateendpointclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {privatelinkserviceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatelinkserviceclient PrivateLinkService  Interface privateLinkServiceRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("privateLinkServiceRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	privatelinkserviceclientInterface, err := privatelinkserviceclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {privatezoneclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/privatezoneclient PrivateZone  Interface privateDNSRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("privateDNSRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	privatezoneclientInterface, err := privatezoneclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {providerclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/providerclient Provider  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	providerclientInterface, err := providerclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {publicipaddressclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient PublicIPAddress  Interface publicIPAddressRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("publicIPAddressRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	publicipaddressclientInterface, err := publicipaddressclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {publicipprefixclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient PublicIPPrefix  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	publicipprefixclientInterface, err := publicipprefixclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {registryclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient Registry  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	registryclientInterface, err := registryclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {resourcegroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient ResourceGroup  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	resourcegroupclientInterface, err := resourcegroupclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {routetableclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient RouteTable  Interface routeTableRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("routeTableRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	routetableclientInterface, err := routetableclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {secretclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient Vault Secret Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	secretclientInterface, err := secretclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {securitygroupclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient SecurityGroup  Interface securityGroupRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("securityGroupRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	securitygroupclientInterface, err := securitygroupclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {snapshotclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/snapshotclient Snapshot  Interface snapshotRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("snapshotRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	snapshotclientInterface, err := snapshotclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {sshpublickeyresourceclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/sshpublickeyresourceclient SSHPublicKeyResource  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	sshpublickeyresourceclientInterface, err := sshpublickeyresourceclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {subnetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient VirtualNetwork Subnet Interface subnetsRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("subnetsRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	subnetclientInterface, err := subnetclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {vaultclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/vaultclient Vault  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	vaultclientInterface, err := vaultclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {virtualmachineclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient VirtualMachine  Interface virtualMachineRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("virtualMachineRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	virtualmachineclientInterface, err := virtualmachineclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {virtualmachinescalesetclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient VirtualMachineScaleSet  Interface virtualMachineSizesRateLimit}
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	//add ratelimit policy
-	ratelimitOption = config.GetRateLimitConfig("virtualMachineSizesRateLimit")
-	rateLimitPolicy = ratelimit.NewRateLimitPolicy(ratelimitOption)
-	if rateLimitPolicy != nil {
-		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	virtualmachinescalesetclientInterface, err := virtualmachinescalesetclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {virtualmachinescalesetvmclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient VirtualMachineScaleSet VirtualMachineScaleSetVM Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	virtualmachinescalesetvmclientInterface, err := virtualmachinescalesetvmclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	//initialize {virtualnetworkclient sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient VirtualNetwork  Interface }
-	options, err = GetDefaultResourceClientOption(armConfig, config)
-	if err != nil {
-		return nil, err
-	}
-	for _, optionMutFn := range clientOptionsMutFn {
-		if optionMutFn != nil {
-			optionMutFn(options)
-		}
-	}
-	virtualnetworkclientInterface, err := virtualnetworkclient.New(config.SubscriptionID, cred, options)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ClientFactoryImpl{
-		ClientFactoryConfig: config,
-		cred:                cred, accountclientInterface: accountclientInterface,
-		availabilitysetclientInterface:          availabilitysetclientInterface,
-		blobcontainerclientInterface:            blobcontainerclientInterface,
-		blobservicepropertiesclientInterface:    blobservicepropertiesclientInterface,
-		deploymentclientInterface:               deploymentclientInterface,
-		diskclientInterface:                     diskclientInterface,
-		fileshareclientInterface:                fileshareclientInterface,
-		interfaceclientInterface:                interfaceclientInterface,
-		ipgroupclientInterface:                  ipgroupclientInterface,
-		loadbalancerclientInterface:             loadbalancerclientInterface,
-		managedclusterclientInterface:           managedclusterclientInterface,
-		privateendpointclientInterface:          privateendpointclientInterface,
-		privatelinkserviceclientInterface:       privatelinkserviceclientInterface,
-		privatezoneclientInterface:              privatezoneclientInterface,
-		providerclientInterface:                 providerclientInterface,
-		publicipaddressclientInterface:          publicipaddressclientInterface,
-		publicipprefixclientInterface:           publicipprefixclientInterface,
-		registryclientInterface:                 registryclientInterface,
-		resourcegroupclientInterface:            resourcegroupclientInterface,
-		routetableclientInterface:               routetableclientInterface,
-		secretclientInterface:                   secretclientInterface,
-		securitygroupclientInterface:            securitygroupclientInterface,
-		snapshotclientInterface:                 snapshotclientInterface,
-		sshpublickeyresourceclientInterface:     sshpublickeyresourceclientInterface,
-		subnetclientInterface:                   subnetclientInterface,
-		vaultclientInterface:                    vaultclientInterface,
-		virtualmachineclientInterface:           virtualmachineclientInterface,
-		virtualmachinescalesetclientInterface:   virtualmachinescalesetclientInterface,
-		virtualmachinescalesetvmclientInterface: virtualmachinescalesetvmclientInterface,
-		virtualnetworkclientInterface:           virtualnetworkclientInterface,
-	}, nil
+	return accountclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetAccountClient() accountclient.Interface {
-	return factory.accountclientInterface
+	clientImp, _ := factory.accountclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(accountclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetAccountClientForSub(subscriptionID string) (accountclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.accountclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(accountclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createAccountClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.accountclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(accountclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createAvailabilitySetClient(subscription string) (availabilitysetclient.Interface, error) {
+	//initialize availabilitysetclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("availabilitySetRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return availabilitysetclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetAvailabilitySetClient() availabilitysetclient.Interface {
 	return factory.availabilitysetclientInterface
 }
 
+func (factory *ClientFactoryImpl) createBlobContainerClient(subscription string) (blobcontainerclient.Interface, error) {
+	//initialize blobcontainerclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return blobcontainerclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetBlobContainerClient() blobcontainerclient.Interface {
-	return factory.blobcontainerclientInterface
+	clientImp, _ := factory.blobcontainerclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(blobcontainerclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetBlobContainerClientForSub(subscriptionID string) (blobcontainerclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.blobcontainerclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(blobcontainerclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createBlobContainerClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.blobcontainerclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(blobcontainerclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createBlobServicePropertiesClient(subscription string) (blobservicepropertiesclient.Interface, error) {
+	//initialize blobservicepropertiesclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return blobservicepropertiesclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetBlobServicePropertiesClient() blobservicepropertiesclient.Interface {
 	return factory.blobservicepropertiesclientInterface
 }
 
+func (factory *ClientFactoryImpl) createDeploymentClient(subscription string) (deploymentclient.Interface, error) {
+	//initialize deploymentclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("deploymentRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return deploymentclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetDeploymentClient() deploymentclient.Interface {
 	return factory.deploymentclientInterface
 }
 
+func (factory *ClientFactoryImpl) createDiskClient(subscription string) (diskclient.Interface, error) {
+	//initialize diskclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("diskRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return diskclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetDiskClient() diskclient.Interface {
-	return factory.diskclientInterface
+	clientImp, _ := factory.diskclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(diskclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetDiskClientForSub(subscriptionID string) (diskclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.diskclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(diskclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createDiskClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.diskclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(diskclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createFileShareClient(subscription string) (fileshareclient.Interface, error) {
+	//initialize fileshareclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return fileshareclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetFileShareClient() fileshareclient.Interface {
-	return factory.fileshareclientInterface
+	clientImp, _ := factory.fileshareclientInterface.Load(strings.ToLower(factory.facotryConfig.SubscriptionID))
+	return clientImp.(fileshareclient.Interface)
+}
+func (factory *ClientFactoryImpl) GetFileShareClientForSub(subscriptionID string) (fileshareclient.Interface, error) {
+	if subscriptionID == "" {
+		subscriptionID = factory.facotryConfig.SubscriptionID
+	}
+	clientImp, loaded := factory.fileshareclientInterface.Load(strings.ToLower(subscriptionID))
+	if loaded {
+		return clientImp.(fileshareclient.Interface), nil
+	}
+	//It's not thread safe, but it's ok for now. because it will be called once.
+	clientImp, err := factory.createFileShareClient(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	factory.fileshareclientInterface.Store(strings.ToLower(subscriptionID), clientImp)
+	return clientImp.(fileshareclient.Interface), nil
+}
+
+func (factory *ClientFactoryImpl) createInterfaceClient(subscription string) (interfaceclient.Interface, error) {
+	//initialize interfaceclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("interfaceRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return interfaceclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetInterfaceClient() interfaceclient.Interface {
 	return factory.interfaceclientInterface
 }
 
+func (factory *ClientFactoryImpl) createIPGroupClient(subscription string) (ipgroupclient.Interface, error) {
+	//initialize ipgroupclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("ipGroupRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return ipgroupclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetIPGroupClient() ipgroupclient.Interface {
 	return factory.ipgroupclientInterface
+}
+
+func (factory *ClientFactoryImpl) createLoadBalancerClient(subscription string) (loadbalancerclient.Interface, error) {
+	//initialize loadbalancerclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("loadBalancerRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return loadbalancerclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetLoadBalancerClient() loadbalancerclient.Interface {
 	return factory.loadbalancerclientInterface
 }
 
+func (factory *ClientFactoryImpl) createManagedClusterClient(subscription string) (managedclusterclient.Interface, error) {
+	//initialize managedclusterclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("containerServiceRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return managedclusterclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetManagedClusterClient() managedclusterclient.Interface {
 	return factory.managedclusterclientInterface
+}
+
+func (factory *ClientFactoryImpl) createPrivateEndpointClient(subscription string) (privateendpointclient.Interface, error) {
+	//initialize privateendpointclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateEndpointRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return privateendpointclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetPrivateEndpointClient() privateendpointclient.Interface {
 	return factory.privateendpointclientInterface
 }
 
+func (factory *ClientFactoryImpl) createPrivateLinkServiceClient(subscription string) (privatelinkserviceclient.Interface, error) {
+	//initialize privatelinkserviceclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateLinkServiceRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return privatelinkserviceclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetPrivateLinkServiceClient() privatelinkserviceclient.Interface {
 	return factory.privatelinkserviceclientInterface
+}
+
+func (factory *ClientFactoryImpl) createPrivateZoneClient(subscription string) (privatezoneclient.Interface, error) {
+	//initialize privatezoneclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateDNSRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return privatezoneclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetPrivateZoneClient() privatezoneclient.Interface {
 	return factory.privatezoneclientInterface
 }
 
+func (factory *ClientFactoryImpl) createProviderClient(subscription string) (providerclient.Interface, error) {
+	//initialize providerclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return providerclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetProviderClient() providerclient.Interface {
 	return factory.providerclientInterface
+}
+
+func (factory *ClientFactoryImpl) createPublicIPAddressClient(subscription string) (publicipaddressclient.Interface, error) {
+	//initialize publicipaddressclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("publicIPAddressRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return publicipaddressclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetPublicIPAddressClient() publicipaddressclient.Interface {
 	return factory.publicipaddressclientInterface
 }
 
+func (factory *ClientFactoryImpl) createPublicIPPrefixClient(subscription string) (publicipprefixclient.Interface, error) {
+	//initialize publicipprefixclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return publicipprefixclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetPublicIPPrefixClient() publicipprefixclient.Interface {
 	return factory.publicipprefixclientInterface
+}
+
+func (factory *ClientFactoryImpl) createRegistryClient(subscription string) (registryclient.Interface, error) {
+	//initialize registryclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return registryclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetRegistryClient() registryclient.Interface {
 	return factory.registryclientInterface
 }
 
+func (factory *ClientFactoryImpl) createResourceGroupClient(subscription string) (resourcegroupclient.Interface, error) {
+	//initialize resourcegroupclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return resourcegroupclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetResourceGroupClient() resourcegroupclient.Interface {
 	return factory.resourcegroupclientInterface
+}
+
+func (factory *ClientFactoryImpl) createRouteTableClient(subscription string) (routetableclient.Interface, error) {
+	//initialize routetableclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("routeTableRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return routetableclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetRouteTableClient() routetableclient.Interface {
 	return factory.routetableclientInterface
 }
 
+func (factory *ClientFactoryImpl) createSecretClient(subscription string) (secretclient.Interface, error) {
+	//initialize secretclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return secretclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetSecretClient() secretclient.Interface {
 	return factory.secretclientInterface
+}
+
+func (factory *ClientFactoryImpl) createSecurityGroupClient(subscription string) (securitygroupclient.Interface, error) {
+	//initialize securitygroupclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("securityGroupRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return securitygroupclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetSecurityGroupClient() securitygroupclient.Interface {
 	return factory.securitygroupclientInterface
 }
 
+func (factory *ClientFactoryImpl) createSnapshotClient(subscription string) (snapshotclient.Interface, error) {
+	//initialize snapshotclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("snapshotRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return snapshotclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetSnapshotClient() snapshotclient.Interface {
 	return factory.snapshotclientInterface
+}
+
+func (factory *ClientFactoryImpl) createSSHPublicKeyResourceClient(subscription string) (sshpublickeyresourceclient.Interface, error) {
+	//initialize sshpublickeyresourceclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return sshpublickeyresourceclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetSSHPublicKeyResourceClient() sshpublickeyresourceclient.Interface {
 	return factory.sshpublickeyresourceclientInterface
 }
 
+func (factory *ClientFactoryImpl) createSubnetClient(subscription string) (subnetclient.Interface, error) {
+	//initialize subnetclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("subnetsRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return subnetclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetSubnetClient() subnetclient.Interface {
 	return factory.subnetclientInterface
+}
+
+func (factory *ClientFactoryImpl) createVaultClient(subscription string) (vaultclient.Interface, error) {
+	//initialize vaultclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return vaultclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetVaultClient() vaultclient.Interface {
 	return factory.vaultclientInterface
 }
 
+func (factory *ClientFactoryImpl) createVirtualMachineClient(subscription string) (virtualmachineclient.Interface, error) {
+	//initialize virtualmachineclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualmachineclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetVirtualMachineClient() virtualmachineclient.Interface {
 	return factory.virtualmachineclientInterface
+}
+
+func (factory *ClientFactoryImpl) createVirtualMachineScaleSetClient(subscription string) (virtualmachinescalesetclient.Interface, error) {
+	//initialize virtualmachinescalesetclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineSizesRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualmachinescalesetclient.New(subscription, factory.cred, options)
 }
 
 func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetClient() virtualmachinescalesetclient.Interface {
 	return factory.virtualmachinescalesetclientInterface
 }
 
+func (factory *ClientFactoryImpl) createVirtualMachineScaleSetVMClient(subscription string) (virtualmachinescalesetvmclient.Interface, error) {
+	//initialize virtualmachinescalesetvmclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualmachinescalesetvmclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetVirtualMachineScaleSetVMClient() virtualmachinescalesetvmclient.Interface {
 	return factory.virtualmachinescalesetvmclientInterface
 }
 
+func (factory *ClientFactoryImpl) createVirtualNetworkClient(subscription string) (virtualnetworkclient.Interface, error) {
+	//initialize virtualnetworkclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualnetworkclient.New(subscription, factory.cred, options)
+}
+
 func (factory *ClientFactoryImpl) GetVirtualNetworkClient() virtualnetworkclient.Interface {
 	return factory.virtualnetworkclientInterface
+}
+
+func (factory *ClientFactoryImpl) createVirtualNetworkLinkClient(subscription string) (virtualnetworklinkclient.Interface, error) {
+	//initialize virtualnetworklinkclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateDNSZoneGroupRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return virtualnetworklinkclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetVirtualNetworkLinkClient() virtualnetworklinkclient.Interface {
+	return factory.virtualnetworklinkclientInterface
 }

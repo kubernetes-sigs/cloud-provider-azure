@@ -22,6 +22,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
@@ -30,19 +32,27 @@ import (
 type Client struct {
 	*armcompute.DisksClient
 	subscriptionID string
+	tracer         tracing.Tracer
 }
 
 func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
+	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
 	client, err := armcompute.NewDisksClient(subscriptionID, credential, options)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client, subscriptionID}, nil
+	return &Client{
+		DisksClient:    client,
+		subscriptionID: subscriptionID,
+		tracer:         tr,
+	}, nil
 }
+
+const GetOperationName = "DisksClient.Get"
 
 // Get gets the Disk
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.Disk, rerr error) {
@@ -51,6 +61,8 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	ctx = utils.ContextWithRequestMethod(ctx, "Get")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	resp, err := client.DisksClient.Get(ctx, resourceGroupName, resourceName, nil)
 	if err != nil {
 		return nil, err
@@ -59,12 +71,16 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	return &resp.Disk, nil
 }
 
+const CreateOrUpdateOperationName = "DisksClient.Create"
+
 // CreateOrUpdate creates or updates a Disk.
-func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.Disk) (*armcompute.Disk, error) {
+func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.Disk) (result *armcompute.Disk, err error) {
 	ctx = utils.ContextWithClientName(ctx, "DisksClient")
 	ctx = utils.ContextWithRequestMethod(ctx, "CreateOrUpdate")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
+	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.DisksClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
@@ -75,15 +91,21 @@ func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName stri
 	return nil, nil
 }
 
+const DeleteOperationName = "DisksClient.Delete"
+
 // Delete deletes a Disk by name.
-func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) error {
+func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	ctx = utils.ContextWithClientName(ctx, "DisksClient")
 	ctx = utils.ContextWithRequestMethod(ctx, "Delete")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
-	_, err := utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
+	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
+	defer endSpan(err)
+	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
 	return err
 }
+
+const ListOperationName = "DisksClient.List"
 
 // List gets a list of Disk in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.Disk, rerr error) {
@@ -91,6 +113,8 @@ func (client *Client) List(ctx context.Context, resourceGroupName string) (resul
 	ctx = utils.ContextWithRequestMethod(ctx, "List")
 	ctx = utils.ContextWithResourceGroupName(ctx, resourceGroupName)
 	ctx = utils.ContextWithSubscriptionID(ctx, client.subscriptionID)
+	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
+	defer endSpan(rerr)
 	pager := client.DisksClient.NewListByResourceGroupPager(resourceGroupName, nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)

@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=Disk,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=DisksClient,expand=false,rateLimitKey=diskRateLimit
+// +azure:client:verbs=get;createorupdate;delete;listbyrg,resource=Disk,packageName=github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5,packageAlias=armcompute,clientName=DisksClient,expand=false,rateLimitKey=diskRateLimit,crossSubFactory=true
 type Interface interface {
 	utils.GetFunc[armcompute.Disk]
 	utils.CreateOrUpdateFunc[armcompute.Disk]
