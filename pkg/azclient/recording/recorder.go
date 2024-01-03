@@ -68,7 +68,7 @@ var responseHeadersToRemove = []string{
 }
 
 var (
-	dateMatcher   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?(\+\d{2}\:\d{2})?(Z)?`)
+	dateMatcher   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|((\+|\-)\d{2}(:?\d{2})?(:?\d{2})?))?`)
 	sshKeyMatcher = regexp.MustCompile("ssh-rsa [0-9a-zA-Z+/=]+")
 
 	// This is pretty involved, here's the breakdown of what each bit means:

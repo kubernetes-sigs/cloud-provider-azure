@@ -19,6 +19,7 @@ package virtualmachineclient
 import (
 	"context"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 )
 
@@ -36,4 +37,24 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 	}
 	//handle statuscode
 	return &resp.VirtualMachine, nil
+}
+
+func (client *Client) InstanceView(ctx context.Context, resourceGroupName string, vmName string) (*armcompute.VirtualMachineInstanceView, error) {
+	resp, err := client.VirtualMachinesClient.InstanceView(ctx, resourceGroupName, vmName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &resp.VirtualMachineInstanceView, nil
+}
+
+func (client *Client) ListVMInstanceView(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachine, rerr error) {
+	pager := client.VirtualMachinesClient.NewListPager(resourceGroupName, &armcompute.VirtualMachinesClientListOptions{Expand: to.Ptr(armcompute.ExpandTypeForListVMsInstanceView)})
+	for pager.More() {
+		nextResult, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nextResult.Value...)
+	}
+	return result, nil
 }

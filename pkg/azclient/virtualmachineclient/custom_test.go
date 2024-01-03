@@ -29,6 +29,7 @@ import (
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
 )
 
 var (
@@ -42,6 +43,20 @@ var (
 
 func init() {
 	additionalTestCases = func() {
+		When("get requests are raised", func() {
+			It("should return 404 error", func(ctx context.Context) {
+				newResource, err := realClient.InstanceView(ctx, resourceGroupName, resourceName)
+				Expect(err).To(HaveOccurred())
+				Expect(newResource).To(BeNil())
+			})
+		})
+		When("list requests are raised", func() {
+			It("should return 404 error", func(ctx context.Context) {
+				newResource, err := realClient.ListVMInstanceView(ctx, resourceGroupName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newResource).To(BeNil())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
