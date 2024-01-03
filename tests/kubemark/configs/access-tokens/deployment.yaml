@@ -1,4 +1,5 @@
 {{$name := .Name}}
+{{$AccessTokensImage := DefaultParam .AccessTokensImage "gcr.io/k8s-testimages/perf-tests-util/access-tokens:v0.0.6"}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -21,7 +22,7 @@ spec:
       imagePullPolicy: Always
       containers:
         - name: access-tokens
-          image: gcr.io/k8s-testimages/perf-tests-util/access-tokens:v0.0.6
+          image: {{$AccessTokensImage}}
           args:
           {{range $tokenId := Loop .Tokens}}
             - --access-token-dirs=/var/tokens/{{$name}}-{{$tokenId}}
