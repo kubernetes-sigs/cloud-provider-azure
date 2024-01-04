@@ -28,13 +28,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/healthz"
-	cacheddiscovery "k8s.io/client-go/discovery/cached"
+	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/metadata/metadatainformer"
@@ -465,17 +463,11 @@ func CreateControllerContext(s *cloudcontrollerconfig.CompletedConfig, clientBui
 		restMapper.Reset()
 	}, 30*time.Second, stop)
 
-	availableResources, err := GetAvailableResources(clientBuilder)
-	if err != nil {
-		return genericcontrollermanager.ControllerContext{}, err
-	}
-
 	ctx := genericcontrollermanager.ControllerContext{
 		ClientBuilder:                   clientBuilder,
 		InformerFactory:                 sharedInformers,
 		ObjectOrMetadataInformerFactory: informerfactory.NewInformerFactory(sharedInformers, metadataInformers),
 		RESTMapper:                      restMapper,
-		AvailableResources:              availableResources,
 		Stop:                            stop,
 		InformersStarted:                make(chan struct{}),
 		ResyncPeriod:                    ResyncPeriod(s),
@@ -493,33 +485,4 @@ func ResyncPeriod(c *cloudcontrollerconfig.CompletedConfig) func() time.Duration
 		factor := float64(n.Int64())/1000.0 + 1.0
 		return time.Duration(float64(c.ComponentConfig.Generic.MinResyncPeriod.Nanoseconds()) * factor)
 	}
-}
-
-// GetAvailableResources gets the map which contains all available resources of the apiserver
-// TODO: In general, any controller checking this needs to be dynamic so
-// users don't have to restart their controller manager if they change the apiserver.
-// Until we get there, the structure here needs to be exposed for the construction of a proper ControllerContext.
-func GetAvailableResources(clientBuilder clientbuilder.ControllerClientBuilder) (map[schema.GroupVersionResource]bool, error) {
-	client := clientBuilder.ClientOrDie("controller-discovery")
-	discoveryClient := client.Discovery()
-	_, resourceMap, err := discoveryClient.ServerGroupsAndResources()
-	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to get all supported resources from server: %w", err))
-	}
-	if len(resourceMap) == 0 {
-		return nil, fmt.Errorf("unable to get any supported resources from server")
-	}
-
-	allResources := map[schema.GroupVersionResource]bool{}
-	for _, apiResourceList := range resourceMap {
-		version, err := schema.ParseGroupVersion(apiResourceList.GroupVersion)
-		if err != nil {
-			return nil, err
-		}
-		for _, apiResource := range apiResourceList.APIResources {
-			allResources[version.WithResource(apiResource.Name)] = true
-		}
-	}
-
-	return allResources, nil
 }
