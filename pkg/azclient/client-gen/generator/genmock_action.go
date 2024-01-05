@@ -30,7 +30,7 @@ import (
 func generateMock(ctx *genall.GenerationContext, pkg *loader.Package, typeName string, _ ClientGenConfig, headerText string) error {
 	var mockCache bytes.Buffer
 	//nolint:gosec // G204 ignore this!
-	cmd := exec.Command("mockgen", "-package", "mock_"+pkg.Name, pkg.PkgPath, typeName)
+	cmd := exec.Command("mockgen", "-package", "mock_"+pkg.Name, "-source", pkg.Name+"/interface.go")
 	cmd.Stdout = &mockCache
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()

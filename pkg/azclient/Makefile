@@ -107,7 +107,7 @@ generatecode: build ## Generate client
 
 .PHONY: generateimpl
 generateimpl: build ## Generate client
-	$(CLIENTGEN) clientgen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./...
+	PATH=$(LOCALBIN):$$PATH $(CLIENTGEN) clientgen:headerFile=../../hack/boilerplate/boilerplate.gomock.txt paths=./...
 
 .PHONY: vet-all
 vet-all: golangci-lint ## Run go vet against code.
@@ -138,7 +138,7 @@ MOCKGEN ?= $(LOCALBIN)/mockgen
 .PHONY: mockgen
 mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
 $(MOCKGEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/mockgen || GOBIN=$(LOCALBIN)  go install github.com/golang/mock/mockgen@v1.6.0
+	test -s $(LOCALBIN)/mockgen || GOBIN=$(LOCALBIN)  go install go.uber.org/mock/mockgen@latest
 
 GINKGO ?= $(LOCALBIN)/ginkgo
 .PHONY: ginkgo
