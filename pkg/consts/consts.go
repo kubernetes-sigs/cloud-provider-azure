@@ -363,6 +363,8 @@ const (
 	FrontendIPConfigNameMaxLength = 80
 	// LoadBalancerRuleNameMaxLength is the max length of the load balancing rule
 	LoadBalancerRuleNameMaxLength = 80
+	// PIPPrefixNameMaxLength is the max length of the PIP prefix name
+	PIPPrefixNameMaxLength = 80
 	// IPFamilySuffixLength is the length of suffix length of IP family ("-IPv4", "-IPv6")
 	IPFamilySuffixLength = 5
 

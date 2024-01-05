@@ -2301,3 +2301,67 @@ func TestGetSecurityRuleName(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPublicIPName(t *testing.T) {
+	testcases := []struct {
+		desc            string
+		svc             *v1.Service
+		pips            []network.PublicIPAddress
+		isIPv6          bool
+		expectedPIPName string
+	}{
+		{
+			desc: "common",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{UID: types.UID("uid")},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			isIPv6:          false,
+			expectedPIPName: "azure-auid",
+		},
+		{
+			desc: "Service PIP prefix id",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv4Protocol},
+				},
+			},
+			isIPv6:          false,
+			expectedPIPName: "azure-auid-prefix-id",
+		},
+		{
+			desc: "Service PIP prefix id IPv6 lengthy",
+			svc: &v1.Service{
+				ObjectMeta: meta.ObjectMeta{
+					UID: types.UID("uid"),
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id-ipv6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+				},
+			},
+			isIPv6:          true,
+			expectedPIPName: "azure-auid-prefix-id-ipv6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			az := GetTestCloud(ctrl)
+			name := az.getPublicIPName("azure", tc.svc)
+			assert.Equal(t, tc.expectedPIPName, name)
+		})
+	}
+}
