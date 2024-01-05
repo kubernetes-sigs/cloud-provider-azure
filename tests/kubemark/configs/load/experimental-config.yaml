@@ -234,7 +234,7 @@ steps:
     - basename: daemonset
       objectTemplatePath: daemonset.yaml
       templateFillMap:
-        Image: registry.k8s.io/pause:3.0
+        Image: mcr.microsoft.com/oss/kubernetes/pause:3.1
   {{end}}
   - namespaceRange:
       min: 1
@@ -616,7 +616,7 @@ steps:
       - basename: daemonset
         objectTemplatePath: daemonset.yaml
         templateFillMap:
-          Image: registry.k8s.io/pause:3.1
+          Image: mcr.microsoft.com/oss/kubernetes/pause:3.1
   {{end}}
   {{if $ENABLE_JOBS}}
   - namespaceRange:
