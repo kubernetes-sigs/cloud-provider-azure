@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
       - name: {{.Name}}
-        image: nginx
+        image: mcr.microsoft.com/mirror/docker/library/nginx:1.25
         ports:
         - containerPort: 8080
