@@ -369,7 +369,14 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service, isIPv6
 			pipName = fmt.Sprintf("%s-%s", pipName, id)
 		}
 	}
-	return getResourceByIPFamily(pipName, isDualStack, isIPv6), nil
+
+	pipNameSegment := pipName
+	maxLength := consts.PIPPrefixNameMaxLength - consts.IPFamilySuffixLength
+	if len(pipName) > maxLength {
+		pipNameSegment = pipNameSegment[:maxLength]
+		klog.V(6).Infof("original PIP name is lengthy %q, truncate it to %q", pipName, pipNameSegment)
+	}
+	return getResourceByIPFamily(pipNameSegment, isDualStack, isIPv6), nil
 }
 
 // TODO: UT
