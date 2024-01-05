@@ -20,465 +20,1186 @@ import (
 	"net/netip"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/testutil"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/testutil/fixture"
 )
 
-func TestIsInternal(t *testing.T) {
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-				},
-			},
-		}
-		assert.True(t, IsInternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "TRUE",
-				},
-			},
-		}
-		assert.True(t, IsInternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "foobar",
-				},
-			},
-		}
-		assert.False(t, IsInternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{},
-			},
-		}
-		assert.False(t, IsInternal(&svc))
-	}
-}
-
-func TestIsExternal(t *testing.T) {
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-				},
-			},
-		}
-		assert.False(t, IsExternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "TRUE",
-				},
-			},
-		}
-		assert.False(t, IsExternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "foobar",
-				},
-			},
-		}
-		assert.True(t, IsExternal(&svc))
-	}
-	{
-		svc := v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{},
-			},
-		}
-		assert.True(t, IsExternal(&svc))
-	}
-}
-
-func TestAllowedServiceTags(t *testing.T) {
-	t.Run("no annotation", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Empty(t, actual)
-	})
-	t.Run("with 1 service tag", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedServiceTags: "Microsoft.ContainerInstance/containerGroups",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []string{"Microsoft.ContainerInstance/containerGroups"}, actual)
-	})
-	t.Run("with multiple service tags", func(t *testing.T) {
-		actual, err := AllowedServiceTags(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedServiceTags: "Microsoft.ContainerInstance/containerGroups,foo,bar",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []string{"Microsoft.ContainerInstance/containerGroups", "foo", "bar"}, actual)
-	})
-}
-
-func TestAllowedIPRanges(t *testing.T) {
-	t.Run("no annotation", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Empty(t, actual)
-	})
-	t.Run("with 1 IPv4 range", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges: "10.10.0.0/24",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("10.10.0.0/24")}, actual)
-	})
-	t.Run("with 1 IPv6 range", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges: "2001:db8::/32",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("2001:db8::/32")}, actual)
-	})
-	t.Run("with multiple IP ranges", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges: "10.10.0.0/24,2001:db8::/32",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.0.0/24"),
-			netip.MustParsePrefix("2001:db8::/32"),
-		}, actual)
-	})
-	t.Run("with invalid IP range", func(t *testing.T) {
-		_, err := AllowedIPRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges: "foobar",
-				},
-			},
-		})
-		assert.Error(t, err)
-	})
-}
-
-func TestSourceRanges(t *testing.T) {
-	t.Run("not specified in spec", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-		})
-		assert.NoError(t, err)
-		assert.Empty(t, actual)
-	})
-	t.Run("specified in spec", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type:                     v1.ServiceTypeLoadBalancer,
-				LoadBalancerSourceRanges: []string{"10.10.0.0/24", "2001:db8::/32"},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.0.0/24"),
-			netip.MustParsePrefix("2001:db8::/32"),
-		}, actual)
-	})
-	t.Run("specified in annotation", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					v1.AnnotationLoadBalancerSourceRangesKey: "10.10.0.0/24,2001:db8::/32",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.0.0/24"),
-			netip.MustParsePrefix("2001:db8::/32"),
-		}, actual)
-	})
-	t.Run("specified in both spec and annotation", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type:                     v1.ServiceTypeLoadBalancer,
-				LoadBalancerSourceRanges: []string{"10.10.0.0/24"},
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					v1.AnnotationLoadBalancerSourceRangesKey: "2001:db8::/32",
-				},
-			},
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.0.0/24"),
-		}, actual, "spec should take precedence over annotation")
-	})
-	t.Run("with invalid IP range", func(t *testing.T) {
-		_, err := SourceRanges(&v1.Service{
-			Spec: v1.ServiceSpec{
-				Type:                     v1.ServiceTypeLoadBalancer,
-				LoadBalancerSourceRanges: []string{"foobar"},
-			},
-		})
-		assert.Error(t, err)
-	})
-}
-
 func TestAccessControl_IsAllowFromInternet(t *testing.T) {
-	t.Run("external LB", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{},
-			},
-		}
-		t.Run("default", func(t *testing.T) {
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.True(t, ac.IsAllowFromInternet())
-		})
-		t.Run("not allowed from all", func(t *testing.T) {
-			svc.Spec.LoadBalancerSourceRanges = []string{"10.10.10.0/24"}
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.False(t, ac.IsAllowFromInternet())
-		})
-		t.Run("allowed from all", func(t *testing.T) {
-			svc.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0"}
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.True(t, ac.IsAllowFromInternet())
-		})
-	})
 
-	t.Run("internal LB", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-				},
-			},
-		}
-		t.Run("default", func(t *testing.T) {
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.False(t, ac.IsAllowFromInternet())
-		})
-		t.Run("not allowed from all", func(t *testing.T) {
-			svc.Spec.LoadBalancerSourceRanges = []string{"10.10.10.0/24"}
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.False(t, ac.IsAllowFromInternet())
-		})
-		t.Run("allowed from all", func(t *testing.T) {
-			svc.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0"}
-			ac, err := NewAccessControl(&svc)
-			assert.NoError(t, err)
-			assert.True(t, ac.IsAllowFromInternet())
-		})
+	var (
+		azureFx = fixture.NewFixture().Azure()
+		k8sFx   = fixture.NewFixture().Kubernetes()
+	)
+	tests := []struct {
+		name           string
+		svc            v1.Service
+		expectedOutput bool
+	}{
+		{
+			name:           "public LB with no access control configuration",
+			svc:            k8sFx.Service().Build(),
+			expectedOutput: true,
+		},
+		{
+			name:           "internal LB with no access control configuration",
+			svc:            k8sFx.Service().WithInternalEnabled().Build(),
+			expectedOutput: false,
+		},
+		{
+			name:           "public LB with spec.LoadBalancerSourceRanges specified but not allow all",
+			svc:            k8sFx.Service().WithLoadBalancerSourceRanges("10.10.10.0/24").Build(),
+			expectedOutput: false,
+		},
+		{
+			name:           "public LB with spec.LoadBalancerSourceRanges specified and allow all",
+			svc:            k8sFx.Service().WithLoadBalancerSourceRanges("0.0.0.0/0").Build(),
+			expectedOutput: true,
+		},
+		{
+			name:           "public LB with annotation allowedIPRanges specified but not allow all",
+			svc:            k8sFx.Service().WithAllowedIPRanges("10.10.10.0/24").Build(),
+			expectedOutput: false,
+		},
+		{
+			name:           "public LB with annotation allowedIPRanges specified and allow all",
+			svc:            k8sFx.Service().WithAllowedIPRanges("0.0.0.0/0").Build(),
+			expectedOutput: true,
+		},
+		{
+			name: "public LB with annotation allowedIPRanges and allowedServiceTags specified and allow all",
+			svc: k8sFx.Service().WithAllowedIPRanges("0.0.0.0/0").
+				WithAllowedServiceTags(azureFx.ServiceTag()).
+				Build(),
+			expectedOutput: false,
+		},
+		{
+			name: "internal LB with annotation allowedIPRanges specified",
+			svc: k8sFx.Service().WithAllowedIPRanges("0.0.0.0/0").
+				WithInternalEnabled().
+				Build(),
+			expectedOutput: true,
+		},
+		{
+			name: "internal LB with spec.LoadBalancerSourceRanges specified",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges("0.0.0.0/0").
+				WithInternalEnabled().
+				Build(),
+			expectedOutput: true,
+		},
+		{
+			name: "internal LB with annotation allowedIPRanges and allowedServiceTags specified",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges("0.0.0.0/0").
+				WithAllowedServiceTags(azureFx.ServiceTag()).
+				WithInternalEnabled().
+				Build(),
+			expectedOutput: false,
+		},
+	}
+
+	for i := range tests {
+		tt := tests[i]
+		sg := azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules(10)).Build()
+		ac, err := NewAccessControl(&tt.svc, &sg)
+		assert.NoError(t, err)
+		actual := ac.IsAllowFromInternet()
+		assert.Equal(t, tt.expectedOutput, actual, "[%s] expecting IsAllowFromInternet returns %v", tt.name, tt.expectedOutput)
+	}
+}
+
+func TestNewAccessControl(t *testing.T) {
+	var (
+		azureFx = fixture.NewFixture().Azure()
+		k8sFx   = fixture.NewFixture().Kubernetes()
+		sg      = azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules(10)).Build()
+	)
+
+	t.Run("it should return error if using both spec.LoadBalancerSourceRanges and service annotation service.beta.kubernetes.io/azure-allowed-ip-ranges", func(t *testing.T) {
+		svc := k8sFx.Service().
+			WithLoadBalancerSourceRanges("20.0.0.1/32").
+			WithAllowedIPRanges("10.0.0.1/32").
+			Build()
+
+		_, err := NewAccessControl(&svc, &sg)
+		assert.ErrorIs(t, err, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges)
 	})
 }
 
-func TestAccessControl_IPV4Sources(t *testing.T) {
-	t.Run("external LB", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32,2001:db8::/32,2002:db8::/32",
-					consts.ServiceAnnotationAllowedServiceTags: "foo,bar",
-				},
-			},
-		}
-		ac, err := NewAccessControl(&svc)
+func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
+
+	var (
+		azureFx = fixture.NewFixture().Azure()
+		k8sFx   = fixture.NewFixture().Kubernetes()
+	)
+
+	tests := []struct {
+		name           string
+		svc            v1.Service
+		expectedOutput bool
+	}{
+		{
+			name:           "empty service",
+			svc:            k8sFx.Service().Build(),
+			expectedOutput: false,
+		},
+		{
+			name:           "with annotation specified but no allowed IP ranges specified",
+			svc:            k8sFx.Service().WithDenyAllExceptLoadBalancerSourceRanges().Build(),
+			expectedOutput: false,
+		},
+		{
+			name: "with annotation and spec.loadBalancerSourceRanges specified",
+			svc: k8sFx.Service().
+				WithDenyAllExceptLoadBalancerSourceRanges().
+				WithLoadBalancerSourceRanges("10.0.0.1/32").
+				Build(),
+			expectedOutput: true,
+		},
+		{
+			name: "with annotation and allowedIPRanges specified",
+			svc: k8sFx.Service().
+				WithDenyAllExceptLoadBalancerSourceRanges().
+				WithAllowedIPRanges("10.0.0.1/32").
+				Build(),
+			expectedOutput: true,
+		},
+	}
+
+	for i := range tests {
+		tt := tests[i]
+		sg := azureFx.SecurityGroup().Build()
+		ac, err := NewAccessControl(&tt.svc, &sg)
 		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"10.10.10.0/24",
-			"192.168.0.1/32",
-			"foo",
-			"bar",
-		}, ac.IPV4Sources())
+		actual := ac.DenyAllExceptSourceRanges()
+		assert.Equal(t, tt.expectedOutput, actual, "[%s] expecting DenyAllExceptSourceRanges returns %v", tt.name, tt.expectedOutput)
+	}
+}
+
+func TestAccessControl_AllowedRanges(t *testing.T) {
+
+	var (
+		azureFx = fixture.NewFixture().Azure()
+		k8sFx   = fixture.NewFixture().Kubernetes()
+	)
+
+	tests := []struct {
+		name         string
+		svc          v1.Service
+		expectedIPv4 []string
+		expectedIPv6 []string
+	}{
+		{
+			name:         "empty service",
+			svc:          k8sFx.Service().Build(),
+			expectedIPv4: nil,
+			expectedIPv6: nil,
+		},
+		{
+			name:         "spec.LoadBalancerSourceRanges = 1 IPv4",
+			svc:          k8sFx.Service().WithLoadBalancerSourceRanges("10.10.0.0/16").Build(),
+			expectedIPv4: []string{"10.10.0.0/16"},
+			expectedIPv6: nil,
+		},
+		{
+			name: "spec.LoadBalancerSourceRanges = N IPv4",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+		},
+		{
+			name: "spec.LoadBalancerSourceRanges = 1 IPv6",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
+				"2001:db8:85a3::1a2b:3c4d/64",
+			).Build(),
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+			},
+		},
+		{
+			name: "spec.LoadBalancerSourceRanges = N IPv6",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			).Build(),
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			},
+		},
+		{
+			name: "spec.LoadBalancerSourceRanges = N IPv4 and N IPv6",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
+				"10.10.0.0/16",
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			},
+		},
+		{
+			name: "annotation allowedIPRanges = 1 IPv4",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"10.10.0.0/16",
+			).Build(),
+			expectedIPv4: []string{"10.10.0.0/16"},
+			expectedIPv6: nil,
+		},
+		{
+			name: "annotation allowedIPRanges = N IPv4",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+		},
+		{
+			name: "annotation allowedIPRanges = 1 IPv6",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"2001:db8:85a3::1a2b:3c4d/64",
+			).Build(),
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+			},
+		},
+		{
+			name: "annotation allowedIPRanges = N IPv6",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			).Build(),
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			},
+		},
+		{
+			name: "annotation allowedIPRanges = N IPv4 and N IPv6",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"10.10.0.0/16",
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+			expectedIPv6: []string{
+				"2001:db8:85a3::1a2b:3c4d/64",
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			},
+		},
+	}
+
+	for i := range tests {
+		tt := tests[i]
+		sg := azureFx.SecurityGroup().Build()
+		ac, err := NewAccessControl(&tt.svc, &sg)
+		assert.NoError(t, err)
+		var (
+			ipv4         = ac.AllowedIPv4Ranges()
+			ipv6         = ac.AllowedIPv6Ranges()
+			expectedIPv4 = fnutil.Map(func(s string) netip.Prefix {
+				return netip.MustParsePrefix(s)
+			}, tt.expectedIPv4)
+			expectedIPv6 = fnutil.Map(func(s string) netip.Prefix {
+				return netip.MustParsePrefix(s)
+			}, tt.expectedIPv6)
+		)
+		if ipv4 == nil {
+			ipv4 = []netip.Prefix{}
+		}
+
+		if ipv6 == nil {
+			ipv6 = []netip.Prefix{}
+		}
+
+		assert.Equal(t, expectedIPv4, ipv4, "[%s] expecting AllowedIPv4Ranges returns %v", tt.name, tt.expectedIPv4)
+		assert.Equal(t, expectedIPv6, ipv6, "[%s] expecting AllowedIPv6Ranges returns %v", tt.name, tt.expectedIPv6)
+	}
+}
+
+func TestAccessControl_PatchSecurityGroup(t *testing.T) {
+	var (
+		azureFx = fixture.NewFixture().Azure()
+	)
+
+	runTest := func(t *testing.T,
+		svc v1.Service,
+		originalRules []network.SecurityRule,
+		dstIPv4Addresses, dstIPv6Addresses []string,
+		expectedUpdated bool,
+		expectedRules []network.SecurityRule,
+	) {
+		t.Helper()
+
+		var (
+			sg      = azureFx.SecurityGroup().WithRules(originalRules).Build()
+			ac, err = NewAccessControl(&svc, &sg)
+		)
+		assert.NoError(t, err)
+
+		err = ac.PatchSecurityGroup(
+			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv4Addresses),
+			fnutil.Map(func(s string) netip.Addr { return netip.MustParseAddr(s) }, dstIPv6Addresses),
+		)
+		assert.NoError(t, err)
+
+		actualSG, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUpdated, updated)
+		testutil.ExpectHasSecurityRules(t, actualSG, expectedRules)
+	}
+
+	t.Run("patch service without access control configuration", func(t *testing.T) {
+		var (
+			k8sFx            = fixture.NewFixture().Kubernetes()
+			svc              = k8sFx.Service().Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			serviceTags      = []string{securitygroup.ServiceTagInternet}
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP + IPv4 for Internet
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, serviceTags, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// TCP + IPv6 for Internet
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, serviceTags, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			// UDP + IPv4 for Internet
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, serviceTags, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// UDP + IPv6 for Internet
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, serviceTags, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
 	})
-	t.Run("internal LB with Internet access", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-					consts.ServiceAnnotationAllowedIPRanges:      "0.0.0.0/0",
-				},
-			},
-		}
-		ac, err := NewAccessControl(&svc)
-		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"Internet",
-			"0.0.0.0/0",
-		}, ac.IPV4Sources())
+
+	t.Run("patch service with allowedServiceTag", func(t *testing.T) {
+		var (
+			k8sFx        = fixture.NewFixture().Kubernetes()
+			nServiceTags = 2
+			serviceTags  = azureFx.ServiceTags(nServiceTags)
+			svc          = k8sFx.Service().WithAllowedServiceTags(serviceTags...).
+					Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP + IPv4 for 2 service tags
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{serviceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// TCP + IPv6 for 2 service tags
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{serviceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{serviceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			// UDP + IPv4 for 2 service tags
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{serviceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(504).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{serviceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(505).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// UDP + IPv6 for 2 service tags
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{serviceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(506).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{serviceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(507).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
 	})
-	t.Run("internal LB without Internet access", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-					consts.ServiceAnnotationAllowedIPRanges:      "10.10.10.0/24,192.168.0.1/32,2001:db8::/32,2002:db8::/32",
-					consts.ServiceAnnotationAllowedServiceTags:   "foo,bar",
-				},
-			},
-		}
-		ac, err := NewAccessControl(&svc)
-		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"10.10.10.0/24",
-			"192.168.0.1/32",
-			"foo",
-			"bar",
-		}, ac.IPV4Sources())
+
+	t.Run("patch service with allowedIPRanges on IPv4", func(t *testing.T) {
+		var (
+			k8sFx           = fixture.NewFixture().Kubernetes()
+			allowedIPRanges = []string{
+				"192.168.0.0/16",
+				"20.0.0.1/32",
+			}
+			svc              = k8sFx.Service().WithAllowedIPRanges(allowedIPRanges...).Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPRanges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// UDP
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPRanges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with allowedIPRanges on IPv6", func(t *testing.T) {
+		var (
+			k8sFx           = fixture.NewFixture().Kubernetes()
+			allowedIPRanges = []string{
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			}
+			svc = k8sFx.Service().
+				WithAllowedIPRanges(allowedIPRanges...).
+				Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPRanges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			// UDP
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPRanges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with allowedIPRanges on IPv4 and IPv6", func(t *testing.T) {
+		var (
+			k8sFx             = fixture.NewFixture().Kubernetes()
+			allowedIPv4Ranges = []string{
+				"192.168.0.0/16",
+				"20.0.0.1/32",
+			}
+			allowedIPv6Ranges = []string{
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			}
+			svc = k8sFx.Service().
+				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
+				Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP + IPv4
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// TCP + IPv6
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			// UDP + IPv4
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			// UDP + IPv6
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with allowedIPRanges and allowedServiceTags", func(t *testing.T) {
+		var (
+			k8sFx              = fixture.NewFixture().Kubernetes()
+			nServiceTags       = 2
+			allowedServiceTags = azureFx.ServiceTags(nServiceTags)
+			allowedIPv4Ranges  = []string{
+				"192.168.0.0/16",
+				"20.0.0.1/32",
+			}
+			allowedIPv6Ranges = []string{
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			}
+			svc = k8sFx.Service().
+				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
+				WithAllowedServiceTags(allowedServiceTags...).
+				Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+			// TCP + IPv4 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// TCP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(504).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(505).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+
+			// UDP + IPv4 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(506).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(507).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(508).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// UDP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(509).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(510).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(511).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with allowedIPRanges and allowedServiceTags and deny vnet traffic", func(t *testing.T) {
+		var (
+			k8sFx              = fixture.NewFixture().Kubernetes()
+			nServiceTags       = 2
+			allowedServiceTags = azureFx.ServiceTags(nServiceTags)
+			allowedIPv4Ranges  = []string{
+				"192.168.0.0/16",
+				"20.0.0.1/32",
+			}
+			allowedIPv6Ranges = []string{
+				"fd12:3456:789a::1234:5678/48",
+				"fe80:1234:abcd::1c2d:3e4f/32",
+			}
+			svc = k8sFx.Service().
+				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
+				WithAllowedServiceTags(allowedServiceTags...).
+				WithDenyAllExceptLoadBalancerSourceRanges().
+				Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+
+			// TCP + IPv4 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// TCP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(503).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(504).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(505).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+
+			// UDP + IPv4 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(506).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(507).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(508).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// UDP + IPv6 for 2 service Tags + 1 IP Ranges
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[0]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(509).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTags[1]}, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(510).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(511).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+
+			// Deny ALL
+			azureFx.
+				DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				DenyAllSecurityRule(iputil.IPv6).WithPriority(4094).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
 	})
 }
 
-func TestAccessControl_IPV6Sources(t *testing.T) {
-	t.Run("external LB", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32,2001:db8::/32,2002:db8::/32",
-					consts.ServiceAnnotationAllowedServiceTags: "foo,bar",
-				},
-			},
-		}
-		ac, err := NewAccessControl(&svc)
+func TestAccessControl_CleanSecurityGroup(t *testing.T) {
+
+	var (
+		fx      = fixture.NewFixture()
+		azureFx = fx.Azure()
+	)
+
+	t.Run("it should not patch rules if no rules exist", func(t *testing.T) {
+		var (
+			sg      = azureFx.SecurityGroup().Build()
+			svc     = fx.Kubernetes().Service().Build()
+			ac, err = NewAccessControl(&svc, &sg)
+		)
 		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"2001:db8::/32",
-			"2002:db8::/32",
-			"foo",
-			"bar",
-		}, ac.IPV6Sources())
+
+		ac.CleanSecurityGroup(fx.RandomIPv4Addresses(2), fx.RandomIPv6Addresses(2))
+		_, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+		assert.False(t, updated)
 	})
-	t.Run("internal LB with Internet access", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-					consts.ServiceAnnotationAllowedIPRanges:      "::/0",
+
+	t.Run("it should not patch rules if no rules match", func(t *testing.T) {
+		var (
+			rules = []network.SecurityRule{
+				{
+					Name: ptr.To("test-rule-0"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_foo", "src_bar"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"10.0.0.1", "10.0.0.2"}),
+						DestinationPortRanges:      ptr.To([]string{"80", "443"}),
+						Priority:                   ptr.To(int32(500)),
+					},
 				},
-			},
-		}
-		ac, err := NewAccessControl(&svc)
+				{
+					Name: ptr.To("test-rule-1"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolUDP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_baz", "src_quo"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"20.0.0.1", "20.0.0.2"}),
+						DestinationPortRanges:      ptr.To([]string{"53"}),
+						Priority:                   ptr.To(int32(501)),
+					},
+				},
+			}
+
+			sg               = azureFx.SecurityGroup().WithRules(rules).Build()
+			dstIPv4Addresses = []netip.Addr{
+				netip.MustParseAddr("192.168.0.1"),
+				netip.MustParseAddr("192.168.0.2"),
+			}
+			svc     = fx.Kubernetes().Service().Build()
+			ac, err = NewAccessControl(&svc, &sg)
+		)
 		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"Internet",
-			"::/0",
-		}, ac.IPV6Sources())
+
+		ac.CleanSecurityGroup(dstIPv4Addresses, nil)
+		_, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+		assert.False(t, updated)
 	})
-	t.Run("internal LB without Internet access", func(t *testing.T) {
-		svc := v1.Service{
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					consts.ServiceAnnotationLoadBalancerInternal: "true",
-					consts.ServiceAnnotationAllowedIPRanges:      "10.10.10.0/24,192.168.0.1/32,2001:db8::/32,2002:db8::/32",
-					consts.ServiceAnnotationAllowedServiceTags:   "foo,bar",
+
+	t.Run("it should patch the matched rules", func(t *testing.T) {
+		var (
+			rules = []network.SecurityRule{
+				{
+					Name: ptr.To("test-rule-0"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_foo", "src_bar"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"10.0.0.1", "10.0.0.2", "192.168.0.1"}),
+						DestinationPortRanges:      ptr.To([]string{"80", "443"}),
+						Priority:                   ptr.To(int32(500)),
+					},
+				},
+				{
+					Name: ptr.To("test-rule-1"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolUDP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_baz", "src_quo"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"20.0.0.1", "192.168.0.1", "192.168.0.2", "20.0.0.2"}),
+						DestinationPortRanges:      ptr.To([]string{"53"}),
+						Priority:                   ptr.To(int32(501)),
+					},
+				},
+				{
+					Name: ptr.To("test-rule-2"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolAsterisk,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"*"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"8.8.8.8"}),
+						DestinationPortRanges:      ptr.To([]string{"5000"}),
+						Priority:                   ptr.To(int32(502)),
+					},
+				},
+			}
+
+			sg               = azureFx.SecurityGroup().WithRules(rules).Build()
+			dstIPv4Addresses = []netip.Addr{
+				netip.MustParseAddr("192.168.0.1"),
+				netip.MustParseAddr("192.168.0.2"),
+			}
+			svc     = fx.Kubernetes().Service().Build()
+			ac, err = NewAccessControl(&svc, &sg)
+		)
+		assert.NoError(t, err)
+
+		ac.CleanSecurityGroup(dstIPv4Addresses, nil)
+		outputSG, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+		assert.True(t, updated)
+
+		testutil.ExpectEqualInJSON(t, []network.SecurityRule{
+			{
+				Name: ptr.To("test-rule-0"),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolTCP,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefixes:      ptr.To([]string{"src_foo", "src_bar"}),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To([]string{"10.0.0.1", "10.0.0.2"}),
+					DestinationPortRanges:      ptr.To([]string{"80", "443"}),
+					Priority:                   ptr.To(int32(500)),
 				},
 			},
-		}
-		ac, err := NewAccessControl(&svc)
+			{
+				Name: ptr.To("test-rule-1"),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolUDP,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefixes:      ptr.To([]string{"src_baz", "src_quo"}),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To([]string{"20.0.0.1", "20.0.0.2"}),
+					DestinationPortRanges:      ptr.To([]string{"53"}),
+					Priority:                   ptr.To(int32(501)),
+				},
+			},
+			{
+				Name: ptr.To("test-rule-2"),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolAsterisk,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefixes:      ptr.To([]string{"*"}),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To([]string{"8.8.8.8"}),
+					DestinationPortRanges:      ptr.To([]string{"5000"}),
+					Priority:                   ptr.To(int32(502)),
+				},
+			},
+		}, outputSG.SecurityRules)
+	})
+
+	t.Run("it should remove the matched rules if no destination addresses left", func(t *testing.T) {
+		var (
+			rules = []network.SecurityRule{
+				{
+					Name: ptr.To("test-rule-0"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_foo", "src_bar"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"10.0.0.1", "10.0.0.2", "192.168.0.1"}),
+						DestinationPortRanges:      ptr.To([]string{"80", "443"}),
+						Priority:                   ptr.To(int32(500)),
+					},
+				},
+				{
+					Name: ptr.To("test-rule-1"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolUDP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"src_baz", "src_quo"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"192.168.0.1", "192.168.0.2"}),
+						DestinationPortRanges:      ptr.To([]string{"53"}),
+						Priority:                   ptr.To(int32(501)),
+					},
+				},
+				{
+					Name: ptr.To("test-rule-2"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolAsterisk,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:      ptr.To([]string{"*"}),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{"8.8.8.8"}),
+						DestinationPortRanges:      ptr.To([]string{"5000"}),
+						Priority:                   ptr.To(int32(502)),
+					},
+				},
+				{
+					Name: ptr.To("test-rule-3"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolAsterisk,
+						Access:                   network.SecurityRuleAccessAllow,
+						Direction:                network.SecurityRuleDirectionInbound,
+						SourceAddressPrefixes:    ptr.To([]string{"*"}),
+						SourcePortRange:          ptr.To("*"),
+						DestinationAddressPrefix: ptr.To("192.168.0.1"),
+						DestinationPortRanges:    ptr.To([]string{"8000"}),
+						Priority:                 ptr.To(int32(2000)),
+					},
+				},
+			}
+
+			sg               = azureFx.SecurityGroup().WithRules(rules).Build()
+			dstIPv4Addresses = []netip.Addr{
+				netip.MustParseAddr("192.168.0.1"),
+				netip.MustParseAddr("192.168.0.2"),
+			}
+			svc     = fx.Kubernetes().Service().Build()
+			ac, err = NewAccessControl(&svc, &sg)
+		)
 		assert.NoError(t, err)
-		assert.Equal(t, []string{
-			"2001:db8::/32",
-			"2002:db8::/32",
-			"foo",
-			"bar",
-		}, ac.IPV6Sources())
+
+		ac.CleanSecurityGroup(dstIPv4Addresses, nil)
+		outputSG, updated, err := ac.SecurityGroup()
+		assert.NoError(t, err)
+
+		assert.True(t, updated)
+		testutil.ExpectEqualInJSON(t, []network.SecurityRule{
+			{
+				Name: ptr.To("test-rule-0"),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolTCP,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefixes:      ptr.To([]string{"src_foo", "src_bar"}),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To([]string{"10.0.0.1", "10.0.0.2"}),
+					DestinationPortRanges:      ptr.To([]string{"80", "443"}),
+					Priority:                   ptr.To(int32(500)),
+				},
+			},
+			{
+				Name: ptr.To("test-rule-2"),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   network.SecurityRuleProtocolAsterisk,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefixes:      ptr.To([]string{"*"}),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To([]string{"8.8.8.8"}),
+					DestinationPortRanges:      ptr.To([]string{"5000"}),
+					Priority:                   ptr.To(int32(502)),
+				},
+			},
+		}, outputSG.SecurityRules)
 	})
 }

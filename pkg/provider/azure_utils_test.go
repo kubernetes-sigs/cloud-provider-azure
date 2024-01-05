@@ -17,7 +17,6 @@ limitations under the License.
 package provider
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -186,78 +185,6 @@ func TestReconcileTags(t *testing.T) {
 			tags, changed := cloud.reconcileTags(testCase.currentTagsOnResource, testCase.newTags)
 			assert.Equal(t, testCase.expectedChanged, changed)
 			assert.Equal(t, testCase.expectedTags, tags)
-		})
-	}
-}
-
-func TestGetServiceAdditionalPublicIPs(t *testing.T) {
-	for _, testCase := range []struct {
-		description   string
-		service       *v1.Service
-		expectedIPs   []string
-		expectedError error
-	}{
-		{
-			description: "nil service should return empty IP list",
-		},
-		{
-			description: "service without annotation should return empty IP list",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{},
-				},
-			},
-			expectedIPs: []string{},
-		},
-		{
-			description: "service without annotation should return empty IP list",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAdditionalPublicIPs: "",
-					},
-				},
-			},
-			expectedIPs: []string{},
-		},
-		{
-			description: "service with one IP in annotation should return expected IPs",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAdditionalPublicIPs: "1.2.3.4 ",
-					},
-				},
-			},
-			expectedIPs: []string{"1.2.3.4"},
-		},
-		{
-			description: "service with multiple IPs in annotation should return expected IPs",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAdditionalPublicIPs: "1.2.3.4, 2.3.4.5 ",
-					},
-				},
-			},
-			expectedIPs: []string{"1.2.3.4", "2.3.4.5"},
-		},
-		{
-			description: "service with wrong IP in annotation should report an error",
-			service: &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						consts.ServiceAnnotationAdditionalPublicIPs: "invalid",
-					},
-				},
-			},
-			expectedError: fmt.Errorf("invalid is not a valid IP address"),
-		},
-	} {
-		t.Run(testCase.description, func(t *testing.T) {
-			ips, err := getServiceAdditionalPublicIPs(testCase.service)
-			assert.Equal(t, testCase.expectedIPs, ips)
-			assert.Equal(t, testCase.expectedError, err)
 		})
 	}
 }

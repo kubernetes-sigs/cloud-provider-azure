@@ -196,31 +196,6 @@ func getExtendedLocationTypeFromString(extendedLocationType string) network.Exte
 	return network.EdgeZone
 }
 
-func getServiceAdditionalPublicIPs(service *v1.Service) ([]string, error) {
-	if service == nil {
-		return nil, nil
-	}
-
-	result := []string{}
-	if val, ok := service.Annotations[consts.ServiceAnnotationAdditionalPublicIPs]; ok {
-		pips := strings.Split(strings.TrimSpace(val), ",")
-		for _, pip := range pips {
-			ip := strings.TrimSpace(pip)
-			if ip == "" {
-				continue // skip empty string
-			}
-
-			if net.ParseIP(ip) == nil {
-				return nil, fmt.Errorf("%s is not a valid IP address", ip)
-			}
-
-			result = append(result, ip)
-		}
-	}
-
-	return result, nil
-}
-
 func getNodePrivateIPAddress(node *v1.Node, isIPv6 bool) string {
 	for _, nodeAddress := range node.Status.Addresses {
 		if strings.EqualFold(string(nodeAddress.Type), string(v1.NodeInternalIP)) &&
