@@ -16,7 +16,7 @@ spec:
         svc: {{.SvcName}}-{{.Index}}
     spec:
       containers:
-      - image: registry.k8s.io/pause:3.1
+      - image: mcr.microsoft.com/oss/kubernetes/pause:3.1
         name: {{.Name}}
         resources:
           requests:
