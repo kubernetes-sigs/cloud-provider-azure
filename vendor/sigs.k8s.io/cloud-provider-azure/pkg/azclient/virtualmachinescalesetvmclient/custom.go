@@ -29,7 +29,7 @@ import (
 
 // Update updates a VirtualMachine.
 func (client *Client) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters armcompute.VirtualMachineScaleSetVM) (*armcompute.VirtualMachineScaleSetVM, error) {
-	resp, err := client.UpdateAsync(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters).WaitforPollerResp(ctx)
+	resp, err := utils.NewPollerWrapper(client.VirtualMachineScaleSetVMsClient.BeginUpdate(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, nil)).WaitforPollerResp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +37,6 @@ func (client *Client) Update(ctx context.Context, resourceGroupName string, VMSc
 		return &resp.VirtualMachineScaleSetVM, nil
 	}
 	return nil, nil
-}
-
-func (client *Client) UpdateAsync(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters armcompute.VirtualMachineScaleSetVM) *utils.PollerWrapper[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse] {
-	return utils.NewPollerWrapper(client.VirtualMachineScaleSetVMsClient.BeginUpdate(ctx, resourceGroupName, VMScaleSetName, instanceID, parameters, nil))
 }
 
 func UpdateVMsInBatch(ctx context.Context, client *Client, resourceGroupName string, VMScaleSetName string, instances map[string]armcompute.VirtualMachineScaleSetVM, batchSize int) error {

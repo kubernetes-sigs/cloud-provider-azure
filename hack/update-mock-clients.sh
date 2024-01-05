@@ -24,7 +24,7 @@ TARGET_DIR="${REPO_ROOT}/${AZURECLIENTS}"
 
 if ! type mockgen &> /dev/null; then
     echo "mockgen not exist, install it"
-    go install github.com/golang/mock/mockgen@v1.6.0
+    go install go.uber.org/mock/mockgen@v0.4.0
 fi
 
 # update_all_mocks update mocks for all modules

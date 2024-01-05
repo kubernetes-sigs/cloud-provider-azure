@@ -1050,7 +1050,7 @@ func (factory *ClientFactoryImpl) createVirtualNetworkLinkClient(subscription st
 	}
 
 	//add ratelimit policy
-	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("privateDNSZoneGroupRateLimit")
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualNetworkRateLimit")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)

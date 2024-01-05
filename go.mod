@@ -21,14 +21,14 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/logr v1.3.0
-	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.13.2
 	github.com/onsi/gomega v1.30.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
+	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.17.0
-	golang.org/x/sync v0.5.0
+	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.15.0
 	golang.org/x/text v0.14.0
 	k8s.io/api v0.29.0
@@ -42,7 +42,7 @@ require (
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kubelet v0.29.0
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20240103055401-88f4ca026f87
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20240105075710-c4d4895a970b
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231205023417-1ba5a224ab0e
 	sigs.k8s.io/yaml v1.4.0
 )
