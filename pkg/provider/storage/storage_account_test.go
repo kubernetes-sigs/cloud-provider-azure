@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/storage"

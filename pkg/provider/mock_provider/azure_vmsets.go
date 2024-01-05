@@ -27,7 +27,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	network "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	azure "github.com/Azure/go-autorest/autorest/azure"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
