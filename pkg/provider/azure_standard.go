@@ -332,7 +332,15 @@ func (az *Cloud) getPublicIPName(clusterName string, service *v1.Service) string
 		}
 		pipName = fmt.Sprintf("%s-%s", pipName, prefixName)
 	}
-	return pipName
+
+	pipNameSegment := pipName
+	maxLength := consts.PIPPrefixNameMaxLength - consts.IPFamilySuffixLength
+	if len(pipName) > maxLength {
+		pipNameSegment = pipNameSegment[:maxLength]
+		klog.V(6).Infof("original PIP name is lengthy %q, truncate it to %q", pipName, pipNameSegment)
+	}
+
+	return pipNameSegment
 }
 
 func (az *Cloud) serviceOwnsRule(service *v1.Service, rule string) bool {
