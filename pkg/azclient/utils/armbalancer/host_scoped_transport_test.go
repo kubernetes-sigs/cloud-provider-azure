@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils/armbalancer/mock"
 )

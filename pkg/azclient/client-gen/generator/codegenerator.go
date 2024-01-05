@@ -54,7 +54,7 @@ func (Generator) RegisterMarkers(into *markers.Registry) error {
 }
 
 func (g Generator) Generate(ctx *genall.GenerationContext) error {
-	cmd := exec.Command("go", "get", "github.com/golang/mock/mockgen/model")
+	cmd := exec.Command("go", "get", "go.uber.org/mock/mockgen/model")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
