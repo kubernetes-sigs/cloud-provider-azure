@@ -277,10 +277,6 @@ func getIPConfigByIPFamily(nic network.Interface, IPv6 bool) (*network.Interface
 	return nil, fmt.Errorf("failed to determine the ipconfig(IPv6=%v). nicname=%q", IPv6, pointer.StringDeref(nic.Name, ""))
 }
 
-func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
-	return strings.HasSuffix(*lb.Name, consts.InternalLoadBalancerNameSuffix)
-}
-
 // getBackendPoolName the LB BackendPool name for a service.
 // to ensure backward and forward compat:
 // SingleStack -v4 (pre v1.16) => BackendPool name == clusterName
