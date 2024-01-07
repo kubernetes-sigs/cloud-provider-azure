@@ -1,6 +1,8 @@
 module sigs.k8s.io/cloud-provider-azure/kubetest2-aks
 
-go 1.18
+go 1.21
+
+toolchain go1.21.5
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1
