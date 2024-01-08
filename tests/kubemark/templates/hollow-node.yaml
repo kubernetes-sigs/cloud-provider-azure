@@ -14,7 +14,7 @@ spec:
     spec:
       initContainers:
         - name: init-inotify-limit
-          image: docker.io/busybox:latest
+          image: mcr.microsoft.com/mirror/docker/library/busybox:1.35
           command: ["sysctl", "-w", "fs.inotify.max_user_instances=200"]
           securityContext:
             privileged: true
