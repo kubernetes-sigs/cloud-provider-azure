@@ -122,7 +122,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 			"uri": &options,
 		}
 
-		_, err = fs.AttachDisk(ctx, tc.nodeName, diskMap)
+		err = fs.AttachDisk(ctx, tc.nodeName, diskMap)
 		if tc.expectedErr == nil {
 			assert.NoError(t, err)
 		} else {

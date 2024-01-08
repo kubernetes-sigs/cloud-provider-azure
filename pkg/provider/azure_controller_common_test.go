@@ -123,7 +123,6 @@ func TestCommonAttachDisk(t *testing.T) {
 		isDiskUsed           bool
 		setup                func(testCloud *Cloud, expectedVMs []compute.VirtualMachine, statusCode int, result *retry.Error)
 		expectErr            bool
-		isAcceptedErr        bool
 		isContextDeadlineErr bool
 		statusCode           int
 		waitResult           *retry.Error
@@ -197,29 +196,6 @@ func TestCommonAttachDisk(t *testing.T) {
 			existedDisk: &compute.Disk{Name: pointer.String("disk-name"), ManagedBy: pointer.String(goodInstanceID), DiskProperties: &compute.DiskProperties{MaxShares: &maxShare}},
 			expectedLun: -1,
 			expectErr:   true,
-		},
-		{
-			desc:          "should return a PartialUpdateError type when storage configuration was accepted but wait fails with an error",
-			vmList:        map[string]string{"vm1": "PowerState/Running"},
-			nodeName:      "vm1",
-			diskName:      "disk-name",
-			existedDisk:   nil,
-			expectedLun:   -1,
-			expectErr:     true,
-			statusCode:    200,
-			waitResult:    conflictingUserInputError,
-			isAcceptedErr: true,
-		},
-		{
-			desc:        "should not return a PartialUpdateError type when storage configuration was not accepted",
-			vmList:      map[string]string{"vm1": "PowerState/Running"},
-			nodeName:    "vm1",
-			diskName:    "disk-name",
-			existedDisk: nil,
-			expectedLun: -1,
-			expectErr:   true,
-			statusCode:  400,
-			waitResult:  conflictingUserInputError,
 		},
 		{
 			desc:        "should retry on OperationPreempted error and succeed",
@@ -297,132 +273,7 @@ func TestCommonAttachDisk(t *testing.T) {
 
 			assert.Equal(t, tt.expectedLun, lun, "TestCase[%d]: %s", i, tt.desc)
 			assert.Equal(t, tt.expectErr, err != nil, "TestCase[%d]: %s, return error: %v", i, tt.desc, err)
-
-			if tt.isAcceptedErr {
-				assert.IsType(t, &retry.PartialUpdateError{}, err)
-			} else {
-				var partialUpdateError *retry.PartialUpdateError
-				ok := errors.As(err, &partialUpdateError)
-				assert.False(t, ok, "the returned error should not be AcceptedError type")
-			}
-
 			assert.Equal(t, tt.isContextDeadlineErr, errors.Is(err, context.DeadlineExceeded))
-		})
-	}
-}
-
-func TestWaitForUpdateResult(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	defaultSetup := func(testCloud *Cloud, statusCode int, result *retry.Error) {
-		mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-		mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(statusCode)).MaxTimes(1)
-		mockVMsClient.EXPECT().Update(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).MaxTimes(1)
-		mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).MaxTimes(1)
-	}
-
-	testCases := []struct {
-		desc              string
-		nodeName          string
-		statusCode        int
-		waitResult        *retry.Error
-		expectErr         bool
-		expectedErrorType error
-		setup             func(testCloud *Cloud, statusCode int, result *retry.Error)
-		contextDuration   time.Duration
-	}{
-		{
-			desc:              "should return a PartialUpdateError type when storage configuration was accepted but wait fails with an error",
-			nodeName:          "vm1",
-			expectErr:         true,
-			statusCode:        200,
-			waitResult:        conflictingUserInputError,
-			expectedErrorType: &retry.PartialUpdateError{},
-		},
-		{
-			desc:              "should return a PartialUpdateError type when storage configuration was accepted but wait fails with an error",
-			nodeName:          "vm1",
-			expectErr:         true,
-			statusCode:        200,
-			waitResult:        conflictingUserInputError,
-			expectedErrorType: &retry.PartialUpdateError{},
-		},
-		{
-			desc:              "should not return a PartialUpdateError type when storage configuration was not accepted",
-			nodeName:          "vm1",
-			expectErr:         true,
-			statusCode:        400,
-			waitResult:        conflictingUserInputError,
-			expectedErrorType: conflictingUserInputError.Error(),
-		},
-		{
-			desc:       "should retry on OperationPreempted error and succeed",
-			nodeName:   "vm1",
-			expectErr:  false,
-			statusCode: 200,
-			waitResult: operationPreemptedError,
-			setup: func(testCloud *Cloud, statusCode int, result *retry.Error) {
-				defaultSetup(testCloud, statusCode, result)
-				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200))
-				gomock.InOrder(
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result),
-					mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, nil),
-				)
-			},
-		},
-		{
-			desc:     "should retry on OperationPreempted error until context deadline and return context.DeadlineExceeded error",
-			nodeName: "vm1",
-
-			expectErr:  true,
-			statusCode: 200,
-			waitResult: operationPreemptedError,
-			setup: func(testCloud *Cloud, statusCode int, result *retry.Error) {
-				defaultSetup(testCloud, statusCode, result)
-				mockVMsClient := testCloud.VirtualMachinesClient.(*mockvmclient.MockInterface)
-				mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(fakeUpdateAsync(200)).AnyTimes()
-				mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, result).AnyTimes()
-			},
-			contextDuration:   time.Second,
-			expectedErrorType: context.DeadlineExceeded,
-		},
-	}
-
-	for i, test := range testCases {
-		tt := test
-		t.Run(tt.desc, func(t *testing.T) {
-			testCloud := GetTestCloud(ctrl)
-			if tt.setup == nil {
-				defaultSetup(testCloud, tt.statusCode, tt.waitResult)
-			} else {
-				tt.setup(testCloud, tt.statusCode, tt.waitResult)
-			}
-
-			if tt.contextDuration > 0 {
-				oldCtx := ctx
-				ctx, cancel = context.WithTimeout(oldCtx, tt.contextDuration)
-				defer cancel()
-				defer func() {
-					ctx = oldCtx
-				}()
-			}
-
-			r := autorestmocks.NewResponseWithStatus(strconv.Itoa(tt.statusCode), tt.statusCode)
-			r.Request.Method = http.MethodPut
-			future, _ := azure.NewFutureFromResponse(r)
-
-			err := testCloud.waitForUpdateResult(ctx, testCloud.VMSet, types.NodeName(tt.nodeName), &future, nil)
-
-			assert.Equal(t, tt.expectErr, err != nil, "TestCase[%d]: %s, return error: %v", i, tt.desc, err)
-
-			if tt.expectErr {
-				assert.IsType(t, tt.expectedErrorType, err)
-			}
 		})
 	}
 }

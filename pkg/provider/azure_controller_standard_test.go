@@ -130,7 +130,7 @@ func TestStandardAttachDisk(t *testing.T) {
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
 		}
-		_, err := vmSet.AttachDisk(ctx, test.nodeName, diskMap)
+		err := vmSet.AttachDisk(ctx, test.nodeName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 	}
 }

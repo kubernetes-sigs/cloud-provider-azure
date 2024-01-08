@@ -152,7 +152,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = &options
 		}
-		_, err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
+		err = ss.AttachDisk(ctx, test.vmssvmName, diskMap)
 		assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErr, err)
 	}
 }

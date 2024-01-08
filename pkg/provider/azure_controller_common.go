@@ -39,7 +39,6 @@ import (
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
 
 const (
@@ -55,10 +54,6 @@ const (
 	sourceVolume           = "volume"
 	attachDiskMapKeySuffix = "attachdiskmap"
 	detachDiskMapKeySuffix = "detachdiskmap"
-
-	updateVMRetryDuration = time.Duration(1) * time.Second
-	updateVMRetryFactor   = 3.0
-	updateVMRetrySteps    = 5
 
 	// default initial delay in milliseconds for batch disk attach/detach
 	defaultAttachDetachInitialDelayInMs = 1000
@@ -79,12 +74,6 @@ var defaultBackOff = kwait.Backoff{
 	Duration: 2 * time.Second,
 	Factor:   1.5,
 	Jitter:   0.0,
-}
-
-var updateVMBackoff = kwait.Backoff{
-	Duration: updateVMRetryDuration,
-	Factor:   updateVMRetryFactor,
-	Steps:    updateVMRetrySteps,
 }
 
 var (
@@ -253,13 +242,8 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, diskName, diskURI str
 		}
 	}()
 
-	var future *azure.Future
-	future, err = vmset.AttachDisk(ctx, nodeName, diskMap)
+	err = vmset.AttachDisk(ctx, nodeName, diskMap)
 	if err != nil {
-		return -1, err
-	}
-	// err will be handled by waitForUpdateResult below
-	if err = c.waitForUpdateResult(ctx, vmset, nodeName, future, err); err != nil {
 		return -1, err
 	}
 
@@ -272,33 +256,6 @@ func (c *controllerCommon) AttachDisk(ctx context.Context, diskName, diskURI str
 		lun = diskLun
 	}
 	return lun, nil
-}
-
-// waitForUpdateResult handles asynchronous VM update operations and retries with backoff if OperationPreempted error is observed
-func (c *controllerCommon) waitForUpdateResult(ctx context.Context, vmset VMSet, nodeName types.NodeName, future *azure.Future, updateErr error) (err error) {
-	err = updateErr
-	if err == nil {
-		err = vmset.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
-	}
-
-	if vmUpdateRequired(future, err) {
-		if derr := kwait.ExponentialBackoffWithContext(ctx, updateVMBackoff, func(ctx context.Context) (bool, error) {
-			klog.Errorf("Retry VM Update on node (%s) due to error (%v)", nodeName, err)
-			future, err = vmset.UpdateVMAsync(ctx, nodeName)
-			if err == nil {
-				err = vmset.WaitForUpdateResult(ctx, future, nodeName, "attach_disk")
-			}
-			return !vmUpdateRequired(future, err), nil
-		}); derr != nil {
-			err = derr
-			return
-		}
-	}
-
-	if err != nil && configAccepted(future) {
-		err = retry.NewPartialUpdateError(err.Error())
-	}
-	return
 }
 
 // insertAttachDiskRequest return (attachDiskRequestQueueLength, error)
