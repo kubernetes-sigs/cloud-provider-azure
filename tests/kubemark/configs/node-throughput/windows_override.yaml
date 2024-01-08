@@ -1,5 +1,5 @@
 POD_COUNT: 80
 POD_THROUGHPUT: 0.03
-CONTAINER_IMAGE: registry.k8s.io/pause:3.4.1
+CONTAINER_IMAGE: mcr.microsoft.com/oss/kubernetes/pause:3.4.1
 OPERATION_TIMEOUT: 90m
 POD_STARTUP_LATENCY_THRESHOLD: 60m
