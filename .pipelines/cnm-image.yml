@@ -1,7 +1,7 @@
 steps:
   - task: GoTool@0
     inputs:
-      version: '1.18.5'
+      version: '1.21.5'
   - bash: |
       git show --stat
       echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
