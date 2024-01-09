@@ -19,8 +19,8 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/crypto v0.14.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/crypto v0.17.0
+	golang.org/x/sys v0.15.0
 	golang.org/x/text v0.14.0
 	k8s.io/api v0.25.15
 	k8s.io/apimachinery v0.25.15
@@ -113,7 +113,7 @@ require (
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.10.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230711160842-782d3b101e98 // indirect
