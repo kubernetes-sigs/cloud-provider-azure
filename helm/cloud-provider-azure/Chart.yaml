@@ -13,4 +13,4 @@ maintainers:
 name: cloud-provider-azure
 sources:
 - https://github.com/kubernetes-sigs/cloud-provider-azure
-version: 1.28.1+20231102
+version: 1.28.5

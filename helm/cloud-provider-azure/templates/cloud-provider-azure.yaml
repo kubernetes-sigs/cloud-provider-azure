@@ -397,6 +397,23 @@ spec:
         - operator: "Exists"
           effect: NoSchedule
       containers:
+        {{- if .Values.cloudNodeManager.enableHealthProbeProxy }}
+        - name: health-probe-proxy
+          image: {{ .Values.cloudNodeManager.healthProbeProxyImage }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/health-probe-proxy
+          ports:
+            - containerPort: {{ .Values.cloudNodeManager.healthCheckPort }}
+            - containerPort: {{ .Values.cloudNodeManager.targetPort }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+        {{- end }}
         - name: cloud-node-manager
           image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
           imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
@@ -516,6 +533,23 @@ spec:
           name: cloud-provider-azure-scripts
         name: cloud-provider-azure-scripts
       containers:
+      {{- if .Values.cloudNodeManager.enableHealthProbeProxy }}
+      - name: health-probe-proxy
+        image: {{ .Values.cloudNodeManager.healthProbeProxyImageWindows }}
+        imagePullPolicy: IfNotPresent
+        command:
+          - $env:CONTAINER_SANDBOX_MOUNT_POINT/health-probe-proxy.exe
+        ports:
+          - containerPort: {{ .Values.cloudNodeManager.healthCheckPort }}
+          - containerPort: {{ .Values.cloudNodeManager.targetPort }}
+        resources:
+          requests:
+            cpu: 50m
+            memory: 50Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+      {{- end }}
       - name: cloud-node-manager
         image: {{ template "image.cloudNodeManager" . | required "you must use a supported version of Kubernetes or provide cloudNodeManager.imageRepository, cloudNodeManager.imageName, and cloudNodeManager.imageTag values" }}
         imagePullPolicy: {{ .Values.cloudNodeManager.imagePullPolicy }}
