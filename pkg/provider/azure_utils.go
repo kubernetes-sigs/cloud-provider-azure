@@ -619,3 +619,7 @@ func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string,
 	}
 	return nicResourceGroup, nicName, nil
 }
+
+func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
+	return strings.HasSuffix(strings.ToLower(*lb.Name), consts.InternalLoadBalancerNameSuffix)
+}
