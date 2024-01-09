@@ -281,6 +281,16 @@ type Config struct {
 	RouteUpdateIntervalInSeconds int `json:"routeUpdateIntervalInSeconds,omitempty" yaml:"routeUpdateIntervalInSeconds,omitempty"`
 	// LoadBalancerBackendPoolUpdateIntervalInSeconds is the interval for updating load balancer backend pool of local services. Default is 30 seconds.
 	LoadBalancerBackendPoolUpdateIntervalInSeconds int `json:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty" yaml:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty"`
+
+	// ClusterServiceLoadBalancerHealthProbeMode determines the health probe mode for cluster service load balancer.
+	// Supported values are `shared` and `servicenodeport`.
+	// `servicenodeport`: the health probe will be created against each port of each service by watching the backend application (default).
+	// `shared`: all cluster services shares one HTTP probe targeting the kube-proxy on the node (<nodeIP>/healthz:10256).
+	ClusterServiceLoadBalancerHealthProbeMode string `json:"clusterServiceLoadBalancerHealthProbeMode,omitempty" yaml:"clusterServiceLoadBalancerHealthProbeMode,omitempty"`
+	// ClusterServiceSharedLoadBalancerHealthProbePort defines the target port of the shared health probe. Default to 10256.
+	ClusterServiceSharedLoadBalancerHealthProbePort int32 `json:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePort,omitempty"`
+	// ClusterServiceSharedLoadBalancerHealthProbePath defines the target path of the shared health probe. Default to `/healthz`.
+	ClusterServiceSharedLoadBalancerHealthProbePath string `json:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty" yaml:"clusterServiceSharedLoadBalancerHealthProbePath,omitempty"`
 }
 
 // MultipleStandardLoadBalancerConfiguration stores the properties regarding multiple standard load balancers.
@@ -628,6 +638,24 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		if !supportedLoadBalancerBackendPoolConfigurationTypes.Has(strings.ToLower(config.LoadBalancerBackendPoolConfigurationType)) {
 			return fmt.Errorf("loadBalancerBackendPoolConfigurationType %s is not supported, supported values are %v", config.LoadBalancerBackendPoolConfigurationType, supportedLoadBalancerBackendPoolConfigurationTypes.UnsortedList())
 		}
+	}
+
+	if config.ClusterServiceLoadBalancerHealthProbeMode == "" {
+		config.ClusterServiceLoadBalancerHealthProbeMode = consts.ClusterServiceLoadBalancerHealthProbeModeServiceNodePort
+	} else {
+		supportedClusterServiceLoadBalancerHealthProbeModes := sets.New(
+			strings.ToLower(consts.ClusterServiceLoadBalancerHealthProbeModeServiceNodePort),
+			strings.ToLower(consts.ClusterServiceLoadBalancerHealthProbeModeShared),
+		)
+		if !supportedClusterServiceLoadBalancerHealthProbeModes.Has(strings.ToLower(config.ClusterServiceLoadBalancerHealthProbeMode)) {
+			return fmt.Errorf("clusterServiceLoadBalancerHealthProbeMode %s is not supported, supported values are %v", config.ClusterServiceLoadBalancerHealthProbeMode, supportedClusterServiceLoadBalancerHealthProbeModes.UnsortedList())
+		}
+	}
+	if config.ClusterServiceSharedLoadBalancerHealthProbePort == 0 {
+		config.ClusterServiceSharedLoadBalancerHealthProbePort = consts.ClusterServiceLoadBalancerHealthProbeDefaultPort
+	}
+	if config.ClusterServiceSharedLoadBalancerHealthProbePath == "" {
+		config.ClusterServiceSharedLoadBalancerHealthProbePath = consts.ClusterServiceLoadBalancerHealthProbeDefaultPath
 	}
 
 	env, err := ratelimitconfig.ParseAzureEnvironment(config.Cloud, config.ResourceManagerEndpoint, config.IdentitySystem)

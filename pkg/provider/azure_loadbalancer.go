@@ -2132,6 +2132,8 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb
 }
 
 func (az *Cloud) reconcileLBProbes(lb *network.LoadBalancer, service *v1.Service, serviceName string, wantLb bool, expectedProbes []network.Probe) bool {
+	expectedProbes, _ = az.keepSharedProbe(service, *lb, expectedProbes, wantLb)
+
 	// remove unwanted probes
 	dirtyProbes := false
 	var updatedProbes []network.Probe
@@ -2594,6 +2596,13 @@ func (az *Cloud) getExpectedLBRules(
 		}
 	}
 
+	var useSharedProbe bool
+	if az.useSharedLoadBalancerHealthProbeMode() &&
+		!strings.EqualFold(string(service.Spec.ExternalTrafficPolicy), string(v1.ServiceExternalTrafficPolicyLocal)) {
+		nodeEndpointHealthprobe = az.buildClusterServiceSharedProbe()
+		useSharedProbe = true
+	}
+
 	// In HA mode, lb forward traffic of all port to backend
 	// HA mode is only supported on standard loadbalancer SKU in internal mode
 	if consts.IsK8sServiceUsingInternalLoadBalancer(service) &&
@@ -2611,7 +2620,7 @@ func (az *Cloud) getExpectedLBRules(
 		if nodeEndpointHealthprobe == nil {
 			// use user customized health probe rule if any
 			for _, port := range service.Spec.Ports {
-				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nil)
+				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nil, false)
 				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
@@ -2673,7 +2682,7 @@ func (az *Cloud) getExpectedLBRules(
 					"rule-name", lbRuleName, "port", port.Port)
 			}
 			if !isNoHealthProbeRule {
-				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nodeEndpointHealthprobe)
+				portprobe, err := az.buildHealthProbeRulesForPort(service, port, lbRuleName, nodeEndpointHealthprobe, useSharedProbe)
 				if err != nil {
 					klog.V(2).ErrorS(err, "error occurred when buildHealthProbeRulesForPort", "service", service.Name, "namespace", service.Namespace,
 						"rule-name", lbRuleName, "port", port.Port)
