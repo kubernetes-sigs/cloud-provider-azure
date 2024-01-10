@@ -2680,13 +2680,13 @@ func TestGetPublicIPName(t *testing.T) {
 			expectedPIPName: "azure-auid-prefix-id",
 		},
 		{
-			desc: "Service PIP prefix id dualstack IPv6",
+			desc: "Service PIP prefix id dualstack lengthy IPv6",
 			svc: &v1.Service{
 				ObjectMeta: meta.ObjectMeta{
 					UID: types.UID("uid"),
 					Annotations: map[string]string{
 						consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "prefix-id",
-						consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  "prefix-id-ipv6",
+						consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  "prefix-id-ipv6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -2694,7 +2694,7 @@ func TestGetPublicIPName(t *testing.T) {
 				},
 			},
 			isIPv6:          true,
-			expectedPIPName: "azure-auid-prefix-id-ipv6-IPv6",
+			expectedPIPName: "azure-auid-prefix-id-ipv6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-IPv6",
 		},
 		{
 			desc: "Service PIP IPv6 only with existing PIP",
