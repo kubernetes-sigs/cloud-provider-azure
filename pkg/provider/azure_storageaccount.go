@@ -285,7 +285,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if len(accountOptions.StorageEndpointSuffix) == 0 {
-			accountOptions.StorageEndpointSuffix = az.cloud.Environment.StorageEndpointSuffix
+			accountOptions.StorageEndpointSuffix = az.Environment.StorageEndpointSuffix
 		}
 		privateDNSZoneName = fmt.Sprintf(privateDNSZoneNameFmt, accountOptions.StorageType, accountOptions.StorageEndpointSuffix)
 	}
@@ -635,10 +635,10 @@ func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, pr
 func (az *Cloud) createVNetLink(ctx context.Context, vNetLinkName, vnetResourceGroup, vnetName, privateDNSZoneName string) error {
 	klog.V(2).Infof("Creating virtual link for vnet(%s) and DNS Zone(%s) in resourceGroup(%s)", vNetLinkName, privateDNSZoneName, vnetResourceGroup)
 	var clientFactory azclient.ClientFactory
-	if az.cloud.NetworkClientFactory != nil {
-		clientFactory = az.cloud.NetworkClientFactory
+	if az.NetworkClientFactory != nil {
+		clientFactory = az.NetworkClientFactory
 	} else {
-		clientFactory = az.cloud.ComputeClientFactory
+		clientFactory = az.ComputeClientFactory
 	}
 	vnetLinkClient := clientFactory.GetVirtualNetworkLinkClient()
 

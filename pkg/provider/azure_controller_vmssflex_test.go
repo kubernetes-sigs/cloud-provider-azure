@@ -99,7 +99,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -197,7 +197,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -259,7 +259,7 @@ func TestUpdateVMWithVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -329,7 +329,7 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -352,11 +352,10 @@ func TestVMSSFlexUpdateCache(t *testing.T) {
 	assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
 	testCases := []struct {
-		description        string
-		nodeName           string
-		vm                 *compute.VirtualMachine
-		disableUpdateCache bool
-		expectedErr        error
+		description string
+		nodeName    string
+		vm          *compute.VirtualMachine
+		expectedErr error
 	}{
 		{
 			description: "vm is nil",
@@ -389,15 +388,9 @@ func TestVMSSFlexUpdateCache(t *testing.T) {
 			},
 			expectedErr: fmt.Errorf("vm.OsProfile.ComputerName is nil"),
 		},
-		{
-			description:        "disableUpdateCache is set",
-			disableUpdateCache: true,
-			expectedErr:        nil,
-		},
 	}
 
 	for _, test := range testCases {
-		fs.DisableUpdateCache = test.disableUpdateCache
 		err = fs.updateCache(test.nodeName, test.vm)
 		assert.Equal(t, test.expectedErr, err, test.description)
 	}

@@ -104,6 +104,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		nodePrivateIPs:           map[string]sets.Set[string]{},
 		routeCIDRs:               map[string]string{},
 		eventRecorder:            &record.FakeRecorder{},
+		lockMap:                  newLockMap(),
 	}
 	az.DisksClient = mockdiskclient.NewMockInterface(ctrl)
 	az.SnapshotsClient = mocksnapshotclient.NewMockInterface(ctrl)
@@ -128,8 +129,6 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.plsCache, _ = az.newPLSCache()
 	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 	az.storageAccountCache, _ = az.newStorageAccountCache()
-
-	_ = InitDiskControllers(az)
 
 	az.regionZonesMap = map[string][]string{az.Location: {"1", "2", "3"}}
 

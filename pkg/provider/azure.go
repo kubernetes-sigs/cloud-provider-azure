@@ -349,7 +349,6 @@ var (
 	_ cloudprovider.LoadBalancer = (*Cloud)(nil)
 	_ cloudprovider.Routes       = (*Cloud)(nil)
 	_ cloudprovider.Zones        = (*Cloud)(nil)
-	_ cloudprovider.PVLabeler    = (*Cloud)(nil)
 )
 
 // Cloud holds the config and clients
@@ -441,8 +440,7 @@ type Cloud struct {
 	// node-sync-loop routine and service-reconcile routine should not update LoadBalancer at the same time
 	serviceReconcileLock sync.Mutex
 
-	*ManagedDiskController
-
+	lockMap *LockMap
 	// multipleStandardLoadBalancerConfigurationsSynced make sure the `reconcileMultipleStandardLoadBalancerConfigurations`
 	// runs only once every time the cloud provide restarts.
 	multipleStandardLoadBalancerConfigurationsSynced bool
@@ -473,7 +471,7 @@ func NewCloud(ctx context.Context, config *Config, callFromCCM bool) (cloudprovi
 	}
 
 	az.ipv6DualStackEnabled = true
-
+	az.lockMap = newLockMap()
 	return az, nil
 }
 
@@ -728,9 +726,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 
-	if err := InitDiskControllers(az); err != nil {
-		return err
-	}
 	// Common controller contains the function
 	// needed by both blob disk and managed disk controllers
 	qps := float32(ratelimitconfig.DefaultAtachDetachDiskQPS)
@@ -740,14 +735,6 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
 	}
 	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
-
-	common := &controllerCommon{
-		cloud:                        az,
-		lockMap:                      newLockMap(),
-		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
-	}
-
-	az.ManagedDiskController = &ManagedDiskController{common}
 
 	// updating routes and syncing zones only in CCM
 	if callFromCCM {
@@ -1171,29 +1158,6 @@ func (az *Cloud) HasClusterID() bool {
 // ProviderName returns the cloud provider ID.
 func (az *Cloud) ProviderName() string {
 	return consts.CloudProviderName
-}
-
-func InitDiskControllers(az *Cloud) error {
-	// Common controller contains the function
-	// needed by both blob disk and managed disk controllers
-
-	qps := float32(ratelimitconfig.DefaultAtachDetachDiskQPS)
-	bucket := ratelimitconfig.DefaultAtachDetachDiskBucket
-	if az.Config.AttachDetachDiskRateLimit != nil {
-		qps = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitQPSWrite
-		bucket = az.Config.AttachDetachDiskRateLimit.CloudProviderRateLimitBucketWrite
-	}
-	klog.V(2).Infof("attach/detach disk operation rate limit QPS: %f, Bucket: %d", qps, bucket)
-
-	common := &controllerCommon{
-		cloud:                        az,
-		lockMap:                      newLockMap(),
-		AttachDetachInitialDelayInMs: defaultAttachDetachInitialDelayInMs,
-	}
-
-	az.ManagedDiskController = &ManagedDiskController{common}
-
-	return nil
 }
 
 // SetInformers sets informers for Azure cloud provider.

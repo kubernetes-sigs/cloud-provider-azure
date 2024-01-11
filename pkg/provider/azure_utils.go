@@ -44,21 +44,21 @@ var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
 	"edgezone": network.EdgeZone,
 }
 
-// lockMap used to lock on entries
-type lockMap struct {
+// LockMap used to lock on entries
+type LockMap struct {
 	sync.Mutex
 	mutexMap map[string]*sync.Mutex
 }
 
 // NewLockMap returns a new lock map
-func newLockMap() *lockMap {
-	return &lockMap{
+func newLockMap() *LockMap {
+	return &LockMap{
 		mutexMap: make(map[string]*sync.Mutex),
 	}
 }
 
 // LockEntry acquires a lock associated with the specific entry
-func (lm *lockMap) LockEntry(entry string) {
+func (lm *LockMap) LockEntry(entry string) {
 	lm.Lock()
 	// check if entry does not exists, then add entry
 	mutex, exists := lm.mutexMap[entry]
@@ -71,7 +71,7 @@ func (lm *lockMap) LockEntry(entry string) {
 }
 
 // UnlockEntry release the lock associated with the specific entry
-func (lm *lockMap) UnlockEntry(entry string) {
+func (lm *LockMap) UnlockEntry(entry string) {
 	lm.Lock()
 	defer lm.Unlock()
 
