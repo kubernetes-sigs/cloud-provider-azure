@@ -314,3 +314,41 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 		})
 	}
 }
+
+func TestIsInternalLoadBalancer(t *testing.T) {
+	tests := []struct {
+		name     string
+		lb       network.LoadBalancer
+		expected bool
+	}{
+		{
+			name: "internal load balancer",
+			lb: network.LoadBalancer{
+				Name: pointer.String("test-internal"),
+			},
+			expected: true,
+		},
+		{
+			name: "internal load balancer",
+			lb: network.LoadBalancer{
+				Name: pointer.String("TEST-INTERNAL"),
+			},
+			expected: true,
+		},
+		{
+			name: "not internal load balancer",
+			lb: network.LoadBalancer{
+				Name: pointer.String("test"),
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lb := test.lb
+			result := isInternalLoadBalancer(&lb)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
