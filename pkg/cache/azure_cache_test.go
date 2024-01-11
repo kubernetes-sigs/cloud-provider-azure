@@ -230,6 +230,31 @@ func TestCacheAllowUnsafeRead(t *testing.T) {
 	assert.Equal(t, val, v, "cache should return expired as allow unsafe read is allowed")
 }
 
+func TestCacheAllowNoRefreshRead(t *testing.T) {
+	val := &fakeDataObj{}
+	data := map[string]*fakeDataObj{
+		testKey: val,
+	}
+	dataSource, cache := newFakeCache(t)
+	dataSource.set(data)
+
+	v, err := cache.GetWithDeepCopy(testKey, CacheReadTypeDefault)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, dataSource.called)
+	assert.Equal(t, val, v, "cache should get correct data")
+
+	time.Sleep(fakeCacheTTL)
+	v, err = cache.GetWithDeepCopy(testKey, CacheReadTypeNoRefresh)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, dataSource.called)
+	assert.Equal(t, val, v, "cache should return expired as allow unsafe read is allowed")
+
+	v, err = cache.GetWithDeepCopy("doesNotExist", CacheReadTypeNoRefresh)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, dataSource.called)
+	assert.Equal(t, nil, v, "cache should return nil as entry does not exist")
+}
+
 func TestCacheNoConcurrentGet(t *testing.T) {
 	val := &fakeDataObj{}
 	data := map[string]*fakeDataObj{

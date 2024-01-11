@@ -41,6 +41,10 @@ const (
 	// CacheReadTypeForceRefresh force refreshes the cache even if the cache entry
 	// is not expired
 	CacheReadTypeForceRefresh
+	// CacheReadTypeNoRefresh returns data from cache even if the cache entry is
+	// active/expired. If entry doesn't exist in cache, then nil is returned.
+	// Data must be nil checked before inference.
+	CacheReadTypeNoRefresh
 )
 
 // GetFunc defines a getter function for timedCache.
@@ -178,6 +182,10 @@ func (t *TimedCache) get(key string, crt AzureCacheReadType) (interface{}, error
 
 	entry.Lock.Lock()
 	defer entry.Lock.Unlock()
+
+	if crt == CacheReadTypeNoRefresh {
+		return entry.Data, nil
+	}
 
 	// entry exists and if cache is not force refreshed
 	if entry.Data != nil && crt != CacheReadTypeForceRefresh {
