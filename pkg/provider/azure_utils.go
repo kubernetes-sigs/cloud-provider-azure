@@ -623,3 +623,15 @@ func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string,
 func isInternalLoadBalancer(lb *network.LoadBalancer) bool {
 	return strings.HasSuffix(strings.ToLower(*lb.Name), consts.InternalLoadBalancerNameSuffix)
 }
+
+// trimSuffixIgnoreCase trims the suffix from the string, case-insensitive.
+// It returns the original string if the suffix is not found.
+// The returning string is in lower case.
+func trimSuffixIgnoreCase(str, suf string) string {
+	str = strings.ToLower(str)
+	suf = strings.ToLower(suf)
+	if strings.HasSuffix(str, suf) {
+		return strings.TrimSuffix(str, suf)
+	}
+	return str
+}
