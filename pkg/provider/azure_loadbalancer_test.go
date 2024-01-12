@@ -63,11 +63,10 @@ const LBInUseRawError = `{
 }`
 
 const (
-	expectedPIPID  = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"
-	rgprefix       = "/subscriptions/subscription/resourceGroups/rg"
-	resourcesuffix = "/providers/Microsoft.Network/publicIPAddresses/pip1"
-	ipv6Suffix     = "-IPv6"
-	svcPrefix      = "aservice1-"
+	expectedPIPID = "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"
+	rgprefix      = "/subscriptions/subscription/resourceGroups/rg"
+	ipv6Suffix    = "-IPv6"
+	svcPrefix     = "aservice1-"
 )
 
 func TestExistsPip(t *testing.T) {
@@ -6948,6 +6947,10 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 						},
 					},
 				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
 			},
 			namespace: &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -6978,8 +6981,46 @@ func TestGetEligibleLoadBalancers(t *testing.T) {
 						},
 					},
 				},
+				{
+					Name: "c",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
 			},
 			expectedLBs: []string{"b"},
+		},
+		{
+			description: "should put the service to the load balancers that does not have label/namespace selector if there is no other choice",
+			svc:         getTestService("test", v1.ProtocolTCP, nil, false),
+			labels:      map[string]string{"k2": "v2", "k3": "v3"},
+			namespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ns1",
+					Labels: map[string]string{"k1": "v1"},
+				},
+			},
+			lbConfigs: []MultipleStandardLoadBalancerConfiguration{
+				{
+					Name: "fails to match service label",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceLabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k1": "v1"},
+						},
+					},
+				},
+				{
+					Name: "fails to match service namespace",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{
+						ServiceNamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"k2": "v2"},
+						},
+					},
+				},
+				{
+					Name: "empty",
+					MultipleStandardLoadBalancerConfigurationSpec: MultipleStandardLoadBalancerConfigurationSpec{},
+				},
+			},
+			expectedLBs: []string{"empty"},
 		},
 		{
 			description: "should return the intersection of annotation, namespace and label selector",
@@ -7417,6 +7458,33 @@ func TestGetMostEligibleLBName(t *testing.T) {
 				},
 			},
 			expectedLBName: "lb1",
+		},
+		{
+			description: "should respect internal load balancers",
+			eligibleLBs: []string{"lb1", "lb2", "lb3"},
+			existingLBs: &[]network.LoadBalancer{
+				{
+					Name: pointer.String("lb1-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{
+							{},
+						},
+					},
+				},
+				{
+					Name: pointer.String("lb2-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{},
+					},
+				},
+				{
+					Name: pointer.String("lb3-internal"),
+					LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
+						LoadBalancingRules: &[]network.LoadBalancingRule{},
+					},
+				},
+			},
+			expectedLBName: "lb2",
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {

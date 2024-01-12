@@ -5,7 +5,7 @@ metadata:
     ccm: external
     cni: calico
   name: ${CLUSTER_NAME}
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   clusterNetwork:
     pods:
@@ -24,7 +24,7 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureCluster
 metadata:
   name: ${CLUSTER_NAME}
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   identityRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -48,7 +48,7 @@ apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
 metadata:
   name: ${CLUSTER_NAME}-control-plane
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   kubeadmConfigSpec:
     clusterConfiguration:
@@ -135,7 +135,7 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   template:
     spec:
@@ -153,6 +153,7 @@ apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachinePool
 metadata:
   name: ${CLUSTER_NAME}-vmss-0
+  namespace: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT}
@@ -174,6 +175,7 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureMachinePool
 metadata:
   name: ${CLUSTER_NAME}-vmss-0
+  namespace: ${CLUSTER_NAME}
 spec:
   location: ${AZURE_LOCATION}
   strategy:
@@ -195,6 +197,7 @@ apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfig
 metadata:
   name: ${CLUSTER_NAME}-vmss-0
+  namespace: ${CLUSTER_NAME}
 spec:
   joinConfiguration:
     nodeRegistration:
@@ -216,6 +219,7 @@ apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachinePool
 metadata:
   name: ${CLUSTER_NAME}-vmss-1
+  namespace: ${CLUSTER_NAME}
 spec:
   clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT}
@@ -237,6 +241,7 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureMachinePool
 metadata:
   name: ${CLUSTER_NAME}-vmss-1
+  namespace: ${CLUSTER_NAME}
 spec:
   location: ${AZURE_LOCATION}
   strategy:
@@ -258,6 +263,7 @@ apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfig
 metadata:
   name: ${CLUSTER_NAME}-vmss-1
+  namespace: ${CLUSTER_NAME}
 spec:
   joinConfiguration:
     nodeRegistration:
@@ -281,7 +287,7 @@ metadata:
   labels:
     clusterctl.cluster.x-k8s.io/move-hierarchy: "true"
   name: ${CLUSTER_IDENTITY_NAME}
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   allowedNamespaces: {}
   clientID: ${AZURE_CLIENT_ID}
@@ -295,7 +301,7 @@ apiVersion: addons.cluster.x-k8s.io/v1beta1
 kind: ClusterResourceSet
 metadata:
   name: crs-ccm
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   clusterSelector:
     matchLabels:
@@ -309,7 +315,7 @@ apiVersion: addons.cluster.x-k8s.io/v1beta1
 kind: ClusterResourceSet
 metadata:
   name: crs-node-manager
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   clusterSelector:
     matchLabels:
@@ -323,7 +329,7 @@ apiVersion: addons.cluster.x-k8s.io/v1alpha1
 kind: HelmChartProxy
 metadata:
   name: calico
-  namespace: default
+  namespace: ${CLUSTER_NAME}
 spec:
   chartName: tigera-operator
   clusterSelector:
