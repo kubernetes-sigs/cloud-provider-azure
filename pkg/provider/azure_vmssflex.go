@@ -48,14 +48,13 @@ var (
 type FlexScaleSet struct {
 	*Cloud
 
-	vmssFlexCache azcache.Resource
-
+	vmssFlexCache            azcache.Resource
 	vmssFlexVMNameToVmssID   *sync.Map
 	vmssFlexVMNameToNodeName *sync.Map
 	vmssFlexVMCache          azcache.Resource
 
 	// lockMap in cache refresh
-	lockMap *lockMap
+	lockMap *LockMap
 }
 
 func newFlexScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {

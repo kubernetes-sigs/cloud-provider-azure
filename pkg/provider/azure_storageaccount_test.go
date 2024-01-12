@@ -626,8 +626,7 @@ func TestAddStorageAccountTags(t *testing.T) {
 	defer cancel()
 
 	cloud := &Cloud{}
-	_ = InitDiskControllers(cloud)
-
+	cloud.lockMap = newLockMap()
 	tests := []struct {
 		name           string
 		subsID         string
@@ -699,7 +698,6 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 	defer cancel()
 
 	cloud := &Cloud{}
-	_ = InitDiskControllers(cloud)
 
 	tests := []struct {
 		name           string
@@ -732,7 +730,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 
 	getter := func(key string) (interface{}, error) { return nil, nil }
 	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
-
+	cloud.lockMap = newLockMap()
 	for _, test := range tests {
 		mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
 		cloud.StorageAccountClient = mockStorageAccountsClient

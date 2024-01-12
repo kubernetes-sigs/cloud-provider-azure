@@ -101,7 +101,7 @@ type ScaleSet struct {
 	nonVmssUniformNodesCache azcache.Resource
 
 	// lockMap in cache refresh
-	lockMap *lockMap
+	lockMap *LockMap
 }
 
 // newScaleSet creates a new ScaleSet.
@@ -144,6 +144,7 @@ func newScaleSet(ctx context.Context, az *Cloud) (VMSet, error) {
 		return nil, err
 	}
 
+	ss.lockMap = newLockMap()
 	return ss, nil
 }
 

@@ -112,3 +112,12 @@ type VMSet interface {
 	// DeleteCacheForNode removes the node entry from cache.
 	DeleteCacheForNode(nodeName string) error
 }
+
+// AttachDiskOptions attach disk options
+type AttachDiskOptions struct {
+	CachingMode             compute.CachingTypes
+	DiskName                string
+	DiskEncryptionSetID     string
+	WriteAcceleratorEnabled bool
+	Lun                     int32
+}

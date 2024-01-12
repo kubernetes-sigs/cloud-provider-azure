@@ -271,7 +271,7 @@ func TestGetNodeNameByProviderIDVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -322,7 +322,7 @@ func TestGetInstanceIDByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -372,7 +372,7 @@ func TestGetInstanceTypeByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -446,7 +446,7 @@ func TestGetZoneByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -506,7 +506,7 @@ func TestGetProvisioningStateByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -566,7 +566,7 @@ func TestGetPowerStatusByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -634,7 +634,7 @@ func TestGetPrimaryInterfaceVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -686,7 +686,7 @@ func TestGetIPByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -747,7 +747,7 @@ func TestGetPrivateIPsByNodeNameVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -817,7 +817,7 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		fs, err := NewTestFlexScaleSet(ctrl)
 		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -916,7 +916,7 @@ func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
 		if tc.tags != nil {
 			testVmssFlexList[0].Tags = tc.tags
 		}
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -1100,7 +1100,7 @@ func TestEnsureHostInPoolVmssFlex(t *testing.T) {
 			fs.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
 
 		mockVMClient := fs.VirtualMachinesClient.(*mockvmclient.MockInterface)
@@ -1257,7 +1257,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		}
 		expectedestVmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(expectedestVmssFlexList, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
@@ -1364,7 +1364,7 @@ func TestEnsureHostsInPoolVmssFlex(t *testing.T) {
 			fs.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
 		}
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]compute.VirtualMachineScaleSet{genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)}, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
@@ -1514,7 +1514,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 
 			vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex}
 
-			mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 			mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).Times(tc.vmssListCallingTimes)
 			mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()
@@ -1702,7 +1702,7 @@ func TestEnsureBackendPoolDeletedVmssFlex(t *testing.T) {
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 		vmssFlexList := []compute.VirtualMachineScaleSet{testVmssFlex, genreteTestVmssFlex("vmssflex2", testVmssFlex2ID)}
 
-		mockVMSSClient := fs.cloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := fs.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(vmssFlexList, nil).AnyTimes()
 		mockVMSSClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(testVmssFlex1, nil).AnyTimes()
 		mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.vmssPutErr).AnyTimes()

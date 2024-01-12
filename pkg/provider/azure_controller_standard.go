@@ -106,7 +106,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 		klog.Errorf("azureDisk - attach disk list(%v) on rg(%s) vm(%s) failed, err: %+v", diskMap, nodeResourceGroup, vmName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
-			disks := as.filterNonExistingDisks(ctx, *newVM.VirtualMachineProperties.StorageProfile.DataDisks)
+			disks := FilterNonExistingDisks(ctx, as.DisksClient, *newVM.VirtualMachineProperties.StorageProfile.DataDisks)
 			newVM.VirtualMachineProperties.StorageProfile.DataDisks = &disks
 			future, rerr = as.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, vmName, newVM, "attach_disk")
 		}
@@ -120,7 +120,7 @@ func (as *availabilitySet) AttachDisk(ctx context.Context, nodeName types.NodeNa
 }
 
 func (as *availabilitySet) DeleteCacheForNode(nodeName string) error {
-	err := as.cloud.vmCache.Delete(nodeName)
+	err := as.vmCache.Delete(nodeName)
 	if err == nil {
 		klog.V(2).Infof("DeleteCacheForNode(%s) successfully", nodeName)
 	} else {
@@ -187,7 +187,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 		// only log here, next action is to update VM status with original meta data
 		klog.Warningf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
 	} else {
-		if strings.EqualFold(as.cloud.Environment.Name, consts.AzureStackCloudName) && !as.Config.DisableAzureStackCloud {
+		if strings.EqualFold(as.Environment.Name, consts.AzureStackCloudName) && !as.Config.DisableAzureStackCloud {
 			// Azure stack does not support ToBeDetached flag, use original way to detach disk
 			newDisks := []compute.DataDisk{}
 			for _, disk := range disks {
@@ -226,7 +226,7 @@ func (as *availabilitySet) DetachDisk(ctx context.Context, nodeName types.NodeNa
 		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
-			disks := as.filterNonExistingDisks(ctx, *vm.StorageProfile.DataDisks)
+			disks := FilterNonExistingDisks(ctx, as.DisksClient, *vm.StorageProfile.DataDisks)
 			newVM.VirtualMachineProperties.StorageProfile.DataDisks = &disks
 			result, rerr = as.VirtualMachinesClient.Update(ctx, nodeResourceGroup, vmName, newVM, "detach_disk")
 		}
@@ -264,10 +264,7 @@ func (as *availabilitySet) UpdateVMAsync(ctx context.Context, nodeName types.Nod
 }
 
 func (as *availabilitySet) updateCache(nodeName string, vm *compute.VirtualMachine) {
-	if as.ManagedDiskController.DisableUpdateCache {
-		return
-	}
-	as.cloud.vmCache.Update(nodeName, vm)
+	as.vmCache.Update(nodeName, vm)
 	klog.V(2).Infof("updateCache(%s) successfully", nodeName)
 }
 

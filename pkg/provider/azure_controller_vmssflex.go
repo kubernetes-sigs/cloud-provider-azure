@@ -107,7 +107,7 @@ func (fs *FlexScaleSet) AttachDisk(ctx context.Context, nodeName types.NodeName,
 		klog.Errorf("azureDisk - attach disk list(%+v) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
-			disks := fs.filterNonExistingDisks(ctx, *newVM.VirtualMachineProperties.StorageProfile.DataDisks)
+			disks := FilterNonExistingDisks(ctx, fs.DisksClient, *newVM.VirtualMachineProperties.StorageProfile.DataDisks)
 			newVM.VirtualMachineProperties.StorageProfile.DataDisks = &disks
 			future, rerr = fs.VirtualMachinesClient.UpdateAsync(ctx, nodeResourceGroup, *vm.Name, newVM, "attach_disk")
 		}
@@ -156,7 +156,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		// only log here, next action is to update VM status with original meta data
 		klog.Warningf("detach azure disk on node(%s): disk list(%s) not found", nodeName, diskMap)
 	} else {
-		if strings.EqualFold(fs.cloud.Environment.Name, consts.AzureStackCloudName) && !fs.Config.DisableAzureStackCloud {
+		if strings.EqualFold(fs.Environment.Name, consts.AzureStackCloudName) && !fs.Config.DisableAzureStackCloud {
 			// Azure stack does not support ToBeDetached flag, use original way to detach disk
 			newDisks := []compute.DataDisk{}
 			for _, disk := range disks {
@@ -197,7 +197,7 @@ func (fs *FlexScaleSet) DetachDisk(ctx context.Context, nodeName types.NodeName,
 		klog.Errorf("azureDisk - detach disk list(%s) on rg(%s) vm(%s) failed, err: %v", diskMap, nodeResourceGroup, vmName, rerr)
 		if rerr.HTTPStatusCode == http.StatusNotFound {
 			klog.Errorf("azureDisk - begin to filterNonExistingDisks(%v) on rg(%s) vm(%s)", diskMap, nodeResourceGroup, vmName)
-			disks := fs.filterNonExistingDisks(ctx, *vm.StorageProfile.DataDisks)
+			disks := FilterNonExistingDisks(ctx, fs.DisksClient, *vm.StorageProfile.DataDisks)
 			newVM.VirtualMachineProperties.StorageProfile.DataDisks = &disks
 			result, rerr = fs.VirtualMachinesClient.Update(ctx, nodeResourceGroup, *vm.Name, newVM, "detach_disk")
 		}
@@ -263,9 +263,6 @@ func (fs *FlexScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeNa
 }
 
 func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine) error {
-	if fs.ManagedDiskController.DisableUpdateCache {
-		return nil
-	}
 	if vm == nil {
 		return fmt.Errorf("vm is nil")
 	}

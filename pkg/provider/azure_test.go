@@ -2396,53 +2396,6 @@ func validateTestSubnet(t *testing.T, az *Cloud, svc *v1.Service) {
 		}, nil).AnyTimes()
 }
 
-func TestGetInfoFromDiskURI(t *testing.T) {
-	tests := []struct {
-		diskURL        string
-		expectedRG     string
-		expectedSubsID string
-		expectError    bool
-	}{
-		{
-			diskURL:        "/subscriptions/4be8920b-2978-43d7-axyz-04d8549c1d05/resourceGroups/azure-k8s1102/providers/Microsoft.Compute/disks/andy-mghyb1102-dynamic-pvc-f7f014c9-49f4-11e8-ab5c-000d3af7b38e",
-			expectedRG:     "azure-k8s1102",
-			expectedSubsID: "4be8920b-2978-43d7-axyz-04d8549c1d05",
-			expectError:    false,
-		},
-		{
-			// case insensitive check
-			diskURL:        "/subscriptions/4be8920b-2978-43d7-axyz-04d8549c1d05/resourcegroups/azure-k8s1102/providers/Microsoft.Compute/disks/andy-mghyb1102-dynamic-pvc-f7f014c9-49f4-11e8-ab5c-000d3af7b38e",
-			expectedRG:     "azure-k8s1102",
-			expectedSubsID: "4be8920b-2978-43d7-axyz-04d8549c1d05",
-			expectError:    false,
-		},
-		{
-			diskURL:     "/4be8920b-2978-43d7-axyz-04d8549c1d05/resourceGroups/azure-k8s1102/providers/Microsoft.Compute/disks/andy-mghyb1102-dynamic-pvc-f7f014c9-49f4-11e8-ab5c-000d3af7b38e",
-			expectedRG:  "",
-			expectError: true,
-		},
-		{
-			diskURL:     "",
-			expectedRG:  "",
-			expectError: true,
-		},
-	}
-
-	for _, test := range tests {
-		rg, subsID, err := getInfoFromDiskURI(test.diskURL)
-		assert.Equal(t, rg, test.expectedRG, "Expect result not equal with getInfoFromDiskURI(%s) return: %q, expected: %q",
-			test.diskURL, rg, test.expectedRG)
-		assert.Equal(t, subsID, test.expectedSubsID, "Expect result not equal with getInfoFromDiskURI(%s) return: %q, expected: %q",
-			test.diskURL, subsID, test.expectedSubsID)
-
-		if test.expectError {
-			assert.NotNil(t, err, "Expect error during getInfoFromDiskURI(%s)", test.diskURL)
-		} else {
-			assert.Nil(t, err, "Expect error is nil during getInfoFromDiskURI(%s)", test.diskURL)
-		}
-	}
-}
-
 func TestGetResourceGroups(t *testing.T) {
 	tests := []struct {
 		name               string

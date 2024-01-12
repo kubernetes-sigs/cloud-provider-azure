@@ -95,7 +95,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		scaleSetName := string(test.vmssName)
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
-		testCloud := ss.cloud
+		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -224,7 +224,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		scaleSetName := strings.ToLower(string(test.vmssName))
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
-		testCloud := ss.cloud
+		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -354,7 +354,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		scaleSetName := strings.ToLower(string(test.vmssName))
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
-		testCloud := ss.cloud
+		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
@@ -476,7 +476,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		scaleSetName := string(test.nodeName)
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err, test.desc)
-		testCloud := ss.cloud
+		testCloud := ss.Cloud
 		testCloud.PrimaryScaleSetName = scaleSetName
 		expectedVMSS := buildTestVMSSWithLB(scaleSetName, "vmss00-vm-", []string{testLBBackendpoolID0}, false)
 		mockVMSSClient := testCloud.VirtualMachineScaleSetsClient.(*mockvmssclient.MockInterface)
