@@ -54,7 +54,7 @@ jobs:
           make build-node-image-linux-amd64
 
       - name: Run Trivy scanner CCM
-        uses: aquasecurity/trivy-action@22d2755f774d925b191a185b74e782a4b0638a41 # master
+        uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
         with:
           image-ref: 'local/azure-cloud-controller-manager:${{ github.sha }}'
           format: 'table'
@@ -63,7 +63,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
       - name: Run Trivy scanner CNM
-        uses: aquasecurity/trivy-action@22d2755f774d925b191a185b74e782a4b0638a41 # master
+        uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
         with:
           image-ref: 'local/azure-cloud-node-manager:${{ github.sha }}-linux-amd64'
           format: 'table'
@@ -73,7 +73,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
 
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@22d2755f774d925b191a185b74e782a4b0638a41 # master
+        uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
         with:
           scan-type: 'fs'
           ignore-unfixed: true
