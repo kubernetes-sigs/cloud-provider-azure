@@ -251,7 +251,7 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 	}
 	if !serviceExists {
 		isOperationSucceeded = true
-		klog.V(2).Infof("UpdateLoadBalancer: skipping service %s because service is going to be deleted", service.Name)
+		klog.V(2).Infof("UpdateLoadBalancer: skipping service %s because service is going to be deleted", serviceName)
 		return nil
 	}
 
