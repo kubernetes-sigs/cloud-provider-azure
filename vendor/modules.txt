@@ -1349,9 +1349,6 @@ k8s.io/cloud-provider/names
 k8s.io/cloud-provider/node/helpers
 k8s.io/cloud-provider/options
 k8s.io/cloud-provider/service/helpers
-k8s.io/cloud-provider/volume
-k8s.io/cloud-provider/volume/errors
-k8s.io/cloud-provider/volume/helpers
 # k8s.io/component-base v0.29.0
 ## explicit; go 1.21
 k8s.io/component-base/cli/flag
