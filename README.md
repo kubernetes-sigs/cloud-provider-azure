@@ -17,8 +17,8 @@ This is the "external" or "out-of-tree" cloud provider for Azure. The "in-tree" 
 
 The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.28.3`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.28.3`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.29.0`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.29.0`
 
 ### Version matrix
 
@@ -27,6 +27,7 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
+| v1.y.x             | v1.y.z                 | release-1.y           |
 | v1.28.x            | v1.28.z                | release-1.28          |
 | v1.27.x            | v1.27.z                | release-1.27          |
 | v1.26.x            | v1.26.z                | release-1.26          |
@@ -41,10 +42,11 @@ Below table shows the cloud-controller-manager and cloud-node-manager versions s
 
 | AKS version                 | cloud-controller-manager version | cloud-node-manager version |
 |-----------------------------|----------------------------------|----------------------------|
-| v1.28.x                     | v1.28.3                          | v1.28.0                    |
-| v1.27.x                     | v1.27.11                         | v1.27.4                    |
-| v1.26.x                     | v1.26.17                         | v1.26.10                   |
-| v1.25.x                     | v1.25.21                         | v1.25.14                   |
+| v1.29.x                     | v1.29.0                          | v1.29.0                    |
+| v1.28.x                     | v1.28.5                          | v1.28.5                    |
+| v1.27.x                     | v1.27.13                         | v1.27.13                   |
+| v1.26.x                     | v1.26.19                         | v1.26.19                   |
+| v1.25.x                     | v1.25.24                         | v1.25.24                   |
 | v1.24.x                     | v1.24.21                         | v1.24.20                   |
 | v1.23.x                     | v1.23.30                         | v1.23.24                   |
 | v1.22.x                     | v1.1.26                          | v1.1.14                    |
