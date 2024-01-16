@@ -52,6 +52,7 @@ jobs:
       - name: Build images
         run: |
           export TAG=${{ github.sha }}
+          export IMAGE_TAG=${{ github.sha }}
           make build-ccm-image
           make build-node-image-linux-amd64
           cd health-probe-proxy && make build-health-probe-proxy-image && cd ..
