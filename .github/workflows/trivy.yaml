@@ -12,6 +12,7 @@ on:
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'
+      - 'health-probe-proxy/**'
   pull_request:
     branches: [ master, 'release-**' ]
     paths:
@@ -22,6 +23,7 @@ on:
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'
+      - 'health-probe-proxy/**'
   schedule:
     - cron: '35 12 * * 4'
 permissions:
@@ -50,8 +52,10 @@ jobs:
       - name: Build images
         run: |
           export TAG=${{ github.sha }}
+          export IMAGE_TAG=${{ github.sha }}
           make build-ccm-image
           make build-node-image-linux-amd64
+          cd health-probe-proxy && make build-health-probe-proxy-image && cd ..
 
       - name: Run Trivy scanner CCM
         uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
@@ -83,6 +87,21 @@ jobs:
         with:
           sarif_file: 'trivy-cnm-linux-results.sarif'
           category: azure-cloud-node-manager-linux-image
+      - name: Run Trivy scanner health-probe-proxy
+        uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
+        with:
+          image-ref: 'local/health-probe-proxy:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-health-probe-proxy-linux-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-health-probe-proxy-linux-results.sarif'
+          category: health-probe-proxy-linux-image
 
       - name: Run Trivy vulnerability scanner in repo mode
         uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca # master
