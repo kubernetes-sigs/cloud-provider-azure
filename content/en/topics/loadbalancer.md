@@ -295,6 +295,24 @@ spec:
   internalTrafficPolicy: Cluster
 ```
 
+### Probing kube-proxy with a shared health probe
+
+> This feature is supported since v1.28.5
+
+In `externalTrafficPolicy: Local`, SLB directly probes kube-proxy – the thing it is directing traffic to. If kube-proxy is experiencing an issue on a given node, this will be visible on the healthCheckNodePort and SLB will stop sending traffic to this node.
+
+In `externalTrafficPolicy: Cluster`, the probes are directed to the backend application, and thus SLB can only know kube-proxy's health indirectly – by whether the probes are forwarded to a backend application and answered successfully. This indirection causes confusion and causes problems in multiple different ways.
+
+It is provided since v1.28.5 that a shared health probe can be used to probe kube-proxy. This feature is enabled by setting `clusterServiceLoadBalancerHealthProbeMode: "shared"` in the cloud provider configuration. When this feature is enabled, the health probe will be configured to probe kube-proxy on the healthCheckNodePort. This will allow SLB to directly probe kube-proxy and thus detect kube-proxy issues more quickly and accurately. The customization options are listed as below:
+
+| Configuration                                     | Default           | Description                                                                                                                                                                                      |
+|---------------------------------------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `clusterServiceLoadBalancerHealthProbeMode`       | `servicenodeport` | Supported values are `shared` and `servicenodeport`. All ETP cluster service will share one health probe if `shared` is set. Otherwise, each ETP cluster service will have its own health probe. |
+| `clusterServiceSharedLoadBalancerHealthProbePort` | 10256             | Default to kube-proxy healthCheckNodePort.                                                                                                                                                       |
+| `clusterServiceSharedLoadBalancerHealthProbePath` | /healthz          | Default to kube-proxy health check path.                                                                                                                                                         |
+
+When a service is integrated with a private link service and uses the proxy protocol, the health check requests to the kube-proxy will fail. A new `cloud-node-manager` sidecar `health-probe-proxy` is introduced to solve this issue. The sidecar will forward the health check requests to the kube-proxy and return the response to the load balancer. The sidecar will read these requests, parse the proxy protocol header, and forward the request to the kube-proxy. If the proxy protocol is not used, this daemonset will forward the request to the kube-proxy without any modification. To enable `health-probe-proxy` sidecar, turn on `cloudNodeManager.enableHealthProbeProxy` in the helm chart, or deploy it as a daemonset manually. To read more, check [this documentation](https://github.com/kubernetes-sigs/cloud-provider-azure/blob/master/health-probe-proxy/README.md).
+
 ## Configure Load Balancer backend
 
 > This feature is supported since v1.23.0
