@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 
@@ -286,7 +287,7 @@ func (ss *ScaleSet) UpdateVMAsync(ctx context.Context, nodeName types.NodeName) 
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
-func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
+func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
 	vm, err := ss.getVmssVM(string(nodeName), crt)
 	if err != nil {
 		return nil, nil, err
@@ -298,8 +299,11 @@ func (ss *ScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCache
 		if storageProfile == nil || storageProfile.DataDisks == nil {
 			return nil, nil, nil
 		}
-
-		return *storageProfile.DataDisks, vm.AsVirtualMachineScaleSetVM().ProvisioningState, nil
+		result, err := ToArmcomputeDisk(*storageProfile.DataDisks)
+		if err != nil {
+			return nil, nil, err
+		}
+		return result, vm.AsVirtualMachineScaleSetVM().ProvisioningState, nil
 	}
 
 	return nil, nil, nil

@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
@@ -296,7 +297,7 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
 		vmListErr                      error
-		expectedDataDisks              []compute.DataDisk
+		expectedDataDisks              []*armcompute.DataDisk
 		expectedErr                    error
 	}{
 		{
@@ -305,11 +306,11 @@ func TestGetDataDisksWithVmssFlex(t *testing.T) {
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
-			expectedDataDisks: []compute.DataDisk{
+			expectedDataDisks: []*armcompute.DataDisk{
 				{
 					Lun:         pointer.Int32(1),
 					Name:        pointer.String("dataDisktestvm1"),
-					ManagedDisk: &compute.ManagedDiskParameters{ID: pointer.String("uri")},
+					ManagedDisk: &armcompute.ManagedDiskParameters{ID: pointer.String("uri")},
 				},
 			},
 			expectedErr: nil,

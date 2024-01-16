@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
@@ -292,7 +293,7 @@ func TestGetDataDisks(t *testing.T) {
 		crt               azcache.AzureCacheReadType
 		isDataDiskNull    bool
 		expectedError     bool
-		expectedDataDisks []compute.DataDisk
+		expectedDataDisks []*armcompute.DataDisk
 	}{
 		{
 			desc:              "an error shall be returned if there's no corresponding vm",
@@ -304,7 +305,7 @@ func TestGetDataDisks(t *testing.T) {
 		{
 			desc:     "correct list of data disks shall be returned if everything is good",
 			nodeName: "vm1",
-			expectedDataDisks: []compute.DataDisk{
+			expectedDataDisks: []*armcompute.DataDisk{
 				{
 					Lun:  pointer.Int32(0),
 					Name: pointer.String("disk1"),
@@ -324,7 +325,7 @@ func TestGetDataDisks(t *testing.T) {
 		{
 			desc:     "correct list of data disks shall be returned if everything is good",
 			nodeName: "vm1",
-			expectedDataDisks: []compute.DataDisk{
+			expectedDataDisks: []*armcompute.DataDisk{
 				{
 					Lun:  pointer.Int32(0),
 					Name: pointer.String("disk1"),
