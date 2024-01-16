@@ -126,26 +126,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	})
 
 	It("should arrange services across load balancers correctly", func() {
+		By("Creating a service targeting to lb-2")
 		var svcIPs []*string
-		svcCount := 2
-		var svc *v1.Service
-		By(fmt.Sprintf("Creating %d services", svcCount))
-		for i := 0; i < svcCount; i++ {
-			svcName := fmt.Sprintf("%s-%d", testServiceName, i)
-			svc = utils.CreateLoadBalancerServiceManifest(svcName, nil, labels, ns.Name, ports)
-			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []*string{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(ips)).NotTo(BeZero())
-			svcIPs = append(svcIPs, ips[0])
-		}
-
-		By("Checking the load balancer count to equal 2")
-		lbNames := getLBsFromPublicIPs(tc, svcIPs)
-		Expect(len(lbNames)).To(Equal(2))
-
-		By("Creating a service targeting to a new load balancer")
 		l := map[string]string{
 			"app": testServiceName,
 			"a":   "b",
@@ -160,6 +142,20 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		lb := getAzureLoadBalancerFromPIP(tc, &svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
 		Expect(pointer.StringDeref(lb.Name, "")).To(Equal("lb-2"))
 
+		svcCount := 2
+		var svc *v1.Service
+		By(fmt.Sprintf("Creating %d services", svcCount))
+		for i := 0; i < svcCount; i++ {
+			svcName := fmt.Sprintf("%s-%d", testServiceName, i)
+			svc = utils.CreateLoadBalancerServiceManifest(svcName, nil, labels, ns.Name, ports)
+			_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svcName, []*string{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).NotTo(BeZero())
+			svcIPs = append(svcIPs, ips[0])
+		}
+
 		By("Checking the load balancer count to equal 3")
 		interval := 5 * time.Second
 		timeout := 5 * time.Minute
@@ -173,7 +169,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking the load balancer count to equal 2")
-		lbNames, err = waitLBCountEqualTo(tc, interval, timeout, 2, svcIPs)
+		lbNames, err := waitLBCountEqualTo(tc, interval, timeout, 2, svcIPs)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(lbNames.Has("lb-1")).To(BeFalse())
 		Expect(lbNames.Has(clusterName)).To(BeTrue())

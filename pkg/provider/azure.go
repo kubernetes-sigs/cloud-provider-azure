@@ -1471,7 +1471,7 @@ func (az *Cloud) getActiveNodesByLoadBalancerName(lbName string) sets.Set[string
 	defer az.multipleStandardLoadBalancersActiveNodesLock.Unlock()
 
 	for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
-		if strings.EqualFold(strings.TrimSuffix(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
+		if strings.EqualFold(trimSuffixIgnoreCase(lbName, consts.InternalLoadBalancerNameSuffix), multiSLBConfig.Name) {
 			return multiSLBConfig.ActiveNodes
 		}
 	}
