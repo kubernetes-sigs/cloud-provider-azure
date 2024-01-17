@@ -22,10 +22,22 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 func init() {
 	additionalTestCases = func() {
+		When("the disk is patched with a new size", func() {
+			It("", func(ctx context.Context) {
+				_, err := realClient.Patch(ctx, resourceGroupName, resourceName, armcompute.DiskUpdate{
+					Properties: &armcompute.DiskUpdateProperties{
+						DiskSizeGB: to.Ptr[int32](300),
+					},
+				})
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
