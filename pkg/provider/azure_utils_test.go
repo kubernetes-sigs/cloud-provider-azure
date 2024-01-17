@@ -17,14 +17,16 @@ limitations under the License.
 package provider
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -930,6 +932,47 @@ func TestIsInternalLoadBalancer(t *testing.T) {
 			lb := test.lb
 			result := isInternalLoadBalancer(&lb)
 			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
+func TestToArmcomputeDisk(t *testing.T) {
+	type args struct {
+		disks []compute.DataDisk
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []*armcompute.DataDisk
+		wantErr bool
+	}{
+		{
+			name: "normal",
+			args: args{
+				disks: []compute.DataDisk{
+					{
+						Name: pointer.String("disk1"),
+					},
+				},
+			},
+			want: []*armcompute.DataDisk{
+				{
+					Name: pointer.String("disk1"),
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ToArmcomputeDisk(tt.args.disks)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ToArmcomputeDisk() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ToArmcomputeDisk() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

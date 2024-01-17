@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"k8s.io/apimachinery/pkg/types"
@@ -297,7 +298,7 @@ func (fs *FlexScaleSet) updateCache(nodeName string, vm *compute.VirtualMachine)
 }
 
 // GetDataDisks gets a list of data disks attached to the node.
-func (fs *FlexScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]compute.DataDisk, *string, error) {
+func (fs *FlexScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureCacheReadType) ([]*armcompute.DataDisk, *string, error) {
 	vm, err := fs.getVmssFlexVM(string(nodeName), crt)
 	if err != nil {
 		return nil, nil, err
@@ -306,6 +307,9 @@ func (fs *FlexScaleSet) GetDataDisks(nodeName types.NodeName, crt azcache.AzureC
 	if vm.StorageProfile.DataDisks == nil {
 		return nil, nil, nil
 	}
-
-	return *vm.StorageProfile.DataDisks, vm.ProvisioningState, nil
+	result, err := ToArmcomputeDisk(*vm.StorageProfile.DataDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+	return result, vm.ProvisioningState, nil
 }

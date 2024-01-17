@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
@@ -426,7 +427,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		desc              string
 		crt               azcache.AzureCacheReadType
 		nodeName          types.NodeName
-		expectedDataDisks []compute.DataDisk
+		expectedDataDisks []*armcompute.DataDisk
 		isDataDiskNull    bool
 		expectedErr       bool
 		expectedErrMsg    error
@@ -442,7 +443,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		{
 			desc:     "correct list of data disks shall be returned if everything is good",
 			nodeName: "vmss00-vm-000000",
-			expectedDataDisks: []compute.DataDisk{
+			expectedDataDisks: []*armcompute.DataDisk{
 				{
 					Lun:  pointer.Int32(0),
 					Name: pointer.String("disk1"),
@@ -454,7 +455,7 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 		{
 			desc:     "correct list of data disks shall be returned if everything is good",
 			nodeName: "vmss00-vm-000000",
-			expectedDataDisks: []compute.DataDisk{
+			expectedDataDisks: []*armcompute.DataDisk{
 				{
 					Lun:  pointer.Int32(0),
 					Name: pointer.String("disk1"),

@@ -18,11 +18,14 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
@@ -577,4 +580,25 @@ func trimSuffixIgnoreCase(str, suf string) string {
 		return strings.TrimSuffix(str, suf)
 	}
 	return str
+}
+
+// ToArmcomputeDisk converts compute.DataDisk to armcompute.DataDisk
+// This is a workaround during track2 migration.
+// TODO: remove this function after compute api is migrated to track2
+func ToArmcomputeDisk(disks []compute.DataDisk) ([]*armcompute.DataDisk, error) {
+	var result []*armcompute.DataDisk
+	for _, disk := range disks {
+		content, err := json.Marshal(disk)
+		if err != nil {
+			return nil, err
+		}
+		var dataDisk armcompute.DataDisk
+		err = json.Unmarshal(content, &dataDisk)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, &dataDisk)
+	}
+
+	return result, nil
 }
