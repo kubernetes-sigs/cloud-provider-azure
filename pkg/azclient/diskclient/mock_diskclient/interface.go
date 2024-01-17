@@ -114,3 +114,18 @@ func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName any) *gomock.Ca
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockInterface)(nil).List), ctx, resourceGroupName)
 }
+
+// Patch mocks base method.
+func (m *MockInterface) Patch(ctx context.Context, resourceGroupName, resourceName string, parameters armcompute.DiskUpdate) (*armcompute.Disk, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Patch", ctx, resourceGroupName, resourceName, parameters)
+	ret0, _ := ret[0].(*armcompute.Disk)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Patch indicates an expected call of Patch.
+func (mr *MockInterfaceMockRecorder) Patch(ctx, resourceGroupName, resourceName, parameters any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockInterface)(nil).Patch), ctx, resourceGroupName, resourceName, parameters)
+}
