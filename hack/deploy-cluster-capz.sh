@@ -89,7 +89,7 @@ function create_management_cluster() {
     kind create cluster --name="${MANAGEMENT_CLUSTER_NAME}"
     echo "Waiting for the node to be Ready"
     kubectl wait node "${MANAGEMENT_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=900s --context="${MGMT_CLUSTER_CONTEXT}"
-    kubectl cluster-info --context=kind-"${MGMT_CLUSTER_CONTEXT}"
+    kubectl cluster-info --context="${MGMT_CLUSTER_CONTEXT}"
     init_and_wait_capz
   else
     if [ "${KIND}" = "true" ]; then
