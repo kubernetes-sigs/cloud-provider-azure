@@ -129,7 +129,7 @@ function create_workload_cluster() {
   fi
 
   echo "Waiting for the kubeconfig to become available"
-  timeout --foreground 1000 bash -c "while ! kubectl get secrets | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
+  timeout --foreground 1000 bash -c "while ! kubectl get secrets -n "${CLUSTER_NAME}" | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the kubeconfig to become available, please check the logs of the capz controller to get the detailed error"
     return 124
