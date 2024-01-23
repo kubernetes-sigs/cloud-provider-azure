@@ -26,6 +26,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -471,12 +472,17 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 				numOfAdd++
 			}
 		}
+
+		hardcodedIPs := []string{"10.1.0.8", "10.1.0.9", "10.1.0.10", "10.1.0.11", "10.1.0.12", "10.1.0.13"}
+
+		nodeIPsToBeAdded = append(nodeIPsToBeAdded, hardcodedIPs...)
+
 		changed = bi.addNodeIPAddressesToBackendPool(&backendPool, nodeIPsToBeAdded)
 
 		var nodeIPsToBeDeleted []string
 		for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
 			ip := pointer.StringDeref(loadBalancerBackendAddress.IPAddress, "")
-			if !nodePrivateIPsSet.Has(ip) {
+			if nodePrivateIPsSet.Has(ip) {
 				klog.V(4).Infof("bi.EnsureHostsInPool: removing IP %s because it is deleted or should be excluded", ip)
 				nodeIPsToBeDeleted = append(nodeIPsToBeDeleted, ip)
 				changed = true
@@ -487,7 +493,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 					klog.Warningf("bi.EnsureHostsInPool: cannot find node name for private IP %s", ip)
 					continue
 				}
-				if !activeNodes.Has(nodeName) {
+				if activeNodes.Has(nodeName) {
 					klog.V(4).Infof("bi.EnsureHostsInPool: removing IP %s because it should not be in this load balancer", ip)
 					nodeIPsToBeDeleted = append(nodeIPsToBeDeleted, ip)
 					changed = true
@@ -803,6 +809,9 @@ func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *network.BackendAdd
 	for _, ipAddress := range nodeIPAddresses {
 		if !hasIPAddressInBackendPool(backendPool, ipAddress) {
 			name := az.nodePrivateIPToNodeNameMap[ipAddress]
+			if name == "" {
+				name = rand.String(8)
+			}
 			klog.V(4).Infof("bi.addNodeIPAddressesToBackendPool: adding %s to the backend pool %s", ipAddress, pointer.StringDeref(backendPool.Name, ""))
 			addresses = append(addresses, network.LoadBalancerBackendAddress{
 				Name: pointer.String(name),
@@ -877,4 +886,28 @@ func removeNodeIPAddressesFromBackendPool(
 	}
 
 	return changed
+}
+
+type backendPoolTypePodIP struct {
+	*Cloud
+}
+
+func newBackendPoolTypePodIP(c *Cloud) BackendPool {
+	return &backendPoolTypePodIP{c}
+}
+
+func (bp *backendPoolTypePodIP) CleanupVMSetFromBackendPoolByCondition(slb *network.LoadBalancer, service *v1.Service, nodes []*v1.Node, clusterName string, shouldRemoveVMSetFromSLB func(string) bool) (*network.LoadBalancer, error) {
+	panic("unimplemented")
+}
+
+func (bp *backendPoolTypePodIP) EnsureHostsInPool(service *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetName string, clusterName string, lbName string, backendPool network.BackendAddressPool) error {
+	panic("unimplemented")
+}
+
+func (bp *backendPoolTypePodIP) GetBackendPrivateIPs(clusterName string, service *v1.Service, lb *network.LoadBalancer) ([]string, []string) {
+	panic("unimplemented")
+}
+
+func (bp *backendPoolTypePodIP) ReconcileBackendPools(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
+	panic("unimplemented")
 }

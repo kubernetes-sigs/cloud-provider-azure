@@ -89,7 +89,7 @@ function create_management_cluster() {
     kind create cluster --name="${MANAGEMENT_CLUSTER_NAME}"
     echo "Waiting for the node to be Ready"
     kubectl wait node "${MANAGEMENT_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=900s --context="${MGMT_CLUSTER_CONTEXT}"
-    kubectl cluster-info --context=kind-"${MGMT_CLUSTER_CONTEXT}"
+    kubectl cluster-info --context="${MGMT_CLUSTER_CONTEXT}"
     init_and_wait_capz
   else
     if [ "${KIND}" = "true" ]; then
@@ -129,7 +129,7 @@ function create_workload_cluster() {
   fi
 
   echo "Waiting for the kubeconfig to become available"
-  timeout --foreground 1000 bash -c "while ! kubectl get secrets | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
+  timeout --foreground 5000 bash -c "while ! kubectl get secrets -n "${CLUSTER_NAME}" | grep ${CLUSTER_NAME}-kubeconfig; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the kubeconfig to become available, please check the logs of the capz controller to get the detailed error"
     return 124
@@ -137,7 +137,7 @@ function create_workload_cluster() {
   echo "Get kubeconfig and store it locally."
   kubectl --context="${MGMT_CLUSTER_CONTEXT}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json -n "${CLUSTER_NAME}" | jq -r .data.value | base64 --decode > ./"${CLUSTER_NAME}"-kubeconfig
   echo "Waiting for the control plane nodes to show up"
-  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes -n "${CLUSTER_NAME}" | grep -E 'master|control-plane'; do sleep 1; done"
+  timeout --foreground 5000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes -n "${CLUSTER_NAME}" | grep -E 'master|control-plane'; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the control plane nodes"
     return 124
@@ -145,7 +145,7 @@ function create_workload_cluster() {
 
   echo "Installing cloud provider azure"
 
-  helm install cloud-provider-azure ../helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
+  helm install cloud-provider-azure helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
     --kubeconfig ./"${CLUSTER_NAME}"-kubeconfig \
     --set infra.clusterName="${CLUSTER_NAME}" \
     --set cloudControllerManager.enableDynamicReloading=true \
@@ -154,6 +154,8 @@ function create_workload_cluster() {
     --set-string cloudControllerManager.imageRepository="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_REGISTRY}" \
     --set-string cloudControllerManager.imageName="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_NAME}" \
     --set-string cloudControllerManager.imageTag="${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_TAG}" \
+    --set-string cloudNodeManager.imageRepository="${AZURE_NODE_CONTROLLER_MANAGER_IMG_REGISTRY}" \
+    --set-string cloudNodeManager.imageName="${AZURE_NODE_CONTROLLER_MANAGER_IMG_NAME}" \
     --set-string cloudNodeManager.imageTag="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG}" \
     --set cloudNodeManager.enableHealthProbeProxy=true
 

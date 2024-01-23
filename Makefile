@@ -266,7 +266,8 @@ push-node-image-windows-%:
 	$(MAKE) WINDOWS_OSVERSION=$(call word-hyphen,$*,1) ARCH=$(call word-hyphen,$*,2) OUTPUT_TYPE=registry build-node-image-windows
 
 .PHONY: build-all-node-images ## Build node-manager image for all OS and archs.
-build-all-node-images: build-all-node-images-linux build-all-node-images-windows
+build-all-node-images: build-all-node-images-linux 
+#build-all-node-images-windows
 
 .PHONY: build-all-node-images-linux ## Build node-manager image for Linux.
 build-all-node-images-linux: $(addprefix build-node-image-linux-,$(ALL_ARCH.linux))
