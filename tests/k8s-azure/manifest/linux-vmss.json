@@ -16,7 +16,6 @@
                 },
                 "apiServerConfig": {
                     "--enable-admission-plugins": "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota,AlwaysPullImages",
-                    "--feature-gates": "MixedProtocolLBService=true"
                 }
             }
         },
