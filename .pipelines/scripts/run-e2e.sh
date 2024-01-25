@@ -148,9 +148,9 @@ kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --config "${CLUSTER_CONFIG_PATH:-}" \
 --customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
---ccmImageTag "${IMAGE_TAG:-}" \
+--ccmImageTag "${CUSTOM_CCM_IMAGE_TAG:-}" \
 --casImageTag "${CUSTOM_CAS_IMAGE:-}" \
---kubernetesImageTag "${IMAGE_TAG:-}" \
+--kubernetesImageTag "${CUSTOM_K8S_IMAGE_TAG:-}" \
 --kubeletURL "${KUBELET_URL:-}" \
 --k8sVersion "${AKS_KUBERNETES_VERSION:-}"
 
