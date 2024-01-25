@@ -230,6 +230,8 @@ func (d *deployer) prepareClusterConfig(clusterID string) (*armcontainerservicev
 		return nil, "", fmt.Errorf("failed to prepare custom config: %v", err)
 	}
 
+	klog.Infof("Customized configurations are: %s", string(customConfig))
+
 	encodedCustomConfig := base64.StdEncoding.EncodeToString(customConfig)
 	clusterConfig = strings.ReplaceAll(clusterConfig, "{CUSTOM_CONFIG}", encodedCustomConfig)
 
