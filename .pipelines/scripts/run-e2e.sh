@@ -79,6 +79,9 @@ if [[ -z "${AZURE_LOCATION:-}" ]]; then
   export AZURE_LOCATION="$(get_random_location)"
 fi
 
+# TODO: remove this and use user-input CUSTOM_CCM_IMAGE_TAG to defined the image tag for
+# cloud provider azure. This will remove dependency on cloud-provider-azure repo, and use
+# explicit variables makes the interface more clear.
 if [[ -z "${IMAGE_TAG:-}" ]]; then
   IMAGE_TAG="$(git describe --tags)"
 fi
@@ -148,7 +151,7 @@ kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --config "${CLUSTER_CONFIG_PATH:-}" \
 --customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
---ccmImageTag "${CUSTOM_CCM_IMAGE_TAG:-}" \
+--ccmImageTag "${CUSTOM_CCM_IMAGE_TAG:-$IMAGE_TAG}" \
 --casImageTag "${CUSTOM_CAS_IMAGE:-}" \
 --kubernetesImageTag "${CUSTOM_K8S_IMAGE_TAG:-}" \
 --kubeletURL "${KUBELET_URL:-}" \
