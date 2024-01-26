@@ -12,7 +12,6 @@
     "kube-controller-manager": {
         "image": "{CUSTOM_KCM_IMAGE}",
         "config": {
-            "--pod-eviction-timeout": "4m",
             "--profiling": "true"
         }
     },
