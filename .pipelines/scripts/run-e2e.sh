@@ -79,6 +79,9 @@ if [[ -z "${AZURE_LOCATION:-}" ]]; then
   export AZURE_LOCATION="$(get_random_location)"
 fi
 
+# TODO: remove this and use user-input CUSTOM_CCM_IMAGE_TAG to defined the image tag for
+# cloud provider azure. This will remove dependency on cloud-provider-azure repo, and use
+# explicit variables makes the interface more clear.
 if [[ -z "${IMAGE_TAG:-}" ]]; then
   IMAGE_TAG="$(git describe --tags)"
 fi
@@ -110,12 +113,11 @@ fi
 echo "Choose custom config file: ${CUSTOM_CONFIG_PATH:-}"
 
 if [[ "${SKIP_BUILD_KUBETEST2_AKS:-}" != "true" ]]; then
-  rm -rf kubetest2-aks
-  git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git
-  cp -r cloud-provider-azure/kubetest2-aks .
-  rm -rf cloud-provider-azure
-  git config --global --add safe.directory "$(pwd)" || true
-  pushd kubetest2-aks
+  # Considering building kubetest2-aks has no dependency on cloud-provider-azure repo, and to avoid
+  # the potential conflict between the cloud-provider-azure repo and the kubetest2-aks, we use a
+  # tmp folder to clone the cloud-provider-azure repo and build kubetest2-aks. 
+  git clone https://github.com/kubernetes-sigs/cloud-provider-azure.git /tmp/cloud-provider-azure
+  pushd /tmp/cloud-provider-azure/kubetest2-aks
   go get -d sigs.k8s.io/kubetest2@latest
   go install sigs.k8s.io/kubetest2@latest
   go mod tidy
@@ -125,6 +127,7 @@ if [[ "${SKIP_BUILD_KUBETEST2_AKS:-}" != "true" ]]; then
   else
     sudo GOPATH="/home/vsts/go" make install
   fi
+  rm /tmp/cloud-provider-azure -rf
   popd
 fi
 
@@ -148,9 +151,9 @@ kubetest2 aks --up --rgName "${RESOURCE_GROUP:-}" \
 --config "${CLUSTER_CONFIG_PATH:-}" \
 --customConfig "${CUSTOM_CONFIG_PATH}" \
 --clusterName "${CLUSTER_NAME:-}" \
---ccmImageTag "${IMAGE_TAG:-}" \
+--ccmImageTag "${CUSTOM_CCM_IMAGE_TAG:-$IMAGE_TAG}" \
 --casImageTag "${CUSTOM_CAS_IMAGE:-}" \
---kubernetesImageTag "${IMAGE_TAG:-}" \
+--kubernetesImageTag "${CUSTOM_K8S_IMAGE_TAG:-}" \
 --kubeletURL "${KUBELET_URL:-}" \
 --k8sVersion "${AKS_KUBERNETES_VERSION:-}"
 
