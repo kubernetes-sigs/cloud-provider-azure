@@ -80,5 +80,5 @@ cloudNodeManager:
   enableHealthProbeProxy: false
   healthCheckPort: 10356
   targetPort: 10256
-  healthProbeProxyImage: "ss104301/health-probe-proxy:latest"
-  healthProbeProxyImageWindows: "ss104301/health-probe-proxy-windows:latest"
+  healthProbeProxyImage: "mcr.microsoft.com/oss/kubernetes/azure-health-probe-proxy:v1.29.0"
+  healthProbeProxyImageWindows: "mcr.microsoft.com/oss/kubernetes/azure-health-probe-proxy:v1.29.0"
