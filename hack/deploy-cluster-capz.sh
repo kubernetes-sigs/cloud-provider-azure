@@ -22,6 +22,8 @@ WORKLOAD_CLUSTER_TEMPLATE_DIR="${REPO_ROOT}/tests/k8s-azure/manifest/cluster-api
 MANAGEMENT_CLUSTER_NAME="${MANAGEMENT_CLUSTER_NAME:-capz}"
 WORKLOAD_CLUSTER_TEMPLATE="${WORKLOAD_CLUSTER_TEMPLATE:-${WORKLOAD_CLUSTER_TEMPLATE_DIR}/vmss-multi-nodepool.yaml}"
 
+GENERATED_KUBECONFIG_DIRECTORY="${REPO_ROOT}/.kubeconfig"
+
 : "${AZURE_SUBSCRIPTION_ID:?empty or not defined.}"
 : "${AZURE_TENANT_ID:?empty or not defined.}"
 : "${AZURE_CLIENT_ID:?empty or not defined.}"
@@ -120,8 +122,8 @@ function create_workload_cluster() {
   fi
 
   echo "Creating workload cluster from ${WORKLOAD_CLUSTER_TEMPLATE}"
-  echo "Using cloud-controller-manager image: ${AZURE_CLOUD_CONTROLLER_MANAGER_IMG}"
-  echo "Using cloud-node-manager image: ${AZURE_CLOUD_NODE_MANAGER_IMG}"
+  echo "Using cloud-controller-manager image: ${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_REGISTRY}/${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_NAME}:${AZURE_CLOUD_CONTROLLER_MANAGER_IMG_TAG}"
+  echo "Using cloud-node-manager image: ${AZURE_CLOUD_NODE_MANAGER_IMG_REGISTRY}/${AZURE_CLOUD_NODE_MANAGER_IMG_NAME}:${AZURE_CLOUD_NODE_MANAGER_IMG_TAG}"
   if [[ -f "${WORKLOAD_CLUSTER_TEMPLATE}" ]]; then
     envsubst < "${WORKLOAD_CLUSTER_TEMPLATE}" | kubectl apply -f -
   else
@@ -137,7 +139,7 @@ function create_workload_cluster() {
   echo "Get kubeconfig and store it locally."
   kubectl --context="${MGMT_CLUSTER_CONTEXT}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json -n "${CLUSTER_NAME}" | jq -r .data.value | base64 --decode > ./"${CLUSTER_NAME}"-kubeconfig
   echo "Waiting for the control plane nodes to show up"
-  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig get nodes -n "${CLUSTER_NAME}" | grep -E 'master|control-plane'; do sleep 1; done"
+  timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig="${GENERATED_KUBECONFIG_DIRECTORY}"/${CLUSTER_NAME}-kubeconfig get nodes -n "${CLUSTER_NAME}" | grep -E 'master|control-plane'; do sleep 1; done"
   if [ "$?" == 124 ]; then
     echo "Timeout waiting for the control plane nodes"
     return 124
@@ -145,7 +147,7 @@ function create_workload_cluster() {
 
   echo "Installing cloud provider azure"
 
-  helm install cloud-provider-azure ../helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
+  helm install cloud-provider-azure "${REPO_ROOT}"/helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
     --kubeconfig ./"${CLUSTER_NAME}"-kubeconfig \
     --set infra.clusterName="${CLUSTER_NAME}" \
     --set cloudControllerManager.enableDynamicReloading=true \
@@ -157,7 +159,7 @@ function create_workload_cluster() {
     --set-string cloudNodeManager.imageTag="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG}" \
     --set cloudNodeManager.enableHealthProbeProxy=true
 
-  echo "Run \"kubectl --kubeconfig=./${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
+  echo "Run \"kubectl --kubeconfig=.${GENERATED_KUBECONFIG_DIRECTORY}/${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
 }
 
 create_management_cluster
