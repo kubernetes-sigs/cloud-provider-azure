@@ -378,7 +378,11 @@ clean: ## Cleanup local builds.
 	rm -rf $(BIN_DIR) $(PKG_CONFIG) $(TEST_RESULTS_DIR)
 
 $(PKG_CONFIG):
+ifeq ($(OVERRIDE_PKG_CONFIG), true)
+	@echo "Overriding pkg-config script. Use an alternate method to generate .pkg_config"
+else
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) hack/pkg-config.sh > $@
+endif
 
 ## --------------------------------------
 ##@ Release
