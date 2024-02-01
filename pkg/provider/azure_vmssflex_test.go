@@ -1250,7 +1250,7 @@ func TestEnsureVMSSFlexInPool(t *testing.T) {
 		testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 		if tc.isVMSSDeallocating {
-			testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+			testVmssFlex.ProvisioningState = pointer.String(consts.ProvisionStateDeleting)
 		}
 		if !tc.hasDefaultVMProfile {
 			testVmssFlex.VirtualMachineProfile = nil
@@ -1500,7 +1500,7 @@ func TestEnsureBackendPoolDeletedFromVMSetsVmssFlex(t *testing.T) {
 			testVmssFlex := genreteTestVmssFlex("vmssflex1", testVmssFlex1ID)
 
 			if tc.isVMSSDeallocating {
-				testVmssFlex.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+				testVmssFlex.ProvisioningState = pointer.String(consts.ProvisionStateDeleting)
 			}
 			if !tc.hasDefaultVMProfile {
 				testVmssFlex.VirtualMachineProfile = nil
