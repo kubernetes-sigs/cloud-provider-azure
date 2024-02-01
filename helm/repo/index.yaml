@@ -2,10 +2,10 @@ apiVersion: v1
 entries:
   cloud-provider-azure:
   - apiVersion: v1
-    created: "2024-01-30T14:55:54.503861+08:00"
+    created: "2024-02-01T15:23:23.778722-07:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
       components
-    digest: b3dd2addb05cbe6977237c2c65a5cc8ba3e50e211a580fb6a4963f875e712303
+    digest: e88f415bbc5230710a4aee76dbf1c9703ac270b54100b97d6f3264f96f58a718
     home: https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/cloud-provider-azure/README.md
     keywords:
     - cloud-provider-azure
@@ -20,8 +20,8 @@ entries:
     sources:
     - https://github.com/kubernetes-sigs/cloud-provider-azure
     urls:
-    - cloud-provider-azure-1.29.0.tgz
-    version: 1.29.0
+    - cloud-provider-azure-1.29.0+20240201.tgz
+    version: 1.29.0+20240201
   - apiVersion: v1
     created: "2024-01-07T10:16:11.421192+08:00"
     description: A Helm chart for installing kubernetes-sigs/cloud-provider-azure
@@ -568,4 +568,4 @@ entries:
     urls:
     - cloud-provider-azure-1.23.8.tgz
     version: 1.23.8
-generated: "2024-01-30T14:55:54.503484+08:00"
+generated: "2024-02-01T15:23:23.778182-07:00"

@@ -28,6 +28,7 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 |--------------------|------------------------|-----------------------|
 | master             | N/A                    | master                |
 | v1.y.x             | v1.y.z                 | release-1.y           |
+| v1.29.x            | v1.29.z                | release-1.29          |
 | v1.28.x            | v1.28.z                | release-1.28          |
 | v1.27.x            | v1.27.z                | release-1.27          |
 | v1.26.x            | v1.26.z                | release-1.26          |
