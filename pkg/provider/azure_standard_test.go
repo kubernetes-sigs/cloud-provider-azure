@@ -1048,7 +1048,7 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 					ProvisioningState: pointer.String("Succeeded"),
 				},
 			},
-			expectedStatus: vmPowerStateUnknown,
+			expectedStatus: consts.VMPowerStateUnknown,
 		},
 		{
 			name:     "GetPowerStatusByNodeName should get vmPowerStateUnknown if vm.InstanceView.statuses is nil",
@@ -1060,7 +1060,7 @@ func TestGetStandardVMPowerStatusByNodeName(t *testing.T) {
 					InstanceView:      &compute.VirtualMachineInstanceView{},
 				},
 			},
-			expectedStatus: vmPowerStateUnknown,
+			expectedStatus: consts.VMPowerStateUnknown,
 		},
 	}
 	for _, test := range testcases {
