@@ -43,11 +43,6 @@ var (
 )
 
 func TestStandardAttachDisk(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx, cancel := getContextWithCancel()
-	defer cancel()
 
 	testCases := []struct {
 		desc            string
@@ -85,6 +80,11 @@ func TestStandardAttachDisk(t *testing.T) {
 	}
 
 	for i, test := range testCases {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ctx, cancel := getContextWithCancel()
+		defer cancel()
 		testCloud := GetTestCloud(ctrl)
 		vmSet := testCloud.VMSet
 		expectedVMs := setTestVirtualMachines(testCloud, map[string]string{"vm1": "PowerState/Running"}, false)
@@ -116,6 +116,7 @@ func TestStandardAttachDisk(t *testing.T) {
 			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &retry.Error{HTTPStatusCode: http.StatusNotFound, RawError: cloudprovider.InstanceNotFound}).AnyTimes()
 		} else {
 			mockVMsClient.EXPECT().UpdateAsync(gomock.Any(), testCloud.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockVMsClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), testCloud.ResourceGroup, gomock.Any()).Return(nil, nil).AnyTimes()
 		}
 
 		options := AttachDiskOptions{
@@ -131,7 +132,7 @@ func TestStandardAttachDisk(t *testing.T) {
 		diskMap := map[string]*AttachDiskOptions{
 			"uri": &options,
 		}
-		_, err := vmSet.AttachDisk(ctx, test.nodeName, diskMap)
+		err := vmSet.AttachDisk(ctx, test.nodeName, diskMap)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 	}
 }

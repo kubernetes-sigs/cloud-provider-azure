@@ -108,7 +108,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
 
 		mockVMClient.EXPECT().UpdateAsync(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
-
+		mockVMClient.EXPECT().WaitForUpdateResult(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
 		options := AttachDiskOptions{
 			Lun:                     1,
 			DiskName:                "diskname",
@@ -123,7 +123,7 @@ func TestAttachDiskWithVmssFlex(t *testing.T) {
 			"uri": &options,
 		}
 
-		_, err = fs.AttachDisk(ctx, tc.nodeName, diskMap)
+		err = fs.AttachDisk(ctx, tc.nodeName, diskMap)
 		if tc.expectedErr == nil {
 			assert.NoError(t, err)
 		} else {
