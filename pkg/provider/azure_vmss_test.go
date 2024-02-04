@@ -790,7 +790,7 @@ func TestGetPowerStatusByNodeName(t *testing.T) {
 			description:        "GetPowerStatusByNodeName should return vmPowerStateUnknown when the vm.InstanceView.Statuses is nil",
 			vmList:             []string{"vmss-vm-000001"},
 			nilStatus:          true,
-			expectedPowerState: vmPowerStateUnknown,
+			expectedPowerState: consts.VMPowerStateUnknown,
 		},
 	}
 
@@ -2172,6 +2172,7 @@ func TestEnsureHostInPool(t *testing.T) {
 		isNilVMNetworkConfigs     bool
 		useMultipleSLBs           bool
 		isVMBeingDeleted          bool
+		isVMNotActive             bool
 		expectedNodeResourceGroup string
 		expectedVMSSName          string
 		expectedInstanceID        string
@@ -2261,6 +2262,11 @@ func TestEnsureHostInPool(t *testing.T) {
 				},
 			},
 		},
+		{
+			description:   "EnsureHostInPool should skip if the current node is not active",
+			nodeName:      "vmss-vm-000000",
+			isVMNotActive: true,
+		},
 	}
 
 	for _, test := range testCases {
@@ -2295,7 +2301,12 @@ func TestEnsureHostInPool(t *testing.T) {
 		if test.isNilVMNetworkConfigs {
 			expectedVMSSVMs[0].NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
 		}
-		mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
+		if test.isVMNotActive {
+			(*expectedVMSSVMs[0].InstanceView.Statuses)[0] = compute.InstanceViewStatus{
+				Code: pointer.String("PowerState/deallocated"),
+			}
+		}
+		mockVMSSVMClient := ss.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 		mockVMSSVMClient.EXPECT().List(
 			gomock.Any(),
 			ss.ResourceGroup,
@@ -2524,7 +2535,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 
 			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
 			if test.isVMSSDeallocating {
-				expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+				expectedVMSS.ProvisioningState = pointer.String(consts.ProvisionStateDeleting)
 			}
 			if test.isVMSSNilNICConfig {
 				expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil
@@ -2654,6 +2665,7 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 		nodeName                  string
 		backendpoolIDs            []string
 		isNilVMNetworkConfigs     bool
+		isVMNotActive             bool
 		expectedNodeResourceGroup string
 		expectedVMSSName          string
 		expectedInstanceID        string
@@ -2716,6 +2728,11 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 				},
 			},
 		},
+		{
+			description:   "ensureBackendPoolDeletedFromNode should skip if the node is not active",
+			nodeName:      "vmss-vm-000000",
+			isVMNotActive: true,
+		},
 	}
 
 	for _, test := range testCases {
@@ -2731,6 +2748,11 @@ func TestEnsureBackendPoolDeletedFromNodeCommon(t *testing.T) {
 			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", true)
 			if test.isNilVMNetworkConfigs {
 				expectedVMSSVMs[0].NetworkProfileConfiguration.NetworkInterfaceConfigurations = nil
+			}
+			if test.isVMNotActive {
+				(*expectedVMSSVMs[0].InstanceView.Statuses)[0] = compute.InstanceViewStatus{
+					Code: pointer.String("PowerState/deallocated"),
+				}
 			}
 			mockVMSSVMClient := ss.cloud.VirtualMachineScaleSetVMsClient.(*mockvmssvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
@@ -2812,7 +2834,7 @@ func TestEnsureBackendPoolDeletedFromVMSS(t *testing.T) {
 
 		expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, false)
 		if test.isVMSSDeallocating {
-			expectedVMSS.ProvisioningState = pointer.String(consts.VirtualMachineScaleSetsDeallocating)
+			expectedVMSS.ProvisioningState = pointer.String(consts.ProvisionStateDeleting)
 		}
 		if test.isVMSSNilNICConfig {
 			expectedVMSS.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = nil

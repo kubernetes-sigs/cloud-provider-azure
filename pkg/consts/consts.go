@@ -113,8 +113,8 @@ const (
 	// StrRawVersion is the raw version string
 	StrRawVersion string = "raw"
 
-	// VirtualMachineScaleSetsDeallocating indicates VMSS instances are in Deallocating state.
-	VirtualMachineScaleSetsDeallocating = "Deallocating"
+	// ProvisionStateDeleting indicates VMSS instances are in Deleting state.
+	ProvisionStateDeleting = "Deleting"
 	// VmssMachineIDTemplate is the vmss manchine ID template
 	VmssMachineIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/%s"
 	// VMSetCIDRIPV4TagKey specifies the node ipv4 CIDR mask of the instances on the VMSS or VMAS
@@ -130,6 +130,12 @@ const (
 	VMSetNamesSharingPrimarySLBDelimiter = ","
 	// PremiumV2_LRS type for Azure Disk
 	PremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
+	// ProvisioningStateDeleting ...
+	ProvisioningStateDeleting = "Deleting"
+	// ProvisioningStateSucceeded ...
+	ProvisioningStateSucceeded = "Succeeded"
+	// ProvisioningStateUnknown is the unknown provisioning state
+	ProvisioningStateUnknown = "Unknown"
 )
 
 // cache
@@ -542,4 +548,14 @@ const (
 
 const (
 	VMSSTagForBatchOperation = "aks-managed-coordination"
+)
+
+// VM power state
+const (
+	VMPowerStatePrefix       = "PowerState/"
+	VMPowerStateStopped      = "stopped"
+	VMPowerStateStopping     = "stopping"
+	VMPowerStateDeallocated  = "deallocated"
+	VMPowerStateDeallocating = "deallocating"
+	VMPowerStateUnknown      = "unknown"
 )
