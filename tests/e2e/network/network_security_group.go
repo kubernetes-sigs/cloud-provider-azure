@@ -351,17 +351,32 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			return true
 		}
 
-		allowedIPRanges := []string{
-			"10.20.0.0/16",
-			"192.168.0.1/32",
+		var (
+			allowedIPRanges []string
+			ipFamilies      []v1.IPFamily
+		)
+		_, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		if v6Enabled {
+			allowedIPRanges = []string{
+				"2c0f:fe40:8000::/48",
+				"2c0f:feb0::/43",
+			}
+			ipFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		} else {
+			allowedIPRanges = []string{
+				"10.20.0.0/16",
+				"192.168.0.1/32",
+			}
+			ipFamilies = []v1.IPFamily{v1.IPv4Protocol}
 		}
 
-		ipFamilyPolicy := v1.IPFamilyPolicyPreferDualStack
+		ipFamilyPolicy := v1.IPFamilyPolicySingleStack
 		svc := v1.Service{
 			Spec: v1.ServiceSpec{
 				Ports:          ports,
 				Type:           v1.ServiceTypeLoadBalancer,
 				Selector:       labels,
+				IPFamilies:     ipFamilies,
 				IPFamilyPolicy: &ipFamilyPolicy,
 			},
 			ObjectMeta: metav1.ObjectMeta{

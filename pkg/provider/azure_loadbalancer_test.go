@@ -4029,6 +4029,51 @@ func TestReconcileSecurityGroup(t *testing.T) {
 			},
 		},
 		{
+			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges annotation is set for IPv6",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges: "2001:db8::/32,2002:db8::/32",
+			}, true, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIP:   to.StringPtr("1234::5"),
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-2001.db8.._32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                 network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:          pointer.String("*"),
+								DestinationPortRange:     pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:      pointer.String("2001:db8::/32"),
+								DestinationAddressPrefix: to.StringPtr("1234::5"),
+								Access:                   network.SecurityRuleAccessAllow,
+								Priority:                 pointer.Int32(500),
+								Direction:                network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-2002.db8.._32"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                 network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:          pointer.String("*"),
+								DestinationPortRange:     pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:      pointer.String("2002:db8::/32"),
+								DestinationAddressPrefix: to.StringPtr("1234::5"),
+								Access:                   network.SecurityRuleAccessAllow,
+								Priority:                 pointer.Int32(501),
+								Direction:                network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges and serviceTags annotation is set",
 			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
 				consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32",
