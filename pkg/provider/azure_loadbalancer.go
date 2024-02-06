@@ -37,7 +37,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -49,6 +48,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // Since public IP is not a part of the load balancer on Azure,
@@ -571,12 +571,10 @@ func (az *Cloud) safeDeleteLoadBalancer(lb network.LoadBalancer, clusterName, vm
 			trimSuffixIgnoreCase(pointer.StringDeref(lb.Name, ""), consts.InternalLoadBalancerNameSuffix),
 			az.MultipleStandardLoadBalancerConfigurations[i].Name,
 		) {
-			if az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes != nil {
-				for nodeName := range az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes {
-					az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Delete(strings.ToLower(nodeName))
-				}
+			for _, nodeName := range az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes.UnsortedList() {
+				az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Delete(nodeName)
 			}
-			az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes = sets.New[string]()
+			az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes = utilsets.NewString()
 			break
 		}
 	}
@@ -1574,10 +1572,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 					for i := range az.MultipleStandardLoadBalancerConfigurations {
 						if strings.EqualFold(trimSuffixIgnoreCase(lbName, consts.InternalLoadBalancerNameSuffix), az.MultipleStandardLoadBalancerConfigurations[i].Name) {
 							az.multipleStandardLoadBalancersActiveServicesLock.Lock()
-							if az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices == nil {
-								az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices = sets.New[string]()
-							}
-							az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices.Insert(strings.ToLower(svcName))
+							az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices = utilsets.SafeInsert(az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices, svcName)
 							az.multipleStandardLoadBalancersActiveServicesLock.Unlock()
 							klog.V(2).Infof("reconcileMultipleStandardLoadBalancerConfigurations: service(%s) is active on lb(%s)", svcName, lbName)
 						}
@@ -1893,9 +1888,9 @@ func (az *Cloud) removeNodeFromLBConfig(nodeNameToLBConfigIDXMap map[string]int,
 // removeDeletedNodesFromLoadBalancerConfigurations removes the deleted nodes
 // that do not exist in nodes list from the load balancer configurations
 func (az *Cloud) removeDeletedNodesFromLoadBalancerConfigurations(nodes []*v1.Node) map[string]int {
-	nodeNamesSet := sets.New[string]()
+	nodeNamesSet := utilsets.NewString()
 	for _, node := range nodes {
-		nodeNamesSet.Insert(strings.ToLower(node.Name))
+		nodeNamesSet.Insert(node.Name)
 	}
 
 	az.multipleStandardLoadBalancersActiveNodesLock.Lock()
@@ -1905,12 +1900,12 @@ func (az *Cloud) removeDeletedNodesFromLoadBalancerConfigurations(nodes []*v1.No
 	nodeNameToLBConfigIDXMap := make(map[string]int)
 	for i, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
 		if multiSLBConfig.ActiveNodes != nil {
-			for nodeName := range multiSLBConfig.ActiveNodes {
+			for _, nodeName := range multiSLBConfig.ActiveNodes.UnsortedList() {
 				if nodeNamesSet.Has(nodeName) {
 					nodeNameToLBConfigIDXMap[nodeName] = i
 				} else {
 					klog.V(4).Infof("reconcileMultipleStandardLoadBalancerBackendNodes: node(%s) is gone, remove it from lb(%s)", nodeName, multiSLBConfig.Name)
-					az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes, _ = safeRemoveKeyFromStringsSet(az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes, strings.ToLower(nodeName))
+					az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes.Delete(nodeName)
 				}
 			}
 		}
@@ -1946,14 +1941,14 @@ func (az *Cloud) accommodateNodesByPrimaryVMSet(
 					continue
 				}
 
-				az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Store(strings.ToLower(node.Name), sets.Empty{})
+				az.nodesWithCorrectLoadBalancerByPrimaryVMSet.Store(strings.ToLower(node.Name), struct{}{})
 				if !multiSLBConfig.ActiveNodes.Has(node.Name) {
 					klog.V(4).Infof("accommodateNodesByPrimaryVMSet: node(%s) should be on lb(%s) because of primary vmSet (%s)", node.Name, multiSLBConfig.Name, vmSetName)
 
 					az.removeNodeFromLBConfig(nodeNameToLBConfigIDXMap, node.Name)
 
 					az.multipleStandardLoadBalancersActiveNodesLock.Lock()
-					az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes = safeAddKeyToStringsSet(az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes, strings.ToLower(node.Name))
+					az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes = utilsets.SafeInsert(az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes, node.Name)
 					az.multipleStandardLoadBalancersActiveNodesLock.Unlock()
 				}
 				break
@@ -2052,7 +2047,7 @@ func (az *Cloud) accommodateNodesByNodeSelector(
 
 		klog.V(4).Infof("accommodateNodesByNodeSelector: node(%s) should be on lb(%s) it is the eligible LB with fewest number of nodes", node.Name, az.MultipleStandardLoadBalancerConfigurations[minNodesIDX].Name)
 		az.multipleStandardLoadBalancersActiveNodesLock.Lock()
-		az.MultipleStandardLoadBalancerConfigurations[minNodesIDX].ActiveNodes = safeAddKeyToStringsSet(az.MultipleStandardLoadBalancerConfigurations[minNodesIDX].ActiveNodes, strings.ToLower(node.Name))
+		az.MultipleStandardLoadBalancerConfigurations[minNodesIDX].ActiveNodes = utilsets.SafeInsert(az.MultipleStandardLoadBalancerConfigurations[minNodesIDX].ActiveNodes, node.Name)
 		az.multipleStandardLoadBalancersActiveNodesLock.Unlock()
 	}
 
@@ -2114,16 +2109,13 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurationStatus(wantLb
 	for i := range az.MultipleStandardLoadBalancerConfigurations {
 		if strings.EqualFold(lbName, az.MultipleStandardLoadBalancerConfigurations[i].Name) {
 			az.multipleStandardLoadBalancersActiveServicesLock.Lock()
-			if az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices == nil {
-				az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices = sets.New[string]()
-			}
 
 			if wantLb {
 				klog.V(4).Infof("reconcileMultipleStandardLoadBalancerConfigurationStatus: service(%s) is active on lb(%s)", svcName, lbName)
-				az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices.Insert(strings.ToLower(svcName))
+				az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices = utilsets.SafeInsert(az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices, svcName)
 			} else {
 				klog.V(4).Infof("reconcileMultipleStandardLoadBalancerConfigurationStatus: service(%s) is not active on lb(%s) any more", svcName, lbName)
-				az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices, _ = safeRemoveKeyFromStringsSet(az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices, strings.ToLower(svcName))
+				az.MultipleStandardLoadBalancerConfigurations[i].ActiveServices.Delete(svcName)
 			}
 			az.multipleStandardLoadBalancersActiveServicesLock.Unlock()
 			break
@@ -3657,7 +3649,7 @@ func (az *Cloud) safeDeletePublicIP(service *v1.Service, pipResourceGroup string
 
 			// Check whether there are still load balancer rules referring to it.
 			if len(referencedLBRules) > 0 {
-				referencedLBRuleIDs := sets.New[string]()
+				referencedLBRuleIDs := utilsets.NewString()
 				for _, refer := range referencedLBRules {
 					referencedLBRuleIDs.Insert(pointer.StringDeref(refer.ID, ""))
 				}
@@ -4244,9 +4236,9 @@ func (az *Cloud) getEligibleLoadBalancersForService(service *v1.Service) ([]stri
 	// If there is no annotation given, it selects all LBs.
 	lbsFromAnnotation := consts.GetLoadBalancerConfigurationsNames(service)
 	if len(lbsFromAnnotation) > 0 {
-		lbNamesSet := sets.New[string](lbsFromAnnotation...)
+		lbNamesSet := utilsets.NewString(lbsFromAnnotation...)
 		for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
-			if lbNamesSet.Has(strings.ToLower(multiSLBConfig.Name)) {
+			if lbNamesSet.Has(multiSLBConfig.Name) {
 				logger.V(4).Info("selects the load balancer by annotation",
 					"load balancer configuration name", multiSLBConfig.Name)
 				eligibleLBs = append(eligibleLBs, multiSLBConfig)
@@ -4382,10 +4374,7 @@ func (az *Cloud) isLoadBalancerInUseByService(service *v1.Service, lbConfig Mult
 	defer az.multipleStandardLoadBalancersActiveServicesLock.Unlock()
 
 	serviceName := getServiceName(service)
-	if lbConfig.ActiveServices != nil {
-		return lbConfig.ActiveServices.Has(serviceName)
-	}
-	return false
+	return lbConfig.ActiveServices.Has(serviceName)
 }
 
 // There are two cases when a service owns the frontend IP config:

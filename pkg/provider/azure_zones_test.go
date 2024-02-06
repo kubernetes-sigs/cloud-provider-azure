@@ -25,18 +25,17 @@ import (
 	"testing"
 	"time"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
-
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 const (
@@ -283,7 +282,7 @@ func TestGetZoneByProviderID(t *testing.T) {
 
 func TestAvailabilitySetGetZoneByNodeName(t *testing.T) {
 	az := &Cloud{
-		unmanagedNodes: sets.Set[string]{"vm-0": sets.Empty{}},
+		unmanagedNodes: utilsets.NewString("vm-0"),
 		nodeInformerSynced: func() bool {
 			return true
 		},
@@ -293,7 +292,7 @@ func TestAvailabilitySetGetZoneByNodeName(t *testing.T) {
 	assert.Equal(t, cloudprovider.Zone{}, zone)
 
 	az = &Cloud{
-		unmanagedNodes: sets.Set[string]{"vm-0": sets.Empty{}},
+		unmanagedNodes: utilsets.NewString("vm-0"),
 		nodeInformerSynced: func() bool {
 			return false
 		},
