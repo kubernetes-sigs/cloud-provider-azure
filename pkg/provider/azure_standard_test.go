@@ -31,7 +31,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
@@ -42,6 +41,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 const (
@@ -1618,9 +1618,7 @@ func TestStandardEnsureHostsInPool(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		cloud.Config.LoadBalancerSku = consts.LoadBalancerSkuStandard
-		cloud.Config.ExcludeMasterFromStandardLB = pointer.Bool(true)
-		cloud.excludeLoadBalancerNodes = sets.New(test.excludeLBNodes...)
+		cloud.excludeLoadBalancerNodes = utilsets.NewString(test.excludeLBNodes...)
 
 		testVM := buildDefaultTestVirtualMachine(availabilitySetID, []string{test.nicID})
 		testNIC := buildDefaultTestInterface(false, []string{backendAddressPoolID})

@@ -34,7 +34,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	servicehelpers "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
@@ -47,6 +46,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // getServiceLoadBalancerIP retrieves LB IP from IPv4 annotation, then IPv6 annotation, then service.Spec.LoadBalancerIP.
@@ -582,7 +582,7 @@ func (az *Cloud) reconcileSharedLoadBalancer(service *v1.Service, clusterName st
 		return existingLBs, nil
 	}
 
-	lbNamesToBeDeleted := sets.New[string]()
+	lbNamesToBeDeleted := utilsets.NewString()
 	// delete unwanted LBs
 	for _, lb := range existingLBs {
 		klog.V(4).Infof("reconcileSharedLoadBalancer: checking LB %s", pointer.StringDeref(lb.Name, ""))
@@ -3123,7 +3123,7 @@ func (az *Cloud) safeDeletePublicIP(service *v1.Service, pipResourceGroup string
 
 			// Check whether there are still load balancer rules referring to it.
 			if len(referencedLBRules) > 0 {
-				referencedLBRuleIDs := sets.New[string]()
+				referencedLBRuleIDs := utilsets.NewString()
 				for _, refer := range referencedLBRules {
 					referencedLBRuleIDs.Insert(pointer.StringDeref(refer.ID, ""))
 				}
