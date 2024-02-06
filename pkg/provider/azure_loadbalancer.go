@@ -2411,7 +2411,14 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		sourceRanges          = accessControl.SourceRanges()
 		allowedServiceTags    = accessControl.AllowedServiceTags()
 		allowedIPRanges       = accessControl.AllowedIPRanges()
-		sourceAddressPrefixes = accessControl.IPV4Sources()
+		sourceAddressPrefixes = func() []string {
+			// AKS v1.26 does not support dual stack, so it returns the single stack source ranges instead.
+			if service.Spec.IPFamilies[0] == v1.IPv4Protocol {
+				return accessControl.IPV4Sources()
+			} else {
+				return accessControl.IPV6Sources()
+			}
+		}()
 	)
 
 	if len(sourceRanges) != 0 && len(allowedIPRanges) != 0 {
