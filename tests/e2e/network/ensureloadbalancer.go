@@ -839,7 +839,11 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		}
 
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
-		service.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0"}
+		if tc.IPFamily == utils.IPv6 {
+			service.Spec.LoadBalancerSourceRanges = []string{"::/0"}
+		} else {
+			service.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0"}
+		}
 		service.Spec.SessionAffinity = "ClientIP"
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())

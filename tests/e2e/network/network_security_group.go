@@ -19,6 +19,7 @@ package network
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -259,11 +260,18 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 		hostExecPod, err := utils.GetPod(cs, ns.Name, agnhostPod)
 		Expect(err).NotTo(HaveOccurred())
 		hostExecPodIP := hostExecPod.Status.PodIP
-
 		mask := 32
+		// For IPv6
 		if tc.IPFamily == utils.IPv6 {
+			for _, ip := range hostExecPod.Status.PodIPs {
+				if net.ParseIP(ip.IP).To4() == nil {
+					hostExecPodIP = ip.IP
+					break
+				}
+			}
 			mask = 128
 		}
+
 		allowCIDR := fmt.Sprintf("%s/%d", hostExecPodIP, mask)
 		service.Spec.LoadBalancerSourceRanges = []string{allowCIDR}
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
