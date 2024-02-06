@@ -128,8 +128,8 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-      - "release-1.25"
-    target-branch: "release-1.25"
+      - "release-1.29"
+    target-branch: "release-1.29"
     ignore:
       - dependency-name: "k8s.io/*"
         versions: [">=0.26.0"]
@@ -140,7 +140,7 @@ updates:
       interval: daily
       time: "01:00"
       timezone: "Asia/Shanghai"
-    target-branch: "release-1.25"
+    target-branch: "release-1.29"
     labels:
       - "area/dependency"
       - "release-note-none"
@@ -148,14 +148,14 @@ updates:
       - "kind/testing"
       - "lgtm"
       - "approved"
-      - "release-1.25"
+      - "release-1.29"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "daily"
       time: "01:00"
       timezone: "Asia/Shanghai"
-    target-branch: "release-1.25"
+    target-branch: "release-1.29"
     labels:
       - "area/dependency"
       - "release-note-none"
@@ -163,7 +163,7 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-      - "release-1.25"
+      - "release-1.29"
   - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 1
