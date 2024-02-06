@@ -132,7 +132,7 @@ updates:
     target-branch: "release-1.29"
     ignore:
       - dependency-name: "k8s.io/*"
-        versions: [">=0.26.0"]
+        versions: [">=0.30.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
