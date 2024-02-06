@@ -29,12 +29,12 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestDeleteRoute(t *testing.T) {
@@ -49,7 +49,7 @@ func TestDeleteRoute(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.New[string](),
+		unmanagedNodes:     utilsets.NewString(),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -121,7 +121,7 @@ func TestDeleteRouteDualStack(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:       sets.New[string](),
+		unmanagedNodes:       utilsets.NewString(),
 		nodeInformerSynced:   func() bool { return true },
 		ipv6DualStackEnabled: true,
 	}
@@ -194,7 +194,7 @@ func TestCreateRoute(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.New[string](),
+		unmanagedNodes:     utilsets.NewString(),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -353,7 +353,7 @@ func TestCreateRoute(t *testing.T) {
 			cloud.unmanagedNodes.Insert(test.unmanagedNodeName)
 			cloud.routeCIDRs = test.routeCIDRs
 		} else {
-			cloud.unmanagedNodes = sets.New[string]()
+			cloud.unmanagedNodes = utilsets.NewString()
 			cloud.routeCIDRs = nil
 		}
 		if test.nodeInformerNotSynced {
@@ -601,7 +601,7 @@ func TestListRoutes(t *testing.T) {
 			RouteTableName:          "bar",
 			Location:                "location",
 		},
-		unmanagedNodes:     sets.New[string](),
+		unmanagedNodes:     utilsets.NewString(),
 		nodeInformerSynced: func() bool { return true },
 	}
 	cache, _ := cloud.newRouteTableCache()
@@ -713,7 +713,7 @@ func TestListRoutes(t *testing.T) {
 			cloud.unmanagedNodes.Insert(test.unmanagedNodeName)
 			cloud.routeCIDRs = test.routeCIDRs
 		} else {
-			cloud.unmanagedNodes = sets.New[string]()
+			cloud.unmanagedNodes = utilsets.NewString()
 			cloud.routeCIDRs = nil
 		}
 
@@ -741,7 +741,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 	for _, testCase := range []struct {
 		description                          string
 		existingRoutes, expectedRoutes       []network.Route
-		existingNodeNames                    sets.Set[string]
+		existingNodeNames                    *utilsets.IgnoreCaseSet
 		expectedChanged, enableIPV6DualStack bool
 	}{
 		{
@@ -753,7 +753,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 			expectedRoutes: []network.Route{
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 			},
-			existingNodeNames:   sets.New("aks-node1-vmss000000"),
+			existingNodeNames:   utilsets.NewString("aks-node1-vmss000000"),
 			enableIPV6DualStack: true,
 			expectedChanged:     true,
 		},
@@ -766,7 +766,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 			expectedRoutes: []network.Route{
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames: sets.New("aks-node1-vmss000000"),
+			existingNodeNames: utilsets.NewString("aks-node1-vmss000000"),
 			expectedChanged:   true,
 		},
 		{
@@ -779,7 +779,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames:   sets.New("aks-node1-vmss000001"),
+			existingNodeNames:   utilsets.NewString("aks-node1-vmss000001"),
 			enableIPV6DualStack: true,
 		},
 		{
@@ -792,7 +792,7 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 				{Name: pointer.String("aks-node1-vmss000000____xxx")},
 				{Name: pointer.String("aks-node1-vmss000000")},
 			},
-			existingNodeNames: sets.New("aks-node1-vmss000001"),
+			existingNodeNames: utilsets.NewString("aks-node1-vmss000001"),
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
