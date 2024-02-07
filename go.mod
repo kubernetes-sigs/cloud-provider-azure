@@ -22,13 +22,13 @@ require (
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.16.0
 	golang.org/x/text v0.14.0
-	k8s.io/api v0.27.8
-	k8s.io/apimachinery v0.27.8
+	k8s.io/api v0.27.10
+	k8s.io/apimachinery v0.27.10
 	k8s.io/apiserver v0.27.8
-	k8s.io/client-go v0.27.8
+	k8s.io/client-go v0.27.10
 	k8s.io/cloud-provider v0.27.8
 	k8s.io/component-base v0.27.8
-	k8s.io/component-helpers v0.27.8
+	k8s.io/component-helpers v0.27.10
 	k8s.io/controller-manager v0.27.8
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kubelet v0.27.8
@@ -117,11 +117,11 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.19.0 // indirect
 	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
-	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/oauth2 v0.11.0 // indirect
 	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.14.0 // indirect
+	golang.org/x/tools v0.16.1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
