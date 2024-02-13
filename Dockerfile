@@ -14,7 +14,7 @@
 
 # syntax=docker/dockerfile:1
 
-FROM --platform=linux/amd64 golang:1.22-bullseye@sha256:84825c0ec01d277311cfbad14321338166fc7ffa73202db3a2debfeb89e8ddd5 AS builder
+FROM --platform=linux/amd64 golang:1.22-bullseye@sha256:32d6bbfa90c6dc234f39eab308a4f8a6091749910e5374363736e9f5b0c05224 AS builder
 
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
