@@ -186,7 +186,7 @@ func TestNodeInitialized(t *testing.T) {
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		factory.Core().V1().Nodes().Lister(),
 		fnh,
 		mockNP,
 		time.Second,
@@ -265,7 +265,7 @@ func TestUpdateCloudNode(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		factory.Core().V1().Nodes().Lister(),
 		fnh,
 		mockNP,
 		time.Second,
@@ -317,7 +317,7 @@ func TestNodeIgnored(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		factory.Core().V1().Nodes().Lister(),
 		fnh,
 		mockNP,
 		time.Second,
@@ -400,7 +400,7 @@ func TestZoneInitialized(t *testing.T) {
 			kubeClient:   fnh,
 			nodeName:     "node0",
 			nodeProvider: mockNP,
-			nodeInformer: factory.Core().V1().Nodes(),
+			nodeLister:   factory.Core().V1().Nodes().Lister(),
 			recorder:     eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
 		}
 		eventBroadcaster.StartLogging(klog.Infof)
@@ -481,7 +481,7 @@ func TestZoneInitialized(t *testing.T) {
 			kubeClient:               fnh,
 			nodeName:                 "node0",
 			nodeProvider:             mockNP,
-			nodeInformer:             factory.Core().V1().Nodes(),
+			nodeLister:               factory.Core().V1().Nodes().Lister(),
 			recorder:                 eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
 			enableBetaTopologyLabels: true,
 		}
@@ -578,12 +578,19 @@ func TestAddCloudNode(t *testing.T) {
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		nodeInformer,
+		nodeInformer.Lister(),
 		fnh,
 		mockNP,
 		time.Second,
 		false,
 		false)
+	_, err := nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { cloudNodeController.AddCloudNode(context.TODO(), obj) },
+		UpdateFunc: func(oldObj, newObj interface{}) { cloudNodeController.UpdateCloudNode(context.TODO(), oldObj, newObj) },
+	})
+	if err != nil {
+		t.Fatalf("error AddEventHandler: %v", err)
+	}
 	factory.Start(ctx.Done())
 	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
 
@@ -638,12 +645,19 @@ func TestUpdateNodeAddresses(t *testing.T) {
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		nodeInformer,
+		nodeInformer.Lister(),
 		fnh,
 		mockNP,
 		time.Second,
 		false,
 		false)
+	_, err := nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { cloudNodeController.AddCloudNode(context.TODO(), obj) },
+		UpdateFunc: func(oldObj, newObj interface{}) { cloudNodeController.UpdateCloudNode(context.TODO(), oldObj, newObj) },
+	})
+	if err != nil {
+		t.Fatalf("error AddEventHandler: %v", err)
+	}
 	factory.Start(ctx.Done())
 	cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced)
 
@@ -740,7 +754,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
 		"node0",
-		factory.Core().V1().Nodes(),
+		factory.Core().V1().Nodes().Lister(),
 		fnh,
 		mockNP,
 		time.Second,
@@ -844,8 +858,8 @@ func Test_reconcileNodeLabels(t *testing.T) {
 			factory := informers.NewSharedInformerFactory(clientset, 0)
 
 			cnc := &CloudNodeController{
-				kubeClient:   clientset,
-				nodeInformer: factory.Core().V1().Nodes(),
+				kubeClient: clientset,
+				nodeLister: factory.Core().V1().Nodes().Lister(),
 				// Test using the beta toplogy labels.
 				labelReconcileInfo: betaToplogyLabels,
 			}
@@ -1076,7 +1090,7 @@ func TestNodeAddressesNotUpdate(t *testing.T) {
 	cloudNodeController := &CloudNodeController{
 		nodeName:                  "node0",
 		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeLister:                factory.Core().V1().Nodes().Lister(),
 		nodeProvider:              mockNP,
 		recorder:                  eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"}),
 		nodeStatusUpdateFrequency: 1 * time.Second,
@@ -1162,7 +1176,7 @@ func TestNodeProviderID(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
 		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeLister:                factory.Core().V1().Nodes().Lister(),
 		nodeName:                  "node0",
 		nodeProvider:              mockNP,
 		nodeStatusUpdateFrequency: 1 * time.Second,
@@ -1248,7 +1262,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
 		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeLister:                factory.Core().V1().Nodes().Lister(),
 		nodeName:                  "node0",
 		nodeProvider:              mockNP,
 		nodeStatusUpdateFrequency: 1 * time.Second,
@@ -1316,7 +1330,7 @@ func TestNodeProviderIDNotSet(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
 		kubeClient:                fnh,
-		nodeInformer:              factory.Core().V1().Nodes(),
+		nodeLister:                factory.Core().V1().Nodes().Lister(),
 		nodeName:                  "node0",
 		nodeProvider:              mockNP,
 		nodeStatusUpdateFrequency: 1 * time.Second,

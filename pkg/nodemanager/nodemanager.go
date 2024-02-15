@@ -33,11 +33,10 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/cache"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
 	clientretry "k8s.io/client-go/util/retry"
 	cloudprovider "k8s.io/cloud-provider"
@@ -120,7 +119,7 @@ type CloudNodeController struct {
 	nodeName      string
 	waitForRoutes bool
 	nodeProvider  NodeProvider
-	nodeInformer  coreinformers.NodeInformer
+	nodeLister    corelisters.NodeLister
 	kubeClient    clientset.Interface
 	recorder      record.EventRecorder
 
@@ -134,7 +133,7 @@ type CloudNodeController struct {
 // NewCloudNodeController creates a CloudNodeController object
 func NewCloudNodeController(
 	nodeName string,
-	nodeInformer coreinformers.NodeInformer,
+	nodeInformer corelisters.NodeLister,
 	kubeClient clientset.Interface,
 	nodeProvider NodeProvider,
 	nodeStatusUpdateFrequency time.Duration,
@@ -152,7 +151,7 @@ func NewCloudNodeController(
 
 	cnc := &CloudNodeController{
 		nodeName:                  nodeName,
-		nodeInformer:              nodeInformer,
+		nodeLister:                nodeInformer,
 		kubeClient:                kubeClient,
 		recorder:                  recorder,
 		nodeProvider:              nodeProvider,
@@ -166,33 +165,12 @@ func NewCloudNodeController(
 		cnc.labelReconcileInfo = append(cnc.labelReconcileInfo, betaToplogyLabels...)
 	}
 
-	// Use shared informer to listen to add/update of nodes. Note that any nodes
-	// that exist before node controller starts will show up in the update method
-	_, _ = cnc.nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { cnc.AddCloudNode(context.TODO(), obj) },
-		UpdateFunc: func(oldObj, newObj interface{}) { cnc.UpdateCloudNode(context.TODO(), oldObj, newObj) },
-	})
-
 	return cnc
-}
-
-// Run controller updates newly registered nodes with information
-// from the cloud provider. This call is blocking so should be called
-// via a goroutine
-func (cnc *CloudNodeController) Run(stopCh <-chan struct{}) {
-	defer utilruntime.HandleCrash()
-
-	// The following loops run communicate with the APIServer with a worst case complexity
-	// of O(num_nodes) per cycle. These functions are justified here because these events fire
-	// very infrequently. DO NOT MODIFY this to perform frequent operations.
-
-	// Start a loop to periodically update the node addresses obtained from the cloud
-	wait.Until(func() { cnc.UpdateNodeStatus(context.TODO()) }, cnc.nodeStatusUpdateFrequency, stopCh)
 }
 
 // UpdateNodeStatus updates the node status, such as node addresses
 func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) {
-	node, err := cnc.nodeInformer.Lister().Get(cnc.nodeName)
+	node, err := cnc.nodeLister.Get(cnc.nodeName)
 	if err != nil {
 		// If node not found, just ignore it.
 		if apierrors.IsNotFound(err) {
