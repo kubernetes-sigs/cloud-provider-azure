@@ -57,6 +57,21 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
+// BeginAttachDetachDataDisks mocks base method.
+func (m *MockInterface) BeginAttachDetachDataDisks(ctx context.Context, resourceGroupName, vmName string, parameters armcompute.AttachDetachDataDisksRequest, options *armcompute.VirtualMachinesClientBeginAttachDetachDataDisksOptions) (*runtime.Poller[armcompute.VirtualMachinesClientAttachDetachDataDisksResponse], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BeginAttachDetachDataDisks", ctx, resourceGroupName, vmName, parameters, options)
+	ret0, _ := ret[0].(*runtime.Poller[armcompute.VirtualMachinesClientAttachDetachDataDisksResponse])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BeginAttachDetachDataDisks indicates an expected call of BeginAttachDetachDataDisks.
+func (mr *MockInterfaceMockRecorder) BeginAttachDetachDataDisks(ctx, resourceGroupName, vmName, parameters, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginAttachDetachDataDisks", reflect.TypeOf((*MockInterface)(nil).BeginAttachDetachDataDisks), ctx, resourceGroupName, vmName, parameters, options)
+}
+
 // BeginCreateOrUpdate mocks base method.
 func (m *MockInterface) BeginCreateOrUpdate(ctx context.Context, resourceGroupName, vmName string, parameters armcompute.VirtualMachine, options *armcompute.VirtualMachinesClientBeginCreateOrUpdateOptions) (*runtime.Poller[armcompute.VirtualMachinesClientCreateOrUpdateResponse], error) {
 	m.ctrl.T.Helper()
