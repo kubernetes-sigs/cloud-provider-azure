@@ -65,5 +65,5 @@ func (config *AzureAuthConfig) GetAzureFederatedTokenFile() (string, bool) {
 	if clientCertPath := os.Getenv(utils.AzureFederatedTokenFile); clientCertPath != "" {
 		return clientCertPath, true
 	}
-	return config.AADClientCertPath, config.UseFederatedWorkloadIdentityExtension
+	return config.AADFederatedTokenFile, config.UseFederatedWorkloadIdentityExtension
 }
