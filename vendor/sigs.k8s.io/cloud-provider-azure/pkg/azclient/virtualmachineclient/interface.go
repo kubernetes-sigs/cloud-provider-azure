@@ -35,4 +35,5 @@ type Interface interface {
 	InstanceView(ctx context.Context, resourceGroupName string, vmName string) (*armcompute.VirtualMachineInstanceView, error)
 	ListVMInstanceView(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachine, rerr error)
 	BeginCreateOrUpdate(ctx context.Context, resourceGroupName string, vmName string, parameters armcompute.VirtualMachine, options *armcompute.VirtualMachinesClientBeginCreateOrUpdateOptions) (*runtime.Poller[armcompute.VirtualMachinesClientCreateOrUpdateResponse], error)
+	BeginAttachDetachDataDisks(ctx context.Context, resourceGroupName string, vmName string, parameters armcompute.AttachDetachDataDisksRequest, options *armcompute.VirtualMachinesClientBeginAttachDetachDataDisksOptions) (*runtime.Poller[armcompute.VirtualMachinesClientAttachDetachDataDisksResponse], error)
 }
