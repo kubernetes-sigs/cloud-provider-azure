@@ -948,6 +948,34 @@ func TestIsAllowBlobPublicAccessEqual(t *testing.T) {
 			},
 			expectedResult: false,
 		},
+		{
+			desc: "non-identitical tags with different keys",
+			account: storage.Account{
+				Tags: map[string]*string{
+					"key1": pointer.String("value2"),
+				},
+			},
+			accountOptions: &AccountOptions{
+				MatchTags: true,
+				Tags: map[string]string{
+					"key2": "value",
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			desc: "account tags is empty",
+			account: storage.Account{
+				Tags: map[string]*string{},
+			},
+			accountOptions: &AccountOptions{
+				MatchTags: true,
+				Tags: map[string]string{
+					"key": "value",
+				},
+			},
+			expectedResult: false,
+		},
 	}
 
 	for _, test := range tests {

@@ -747,17 +747,16 @@ func isTagsEqual(account storage.Account, accountOptions *AccountOptions) bool {
 		return true
 	}
 
-	for k, v := range account.Tags {
-		var value string
-		// nil and empty value should be regarded as equal
-		if v != nil {
-			value = *v
-		}
-		if accountOptions.Tags[k] != value {
+	if len(account.Tags) < len(accountOptions.Tags) {
+		return false
+	}
+
+	// ensure all tags in accountOptions are in account
+	for k, v := range accountOptions.Tags {
+		if pointer.StringDeref(account.Tags[k], "") != v {
 			return false
 		}
 	}
-
 	return true
 }
 
