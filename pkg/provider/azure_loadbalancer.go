@@ -1581,6 +1581,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 	}
 
 	for _, existingLB := range *existingLBs {
+
 		lbName := pointer.StringDeref(existingLB.Name, "")
 		if existingLB.LoadBalancerPropertiesFormat != nil &&
 			existingLB.LoadBalancingRules != nil {
