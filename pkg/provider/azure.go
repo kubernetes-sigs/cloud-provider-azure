@@ -474,7 +474,9 @@ func NewCloud(ctx context.Context, config *Config, callFromCCM bool) (cloudprovi
 	}
 
 	az.ipv6DualStackEnabled = true
-	az.lockMap = newLockMap()
+	if az.lockMap == nil {
+		az.lockMap = newLockMap()
+	}
 	return az, nil
 }
 
@@ -624,6 +626,7 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *Config, 
 		return err
 	}
 
+	az.lockMap = newLockMap()
 	az.Config = *config
 	az.Environment = *env
 	az.ResourceRequestBackoff = resourceRequestBackoff
