@@ -28,7 +28,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/pointer"
@@ -36,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestEnsureHostsInPoolNodeIP(t *testing.T) {
@@ -290,7 +290,7 @@ func TestReconcileBackendPoolsNodeIPConfig(t *testing.T) {
 	az.VMSet = mockVMSet
 	az.LoadBalancerClient = mockLBClient
 	az.nodeInformerSynced = func() bool { return true }
-	az.excludeLoadBalancerNodes = sets.New("k8s-agentpool1-00000000")
+	az.excludeLoadBalancerNodes = utilsets.NewString("k8s-agentpool1-00000000")
 
 	bc := newBackendPoolTypeNodeIPConfig(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
@@ -331,7 +331,7 @@ func TestReconcileBackendPoolsNodeIPConfigRemoveIPConfig(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	az.VMSet = mockVMSet
 	az.nodeInformerSynced = func() bool { return true }
-	az.excludeLoadBalancerNodes = sets.New("k8s-agentpool1-00000000")
+	az.excludeLoadBalancerNodes = utilsets.NewString("k8s-agentpool1-00000000")
 
 	bc := newBackendPoolTypeNodeIPConfig(az)
 	svc := getTestService("test", v1.ProtocolTCP, nil, false, 80)
@@ -449,8 +449,8 @@ func TestReconcileBackendPoolsNodeIP(t *testing.T) {
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypeNodeIP
 	az.KubeClient = fake.NewSimpleClientset(nodes[0], nodes[1])
-	az.excludeLoadBalancerNodes = sets.New("vmss-0")
-	az.nodePrivateIPs["vmss-0"] = sets.New("10.0.0.1")
+	az.excludeLoadBalancerNodes = utilsets.NewString("vmss-0")
+	az.nodePrivateIPs["vmss-0"] = utilsets.NewString("10.0.0.1")
 
 	lbClient := mockloadbalancerclient.NewMockInterface(ctrl)
 	lbClient.EXPECT().CreateOrUpdateBackendPools(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), bp, gomock.Any()).Return(nil)
@@ -662,8 +662,8 @@ func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	mockVMSet.EXPECT().GetNodeNameByIPConfigurationID("ipconfig2").Return("node2", "", nil)
 
 	az := GetTestCloud(ctrl)
-	az.nodePrivateIPs = map[string]sets.Set[string]{
-		"node1": sets.New("1.2.3.4", "fe80::1"),
+	az.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+		"node1": utilsets.NewString("1.2.3.4", "fe80::1"),
 	}
 	az.VMSet = mockVMSet
 	bc := newBackendPoolTypeNodeIPConfig(az)
