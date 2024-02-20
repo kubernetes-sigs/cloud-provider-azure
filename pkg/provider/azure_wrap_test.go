@@ -24,10 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestExtractNotFound(t *testing.T) {
@@ -63,32 +62,32 @@ func TestIsNodeUnmanaged(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		unmanagedNodes sets.Set[string]
+		unmanagedNodes *utilsets.IgnoreCaseSet
 		node           string
 		expected       bool
 		expectErr      bool
 	}{
 		{
 			name:           "unmanaged node should return true",
-			unmanagedNodes: sets.New("node1", "node2"),
+			unmanagedNodes: utilsets.NewString("node1", "node2"),
 			node:           "node1",
 			expected:       true,
 		},
 		{
 			name:           "managed node should return false",
-			unmanagedNodes: sets.New("node1", "node2"),
+			unmanagedNodes: utilsets.NewString("node1", "node2"),
 			node:           "node3",
 			expected:       false,
 		},
 		{
 			name:           "empty unmanagedNodes should return true",
-			unmanagedNodes: sets.New[string](),
+			unmanagedNodes: utilsets.NewString(),
 			node:           "node3",
 			expected:       false,
 		},
 		{
 			name:           "no synced informer should report error",
-			unmanagedNodes: sets.New[string](),
+			unmanagedNodes: utilsets.NewString(),
 			node:           "node1",
 			expectErr:      true,
 		},
