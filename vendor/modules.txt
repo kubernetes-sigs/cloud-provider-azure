@@ -1378,7 +1378,7 @@ k8s.io/component-base/term
 k8s.io/component-base/tracing
 k8s.io/component-base/tracing/api/v1
 k8s.io/component-base/version
-# k8s.io/component-helpers v0.29.0
+# k8s.io/component-helpers v0.29.2
 ## explicit; go 1.21
 k8s.io/component-helpers/node/util
 # k8s.io/controller-manager v0.29.0
