@@ -32,7 +32,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -41,6 +40,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
@@ -488,9 +488,9 @@ func TestEndpointSlicesInformer(t *testing.T) {
 				},
 			}
 			cloud.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
-			cloud.nodePrivateIPs = map[string]sets.Set[string]{
-				"node1": sets.New[string]("10.0.0.1"),
-				"node2": sets.New[string]("10.0.0.2"),
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+				"node2": utilsets.NewString("10.0.0.2"),
 			}
 
 			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "test-svc1", []string{"10.0.0.1"})
@@ -574,9 +574,9 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 				},
 			}
 			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
-			cloud.nodePrivateIPs = map[string]sets.Set[string]{
-				"node1": sets.New[string]("10.0.0.1", "fd00::1"),
-				"node2": sets.New[string]("10.0.0.2", "fd00::2"),
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1", "fd00::1"),
+				"node2": utilsets.NewString("10.0.0.2", "fd00::2"),
 			}
 
 			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
