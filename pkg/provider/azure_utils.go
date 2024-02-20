@@ -26,13 +26,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 var strToExtendedLocationType = map[string]network.ExtendedLocationTypes{
@@ -183,7 +183,7 @@ func (az *Cloud) reconcileTags(currentTagsOnResource, newTags map[string]*string
 	return currentTagsOnResource, changed
 }
 
-func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.Set[string] {
+func (az *Cloud) getVMSetNamesSharingPrimarySLB() *utilsets.IgnoreCaseSet {
 	vmSetNames := make([]string, 0)
 	if az.NodePoolsWithoutDedicatedSLB != "" {
 		vmSetNames = strings.Split(az.Config.NodePoolsWithoutDedicatedSLB, consts.VMSetNamesSharingPrimarySLBDelimiter)
@@ -192,7 +192,7 @@ func (az *Cloud) getVMSetNamesSharingPrimarySLB() sets.Set[string] {
 		}
 	}
 
-	return sets.New(vmSetNames...)
+	return utilsets.NewString(vmSetNames...)
 }
 
 func getExtendedLocationTypeFromString(extendedLocationType string) network.ExtendedLocationTypes {

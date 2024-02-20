@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
@@ -46,6 +45,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 // setTestVirtualMachines sets test virtual machine with powerstate.
@@ -883,7 +883,7 @@ func TestInstanceMetadata(t *testing.T) {
 
 	t.Run("instance not exists", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		cloud.unmanagedNodes = sets.New("node0")
+		cloud.unmanagedNodes = utilsets.NewString("node0")
 
 		meta, err := cloud.InstanceMetadata(context.Background(), &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -992,7 +992,7 @@ func TestCloud_InstanceExists(t *testing.T) {
 	t.Run("should return true when instance is not managed by azure", func(t *testing.T) {
 		ctx := context.Background()
 		cloud := GetTestCloud(ctrl)
-		cloud.unmanagedNodes = sets.New("foo")
+		cloud.unmanagedNodes = utilsets.NewString("foo")
 		node := &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "foo",

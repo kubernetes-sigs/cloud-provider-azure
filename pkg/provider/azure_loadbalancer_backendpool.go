@@ -26,7 +26,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 type BackendPool interface {
@@ -305,8 +305,8 @@ func getBackendIPConfigurationsToBeDeleted(
 		return []network.InterfaceIPConfiguration{}
 	}
 
-	bipConfigNotFoundIDSet := sets.New[string]()
-	bipConfigExcludeIDSet := sets.New[string]()
+	bipConfigNotFoundIDSet := utilsets.NewString()
+	bipConfigExcludeIDSet := utilsets.NewString()
 	for _, ipConfig := range bipConfigNotFound {
 		bipConfigNotFoundIDSet.Insert(pointer.StringDeref(ipConfig.ID, ""))
 	}
@@ -345,7 +345,7 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(clusterName string, 
 		return nil, nil
 	}
 
-	backendPrivateIPv4s, backendPrivateIPv6s := sets.New[string](), sets.New[string]()
+	backendPrivateIPv4s, backendPrivateIPv6s := utilsets.NewString(), utilsets.NewString()
 	for _, bp := range *lb.BackendAddressPools {
 		found, _ := isLBBackendPoolsExisting(lbBackendPoolNames, bp.Name)
 		if found {
@@ -413,7 +413,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			backendPool.LoadBalancerBackendAddresses = &lbBackendPoolAddresses
 		}
 
-		existingIPs := sets.New[string]()
+		existingIPs := utilsets.NewString()
 		for _, loadBalancerBackendAddress := range *backendPool.LoadBalancerBackendAddresses {
 			if loadBalancerBackendAddress.LoadBalancerBackendAddressPropertiesFormat != nil &&
 				loadBalancerBackendAddress.IPAddress != nil {
@@ -422,7 +422,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			}
 		}
 
-		nodePrivateIPsSet := sets.New[string]()
+		nodePrivateIPsSet := utilsets.NewString()
 		for _, node := range nodes {
 			if isControlPlaneNode(node) {
 				klog.V(4).Infof("bi.EnsureHostsInPool: skipping control plane node %s", node.Name)
@@ -510,7 +510,7 @@ func (bi *backendPoolTypeNodeIP) CleanupVMSetFromBackendPoolByCondition(slb *net
 		found, isIPv6 := isLBBackendPoolsExisting(lbBackendPoolNames, bp.Name)
 		if found {
 			klog.V(2).Infof("bi.CleanupVMSetFromBackendPoolByCondition: checking the backend pool %s from standard load balancer %s", pointer.StringDeref(bp.Name, ""), pointer.StringDeref(slb.Name, ""))
-			vmIPsToBeDeleted := sets.New[string]()
+			vmIPsToBeDeleted := utilsets.NewString()
 			for _, node := range nodes {
 				vmSetName, err := bi.VMSet.GetNodeVMSetName(node)
 				if err != nil {
@@ -653,8 +653,8 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(clusterName string, servi
 		for _, i := range bpIdxes {
 			bp := newBackendPools[i]
 			var nodeIPAddressesToBeDeleted []string
-			for nodeName := range bi.excludeLoadBalancerNodes {
-				for ip := range bi.nodePrivateIPs[nodeName] {
+			for _, nodeName := range bi.excludeLoadBalancerNodes.UnsortedList() {
+				for _, ip := range bi.nodePrivateIPs[strings.ToLower(nodeName)].UnsortedList() {
 					klog.V(2).Infof("bi.ReconcileBackendPools for service (%s): found unwanted node private IP %s, decouple it from the LB %s", serviceName, ip, lbName)
 					nodeIPAddressesToBeDeleted = append(nodeIPAddressesToBeDeleted, ip)
 				}
@@ -735,7 +735,7 @@ func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, servic
 		return nil, nil
 	}
 
-	backendPrivateIPv4s, backendPrivateIPv6s := sets.New[string](), sets.New[string]()
+	backendPrivateIPv4s, backendPrivateIPv6s := utilsets.NewString(), utilsets.NewString()
 	for _, bp := range *lb.BackendAddressPools {
 		found, _ := isLBBackendPoolsExisting(lbBackendPoolNames, bp.Name)
 		if found {
@@ -785,7 +785,7 @@ func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, p
 
 func removeNodeIPAddressesFromBackendPool(backendPool network.BackendAddressPool, nodeIPAddresses []string, removeAll bool) bool {
 	changed := false
-	nodeIPsSet := sets.New(nodeIPAddresses...)
+	nodeIPsSet := utilsets.NewString(nodeIPAddresses...)
 
 	if backendPool.BackendAddressPoolPropertiesFormat == nil ||
 		backendPool.LoadBalancerBackendAddresses == nil {
