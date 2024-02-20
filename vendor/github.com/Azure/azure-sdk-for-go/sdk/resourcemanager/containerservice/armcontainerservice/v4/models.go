@@ -144,6 +144,10 @@ type AgentPoolUpgradeSettings struct {
 	// practices, see:
 	// https://docs.microsoft.com/azure/aks/upgrade-cluster#customize-node-surge-upgrade
 	MaxSurge *string
+
+	// The amount of time (in minutes) to wait after draining a node and before reimaging it and moving on to next node. If not
+	// specified, the default is 0 minutes.
+	NodeSoakDurationInMinutes *int32
 }
 
 // AzureKeyVaultKms - Azure Key Vault key management service settings for the security profile.
