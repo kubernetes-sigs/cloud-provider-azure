@@ -1335,5 +1335,6 @@ func isNodeReady(node *v1.Node) bool {
 	if _, c := nodeutil.GetNodeCondition(&node.Status, v1.NodeReady); c != nil {
 		return c.Status == v1.ConditionTrue
 	}
+
 	return false
 }
