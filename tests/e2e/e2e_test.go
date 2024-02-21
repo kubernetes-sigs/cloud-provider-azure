@@ -65,7 +65,10 @@ func TestAzureTest(t *testing.T) {
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 	suiteConfig.Timeout = 0
 
-	labelFilters := []string{suiteConfig.LabelFilter}
+	labelFilters := []string{}
+	if suiteConfig.LabelFilter != "" {
+		labelFilters = append(labelFilters, suiteConfig.LabelFilter)
+	}
 	if strings.EqualFold(os.Getenv(clusterProvisioningToolKey), clusterProvisioningToolCAPZ) {
 		labelFilters = append(labelFilters, "!SLBOutbound")
 	}

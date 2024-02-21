@@ -103,6 +103,11 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			Skip("only support cluster with multiple agent pools")
 		}
 
+		// Check if it is a cluster with VMSS
+		vmsses, err := utils.ListUniformVMSSes(tc)
+		Expect(err).NotTo(HaveOccurred())
+		isVMSS := len(vmsses) != 0
+
 		ipcIDs := []string{}
 		for _, backendAddressPool := range *lb.BackendAddressPools {
 			if os.Getenv(utils.AKSTestCCM) != "" && *backendAddressPool.Name == "aksOutboundBackendPool" {
@@ -110,6 +115,13 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 			}
 			for _, ipc := range *backendAddressPool.BackendIPConfigurations {
 				if ipc.ID != nil {
+					if isVMSS && tc.IPFamily == utils.IPv6 && strings.Contains(*ipc.ID, "ipConfigurations/ipConfig0") {
+						// For IPv6 VMSS, there'll be IPv4 IP configurations as well
+						// e.g.
+						// virtualMachines/0/networkInterfaces/<vmss-0>-nic-0/ipConfigurations/ipConfig0
+						// virtualMachines/0/networkInterfaces/<vmss-0>-nic-0/ipConfigurations/ipConfigv6
+						continue
+					}
 					ipcIDs = append(ipcIDs, *ipc.ID)
 				}
 			}
@@ -117,8 +129,6 @@ var _ = Describe("[StandardLoadBalancer] Standard load balancer", func() {
 		utils.Logf("got BackendIPConfigurations IDs: %v", ipcIDs)
 
 		// Check if it is a cluster with VMSS
-		vmsses, err := utils.ListUniformVMSSes(tc)
-		Expect(err).NotTo(HaveOccurred())
 		if len(vmsses) != 0 {
 			allVMs := []azcompute.VirtualMachineScaleSetVM{}
 			for _, vmss := range vmsses {
