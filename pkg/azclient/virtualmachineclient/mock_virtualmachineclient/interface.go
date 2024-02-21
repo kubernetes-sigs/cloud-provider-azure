@@ -72,19 +72,19 @@ func (mr *MockInterfaceMockRecorder) BeginAttachDetachDataDisks(ctx, resourceGro
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginAttachDetachDataDisks", reflect.TypeOf((*MockInterface)(nil).BeginAttachDetachDataDisks), ctx, resourceGroupName, vmName, parameters, options)
 }
 
-// BeginCreateOrUpdate mocks base method.
-func (m *MockInterface) BeginCreateOrUpdate(ctx context.Context, resourceGroupName, vmName string, parameters armcompute.VirtualMachine, options *armcompute.VirtualMachinesClientBeginCreateOrUpdateOptions) (*runtime.Poller[armcompute.VirtualMachinesClientCreateOrUpdateResponse], error) {
+// BeginUpdate mocks base method.
+func (m *MockInterface) BeginUpdate(ctx context.Context, resourceGroupName, vmName string, parameters armcompute.VirtualMachineUpdate, options *armcompute.VirtualMachinesClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachinesClientUpdateResponse], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginCreateOrUpdate", ctx, resourceGroupName, vmName, parameters, options)
-	ret0, _ := ret[0].(*runtime.Poller[armcompute.VirtualMachinesClientCreateOrUpdateResponse])
+	ret := m.ctrl.Call(m, "BeginUpdate", ctx, resourceGroupName, vmName, parameters, options)
+	ret0, _ := ret[0].(*runtime.Poller[armcompute.VirtualMachinesClientUpdateResponse])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// BeginCreateOrUpdate indicates an expected call of BeginCreateOrUpdate.
-func (mr *MockInterfaceMockRecorder) BeginCreateOrUpdate(ctx, resourceGroupName, vmName, parameters, options any) *gomock.Call {
+// BeginUpdate indicates an expected call of BeginUpdate.
+func (mr *MockInterfaceMockRecorder) BeginUpdate(ctx, resourceGroupName, vmName, parameters, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginCreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).BeginCreateOrUpdate), ctx, resourceGroupName, vmName, parameters, options)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginUpdate", reflect.TypeOf((*MockInterface)(nil).BeginUpdate), ctx, resourceGroupName, vmName, parameters, options)
 }
 
 // CreateOrUpdate mocks base method.
