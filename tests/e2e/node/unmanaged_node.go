@@ -18,6 +18,8 @@ package node
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -70,6 +72,9 @@ var _ = Describe("Unmanaged nodes", Label(utils.TestSuiteUnmanagedNode), func() 
 			return false, nil
 		})
 		Expect(err).To(HaveOccurred(), "Node should not be removed")
-		Expect(wait.Interrupted(err)).To(BeTrue())
+		// Error may be:
+		// * client rate limiter Wait returned an error: context deadline exceeded
+		// * client rate limiter Wait returned an error: rate: Wait(n=1) would exceed context deadline
+		Expect(wait.Interrupted(err) || strings.Contains(err.Error(), "exceed context deadline")).To(BeTrue(), fmt.Sprintf("Error should be Interrupted, actually: %v", err))
 	})
 })
