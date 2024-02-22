@@ -40,7 +40,7 @@ require (
 	k8s.io/component-helpers v0.29.2
 	k8s.io/controller-manager v0.29.2
 	k8s.io/klog/v2 v2.110.1
-	k8s.io/kubelet v0.29.0
+	k8s.io/kubelet v0.29.2
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20240218020800-ba9f211f36bf
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20240218020800-ba9f211f36bf
