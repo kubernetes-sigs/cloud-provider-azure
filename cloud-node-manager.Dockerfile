@@ -22,8 +22,18 @@ ARG ARCH=amd64
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 COPY . .
 
+# Build the Go app
 RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
 
+# Use distroless static image for a lean production container.
+# Start a new build stage.
 FROM gcr.io/distroless/static
+
+# Create a group and user
+USER 65532:65532
+
+# Copy the pre-built binary file from the previous stage.
 COPY --from=builder /go/src/sigs.k8s.io/cloud-provider-azure/bin/azure-cloud-node-manager /usr/local/bin/cloud-node-manager
+
+# Run the web service on container startup.
 ENTRYPOINT [ "/usr/local/bin/cloud-node-manager" ]
