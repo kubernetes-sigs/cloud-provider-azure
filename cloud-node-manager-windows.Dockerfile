@@ -29,5 +29,5 @@ ARG ARCH
 
 COPY --from=servercore-helper /Windows/System32/netapi32.dll /Windows/System32/netapi32.dll
 COPY bin/azure-cloud-node-manager-${ARCH}.exe /cloud-node-manager.exe
-USER ContainerAdministrator
+USER ContainerUser
 ENTRYPOINT ["/azure-cloud-node-manager.exe"]
