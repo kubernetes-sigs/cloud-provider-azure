@@ -717,22 +717,20 @@ func (az *Cloud) AddStorageAccountTags(ctx context.Context, subsID, resourceGrou
 		return rerr
 	}
 
-	originalLen := len(result.Tags)
-	newTags := result.Tags
-	if newTags == nil {
-		newTags = make(map[string]*string)
-	}
-
-	// merge two tag map
+	// merge two tag map into one
+	newTags := make(map[string]*string)
 	for k, v := range tags {
 		newTags[k] = v
 	}
+	for k, v := range result.Tags {
+		newTags[k] = v
+	}
 
-	if len(newTags) > originalLen {
+	if len(newTags) > len(result.Tags) {
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := storage.AccountUpdateParameters{Tags: newTags}
-		klog.V(2).Infof("update storage account(%s) with tags(%+v)", account, newTags)
+		klog.V(2).Infof("add storage account(%s) with tags(%+v)", account, newTags)
 		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
 	}
 	return nil
@@ -759,6 +757,7 @@ func (az *Cloud) RemoveStorageAccountTag(ctx context.Context, subsID, resourceGr
 		// only update when newTags is different from old tags
 		_ = az.storageAccountCache.Delete(account) // clean cache
 		updateParams := storage.AccountUpdateParameters{Tags: result.Tags}
+		klog.V(2).Infof("remove tag(%s) from storage account(%s)", key, account)
 		return az.StorageAccountClient.Update(ctx, subsID, resourceGroup, account, updateParams)
 	}
 	return nil
