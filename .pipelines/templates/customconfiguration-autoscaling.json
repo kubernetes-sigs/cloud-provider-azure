@@ -17,6 +17,7 @@
       }
     },
     "cluster-autoscaler": {
+      "image": "{CUSTOM_CAS_IMAGE}",
       "config": {
         "--skip-nodes-with-system-pods": "false",
         "--scale-down-delay-after-add": "1m",
