@@ -173,6 +173,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		vmssName       types.NodeName
 		vmssvmName     types.NodeName
 		disks          []string
+		forceDetach    bool
 		expectedErr    bool
 		expectedErrMsg error
 	}{
@@ -199,6 +200,15 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
 			disks:       []string{diskName, "disk2"},
+			expectedErr: false,
+		},
+		{
+			desc:        "no error shall be returned with force detach",
+			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
+			vmssName:    "vmss00",
+			vmssvmName:  "vmss00-vm-000000",
+			disks:       []string{diskName, "disk2"},
+			forceDetach: true,
 			expectedErr: false,
 		},
 		{
@@ -282,7 +292,7 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err = ss.DetachDisk(ctx, test.vmssvmName, diskMap)
+		err = ss.DetachDisk(ctx, test.vmssvmName, diskMap, test.forceDetach)
 		assert.Equal(t, test.expectedErr, err != nil, "TestCase[%d]: %s, err: %v", i, test.desc, err)
 		if test.expectedErr {
 			assert.EqualError(t, test.expectedErrMsg, err.Error(), "TestCase[%d]: %s, expected error: %v, return error: %v", i, test.desc, test.expectedErrMsg, err)

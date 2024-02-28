@@ -143,6 +143,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 		vmName                         string
 		testVMListWithoutInstanceView  []compute.VirtualMachine
 		testVMListWithOnlyInstanceView []compute.VirtualMachine
+		forceDetach                    bool
 		vmListErr                      error
 		vmssFlexVMUpdateError          *retry.Error
 		diskMap                        map[string]string
@@ -154,6 +155,18 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 			vmName:                         testVM1Spec.VMName,
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			vmssFlexVMUpdateError:          nil,
+			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "DetachDisk should work as expected with managed disk with forceDetach",
+			nodeName:                       types.NodeName(testVM1Spec.ComputerName),
+			vmName:                         testVM1Spec.VMName,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			forceDetach:                    true,
 			vmListErr:                      nil,
 			vmssFlexVMUpdateError:          nil,
 			diskMap:                        map[string]string{"diskUri1": "dataDisktestvm1"},
@@ -206,7 +219,7 @@ func TestDettachDiskWithVmssFlex(t *testing.T) {
 
 		mockVMClient.EXPECT().Update(gomock.Any(), gomock.Any(), tc.vmName, gomock.Any(), "detach_disk").Return(nil, tc.vmssFlexVMUpdateError).AnyTimes()
 
-		err = fs.DetachDisk(ctx, tc.nodeName, tc.diskMap)
+		err = fs.DetachDisk(ctx, tc.nodeName, tc.diskMap, tc.forceDetach)
 		if tc.expectedErr == nil {
 			assert.NoError(t, err)
 		} else {

@@ -85,7 +85,7 @@ func (mr *MockVMSetMockRecorder) DeleteCacheForNode(nodeName interface{}) *gomoc
 }
 
 // DetachDisk mocks base method.
-func (m *MockVMSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string) error {
+func (m *MockVMSet) DetachDisk(ctx context.Context, nodeName types.NodeName, diskMap map[string]string, forceDetach bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DetachDisk", ctx, nodeName, diskMap)
 	ret0, _ := ret[0].(error)

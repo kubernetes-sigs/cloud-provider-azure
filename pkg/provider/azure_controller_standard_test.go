@@ -147,6 +147,7 @@ func TestStandardDetachDisk(t *testing.T) {
 		nodeName      types.NodeName
 		disks         []string
 		isDetachFail  bool
+		forceDetach   bool
 		expectedError bool
 	}{
 		{
@@ -178,6 +179,13 @@ func TestStandardDetachDisk(t *testing.T) {
 			isDetachFail:  true,
 			expectedError: true,
 		},
+		{
+			desc:          "no error shall be returned if there's a corresponding disk with forceDetach",
+			nodeName:      "vm1",
+			disks:         []string{"disk1"},
+			forceDetach:   true,
+			expectedError: false,
+		},
 	}
 
 	for i, test := range testCases {
@@ -201,7 +209,7 @@ func TestStandardDetachDisk(t *testing.T) {
 				testCloud.SubscriptionID, testCloud.ResourceGroup, diskName)
 			diskMap[diskURI] = diskName
 		}
-		err := vmSet.DetachDisk(ctx, test.nodeName, diskMap)
+		err := vmSet.DetachDisk(ctx, test.nodeName, diskMap, test.forceDetach)
 		assert.Equal(t, test.expectedError, err != nil, "TestCase[%d]: %s", i, test.desc)
 		if !test.expectedError && len(test.disks) > 0 {
 			dataDisks, _, err := vmSet.GetDataDisks(test.nodeName, azcache.CacheReadTypeDefault)
