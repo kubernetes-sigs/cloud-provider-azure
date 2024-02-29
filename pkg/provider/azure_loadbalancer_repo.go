@@ -140,7 +140,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 
 	rgName := az.getLoadBalancerResourceGroup()
 	rerr := az.LoadBalancerClient.CreateOrUpdate(ctx, rgName, pointer.StringDeref(lb.Name, ""), lb, pointer.StringDeref(lb.Etag, ""))
-	klog.V(10).Infof("LoadBalancerClient.CreateOrUpdate(%s): end", *lb.Name)
+	klog.V(2).Infof("LoadBalancerClient.CreateOrUpdate(%s): end", *lb.Name)
 	if rerr == nil {
 		// Invalidate the cache right after updating
 		_ = az.lbCache.Delete(*lb.Name)
@@ -152,14 +152,14 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 
 	// Invalidate the cache because ETAG precondition mismatch.
 	if rerr.HTTPStatusCode == http.StatusPreconditionFailed {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", pointer.StringDeref(lb.Name, ""))
+		klog.V(2).Infof("LoadBalancer cache for %s is cleanup because of http.StatusPreconditionFailed", pointer.StringDeref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
 	retryErrorMessage := rerr.Error().Error()
 	// Invalidate the cache because another new operation has canceled the current request.
 	if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceledErrorMessage) {
-		klog.V(3).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", pointer.StringDeref(lb.Name, ""))
+		klog.V(2).Infof("LoadBalancer cache for %s is cleanup because CreateOrUpdate is canceled by another operation", pointer.StringDeref(lb.Name, ""))
 		_ = az.lbCache.Delete(*lb.Name)
 	}
 
@@ -171,7 +171,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 			return rerr.Error()
 		}
 		pipRG, pipName := matches[1], matches[2]
-		klog.V(3).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, pointer.StringDeref(lb.Name, ""))
+		klog.V(2).Infof("The public IP %s referenced by load balancer %s is not in Succeeded provisioning state, will try to update it", pipName, pointer.StringDeref(lb.Name, ""))
 		pip, _, err := az.getPublicIPAddress(pipRG, pipName, azcache.CacheReadTypeDefault)
 		if err != nil {
 			klog.Errorf("Failed to get the public IP %s in resource group %s: %v", pipName, pipRG, err)
@@ -183,6 +183,7 @@ func (az *Cloud) CreateOrUpdateLB(service *v1.Service, lb network.LoadBalancer) 
 			klog.Errorf("Failed to update the public IP %s in resource group %s: %v", pipName, pipRG, err)
 			return rerr.Error()
 		}
+		klog.V(2).Infof("LoadBalancerClient.CreateOrUpdatePIP(%s): end", pipName)
 		// Invalidate the LB cache, return the error, and the controller manager
 		// would retry the LB update in the next reconcile loop
 		_ = az.lbCache.Delete(*lb.Name)
