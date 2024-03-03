@@ -17,7 +17,7 @@ require (
 	github.com/onsi/gomega v1.31.1
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.20.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.17.0
