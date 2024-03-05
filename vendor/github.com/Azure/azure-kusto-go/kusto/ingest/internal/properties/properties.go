@@ -89,7 +89,7 @@ var dfDescriptions = []dfDescriptor{
 	{"Raw", "raw", ".raw", false, true},
 	{"Scsv", "scsv", ".scsv", false, true},
 	{"Sohsv", "sohsv", ".sohsv", false, true},
-	{"SStream", "sstream", ".ss", false, true},
+	{"SStream", "sstream", ".ss", false, false},
 	{"Tsv", "tsv", ".tsv", false, true},
 	{"Tsve", "tsve", ".tsve", false, true},
 	{"Txt", "txt", ".txt", false, true},
