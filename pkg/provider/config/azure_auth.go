@@ -169,7 +169,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, r
 			resource)
 	}
 
-	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
+	if len(config.AADClientCertPath) > 0 {
 		klog.V(2).Infoln("azure: using jwt client_assertion (client_cert+client_private_key) to retrieve access token")
 		certData, err := os.ReadFile(config.AADClientCertPath)
 		if err != nil {
@@ -219,8 +219,22 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 			env.ServiceManagementEndpoint)
 	}
 
-	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
-		return nil, fmt.Errorf("AAD Application client certificate authentication is not supported in getting multi-tenant service principal token")
+	if len(config.AADClientCertPath) > 0 {
+		klog.V(2).Infoln("azure: using jwt client_assertion (client_cert+client_private_key) to retrieve multi-tenant access token")
+		certData, err := os.ReadFile(config.AADClientCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
+		}
+		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		if err != nil {
+			return nil, fmt.Errorf("decoding the client certificate: %w", err)
+		}
+		return adal.NewMultiTenantServicePrincipalTokenFromCertificate(
+			multiTenantOAuthConfig,
+			config.AADClientID,
+			certificate,
+			privateKey,
+			env.ServiceManagementEndpoint)
 	}
 
 	return nil, ErrorNoAuth
@@ -252,8 +266,22 @@ func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure
 			env.ServiceManagementEndpoint)
 	}
 
-	if len(config.AADClientCertPath) > 0 && len(config.AADClientCertPassword) > 0 {
-		return nil, fmt.Errorf("AAD Application client certificate authentication is not supported in getting network resources service principal token")
+	if len(config.AADClientCertPath) > 0 {
+		klog.V(2).Infoln("azure: using jwt client_assertion (client_cert+client_private_key) to retrieve access token for network resources tenant")
+		certData, err := os.ReadFile(config.AADClientCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
+		}
+		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		if err != nil {
+			return nil, fmt.Errorf("decoding the client certificate: %w", err)
+		}
+		return adal.NewServicePrincipalTokenFromCertificate(
+			*oauthConfig,
+			config.AADClientID,
+			certificate,
+			privateKey,
+			env.ServiceManagementEndpoint)
 	}
 
 	return nil, ErrorNoAuth
