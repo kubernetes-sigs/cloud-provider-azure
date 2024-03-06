@@ -140,7 +140,11 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount+1)
+		Expect(err).NotTo(HaveOccurred())
 		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should scale up, deploy a statefulset with disks attached, scale down, and certain pods + disks should be evicted to a new node", func() {
@@ -154,6 +158,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}()
 		Expect(err).NotTo(HaveOccurred())
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount+1)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Deploying a StatefulSet")
 		statefulSetManifest := createStatefulSetWithPVCManifest(basename+"-statefulset", int32(2), map[string]string{"app": basename + "-statefulset"})
@@ -183,6 +189,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}
 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for certain StatefulSet's pods + disks to be evicted to new nodes")
 		err = waitForStatefulSetComplete(cs, ns, statefulSet)
@@ -247,6 +255,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		}()
 		Expect(err).NotTo(HaveOccurred())
 		waitForScaleUpToComplete(cs, ns, len(nodes)+10)
+		err = utils.HoldAutoScaleNodes(cs, len(nodes)+10)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking the balancing state of the node groups")
 		nodes, err = utils.GetAgentNodes(cs)
@@ -256,6 +266,8 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(isBalance).To(BeTrue())
 
 		waitForScaleDownToComplete(cs, ns, initNodeCount, scaleUpDeployment)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should support one node pool with slow scaling", Label(utils.TestSuiteLabelSingleNodePool), func() {
@@ -413,7 +425,11 @@ var _ = Describe("Cluster size autoscaler", Label(utils.TestSuiteLabelFeatureAut
 		Expect(err).NotTo(HaveOccurred())
 
 		waitForScaleUpToComplete(cs, ns, initNodeCount+1)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount+1)
+		Expect(err).NotTo(HaveOccurred())
 		waitForScaleDownToComplete(cs, ns, initNodeCount, deployment)
+		err = utils.HoldAutoScaleNodes(cs, initNodeCount)
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 
