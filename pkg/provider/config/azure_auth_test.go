@@ -304,13 +304,9 @@ func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
 
 func TestGetServicePrincipalTokenFromCertificateWithoutPassword(t *testing.T) {
 	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID: "TenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
+		TenantID:          "TenantID",
+		AADClientID:       "AADClientID",
+		AADClientCertPath: "./testdata/testnopassword.pfx",
 	}
 	env := &azure.PublicCloud
 	token, err := GetServicePrincipalToken(config, env, "")
@@ -329,14 +325,10 @@ func TestGetServicePrincipalTokenFromCertificateWithoutPassword(t *testing.T) {
 
 func TestGetMultiTenantServicePrincipalTokenFromCertificate(t *testing.T) {
 	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
+		TenantID:                      "TenantID",
+		NetworkResourceTenantID:       "NetworkResourceTenantID",
+		AADClientID:                   "AADClientID",
+		AADClientCertPath:             "./testdata/testnopassword.pfx",
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
 	env := &azure.PublicCloud
@@ -389,14 +381,10 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 
 func TestGetNetworkResourceServicePrincipalTokenFromCertificate(t *testing.T) {
 	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
+		TenantID:                      "TenantID",
+		NetworkResourceTenantID:       "NetworkResourceTenantID",
+		AADClientID:                   "AADClientID",
+		AADClientCertPath:             "./testdata/testnopassword.pfx",
 		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
 	}
 	env := &azure.PublicCloud
