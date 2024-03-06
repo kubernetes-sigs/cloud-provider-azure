@@ -17,8 +17,6 @@ limitations under the License.
 package config
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -29,8 +27,6 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-
-	"golang.org/x/crypto/pkcs12"
 
 	"k8s.io/klog/v2"
 
@@ -175,7 +171,7 @@ func GetServicePrincipalToken(config *AzureAuthConfig, env *azure.Environment, r
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -225,7 +221,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -272,7 +268,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure
 		if err != nil {
 			return nil, fmt.Errorf("reading the client certificate from file %s: %w", config.AADClientCertPath, err)
 		}
-		certificate, privateKey, err := decodePkcs12(certData, config.AADClientCertPassword)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(certData, config.AADClientCertPassword)
 		if err != nil {
 			return nil, fmt.Errorf("decoding the client certificate: %w", err)
 		}
@@ -351,21 +347,6 @@ func (config *AzureAuthConfig) UsesNetworkResourceInDifferentTenant() bool {
 // and not equal to one defined in global configs
 func (config *AzureAuthConfig) UsesNetworkResourceInDifferentSubscription() bool {
 	return len(config.NetworkResourceSubscriptionID) > 0 && !strings.EqualFold(config.NetworkResourceSubscriptionID, config.SubscriptionID)
-}
-
-// decodePkcs12 decodes a PKCS#12 client certificate by extracting the public certificate and
-// the private RSA key
-func decodePkcs12(pkcs []byte, password string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	privateKey, certificate, err := pkcs12.Decode(pkcs, password)
-	if err != nil {
-		return nil, nil, fmt.Errorf("decoding the PKCS#12 client certificate: %w", err)
-	}
-	rsaPrivateKey, isRsaKey := privateKey.(*rsa.PrivateKey)
-	if !isRsaKey {
-		return nil, nil, fmt.Errorf("PKCS#12 certificate must contain a RSA private key")
-	}
-
-	return certificate, rsaPrivateKey, nil
 }
 
 // azureStackOverrides ensures that the Environment matches what AKSe currently generates for Azure Stack
