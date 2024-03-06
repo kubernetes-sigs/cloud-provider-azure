@@ -349,6 +349,61 @@ func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
 	assert.Equal(t, token, spt)
 }
 
+func TestGetServicePrincipalTokenFromCertificateWithoutPassword(t *testing.T) {
+	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID: "TenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:       "AADClientID",
+			AADClientCertPath: "./testdata/testnopassword.pfx",
+		},
+	}
+	env := &azure.PublicCloud
+	token, err := GetServicePrincipalToken(config, env, "")
+	assert.NoError(t, err)
+
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+	assert.NoError(t, err)
+	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+	assert.NoError(t, err)
+	certificate, privateKey, err := decodePkcs12(pfxContent, "")
+	assert.NoError(t, err)
+	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+	assert.NoError(t, err)
+	assert.Equal(t, token, spt)
+}
+
+func TestGetMultiTenantServicePrincipalTokenFromCertificate(t *testing.T) {
+	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID:                "TenantID",
+			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:       "AADClientID",
+			AADClientCertPath: "./testdata/testnopassword.pfx",
+		},
+		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+	}
+	env := &azure.PublicCloud
+
+	multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env)
+	assert.NoError(t, err)
+
+	multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+	assert.NoError(t, err)
+
+	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+	assert.NoError(t, err)
+	certificate, privateKey, err := decodePkcs12(pfxContent, "")
+	assert.NoError(t, err)
+	spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+	assert.NoError(t, err)
+
+	assert.Equal(t, multiTenantToken, spt)
+}
+
 func TestGetMultiTenantServicePrincipalTokenNegative(t *testing.T) {
 	env := &azure.PublicCloud
 	for _, config := range CrossTenantNetworkResourceNegativeConfig {
@@ -378,6 +433,36 @@ func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
 	assert.NoError(t, err)
 
 	spt, err := adal.NewServicePrincipalToken(*oauthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
+	assert.NoError(t, err)
+
+	assert.Equal(t, token, spt)
+}
+
+func TestGetNetworkResourceServicePrincipalTokenFromCertificate(t *testing.T) {
+	config := &AzureAuthConfig{
+		ARMClientConfig: azclient.ARMClientConfig{
+			TenantID:                "TenantID",
+			NetworkResourceTenantID: "NetworkResourceTenantID",
+		},
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:       "AADClientID",
+			AADClientCertPath: "./testdata/testnopassword.pfx",
+		},
+		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+	}
+	env := &azure.PublicCloud
+
+	token, err := GetNetworkResourceServicePrincipalToken(config, env)
+	assert.NoError(t, err)
+
+	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
+	assert.NoError(t, err)
+
+	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+	assert.NoError(t, err)
+	certificate, privateKey, err := decodePkcs12(pfxContent, "")
+	assert.NoError(t, err)
+	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
 	assert.NoError(t, err)
 
 	assert.Equal(t, token, spt)
