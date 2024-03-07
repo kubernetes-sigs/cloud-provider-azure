@@ -178,6 +178,7 @@ func TestGetStorageAccounts(t *testing.T) {
 	accountOptions := &AccountOptions{
 		ResourceGroup:             "rg",
 		VirtualNetworkResourceIDs: []string{networkID},
+		EnableHTTPSTrafficOnly:    true,
 	}
 
 	mockStorageAccountsClient := mockstorageaccountclient.NewMockInterface(ctrl)
@@ -1075,6 +1076,69 @@ func TestIsEnableNfsV3PropertyEqual(t *testing.T) {
 
 	for _, test := range tests {
 		result := isEnableNfsV3PropertyEqual(test.account, test.accountOptions)
+		assert.Equal(t, test.expectedResult, result)
+	}
+}
+
+func TestIsEnableHTTPSTrafficOnly(t *testing.T) {
+	tests := []struct {
+		account        storage.Account
+		accountOptions *AccountOptions
+		expectedResult bool
+	}{
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableHTTPSTrafficOnly: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly: false,
+			},
+			expectedResult: false,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableHTTPSTrafficOnly: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly: true,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly: true,
+			},
+			expectedResult: true,
+		},
+		{
+			account: storage.Account{
+				AccountProperties: &storage.AccountProperties{
+					EnableHTTPSTrafficOnly: pointer.Bool(true),
+				},
+			},
+			accountOptions: &AccountOptions{
+				EnableHTTPSTrafficOnly: false,
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		result := isEnableHTTPSTrafficOnlyEqual(test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result)
 	}
 }
