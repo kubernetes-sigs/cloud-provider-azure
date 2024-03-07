@@ -29,7 +29,7 @@ stages:
         - template: ./cnm-image.yml
     - job: create_aks_cluster_and_run_tests_job
       dependsOn: [build_push_ccm_image_job, build_push_cnm_image_job]
-      timeoutInMinutes: 300
+      timeoutInMinutes: 340
       steps:
         - task: GoTool@0
           inputs:
