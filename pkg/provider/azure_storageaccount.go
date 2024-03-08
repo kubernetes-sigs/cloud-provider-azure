@@ -117,6 +117,7 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				isTaggedWithSkip(acct) &&
 				isHnsPropertyEqual(acct, accountOptions) &&
 				isEnableNfsV3PropertyEqual(acct, accountOptions) &&
+				isEnableHTTPSTrafficOnlyEqual(acct, accountOptions) &&
 				isAllowBlobPublicAccessEqual(acct, accountOptions) &&
 				isRequireInfrastructureEncryptionEqual(acct, accountOptions) &&
 				isAllowSharedKeyAccessEqual(acct, accountOptions) &&
@@ -858,6 +859,10 @@ func isHnsPropertyEqual(account storage.Account, accountOptions *AccountOptions)
 
 func isEnableNfsV3PropertyEqual(account storage.Account, accountOptions *AccountOptions) bool {
 	return pointer.BoolDeref(accountOptions.EnableNfsV3, false) == pointer.BoolDeref(account.EnableNfsV3, false)
+}
+
+func isEnableHTTPSTrafficOnlyEqual(account storage.Account, accountOptions *AccountOptions) bool {
+	return accountOptions.EnableHTTPSTrafficOnly == pointer.BoolDeref(account.EnableHTTPSTrafficOnly, true)
 }
 
 func isPrivateEndpointAsExpected(account storage.Account, accountOptions *AccountOptions) bool {
