@@ -135,12 +135,14 @@ func hideRecordingData(s string) string {
 }
 
 type Recorder struct {
-	credential     azcore.TokenCredential
-	rec            *gorecorder.Recorder
-	subscriptionID string
-	tenantID       string
-	clientID       string
-	clientSecret   string
+	credential       azcore.TokenCredential
+	rec              *gorecorder.Recorder
+	subscriptionID   string
+	tenantID         string
+	clientID         string
+	clientSecret     string
+	clientCertPath   string
+	clientCertPasswd string
 }
 
 type DummyTokenCredential func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error)
@@ -166,6 +168,8 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 	var tenantID string
 	var clientID string
 	var clientSecret string
+	var clientCertPath string
+	var clientCertPasswd string
 	if rec.IsNewCassette() {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
 		if subscriptionID == "" {
@@ -186,6 +190,11 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 			return nil, errors.New("required environment variable AZURE_CLIENT_ID was not supplied")
 		}
 		clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
+		clientCertPath = os.Getenv("AZURE_CLIENT_CERT_PATH")
+		clientCertPasswd = os.Getenv("AZURE_CLIENT_CERT_PASSWD")
+		if clientSecret == "" && clientCertPath == "" {
+			return nil, errors.New("either AZURE_CLIENT_SECRET or AZURE_CLIENT_CERT_PATH must be supplied")
+		}
 	} else {
 		// if we are replaying, we won't need auth
 		// and we use a dummy subscription ID
@@ -222,13 +231,17 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 			}
 		}
 
-		if !strings.EqualFold(clientSecret, "clientsecret") {
+		if len(clientSecret) > 0 && !strings.EqualFold(clientSecret, "clientsecret") {
 			i.Request.URL = strings.Replace(i.Request.URL, clientSecret, "clientsecret", -1)
 			i.Request.Body = strings.Replace(i.Request.Body, clientSecret, "clientsecret", -1)
 			i.Response.Body = strings.Replace(i.Response.Body, clientSecret, "clientsecret", -1)
 			if i.Request.Form.Has("client_secret") {
 				i.Request.Form.Set("client_secret", "clientsecret")
 			}
+		}
+		if i.Request.Form.Has("client_assertion") {
+			i.Request.Form.Set("client_assertion", "clientassertion")
+			i.Request.Body = "client_assertion=clientassertion&client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer&client_id=clientid&client_info=1&grant_type=client_credentials&scope=https%3A%2F%2Fmanagement.azure.com%2F.default+openid+offline_access+profile"
 		}
 		if strings.Contains(i.Response.Body, "access_token") {
 			i.Response.Body = `{"token_type":"Bearer","expires_in":86399,"ext_expires_in":86399,"access_token":"faketoken"}`
@@ -277,12 +290,14 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 	}, gorecorder.BeforeSaveHook)
 
 	return &Recorder{
-		credential:     tokenCredential,
-		rec:            rec,
-		subscriptionID: subscriptionID,
-		tenantID:       tenantID,
-		clientID:       clientID,
-		clientSecret:   clientSecret,
+		credential:       tokenCredential,
+		rec:              rec,
+		subscriptionID:   subscriptionID,
+		tenantID:         tenantID,
+		clientID:         clientID,
+		clientSecret:     clientSecret,
+		clientCertPath:   clientCertPath,
+		clientCertPasswd: clientCertPasswd,
 	}, nil
 }
 
@@ -308,6 +323,14 @@ func (r *Recorder) ClientID() string {
 
 func (r *Recorder) ClientSecret() string {
 	return r.clientSecret
+}
+
+func (r *Recorder) ClientCertPath() string {
+	return r.clientCertPath
+}
+
+func (r *Recorder) ClientCertPasswd() string {
+	return r.clientCertPasswd
 }
 
 func (r *Recorder) Stop() error {
