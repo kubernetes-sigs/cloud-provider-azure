@@ -113,16 +113,16 @@ func (i *Ingestion) prepForIngestion(ctx context.Context, options []FileOption, 
 
 		switch props.Ingestion.ReportMethod {
 		case properties.ReportStatusToTable, properties.ReportStatusToQueueAndTable:
-			managerResources, err := i.mgr.Resources()
+			tableResources, err := i.mgr.GetTables()
 			if err != nil {
 				return nil, properties.All{}, err
 			}
 
-			if len(managerResources.Tables) == 0 {
+			if len(tableResources) == 0 {
 				return nil, properties.All{}, fmt.Errorf("User requested reporting status to table, yet status table resource URI is not found")
 			}
 
-			props.Ingestion.TableEntryRef.TableConnectionString = managerResources.Tables[0].URL().String()
+			props.Ingestion.TableEntryRef.TableConnectionString = tableResources[0].URL().String()
 			props.Ingestion.TableEntryRef.PartitionKey = props.Source.ID.String()
 			props.Ingestion.TableEntryRef.RowKey = uuid.Nil.String()
 		}
