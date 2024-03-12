@@ -2856,6 +2856,13 @@ func (az *Cloud) reconcileSecurityGroup(
 				consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationAllowedServiceTags,
 			))
 		}
+
+		if len(accessControl.InvalidRanges) > 0 {
+			az.Event(service, v1.EventTypeWarning, "InvalidConfiguration", fmt.Sprintf(
+				"Found invalid LoadBalancerSourceRanges %v, ignoring and adding a default DenyAll rule in security group.",
+				accessControl.InvalidRanges,
+			))
+		}
 	}
 
 	var (

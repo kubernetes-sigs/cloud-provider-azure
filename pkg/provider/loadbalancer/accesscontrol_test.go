@@ -54,6 +54,18 @@ func TestAccessControl_IsAllowFromInternet(t *testing.T) {
 			expectedOutput: false,
 		},
 		{
+			name:           "public LB with invalid access control configuration",
+			svc:            k8sFx.Service().WithLoadBalancerSourceRanges("10.10.10.1/24").Build(),
+			expectedOutput: false,
+		},
+		{
+			name: "internal LB with invalid access control configuration",
+			svc: k8sFx.Service().WithInternalEnabled().
+				WithLoadBalancerSourceRanges("10.10.10.1/24").
+				Build(),
+			expectedOutput: false,
+		},
+		{
 			name:           "public LB with spec.LoadBalancerSourceRanges specified but not allow all",
 			svc:            k8sFx.Service().WithLoadBalancerSourceRanges("10.10.10.0/24").Build(),
 			expectedOutput: false,
@@ -170,6 +182,11 @@ func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
 				Build(),
 			expectedOutput: true,
 		},
+		{
+			name:           "without annotation but invalid allowedIPRanges specified",
+			svc:            k8sFx.Service().WithAllowedIPRanges("10.0.0.1/24").Build(),
+			expectedOutput: true,
+		},
 	}
 
 	for i := range tests {
@@ -223,34 +240,34 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 		{
 			name: "spec.LoadBalancerSourceRanges = 1 IPv6",
 			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
-				"2001:db8:85a3::1a2b:3c4d/64",
+				"2001:db8:85a3::/64",
 			).Build(),
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
+				"2001:db8:85a3::/64",
 			},
 		},
 		{
 			name: "spec.LoadBalancerSourceRanges = N IPv6",
 			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234::/32",
 			).Build(),
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234::/32",
 			},
 		},
 		{
 			name: "spec.LoadBalancerSourceRanges = N IPv4 and N IPv6",
 			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
 				"10.10.0.0/16",
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
 				"10.11.0.0/16",
 				"10.0.0.1/32",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			).Build(),
 			expectedIPv4: []string{
 				"10.10.0.0/16",
@@ -258,9 +275,32 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 				"10.0.0.1/32",
 			},
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
+			},
+		},
+		{
+			name: "spec.LoadBalancerSourceRanges = N IPv4 and N IPv6 and invalid ranges",
+			svc: k8sFx.Service().WithLoadBalancerSourceRanges(
+				"10.10.0.0/16",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+				"fe80:1234:abcd::1c2d:3e4f/128",
+				"20.10.0.1/16",                 // invalid
+				"fe80:1234:abcd::1c2d:3e4f/64", // invalid
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+			expectedIPv6: []string{
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			},
 		},
 		{
@@ -287,34 +327,34 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 		{
 			name: "annotation allowedIPRanges = 1 IPv6",
 			svc: k8sFx.Service().WithAllowedIPRanges(
-				"2001:db8:85a3::1a2b:3c4d/64",
+				"2001:db8:85a3::/64",
 			).Build(),
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
+				"2001:db8:85a3::/64",
 			},
 		},
 		{
 			name: "annotation allowedIPRanges = N IPv6",
 			svc: k8sFx.Service().WithAllowedIPRanges(
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			).Build(),
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			},
 		},
 		{
 			name: "annotation allowedIPRanges = N IPv4 and N IPv6",
 			svc: k8sFx.Service().WithAllowedIPRanges(
 				"10.10.0.0/16",
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
 				"10.11.0.0/16",
 				"10.0.0.1/32",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			).Build(),
 			expectedIPv4: []string{
 				"10.10.0.0/16",
@@ -322,9 +362,32 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 				"10.0.0.1/32",
 			},
 			expectedIPv6: []string{
-				"2001:db8:85a3::1a2b:3c4d/64",
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
+			},
+		},
+		{
+			name: "annotation allowedIPRanges = N IPv4 and N IPv6 with invalid ranges",
+			svc: k8sFx.Service().WithAllowedIPRanges(
+				"10.10.0.0/16",
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+				"fe80:1234:abcd::1c2d:3e4f/128",
+				"20.10.0.1/16",                 // invalid
+				"fe80:1234:abcd::1c2d:3e4f/64", // invalid
+			).Build(),
+			expectedIPv4: []string{
+				"10.10.0.0/16",
+				"10.11.0.0/16",
+				"10.0.0.1/32",
+			},
+			expectedIPv6: []string{
+				"2001:db8:85a3::/64",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			},
 		},
 	}
@@ -570,8 +633,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 		var (
 			k8sFx           = fixture.NewFixture().Kubernetes()
 			allowedIPRanges = []string{
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			}
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(allowedIPRanges...).
@@ -616,8 +679,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"20.0.0.1/32",
 			}
 			allowedIPv6Ranges = []string{
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			}
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
@@ -680,8 +743,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"20.0.0.1/32",
 			}
 			allowedIPv6Ranges = []string{
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			}
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
@@ -804,8 +867,8 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"20.0.0.1/32",
 			}
 			allowedIPv6Ranges = []string{
-				"fd12:3456:789a::1234:5678/48",
-				"fe80:1234:abcd::1c2d:3e4f/32",
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
 			}
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
@@ -914,6 +977,87 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
 				).
 				WithPriority(511).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+
+			// Deny ALL
+			azureFx.
+				DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+			azureFx.
+				DenyAllSecurityRule(iputil.IPv6).WithPriority(4094).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+		)
+		runTest(t, svc, originalRules, dstIPv4Addresses, dstIPv6Addresses, true, expectedRules)
+	})
+
+	t.Run("patch service with invalid allowedIPRanges", func(t *testing.T) {
+		var (
+			k8sFx           = fixture.NewFixture().Kubernetes()
+			inputIPv4Ranges = []string{
+				"192.168.0.0/16",
+				"20.0.0.1/32",
+				"10.0.0.1/16", // invalid
+			}
+			allowedIPv4Ranges = inputIPv4Ranges[:2]
+			inputIPv6Ranges   = []string{
+				"fd12:3456:789a::/48",
+				"fe80:1234:abcd::1c2d:3e4f/128",
+				"fe80:1234:abcd::3e4f/64", // invalid
+			}
+			allowedIPv6Ranges = inputIPv6Ranges[:2]
+			svc               = k8sFx.Service().
+						WithAllowedIPRanges(append(inputIPv4Ranges, inputIPv6Ranges...)...).
+						WithDenyAllExceptLoadBalancerSourceRanges().
+						Build()
+			originalRules    = azureFx.NoiseSecurityRules(10)
+			dstIPv4Addresses = []string{
+				"10.0.0.1",
+				"10.0.0.2",
+			}
+			dstIPv6Addresses = []string{
+				"2001:db8::1428:57ab",
+				"2002:fb8::1",
+			}
+			expectedRules = testutil.CloneInJSON(originalRules)
+		)
+		expectedRules = append(expectedRules,
+
+			// TCP + IPv4 for 1 IP Range
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(500).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// TCP + IPv6 for 1 IP Range
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts(),
+				).
+				WithPriority(501).
+				WithDestination(dstIPv6Addresses...).
+				Build(),
+
+			// UDP + IPv4 for 1 IP Range
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(502).
+				WithDestination(dstIPv4Addresses...).
+				Build(),
+
+			// UDP + IPv6 for 1 IP Range
+			azureFx.
+				AllowSecurityRule(
+					network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts(),
+				).
+				WithPriority(503).
 				WithDestination(dstIPv6Addresses...).
 				Build(),
 
