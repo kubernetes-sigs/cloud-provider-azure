@@ -20,7 +20,7 @@ require (
 	golang.org/x/crypto v0.21.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/time v0.5.0
-	gopkg.in/dnaeon/go-vcr.v3 v3.1.2
+	gopkg.in/dnaeon/go-vcr.v3 v3.2.0
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
 
