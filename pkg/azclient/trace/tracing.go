@@ -91,9 +91,6 @@ func NewOtlpSpan(ctx context.Context, spanName string, options *tracing.SpanOpti
 				}
 				span.AddEvent(name, trace.WithAttributes(traceAttributes...))
 			},
-			AddError: func(err error) {
-				span.RecordError(err)
-			},
 
 			SetStatus: func(status tracing.SpanStatus, description string) {
 				switch status {
@@ -131,9 +128,6 @@ func NewOtlpSpanFromContext(ctx context.Context) (tracing.Span, bool) {
 					traceAttributes = append(traceAttributes, attribute.String(entry.Key, fmt.Sprintf("%v", entry.Value)))
 				}
 				span.AddEvent(name, trace.WithAttributes(traceAttributes...))
-			},
-			AddError: func(err error) {
-				span.RecordError(err)
 			},
 
 			SetStatus: func(status tracing.SpanStatus, description string) {
