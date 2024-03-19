@@ -136,7 +136,20 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
-      
+  - package-ecosystem: "docker"
+    directory: "/health-probe-proxy"
+    schedule:
+      interval: "daily"
+      time: "01:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "area/dependency"
+      - "release-note-none"
+      - "ok-to-test"
+      - "kind/cleanup"
+      - "lgtm"
+      - "approved"
+  
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
