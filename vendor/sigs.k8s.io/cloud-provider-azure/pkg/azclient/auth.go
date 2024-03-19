@@ -128,6 +128,20 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		if err != nil {
 			return nil, err
 		}
+		if len(armConfig.NetworkResourceTenantID) > 0 && !strings.EqualFold(armConfig.NetworkResourceTenantID, armConfig.GetTenantID()) {
+			networkClientSecretCredential, err = azidentity.NewClientCertificateCredential(armConfig.NetworkResourceTenantID, config.GetAADClientID(), certificate, privateKey, credOptions)
+			if err != nil {
+				return nil, err
+			}
+			credOptions = &azidentity.ClientCertificateCredentialOptions{
+				ClientOptions:              *clientOption,
+				AdditionallyAllowedTenants: []string{armConfig.NetworkResourceTenantID},
+			}
+			multiTenantCredential, err = azidentity.NewClientCertificateCredential(armConfig.GetTenantID(), config.GetAADClientID(), certificate, privateKey, credOptions)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &AuthProvider{
