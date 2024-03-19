@@ -69,7 +69,7 @@ jobs:
             /kind testing
 
             #### What this PR does / why we need it:
-            New release published.
+            go.sum is out of sync
 
             #### Does this PR introduce a user-facing change?
             ```release-note
