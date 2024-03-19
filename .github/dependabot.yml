@@ -409,3 +409,18 @@ updates:
       - "kind/cleanup"
       - "lgtm"
       - "approved"
+
+  - package-ecosystem: docker
+    directory: /health-probe-proxy
+    schedule:
+      interval: daily
+
+  - package-ecosystem: docker
+    directory: /vendor/github.com/samber/lo
+    schedule:
+      interval: daily
+
+  - package-ecosystem: pip
+    directory: /vendor/go.opentelemetry.io/otel
+    schedule:
+      interval: daily
