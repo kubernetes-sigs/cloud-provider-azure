@@ -83,7 +83,7 @@ fi
 # cloud provider azure. This will remove dependency on cloud-provider-azure repo, and use
 # explicit variables makes the interface more clear.
 if [[ -z "${IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="$(git describe --tags)"
+  IMAGE_TAG="$(git describe --tags --match "v[0-9].*")"
 fi
 
 if [[ -z "${CLUSTER_CONFIG_PATH:-}" ]]; then
