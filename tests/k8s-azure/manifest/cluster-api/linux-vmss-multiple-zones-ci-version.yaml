@@ -261,6 +261,7 @@ spec:
   failureDomains:
     - "1"
     - "2"
+    - "3"
   replicas: ${WORKER_MACHINE_COUNT}
   template:
     spec:
@@ -435,6 +436,7 @@ spec:
   failureDomains:
     - "1"
     - "2"
+    - "3"
   replicas: ${WINDOWS_WORKER_MACHINE_COUNT:-0}
   template:
     spec:
