@@ -22,7 +22,7 @@ steps:
       sudo GOPATH="/home/vsts/go" make install
       popd
 
-      export IMAGE_TAG="$(git describe --tags)"
+      export IMAGE_TAG="$(git describe --tags --match "v[0-9].*")"
       kubetest2 aks --build --target cnm --targetPath `pwd`
     displayName: make and push cnm image
     env:

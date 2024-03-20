@@ -27,7 +27,7 @@ fi
 
 # stolen from k8s.io/hack/lib/version.sh
 # Use git describe to find the version based on tags.
-if GIT_VERSION=$(git describe --tags --abbrev=14 2>/dev/null); then
+if GIT_VERSION=$(git describe --tags --match "v[0-9].*" --abbrev=14 2>/dev/null); then
     # This translates the "git describe" to an actual semver.org
     # compatible semantic version that looks something like this:
     #   v1.1.0-alpha.0.6+84c76d1142ea4d
@@ -67,7 +67,7 @@ if GIT_VERSION=$(git describe --tags --abbrev=14 2>/dev/null); then
 fi
 
 GIT_BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
-GIT_RELEASE_TAG=$(git describe --abbrev=0 --tags)
+GIT_RELEASE_TAG=$(git describe --match "v[0-9].*" --abbrev=0 --tags)
 GIT_RELEASE_COMMIT=$(git rev-list -n 1  ${GIT_RELEASE_TAG} | head -c 14)
 
 cat <<EOF
