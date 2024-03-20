@@ -302,10 +302,8 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	}
 	// If nodeIP was suggested by user, ensure that
 	// it can be found in the cloud as well (consistent with the behaviour in kubelet)
-	if nodeIP, ok := ensureNodeProvidedIPExists(node, nodeAddresses); ok {
-		if nodeIP == nil {
-			return fmt.Errorf("specified Node IP %s not found in cloudprovider for node %q", nodeAddresses, node.Name)
-		}
+	if existNodeIPs, ok := ensureNodeProvidedIPsExists(node, nodeAddresses); !ok {
+		return fmt.Errorf("not all specified Node IP %s found in cloudprovider for node %q, existing Node IPs are %s ", nodeAddresses, node.Name, existNodeIPs)
 	}
 	if !nodeAddressesChangeDetected(node.Status.Addresses, nodeAddresses) {
 		return nil
@@ -468,10 +466,8 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 
 	// If user provided an IP address, ensure that IP address is found
 	// in the cloud provider before removing the taint on the node
-	if nodeIP, ok := ensureNodeProvidedIPExists(node, nodeAddresses); ok {
-		if nodeIP == nil {
-			return nil, errors.New("failed to find kubelet node IP from cloud provider")
-		}
+	if _, ok := ensureNodeProvidedIPsExists(node, nodeAddresses); !ok {
+		return nil, errors.New("failed to find kubelet node IP from cloud provider")
 	}
 
 	if instanceType, err := cnc.getInstanceTypeByName(ctx, node); err != nil {
@@ -602,19 +598,30 @@ func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool
 	return false
 }
 
-func ensureNodeProvidedIPExists(node *v1.Node, nodeAddresses []v1.NodeAddress) (*v1.NodeAddress, bool) {
-	var nodeIP *v1.NodeAddress
-	nodeIPExists := false
-	if providedIP, ok := node.ObjectMeta.Annotations[cloudproviderapi.AnnotationAlphaProvidedIPAddr]; ok {
-		nodeIPExists = true
-		for i := range nodeAddresses {
+// Ensure all provided node ip addresses are found in the cloud provider, otherwise return false
+// When there's no provided node ip addresses, it will return true.
+func ensureNodeProvidedIPsExists(node *v1.Node, nodeAddresses []v1.NodeAddress) ([]v1.NodeAddress, bool) {
+	providedIPStr, ok := node.ObjectMeta.Annotations[cloudproviderapi.AnnotationAlphaProvidedIPAddr]
+	if !ok || len(providedIPStr) == 0 {
+		return []v1.NodeAddress{}, true
+	}
+	var existNodeIPs []v1.NodeAddress
+	nodeIPsExists := false
+	providedIPs := strings.Split(providedIPStr, ",")
+	for i := range nodeAddresses {
+		for _, providedIP := range providedIPs {
+			providedIP = strings.TrimSpace(providedIP)
 			if nodeAddresses[i].Address == providedIP {
-				nodeIP = &nodeAddresses[i]
+				existNodeIPs = append(existNodeIPs, nodeAddresses[i])
 				break
 			}
 		}
 	}
-	return nodeIP, nodeIPExists
+	if len(existNodeIPs) == len(providedIPs) {
+		nodeIPsExists = true
+	}
+
+	return existNodeIPs, nodeIPsExists
 }
 
 func (cnc *CloudNodeController) getInstanceTypeByName(ctx context.Context, node *v1.Node) (string, error) {
