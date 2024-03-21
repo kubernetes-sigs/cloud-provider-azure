@@ -2859,6 +2859,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		sourceRanges          = accessControl.SourceRanges()
 		allowedServiceTags    = accessControl.AllowedServiceTags()
 		allowedIPRanges       = accessControl.AllowedIPRanges()
+		invalidRanges         = accessControl.InvalidRanges()
 		sourceAddressPrefixes = map[bool][]string{
 			false: accessControl.IPV4Sources(),
 			true:  accessControl.IPV6Sources(),
@@ -2884,13 +2885,19 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 			consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationAllowedServiceTags,
 		))
 	}
+	if len(invalidRanges) > 0 {
+		az.Event(service, v1.EventTypeWarning, "InvalidConfiguration", fmt.Sprintf(
+			"Found invalid LoadBalancerSourceRanges %v, ignoring and adding a default DenyAll rule in security group.",
+			invalidRanges,
+		))
+	}
 
 	var expectedSecurityRules []network.SecurityRule
 	handleSecurityRules := func(isIPv6 bool) error {
 		expectedSecurityRulesSingleStack, err := az.getExpectedSecurityRules(
 			wantLb, ports,
 			sourceAddressPrefixes[isIPv6], service,
-			destinationIPAddresses[isIPv6], sourceRanges,
+			destinationIPAddresses[isIPv6], sourceRanges, invalidRanges,
 			backendIPAddresses[isIPv6], disableFloatingIP, isIPv6,
 		)
 		expectedSecurityRules = append(expectedSecurityRules, expectedSecurityRulesSingleStack...)
@@ -3083,6 +3090,7 @@ func (az *Cloud) getExpectedSecurityRules(
 	service *v1.Service,
 	destinationIPAddresses []string,
 	sourceRanges []netip.Prefix,
+	invalidRanges []string,
 	backendIPAddresses []string,
 	disableFloatingIP, isIPv6 bool,
 ) ([]network.SecurityRule, error) {
@@ -3132,6 +3140,9 @@ func (az *Cloud) getExpectedSecurityRules(
 			if v, ok := service.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, consts.TrueAnnotationValue) {
 				shouldAddDenyRule = true
 			}
+		}
+		if len(invalidRanges) > 0 {
+			shouldAddDenyRule = true
 		}
 		if shouldAddDenyRule {
 			for _, port := range ports {

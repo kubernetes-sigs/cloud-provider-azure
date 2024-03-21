@@ -44,52 +44,33 @@ func TestIsAllowAll(t *testing.T) {
 	}))
 }
 
-func TestParseCIDRs(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		actual, err := ParseCIDRs([]string{})
-		assert.NoError(t, err)
-		assert.Empty(t, actual)
-	})
+func TestParseCIDR(t *testing.T) {
 	t.Run("1 ipv4 cidr", func(t *testing.T) {
-		actual, err := ParseCIDRs([]string{
-			"10.10.10.0/24",
-		})
+		actual, err := ParseCIDR("10.10.10.0/24")
 		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.10.0/24"),
-		}, actual)
+		assert.Equal(t, netip.MustParsePrefix("10.10.10.0/24"), actual)
 	})
 	t.Run("1 ipv6 cidr", func(t *testing.T) {
-		actual, err := ParseCIDRs([]string{
-			"2001:db8::/32",
-		})
+		actual, err := ParseCIDR("2001:db8::/32")
 		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("2001:db8::/32"),
-		}, actual)
-	})
-	t.Run("multiple cidrs", func(t *testing.T) {
-		actual, err := ParseCIDRs([]string{
-			"10.10.10.0/24",
-			"2001:db8::/32",
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, []netip.Prefix{
-			netip.MustParsePrefix("10.10.10.0/24"),
-			netip.MustParsePrefix("2001:db8::/32"),
-		}, actual)
+		assert.Equal(t, netip.MustParsePrefix("2001:db8::/32"), actual)
 	})
 	t.Run("invalid cidr", func(t *testing.T) {
 		{
-			_, err := ParseCIDRs([]string{""})
+			_, err := ParseCIDR("")
 			assert.Error(t, err)
 		}
 		{
-			_, err := ParseCIDRs([]string{"foo"})
+			_, err := ParseCIDR("foo")
+			assert.Error(t, err)
+		}
+		// below two tests check for valid cidr but not valid network prefix
+		{
+			_, err := ParseCIDR("10.10.10.1/24")
 			assert.Error(t, err)
 		}
 		{
-			_, err := ParseCIDRs([]string{"10.10.10.0/24", "foo"})
+			_, err := ParseCIDR("2001:db8::5/32")
 			assert.Error(t, err)
 		}
 	})
