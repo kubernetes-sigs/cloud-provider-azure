@@ -4762,12 +4762,12 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 							},
 						},
 						{
-							Name: pointer.String("asvc-TCP-80-foo"),
+							Name: pointer.String("asvc-TCP-80-bar"),
 							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 								Protocol:                   network.SecurityRuleProtocol("Tcp"),
 								SourcePortRange:            pointer.String("*"),
 								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
-								SourceAddressPrefix:        pointer.String("foo"),
+								SourceAddressPrefix:        pointer.String("bar"),
 								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
 								Access:                     network.SecurityRuleAccessAllow,
 								Priority:                   pointer.Int32(502),
@@ -4775,12 +4775,12 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 							},
 						},
 						{
-							Name: pointer.String("asvc-TCP-80-bar"),
+							Name: pointer.String("asvc-TCP-80-foo"),
 							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 								Protocol:                   network.SecurityRuleProtocol("Tcp"),
 								SourcePortRange:            pointer.String("*"),
 								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
-								SourceAddressPrefix:        pointer.String("bar"),
+								SourceAddressPrefix:        pointer.String("foo"),
 								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
 								Access:                     network.SecurityRuleAccessAllow,
 								Priority:                   pointer.Int32(503),
@@ -4839,19 +4839,6 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
 					SecurityRules: &[]network.SecurityRule{
 						{
-							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
-							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-								Protocol:                   network.SecurityRuleProtocol("Tcp"),
-								SourcePortRange:            pointer.String("*"),
-								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
-								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
-								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
-								Access:                     network.SecurityRuleAccessAllow,
-								Priority:                   pointer.Int32(500),
-								Direction:                  network.SecurityRuleDirection("Inbound"),
-							},
-						},
-						{
 							Name: pointer.String("asvc-TCP-80-10.10.10.0_24"),
 							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 								Protocol:                   network.SecurityRuleProtocol("Tcp"),
@@ -4860,20 +4847,20 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 								SourceAddressPrefix:        pointer.String("10.10.10.0/24"),
 								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
 								Access:                     network.SecurityRuleAccessAllow,
-								Priority:                   pointer.Int32(501),
+								Priority:                   pointer.Int32(500),
 								Direction:                  network.SecurityRuleDirection("Inbound"),
 							},
 						},
 						{
-							Name: pointer.String("asvc-TCP-80-foo"),
+							Name: pointer.String("asvc-TCP-80-192.168.0.1_32"),
 							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
 								Protocol:                   network.SecurityRuleProtocol("Tcp"),
 								SourcePortRange:            pointer.String("*"),
 								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
-								SourceAddressPrefix:        pointer.String("foo"),
+								SourceAddressPrefix:        pointer.String("192.168.0.1/32"),
 								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
 								Access:                     network.SecurityRuleAccessAllow,
-								Priority:                   pointer.Int32(502),
+								Priority:                   pointer.Int32(501),
 								Direction:                  network.SecurityRuleDirection("Inbound"),
 							},
 						},
@@ -4884,6 +4871,19 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 								SourcePortRange:            pointer.String("*"),
 								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
 								SourceAddressPrefix:        pointer.String("bar"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccessAllow,
+								Priority:                   pointer.Int32(502),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+						{
+							Name: pointer.String("asvc-TCP-80-foo"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								DestinationPortRange:       pointer.String(strconv.Itoa(80)),
+								SourceAddressPrefix:        pointer.String("foo"),
 								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
 								Access:                     network.SecurityRuleAccessAllow,
 								Priority:                   pointer.Int32(503),
@@ -4924,58 +4924,398 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 }
 
 func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	az := GetTestCloud(ctrl)
-	service := getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}, false, 80)
-	service.Spec.LoadBalancerSourceRanges = []string{"1.2.3.4/32"}
-	existingSg := network.SecurityGroup{
-		Name: pointer.String("nsg"),
-		SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
-			SecurityRules: &[]network.SecurityRule{},
-		},
-	}
-	lbIPs := &[]string{"1.1.1.1"}
-	expectedSg := network.SecurityGroup{
-		Name: pointer.String("nsg"),
-		SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
-			SecurityRules: &[]network.SecurityRule{
+	tests := []struct {
+		name          string
+		sourceRanges  []string
+		originalRules []network.SecurityRule
+		expectedRules []network.SecurityRule
+	}{
+		{
+			name:          "should add deny-all rule if not exists #1",
+			sourceRanges:  []string{"1.2.3.4/32"},
+			originalRules: nil,
+			expectedRules: []network.SecurityRule{
 				{
 					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-						Protocol:                 network.SecurityRuleProtocol("Tcp"),
+						Protocol:                 network.SecurityRuleProtocolTCP,
 						SourcePortRange:          pointer.String("*"),
 						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
 						DestinationPortRange:     pointer.String("80"),
 						DestinationAddressPrefix: pointer.String("1.1.1.1"),
-						Access:                   network.SecurityRuleAccess("Allow"),
+						Access:                   network.SecurityRuleAccessAllow,
 						Priority:                 pointer.Int32(500),
-						Direction:                network.SecurityRuleDirection("Inbound"),
+						Direction:                network.SecurityRuleDirectionInbound,
 					},
 				},
 				{
 					Name: pointer.String("atest1-TCP-80-deny_all"),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-						Protocol:                 network.SecurityRuleProtocol("Tcp"),
+						Protocol:                 network.SecurityRuleProtocolTCP,
 						SourcePortRange:          pointer.String("*"),
 						SourceAddressPrefix:      pointer.String("*"),
 						DestinationPortRange:     pointer.String("80"),
 						DestinationAddressPrefix: pointer.String("1.1.1.1"),
-						Access:                   network.SecurityRuleAccess("Deny"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(4096),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+		},
+
+		{
+			name:         "should add deny-all rule if not exists #2",
+			sourceRanges: []string{"1.2.3.4/32"},
+			originalRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(505),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+			expectedRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(500), // would be reset
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(4096),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+		},
+		{
+			name:         "should move deny-all rule after allow rule: reorder priority",
+			sourceRanges: []string{"1.2.3.4/32"},
+			originalRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(505),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(503),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+			expectedRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(500), // would be reset
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(4096),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+		},
+		{
+			name:         "should move deny-all rule after allow rule: add new source range",
+			sourceRanges: []string{"1.2.3.4/32", "10.0.0.0/16"},
+			originalRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(505),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(503),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+			expectedRules: []network.SecurityRule{
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(500), // would be reset
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-10.0.0.0_16"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("10.0.0.0/16"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
 						Priority:                 pointer.Int32(501),
-						Direction:                network.SecurityRuleDirection("Inbound"),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(4096),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+		},
+		{
+			name:         "should move deny-all rule after allow rule: keep unmanaged rules unchanged",
+			sourceRanges: []string{"1.2.3.4/32"},
+			originalRules: []network.SecurityRule{
+				{
+					Name: pointer.String("unmanaged_rule_1"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(499),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("unmanaged_rule_2"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/16"),
+						DestinationPortRange:     pointer.String("443"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(5000),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("unmanaged_rule_3"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/16"),
+						DestinationPortRange:     pointer.String("443"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(400),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(505),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(503),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+			},
+			expectedRules: []network.SecurityRule{
+				{
+					Name: pointer.String("unmanaged_rule_3"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/16"),
+						DestinationPortRange:     pointer.String("443"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(400),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("unmanaged_rule_1"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(499),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-1.2.3.4_32"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/32"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(500), // would be reset
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("atest1-TCP-80-deny_all"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("*"),
+						DestinationPortRange:     pointer.String("80"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessDeny,
+						Priority:                 pointer.Int32(4096),
+						Direction:                network.SecurityRuleDirectionInbound,
+					},
+				},
+				{
+					Name: pointer.String("unmanaged_rule_2"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                 network.SecurityRuleProtocolTCP,
+						SourcePortRange:          pointer.String("*"),
+						SourceAddressPrefix:      pointer.String("1.2.3.4/16"),
+						DestinationPortRange:     pointer.String("443"),
+						DestinationAddressPrefix: pointer.String("1.1.1.1"),
+						Access:                   network.SecurityRuleAccessAllow,
+						Priority:                 pointer.Int32(5000),
+						Direction:                network.SecurityRuleDirectionInbound,
 					},
 				},
 			},
 		},
 	}
-	mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
-	mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(existingSg, nil)
-	mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIPs, nil, true)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedSg, *sg)
+
+	for _, tt := range tests {
+		originalSg := network.SecurityGroup{
+			Name: pointer.String("nsg"),
+			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+				SecurityRules: &tt.originalRules,
+			},
+		}
+		expectedSg := network.SecurityGroup{
+			Name: pointer.String("nsg"),
+			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+				SecurityRules: &tt.expectedRules,
+			},
+		}
+
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloud(ctrl)
+			service := getTestService("test1", v1.ProtocolTCP, map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}, false, 80)
+			service.Spec.LoadBalancerSourceRanges = tt.sourceRanges
+			lbIPs := &[]string{"1.1.1.1"}
+
+			mockSGClient := az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
+			mockSGClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any()).Return(originalSg, nil)
+			mockSGClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			sg, err := az.reconcileSecurityGroup("testCluster", &service, lbIPs, nil, true)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedSg, *sg)
+		})
+	}
 }
 
 func TestReconcileSecurityGroup(t *testing.T) {
@@ -9633,5 +9973,264 @@ func fakeEnsureHostsInPool() func(*v1.Service, []*v1.Node, string, string, strin
 			},
 		}
 		return nil
+	}
+}
+
+func newAllowRule(name string, priority int32) network.SecurityRule {
+	return network.SecurityRule{
+		Name: &name,
+		SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+			Priority: &priority,
+			Access:   network.SecurityRuleAccessAllow,
+		},
+	}
+}
+func newDenyRule(name string, priority int32) network.SecurityRule {
+	return network.SecurityRule{
+		Name: &name,
+		SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+			Priority: &priority,
+			Access:   network.SecurityRuleAccessDeny,
+		},
+	}
+}
+
+func Test_shouldTidySecurityRules(t *testing.T) {
+	type args struct {
+		rules []network.SecurityRule
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "should return false if there are no rules #1",
+			args: args{
+				rules: nil,
+			},
+			want: false,
+		},
+		{
+			name: "should return false if there are no rules #2",
+			args: args{
+				rules: []network.SecurityRule{},
+			},
+			want: false,
+		},
+		{
+			name: "should return false if there is 1 rule",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "should return false if no allow rule after deny rule",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+					newDenyRule("rule2", 505),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "should return false if no allow rule after deny rule: ignore unmanaged rules",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("unmanaged_rule1", 300),
+					newAllowRule("unmanaged_rule2", 400),
+					newDenyRule("unmanaged_rule3", 450),
+
+					newAllowRule("rule1", 500),
+					newDenyRule("rule2", 505),
+
+					newDenyRule("unmanaged_rule4", 5000),
+					newAllowRule("unmanaged_rule5", 6000),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "should return true if allow rule after deny rule",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+					newDenyRule("rule4", 501),
+					newAllowRule("rule2", 502),
+					newDenyRule("rule5", 503),
+					newAllowRule("rule3", 504),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "should return true if allow rule after deny rule: with unmanaged rules",
+			args: args{
+				rules: []network.SecurityRule{
+
+					newAllowRule("unmanaged_rule1", 300),
+					newAllowRule("unmanaged_rule2", 400),
+					newDenyRule("unmanaged_rule3", 450),
+
+					newAllowRule("rule1", 500),
+					newDenyRule("rule4", 501),
+					newAllowRule("rule2", 502),
+					newDenyRule("rule5", 503),
+					newAllowRule("rule3", 504),
+
+					newDenyRule("unmanaged_rule4", 5000),
+					newAllowRule("unmanaged_rule5", 6000),
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, shouldTidySecurityRules(tt.args.rules), "shouldTidySecurityRules(%v)", tt.args.rules)
+		})
+	}
+}
+
+func Test_tidySecurityRules(t *testing.T) {
+
+	type args struct {
+		rules []network.SecurityRule
+	}
+	tests := []struct {
+		name string
+		args args
+		want []network.SecurityRule
+	}{
+		{
+			name: "should return the same rules if there are no rules #1",
+			args: args{
+				rules: nil,
+			},
+			want: nil,
+		},
+		{
+			name: "should return the same rules if there are no rules #2",
+			args: args{
+				rules: []network.SecurityRule{},
+			},
+			want: []network.SecurityRule{},
+		},
+		{
+			name: "should return the same rules if there is 1 rule",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+				},
+			},
+			want: []network.SecurityRule{
+				newAllowRule("rule1", 500),
+			},
+		},
+		{
+			name: "should return the same rules if there are only unmanaged rules",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("unmanaged_rule1", 300),
+					newAllowRule("unmanaged_rule2", 400),
+					newDenyRule("unmanaged_rule3", 450),
+
+					newAllowRule("rule1", 500),
+
+					newDenyRule("unmanaged_rule4", 5000),
+					newAllowRule("unmanaged_rule5", 6000),
+				},
+			},
+			want: []network.SecurityRule{
+				newAllowRule("unmanaged_rule1", 300),
+				newAllowRule("unmanaged_rule2", 400),
+				newDenyRule("unmanaged_rule3", 450),
+
+				newAllowRule("rule1", 500),
+
+				newDenyRule("unmanaged_rule4", 5000),
+				newAllowRule("unmanaged_rule5", 6000),
+			},
+		},
+		{
+			name: "should reorder managed rules #1",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+					newAllowRule("rule2", 541),
+					newAllowRule("rule3", 652),
+					newDenyRule("rule4", 700),
+					newDenyRule("rule5", 1000),
+				},
+			},
+			want: []network.SecurityRule{
+				newAllowRule("rule1", 500),
+				newAllowRule("rule2", 501),
+				newAllowRule("rule3", 502),
+				newDenyRule("rule5", 4095),
+				newDenyRule("rule4", 4096),
+			},
+		},
+		{
+			name: "should reorder managed rules #2",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("rule1", 500),
+					newDenyRule("rule4", 501),
+					newAllowRule("rule2", 502),
+					newDenyRule("rule5", 503),
+					newAllowRule("rule3", 504),
+				},
+			},
+			want: []network.SecurityRule{
+				newAllowRule("rule1", 500),
+				newAllowRule("rule2", 501),
+				newAllowRule("rule3", 502),
+				newDenyRule("rule5", 4095),
+				newDenyRule("rule4", 4096),
+			},
+		},
+		{
+			name: "should reorder managed rules #3: ignore unmanaged rules",
+			args: args{
+				rules: []network.SecurityRule{
+					newAllowRule("unmanaged_rule1", 300),
+					newAllowRule("unmanaged_rule2", 400),
+					newDenyRule("unmanaged_rule3", 450),
+
+					newAllowRule("rule1", 500),
+					newDenyRule("rule4", 501),
+					newAllowRule("rule2", 502),
+					newDenyRule("rule5", 503),
+					newAllowRule("rule3", 504),
+
+					newDenyRule("unmanaged_rule4", 5000),
+					newAllowRule("unmanaged_rule5", 6000),
+				},
+			},
+			want: []network.SecurityRule{
+				newAllowRule("unmanaged_rule1", 300),
+				newAllowRule("unmanaged_rule2", 400),
+				newDenyRule("unmanaged_rule3", 450),
+
+				newAllowRule("rule1", 500),
+				newAllowRule("rule2", 501),
+				newAllowRule("rule3", 502),
+				newDenyRule("rule5", 4095),
+				newDenyRule("rule4", 4096),
+
+				newDenyRule("unmanaged_rule4", 5000),
+				newAllowRule("unmanaged_rule5", 6000),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, tidySecurityRules(tt.args.rules), "tidySecurityRules(%v)", tt.args.rules)
+		})
 	}
 }
