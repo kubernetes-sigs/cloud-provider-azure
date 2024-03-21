@@ -1808,6 +1808,7 @@ func getTestSecurityGroup(az *Cloud, services ...v1.Service) *network.SecurityGr
 				rules = append(rules, network.SecurityRule{
 					Name: pointer.String(ruleName),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Priority:             pointer.Int32(0),
 						SourceAddressPrefix:  pointer.String(src),
 						DestinationPortRange: pointer.String(fmt.Sprintf("%d", port.Port)),
 					},
@@ -2563,6 +2564,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 		{
 			Name: &expectedRuleName,
 			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+				Priority:                 pointer.Int32(500),
 				Protocol:                 network.SecurityRuleProtocolTCP,
 				SourcePortRange:          pointer.String("*"),
 				SourceAddressPrefix:      pointer.String("Internet"),
