@@ -41,7 +41,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kubelet v0.29.3
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.2
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.4
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.1
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -49,7 +49,7 @@ require (
 require (
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.7.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.8.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0 // indirect
 	github.com/Azure/azure-storage-queue-go v0.0.0-20230531184854-c06a8eff66fe // indirect
