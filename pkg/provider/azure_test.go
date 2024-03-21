@@ -1969,6 +1969,7 @@ func getTestSecurityGroupCommon(az *Cloud, v4Enabled, v6Enabled bool, services .
 				return network.SecurityRule{
 					Name: pointer.String(ruleName),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Priority:             pointer.Int32(0),
 						SourceAddressPrefix:  pointer.String(src),
 						DestinationPortRange: pointer.String(fmt.Sprintf("%d", port.Port)),
 					},
@@ -2263,6 +2264,7 @@ func securityRuleMatches(serviceSourceRange string, servicePort v1.ServicePort, 
 }
 
 func validateSecurityGroupCommon(t *testing.T, az *Cloud, securityGroup *network.SecurityGroup, v4Enabled, v6Enabled bool, services ...v1.Service) {
+	t.Helper()
 	expectedRules := make(map[string]bool)
 	for _, svc := range services {
 		svc := svc
@@ -2788,6 +2790,7 @@ func TestIfServiceSpecifiesSharedRuleAndRuleExistsThenTheServicesPortAndAddressA
 		rule := network.SecurityRule{
 			Name: &ruleName,
 			SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+				Priority:                 pointer.Int32(500),
 				Protocol:                 network.SecurityRuleProtocolTCP,
 				SourcePortRange:          pointer.String("*"),
 				SourceAddressPrefix:      pointer.String("Internet"),

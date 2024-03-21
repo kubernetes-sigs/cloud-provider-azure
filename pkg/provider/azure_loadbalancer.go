@@ -2720,11 +2720,106 @@ func (az *Cloud) reconcileSecurityRules(sg network.SecurityGroup,
 
 	updatedRules = removeDuplicatedSecurityRules(updatedRules)
 
+	if dirtySg || shouldTidySecurityRules(updatedRules) {
+		updatedRules = tidySecurityRules(updatedRules)
+		dirtySg = true
+	}
+
 	for _, r := range updatedRules {
 		klog.V(10).Infof("Updated security rule while processing %s: %s:%s -> %s:%s", service.Name, logSafe(r.SourceAddressPrefix), logSafe(r.SourcePortRange), logSafeCollection(r.DestinationAddressPrefix, r.DestinationAddressPrefixes), logSafe(r.DestinationPortRange))
 	}
 
 	return dirtySg, updatedRules, nil
+}
+
+// shouldTidySecurityRules returns true if the priorities of rules should be re-ordered.
+// The rules should be tidied if there are any allow rules after deny rules which will not work.
+func shouldTidySecurityRules(rules []network.SecurityRule) bool {
+	if len(rules) <= 1 {
+		return false
+	}
+	sort.Slice(rules, func(i, j int) bool {
+		return *rules[i].Priority < *rules[j].Priority
+	})
+
+	denyRuleFound := false
+	for i := range rules {
+		if *rules[i].Priority < consts.LoadBalancerMinimumPriority {
+			continue
+		}
+		if *rules[i].Priority > consts.LoadBalancerMaximumPriority {
+			break
+		}
+
+		switch rules[i].Access {
+		case network.SecurityRuleAccessDeny:
+			denyRuleFound = true
+		case network.SecurityRuleAccessAllow:
+			if denyRuleFound {
+				// Allow rule after deny rule, should tidy
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// tidySecurityRules reorders the rules to make the order deterministic and to ensure that the rules are in the correct order.
+func tidySecurityRules(rules []network.SecurityRule) []network.SecurityRule {
+	if len(rules) <= 1 {
+		return rules
+	}
+	var (
+		allowRules     []network.SecurityRule
+		denyAllRules   []network.SecurityRule
+		unmanagedRules []network.SecurityRule // rules priority not in the range of cloud-provider; keep them untouched
+	)
+	for _, rule := range rules {
+		p := *rule.Priority
+		if p < consts.LoadBalancerMinimumPriority || p > consts.LoadBalancerMaximumPriority {
+			unmanagedRules = append(unmanagedRules, rule)
+			continue
+		}
+
+		switch rule.Access {
+		case network.SecurityRuleAccessAllow:
+			allowRules = append(allowRules, rule)
+		case network.SecurityRuleAccessDeny:
+			denyAllRules = append(denyAllRules, rule)
+		}
+	}
+
+	// Tidy allow rules
+	{
+		sort.Slice(allowRules, func(i, j int) bool {
+			// Sort by name to make the order deterministic
+			return *allowRules[i].Name < *allowRules[j].Name
+		})
+		p := int32(consts.LoadBalancerMinimumPriority)
+		for i := range allowRules {
+			allowRules[i].Priority = pointer.Int32(p)
+			p++
+		}
+	}
+	// Tidy deny rules
+	{
+		sort.Slice(denyAllRules, func(i, j int) bool {
+			// Sort by name to make the order deterministic
+			return *denyAllRules[i].Name < *denyAllRules[j].Name
+		})
+		p := int32(consts.LoadBalancerMaximumPriority)
+		for i := range denyAllRules {
+			denyAllRules[i].Priority = pointer.Int32(p)
+			p--
+		}
+	}
+
+	rv := append(append(allowRules, denyAllRules...), unmanagedRules...)
+	sort.Slice(rv, func(i, j int) bool {
+		return *rv[i].Priority < *rv[j].Priority
+	})
+
+	return rv
 }
 
 func (az *Cloud) getExpectedSecurityRules(
