@@ -17,11 +17,13 @@ limitations under the License.
 package loadbalancer
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -50,43 +52,84 @@ func AllowedServiceTags(svc *v1.Service) ([]string, error) {
 }
 
 // AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotation.
-func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, error) {
-	const Sep = ","
+func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
+	const (
+		Sep = ","
+		Key = consts.ServiceAnnotationAllowedIPRanges
+	)
+	var (
+		errs          []error
+		validRanges   []netip.Prefix
+		invalidRanges []string
+	)
 
-	value, found := svc.Annotations[consts.ServiceAnnotationAllowedIPRanges]
+	value, found := svc.Annotations[Key]
 	if !found {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	rv, err := ParseCIDRs(strings.Split(strings.TrimSpace(value), Sep))
-	if err != nil {
-		return nil, fmt.Errorf("invalid service annotation %s:%s: %w", consts.ServiceAnnotationAllowedIPRanges, value, err)
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		prefix, err := ParseCIDR(p)
+		if err != nil {
+			errs = append(errs, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
 	}
-
-	return rv, nil
+	if len(errs) > 0 {
+		return validRanges, invalidRanges, fmt.Errorf("invalid service annotation %s:%s: %w", Key, value, errors.Join(errs...))
+	}
+	return validRanges, invalidRanges, nil
 }
 
 // SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges` and standard annotation.
 // If `spec.LoadBalancerSourceRanges` is not set, it will try to parse the annotation.
-func SourceRanges(svc *v1.Service) ([]netip.Prefix, error) {
+func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
+	var (
+		errs          []error
+		validRanges   []netip.Prefix
+		invalidRanges []string
+	)
+	// Read from spec
 	if len(svc.Spec.LoadBalancerSourceRanges) > 0 {
-		rv, err := ParseCIDRs(svc.Spec.LoadBalancerSourceRanges)
-		if err != nil {
-			return nil, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, err)
+		for _, p := range svc.Spec.LoadBalancerSourceRanges {
+			prefix, err := ParseCIDR(p)
+			if err != nil {
+				errs = append(errs, err)
+				invalidRanges = append(invalidRanges, p)
+			} else {
+				validRanges = append(validRanges, prefix)
+			}
 		}
-		return rv, nil
+		if len(errs) > 0 {
+			return validRanges, invalidRanges, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, errors.Join(errs...))
+		}
+		return validRanges, invalidRanges, nil
 	}
 
-	const Sep = ","
-	value, found := svc.Annotations[v1.AnnotationLoadBalancerSourceRangesKey]
+	// Read from annotation
+	const (
+		Sep = ","
+		Key = v1.AnnotationLoadBalancerSourceRangesKey
+	)
+	value, found := svc.Annotations[Key]
 	if !found {
-		return nil, nil
+		return nil, nil, nil
 	}
-	rv, err := ParseCIDRs(strings.Split(strings.TrimSpace(value), Sep))
-	if err != nil {
-		return nil, fmt.Errorf("invalid service annotation %s:%s: %w", v1.AnnotationLoadBalancerSourceRangesKey, value, err)
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		prefix, err := ParseCIDR(p)
+		if err != nil {
+			errs = append(errs, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
 	}
-	return rv, nil
+	if len(errs) > 0 {
+		return validRanges, invalidRanges, fmt.Errorf("invalid service annotation %s:%s: %w", Key, value, errors.Join(errs...))
+	}
+	return validRanges, invalidRanges, nil
 }
 
 type AccessControl struct {
@@ -96,16 +139,21 @@ type AccessControl struct {
 	sourceRanges       []netip.Prefix
 	allowedIPRanges    []netip.Prefix
 	allowedServiceTags []string
+	invalidRanges      []string
 }
 
 func NewAccessControl(svc *v1.Service) (*AccessControl, error) {
-	sourceRanges, err := SourceRanges(svc)
+	logger := klog.Background().
+		WithName("LoadBalancer.AccessControl").
+		WithValues("service-name", svc.Name)
+
+	sourceRanges, invalidSourceRanges, err := SourceRanges(svc)
 	if err != nil {
-		return nil, err
+		logger.Error(err, "Failed to parse SourceRange configuration")
 	}
-	allowedIPRanges, err := AllowedIPRanges(svc)
+	allowedIPRanges, invalidAllowedIPRanges, err := AllowedIPRanges(svc)
 	if err != nil {
-		return nil, err
+		logger.Error(err, "Failed to parse AllowedIPRanges configuration")
 	}
 	allowedServiceTags, err := AllowedServiceTags(svc)
 	if err != nil {
@@ -117,6 +165,7 @@ func NewAccessControl(svc *v1.Service) (*AccessControl, error) {
 		sourceRanges:       sourceRanges,
 		allowedIPRanges:    allowedIPRanges,
 		allowedServiceTags: allowedServiceTags,
+		invalidRanges:      append(invalidSourceRanges, invalidAllowedIPRanges...),
 	}, nil
 }
 
@@ -135,9 +184,14 @@ func (ac *AccessControl) AllowedServiceTags() []string {
 	return ac.allowedServiceTags
 }
 
+// InvalidRanges returns the invalid IP ranges provided by user in sourceRanges and allowedIPRanges.
+func (ac *AccessControl) InvalidRanges() []string {
+	return ac.invalidRanges
+}
+
 // IsAllowFromInternet returns true if the given service is allowed to be accessed from internet.
 // To be specific,
-// 1. For all types of LB, it returns false if the given service is specified with `service tags` or `not allowed all IP ranges`.
+// 1. For all types of LB, it returns false if the given service is specified with `service tags` or `not allowed all IP ranges`, including invalid IP ranges.
 // 2. For internal LB, it returns true iff the given service is explicitly specified with `allowed all IP ranges`. Refer: https://github.com/kubernetes-sigs/cloud-provider-azure/issues/698
 func (ac *AccessControl) IsAllowFromInternet() bool {
 	if len(ac.allowedServiceTags) > 0 {
@@ -147,6 +201,9 @@ func (ac *AccessControl) IsAllowFromInternet() bool {
 		return false
 	}
 	if len(ac.allowedIPRanges) > 0 && !IsCIDRsAllowAll(ac.allowedIPRanges) {
+		return false
+	}
+	if len(ac.invalidRanges) > 0 {
 		return false
 	}
 	if IsExternal(ac.svc) {

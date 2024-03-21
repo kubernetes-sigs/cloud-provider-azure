@@ -2411,6 +2411,7 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 		sourceRanges          = accessControl.SourceRanges()
 		allowedServiceTags    = accessControl.AllowedServiceTags()
 		allowedIPRanges       = accessControl.AllowedIPRanges()
+		invalidRanges         = accessControl.InvalidRanges()
 		sourceAddressPrefixes = func() []string {
 			// AKS v1.26 does not support dual stack, so it returns the single stack source ranges instead.
 			if service.Spec.IPFamilies[0] == v1.IPv4Protocol {
@@ -2440,11 +2441,17 @@ func (az *Cloud) reconcileSecurityGroup(clusterName string, service *v1.Service,
 			consts.ServiceAnnotationAllowedIPRanges, consts.ServiceAnnotationAllowedServiceTags,
 		))
 	}
+	if len(invalidRanges) > 0 {
+		az.Event(service, v1.EventTypeWarning, "InvalidConfiguration", fmt.Sprintf(
+			"Found invalid LoadBalancerSourceRanges %v, ignoring and adding a default DenyAll rule in security group.",
+			invalidRanges,
+		))
+	}
 
 	expectedSecurityRules, err := az.getExpectedSecurityRules(
 		wantLb, ports,
 		sourceAddressPrefixes, service,
-		destinationIPAddresses, sourceRanges,
+		destinationIPAddresses, sourceRanges, invalidRanges,
 		backendIPAddresses, disableFloatingIP,
 	)
 	if err != nil {
@@ -2607,6 +2614,7 @@ func (az *Cloud) getExpectedSecurityRules(
 	service *v1.Service,
 	destinationIPAddresses []string,
 	sourceRanges []netip.Prefix,
+	invalidRanges []string,
 	backendIPAddresses []string,
 	disableFloatingIP bool,
 ) ([]network.SecurityRule, error) {
@@ -2656,6 +2664,9 @@ func (az *Cloud) getExpectedSecurityRules(
 			if v, ok := service.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges]; ok && strings.EqualFold(v, consts.TrueAnnotationValue) {
 				shouldAddDenyRule = true
 			}
+		}
+		if len(invalidRanges) > 0 {
+			shouldAddDenyRule = true
 		}
 		if shouldAddDenyRule {
 			for _, port := range ports {

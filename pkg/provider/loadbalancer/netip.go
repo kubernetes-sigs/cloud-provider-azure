@@ -37,14 +37,14 @@ func IsCIDRsAllowAll(cidrs []netip.Prefix) bool {
 	return false
 }
 
-func ParseCIDRs(parts []string) ([]netip.Prefix, error) {
-	var rv []netip.Prefix
-	for _, part := range parts {
-		prefix, err := netip.ParsePrefix(part)
-		if err != nil {
-			return nil, fmt.Errorf("invalid IP range %s: %w", part, err)
-		}
-		rv = append(rv, prefix)
+func ParseCIDR(v string) (netip.Prefix, error) {
+	prefix, err := netip.ParsePrefix(v)
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("invalid CIDR `%s`: %w", v, err)
 	}
-	return rv, nil
+	masked := prefix.Masked()
+	if prefix.Addr().Compare(masked.Addr()) != 0 {
+		return netip.Prefix{}, fmt.Errorf("invalid CIDR `%s`: not a valid network prefix, should be properly masked like %s", v, masked)
+	}
+	return prefix, nil
 }
