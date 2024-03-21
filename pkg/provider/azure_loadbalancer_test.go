@@ -4619,6 +4619,38 @@ func TestReconcileSecurityGroupCommon(t *testing.T) {
 			},
 		},
 		{
+			desc: "reconcileSecurityGroup shall create sgs with deny_all rule and not allow internet access when provided allowedIPRanges is invalid",
+			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationAllowedIPRanges: "10.10.10.1/24",
+			}, false, 80),
+			existingSgs: map[string]network.SecurityGroup{"nsg": {
+				Name:                          pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
+			}},
+			lbIPs:  &[]string{"10.0.0.1", "10.0.0.2"},
+			wantLb: true,
+			expectedSg: &network.SecurityGroup{
+				Name: pointer.String("nsg"),
+				SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
+					SecurityRules: &[]network.SecurityRule{
+						{
+							Name: pointer.String("asvc-TCP-80-deny_all"),
+							SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+								Protocol:                   network.SecurityRuleProtocol("Tcp"),
+								SourcePortRange:            pointer.String("*"),
+								SourceAddressPrefix:        pointer.String("*"),
+								DestinationPortRange:       pointer.String("80"),
+								DestinationAddressPrefixes: &([]string{"10.0.0.1", "10.0.0.2"}),
+								Access:                     network.SecurityRuleAccess("Deny"),
+								Priority:                   pointer.Int32(500),
+								Direction:                  network.SecurityRuleDirection("Inbound"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			desc: "reconcileSecurityGroup shall create sgs while allowedIPRanges and serviceTags annotation is set",
 			service: getTestService("svc", v1.ProtocolTCP, map[string]string{
 				consts.ServiceAnnotationAllowedIPRanges:    "10.10.10.0/24,192.168.0.1/32",
