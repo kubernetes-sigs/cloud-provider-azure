@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure
 
-go 1.19
+go 1.20
 
 require (
 	github.com/Azure/azure-kusto-go v0.10.2
