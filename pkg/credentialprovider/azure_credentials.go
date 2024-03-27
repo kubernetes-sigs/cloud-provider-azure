@@ -44,7 +44,7 @@ const (
 
 var (
 	containerRegistryUrls = []string{"*.azurecr.io", "*.azurecr.cn", "*.azurecr.de", "*.azurecr.us"}
-	acrRE                 = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
+	acrRE                 = regexp.MustCompile(`^.+?\.(azurecr\.io|azurecr\.cn|azurecr\.de|azurecr\.us)`)
 )
 
 // CredentialProvider is an interface implemented by the kubelet credential provider plugin to fetch
