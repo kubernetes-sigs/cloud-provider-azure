@@ -42,6 +42,8 @@ type AzureAuthConfig struct {
 	AADFederatedTokenFile string `json:"aadFederatedTokenFile,omitempty" yaml:"aadFederatedTokenFile,omitempty"`
 	// Use workload identity federation for the virtual machine to access Azure ARM APIs
 	UseFederatedWorkloadIdentityExtension bool `json:"useFederatedWorkloadIdentityExtension,omitempty" yaml:"useFederatedWorkloadIdentityExtension,omitempty"`
+	// The KeyVault Secret URI of auxiliary token
+	AuxiliaryTokenSecretURI string `json:"auxiliaryTokenSecretURI,omitempty" yaml:"auxiliaryTokenSecretURI,omitempty"`
 }
 
 func (config *AzureAuthConfig) GetAADClientID() string {
