@@ -18,7 +18,7 @@ set -e
 cd $(dirname "${BASH_SOURCE}")/..
 
 if [ "${ENABLE_GIT_COMMAND}" = true ]; then
-  GIT_VERSION=$(git describe --tags --always --abbrev=9 || echo)
+  GIT_VERSION=$(git describe --tags --match "v[0-9].*" --always --abbrev=9 || echo)
   GIT_COMMIT=$(git rev-parse HEAD)
   version_regex="^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-([a-zA-Z0-9-]+)?$"
   [[ "${GIT_VERSION}" =~ ${version_regex} ]] && {

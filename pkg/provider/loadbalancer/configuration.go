@@ -17,6 +17,7 @@ limitations under the License.
 package loadbalancer
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -49,35 +50,60 @@ func AllowedServiceTags(svc *v1.Service) ([]string, error) {
 }
 
 // AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotation.
-func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, error) {
+func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	const (
 		Sep = ","
 		Key = consts.ServiceAnnotationAllowedIPRanges
 	)
+	var (
+		errs          []error
+		validRanges   []netip.Prefix
+		invalidRanges []string
+	)
 
 	value, found := svc.Annotations[Key]
 	if !found {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	rv, err := iputil.ParsePrefixes(strings.Split(strings.TrimSpace(value), Sep))
-	if err != nil {
-		return nil, NewErrAnnotationValue(Key, value, err)
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		prefix, err := iputil.ParsePrefix(p)
+		if err != nil {
+			errs = append(errs, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
 	}
-
-	return rv, nil
+	if len(errs) > 0 {
+		return validRanges, invalidRanges, NewErrAnnotationValue(Key, value, errors.Join(errs...))
+	}
+	return validRanges, invalidRanges, nil
 }
 
 // SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges` and standard annotation.
 // If `spec.LoadBalancerSourceRanges` is not set, it will try to parse the annotation.
-func SourceRanges(svc *v1.Service) ([]netip.Prefix, error) {
+func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
+	var (
+		errs          []error
+		validRanges   []netip.Prefix
+		invalidRanges []string
+	)
 	// Read from spec
 	if len(svc.Spec.LoadBalancerSourceRanges) > 0 {
-		rv, err := iputil.ParsePrefixes(svc.Spec.LoadBalancerSourceRanges)
-		if err != nil {
-			return nil, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, err)
+		for _, p := range svc.Spec.LoadBalancerSourceRanges {
+			prefix, err := iputil.ParsePrefix(p)
+			if err != nil {
+				errs = append(errs, err)
+				invalidRanges = append(invalidRanges, p)
+			} else {
+				validRanges = append(validRanges, prefix)
+			}
 		}
-		return rv, nil
+		if len(errs) > 0 {
+			return validRanges, invalidRanges, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, errors.Join(errs...))
+		}
+		return validRanges, invalidRanges, nil
 	}
 
 	// Read from annotation
@@ -87,13 +113,21 @@ func SourceRanges(svc *v1.Service) ([]netip.Prefix, error) {
 	)
 	value, found := svc.Annotations[Key]
 	if !found {
-		return nil, nil
+		return nil, nil, nil
 	}
-	rv, err := iputil.ParsePrefixes(strings.Split(strings.TrimSpace(value), Sep))
-	if err != nil {
-		return nil, NewErrAnnotationValue(Key, value, err)
+	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+		prefix, err := iputil.ParsePrefix(p)
+		if err != nil {
+			errs = append(errs, err)
+			invalidRanges = append(invalidRanges, p)
+		} else {
+			validRanges = append(validRanges, prefix)
+		}
 	}
-	return rv, nil
+	if len(errs) > 0 {
+		return validRanges, invalidRanges, NewErrAnnotationValue(Key, value, errors.Join(errs...))
+	}
+	return validRanges, invalidRanges, nil
 }
 
 func AdditionalPublicIPs(svc *v1.Service) ([]netip.Addr, error) {

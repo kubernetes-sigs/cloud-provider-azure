@@ -113,7 +113,7 @@ func TestAllowedServiceTags(t *testing.T) {
 
 func TestAllowedIPRanges(t *testing.T) {
 	t.Run("no annotation", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
+		actual, invalid, err := AllowedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -123,9 +123,10 @@ func TestAllowedIPRanges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Empty(t, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("with 1 IPv4 range", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
+		actual, invalid, err := AllowedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -137,9 +138,10 @@ func TestAllowedIPRanges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("10.10.0.0/24")}, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("with 1 IPv6 range", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
+		actual, invalid, err := AllowedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -151,9 +153,10 @@ func TestAllowedIPRanges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, []netip.Prefix{netip.MustParsePrefix("2001:db8::/32")}, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("with multiple IP ranges", func(t *testing.T) {
-		actual, err := AllowedIPRanges(&v1.Service{
+		actual, invalid, err := AllowedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -168,15 +171,16 @@ func TestAllowedIPRanges(t *testing.T) {
 			netip.MustParsePrefix("10.10.0.0/24"),
 			netip.MustParsePrefix("2001:db8::/32"),
 		}, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("with invalid IP range", func(t *testing.T) {
-		_, err := AllowedIPRanges(&v1.Service{
+		_, invalid, err := AllowedIPRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					consts.ServiceAnnotationAllowedIPRanges: "foobar",
+					consts.ServiceAnnotationAllowedIPRanges: "foobar,10.0.0.1/24",
 				},
 			},
 		})
@@ -185,21 +189,23 @@ func TestAllowedIPRanges(t *testing.T) {
 		var e *ErrAnnotationValue
 		assert.ErrorAs(t, err, &e)
 		assert.Equal(t, e.AnnotationKey, consts.ServiceAnnotationAllowedIPRanges)
+		assert.Equal(t, []string{"foobar", "10.0.0.1/24"}, invalid)
 	})
 }
 
 func TestSourceRanges(t *testing.T) {
 	t.Run("not specified in spec", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
+		actual, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
 		})
 		assert.NoError(t, err)
 		assert.Empty(t, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("specified in spec", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
+		actual, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type:                     v1.ServiceTypeLoadBalancer,
 				LoadBalancerSourceRanges: []string{"10.10.0.0/24", "2001:db8::/32"},
@@ -210,9 +216,10 @@ func TestSourceRanges(t *testing.T) {
 			netip.MustParsePrefix("10.10.0.0/24"),
 			netip.MustParsePrefix("2001:db8::/32"),
 		}, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("specified in annotation", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
+		actual, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
@@ -227,9 +234,10 @@ func TestSourceRanges(t *testing.T) {
 			netip.MustParsePrefix("10.10.0.0/24"),
 			netip.MustParsePrefix("2001:db8::/32"),
 		}, actual)
+		assert.Empty(t, invalid)
 	})
 	t.Run("specified in both spec and annotation", func(t *testing.T) {
-		actual, err := SourceRanges(&v1.Service{
+		actual, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type:                     v1.ServiceTypeLoadBalancer,
 				LoadBalancerSourceRanges: []string{"10.10.0.0/24"},
@@ -244,28 +252,30 @@ func TestSourceRanges(t *testing.T) {
 		assert.Equal(t, []netip.Prefix{
 			netip.MustParsePrefix("10.10.0.0/24"),
 		}, actual, "spec should take precedence over annotation")
+		assert.Empty(t, invalid)
 	})
 	t.Run("with invalid IP range in spec", func(t *testing.T) {
-		_, err := SourceRanges(&v1.Service{
+		_, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type:                     v1.ServiceTypeLoadBalancer,
-				LoadBalancerSourceRanges: []string{"foobar"},
+				LoadBalancerSourceRanges: []string{"foobar", "10.0.0.1/24"},
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{},
 			},
 		})
 		assert.Error(t, err)
+		assert.Equal(t, []string{"foobar", "10.0.0.1/24"}, invalid)
 	})
 
 	t.Run("with invalid IP range in annotation", func(t *testing.T) {
-		_, err := SourceRanges(&v1.Service{
+		_, invalid, err := SourceRanges(&v1.Service{
 			Spec: v1.ServiceSpec{
 				Type: v1.ServiceTypeLoadBalancer,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					v1.AnnotationLoadBalancerSourceRangesKey: "foobar",
+					v1.AnnotationLoadBalancerSourceRangesKey: "foobar,10.0.0.1/24",
 				},
 			},
 		})
@@ -274,6 +284,7 @@ func TestSourceRanges(t *testing.T) {
 		var e *ErrAnnotationValue
 		assert.ErrorAs(t, err, &e)
 		assert.Equal(t, e.AnnotationKey, v1.AnnotationLoadBalancerSourceRangesKey)
+		assert.Equal(t, []string{"foobar", "10.0.0.1/24"}, invalid)
 	})
 }
 

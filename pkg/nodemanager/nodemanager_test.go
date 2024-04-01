@@ -1338,3 +1338,173 @@ func TestNodeProviderIDNotSet(t *testing.T) {
 	// Node update should fail
 	assert.Equal(t, 0, len(fnh.UpdatedNodes), "Node was updated (unexpected)")
 }
+
+func Test_ensureNodeProvidedIPsExists(t *testing.T) {
+	testcases := []struct {
+		name                    string
+		node                    *v1.Node
+		nodeAddresses           []v1.NodeAddress
+		expectedExistingNodeIPs []v1.NodeAddress
+		nodeIPsExists           bool
+	}{
+		{
+			name: "return true when there's provide node ip address",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Labels:      map[string]string{},
+					Annotations: map[string]string{},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{},
+			nodeIPsExists:           true,
+		},
+		{
+			name: "return true when all provided IPv4 IP address are found",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node0",
+					Labels: map[string]string{},
+					Annotations: map[string]string{
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1",
+					},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{{Address: "10.0.0.1"}},
+			nodeIPsExists:           true,
+		},
+		{
+			name: "return true when all provided dual stack IP addresses are found",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node0",
+					Labels: map[string]string{},
+					Annotations: map[string]string{
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1,fd47:c915:f8a8:e63d::5",
+					},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+				{
+					Address: "fd47:c915:f8a8:e63d::5",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+				{
+					Address: "fd47:c915:f8a8:e63d::5",
+				},
+			},
+			nodeIPsExists: true,
+		},
+		{
+			name: "return true when all provided dual stack IP addresses are found but joined with extra space",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node0",
+					Labels: map[string]string{},
+					Annotations: map[string]string{
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1, fd47:c915:f8a8:e63d::5",
+					},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+				{
+					Address: "fd47:c915:f8a8:e63d::5",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+				{
+					Address: "fd47:c915:f8a8:e63d::5",
+				},
+			},
+			nodeIPsExists: true,
+		},
+		{
+			name: "return false when not all ip addresses are found for provided dual stack IP addresses",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node0",
+					Labels: map[string]string{},
+					Annotations: map[string]string{
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1,fd47:c915:f8a8:e63d::5",
+					},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+			},
+			nodeIPsExists: false,
+		},
+		{
+			name: "return false when wrong ip addresses are provided for provided dual stack IP addresses",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node0",
+					Labels: map[string]string{},
+					Annotations: map[string]string{
+						cloudproviderapi.AnnotationAlphaProvidedIPAddr: "10.0.0.1,fd47:c915:f8a8:e63d::10",
+					},
+				},
+			},
+			nodeAddresses: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+				{
+					Address: "fd47:c915:f8a8:e63d::5",
+				},
+			},
+			expectedExistingNodeIPs: []v1.NodeAddress{
+				{
+					Address: "10.0.0.1",
+				},
+			},
+			nodeIPsExists: false,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+
+			actualNodeIP, actualNodeIPsExists := ensureNodeProvidedIPsExists(test.node, test.nodeAddresses)
+
+			if !reflect.DeepEqual(actualNodeIP, test.expectedExistingNodeIPs) {
+				t.Logf("Actual existing node IPs: %v", actualNodeIP)
+				t.Logf("Expected existing  node IPs: %v", test.expectedExistingNodeIPs)
+				t.Errorf("Actual existing  node IP does not match expected existing  node IP")
+			}
+			if actualNodeIPsExists != test.nodeIPsExists {
+				t.Errorf("all node ip addresses exist result mismatch, got: %t, wanted: %t", actualNodeIPsExists, test.nodeIPsExists)
+			}
+		})
+	}
+}

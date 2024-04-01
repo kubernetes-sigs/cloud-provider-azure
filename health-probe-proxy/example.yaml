@@ -23,7 +23,7 @@ spec:
         kubernetes.io/os: linux
       containers:
       - name: health-probe-proxy
-        image: ss104301/health-probe-proxy:test-4
+        image: ss104301/health-probe-proxy:test-6
         imagePullPolicy: IfNotPresent
         command:
           - /usr/local/bin/health-probe-proxy
