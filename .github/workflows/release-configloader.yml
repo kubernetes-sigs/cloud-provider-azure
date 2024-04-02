@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - 'pkg/azclient/configloader/*'
+      - 'pkg/azclient/configloader/**'
 permissions:
   contents: read
 jobs:
