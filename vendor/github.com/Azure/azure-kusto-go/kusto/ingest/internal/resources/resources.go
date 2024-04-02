@@ -31,25 +31,19 @@ type mgmter interface {
 	Mgmt(ctx context.Context, db string, query kusto.Statement, options ...kusto.MgmtOption) (*kusto.RowIterator, error)
 }
 
-var objectTypes = map[string]bool{
-	"queue": true,
-	"blob":  true,
-	"table": true,
-}
-
 // URI represents a resource URI for an ingestion command.
 type URI struct {
-	u                               *url.URL
-	account, objectType, objectName string
-	sas                             url.Values
+	u                   *url.URL
+	account, objectName string
+	sas                 url.Values
 }
 
 // Parse parses a string representing a Kutso resource URI.
-func Parse(uri string) (*URI, error) {
+func Parse(resourceUri string) (*URI, error) {
 	// Example for a valid url:
 	// https://fkjsalfdks.blob.core.windows.com/sdsadsadsa?sas=asdasdasd
 
-	u, err := url.Parse(uri)
+	u, err := url.Parse(resourceUri)
 	if err != nil {
 		return nil, err
 	}
@@ -58,28 +52,11 @@ func Parse(uri string) (*URI, error) {
 		return nil, fmt.Errorf("URI scheme must be 'https', was '%s'", u.Scheme)
 	}
 
-	hostSplit := strings.Split(u.Hostname(), ".")
-	if len(hostSplit) < 5 {
-		return nil, fmt.Errorf("error: Storage URI (%s) is invalid'", uri)
-	}
-
-	var v *URI
-	if len(hostSplit) == 5 {
-		v = &URI{
-			u:          u,
-			account:    hostSplit[0],
-			objectType: hostSplit[1],
-			objectName: strings.TrimLeft(u.EscapedPath(), "/"),
-			sas:        u.Query(),
-		}
-	} else {
-		v = &URI{
-			u:          u,
-			account:    hostSplit[0] + "." + hostSplit[1],
-			objectType: hostSplit[2],
-			objectName: strings.TrimLeft(u.EscapedPath(), "/"),
-			sas:        u.Query(),
-		}
+	v := &URI{
+		u:          u,
+		account:    u.Hostname(),
+		objectName: strings.TrimLeft(u.EscapedPath(), "/"),
+		sas:        u.Query(),
 	}
 
 	if err := v.validate(); err != nil {
@@ -89,31 +66,16 @@ func Parse(uri string) (*URI, error) {
 	return v, nil
 }
 
-// validate validates that the URI was valid.
-// TODO(Daniel): You could add deep validation of each value we have split to give better diagnostic info on an error.
-// I put in the most basic evalutation, but you might want to put checks for the account format or objectName foramt.
 func (u *URI) validate() error {
-	if u.account == "" {
-		return fmt.Errorf("account name was not provided")
-	}
-	if !objectTypes[u.objectType] {
-		return fmt.Errorf("object type was not valid(queue|blob|table), was: %q", u.objectType)
-	}
 	if u.objectName == "" {
 		return fmt.Errorf("object name was not provided")
 	}
-
 	return nil
 }
 
 // Account is the Azure storage account that will be used.
 func (u *URI) Account() string {
 	return u.account
-}
-
-// ObjectType returns the type of object that will be ingested: queue, blob or table.
-func (u *URI) ObjectType() string {
-	return u.objectType
 }
 
 // ObjectName returns the object name of the resource, i.e container name.
@@ -398,7 +360,7 @@ func (m *Manager) fetchRetry(ctx context.Context) error {
 		if err != nil {
 			attempts++
 			if attempts > retryCount {
-				return fmt.Errorf("failed to fetch ingestion resources")
+				return fmt.Errorf("failed to fetch ingestion resources: %w", err)
 			}
 			time.Sleep(10 * time.Second)
 			continue
