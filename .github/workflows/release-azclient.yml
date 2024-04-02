@@ -5,10 +5,10 @@ on:
     branches:
       - master
     paths:
-      - 'pkg/azclient/*'
-      - '!pkg/azclient/configloader*'
-      - '!pkg/azclient/client-gen*'
-      - '!pkg/azclient/trace*'
+      - 'pkg/azclient/**'
+      - '!pkg/azclient/configloader/**'
+      - '!pkg/azclient/client-gen/**'
+      - '!pkg/azclient/trace/**'
 permissions:
   contents: read
 jobs:
