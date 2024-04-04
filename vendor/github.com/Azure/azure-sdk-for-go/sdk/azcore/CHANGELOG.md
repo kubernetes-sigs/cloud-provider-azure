@@ -1,5 +1,12 @@
 # Release History
 
+## 1.11.1 (2024-04-02)
+
+### Bugs Fixed
+
+* Pollers that use the `Location` header won't consider `http.StatusRequestTimeout` a terminal failure.
+* `runtime.Poller[T].Result` won't consider non-terminal error responses as terminal.
+
 ## 1.11.0 (2024-04-01)
 
 ### Features Added
