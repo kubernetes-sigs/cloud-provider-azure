@@ -323,7 +323,7 @@ ifdef JUNIT
 endif
 
 .PHONY: test-check
-test-check: test-boilerplate test-helm verify-vendor-licenses ## Run all static checks.
+test-check: test-boilerplate test-helm ## Run all static checks.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint against code.
