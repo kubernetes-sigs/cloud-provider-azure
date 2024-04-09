@@ -1244,6 +1244,20 @@ func TestSecurityGroupHelper_RemoveDstAddressesFromRules(t *testing.T) {
 						Priority:                 ptr.To(int32(2000)),
 					},
 				},
+				{
+					Name: ptr.To("test-rule-4"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolAsterisk,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourceAddressPrefix:        ptr.To("*"),
+						SourcePortRange:            ptr.To("*"),
+						DestinationAddressPrefixes: ptr.To([]string{}),
+						DestinationAddressPrefix:   ptr.To("192.168.0.1"),
+						DestinationPortRanges:      ptr.To([]string{"8000"}),
+						Priority:                   ptr.To(int32(2000)),
+					},
+				},
 			}
 
 			sg           = fx.Azure().SecurityGroup().WithRules(rules).Build()
