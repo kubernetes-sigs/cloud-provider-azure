@@ -48,14 +48,18 @@ func AllowedServiceTags(svc *v1.Service) ([]string, error) {
 		return nil, nil
 	}
 
-	return strings.Split(strings.TrimSpace(value), Sep), nil
+	tags := strings.Split(strings.TrimSpace(value), Sep)
+	for i := range tags {
+		tags[i] = strings.TrimSpace(tags[i])
+	}
+	return tags, nil
 }
 
-// AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotation.
+// AllowedIPRanges returns the allowed IP ranges configured by user through AKS custom annotations:
+// service.beta.kubernetes.io/azure-allowed-ip-ranges and service.beta.kubernetes.io/load-balancer-source-ranges
 func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	const (
 		Sep = ","
-		Key = consts.ServiceAnnotationAllowedIPRanges
 	)
 	var (
 		errs          []error
@@ -63,28 +67,35 @@ func AllowedIPRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 		invalidRanges []string
 	)
 
-	value, found := svc.Annotations[Key]
-	if !found {
-		return nil, nil, nil
-	}
+	for _, key := range []string{consts.ServiceAnnotationAllowedIPRanges, v1.AnnotationLoadBalancerSourceRangesKey} {
+		value, found := svc.Annotations[key]
+		if !found {
+			continue
+		}
 
-	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
-		prefix, err := ParseCIDR(p)
-		if err != nil {
-			errs = append(errs, err)
-			invalidRanges = append(invalidRanges, p)
-		} else {
-			validRanges = append(validRanges, prefix)
+		var errsByKey []error
+		for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+			p = strings.TrimSpace(p)
+			prefix, err := ParseCIDR(p)
+			if err != nil {
+				errsByKey = append(errsByKey, err)
+				invalidRanges = append(invalidRanges, p)
+			} else {
+				validRanges = append(validRanges, prefix)
+			}
+		}
+		if len(errsByKey) > 0 {
+			errs = append(errs, fmt.Errorf("invalid service annotation %s:%s: %w", key, value, errors.Join(errsByKey...)))
 		}
 	}
+
 	if len(errs) > 0 {
-		return validRanges, invalidRanges, fmt.Errorf("invalid service annotation %s:%s: %w", Key, value, errors.Join(errs...))
+		return validRanges, invalidRanges, errors.Join(errs...)
 	}
 	return validRanges, invalidRanges, nil
 }
 
-// SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges` and standard annotation.
-// If `spec.LoadBalancerSourceRanges` is not set, it will try to parse the annotation.
+// SourceRanges returns the allowed IP ranges configured by user through `spec.LoadBalancerSourceRanges`.
 func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 	var (
 		errs          []error
@@ -92,32 +103,8 @@ func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 		invalidRanges []string
 	)
 	// Read from spec
-	if len(svc.Spec.LoadBalancerSourceRanges) > 0 {
-		for _, p := range svc.Spec.LoadBalancerSourceRanges {
-			prefix, err := ParseCIDR(p)
-			if err != nil {
-				errs = append(errs, err)
-				invalidRanges = append(invalidRanges, p)
-			} else {
-				validRanges = append(validRanges, prefix)
-			}
-		}
-		if len(errs) > 0 {
-			return validRanges, invalidRanges, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, errors.Join(errs...))
-		}
-		return validRanges, invalidRanges, nil
-	}
-
-	// Read from annotation
-	const (
-		Sep = ","
-		Key = v1.AnnotationLoadBalancerSourceRangesKey
-	)
-	value, found := svc.Annotations[Key]
-	if !found {
-		return nil, nil, nil
-	}
-	for _, p := range strings.Split(strings.TrimSpace(value), Sep) {
+	for _, p := range svc.Spec.LoadBalancerSourceRanges {
+		p = strings.TrimSpace(p)
 		prefix, err := ParseCIDR(p)
 		if err != nil {
 			errs = append(errs, err)
@@ -127,7 +114,7 @@ func SourceRanges(svc *v1.Service) ([]netip.Prefix, []string, error) {
 		}
 	}
 	if len(errs) > 0 {
-		return validRanges, invalidRanges, fmt.Errorf("invalid service annotation %s:%s: %w", Key, value, errors.Join(errs...))
+		return validRanges, invalidRanges, fmt.Errorf("invalid service.Spec.LoadBalancerSourceRanges [%v]: %w", svc.Spec.LoadBalancerSourceRanges, errors.Join(errs...))
 	}
 	return validRanges, invalidRanges, nil
 }
