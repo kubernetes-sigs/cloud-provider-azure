@@ -38,6 +38,12 @@ if [ ! -d "${K8S_REPO_PATH}" ]; then
   git clone https://github.com/kubernetes/kubernetes.git
 fi
 
+# Workaround for adding feature gate "ServiceTrafficDistribution=true" in kube-proxy config
+if [[ "${K8S_FEATURE_GATES}" =~ "ServiceTrafficDistribution" ]]; then
+  kubectl create configmap -n kube-system kube-proxy --from-file "${REPO_ROOT}/tests/k8s-azure/manifest/kube-proxy/config.conf" -o yaml --dry-run=client | kubectl apply -f -
+  kubectl rollout restart -n kube-system daemonset kube-proxy
+fi
+
 cd "${K8S_REPO_PATH}"
 make WHAT='test/e2e/e2e.test'
 make WHAT=cmd/kubectl
