@@ -744,6 +744,64 @@ func TestUpdateVMsWithUpdateVMsResponderError(t *testing.T) {
 	assert.NotNil(t, rerr)
 }
 
+func TestUpdateVMsPreemptedRetry(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	vmssVM1 := getTestVMSSVM("vmss1", "1")
+	vmssVM2 := getTestVMSSVM("vmss1", "2")
+	instances := map[string]compute.VirtualMachineScaleSetVM{
+		"1": vmssVM1,
+		"2": vmssVM2,
+	}
+	testvmssVMs1 := map[string]interface{}{
+		pointer.StringDeref(vmssVM1.ID, ""): vmssVM1,
+		pointer.StringDeref(vmssVM2.ID, ""): vmssVM2,
+	}
+	testvmssVMs2 := map[string]interface{}{
+		pointer.StringDeref(vmssVM2.ID, ""): vmssVM2,
+	}
+	resp1 := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	resp2 := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
+	}
+	preemptErr := retry.NewError(false, errors.New(consts.OperationPreemptedErrorMessage))
+	resps1 := map[string]*armclient.PutResourcesResponse{
+		pointer.StringDeref(vmssVM1.ID, ""): {Response: resp1},
+		pointer.StringDeref(vmssVM2.ID, ""): {Response: resp2, Error: preemptErr},
+	}
+	resps2 := map[string]*armclient.PutResourcesResponse{
+		pointer.StringDeref(vmssVM2.ID, ""): {Response: resp2, Error: preemptErr},
+	}
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	firstPut := armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs1, 0).Return(resps1)
+	armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs2, 0).Return(resps2).After(firstPut)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(3)
+
+	vmssvmClient := getTestVMSSVMClient(armClient)
+	rerr := vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
+	assert.NotNil(t, rerr)
+	assert.Contains(t, rerr.RawError.Error(), consts.OperationPreemptedErrorMessage)
+
+	resps1 = map[string]*armclient.PutResourcesResponse{
+		pointer.StringDeref(vmssVM2.ID, ""): {Response: resp2, Error: preemptErr},
+	}
+	resps2 = map[string]*armclient.PutResourcesResponse{
+		pointer.StringDeref(vmssVM2.ID, ""): {Response: resp2},
+	}
+	firstPut = armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs1, 0).Return(resps1)
+	armClient.EXPECT().PutResourcesInBatches(gomock.Any(), testvmssVMs2, 0).Return(resps2).After(firstPut)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(2)
+
+	vmssvmClient = getTestVMSSVMClient(armClient)
+	rerr = vmssvmClient.UpdateVMs(context.TODO(), "rg", "vmss1", instances, "test", 0)
+	assert.Nil(t, rerr)
+}
+
 func TestUpdateVMsNeverRateLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -303,7 +303,7 @@ func TestIsSuccessResponse(t *testing.T) {
 		resp := http.Response{
 			StatusCode: test.code,
 		}
-		res := isSuccessHTTPResponse(&resp)
+		res := IsSuccessHTTPResponse(&resp)
 		if res != test.expected {
 			t.Errorf("expected: %v, saw: %v", test.expected, res)
 		}
@@ -311,7 +311,7 @@ func TestIsSuccessResponse(t *testing.T) {
 }
 
 func TestIsSuccessResponseNil(t *testing.T) {
-	res := isSuccessHTTPResponse(nil)
+	res := IsSuccessHTTPResponse(nil)
 	assert.Equal(t, false, res)
 }
 
