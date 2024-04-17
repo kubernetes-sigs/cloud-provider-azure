@@ -77,7 +77,7 @@ spec:
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: external
           cluster-name: ${CLUSTER_NAME}
-          feature-gates: HPAContainerMetrics=true
+          feature-gates: HPAContainerMetrics=true,ServiceTrafficDistribution=true
           v: "4"
         extraVolumes:
         - hostPath: /etc/kubernetes/azure.json
