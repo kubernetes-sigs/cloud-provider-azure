@@ -800,7 +800,7 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 			nic:                            generateTestNic("testvm1-nic", false, network.ProvisioningStateSucceeded, fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", nonExistingNodeName)),
 			expectedNodeName:               "",
 			expectedVMSetName:              "",
-			expectedErr:                    fmt.Errorf("failed to map VM Name to NodeName: VM Name NonExistingNodeName"),
+			expectedErr:                    fmt.Errorf("failed to map VM Name to NodeName: VM Name NonExistingNodeName: %w", cloudprovider.InstanceNotFound),
 		},
 		{
 			description:                    "GetNodeNameByIPConfigurationID should return error if the ipConfigurationID is in wrong format",
@@ -833,7 +833,6 @@ func TestGetNodeNameByIPConfigurationIDVmssFlex(t *testing.T) {
 		assert.Equal(t, tc.expectedVMSetName, vmSetName)
 		assert.Equal(t, tc.expectedErr, err)
 	}
-
 }
 
 func TestGetNodeCIDRMasksByProviderIDVmssFlex(t *testing.T) {
