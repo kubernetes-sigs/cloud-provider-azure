@@ -415,6 +415,8 @@ const (
 	CannotUpdateVMBeingDeletedMessageSuffix = "since it is marked for deletion"
 	// OperationPreemptedErrorCode is the error code returned for vm operation preempted errors
 	OperationPreemptedErrorCode = "OperationPreempted"
+	// OperationPreemptedErrorMessage is the error message returned for vm operation preempted errors
+	OperationPreemptedErrorMessage = "Operation execution has been preempted by a more recent operation"
 )
 
 // node ipam controller
