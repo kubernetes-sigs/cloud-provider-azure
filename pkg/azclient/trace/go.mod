@@ -8,11 +8,11 @@ require (
 	go.opentelemetry.io/otel/metric v1.25.0
 	go.opentelemetry.io/otel/trace v1.25.0
 	k8s.io/klog/v2 v2.120.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.14
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.15
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.6.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	golang.org/x/net v0.23.0 // indirect
