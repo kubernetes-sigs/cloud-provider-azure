@@ -1,0 +1,12 @@
+{
+  "kubernetesConfigurations": {
+    "azure-disk-csi-driver": {
+      "image": "{CUSTOM_AZURE_DISK_IMAGE}",
+      "config": {
+        "--custom-user-agent": "test",
+        "--v": "6",
+        "user-agent-suffix": "test"
+      }
+    }
+  }
+}

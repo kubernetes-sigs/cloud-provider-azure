@@ -1,0 +1,12 @@
+{
+  "kubernetesConfigurations": {
+    "azure-file-csi-driver": {
+      "image": "{CUSTOM_AZURE_FILE_IMAGE}",
+      "config": {
+        "--custom-user-agent": "test",
+        "--user-agent-suffix": "test",
+        "--v": "3"
+      }
+    }
+  }
+}
