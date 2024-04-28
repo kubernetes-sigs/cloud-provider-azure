@@ -35,6 +35,10 @@ const (
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
+	managedIdentityClientID   = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
+	managedIdentityType       = "E2E_MANAGED_IDENTITY_TYPE"
+
+	userAssignedManagedIdentity = "userassigned"
 )
 
 // AzureAuthConfig holds auth related part of cloud config
@@ -46,6 +50,8 @@ type AzureAuthConfig struct {
 	AADClientID string
 	// The ClientSecret for an AAD application with RBAC access to talk to Azure RM APIs
 	AADClientSecret string
+	// MSI client ID
+	UserAssignedIdentityID string
 	// The ID of the Azure Subscription that the cluster is deployed in
 	SubscriptionID string
 	// The Environment represents a set of endpoints for each of Azure's Clouds.
@@ -60,12 +66,21 @@ func getServicePrincipalToken(config *AzureAuthConfig) (*adal.ServicePrincipalTo
 	}
 
 	if len(config.AADClientSecret) > 0 {
-		klog.V(2).Infoln("azure: using client_id+client_secret to retrieve access token")
+		klog.Infoln("azure: using client_id+client_secret to retrieve access token")
 		return adal.NewServicePrincipalToken(
 			*oauthConfig,
 			config.AADClientID,
 			config.AADClientSecret,
 			config.Environment.ServiceManagementEndpoint)
+	}
+	if len(config.UserAssignedIdentityID) > 0 {
+		klog.Infoln("azure: using MSI client ID to retrieve access token")
+		miOptions := adal.ManagedIdentityOptions{
+			ClientID: config.UserAssignedIdentityID,
+		}
+		return adal.NewServicePrincipalTokenFromManagedIdentity(
+			config.Environment.ServiceManagementEndpoint,
+			&miOptions)
 	}
 
 	return nil, fmt.Errorf("No credentials provided for AAD application %s", config.AADClientID)
@@ -84,12 +99,27 @@ func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 			return nil, err
 		}
 	}
+
 	c := &AzureAuthConfig{
-		TenantID:        os.Getenv(TenantIDEnv),
-		AADClientID:     os.Getenv(ServicePrincipleIDEnv),
-		AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
-		SubscriptionID:  os.Getenv(SubscriptionEnv),
-		Environment:     env,
+		TenantID:       os.Getenv(TenantIDEnv),
+		SubscriptionID: os.Getenv(SubscriptionEnv),
+		Environment:    env,
 	}
+
+	servicePrincipleIDEnv := os.Getenv(ServicePrincipleIDEnv)
+	servicePrincipleSecretEnv := os.Getenv(ServicePrincipleSecretEnv)
+	managedIdentityTypeEnv := os.Getenv(managedIdentityType)
+	managedIdentityClientIDEnv := os.Getenv(managedIdentityClientID)
+	if servicePrincipleIDEnv != "" && servicePrincipleSecretEnv != "" {
+		c.AADClientID = servicePrincipleIDEnv
+		c.AADClientSecret = servicePrincipleSecretEnv
+	} else if managedIdentityTypeEnv != "" {
+		if managedIdentityTypeEnv == userAssignedManagedIdentity {
+			c.UserAssignedIdentityID = managedIdentityClientIDEnv
+		}
+	} else {
+		return c, fmt.Errorf("failed to get Azure auth config from environment")
+	}
+
 	return c, nil
 }
