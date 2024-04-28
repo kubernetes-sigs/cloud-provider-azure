@@ -19,13 +19,19 @@ set -o nounset
 set -o pipefail
 
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE[0]}")/../..)
-export GOPATH="/home/vsts/go"
-export PATH="${PATH:-}:${GOPATH}/bin"
-export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
-
-if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
-  az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
+USER="cloudtest"
+if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
+  # release pipeline uses sp
+  USER="vsts"
+else
+  # aks pipeline uses managed identity
+  az login --identity --username "${AZURE_MANAGED_IDENTITY_CLIENT_ID:-}"
+  export E2E_MANAGED_IDENTITY_TYPE="userassigned"
 fi
+
+export GOPATH="/home/${USER}/go"
+export PATH="${PATH}:${GOPATH}/bin"
+export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
 get_random_location() {
   local LOCATIONS=("eastus")
