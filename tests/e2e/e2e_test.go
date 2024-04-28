@@ -100,6 +100,13 @@ func TestAzureTest(t *testing.T) {
 	if !strings.EqualFold(os.Getenv(utils.IngestTestResult), utils.TrueValue) {
 		return
 	}
+
+	// TODO: Use managed identity for Kusto ingestion
+	skipKustoIngestion := true
+	if skipKustoIngestion {
+		return
+	}
+
 	klog.Infof("Ingesting test result to kusto")
 	if err := utils.KustoIngest(passed, suiteConfig.LabelFilter, os.Getenv(utils.AKSClusterType), reporterConfig.JUnitReport); err != nil {
 		klog.Error(err)
