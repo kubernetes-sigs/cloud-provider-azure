@@ -16,10 +16,6 @@
         "type": "AvailabilitySet"
       }
     ],
-    "servicePrincipalProfile": {
-        "clientId": "{AZURE_CLIENT_ID}",
-        "secret": "{AZURE_CLIENT_SECRET}"
-    },
     "encodedCustomConfiguration": "{CUSTOM_CONFIG}"
   }
 }

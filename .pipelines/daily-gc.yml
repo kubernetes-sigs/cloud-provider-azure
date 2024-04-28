@@ -10,6 +10,8 @@ trigger: none
 
 pr: none
 
+pool: cloud-provider-azure-e2e-pool
+
 variables:
 - template: var-e2e.yml
 
@@ -23,13 +25,9 @@ stages:
         - bash: |
             export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
             export AZURE_TENANT_ID=$AZ_TENANT_ID
-            export AZURE_CLIENT_ID=$SP_CLIENT_ID
-            export AZURE_CLIENT_SECRET=$SP_CLIENT_SECRET
 
             .pipelines/scripts/daily-gc.sh
           displayName: gc aks and resource groups
           env:
             AZ_SUBSCRIPTION_ID: $(az.subscription_id)
             AZ_TENANT_ID: $(az.tenant_id)
-            SP_CLIENT_ID: $(sp.client_id)
-            SP_CLIENT_SECRET: $(sp.client_secret)

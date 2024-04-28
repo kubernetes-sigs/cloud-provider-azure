@@ -16,10 +16,6 @@
         "availabilityProfile": "VirtualMachineScaleSets"
       }
     ],
-    "servicePrincipalProfile": {
-        "clientId": "{AZURE_CLIENT_ID}",
-        "secret": "{AZURE_CLIENT_SECRET}"
-    },
     "encodedCustomConfiguration": "{CUSTOM_CONFIG}",
     "networkProfile": {
       "loadBalancerSku": "Basic"

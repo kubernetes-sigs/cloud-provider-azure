@@ -17,14 +17,19 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE[0]}")/../..)
-export GOPATH="/home/vsts/go"
-export PATH="${PATH:-}:${GOPATH}/bin"
+USER="cloudtest"
+if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
+  USER="vsts"
+fi
+export GOPATH="/home/${USER}/go"
+export PATH="${PATH}:${GOPATH}/bin"
 export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
 if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
-  az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
+  az login --identity
 fi
 
 get_random_location() {
@@ -125,7 +130,7 @@ if [[ "${SKIP_BUILD_KUBETEST2_AKS:-}" != "true" ]]; then
   if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
     make install
   else
-    sudo GOPATH="/home/vsts/go" make install
+    sudo GOPATH="/home/${USER}/go" make install
   fi
   rm /tmp/cloud-provider-azure -rf
   popd

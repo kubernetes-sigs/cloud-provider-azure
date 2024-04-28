@@ -21,7 +21,7 @@ set -o pipefail
 CLUSTER_NAME="aks-cluster"
 CURRENT_DATE="$(date +%s)"
 
-az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+az login --identity
 az group list --tag usage=aks-cluster-e2e | jq -r '.[].name' | awk '{print $1}' | while read -r RESOURCE_GROUP; do
   RG_DATE="$(az group show --resource-group ${RESOURCE_GROUP} | jq -r '.tags.creation_date')"
   DATE_DIFF="$(expr ${CURRENT_DATE} - ${RG_DATE})"
