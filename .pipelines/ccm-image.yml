@@ -6,7 +6,11 @@ steps:
       git show --stat
       echo $REGISTRY_PASSWORD | docker login $REGISTRY_URL -u $REGISTRY_USERNAME --password-stdin
       export IMAGE_REGISTRY=$REGISTRY_URL
-      export GOPATH="/home/vsts/go"
+      USER="cloudtest"
+      if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
+        USER="vsts"
+      fi
+      export GOPATH="/home/${USER}/go"
       export PATH="${PATH}:${GOPATH}/bin"
 
       if [[ ! -d kubetest2-aks ]]; then
@@ -19,7 +23,7 @@ steps:
       go install sigs.k8s.io/kubetest2@latest
       go mod tidy
       make deployer
-      sudo GOPATH="/home/vsts/go" make install
+      sudo GOPATH="/home/${USER}/go" make install
       popd
 
       export IMAGE_TAG="$(git describe --tags --match "v[0-9].*")"
