@@ -26,9 +26,14 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
@@ -82,7 +87,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			sg, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			sg, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 			testutil.ExpectEqualInJSON(t, azureFx.SecurityGroup().Build(), sg)
 		})
@@ -169,7 +174,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -255,7 +260,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -330,7 +335,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -412,7 +417,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -487,7 +492,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -567,7 +572,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -665,7 +670,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -745,7 +750,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -838,7 +843,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -906,7 +911,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -968,7 +973,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1034,7 +1039,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1118,7 +1123,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1185,7 +1190,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1264,7 +1269,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1361,7 +1366,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -1415,7 +1420,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
-						DestinationPortRanges:      ptr.To([]string{"4000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
 						Priority:                   ptr.To(int32(4003)),
 					},
@@ -1428,7 +1433,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-						DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
 						Priority:                   ptr.To(int32(4004)),
 					},
@@ -1522,7 +1527,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Direction:                  network.SecurityRuleDirectionInbound,
 							SourcePortRange:            ptr.To("*"),
 							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
 							Priority:                   ptr.To(int32(4004)),
 						},
@@ -1545,7 +1550,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -1676,7 +1681,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -1729,7 +1734,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
-						DestinationPortRanges:      ptr.To([]string{"4000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
 						Priority:                   ptr.To(int32(4003)),
 					},
@@ -1742,11 +1747,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-						DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
 						Priority:                   ptr.To(int32(4004)),
 					},
 				},
+
 				azureFx.
 					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
 					WithPriority(505).
@@ -1836,7 +1842,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Direction:                  network.SecurityRuleDirectionInbound,
 							SourcePortRange:            ptr.To("*"),
 							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
 							Priority:                   ptr.To(int32(4004)),
 						},
@@ -1876,7 +1882,304 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		assert.NoError(t, err)
+	})
+
+	t.Run("update rules - keep retain ports", func(t *testing.T) {
+
+		sharedIPSvc := k8sFx.Service().
+			WithNamespace("ns-02").
+			WithName("svc-02").
+			Build()
+
+		sharedIPSvc.Spec.Ports = []v1.ServicePort{
+			{
+				Name:     "port-1",
+				Protocol: v1.ProtocolTCP,
+				Port:     18000,
+				NodePort: 48000,
+			},
+			{
+				Name:     "port2",
+				Protocol: v1.ProtocolTCP,
+				Port:     19000,
+				NodePort: 49000,
+			},
+		}
+		var (
+			ctrl                    = gomock.NewController(t)
+			az                      = GetTestCloud(ctrl)
+			publicIPAddressClient   = az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
+			securityGroupClient     = az.SecurityGroupsClient.(*mocksecuritygroupclient.MockInterface)
+			loadBalancerClient      = az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+			loadBalancerBackendPool = az.LoadBalancerBackendPool.(*MockBackendPool)
+			loadBalancer            = azureFx.LoadBalancer().Build()
+
+			allowedServiceTag = azureFx.ServiceTag()
+			allowedIPv4Ranges = fx.RandomIPv4PrefixStrings(3)
+			allowedIPv6Ranges = fx.RandomIPv6PrefixStrings(3)
+			allowedRanges     = append(allowedIPv4Ranges, allowedIPv6Ranges...)
+			svc               = k8sFx.Service().
+						WithNamespace("ns-01").
+						WithName("svc-01").
+						WithAllowedServiceTags(allowedServiceTag).
+						WithAllowedIPRanges(allowedRanges...).
+						Build()
+
+			kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
+			informerFactory = informers.NewSharedInformerFactory(kubeClient, 0)
+			svcLister       = informerFactory.Core().V1().Services().Lister()
+
+			pip = fx.Azure().PublicIPAddress("pip1").
+				WithTag(consts.ServiceTagKey, fmt.Sprintf("%s/%s,%s/%s", svc.Namespace, svc.Name, sharedIPSvc.Namespace, sharedIPSvc.Name)).
+				Build()
+			frontendIPConfigurations = []*network.FrontendIPConfiguration{
+				{
+					FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{
+						PublicIPAddress: &pip,
+					},
+				},
+			}
+		)
+		defer ctrl.Finish()
+
+		az.serviceLister = svcLister
+		informerFactory.Start(wait.NeverStop)
+		informerFactory.WaitForCacheSync(wait.NeverStop)
+
+		var (
+			noiseRules = azureFx.NoiseSecurityRules(10)
+			staleRules = []network.SecurityRule{
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{8000}).
+					WithPriority(4000).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...). // Should remove the rule
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
+					WithPriority(4001).
+					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "foo", "bar")...). // Should keep foo and bar but clean the rest
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
+					WithPriority(4002).
+					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
+					Build(),
+
+				{
+					Name: ptr.To("foo"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
+						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
+						Priority:                   ptr.To(int32(4003)),
+					},
+				},
+				{
+					Name: ptr.To("bar"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolUDP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
+						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
+						Priority:                   ptr.To(int32(4004)),
+					},
+				},
+
+				{
+					Name: ptr.To("baz"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      ptr.To([]string{"baz"}),
+						DestinationPortRanges:      ptr.To([]string{"18000", "19000"}),
+						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "baz")), // Should keep all since the ports are retained
+						Priority:                   ptr.To(int32(4005)),
+					},
+				},
+
+				{
+					Name: ptr.To("quo"),
+					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+						Protocol:                   network.SecurityRuleProtocolTCP,
+						Access:                     network.SecurityRuleAccessAllow,
+						Direction:                  network.SecurityRuleDirectionInbound,
+						SourcePortRange:            ptr.To("*"),
+						SourceAddressPrefixes:      ptr.To([]string{"quo"}),
+						DestinationPortRanges:      ptr.To([]string{"18000", "19000", "20000"}),
+						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "quo")), // Should split the rules
+						Priority:                   ptr.To(int32(4006)),
+					},
+				},
+			}
+			targetRules = []network.SecurityRule{
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
+					WithPriority(505).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().TCPPorts()).
+					WithPriority(507).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().TCPPorts()).
+					WithPriority(509).
+					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().TCPPorts()).
+					WithPriority(520).
+					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv4, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
+					WithPriority(530).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv4, allowedIPv4Ranges, k8sFx.Service().UDPPorts()).
+					WithPriority(607).
+					WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv6, []string{allowedServiceTag}, k8sFx.Service().UDPPorts()).
+					WithPriority(709).
+					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
+					Build(),
+
+				azureFx.
+					AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
+					WithPriority(3000).
+					WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
+					Build(),
+			}
+		)
+
+		publicIPAddressClient.EXPECT().
+			List(gomock.Any(), gomock.Any()).
+			Return([]network.PublicIPAddress{pip}, nil).
+			Times(1)
+
+		securityGroup := azureFx.SecurityGroup().WithRules(
+			append(append(noiseRules, targetRules...), staleRules...),
+		).Build()
+
+		securityGroupClient.EXPECT().
+			Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
+			Return(securityGroup, nil).
+			Times(1)
+		securityGroupClient.EXPECT().
+			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(
+				ctx context.Context,
+				resourceGroupName, securityGroupName string,
+				properties network.SecurityGroup,
+				etag string,
+			) *retry.Error {
+				rules := append(append(noiseRules, targetRules...),
+					azureFx.
+						AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{allowedServiceTag}, []int32{6000, 3000}).
+						WithPriority(4001).
+						WithDestination("foo", "bar"). // Should keep foo and bar but clean the rest
+						Build(),
+
+					azureFx.
+						AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, []int32{9000}).
+						WithPriority(4002).
+						WithDestination("baz"). // Should keep baz but clean the rest
+						Build(),
+
+					network.SecurityRule{
+						Name: ptr.To("bar"),
+						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+							Protocol:                   network.SecurityRuleProtocolUDP,
+							Access:                     network.SecurityRuleAccessAllow,
+							Direction:                  network.SecurityRuleDirectionInbound,
+							SourcePortRange:            ptr.To("*"),
+							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
+							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
+							Priority:                   ptr.To(int32(4004)),
+						},
+					},
+
+					network.SecurityRule{
+						Name: ptr.To("baz"),
+						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+							Protocol:                   network.SecurityRuleProtocolTCP,
+							Access:                     network.SecurityRuleAccessAllow,
+							Direction:                  network.SecurityRuleDirectionInbound,
+							SourcePortRange:            ptr.To("*"),
+							SourceAddressPrefixes:      ptr.To([]string{"baz"}),
+							DestinationPortRanges:      ptr.To([]string{"18000", "19000"}),
+							DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "baz")), // Should keep all since the ports are retained
+							Priority:                   ptr.To(int32(4005)),
+						},
+					},
+
+					network.SecurityRule{
+						Name: ptr.To("quo"),
+						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+							Protocol:                   network.SecurityRuleProtocolTCP,
+							Access:                     network.SecurityRuleAccessAllow,
+							Direction:                  network.SecurityRuleDirectionInbound,
+							SourcePortRange:            ptr.To("*"),
+							SourceAddressPrefixes:      ptr.To([]string{"quo"}),
+							DestinationPortRanges:      ptr.To([]string{"18000", "19000", "20000"}),
+							DestinationAddressPrefixes: ptr.To([]string{"quo"}), // Should split the rules
+							Priority:                   ptr.To(int32(4006)),
+						},
+					},
+
+					azureFx.
+						AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{"quo"}, []int32{18000, 19000}).
+						WithPriority(500).
+						WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
+						Build(),
+
+					azureFx.
+						AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv6, []string{"quo"}, []int32{18000, 19000}).
+						WithPriority(501).
+						WithDestination(azureFx.LoadBalancer().IPv6Addresses()...).
+						Build(),
+				)
+
+				testutil.ExpectExactSecurityRules(t, &properties, rules)
+
+				return nil
+			}).Times(1)
+		loadBalancerClient.EXPECT().
+			Get(gomock.Any(), az.ResourceGroup, *loadBalancer.Name, gomock.Any()).
+			Return(loadBalancer, nil).
+			Times(1)
+		loadBalancerBackendPool.EXPECT().
+			GetBackendPrivateIPs(ClusterName, &svc, &loadBalancer).
+			Return(
+				[]string{}, []string{},
+			).
+			Times(1)
+
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, frontendIPConfigurations, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -1947,7 +2250,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
-						DestinationPortRanges:      ptr.To([]string{"4000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
 						Priority:                   ptr.To(int32(4003)),
 					},
@@ -1960,7 +2263,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-						DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
 						Priority:                   ptr.To(int32(4004)),
 					},
@@ -2024,7 +2327,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Direction:                  network.SecurityRuleDirectionInbound,
 							SourcePortRange:            ptr.To("*"),
 							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
 							Priority:                   ptr.To(int32(4004)),
 						},
@@ -2053,7 +2356,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2131,7 +2434,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
-						DestinationPortRanges:      ptr.To([]string{"4000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
 						Priority:                   ptr.To(int32(4003)),
 					},
@@ -2144,7 +2447,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-						DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
 						Priority:                   ptr.To(int32(4004)),
 					},
@@ -2208,7 +2511,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Direction:                  network.SecurityRuleDirectionInbound,
 							SourcePortRange:            ptr.To("*"),
 							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
 							Priority:                   ptr.To(int32(4004)),
 						},
@@ -2237,7 +2540,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2307,7 +2610,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"foo"}),
-						DestinationPortRanges:      ptr.To([]string{"4000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"4000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(azureFx.LoadBalancer().Addresses()), // Should remove the rule
 						Priority:                   ptr.To(int32(4003)),
 					},
@@ -2320,7 +2623,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						Direction:                  network.SecurityRuleDirectionInbound,
 						SourcePortRange:            ptr.To("*"),
 						SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-						DestinationPortRanges:      ptr.To([]string{"5000-6000"}),
+						DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
 						DestinationAddressPrefixes: ptr.To(append(azureFx.LoadBalancer().Addresses(), "bar")), // Should keep bar but clean the rest
 						Priority:                   ptr.To(int32(4004)),
 					},
@@ -2360,7 +2663,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, &retry.Error{HTTPStatusCode: http.StatusNotFound}).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, false) // deleting
+		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, nil, false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2389,7 +2692,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(securityGroup, nil).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, loadbalancer.ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges)
 		})
@@ -2414,7 +2717,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(securityGroup, expectedErr).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -2444,7 +2747,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, expectedErr).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -2487,7 +2790,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -2522,7 +2825,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 		})
 	})
