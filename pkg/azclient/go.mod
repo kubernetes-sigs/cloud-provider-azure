@@ -16,7 +16,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.5.0
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.17.2
-	github.com/onsi/gomega v1.33.0
+	github.com/onsi/gomega v1.33.1
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.22.0
 	golang.org/x/sync v0.7.0
