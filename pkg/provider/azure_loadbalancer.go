@@ -30,6 +30,7 @@ import (
 	"unicode"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/go-autorest/autorest/azure"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -143,7 +144,7 @@ func (az *Cloud) reconcileService(_ context.Context, clusterName string, service
 
 	serviceIPs := lbIPsPrimaryPIPs
 	klog.V(2).Infof("reconcileService: reconciling security group for service %q with IPs %q, wantLb = true", serviceName, serviceIPs)
-	if _, err := az.reconcileSecurityGroup(clusterName, service, ptr.Deref(lb.Name, ""), serviceIPs, true /* wantLb */); err != nil {
+	if _, err := az.reconcileSecurityGroup(clusterName, service, ptr.Deref(lb.Name, ""), fipConfigs, serviceIPs, true /* wantLb */); err != nil {
 		klog.Errorf("reconcileSecurityGroup(%s) failed: %#v", serviceName, err)
 		return nil, err
 	}
@@ -322,11 +323,14 @@ func (az *Cloud) EnsureLoadBalancerDeleted(_ context.Context, clusterName string
 	}
 	serviceIPsToCleanup := lbIPsPrimaryPIPs
 	klog.V(2).Infof("EnsureLoadBalancerDeleted: reconciling security group for service %q with IPs %q, wantLb = false", serviceName, serviceIPsToCleanup)
-	var lbName string
-	if lb != nil {
-		lbName = ptr.Deref(lb.Name, "")
+
+	_, _, fipConfigs, err := az.getServiceLoadBalancerStatus(service, lb)
+	if err != nil {
+		klog.Errorf("EnsureLoadBalancerDeleted: getServiceLoadBalancerStatus(%s) failed: %v", serviceName, err)
+		return err
 	}
-	_, err = az.reconcileSecurityGroup(clusterName, service, lbName, serviceIPsToCleanup, false /* wantLb */)
+
+	_, err = az.reconcileSecurityGroup(clusterName, service, ptr.Deref(lb.Name, ""), fipConfigs, serviceIPsToCleanup, false /* wantLb */)
 	if err != nil {
 		return err
 	}
@@ -2804,12 +2808,124 @@ func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 	return props, nil
 }
 
+func (az *Cloud) listServicesByPublicIPs(pips []network.PublicIPAddress) ([]*v1.Service, error) {
+	logger := klog.Background().WithName("listServicesByPublicIPs")
+	var (
+		svcNames []string
+		rv       []*v1.Service
+	)
+
+	for _, pip := range pips {
+		if pip.ID == nil { // FIXME: it should not be nil
+			continue
+		}
+		resourceID, err := azure.ParseResourceID(*pip.ID)
+		if err != nil { // FIXME: it should never happen except for testing
+			continue
+		}
+		logger.V(4).Info("fetching public IPs", "pip-id", pip.ID)
+		pip, _, err := az.getPublicIPAddress(resourceID.ResourceGroup, resourceID.ResourceName, azcache.CacheReadTypeDefault)
+
+		if err != nil {
+			return nil, err
+		}
+
+		logger.V(4).Info("fetched public IP", "pip", pip)
+		v := getServiceFromPIPServiceTags(pip.Tags)
+		if v != "" {
+			parts := strings.Split(strings.TrimSpace(v), ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				svcNames = append(svcNames, p)
+			}
+		}
+	}
+
+	for _, svcName := range svcNames {
+		parts := strings.Split(svcName, "/")
+		if len(parts) != 2 {
+			continue
+		}
+		ns, svcName := parts[0], parts[1]
+
+		logger.Info("fetching service from lister", "ns", ns, "service-name", svcName)
+		svc, err := az.serviceLister.Services(ns).Get(svcName)
+		if err != nil {
+			return nil, fmt.Errorf("get service error: %w", err)
+		}
+
+		rv = append(rv, svc)
+	}
+
+	return rv, nil
+}
+
+// listSharedIPPortMapping lists the shared IP port mapping for the service excluding the service itself.
+// There are scenarios where multiple services share the same public IP,
+// and in order to clean up the security rules, we need to know the port mapping of the shared IP.
+func (az *Cloud) listSharedIPPortMapping(svc *v1.Service, publicIPs []network.PublicIPAddress) (map[network.SecurityRuleProtocol][]int32, error) {
+	var (
+		logger          = klog.Background().WithName("listSharedIPPortMapping").WithValues("service-name", svc.Name)
+		rv              = make(map[network.SecurityRuleProtocol][]int32)
+		convertProtocol = func(protocol v1.Protocol) (network.SecurityRuleProtocol, error) {
+			switch protocol {
+			case v1.ProtocolTCP:
+				return network.SecurityRuleProtocolTCP, nil
+			case v1.ProtocolUDP:
+				return network.SecurityRuleProtocolUDP, nil
+			case v1.ProtocolSCTP:
+				return network.SecurityRuleProtocolAsterisk, nil
+			}
+			return "", fmt.Errorf("unsupported protocol %s", protocol)
+		}
+	)
+
+	services, err := az.listServicesByPublicIPs(publicIPs)
+	if err != nil {
+		logger.Error(err, "Failed to list services by public IPs")
+		return nil, err
+	}
+
+	for _, s := range services {
+		logger.V(4).Info("iterating service", "service", s.Name, "namespace", s.Namespace)
+		if svc.Namespace == s.Namespace && svc.Name == s.Name {
+			// skip the service itself
+			continue
+		}
+
+		for _, port := range s.Spec.Ports {
+			protocol, err := convertProtocol(port.Protocol)
+			if err != nil {
+				return nil, err
+			}
+
+			var p int32
+			if consts.IsK8sServiceDisableLoadBalancerFloatingIP(s) {
+				p = port.NodePort
+			} else {
+				p = port.Port
+			}
+			logger.V(4).Info("adding port mapping", "protocol", protocol, "port", p)
+
+			rv[protocol] = append(rv[protocol], p)
+		}
+	}
+
+	logger.V(4).Info("retain port mapping", "port-mapping", rv)
+
+	return rv, nil
+}
+
 // This reconciles the Network Security Group similar to how the LB is reconciled.
 // This entails adding required, missing SecurityRules and removing stale rules.
 func (az *Cloud) reconcileSecurityGroup(
 	clusterName string, service *v1.Service,
-	lbName string, lbIPs []string,
-	wantLb bool,
+	lbName string,
+	fipConfigs []*network.FrontendIPConfiguration,
+	lbIPs []string, wantLb bool,
 ) (*network.SecurityGroup, error) {
 	logger := klog.Background().WithName("reconcileSecurityGroup").
 		WithValues("cluster", clusterName).
@@ -2820,6 +2936,13 @@ func (az *Cloud) reconcileSecurityGroup(
 
 	if wantLb && len(lbIPs) == 0 {
 		return nil, fmt.Errorf("no load balancer IP for setting up security rules for service %s", service.Name)
+	}
+
+	var publicIPs []network.PublicIPAddress
+	for _, fipConfig := range fipConfigs {
+		if fipConfig.PublicIPAddress != nil {
+			publicIPs = append(publicIPs, *fipConfig.PublicIPAddress)
+		}
 	}
 
 	additionalIPs, err := loadbalancer.AdditionalPublicIPs(service)
@@ -2900,7 +3023,16 @@ func (az *Cloud) reconcileSecurityGroup(
 		dstIPv6Addresses := append(lbIPv6Addresses, backendIPv6Addresses...)
 		dstIPv6Addresses = append(dstIPv6Addresses, additionalIPv6Addresses...)
 
-		accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses)
+		retainPortRanges, err := az.listSharedIPPortMapping(service, publicIPs)
+		if err != nil {
+			logger.Error(err, "Failed to list retain port ranges")
+			return nil, err
+		}
+
+		if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
+			logger.Error(err, "Failed to clean security group")
+			return nil, err
+		}
 	}
 
 	if wantLb {

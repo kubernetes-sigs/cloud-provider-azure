@@ -71,6 +71,16 @@ type KubernetesServiceFixture struct {
 	svc v1.Service
 }
 
+func (f *KubernetesServiceFixture) WithNamespace(ns string) *KubernetesServiceFixture {
+	f.svc.Namespace = ns
+	return f
+}
+
+func (f *KubernetesServiceFixture) WithName(name string) *KubernetesServiceFixture {
+	f.svc.Name = name
+	return f
+}
+
 func (f *KubernetesServiceFixture) WithInternalEnabled() *KubernetesServiceFixture {
 	f.svc.Annotations[consts.ServiceAnnotationLoadBalancerInternal] = "true"
 	return f
