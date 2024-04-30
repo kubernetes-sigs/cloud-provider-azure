@@ -18,13 +18,11 @@ package securitygroup
 
 import (
 	"bytes"
-	"crypto/md5" //nolint:gosec
 	"encoding/json"
 	"fmt"
 	"net/netip"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"k8s.io/klog/v2"
@@ -303,6 +301,72 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	return nil
 }
 
+// RemoveDestinationFromRules removes the given destination addresses from rules that match the given protocol and ports is in the retainDstPorts list.
+// It may add a new rule if the original rule needs to be split.
+func (helper *RuleHelper) RemoveDestinationFromRules(
+	protocol network.SecurityRuleProtocol,
+	dstPrefixes []string,
+	retainDstPorts []int32,
+) error {
+	logger := helper.logger.WithName("RemoveDestinationFromRules").WithValues("protocol", protocol, "num-dst-prefixes", len(dstPrefixes))
+	logger.V(10).Info("Cleaning destination from SecurityGroup")
+
+	for _, rule := range helper.rules {
+		if rule.Protocol != protocol {
+			continue
+		}
+
+		if err := helper.removeDestinationFromRule(rule, dstPrefixes, retainDstPorts); err != nil {
+			logger.Error(err, "Failed to remove destination from rule", "rule-name", *rule.Name)
+		}
+	}
+
+	return nil
+}
+
+func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, prefixes []string, retainDstPorts []int32) error {
+	logger := helper.logger.WithName("removeDestinationFromRule").
+		WithValues("security-rule-name", rule.Name)
+	currentPorts, err := ListDestinationPortRanges(rule)
+	if err != nil {
+		// Skip the rule with invalid destination port ranges.
+		// NOTE: cloud-provider would not create allow rules with `*` or `4000-5000` as destination port ranges.
+		logger.Info("Skip because it contains `*` or port-ranges as destination port ranges.")
+		return nil
+	}
+
+	var (
+		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
+		currentPrefixes = ListDestinationPrefixes(rule)
+
+		expectedPrefixes = fnutil.RemoveIf(func(p string) bool { return prefixIndex[p] }, currentPrefixes) // The prefixes to keep.
+		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes)                                  // The prefixes to remove.
+		expectedPorts    = fnutil.Intersection(currentPorts, retainDstPorts)                               // The ports to keep.
+	)
+
+	if len(targetPrefixes) == 0 || len(currentPorts) == len(expectedPorts) {
+		return nil
+	}
+
+	// Update the prefixes
+	rule.DestinationAddressPrefix = nil
+	rule.DestinationAddressPrefixes = ptr.To(NormalizeSecurityRuleAddressPrefixes(expectedPrefixes))
+
+	if len(expectedPorts) == 0 {
+		// No additional ports are expected, no more actions are needed.
+		return nil
+	}
+
+	// There are additional ports are expected, need to create a new rule for them.
+	addr, err := netip.ParseAddr(prefixes[0])
+	if err != nil {
+		logger.Error(err, "Failed to parse dst IP address", "dst-ip", prefixes[0])
+		return fmt.Errorf("parse prefix as IP address %q: %w", prefixes[0], err)
+	}
+	ipFamily := iputil.FamilyOfAddr(addr)
+	return helper.addAllowRule(rule.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
+}
+
 // RemoveDestinationPrefixesFromRules removes the given destination addresses from all rules.
 func (helper *RuleHelper) RemoveDestinationPrefixesFromRules(prefixes []string) {
 	helper.logger.V(10).Info("Cleaning destination address prefixes from SecurityGroup", "num-dst-prefixes", len(prefixes))
@@ -395,28 +459,6 @@ func (helper *RuleHelper) SecurityGroup() (*network.SecurityGroup, bool, error) 
 	return rv, updated, nil
 }
 
-// NormalizeSecurityRuleAddressPrefixes normalizes the given rule address prefixes.
-func NormalizeSecurityRuleAddressPrefixes(vs []string) []string {
-	// Remove redundant addresses.
-	indexes := make(map[string]bool, len(vs))
-	for _, v := range vs {
-		indexes[v] = true
-	}
-	rv := make([]string, 0, len(indexes))
-	for k := range indexes {
-		rv = append(rv, k)
-	}
-	sort.Strings(rv)
-	return rv
-}
-
-// NormalizeDestinationPortRanges normalizes the given destination port ranges.
-func NormalizeDestinationPortRanges(dstPorts []int32) []string {
-	rv := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
-	sort.Strings(rv)
-	return rv
-}
-
 // makeSecurityGroupSnapshot returns a byte array as the snapshot of the given SecurityGroup.
 // It's used to check if the SecurityGroup had been changed.
 func makeSecurityGroupSnapshot(sg *network.SecurityGroup) []byte {
@@ -425,38 +467,4 @@ func makeSecurityGroupSnapshot(sg *network.SecurityGroup) []byte {
 	})
 	snapshot, _ := json.Marshal(sg)
 	return snapshot
-}
-
-// GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
-func GenerateAllowSecurityRuleName(
-	protocol network.SecurityRuleProtocol,
-	ipFamily iputil.Family,
-	srcPrefixes []string,
-	dstPorts []int32,
-) string {
-	var ruleID string
-	{
-		dstPortRanges := fnutil.Map(func(p int32) string { return strconv.FormatInt(int64(p), 10) }, dstPorts)
-		// Generate rule ID from protocol, source prefixes and destination port ranges.
-		sort.Strings(srcPrefixes)
-		sort.Strings(dstPortRanges)
-
-		v := strings.Join([]string{
-			string(protocol),
-			strings.Join(srcPrefixes, ","),
-			strings.Join(dstPortRanges, ","),
-		}, "_")
-
-		h := md5.New() //nolint:gosec
-		h.Write([]byte(v))
-
-		ruleID = fmt.Sprintf("%x", h.Sum(nil))
-	}
-
-	return strings.Join([]string{SecurityRuleNamePrefix, "allow", string(ipFamily), ruleID}, SecurityRuleNameSep)
-}
-
-// GenerateDenyAllSecurityRuleName returns the DenyInbound rule name based on the given rule properties.
-func GenerateDenyAllSecurityRuleName(ipFamily iputil.Family) string {
-	return strings.Join([]string{SecurityRuleNamePrefix, "deny-all", string(ipFamily)}, SecurityRuleNameSep)
 }

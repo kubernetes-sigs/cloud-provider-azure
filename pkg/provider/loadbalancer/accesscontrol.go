@@ -265,21 +265,41 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 }
 
 // CleanSecurityGroup removes the given IP addresses from the SecurityGroup.
-func (ac *AccessControl) CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) {
+func (ac *AccessControl) CleanSecurityGroup(
+	dstIPv4Addresses, dstIPv6Addresses []netip.Addr,
+	retainPortRanges map[network.SecurityRuleProtocol][]int32,
+) error {
 	logger := ac.logger.WithName("CleanSecurityGroup").
 		WithValues("num-dst-ipv4-addresses", len(dstIPv4Addresses)).
 		WithValues("num-dst-ipv6-addresses", len(dstIPv6Addresses))
 	logger.V(10).Info("Start cleaning")
 
 	var (
-		prefixes = fnutil.Map(func(addr netip.Addr) string {
-			return addr.String()
-		}, append(dstIPv4Addresses, dstIPv6Addresses...))
+		ipv4Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv4Addresses)
+		ipv6Prefixes = fnutil.Map(func(addr netip.Addr) string { return addr.String() }, dstIPv6Addresses)
 	)
 
-	ac.sgHelper.RemoveDestinationPrefixesFromRules(prefixes)
+	protocols := []network.SecurityRuleProtocol{
+		network.SecurityRuleProtocolTCP,
+		network.SecurityRuleProtocolUDP,
+		network.SecurityRuleProtocolAsterisk,
+	}
+
+	for _, protocol := range protocols {
+		retainDstPorts := retainPortRanges[protocol]
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv4Prefixes, retainDstPorts); err != nil {
+			logger.Error(err, "Failed to remove IPv4 destination from rules")
+			return err
+		}
+
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv6Prefixes, retainDstPorts); err != nil {
+			logger.Error(err, "Failed to remove IPv6 destination from rules")
+			return err
+		}
+	}
 
 	logger.V(10).Info("Completed cleaning")
+	return nil
 }
 
 // SecurityGroup returns the SecurityGroup object with patched rules and indicates if the rules had been changed.
