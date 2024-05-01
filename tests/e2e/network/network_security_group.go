@@ -707,6 +707,127 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 			})
 		})
 	})
+
+	When("creating 2 LoadBalancer services with shared public IP", func() {
+		It("should add rules independently", func() {
+
+			const (
+				Deployment1Name = "app-01"
+				Deployment2Name = "app-02"
+
+				Service1Name = "svc-01"
+				Service2Name = "svc-02"
+			)
+
+			var (
+				app1Port  int32 = 80
+				app2Port  int32 = 81
+				replicas  int32 = 2
+				svc1IPv4s []netip.Addr
+				svc1IPv6s []netip.Addr
+				svc2IPs   []netip.Addr
+			)
+
+			deployment1 := createDeploymentManifest(Deployment1Name, map[string]string{
+				"app": Deployment1Name,
+			}, &app1Port, nil)
+			deployment1.Spec.Replicas = &replicas
+			_, err := k8sClient.AppsV1().Deployments(namespace.Name).Create(context.Background(), deployment1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			deployment2 := createDeploymentManifest(Deployment2Name, map[string]string{
+				"app": Deployment2Name,
+			}, &app2Port, nil)
+			deployment2.Spec.Replicas = &replicas
+			_, err = k8sClient.AppsV1().Deployments(namespace.Name).Create(context.Background(), deployment2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating service 1", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment1Name,
+					}
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
+						Port:       app1Port,
+						TargetPort: intstr.FromInt32(app1Port),
+					}}
+				)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports)
+				svc1IPv4s, svc1IPv6s = groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
+				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", svc1IPv4s, "v6-IPs", svc1IPv6s)
+			})
+
+			By("Creating service 2", func() {
+				var (
+					labels = map[string]string{
+						"app": Deployment2Name,
+					}
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
+						Port:       app2Port,
+						TargetPort: intstr.FromInt32(app2Port),
+					}}
+				)
+				var ip netip.Addr
+				if len(svc1IPv4s) > 0 {
+					ip = svc1IPv4s[0]
+				}
+				if len(svc1IPv6s) > 0 {
+					ip = svc1IPv6s[0]
+				}
+
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports, func(svc *v1.Service) error {
+					svc.Spec.LoadBalancerIP = ip.String()
+					return nil
+				})
+				svc2IPs = mustParseIPs(derefSliceOfStringPtr(rv))
+				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "IPs", svc2IPs)
+				Expect(svc2IPs).To(HaveLen(1))
+				Expect(svc2IPs[0]).To(Equal(ip))
+			})
+
+			var validator *SecurityGroupValidator
+			By("Getting the cluster security groups", func() {
+				rv, err := azureClient.GetClusterSecurityGroups()
+				Expect(err).NotTo(HaveOccurred())
+
+				validator = NewSecurityGroupValidator(rv)
+			})
+
+			By("Checking if the rule for allowing traffic for app 01", func() {
+				var (
+					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(app1Port), 10)}
+				)
+
+				By("Checking if the rule for allowing traffic from Internet exists")
+
+				if len(svc1IPv4s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, svc1IPv4s, expectedDstPorts),
+					).To(BeTrue(), "Should not have a rule for allowing IPv4 traffic from Internet")
+				}
+
+				if len(svc1IPv6s) > 0 {
+					Expect(
+						validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, svc1IPv6s, expectedDstPorts),
+					).To(BeTrue(), "Should not have a rule for allowing IPv6 traffic from Internet")
+				}
+			})
+
+			By("Checking if the rule for allowing traffic for app 02", func() {
+				var (
+					expectedProtocol = aznetwork.SecurityRuleProtocolTCP
+					expectedDstPorts = []string{strconv.FormatInt(int64(app2Port), 10)}
+				)
+				By("Checking if the rule for allowing traffic from Internet exists")
+				Expect(
+					validator.HasExactAllowRule(expectedProtocol, []string{"Internet"}, svc2IPs, expectedDstPorts),
+				).To(BeTrue(), "Should not have a rule for allowing traffic from Internet")
+			})
+		})
+	})
 })
 
 type SecurityGroupValidator struct {
