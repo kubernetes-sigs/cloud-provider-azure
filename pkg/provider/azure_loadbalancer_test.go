@@ -8775,6 +8775,7 @@ func TestGetMostEligibleLBName(t *testing.T) {
 		currentLBName  string
 		eligibleLBs    []string
 		existingLBs    *[]network.LoadBalancer
+		isInternal     bool
 		expectedLBName string
 	}{
 		{
@@ -8862,10 +8863,11 @@ func TestGetMostEligibleLBName(t *testing.T) {
 				},
 			},
 			expectedLBName: "lb2",
+			isInternal:     true,
 		},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
-			lbName := getMostEligibleLBForService(tc.currentLBName, tc.eligibleLBs, tc.existingLBs)
+			lbName := getMostEligibleLBForService(tc.currentLBName, tc.eligibleLBs, tc.existingLBs, tc.isInternal)
 			assert.Equal(t, tc.expectedLBName, lbName)
 		})
 	}
