@@ -19,13 +19,19 @@ set -o nounset
 set -o pipefail
 
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE[0]}")/../..)
-export GOPATH="/home/vsts/go"
-export PATH="${PATH:-}:${GOPATH}/bin"
-export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
-
-if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
-  az login --service-principal -u "${AZURE_CLIENT_ID:-}" -p "${AZURE_CLIENT_SECRET:-}" --tenant "${AZURE_TENANT_ID:-}"
+USER="cloudtest"
+if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
+  # release pipeline uses sp
+  USER="vsts"
+else
+  # aks pipeline uses managed identity
+  az login --identity --username "${AZURE_MANAGED_IDENTITY_CLIENT_ID:-}"
+  export E2E_MANAGED_IDENTITY_TYPE="userassigned"
 fi
+
+export GOPATH="/home/${USER}/go"
+export PATH="${PATH}:${GOPATH}/bin"
+export AKS_CLUSTER_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourcegroups/${RESOURCE_GROUP:-}/providers/Microsoft.ContainerService/managedClusters/${CLUSTER_NAME:-}"
 
 get_random_location() {
   local LOCATIONS=("eastus")
@@ -125,7 +131,7 @@ if [[ "${SKIP_BUILD_KUBETEST2_AKS:-}" != "true" ]]; then
   if [[ -n "${RELEASE_PIPELINE:-}" ]]; then
     make install
   else
-    sudo GOPATH="/home/vsts/go" make install
+    sudo GOPATH="/home/${USER}/go" make install
   fi
   rm /tmp/cloud-provider-azure -rf
   popd
@@ -179,6 +185,13 @@ if [[ "${CLUSTER_TYPE:-}" =~ "autoscaling" ]]; then
     az aks update --subscription ${AZURE_SUBSCRIPTION_ID:-} --resource-group "${RESOURCE_GROUP:-}" --name "${CLUSTER_NAME:-}" \
       --cluster-autoscaler-profile balance-similar-node-groups=true
   fi
+fi
+
+# Do role assignment for the managed identity
+if [[ -z "${RELEASE_PIPELINE:-}" ]]; then
+  MC_RESOURCE_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID:-}/resourceGroups/MC_${RESOURCE_GROUP:-}_${CLUSTER_NAME:-}_eastus"
+  AGENTPOOL_MI_PRINCIPAL_ID="$(az identity show -n ${CLUSTER_NAME:-}-agentpool -g MC_${RESOURCE_GROUP:-}_${CLUSTER_NAME:-}_eastus --subscription ${AZURE_SUBSCRIPTION_ID:-} | jq -r '.principalId')"
+  az role assignment create --assignee "${AGENTPOOL_MI_PRINCIPAL_ID}" --role "AcrPull" --scope "${MC_RESOURCE_ID}" --subscription "${AZURE_SUBSCRIPTION_ID:-}"
 fi
 
 if [[ "${SKIP_E2E:-}" != "true" ]]; then
