@@ -452,7 +452,9 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(service *v1.Service, nodes []
 			}
 
 			privateIP := getNodePrivateIPAddress(node, isIPv6)
-			nodePrivateIPsSet.Insert(privateIP)
+			if privateIP != "" {
+				nodePrivateIPsSet.Insert(privateIP)
+			}
 
 			if bi.useMultipleStandardLoadBalancers() {
 				if !activeNodes.Has(node.Name) {
