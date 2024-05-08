@@ -12,8 +12,7 @@ trigger:
 
 pr: none
 
-pool:
-  vmImage: ubuntu-latest
+pool: cloud-provider-azure-e2e-pool
 
 variables:
 - template: var-e2e.yml

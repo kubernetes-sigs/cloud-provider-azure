@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"fmt"
 	"os"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
@@ -31,6 +32,10 @@ const (
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
+	managedIdentityClientID   = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
+	managedIdentityType       = "E2E_MANAGED_IDENTITY_TYPE"
+
+	userAssignedManagedIdentity = "userassigned"
 )
 
 // azureAuthConfigFromTestProfile obtains azure config from Environment
@@ -39,10 +44,30 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 	if len(envStr) == 0 {
 		envStr = "AZUREPUBLICCLOUD"
 	}
-	return &azclient.AzureAuthConfig{
-			AADClientID:     os.Getenv(ServicePrincipleIDEnv),
-			AADClientSecret: os.Getenv(ServicePrincipleSecretEnv),
-		}, &azclient.ARMClientConfig{
+
+	var azureAuthConfig azclient.AzureAuthConfig
+	servicePrincipleIDEnv := os.Getenv(ServicePrincipleIDEnv)
+	servicePrincipleSecretEnv := os.Getenv(ServicePrincipleSecretEnv)
+	managedIdentityTypeEnv := os.Getenv(managedIdentityType)
+	managedIdentityClientIDEnv := os.Getenv(managedIdentityClientID)
+	if servicePrincipleIDEnv != "" && servicePrincipleSecretEnv != "" {
+		azureAuthConfig = azclient.AzureAuthConfig{
+			AADClientID:     servicePrincipleIDEnv,
+			AADClientSecret: servicePrincipleSecretEnv,
+		}
+	} else if managedIdentityTypeEnv != "" {
+		azureAuthConfig = azclient.AzureAuthConfig{
+			UseManagedIdentityExtension: true,
+		}
+		if managedIdentityTypeEnv == userAssignedManagedIdentity {
+			azureAuthConfig.UserAssignedIdentityID = managedIdentityClientIDEnv
+
+		}
+	} else {
+		return nil, nil, nil, fmt.Errorf("failed to get Azure auth config from environment")
+	}
+
+	return &azureAuthConfig, &azclient.ARMClientConfig{
 			Cloud:    envStr,
 			TenantID: os.Getenv(TenantIDEnv),
 		}, &azclient.ClientFactoryConfig{
