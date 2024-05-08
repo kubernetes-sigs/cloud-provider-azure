@@ -327,13 +327,6 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, prefixes []string, retainDstPorts []int32) error {
 	logger := helper.logger.WithName("removeDestinationFromRule").
 		WithValues("security-rule-name", rule.Name)
-	currentPorts, err := ListDestinationPortRanges(rule)
-	if err != nil {
-		// Skip the rule with invalid destination port ranges.
-		// NOTE: cloud-provider would not create allow rules with `*` or `4000-5000` as destination port ranges.
-		logger.Info("Skip because it contains `*` or port-ranges as destination port ranges.")
-		return nil
-	}
 
 	var (
 		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
@@ -341,7 +334,26 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 
 		expectedPrefixes = fnutil.RemoveIf(func(p string) bool { return prefixIndex[p] }, currentPrefixes) // The prefixes to keep.
 		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes)                                  // The prefixes to remove.
-		expectedPorts    = fnutil.Intersection(currentPorts, retainDstPorts)                               // The ports to keep.
+	)
+
+	// Clean DenyAll rule
+	if rule.Access == network.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {
+		// Update the prefixes
+		rule.DestinationAddressPrefix = nil
+		rule.DestinationAddressPrefixes = ptr.To(NormalizeSecurityRuleAddressPrefixes(expectedPrefixes))
+		return nil
+	}
+
+	// Clean Allow rule
+	currentPorts, err := ListDestinationPortRanges(rule)
+	if err != nil {
+		// Skip the rule with invalid destination port ranges.
+		// NOTE: cloud-provider would not create allow rules with `*` or `4000-5000` as destination port ranges.
+		logger.Info("Skip because it contains `*` or port-ranges as destination port ranges.")
+		return nil
+	}
+	var (
+		expectedPorts = fnutil.Intersection(currentPorts, retainDstPorts) // The ports to keep.
 	)
 
 	if len(targetPrefixes) == 0 || len(currentPorts) == len(expectedPorts) {
