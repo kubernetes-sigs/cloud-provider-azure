@@ -3899,7 +3899,7 @@ func (az *Cloud) getAzureLoadBalancerName(
 		}
 
 		currentLBName := az.getServiceCurrentLoadBalancerName(service)
-		lbNamePrefix = getMostEligibleLBForService(currentLBName, eligibleLBs, existingLBs)
+		lbNamePrefix = getMostEligibleLBForService(currentLBName, eligibleLBs, existingLBs, requiresInternalLoadBalancer(service))
 	}
 
 	if isInternal {
@@ -3912,6 +3912,7 @@ func getMostEligibleLBForService(
 	currentLBName string,
 	eligibleLBs []string,
 	existingLBs *[]network.LoadBalancer,
+	isInternal bool,
 ) string {
 	// 1. If the LB is eligible and being used, choose it.
 	if StringInSlice(currentLBName, eligibleLBs) {
@@ -3923,8 +3924,10 @@ func getMostEligibleLBForService(
 	for _, eligibleLB := range eligibleLBs {
 		var found bool
 		if existingLBs != nil {
-			for _, existingLB := range *existingLBs {
-				if strings.EqualFold(trimSuffixIgnoreCase(pointer.StringDeref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLB) {
+			for i := range *existingLBs {
+				existingLB := (*existingLBs)[i]
+				if strings.EqualFold(trimSuffixIgnoreCase(pointer.StringDeref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLB) &&
+					isInternalLoadBalancer(&existingLB) == isInternal {
 					found = true
 					break
 				}
@@ -3940,8 +3943,10 @@ func getMostEligibleLBForService(
 	var expectedLBName string
 	ruleCount := 301
 	if existingLBs != nil {
-		for _, existingLB := range *existingLBs {
-			if StringInSlice(trimSuffixIgnoreCase(pointer.StringDeref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) {
+		for i := range *existingLBs {
+			existingLB := (*existingLBs)[i]
+			if StringInSlice(trimSuffixIgnoreCase(pointer.StringDeref(existingLB.Name, ""), consts.InternalLoadBalancerNameSuffix), eligibleLBs) &&
+				isInternalLoadBalancer(&existingLB) == isInternal {
 				if existingLB.LoadBalancerPropertiesFormat != nil &&
 					existingLB.LoadBalancingRules != nil {
 					if len(*existingLB.LoadBalancingRules) < ruleCount {
@@ -3996,7 +4001,8 @@ func (az *Cloud) getEligibleLoadBalancersForService(service *v1.Service) ([]stri
 	lbsFromAnnotation := consts.GetLoadBalancerConfigurationsNames(service)
 	if len(lbsFromAnnotation) > 0 {
 		lbNamesSet := utilsets.NewString(lbsFromAnnotation...)
-		for _, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
+		for i := range az.MultipleStandardLoadBalancerConfigurations {
+			multiSLBConfig := az.MultipleStandardLoadBalancerConfigurations[i]
 			if lbNamesSet.Has(multiSLBConfig.Name) {
 				logger.V(4).Info("selects the load balancer by annotation",
 					"load balancer configuration name", multiSLBConfig.Name)
@@ -4121,7 +4127,8 @@ func (az *Cloud) getEligibleLoadBalancersForService(service *v1.Service) ([]stri
 		logger.V(4).Info("no load balancer that has label/namespace selector matches the service, so the service can be placed on the load balancers that do not have label/namespace selector")
 	}
 
-	for _, eligibleLB := range eligibleLBs {
+	for i := range eligibleLBs {
+		eligibleLB := eligibleLBs[i]
 		eligibleLBNames = append(eligibleLBNames, eligibleLB.Name)
 	}
 
