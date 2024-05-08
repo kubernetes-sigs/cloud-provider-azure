@@ -149,6 +149,15 @@ func (c *Client) getVM(ctx context.Context, resourceGroupName string, VMName str
 
 // List gets a list of VirtualMachine in the resourceGroupName.
 func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachine, *retry.Error) {
+	return c.list(ctx, resourceGroupName, false)
+}
+
+// ListWithInstanceView gets a list of VirtualMachine in the resourceGroupName with InstanceView.
+func (c *Client) ListWithInstanceView(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachine, *retry.Error) {
+	return c.list(ctx, resourceGroupName, true)
+}
+
+func (c *Client) list(ctx context.Context, resourceGroupName string, withInstanceView bool) ([]compute.VirtualMachine, *retry.Error) {
 	mc := metrics.NewMetricContext("vm", "list", resourceGroupName, c.subscriptionID, "")
 
 	// Report errors if the client is rate limited.
@@ -164,7 +173,7 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 		return nil, rerr
 	}
 
-	result, rerr := c.listVM(ctx, resourceGroupName)
+	result, rerr := c.listVM(ctx, resourceGroupName, withInstanceView)
 	mc.Observe(rerr)
 	if rerr != nil {
 		if rerr.IsThrottled() {
@@ -179,14 +188,22 @@ func (c *Client) List(ctx context.Context, resourceGroupName string) ([]compute.
 }
 
 // listVM gets a list of VirtualMachines in the resourceGroupName.
-func (c *Client) listVM(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachine, *retry.Error) {
+func (c *Client) listVM(ctx context.Context, resourceGroupName string, withInstanceView bool) ([]compute.VirtualMachine, *retry.Error) {
 	resourceID := armclient.GetResourceListID(c.subscriptionID, resourceGroupName, vmResourceType)
 
 	result := make([]compute.VirtualMachine, 0)
 	page := &VirtualMachineListResultPage{}
 	page.fn = c.listNextResults
 
-	resp, rerr := c.armClient.GetResource(ctx, resourceID)
+	var resp *http.Response
+	var rerr *retry.Error
+	if withInstanceView {
+		queries := make(map[string]interface{})
+		queries["$expand"] = autorest.Encode("query", "instanceView")
+		resp, rerr = c.armClient.GetResourceWithQueries(ctx, resourceID, queries)
+	} else {
+		resp, rerr = c.armClient.GetResource(ctx, resourceID)
+	}
 	defer c.armClient.CloseResponse(ctx, resp)
 	if rerr != nil {
 		klog.V(5).Infof("Received error in %s: resourceID: %s, error: %s", "vm.list.request", resourceID, rerr.Error())
