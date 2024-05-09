@@ -230,6 +230,31 @@ func TestList(t *testing.T) {
 	assert.Equal(t, 3, len(result))
 }
 
+func TestListWithInstanceView(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	armClient := mockarmclient.NewMockInterface(ctrl)
+	vmList := []compute.VirtualMachine{getTestVMWithInstanceView("vm1"), getTestVMWithInstanceView("vm2")}
+	responseBody, err := json.Marshal(compute.VirtualMachineListResult{Value: &vmList})
+	assert.NoError(t, err)
+
+	queryparams := map[string]interface{}{
+		"$expand": "instanceView",
+	}
+	armClient.EXPECT().GetResourceWithQueries(gomock.Any(), testResourcePrefix, queryparams).Return(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(responseBody)),
+		}, nil).Times(1)
+	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
+
+	vmClient := getTestVMClient(armClient)
+	result, rerr := vmClient.ListWithInstanceView(context.TODO(), "rg")
+	assert.Nil(t, rerr)
+	assert.Equal(t, 2, len(result))
+}
+
 func TestListNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1158,6 +1183,25 @@ func getTestVM(vmName string) compute.VirtualMachine {
 		Name:     pointer.String(vmName),
 		Location: pointer.String("eastus"),
 	}
+}
+
+func getTestVMWithInstanceView(vmName string) compute.VirtualMachine {
+	resourceID := fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/%s", vmName)
+	vm := compute.VirtualMachine{
+		ID:       pointer.String(resourceID),
+		Name:     pointer.String(vmName),
+		Location: pointer.String("eastus"),
+		VirtualMachineProperties: &compute.VirtualMachineProperties{
+			InstanceView: &compute.VirtualMachineInstanceView{
+				Statuses: &[]compute.InstanceViewStatus{
+					{
+						Code: pointer.String("PowerState/running"),
+					},
+				},
+			},
+		},
+	}
+	return vm
 }
 
 func getTestVMClient(armClient armclient.Interface) *Client {
