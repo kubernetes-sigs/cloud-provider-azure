@@ -2242,6 +2242,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					WithDestination(append(azureFx.LoadBalancer().IPv6Addresses(), "baz")...). // Should keep baz but clean the rest
 					Build(),
 
+				azureFx.DenyAllSecurityRule(iputil.IPv4).
+					WithPriority(4095).
+					WithDestination(append(azureFx.LoadBalancer().IPv4Addresses(), "5.5.5.5/32")...).
+					Build(),
+
 				{
 					Name: ptr.To("foo"),
 					SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
@@ -2337,6 +2342,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv6, allowedIPv6Ranges, k8sFx.Service().UDPPorts()).
 						WithPriority(3000).
 						WithDestination("foo"). // should keep foo
+						Build(),
+
+					azureFx.DenyAllSecurityRule(iputil.IPv4).
+						WithPriority(4095).
+						WithDestination("5.5.5.5/32").
 						Build(),
 				)
 
