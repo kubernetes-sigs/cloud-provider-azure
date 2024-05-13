@@ -146,6 +146,14 @@ func (f *KubernetesServiceFixture) UDPNodePorts() []int32 {
 	return rv
 }
 
+func (f *KubernetesServiceFixture) WithIngressIPs(ips []string) *KubernetesServiceFixture {
+	f.svc.Status.LoadBalancer.Ingress = make([]v1.LoadBalancerIngress, len(ips))
+	for i, ip := range ips {
+		f.svc.Status.LoadBalancer.Ingress[i].IP = ip
+	}
+	return f
+}
+
 func (f *KubernetesServiceFixture) Build() v1.Service {
 	return f.svc
 }
