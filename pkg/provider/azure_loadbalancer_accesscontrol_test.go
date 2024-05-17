@@ -1891,6 +1891,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		sharedIPSvc := k8sFx.Service().
 			WithNamespace("ns-02").
 			WithName("svc-02").
+			WithIngressIPs([]string{"200.200.0.1"}).
 			Build()
 
 		sharedIPSvc.Spec.Ports = []v1.ServicePort{
@@ -1925,6 +1926,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 						WithName("svc-01").
 						WithAllowedServiceTags(allowedServiceTag).
 						WithAllowedIPRanges(allowedRanges...).
+						WithIngressIPs([]string{"200.200.0.1"}).
 						Build()
 
 			kubeClient      = fake.NewSimpleClientset(&sharedIPSvc, &svc)
@@ -1932,7 +1934,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			svcLister       = informerFactory.Core().V1().Services().Lister()
 
 			pip = fx.Azure().PublicIPAddress("pip1").
-				WithTag(consts.ServiceTagKey, fmt.Sprintf("%s/%s,%s/%s", svc.Namespace, svc.Name, sharedIPSvc.Namespace, sharedIPSvc.Name)).
+				WithAddress("200.200.0.1").
 				Build()
 			frontendIPConfigurations = []*network.FrontendIPConfiguration{
 				{
