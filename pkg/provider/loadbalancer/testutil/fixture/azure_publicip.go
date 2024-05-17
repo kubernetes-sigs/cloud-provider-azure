@@ -51,3 +51,8 @@ func (f *AzurePublicIPAddressFixture) WithTag(key, value string) *AzurePublicIPA
 	f.pip.Tags[key] = ptr.To(value)
 	return f
 }
+
+func (f *AzurePublicIPAddressFixture) WithAddress(address string) *AzurePublicIPAddressFixture {
+	f.pip.PublicIPAddressPropertiesFormat.IPAddress = ptr.To(address)
+	return f
+}
