@@ -31,7 +31,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/go-autorest/autorest/azure"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +47,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -2809,10 +2809,10 @@ func (az *Cloud) getExpectedHAModeLoadBalancingRuleProperties(
 }
 
 func (az *Cloud) listServicesByPublicIPs(pips []network.PublicIPAddress) ([]*v1.Service, error) {
-	logger := klog.Background().WithName("listServicesByPublicIPs")
+	logger := klog.Background().WithName("listServicesByPublicIPs").WithValues("num-pips", len(pips))
 	var (
-		svcNames []string
-		rv       []*v1.Service
+		rv  []*v1.Service
+		ips []string
 	)
 
 	for _, pip := range pips {
@@ -2825,40 +2825,25 @@ func (az *Cloud) listServicesByPublicIPs(pips []network.PublicIPAddress) ([]*v1.
 		}
 		logger.V(4).Info("fetching public IPs", "pip-id", pip.ID)
 		pip, _, err := az.getPublicIPAddress(resourceID.ResourceGroup, resourceID.ResourceName, azcache.CacheReadTypeDefault)
-
 		if err != nil {
 			return nil, err
 		}
-
-		logger.V(4).Info("fetched public IP", "pip", pip)
-		v := getServiceFromPIPServiceTags(pip.Tags)
-		if v != "" {
-			parts := strings.Split(strings.TrimSpace(v), ",")
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p == "" {
-					continue
-				}
-				svcNames = append(svcNames, p)
-			}
-		}
+		ips = append(ips, *pip.IPAddress)
 	}
 
-	for _, svcName := range svcNames {
-		parts := strings.Split(svcName, "/")
-		if len(parts) != 2 {
-			continue
-		}
-		ns, svcName := parts[0], parts[1]
-
-		logger.Info("fetching service from lister", "ns", ns, "service-name", svcName)
-		svc, err := az.serviceLister.Services(ns).Get(svcName)
-		if err != nil {
-			return nil, fmt.Errorf("get service error: %w", err)
-		}
-
-		rv = append(rv, svc)
+	logger = logger.WithValues("pips", ips)
+	allServices, err := az.serviceLister.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("list all services from lister: %w", err)
 	}
+	logger.V(4).Info("Listed all service from lister", "num-all-services", len(allServices))
+
+	rv = fnutil.Filter(func(svc *v1.Service) bool {
+		ingressIPs := fnutil.Map(func(ing v1.LoadBalancerIngress) string { return ing.IP }, svc.Status.LoadBalancer.Ingress)
+		ingressIPs = fnutil.Filter(func(ip string) bool { return ip != "" }, ingressIPs)
+		return len(fnutil.Intersection(ingressIPs, ips)) > 0
+	}, allServices)
+	logger.V(4).Info("Filtered services by public IPs", "num-target-services", len(rv))
 
 	return rv, nil
 }
