@@ -174,6 +174,8 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		NetworkClientSecretCredential: networkClientSecretCredential,
 		NetworkTokenCredential:        networkTokenCredential,
 		MultiTenantCredential:         multiTenantCredential,
+
+		ClientOptions: clientOption,
 	}, nil
 }
 
