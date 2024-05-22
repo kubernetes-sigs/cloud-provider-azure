@@ -107,6 +107,17 @@ func ListDestinationPrefixes(r *network.SecurityRule) []string {
 	return rv
 }
 
+func SetDestinationPrefixes(r *network.SecurityRule, prefixes []string) {
+	ps := NormalizeSecurityRuleAddressPrefixes(prefixes)
+	if len(ps) == 1 {
+		r.DestinationAddressPrefix = &ps[0]
+		r.DestinationAddressPrefixes = nil
+	} else {
+		r.DestinationAddressPrefix = nil
+		r.DestinationAddressPrefixes = &ps
+	}
+}
+
 func ListDestinationPortRanges(r *network.SecurityRule) ([]int32, error) {
 	var values []string
 	if r.DestinationPortRange != nil {
