@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
@@ -34,6 +36,7 @@ import (
 var (
 	CrossTenantNetworkResourceNegativeConfig = []*AzureAuthConfig{
 		{
+			// missing NetworkResourceTenantID
 			ARMClientConfig: azclient.ARMClientConfig{
 				TenantID: "TenantID",
 			},
@@ -52,428 +55,488 @@ var (
 				AADClientSecret: "AADClientSecret",
 			},
 			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-			IdentitySystem:                consts.ADFSIdentitySystem,
-		},
-		{
-			ARMClientConfig: azclient.ARMClientConfig{
-				TenantID:                "TenantID",
-				NetworkResourceTenantID: "NetworkResourceTenantID",
-			},
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				AADClientID:                 "AADClientID",
-				AADClientSecret:             "AADClientSecret",
-				UseManagedIdentityExtension: true,
-			},
-			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+			IdentitySystem:                consts.ADFSIdentitySystem, // multi-tenant not supported with ADFS
 		},
 	}
-
-	// msiEndpointEnv is the environment variable used to store the endpoint in go-autorest/adal library.
-	msiEndpointEnv = "MSI_ENDPOINT"
-	// msiSecretEnv is the environment variable used to store the request secret in go-autorest/adal library.
-	msiSecretEnv = "MSI_SECRET"
 )
 
-func TestGetServicePrincipalTokenFromMSIWithUserAssignedID(t *testing.T) {
-	configs := []*AzureAuthConfig{
-		{
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-				UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
-			},
-		},
-		// The Azure service principal is ignored when
-		// UseManagedIdentityExtension is set to true
-		{
-			ARMClientConfig: azclient.ARMClientConfig{
-				TenantID: "TenantID",
-			},
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-				UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
-				AADClientID:                 "AADClientID",
-				AADClientSecret:             "AADClientSecret",
-			},
-		},
-	}
-	env := &azure.PublicCloud
-
-	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("{}"))
-		assert.NoError(t, err)
-	}))
-	originalEnv := os.Getenv(msiEndpointEnv)
-	originalSecret := os.Getenv(msiSecretEnv)
-	os.Setenv(msiEndpointEnv, server.URL)
-	os.Setenv(msiSecretEnv, "secret")
-	defer func() {
-		server.Close()
-		os.Setenv(msiEndpointEnv, originalEnv)
-		os.Setenv(msiSecretEnv, originalSecret)
-	}()
-
-	for _, config := range configs {
-		token, err := GetServicePrincipalToken(config, env, "")
-		assert.NoError(t, err)
-
-		msiEndpoint, err := adal.GetMSIVMEndpoint()
-		assert.NoError(t, err)
-
-		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(msiEndpoint,
-			env.ServiceManagementEndpoint, config.UserAssignedIdentityID)
-		assert.NoError(t, err)
-		assert.Equal(t, token, spt)
-	}
-}
-
-func TestGetServicePrincipalTokenFromMSIWithIdentityResourceID(t *testing.T) {
-	configs := []*AzureAuthConfig{
-		{
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-				UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
-			},
-		},
-		// The Azure service principal is ignored when
-		// UseManagedIdentityExtension is set to true
-		{
-			ARMClientConfig: azclient.ARMClientConfig{
-				TenantID: "TenantID",
-			},
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-				UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
-				AADClientID:                 "AADClientID",
-				AADClientSecret:             "AADClientSecret",
-			},
-		},
-	}
-	env := &azure.PublicCloud
-
-	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("{}"))
-		assert.NoError(t, err)
-	}))
-	originalEnv := os.Getenv(msiEndpointEnv)
-	originalSecret := os.Getenv(msiSecretEnv)
-	os.Setenv(msiEndpointEnv, server.URL)
-	os.Setenv(msiSecretEnv, "secret")
-	defer func() {
-		server.Close()
-		os.Setenv(msiEndpointEnv, originalEnv)
-		os.Setenv(msiSecretEnv, originalSecret)
-	}()
-
-	for _, config := range configs {
-		token, err := GetServicePrincipalToken(config, env, "")
-		assert.NoError(t, err)
-
-		msiEndpoint, err := adal.GetMSIVMEndpoint()
-		assert.NoError(t, err)
-
-		spt, err := adal.NewServicePrincipalTokenFromMSIWithIdentityResourceID(msiEndpoint,
-			env.ServiceManagementEndpoint, config.UserAssignedIdentityID)
-		assert.NoError(t, err)
-		assert.Equal(t, token, spt)
-	}
-}
-
-func TestGetServicePrincipalTokenFromMSI(t *testing.T) {
-	configs := []*AzureAuthConfig{
-		{
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-			},
-		},
-		// The Azure service principal is ignored when
-		// UseManagedIdentityExtension is set to true
-		{
-			ARMClientConfig: azclient.ARMClientConfig{
-				TenantID: "TenantID",
-			},
-			AzureAuthConfig: azclient.AzureAuthConfig{
-				UseManagedIdentityExtension: true,
-				AADClientID:                 "AADClientID",
-				AADClientSecret:             "AADClientSecret",
-			},
-		},
-	}
-	env := &azure.PublicCloud
-
-	// msiEndpointEnv and msiSecretEnv are required because autorest/adal library requires IMDS endpoint to be available.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("{}"))
-		assert.NoError(t, err)
-	}))
-	originalEnv := os.Getenv(msiEndpointEnv)
-	originalSecret := os.Getenv(msiSecretEnv)
-	os.Setenv(msiEndpointEnv, server.URL)
-	os.Setenv(msiSecretEnv, "secret")
-	defer func() {
-		server.Close()
-		os.Setenv(msiEndpointEnv, originalEnv)
-		os.Setenv(msiSecretEnv, originalSecret)
-	}()
-
-	for _, config := range configs {
-		token, err := GetServicePrincipalToken(config, env, "")
-		assert.NoError(t, err)
-
-		msiEndpoint, err := adal.GetMSIVMEndpoint()
-		assert.NoError(t, err)
-
-		spt, err := adal.NewServicePrincipalTokenFromMSI(msiEndpoint, env.ServiceManagementEndpoint)
-		assert.NoError(t, err)
-		assert.Equal(t, token, spt)
-	}
-
-}
-
-func TestGetServicePrincipalTokenFromWorkloadIdentity(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID: "TenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:                           "AADClientID",
-			AADFederatedTokenFile:                 "/tmp/federated-token",
-			UseFederatedWorkloadIdentityExtension: true,
-		},
-	}
-	env := &azure.PublicCloud
-
-	token, err := GetServicePrincipalToken(config, env, "")
-	assert.NoError(t, err)
-	marshalToken, _ := token.MarshalJSON()
-
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
-	assert.NoError(t, err)
-
-	jwtCallback := func() (string, error) {
-		jwt, err := os.ReadFile(config.AADFederatedTokenFile)
-		if err != nil {
-			return "", fmt.Errorf("failed to read a file with a federated token: %w", err)
-		}
-		return string(jwt), nil
-	}
-
-	spt, err := adal.NewServicePrincipalTokenFromFederatedTokenCallback(*oauthConfig, config.AADClientID, jwtCallback, env.ResourceManagerEndpoint)
-	assert.NoError(t, err)
-
-	marshalSpt, _ := spt.MarshalJSON()
-
-	assert.Equal(t, marshalToken, marshalSpt)
-}
+const (
+	// envMSIEndpoint is the environment variable used to store the endpoint in go-autorest/adal library.
+	envMSIEndpoint = "MSI_ENDPOINT"
+	// envMSISecret is the environment variable used to store the request secret in go-autorest/adal library.
+	envMSISecret = "MSI_SECRET"
+)
 
 func TestGetServicePrincipalToken(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID: "TenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:     "AADClientID",
-			AADClientSecret: "AADClientSecret",
-		},
-	}
 	env := &azure.PublicCloud
+	setupLocalMSIServer := func(t *testing.T) (*httptest.Server, func()) {
+		t.Helper()
+		var (
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodGet, r.Method)
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write([]byte("{}"))
+				assert.NoError(t, err)
+			}))
+			originalEnv    = os.Getenv(envMSIEndpoint)
+			originalSecret = os.Getenv(envMSISecret)
 
-	token, err := GetServicePrincipalToken(config, env, "")
-	assert.NoError(t, err)
+			cleanUp = func() {
+				server.Close()
+				_ = os.Setenv(envMSIEndpoint, originalEnv)
+				_ = os.Setenv(envMSISecret, originalSecret)
+			}
+		)
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
-	assert.NoError(t, err)
+		_ = os.Setenv(envMSIEndpoint, server.URL)
+		_ = os.Setenv(envMSISecret, "secret")
 
-	spt, err := adal.NewServicePrincipalToken(*oauthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
+		return server, cleanUp
+	}
 
-	assert.Equal(t, token, spt)
+	t.Run("setup with MSI (user assigned managed identity)", func(t *testing.T) {
+		type IDType int
+		const (
+			ResourceID IDType = iota
+			ClientID
+		)
+
+		tests := []struct {
+			Name   string
+			Type   IDType
+			Config *AzureAuthConfig
+		}{
+			{
+				Name: "client id",
+				Type: ClientID,
+				Config: &AzureAuthConfig{
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+						UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
+					},
+				},
+			},
+			{
+				Name: "client id with SP (SP config should be ignored)",
+				Type: ClientID,
+				Config: &AzureAuthConfig{
+					ARMClientConfig: azclient.ARMClientConfig{
+						TenantID: "TenantID",
+					},
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+						UserAssignedIdentityID:      "00000000-0000-0000-0000-000000000000",
+						AADClientID:                 "AADClientID",
+						AADClientSecret:             "AADClientSecret",
+					},
+				},
+			},
+			{
+				Name: "resource id",
+				Type: ResourceID,
+				Config: &AzureAuthConfig{
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+						UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+					},
+				},
+			},
+			{
+				Name: "resource id with SP (SP config should be ignored)",
+				Type: ResourceID,
+				Config: &AzureAuthConfig{
+					ARMClientConfig: azclient.ARMClientConfig{
+						TenantID: "TenantID",
+					},
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+						UserAssignedIdentityID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ua",
+						AADClientID:                 "AADClientID",
+						AADClientSecret:             "AADClientSecret",
+					},
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.Name, func(t *testing.T) {
+				_, cleanUp := setupLocalMSIServer(t)
+				defer cleanUp()
+
+				token, err := GetServicePrincipalToken(tt.Config, env, "")
+				assert.NoError(t, err)
+
+				msiEndpoint, err := adal.GetMSIVMEndpoint()
+				assert.NoError(t, err)
+
+				switch tt.Type {
+				case ClientID:
+					spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(msiEndpoint,
+						env.ServiceManagementEndpoint, tt.Config.UserAssignedIdentityID)
+					assert.NoError(t, err)
+					assert.Equal(t, token, spt)
+				case ResourceID:
+					spt, err := adal.NewServicePrincipalTokenFromMSIWithIdentityResourceID(msiEndpoint,
+						env.ServiceManagementEndpoint, tt.Config.UserAssignedIdentityID)
+					assert.NoError(t, err)
+					assert.Equal(t, token, spt)
+				}
+			})
+		}
+	})
+
+	t.Run("setup with MSI (system managed identity)", func(t *testing.T) {
+		tests := []struct {
+			Name   string
+			Config *AzureAuthConfig
+		}{
+			{
+				Name: "default",
+				Config: &AzureAuthConfig{
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+					},
+				},
+			},
+			{
+				Name: "with SP (SP config should be ignored",
+				Config: &AzureAuthConfig{
+					ARMClientConfig: azclient.ARMClientConfig{
+						TenantID: "TenantID",
+					},
+					AzureAuthConfig: azclient.AzureAuthConfig{
+						UseManagedIdentityExtension: true,
+						AADClientID:                 "AADClientID",
+						AADClientSecret:             "AADClientSecret",
+					},
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.Name, func(t *testing.T) {
+				_, cleanUp := setupLocalMSIServer(t)
+				defer cleanUp()
+
+				token, err := GetServicePrincipalToken(tt.Config, env, "")
+				assert.NoError(t, err)
+
+				msiEndpoint, err := adal.GetMSIVMEndpoint()
+				assert.NoError(t, err)
+
+				spt, err := adal.NewServicePrincipalTokenFromMSI(msiEndpoint, env.ServiceManagementEndpoint)
+				assert.NoError(t, err)
+				assert.Equal(t, token, spt)
+
+			})
+		}
+	})
+
+	t.Run("setup with workload identity", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:                           "AADClientID",
+				AADFederatedTokenFile:                 "/tmp/federated-token",
+				UseFederatedWorkloadIdentityExtension: true,
+			},
+		}
+		env := &azure.PublicCloud
+
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+		marshalToken, _ := token.MarshalJSON()
+
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		assert.NoError(t, err)
+
+		jwtCallback := func() (string, error) {
+			jwt, err := os.ReadFile(config.AADFederatedTokenFile)
+			if err != nil {
+				return "", fmt.Errorf("failed to read a file with a federated token: %w", err)
+			}
+			return string(jwt), nil
+		}
+
+		spt, err := adal.NewServicePrincipalTokenFromFederatedTokenCallback(*oauthConfig, config.AADClientID, jwtCallback, env.ResourceManagerEndpoint)
+		assert.NoError(t, err)
+
+		marshalSpt, _ := spt.MarshalJSON()
+
+		assert.Equal(t, marshalToken, marshalSpt)
+	})
+
+	t.Run("setup with SP with password", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:     "AADClientID",
+				AADClientSecret: "AADClientSecret",
+			},
+		}
+		env := &azure.PublicCloud
+
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		assert.NoError(t, err)
+
+		spt, err := adal.NewServicePrincipalToken(*oauthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
+
+		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with SP with certificate", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:           "AADClientID",
+				AADClientCertPath:     "./testdata/test.pfx",
+				AADClientCertPassword: "id",
+			},
+		}
+		env := &azure.PublicCloud
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		assert.NoError(t, err)
+		pfxContent, err := os.ReadFile("./testdata/test.pfx")
+		assert.NoError(t, err)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "id")
+		assert.NoError(t, err)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
+		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with SP and certificate (no certificate password)", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID: "TenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopassword.pfx",
+			},
+		}
+		env := &azure.PublicCloud
+		token, err := GetServicePrincipalToken(config, env, "")
+		assert.NoError(t, err)
+
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
+		assert.NoError(t, err)
+		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+		assert.NoError(t, err)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		assert.NoError(t, err)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
+		assert.Equal(t, token, spt)
+	})
 }
 
 func TestGetMultiTenantServicePrincipalToken(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:     "AADClientID",
-			AADClientSecret: "AADClientSecret",
-		},
-		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-	}
-	env := &azure.PublicCloud
+	t.Run("setup with SP with password", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:     "AADClientID",
+				AADClientSecret: "AADClientSecret",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
 
-	multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env)
-	assert.NoError(t, err)
+		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		assert.NoError(t, err)
 
-	multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
-	assert.NoError(t, err)
+		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+		assert.NoError(t, err)
 
-	spt, err := adal.NewMultiTenantServicePrincipalToken(multiTenantOAuthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
+		spt, err := adal.NewMultiTenantServicePrincipalToken(multiTenantOAuthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
 
-	assert.Equal(t, multiTenantToken, spt)
-}
+		assert.Equal(t, multiTenantToken, spt)
+	})
 
-func TestGetServicePrincipalTokenFromCertificate(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID: "TenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:           "AADClientID",
-			AADClientCertPath:     "./testdata/test.pfx",
-			AADClientCertPassword: "id",
-		},
-	}
-	env := &azure.PublicCloud
-	token, err := GetServicePrincipalToken(config, env, "")
-	assert.NoError(t, err)
+	t.Run("setup with SP with certificate", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopassword.pfx",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
-	assert.NoError(t, err)
-	pfxContent, err := os.ReadFile("./testdata/test.pfx")
-	assert.NoError(t, err)
-	certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "id")
-	assert.NoError(t, err)
-	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
-	assert.Equal(t, token, spt)
-}
+		multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+		assert.NoError(t, err)
 
-func TestGetServicePrincipalTokenFromCertificateWithoutPassword(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID: "TenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
-	}
-	env := &azure.PublicCloud
-	token, err := GetServicePrincipalToken(config, env, "")
-	assert.NoError(t, err)
+		multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
+		assert.NoError(t, err)
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.TenantID, nil)
-	assert.NoError(t, err)
-	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
-	assert.NoError(t, err)
-	certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
-	assert.NoError(t, err)
-	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
-	assert.Equal(t, token, spt)
-}
+		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+		assert.NoError(t, err)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		assert.NoError(t, err)
+		spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
 
-func TestGetMultiTenantServicePrincipalTokenFromCertificate(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
-		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-	}
-	env := &azure.PublicCloud
+		assert.Equal(t, multiTenantToken, spt)
+	})
 
-	multiTenantToken, err := GetMultiTenantServicePrincipalToken(config, env)
-	assert.NoError(t, err)
+	t.Run("setup with MSI and auxiliary token provider", func(t *testing.T) {
+		const (
+			managedIdentityToken = "managed-identity-token"
+			networkToken         = "network-token"
+		)
+		var (
+			cfg = &AzureAuthConfig{
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+				},
+				ARMClientConfig: azclient.ARMClientConfig{
+					TenantID:                "TenantID",
+					NetworkResourceTenantID: "NetworkResourceTenantID",
+				},
+			}
+			authProvider = &azclient.AuthProvider{
+				ManagedIdentityCredential: NewDummyTokenCredential(managedIdentityToken),
+				NetworkTokenCredential:    NewDummyTokenCredential(networkToken),
+				ClientOptions: &policy.ClientOptions{
+					Cloud: cloud.AzurePublic,
+				},
+			}
+		)
 
-	multiTenantOAuthConfig, err := adal.NewMultiTenantOAuthConfig(env.ActiveDirectoryEndpoint, config.TenantID, []string{config.NetworkResourceTenantID}, adal.OAuthOptions{})
-	assert.NoError(t, err)
+		token, err := GetMultiTenantServicePrincipalToken(cfg, &azure.PublicCloud, authProvider)
+		assert.NoError(t, err)
 
-	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
-	assert.NoError(t, err)
-	certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
-	assert.NoError(t, err)
-	spt, err := adal.NewMultiTenantServicePrincipalTokenFromCertificate(multiTenantOAuthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
+		assert.Equal(t, managedIdentityToken, token.PrimaryOAuthToken())
+		auxTokens := token.AuxiliaryOAuthTokens()
+		assert.Len(t, auxTokens, 1)
+		assert.Equal(t, networkToken, auxTokens[0])
+	})
 
-	assert.Equal(t, multiTenantToken, spt)
-}
-
-func TestGetMultiTenantServicePrincipalTokenNegative(t *testing.T) {
-	env := &azure.PublicCloud
-	for _, config := range CrossTenantNetworkResourceNegativeConfig {
-		_, err := GetMultiTenantServicePrincipalToken(config, env)
-		assert.Error(t, err)
-	}
+	t.Run("invalid config", func(t *testing.T) {
+		env := &azure.PublicCloud
+		for _, config := range CrossTenantNetworkResourceNegativeConfig {
+			_, err := GetMultiTenantServicePrincipalToken(config, env, nil)
+			assert.Error(t, err)
+		}
+	})
 }
 
 func TestGetNetworkResourceServicePrincipalToken(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:     "AADClientID",
-			AADClientSecret: "AADClientSecret",
-		},
-		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-	}
-	env := &azure.PublicCloud
 
-	token, err := GetNetworkResourceServicePrincipalToken(config, env)
-	assert.NoError(t, err)
+	t.Run("setup with SP with password", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:     "AADClientID",
+				AADClientSecret: "AADClientSecret",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
-	assert.NoError(t, err)
+		token, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		assert.NoError(t, err)
 
-	spt, err := adal.NewServicePrincipalToken(*oauthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
+		assert.NoError(t, err)
 
-	assert.Equal(t, token, spt)
-}
+		spt, err := adal.NewServicePrincipalToken(*oauthConfig, config.AADClientID, config.AADClientSecret, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
 
-func TestGetNetworkResourceServicePrincipalTokenFromCertificate(t *testing.T) {
-	config := &AzureAuthConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			TenantID:                "TenantID",
-			NetworkResourceTenantID: "NetworkResourceTenantID",
-		},
-		AzureAuthConfig: azclient.AzureAuthConfig{
-			AADClientID:       "AADClientID",
-			AADClientCertPath: "./testdata/testnopassword.pfx",
-		},
-		NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
-	}
-	env := &azure.PublicCloud
+		assert.Equal(t, token, spt)
+	})
 
-	token, err := GetNetworkResourceServicePrincipalToken(config, env)
-	assert.NoError(t, err)
+	t.Run("setup with SP with certificate", func(t *testing.T) {
+		config := &AzureAuthConfig{
+			ARMClientConfig: azclient.ARMClientConfig{
+				TenantID:                "TenantID",
+				NetworkResourceTenantID: "NetworkResourceTenantID",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				AADClientID:       "AADClientID",
+				AADClientCertPath: "./testdata/testnopassword.pfx",
+			},
+			NetworkResourceSubscriptionID: "NetworkResourceSubscriptionID",
+		}
+		env := &azure.PublicCloud
 
-	oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
-	assert.NoError(t, err)
+		token, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+		assert.NoError(t, err)
 
-	pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
-	assert.NoError(t, err)
-	certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
-	assert.NoError(t, err)
-	spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
-	assert.NoError(t, err)
+		oauthConfig, err := adal.NewOAuthConfigWithAPIVersion(env.ActiveDirectoryEndpoint, config.NetworkResourceTenantID, nil)
+		assert.NoError(t, err)
 
-	assert.Equal(t, token, spt)
-}
+		pfxContent, err := os.ReadFile("./testdata/testnopassword.pfx")
+		assert.NoError(t, err)
+		certificate, privateKey, err := adal.DecodePfxCertificateData(pfxContent, "")
+		assert.NoError(t, err)
+		spt, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, config.AADClientID, certificate, privateKey, env.ServiceManagementEndpoint)
+		assert.NoError(t, err)
 
-func TestGetNetworkResourceServicePrincipalTokenNegative(t *testing.T) {
-	env := &azure.PublicCloud
-	for _, config := range CrossTenantNetworkResourceNegativeConfig {
-		_, err := GetNetworkResourceServicePrincipalToken(config, env)
-		assert.Error(t, err)
-	}
+		assert.Equal(t, token, spt)
+	})
+
+	t.Run("setup with MSI and auxiliary token provider", func(t *testing.T) {
+		const (
+			managedIdentityToken = "managed-identity-token"
+			networkToken         = "network-token"
+		)
+		var (
+			cfg = &AzureAuthConfig{
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+				},
+				ARMClientConfig: azclient.ARMClientConfig{
+					TenantID:                "TenantID",
+					NetworkResourceTenantID: "NetworkResourceTenantID",
+				},
+			}
+			authProvider = &azclient.AuthProvider{
+				ManagedIdentityCredential: NewDummyTokenCredential(managedIdentityToken),
+				NetworkTokenCredential:    NewDummyTokenCredential(networkToken),
+				ClientOptions: &policy.ClientOptions{
+					Cloud: cloud.AzurePublic,
+				},
+			}
+		)
+
+		token, err := GetNetworkResourceServicePrincipalToken(cfg, &azure.PublicCloud, authProvider)
+		assert.NoError(t, err)
+		assert.Equal(t, networkToken, token.OAuthToken())
+	})
+
+	t.Run("invalid config", func(t *testing.T) {
+		env := &azure.PublicCloud
+		for _, config := range CrossTenantNetworkResourceNegativeConfig {
+			_, err := GetNetworkResourceServicePrincipalToken(config, env, nil)
+			assert.Error(t, err)
+		}
+	})
 }
 
 func TestParseAzureEnvironment(t *testing.T) {

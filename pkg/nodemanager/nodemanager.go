@@ -161,7 +161,7 @@ func NewCloudNodeController(
 		enableBetaTopologyLabels:  enableBetaTopologyLabels,
 	}
 
-	// Only reconcile the beta toplogy labels when the feature flag is enabled.
+	// Only reconcile the beta topology labels when the feature flag is enabled.
 	if cnc.enableBetaTopologyLabels {
 		cnc.labelReconcileInfo = append(cnc.labelReconcileInfo, betaToplogyLabels...)
 	}
