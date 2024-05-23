@@ -20,7 +20,8 @@ set -o pipefail
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 DEFAULT_LABEL_FILTER="!Serial && !Slow"
 LABEL_FILTER="${LABEL_FILTER:-${DEFAULT_LABEL_FILTER}}"
+FLAKE_ATTEMPTS=${FLAKE_ATTEMPTS:-2}
 
 source "${REPO_ROOT}/hack/ensure-ginkgo-v2.sh"
 
-ginkgo -flake-attempts 2 -skip "${SKIP_ARGS}" -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/ --timeout "${CCM_E2E_TIMEOUT:-210m}"
+ginkgo -flake-attempts ${FLAKE_ATTEMPTS} -skip "${SKIP_ARGS}" -label-filter "${LABEL_FILTER}" "${REPO_ROOT}"/tests/e2e/ --timeout "${CCM_E2E_TIMEOUT:-210m}"

@@ -848,6 +848,28 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				replicas                 int32 = 2
 				ipv4PIPName, ipv6PIPName string
 				ipv4PIPs, ipv6PIPs       []netip.Addr
+
+				// TODO: move to utils
+				applyIPFamilyForService = func(svc *v1.Service, ipFamily utils.IPFamily, ipv4PIPName, ipv6PIPName string) error {
+					switch ipFamily {
+					case utils.IPv4:
+						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicySingleStack)
+						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv4PIPName
+					case utils.IPv6:
+						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicySingleStack)
+						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv6PIPName
+					case utils.DualStack:
+						svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+						svc.Spec.IPFamilyPolicy = ptr.To(v1.IPFamilyPolicyPreferDualStack)
+						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]] = ipv4PIPName
+						svc.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]] = ipv6PIPName
+					default:
+						return fmt.Errorf("unsupported IPFamily: %v", ipFamily)
+					}
+					return nil
+				}
 			)
 
 			By("Creating shared BYO public IP")
@@ -890,16 +912,15 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					labels = map[string]string{
 						"app": Deployment1Name,
 					}
-					annotations = map[string]string{
-						consts.ServiceAnnotationPIPNameDualStack[false]: ipv4PIPName,
-						consts.ServiceAnnotationPIPNameDualStack[true]:  ipv6PIPName,
-					}
-					ports = []v1.ServicePort{{
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
 						Port:       app1Port,
 						TargetPort: intstr.FromInt32(app1Port),
 					}}
 				)
-				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service1Name, namespace.Name, labels, annotations, ports, func(svc *v1.Service) error {
+					return applyIPFamilyForService(svc, azureClient.IPFamily, ipv4PIPName, ipv6PIPName)
+				})
 				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
 				logger.Info("Created the first LoadBalancer service", "svc-name", Service1Name, "v4-IPs", ipv4s, "v6-IPs", ipv6s)
 				Expect(ipv4s).To(Equal(ipv4PIPs))
@@ -911,17 +932,16 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 					labels = map[string]string{
 						"app": Deployment2Name,
 					}
-					annotations = map[string]string{
-						consts.ServiceAnnotationPIPNameDualStack[false]: ipv4PIPName,
-						consts.ServiceAnnotationPIPNameDualStack[true]:  ipv6PIPName,
-					}
-					ports = []v1.ServicePort{{
+					annotations = map[string]string{}
+					ports       = []v1.ServicePort{{
 						Port:       app2Port,
 						TargetPort: intstr.FromInt32(app2Port),
 					}}
 				)
 
-				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports)
+				rv := createAndExposeDefaultServiceWithAnnotation(k8sClient, azureClient.IPFamily, Service2Name, namespace.Name, labels, annotations, ports, func(svc *v1.Service) error {
+					return applyIPFamilyForService(svc, azureClient.IPFamily, ipv4PIPName, ipv6PIPName)
+				})
 				ipv4s, ipv6s := groupIPsByFamily(mustParseIPs(derefSliceOfStringPtr(rv)))
 				logger.Info("Created the second LoadBalancer service", "svc-name", Service2Name, "v4-IPs", ipv4s, "v6-IPs", ipv6s)
 				Expect(ipv4s).To(Equal(ipv4PIPs))
@@ -1087,7 +1107,6 @@ func SecurityGroupHasAllowRuleForDestination(
 			*rule.Properties.Direction != aznetwork.SecurityRuleDirectionInbound ||
 			*rule.Properties.Protocol != protocol ||
 			ptr.Deref(rule.Properties.SourcePortRange, "") != "*" ||
-			len(rule.Properties.DestinationAddressPrefixes) < len(expectedDstAddresses) ||
 			len(rule.Properties.DestinationPortRanges) != len(dstPorts) {
 			logger.Info("skip rule", "rule-name", rule.Name, "rule", rule)
 			continue
@@ -1119,11 +1138,16 @@ func SecurityGroupHasAllowRuleForDestination(
 			}
 		}
 
-		// check destination addresses
-		for _, d := range rule.Properties.DestinationAddressPrefixes {
-			expectedDstAddresses.Delete(*d)
-			if expectedDstAddresses.Len() == 0 {
-				break
+		{
+			// check destination addresses
+			if rule.Properties.DestinationAddressPrefix != nil {
+				expectedDstAddresses.Delete(*rule.Properties.DestinationAddressPrefix)
+			}
+			for _, d := range rule.Properties.DestinationAddressPrefixes {
+				expectedDstAddresses.Delete(*d)
+				if expectedDstAddresses.Len() == 0 {
+					break
+				}
 			}
 		}
 
@@ -1164,6 +1188,9 @@ func SecurityGroupHasDenyAllRuleForDestination(nsg *aznetwork.SecurityGroup, dst
 		}
 		logger.Info("checking rule", "rule-name", rule.Name, "rule", rule)
 
+		if rule.Properties.DestinationAddressPrefix != nil {
+			expectedDstAddresses.Delete(*rule.Properties.DestinationAddressPrefix)
+		}
 		for _, d := range rule.Properties.DestinationAddressPrefixes {
 			expectedDstAddresses.Delete(*d)
 			if expectedDstAddresses.Len() == 0 {
