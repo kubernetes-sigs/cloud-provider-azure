@@ -27,6 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
 
 	v1 "k8s.io/api/core/v1"
@@ -397,6 +398,9 @@ func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) netwo
 		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
 		Name: pointer.String(bpName),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+			VirtualNetwork: &network.SubResource{
+				ID: pointer.String("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
+			},
 			Location:                     pointer.String("eastus"),
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 		},
