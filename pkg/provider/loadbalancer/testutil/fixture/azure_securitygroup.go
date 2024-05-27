@@ -172,7 +172,14 @@ func (f *AzureAllowSecurityRuleFixture) WithPriority(p int32) *AzureAllowSecurit
 }
 
 func (f *AzureAllowSecurityRuleFixture) WithDestination(prefixes ...string) *AzureAllowSecurityRuleFixture {
-	f.rule.DestinationAddressPrefixes = ptr.To(securitygroup.NormalizeSecurityRuleAddressPrefixes(prefixes))
+	if len(prefixes) == 1 {
+		f.rule.DestinationAddressPrefix = ptr.To(prefixes[0])
+		f.rule.DestinationAddressPrefixes = nil
+	} else {
+		f.rule.DestinationAddressPrefix = nil
+		f.rule.DestinationAddressPrefixes = ptr.To(securitygroup.NormalizeSecurityRuleAddressPrefixes(prefixes))
+	}
+
 	return f
 }
 
@@ -191,7 +198,13 @@ func (f *AzureDenyAllSecurityRuleFixture) WithPriority(p int32) *AzureDenyAllSec
 }
 
 func (f *AzureDenyAllSecurityRuleFixture) WithDestination(prefixes ...string) *AzureDenyAllSecurityRuleFixture {
-	f.rule.DestinationAddressPrefixes = ptr.To(securitygroup.NormalizeSecurityRuleAddressPrefixes(prefixes))
+	if len(prefixes) == 1 {
+		f.rule.DestinationAddressPrefix = ptr.To(prefixes[0])
+		f.rule.DestinationAddressPrefixes = nil
+	} else {
+		f.rule.DestinationAddressPrefix = nil
+		f.rule.DestinationAddressPrefixes = ptr.To(securitygroup.NormalizeSecurityRuleAddressPrefixes(prefixes))
+	}
 	return f
 }
 

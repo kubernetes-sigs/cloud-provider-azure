@@ -1522,14 +1522,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("bar"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolUDP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
-							Priority:                   ptr.To(int32(4004)),
+							Protocol:                 network.SecurityRuleProtocolUDP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"bar"}),
+							DestinationPortRanges:    ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
+							Priority:                 ptr.To(int32(4004)),
 						},
 					},
 				)
@@ -1837,14 +1837,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("bar"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolUDP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
-							Priority:                   ptr.To(int32(4004)),
+							Protocol:                 network.SecurityRuleProtocolUDP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"bar"}),
+							DestinationPortRanges:    ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
+							Priority:                 ptr.To(int32(4004)),
 						},
 					},
 					azureFx.
@@ -2114,14 +2114,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("bar"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolUDP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
-							Priority:                   ptr.To(int32(4004)),
+							Protocol:                 network.SecurityRuleProtocolUDP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"bar"}),
+							DestinationPortRanges:    ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
+							Priority:                 ptr.To(int32(4004)),
 						},
 					},
 
@@ -2142,14 +2142,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("quo"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolTCP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"quo"}),
-							DestinationPortRanges:      ptr.To([]string{"18000", "19000", "20000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"quo"}), // Should split the rules
-							Priority:                   ptr.To(int32(4006)),
+							Protocol:                 network.SecurityRuleProtocolTCP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"quo"}),
+							DestinationPortRanges:    ptr.To([]string{"18000", "19000", "20000"}),
+							DestinationAddressPrefix: ptr.To("quo"), // Should split the rules
+							Priority:                 ptr.To(int32(4006)),
 						},
 					},
 
@@ -2329,14 +2329,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("bar"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolUDP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
-							Priority:                   ptr.To(int32(4004)),
+							Protocol:                 network.SecurityRuleProtocolUDP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"bar"}),
+							DestinationPortRanges:    ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
+							Priority:                 ptr.To(int32(4004)),
 						},
 					},
 
@@ -2518,14 +2518,14 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					network.SecurityRule{
 						Name: ptr.To("bar"),
 						SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
-							Protocol:                   network.SecurityRuleProtocolUDP,
-							Access:                     network.SecurityRuleAccessAllow,
-							Direction:                  network.SecurityRuleDirectionInbound,
-							SourcePortRange:            ptr.To("*"),
-							SourceAddressPrefixes:      ptr.To([]string{"bar"}),
-							DestinationPortRanges:      ptr.To([]string{"5000", "6000"}),
-							DestinationAddressPrefixes: ptr.To([]string{"bar"}), // Should keep bar but clean the rest
-							Priority:                   ptr.To(int32(4004)),
+							Protocol:                 network.SecurityRuleProtocolUDP,
+							Access:                   network.SecurityRuleAccessAllow,
+							Direction:                network.SecurityRuleDirectionInbound,
+							SourcePortRange:          ptr.To("*"),
+							SourceAddressPrefixes:    ptr.To([]string{"bar"}),
+							DestinationPortRanges:    ptr.To([]string{"5000", "6000"}),
+							DestinationAddressPrefix: ptr.To("bar"), // Should keep bar but clean the rest
+							Priority:                 ptr.To(int32(4004)),
 						},
 					},
 
