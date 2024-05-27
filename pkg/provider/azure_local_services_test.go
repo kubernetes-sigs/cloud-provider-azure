@@ -397,6 +397,9 @@ func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) netwo
 		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
 		Name: pointer.String(bpName),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
+			VirtualNetwork: &network.SubResource{
+				ID: pointer.String("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
+			},
 			Location:                     pointer.String("eastus"),
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 		},
