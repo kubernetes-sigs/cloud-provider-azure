@@ -6,7 +6,7 @@
   {{$NODE_MODE := DefaultParam .NODE_MODE "allnodes"}}
   {{$NODES_PER_NAMESPACE := DefaultParam .NODES_PER_NAMESPACE 100}}
 
-# Test Variales
+# Test Variables
   {{$PODS_PER_NODE := .PODS_PER_NODE}}
   {{$DEPLOYMENT_TEMPLATE_PATH := .DEPLOYMENT_TEMPLATE_PATH }}
   {{$VOLUMES_PER_POD := .VOLUMES_PER_POD}}

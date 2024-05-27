@@ -192,12 +192,8 @@ func (helper *RuleHelper) addAllowRule(
 	}
 	{
 		// Destination
-		if rule.DestinationAddressPrefixes == nil {
-			rule.DestinationAddressPrefixes = &[]string{}
-		}
-		rule.DestinationAddressPrefixes = ptr.To(
-			NormalizeSecurityRuleAddressPrefixes(append(*rule.DestinationAddressPrefixes, dstPrefixes...)),
-		)
+		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
+		SetDestinationPrefixes(rule, addresses)
 		rule.DestinationPortRanges = ptr.To(dstPortRanges)
 	}
 
@@ -287,12 +283,8 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	{
 		// Destination
 		addresses := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, dstAddresses)
-		if rule.DestinationAddressPrefixes == nil {
-			rule.DestinationAddressPrefixes = &[]string{}
-		}
-		rule.DestinationAddressPrefixes = ptr.To(
-			NormalizeSecurityRuleAddressPrefixes(append(*rule.DestinationAddressPrefixes, addresses...)),
-		)
+		addresses = append(addresses, ListDestinationPrefixes(rule)...)
+		SetDestinationPrefixes(rule, addresses)
 		rule.DestinationPortRange = ptr.To("*")
 	}
 
@@ -312,6 +304,15 @@ func (helper *RuleHelper) RemoveDestinationFromRules(
 	logger.V(10).Info("Cleaning destination from SecurityGroup")
 
 	for _, rule := range helper.rules {
+		if rule.Priority == nil {
+			continue
+		}
+		priority := *rule.Priority
+		if priority < consts.LoadBalancerMinimumPriority || consts.LoadBalancerMaximumPriority < priority {
+			logger.V(4).Info("Skip rule with not-in-range priority", "rule-name", *rule.Name, "priority", priority)
+			continue
+		}
+
 		if rule.Protocol != protocol {
 			continue
 		}
@@ -339,8 +340,8 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 	// Clean DenyAll rule
 	if rule.Access == network.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {
 		// Update the prefixes
-		rule.DestinationAddressPrefix = nil
-		rule.DestinationAddressPrefixes = ptr.To(NormalizeSecurityRuleAddressPrefixes(expectedPrefixes))
+		SetDestinationPrefixes(rule, expectedPrefixes)
+
 		return nil
 	}
 
@@ -361,8 +362,7 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 	}
 
 	// Update the prefixes
-	rule.DestinationAddressPrefix = nil
-	rule.DestinationAddressPrefixes = ptr.To(NormalizeSecurityRuleAddressPrefixes(expectedPrefixes))
+	SetDestinationPrefixes(rule, expectedPrefixes)
 
 	if len(expectedPorts) == 0 {
 		// No additional ports are expected, no more actions are needed.
@@ -377,41 +377,6 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 	}
 	ipFamily := iputil.FamilyOfAddr(addr)
 	return helper.addAllowRule(rule.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
-}
-
-// RemoveDestinationPrefixesFromRules removes the given destination addresses from all rules.
-func (helper *RuleHelper) RemoveDestinationPrefixesFromRules(prefixes []string) {
-	helper.logger.V(10).Info("Cleaning destination address prefixes from SecurityGroup", "num-dst-prefixes", len(prefixes))
-
-	index := make(map[string]bool, len(prefixes))
-	for _, p := range prefixes {
-		index[p] = true
-	}
-
-	for _, rule := range helper.rules {
-		if rule.DestinationAddressPrefix != nil && index[*rule.DestinationAddressPrefix] {
-			rule.DestinationAddressPrefix = nil
-			continue
-		}
-		if rule.DestinationAddressPrefixes == nil {
-			continue
-		}
-
-		dstPrefixes := fnutil.RemoveIf(func(dstAddress string) bool {
-			return index[dstAddress]
-		}, *rule.DestinationAddressPrefixes)
-
-		switch len(dstPrefixes) {
-		case len(*rule.DestinationAddressPrefixes):
-			// No change.
-			continue
-		default:
-			// Update the prefixes.
-			rule.DestinationAddressPrefixes = ptr.To(
-				NormalizeSecurityRuleAddressPrefixes(dstPrefixes),
-			)
-		}
-	}
 }
 
 // SecurityGroup returns the underlying SecurityGroup object and a bool indicating whether any changes were made to the RuleHelper.
