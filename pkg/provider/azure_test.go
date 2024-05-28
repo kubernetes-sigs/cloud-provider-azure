@@ -2089,6 +2089,7 @@ func TestNewCloudFromJSON(t *testing.T) {
 // Test Backoff and Rate Limit defaults (json)
 func TestCloudDefaultConfigFromJSON(t *testing.T) {
 	config := `{
+								"tenantId": "--tenant-id--",
                 "aadClientId": "--aad-client-id--",
                 "aadClientSecret": "--aad-client-secret--"
         }`
@@ -2099,6 +2100,7 @@ func TestCloudDefaultConfigFromJSON(t *testing.T) {
 // Test Backoff and Rate Limit defaults (yaml)
 func TestCloudDefaultConfigFromYAML(t *testing.T) {
 	config := `
+tenantId: --tenant-id--
 aadClientId: --aad-client-id--
 aadClientSecret: --aad-client-secret--
 `
@@ -2294,8 +2296,14 @@ func getCloudFromConfig(t *testing.T, config string) *Cloud {
 	mockZoneClient := az.ZoneClient.(*mockzoneclient.MockInterface)
 	mockZoneClient.EXPECT().GetZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil)
 
+	// Skip AAD client cert path validation since it will read the file from the path
+	aadCertPath := c.AADClientCertPath
+	c.AADClientCertPath = ""
+
 	err = az.InitializeCloudFromConfig(context.Background(), c, false, true)
 	assert.NoError(t, err)
+
+	az.AADClientCertPath = aadCertPath
 
 	return az
 }
