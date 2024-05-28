@@ -847,7 +847,7 @@ func Test_reconcileNodeLabels(t *testing.T) {
 				kubeClient:   clientset,
 				nodeInformer: factory.Core().V1().Nodes(),
 				// Test using the beta topology labels.
-				labelReconcileInfo: betaToplogyLabels,
+				labelReconcileInfo: betaTopologyLabels,
 			}
 
 			// activate node informer
