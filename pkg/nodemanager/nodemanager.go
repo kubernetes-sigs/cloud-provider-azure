@@ -75,10 +75,10 @@ type labelReconcile struct {
 	ensureSecondaryExists bool
 }
 
-// betaToplogyLabels lists beta topology labels that are deprecated and will
+// betaTopologyLabels lists beta topology labels that are deprecated and will
 // be removed in a future release.
 // For now we reconcile them optionally onto nodes.
-var betaToplogyLabels = []labelReconcile{
+var betaTopologyLabels = []labelReconcile{
 	{
 		// Reconcile the beta and the GA zone label using the GA label as
 		// the source of truth
@@ -163,7 +163,7 @@ func NewCloudNodeController(
 
 	// Only reconcile the beta topology labels when the feature flag is enabled.
 	if cnc.enableBetaTopologyLabels {
-		cnc.labelReconcileInfo = append(cnc.labelReconcileInfo, betaToplogyLabels...)
+		cnc.labelReconcileInfo = append(cnc.labelReconcileInfo, betaTopologyLabels...)
 	}
 
 	// Use shared informer to listen to add/update of nodes. Note that any nodes
