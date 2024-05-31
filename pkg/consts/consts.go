@@ -125,6 +125,7 @@ const (
 	// Microsoft.Compute/galleries/AKSWindows gallery
 	VmssWindows2019ImageGalleryName = "windows-2019-containerd"
 	// Windows2019OSBuildVersion is the official build version of Windows Server 2019
+	// https://learn.microsoft.com/en-us/windows-server/get-started/windows-server-release-info
 	Windows2019OSBuildVersion = "17763"
 
 	// TagsDelimiter is the delimiter of tags
