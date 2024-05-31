@@ -1374,7 +1374,7 @@ func isWindows2019(vmss *compute.VirtualMachineScaleSet) bool {
 	if storageProfile.ImageReference == nil || storageProfile.ImageReference.ID == nil {
 		return false
 	}
-	// example: /subscriptions/109a5e88-712a-48ae-9078-9ca8b3c81345/resourceGroups/AKS-Windows/providers/Microsoft.Compute/galleries/AKSWindows/images/windows-2019-containerd/versions/17763.5820.240516
+	// example: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-Windows/providers/Microsoft.Compute/galleries/AKSWindows/images/windows-2019-containerd/versions/17763.5820.240516
 	imageRef := *storageProfile.ImageReference.ID
 	parts := strings.Split(imageRef, "/")
 	if len(parts) < 4 {
