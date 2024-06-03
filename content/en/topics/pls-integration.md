@@ -91,7 +91,7 @@ spec:
 ## Restrictions
 
 * PLS does not support basic Load Balancer or IP-based Load Balancer.
-* PLS connectivity is broken with Azure external Standard Load Balancer and floating ip enabled (default). To use managed private link service, users can either create an internal service by setting annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to `true` or disable floating ip by setting annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` to `true` ([more details here](..topics/loadbalancer.md)).
+* PLS connectivity is broken with Azure external Standard Load Balancer and floating ip enabled (default). To use managed private link service, users can either create an internal service by setting annotation `service.beta.kubernetes.io/azure-load-balancer-internal` to `true` or disable floating ip by setting annotation `service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip` to `true` ([more details here](../loadbalancer.md)).
 * Due to limitation of [kubernetes#95555](https://github.com/kubernetes/kubernetes/issues/95555), when the service's externalTrafficPolicy set to Local, PLS need to use a different subnet from Pod's subnet. If the same subnet is required, then the service should use Cluster externalTrafficPolicy.
 * PLS only works with IPv4 and cannot be deployed to an SLB with IPv6 frontend ipConfigurations. In dual-stack clusters, users cannot create a service with PLS if there's existing IPv6 service deployed on the same load balancer.
 * For other limitations, please check [Azure Private Link Service Doc](https://learn.microsoft.com/en-us/azure/private-link/private-link-service-overview).
