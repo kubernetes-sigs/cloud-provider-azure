@@ -60,6 +60,42 @@ const (
 	errMsgSuffix           = ", but an error occurs"
 )
 
+// helper enum for setting the OS variant
+// of the VMSS image ref.
+type osVersion int
+
+const (
+	unspecified osVersion = iota
+	windows2019
+	windows2022
+	ubuntu
+)
+
+func buildTestOSSpecificVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, os osVersion, ipv6 bool) compute.VirtualMachineScaleSet {
+	vmss := buildTestVMSSWithLB(name, namePrefix, lbBackendpoolIDs, ipv6)
+	switch os {
+	case windows2019:
+		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.StorageProfile = &compute.VirtualMachineScaleSetStorageProfile{
+			OsDisk: &compute.VirtualMachineScaleSetOSDisk{
+				OsType: compute.OperatingSystemTypesWindows,
+			},
+			ImageReference: &compute.ImageReference{
+				ID: ptr.To("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-Windows/providers/Microsoft.Compute/galleries/AKSWindows/images/windows-2019-containerd/versions/17763.5820.240516"),
+			},
+		}
+	case windows2022:
+		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.StorageProfile = &compute.VirtualMachineScaleSetStorageProfile{
+			OsDisk: &compute.VirtualMachineScaleSetOSDisk{
+				OsType: compute.OperatingSystemTypesWindows,
+			},
+			ImageReference: &compute.ImageReference{
+				ID: ptr.To("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-Windows/providers/Microsoft.Compute/galleries/AKSWindows/images/windows-2022-containerd/versions/20348.5820.240516"),
+			},
+		}
+	}
+	return vmss
+}
+
 func buildTestVMSSWithLB(name, namePrefix string, lbBackendpoolIDs []string, ipv6 bool) compute.VirtualMachineScaleSet {
 	lbBackendpoolsV4, lbBackendpoolsV6 := make([]compute.SubResource, 0), make([]compute.SubResource, 0)
 	for _, id := range lbBackendpoolIDs {
@@ -2262,6 +2298,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 		vmSetName             string
 		clusterIP             string
 		nodes                 []*v1.Node
+		os                    osVersion
 		isBasicLB             bool
 		isVMSSDeallocating    bool
 		isVMSSNilNICConfig    bool
@@ -2365,6 +2402,74 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			expectedErr:     fmt.Errorf("failed to find a primary IP configuration (IPv6=true) for the VMSS VM or VMSS \"vmss\""),
 		},
 		{
+			description: "ensureVMSSInPool should skip Windows 2019 VM for IPv6 backend pool",
+			nodes: []*v1.Node{
+				{
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			isBasicLB:       false,
+			backendPoolID:   testLBBackendpoolID1 + "-" + consts.IPVersionIPv6String,
+			clusterIP:       "fd00::e68b",
+			expectedPutVMSS: false,
+			setIPv6Config:   false,
+			expectedErr:     nil,
+			os:              windows2019,
+		},
+		{
+			description: "ensureVMSSInPool should add Windows2019 VM to IPv4 backend pool even if service is IPv6",
+			nodes: []*v1.Node{
+				{
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			isBasicLB:       false,
+			backendPoolID:   testLBBackendpoolID1,
+			clusterIP:       "fd00::e68b",
+			expectedPutVMSS: true,
+			setIPv6Config:   false,
+			expectedErr:     nil,
+			os:              windows2019,
+		},
+		{
+			description: "ensureVMSSInPool should add Windows 2022 VM to IPv6 backend pool",
+			nodes: []*v1.Node{
+				{
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			isBasicLB:       false,
+			backendPoolID:   testLBBackendpoolID1 + "-" + consts.IPVersionIPv6String,
+			clusterIP:       "fd00::e68b",
+			expectedPutVMSS: true,
+			setIPv6Config:   true,
+			expectedErr:     nil,
+			os:              windows2022,
+		},
+		{
+			description: "ensureVMSSInPool should fail if no IPv6 network config - Windows 2022",
+			nodes: []*v1.Node{
+				{
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			isBasicLB:       false,
+			backendPoolID:   testLBBackendpoolID1 + "-" + consts.IPVersionIPv6String,
+			clusterIP:       "fd00::e68b",
+			expectedPutVMSS: false,
+			setIPv6Config:   false,
+			expectedErr:     fmt.Errorf("failed to find a primary IP configuration (IPv6=true) for the VMSS VM or VMSS \"vmss\""),
+			os:              windows2022,
+		},
+		{
 			description: "ensureVMSSInPool should update the VMSS correctly for IPv6",
 			nodes: []*v1.Node{
 				{
@@ -2448,7 +2553,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 				ss.LoadBalancerSku = consts.LoadBalancerSkuStandard
 			}
 
-			expectedVMSS := buildTestVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.setIPv6Config)
+			expectedVMSS := buildTestOSSpecificVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.os, test.setIPv6Config)
 			if test.isVMSSDeallocating {
 				expectedVMSS.ProvisioningState = pointer.String(consts.ProvisionStateDeleting)
 			}
