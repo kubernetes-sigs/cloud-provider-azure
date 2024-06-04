@@ -386,9 +386,12 @@ func (helper *RuleHelper) SecurityGroup() (*network.SecurityGroup, bool, error) 
 		rules = make([]network.SecurityRule, 0, len(helper.rules))
 	)
 	for _, r := range helper.rules {
-		noDstPrefixes := ptr.Deref(r.DestinationAddressPrefix, "") == "" &&
-			len(ptr.Deref(r.DestinationAddressPrefixes, []string{})) == 0
-		if noDstPrefixes {
+		var (
+			dstAddresses = ListDestinationPrefixes(r)
+			dstASGs      = ptr.Deref(r.DestinationApplicationSecurityGroups, []network.ApplicationSecurityGroup{})
+		)
+
+		if len(dstAddresses) == 0 && len(dstASGs) == 0 {
 			// Skip the rule without destination prefixes.
 			continue
 		}
