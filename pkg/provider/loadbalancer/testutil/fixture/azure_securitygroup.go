@@ -62,16 +62,29 @@ func (f *AzureFixture) NoiseSecurityRules(nRules int) []network.SecurityRule {
 					fmt.Sprintf("130.0.50.%d", i),
 				}),
 				SourcePortRange: ptr.To("*"),
-				DestinationAddressPrefixes: ptr.To([]string{
-					fmt.Sprintf("222.111.0.%d", i), // NOTE: keep the source IP / destination IP unique to LB ips.
-					fmt.Sprintf("200.0.50.%d", i),
-				}),
 				DestinationPortRanges: ptr.To([]string{
 					fmt.Sprintf("4000%d", i),
 					fmt.Sprintf("5000%d", i),
 				}),
 			},
 		}
+
+		switch i % 3 {
+		case 0:
+			rule.DestinationAddressPrefixes = ptr.To([]string{
+				fmt.Sprintf("222.111.0.%d", i),
+				fmt.Sprintf("200.0.50.%d", i),
+			})
+		case 1:
+			rule.DestinationAddressPrefix = ptr.To(fmt.Sprintf("222.111.0.%d", i))
+		case 2:
+			rule.DestinationApplicationSecurityGroups = &[]network.ApplicationSecurityGroup{
+				{
+					ID: ptr.To(fmt.Sprintf("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/the-rg/providers/Microsoft.Network/applicationSecurityGroups/the-asg-%d", i)),
+				},
+			}
+		}
+
 		rv = append(rv, rule)
 
 		initPriority++
