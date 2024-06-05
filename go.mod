@@ -28,7 +28,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.7.0
-	golang.org/x/sys v0.20.0
+	golang.org/x/sys v0.21.0
 	golang.org/x/text v0.15.0
 	k8s.io/api v0.29.5
 	k8s.io/apimachinery v0.29.5
