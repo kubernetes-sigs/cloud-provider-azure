@@ -846,7 +846,7 @@ func Test_reconcileNodeLabels(t *testing.T) {
 			cnc := &CloudNodeController{
 				kubeClient:   clientset,
 				nodeInformer: factory.Core().V1().Nodes(),
-				// Test using the beta toplogy labels.
+				// Test using the beta topology labels.
 				labelReconcileInfo: betaToplogyLabels,
 			}
 
