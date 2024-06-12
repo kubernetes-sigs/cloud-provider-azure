@@ -24,16 +24,22 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/testutil"
 )
 
-// NoiseSecurityRules returns N non cloud-provider-specific security rules.
+// NoiseSecurityRules returns 3 non cloud-provider-specific security rules.
+// Use NNoiseSecurityRules if you need more.
+func (f *AzureFixture) NoiseSecurityRules() []network.SecurityRule {
+	return f.NNoiseSecurityRules(3)
+}
+
+// NNoiseSecurityRules returns N non cloud-provider-specific security rules.
 // It's not random, but it's good enough for testing.
-func (f *AzureFixture) NoiseSecurityRules(nRules int) []network.SecurityRule {
+func (f *AzureFixture) NNoiseSecurityRules(nRules int) []network.SecurityRule {
 	var (
 		rv           = make([]network.SecurityRule, 0, nRules)
 		protocolByID = func(id int) network.SecurityRuleProtocol {

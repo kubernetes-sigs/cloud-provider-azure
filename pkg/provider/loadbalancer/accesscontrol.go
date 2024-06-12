@@ -95,7 +95,7 @@ func NewAccessControl(svc *v1.Service, sg *network.SecurityGroup, opts ...Access
 	if err != nil && !options.SkipAnnotationValidation {
 		logger.Error(err, "Failed to parse AllowedServiceTags configuration")
 	}
-	securityRuleDestinationPortsByProtocol, err := securityRuleDestinationPortsByProtocol(svc)
+	securityRuleDestinationPortsByProtocol, err := SecurityRuleDestinationPortsByProtocol(svc)
 	if err != nil {
 		logger.Error(err, "Failed to parse service spec.Ports")
 		return nil, err
@@ -311,23 +311,11 @@ func (ac *AccessControl) SecurityGroup() (*network.SecurityGroup, bool, error) {
 	return ac.sgHelper.SecurityGroup()
 }
 
-// securityRuleDestinationPortsByProtocol returns the service ports grouped by SecurityGroup protocol.
-func securityRuleDestinationPortsByProtocol(svc *v1.Service) (map[network.SecurityRuleProtocol][]int32, error) {
-	convert := func(protocol v1.Protocol) (network.SecurityRuleProtocol, error) {
-		switch protocol {
-		case v1.ProtocolTCP:
-			return network.SecurityRuleProtocolTCP, nil
-		case v1.ProtocolUDP:
-			return network.SecurityRuleProtocolUDP, nil
-		case v1.ProtocolSCTP:
-			return network.SecurityRuleProtocolAsterisk, nil
-		}
-		return "", fmt.Errorf("unsupported protocol %s", protocol)
-	}
-
+// SecurityRuleDestinationPortsByProtocol returns the service ports grouped by SecurityGroup protocol.
+func SecurityRuleDestinationPortsByProtocol(svc *v1.Service) (map[network.SecurityRuleProtocol][]int32, error) {
 	rv := make(map[network.SecurityRuleProtocol][]int32)
 	for _, port := range svc.Spec.Ports {
-		protocol, err := convert(port.Protocol)
+		protocol, err := securitygroup.ProtocolFromKubernetes(port.Protocol)
 		if err != nil {
 			return nil, err
 		}

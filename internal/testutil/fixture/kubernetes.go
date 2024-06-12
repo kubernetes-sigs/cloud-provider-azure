@@ -101,6 +101,11 @@ func (f *KubernetesServiceFixture) WithAllowedServiceTags(parts ...string) *Kube
 	return f
 }
 
+func (f *KubernetesServiceFixture) WithDisableFloatingIP() *KubernetesServiceFixture {
+	f.svc.Annotations[consts.ServiceAnnotationDisableLoadBalancerFloatingIP] = "true"
+	return f
+}
+
 func (f *KubernetesServiceFixture) WithLoadBalancerSourceRanges(parts ...string) *KubernetesServiceFixture {
 	f.svc.Spec.LoadBalancerSourceRanges = parts
 	return f
