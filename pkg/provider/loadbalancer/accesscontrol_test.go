@@ -25,11 +25,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/testutil"
-	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/testutil/fixture"
 )
 
 func TestAccessControl_IsAllowFromInternet(t *testing.T) {
@@ -118,7 +118,7 @@ func TestAccessControl_IsAllowFromInternet(t *testing.T) {
 
 	for i := range tests {
 		tt := tests[i]
-		sg := azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules(10)).Build()
+		sg := azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules()).Build()
 		ac, err := NewAccessControl(&tt.svc, &sg)
 		assert.NoError(t, err)
 		actual := ac.IsAllowFromInternet()
@@ -130,7 +130,7 @@ func TestNewAccessControl(t *testing.T) {
 	var (
 		azureFx = fixture.NewFixture().Azure()
 		k8sFx   = fixture.NewFixture().Kubernetes()
-		sg      = azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules(10)).Build()
+		sg      = azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules()).Build()
 	)
 
 	t.Run("it should return error if using both spec.LoadBalancerSourceRanges and service annotation service.beta.kubernetes.io/azure-allowed-ip-ranges", func(t *testing.T) {
@@ -456,7 +456,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 		var (
 			k8sFx            = fixture.NewFixture().Kubernetes()
 			svc              = k8sFx.Service().Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			serviceTags      = []string{securitygroup.ServiceTagInternet}
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
@@ -513,7 +513,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 			serviceTags  = azureFx.ServiceTags(nServiceTags)
 			svc          = k8sFx.Service().WithAllowedServiceTags(serviceTags...).
 					Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -597,7 +597,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				"20.0.0.1/32",
 			}
 			svc              = k8sFx.Service().WithAllowedIPRanges(allowedIPRanges...).Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -639,7 +639,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(allowedIPRanges...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -685,7 +685,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 			svc = k8sFx.Service().
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -750,7 +750,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithAllowedIPRanges(append(allowedIPv4Ranges, allowedIPv6Ranges...)...).
 				WithAllowedServiceTags(allowedServiceTags...).
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -875,7 +875,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 				WithAllowedServiceTags(allowedServiceTags...).
 				WithDenyAllExceptLoadBalancerSourceRanges().
 				Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
@@ -1012,7 +1012,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 						WithAllowedIPRanges(append(inputIPv4Ranges, inputIPv6Ranges...)...).
 						WithDenyAllExceptLoadBalancerSourceRanges().
 						Build()
-			originalRules    = azureFx.NoiseSecurityRules(10)
+			originalRules    = azureFx.NoiseSecurityRules()
 			dstIPv4Addresses = []string{
 				"10.0.0.1",
 				"10.0.0.2",
