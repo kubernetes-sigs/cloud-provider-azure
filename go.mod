@@ -30,10 +30,10 @@ require (
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.21.0
 	golang.org/x/text v0.16.0
-	k8s.io/api v0.29.5
-	k8s.io/apimachinery v0.29.5
+	k8s.io/api v0.29.6
+	k8s.io/apimachinery v0.29.6
 	k8s.io/apiserver v0.29.5
-	k8s.io/client-go v0.29.5
+	k8s.io/client-go v0.29.6
 	k8s.io/cloud-provider v0.29.5
 	k8s.io/component-base v0.29.5
 	k8s.io/component-helpers v0.29.5
