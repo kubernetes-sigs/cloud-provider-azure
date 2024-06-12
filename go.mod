@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-kusto-go v0.11.3
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.29
-	github.com/Azure/go-autorest/autorest/adal v0.9.23
+	github.com/Azure/go-autorest/autorest/adal v0.9.24
 	github.com/Azure/go-autorest/autorest/mocks v0.4.2
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/evanphx/json-patch v5.9.0+incompatible
