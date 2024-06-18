@@ -226,19 +226,20 @@ func InferFormatFromFileName(fName string) DataFormat {
 	return properties.DataFormatDiscovery(fName)
 }
 
-// IngestionMapping provides runtime mapping of the data being imported to the fields in the table.
-// "ref" will be JSON encoded, so it can be any type that can be JSON marshalled. If you pass a string
+// IngestionMapping provides runtime mapping of the data being imported to the columns in the table.
+// "mapping" will be JSON encoded, so it can be any type that can be JSON marshalled. If you pass a string
 // or []byte, it will be interpreted as already being JSON encoded.
-// mappingKind can only be: CSV, JSON, AVRO, Parquet or ORC.
-// The mappingKind parameter will also automatically set the FileFormat option.
-func IngestionMapping(mapping interface{}, mappingKind DataFormat) FileOption {
+// The format parameter will automatically set the FileOption.Format option.
+func IngestionMapping(mapping interface{}, format DataFormat) FileOption {
 	return option{
 		run: func(p *properties.All) error {
-			if !mappingKind.IsValidMappingKind() {
+			kind := format.MappingKind()
+
+			if kind == DFUnknown {
 				return errors.ES(
 					errors.OpUnknown,
 					errors.KClientArgs,
-					"IngestionMapping() option does not support EncodingType %v", mappingKind,
+					"IngestionMapping() option does not support EncodingType %v", format,
 				).SetNoRetry()
 			}
 
@@ -261,8 +262,8 @@ func IngestionMapping(mapping interface{}, mappingKind DataFormat) FileOption {
 			}
 
 			p.Ingestion.Additional.IngestionMapping = j
-			p.Ingestion.Additional.IngestionMappingType = mappingKind
-			p.Ingestion.Additional.Format = mappingKind
+			p.Ingestion.Additional.IngestionMappingType = kind
+			p.Ingestion.Additional.Format = format
 
 			return nil
 		},
@@ -273,18 +274,18 @@ func IngestionMapping(mapping interface{}, mappingKind DataFormat) FileOption {
 }
 
 // IngestionMappingRef provides the name of a pre-created mapping for the data being imported to the fields in the table.
-// mappingKind can only be: CSV, JSON, AVRO, Parquet or ORC.
-// For more details, see: https://docs.microsoft.com/en-us/azure/kusto/management/create-ingestion-mapping-command
-// The mappingKind parameter will also automatically set the FileFormat option.
-func IngestionMappingRef(refName string, mappingKind DataFormat) FileOption {
+// For more details, see: https://docs.microsoft.com/azure/kusto/management/create-ingestion-mapping-command
+// The formatparameter will also automatically set the FileOption.Format option.
+func IngestionMappingRef(refName string, format DataFormat) FileOption {
 	return option{
 		run: func(p *properties.All) error {
-			if !mappingKind.IsValidMappingKind() {
-				return errors.ES(errors.OpUnknown, errors.KClientArgs, "IngestionMappingRef() option does not support EncodingType %v", mappingKind).SetNoRetry()
+			kind := format.MappingKind()
+			if kind == DFUnknown {
+				return errors.ES(errors.OpUnknown, errors.KClientArgs, "IngestionMappingRef() option does not support EncodingType %v", format).SetNoRetry()
 			}
 			p.Ingestion.Additional.IngestionMappingRef = refName
-			p.Ingestion.Additional.IngestionMappingType = mappingKind
-			p.Ingestion.Additional.Format = mappingKind
+			p.Ingestion.Additional.IngestionMappingType = kind
+			p.Ingestion.Additional.Format = format
 			return nil
 		},
 		clientScopes: QueuedClient | StreamingClient | ManagedClient,
