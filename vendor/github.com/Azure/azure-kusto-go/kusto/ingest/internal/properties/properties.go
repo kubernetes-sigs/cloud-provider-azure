@@ -69,32 +69,32 @@ const (
 )
 
 type dfDescriptor struct {
-	camelName        string
-	jsonName         string
-	detectableExt    string
-	validMappingKind bool
-	shouldCompress   bool
+	camelName      string
+	jsonName       string
+	detectableExt  string
+	mappingKind    DataFormat
+	shouldCompress bool
 }
 
 var dfDescriptions = []dfDescriptor{
-	{"", "", "", false, true},
-	{"Avro", "avro", ".avro", true, false},
-	{"ApacheAvro", "avro", "", false, false},
-	{"Csv", "csv", ".csv", true, true},
-	{"Json", "json", ".json", true, true},
-	{"MultiJson", "multijson", "", false, true},
-	{"Orc", "orc", ".orc", true, false},
-	{"Parquet", "parquet", ".parquet", true, false},
-	{"Psv", "psv", ".psv", false, true},
-	{"Raw", "raw", ".raw", false, true},
-	{"Scsv", "scsv", ".scsv", false, true},
-	{"Sohsv", "sohsv", ".sohsv", false, true},
-	{"SStream", "sstream", ".ss", false, false},
-	{"Tsv", "tsv", ".tsv", false, true},
-	{"Tsve", "tsve", ".tsve", false, true},
-	{"Txt", "txt", ".txt", false, true},
-	{"W3cLogFile", "w3clogfile", ".w3clogfile", false, true},
-	{"SingleJson", "singlejson", "", false, true},
+	{"", "", "", DFUnknown, true},
+	{"Avro", "avro", ".avro", AVRO, false},
+	{"ApacheAvro", "avro", "", AVRO, false},
+	{"Csv", "csv", ".csv", CSV, true},
+	{"Json", "json", ".json", JSON, true},
+	{"MultiJson", "multijson", "", JSON, true},
+	{"Orc", "orc", ".orc", ORC, false},
+	{"Parquet", "parquet", ".parquet", Parquet, false},
+	{"Psv", "psv", ".psv", CSV, true},
+	{"Raw", "raw", ".raw", CSV, true},
+	{"Scsv", "scsv", ".scsv", CSV, true},
+	{"Sohsv", "sohsv", ".sohsv", CSV, true},
+	{"SStream", "sstream", ".ss", DFUnknown, false},
+	{"Tsv", "tsv", ".tsv", CSV, true},
+	{"Tsve", "tsve", ".tsve", CSV, true},
+	{"Txt", "txt", ".txt", CSV, true},
+	{"W3cLogFile", "w3clogfile", ".w3clogfile", W3CLogFile, true},
+	{"SingleJson", "singlejson", "", JSON, true},
 }
 
 // IngestionReportLevel defines which ingestion statuses are reported by the DM.
@@ -161,13 +161,13 @@ func (d DataFormat) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("%q", d.String())), nil
 }
 
-// IsValidMappingKind returns true if a dataformat can be used as a MappingKind.
-func (d DataFormat) IsValidMappingKind() bool {
+// MappingKind returns the mapping kind associated with this DataFormat```
+func (d DataFormat) MappingKind() DataFormat {
 	if int(d) < len(dfDescriptions) {
-		return dfDescriptions[d].validMappingKind
+		return dfDescriptions[d].mappingKind
 	}
 
-	return false
+	return DFUnknown
 }
 
 func (d DataFormat) ShouldCompress() bool {
@@ -273,6 +273,10 @@ type Ingestion struct {
 	Additional Additional `json:"AdditionalProperties"`
 	// TableEntryRef points to the staus table entry used to report the status of this ingestion.
 	TableEntryRef StatusTableDescription `json:"IngestionStatusInTable,omitempty"`
+	// ApplicationForTracing is the application name that is used for tracing.
+	ApplicationForTracing string `json:",omitempty"`
+	// ClientVersionForTracing is the client version that is used for tracing.
+	ClientVersionForTracing string `json:",omitempty"`
 }
 
 // Additional is additional properites.
