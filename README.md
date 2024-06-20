@@ -22,7 +22,7 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 
 ### Version matrix
 
-(Minor release versions match Kubernetes minor release versions since v1.23.0.)
+(Minor release versions match Kubernetes minor release versions.)
 
 | Kubernetes version | cloud-provider version | cloud-provider branch |
 |--------------------|------------------------|-----------------------|
@@ -32,27 +32,16 @@ The latest release of azure-cloud-controller-manager and azure-cloud-node-manage
 | v1.29.x            | v1.29.z                | release-1.29          |
 | v1.28.x            | v1.28.z                | release-1.28          |
 | v1.27.x            | v1.27.z                | release-1.27          |
-| v1.26.x            | v1.26.z                | release-1.26          |
-| v1.25.x            | v1.25.z                | release-1.25          |
-| v1.24.x            | v1.24.z                | release-1.24          |
-| v1.23.x            | v1.23.z                | release-1.23          |
-| v1.22.x            | v1.1.z                 | release-1.1           |
 
 ### AKS version matrix
 
-Below table shows the cloud-controller-manager and cloud-node-manager versions supported in Azure Kubernetes Service(AKS).
+The table below shows the cloud-controller-manager and cloud-node-manager versions supported in Azure Kubernetes Service (AKS).
 
 | AKS version                 | cloud-controller-manager version | cloud-node-manager version |
 |-----------------------------|----------------------------------|----------------------------|
 | v1.29.x                     | v1.29.0                          | v1.29.0                    |
 | v1.28.x                     | v1.28.5                          | v1.28.5                    |
 | v1.27.x                     | v1.27.13                         | v1.27.13                   |
-| v1.26.x                     | v1.26.19                         | v1.26.19                   |
-| v1.25.x                     | v1.25.24                         | v1.25.24                   |
-| v1.24.x                     | v1.24.21                         | v1.24.20                   |
-| v1.23.x                     | v1.23.30                         | v1.23.24                   |
-| v1.22.x                     | v1.1.26                          | v1.1.14                    |
-| v1.21.x                     | v1.0.23                          | v1.0.18                    |
 
 ## Build
 
