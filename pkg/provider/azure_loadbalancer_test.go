@@ -788,7 +788,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 		mockLBsClient.EXPECT().List(gomock.Any(), az.Config.ResourceGroup).Return(expectedLBs, nil).MaxTimes(2)
 		az.LoadBalancerClient = mockLBsClient
 		assert.Nil(t, err, "TestCase[%d]: %s", i, c.desc)
-		result, rerr := az.LoadBalancerClient.List(context.Background(), az.Config.ResourceGroup)
+		result, rerr := az.LoadBalancerClient.List(context.TODO(), az.Config.ResourceGroup)
 		assert.Nil(t, rerr, "TestCase[%d]: %s", i, c.desc)
 		assert.Equal(t, 0, len(result), "TestCase[%d]: %s", i, c.desc)
 	}
@@ -1798,7 +1798,7 @@ func TestGetServiceLoadBalancerMultiSLB(t *testing.T) {
 				tc.service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
 			}
 
-			lb, lbs, _, _, _, err := cloud.getServiceLoadBalancer(&tc.service, testClusterName,
+			lb, lbs, _, _, _, err := cloud.getServiceLoadBalancer(context.TODO(), &tc.service, testClusterName,
 				[]*v1.Node{}, true, &tc.existingLBs)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedLB, lb)
@@ -1943,7 +1943,7 @@ func TestGetServiceLoadBalancerCommon(t *testing.T) {
 			}
 			az.LoadBalancerSku = test.sku
 			service := test.service
-			lb, _, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+			lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 				clusterResources.nodes, test.wantLB, &[]network.LoadBalancer{})
 			assert.Equal(t, test.expectedLB, lb)
 			assert.Equal(t, test.expectedStatus, status)
@@ -1976,7 +1976,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, _, status, _, exists, err := az.getServiceLoadBalancer(&service, testClusterName,
+	lb, _, status, _, exists, err := az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, false, &[]network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a default LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for default LB.")
@@ -2001,7 +2001,7 @@ func TestGetServiceLoadBalancerWithExtendedLocation(t *testing.T) {
 	mockLBsClient.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 	az.LoadBalancerClient = mockLBsClient
 
-	lb, _, status, _, exists, err = az.getServiceLoadBalancer(&service, testClusterName,
+	lb, _, status, _, exists, err = az.getServiceLoadBalancer(context.TODO(), &service, testClusterName,
 		clusterResources.nodes, true, &[]network.LoadBalancer{})
 	assert.Equal(t, expectedLB, lb, "GetServiceLoadBalancer shall return a new LB with expected location.")
 	assert.Nil(t, status, "GetServiceLoadBalancer: Status should be nil for new LB.")
@@ -3904,7 +3904,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			}).AnyTimes()
 			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-			lb, rerr := az.reconcileLoadBalancer("testCluster", &service, clusterResources.nodes, test.wantLb)
+			lb, rerr := az.reconcileLoadBalancer(context.TODO(), "testCluster", &service, clusterResources.nodes, test.wantLb)
 			assert.Equal(t, test.expectedError, rerr)
 
 			if test.expectedError == nil {
@@ -5387,7 +5387,7 @@ func TestShouldUpdateLoadBalancer(t *testing.T) {
 			mockVMSet.EXPECT().GetPrimaryVMSetName().Return(az.Config.PrimaryAvailabilitySetName).MaxTimes(3)
 			az.VMSet = mockVMSet
 
-			shouldUpdateLoadBalancer, err := az.shouldUpdateLoadBalancer(testClusterName, &service, existingNodes)
+			shouldUpdateLoadBalancer, err := az.shouldUpdateLoadBalancer(context.TODO(), testClusterName, &service, existingNodes)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedOutput, shouldUpdateLoadBalancer)
 		})
@@ -6073,7 +6073,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 	t.Run("cleanOrphanedLoadBalancer should retry deleting lb when meeting LoadBalancerInUseByVirtualMachineScaleSet", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		vmss, err := newScaleSet(context.Background(), cloud)
+		vmss, err := newScaleSet(context.TODO(), cloud)
 		assert.NoError(t, err)
 		cloud.VMSet = vmss
 		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard
@@ -6098,7 +6098,7 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 	t.Run("cleanupOrphanedLoadBalancer should not call delete api if the lb does not exist", func(t *testing.T) {
 		cloud := GetTestCloud(ctrl)
-		vmss, err := newScaleSet(context.Background(), cloud)
+		vmss, err := newScaleSet(context.TODO(), cloud)
 		assert.NoError(t, err)
 		cloud.VMSet = vmss
 		cloud.LoadBalancerSku = consts.LoadBalancerSkuStandard

@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"net/netip"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2"
-
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 )
@@ -60,34 +59,34 @@ func (az *Cloud) listSharedIPPortMapping(
 	ingressIPs []netip.Addr,
 ) (map[network.SecurityRuleProtocol][]int32, error) {
 	var (
-		logger = klog.FromContext(ctx).WithName("listSharedIPPortMapping")
+		logger = log.FromContextOrBackground(ctx).WithName("listSharedIPPortMapping")
 		rv     = make(map[network.SecurityRuleProtocol][]int32)
 	)
 
 	var services []*v1.Service
 	{
 		var err error
-		logger.Info("Listing all services")
+		logger.V(5).Info("Listing all services")
 		services, err = az.serviceLister.List(labels.Everything())
 		if err != nil {
 			logger.Error(err, "Failed to list all services")
 			return nil, fmt.Errorf("list all services: %w", err)
 		}
-		logger.Info("Listed all services", "num-all-services", len(services))
+		logger.V(5).Info("Listed all services", "num-all-services", len(services))
 
 		// Filter services by ingress IPs or backend node pool IPs (when disable floating IP)
 		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
-			logger.Info("Filter service by disableFloatingIP")
+			logger.V(5).Info("Filter service by disableFloatingIP")
 			services = filterServicesByDisableFloatingIP(services)
 		} else {
-			logger.Info("Filter service by external IPs")
+			logger.V(5).Info("Filter service by external IPs")
 			services = filterServicesByIngressIPs(services, ingressIPs)
 		}
 	}
-	logger.Info("Filtered services", "num-filtered-services", len(services))
+	logger.V(5).Info("Filtered services", "num-filtered-services", len(services))
 
 	for _, s := range services {
-		logger.V(4).Info("iterating service", "service", s.Name, "namespace", s.Namespace)
+		logger.V(5).Info("Iterating service", "service", s.Name, "namespace", s.Namespace)
 		if svc.Namespace == s.Namespace && svc.Name == s.Name {
 			// skip the service itself
 			continue
@@ -103,7 +102,7 @@ func (az *Cloud) listSharedIPPortMapping(
 		}
 	}
 
-	logger.V(4).Info("retain port mapping", "port-mapping", rv)
+	logger.V(5).Info("Retain port mapping", "port-mapping", rv)
 
 	return rv, nil
 }
