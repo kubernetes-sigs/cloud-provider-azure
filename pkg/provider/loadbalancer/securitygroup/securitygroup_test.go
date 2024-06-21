@@ -27,6 +27,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	. "sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup" //nolint:revive
@@ -34,7 +35,7 @@ import (
 
 func ExpectNewSecurityGroupHelper(t *testing.T, sg *network.SecurityGroup) *RuleHelper {
 	t.Helper()
-	helper, err := NewSecurityGroupHelper(sg)
+	helper, err := NewSecurityGroupHelper(log.Noop(), sg)
 	if err != nil {
 		assert.NoError(t, err)
 	}
@@ -43,28 +44,28 @@ func ExpectNewSecurityGroupHelper(t *testing.T, sg *network.SecurityGroup) *Rule
 
 func TestNewSecurityGroupHelper(t *testing.T) {
 	{
-		_, err := NewSecurityGroupHelper(nil)
+		_, err := NewSecurityGroupHelper(log.Noop(), nil)
 		assert.ErrorIs(t, err, ErrInvalidSecurityGroup)
 	}
 	{
-		_, err := NewSecurityGroupHelper(&network.SecurityGroup{})
+		_, err := NewSecurityGroupHelper(log.Noop(), &network.SecurityGroup{})
 		assert.ErrorIs(t, err, ErrInvalidSecurityGroup)
 	}
 	{
-		_, err := NewSecurityGroupHelper(&network.SecurityGroup{
+		_, err := NewSecurityGroupHelper(log.Noop(), &network.SecurityGroup{
 			Name: ptr.To("nsg"),
 		})
 		assert.ErrorIs(t, err, ErrInvalidSecurityGroup)
 	}
 	{
-		_, err := NewSecurityGroupHelper(&network.SecurityGroup{
+		_, err := NewSecurityGroupHelper(log.Noop(), &network.SecurityGroup{
 			Name:                          ptr.To("nsg"),
 			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{},
 		})
 		assert.ErrorIs(t, err, ErrInvalidSecurityGroup)
 	}
 	{
-		helper, err := NewSecurityGroupHelper(&network.SecurityGroup{
+		helper, err := NewSecurityGroupHelper(log.Noop(), &network.SecurityGroup{
 			Name: ptr.To("nsg"),
 			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
 				SecurityRules: &[]network.SecurityRule{},

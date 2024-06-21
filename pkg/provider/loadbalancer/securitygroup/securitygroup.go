@@ -25,7 +25,7 @@ import (
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
-	"k8s.io/klog/v2"
+	"github.com/go-logr/logr"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -59,7 +59,7 @@ var (
 
 // RuleHelper manages security rules within a security group.
 type RuleHelper struct {
-	logger   klog.Logger
+	logger   logr.Logger
 	sg       *network.SecurityGroup
 	snapshot []byte
 
@@ -69,7 +69,7 @@ type RuleHelper struct {
 	priorities map[int32]string
 }
 
-func NewSecurityGroupHelper(sg *network.SecurityGroup) (*RuleHelper, error) {
+func NewSecurityGroupHelper(logger logr.Logger, sg *network.SecurityGroup) (*RuleHelper, error) {
 	if sg == nil ||
 		sg.Name == nil ||
 		sg.SecurityGroupPropertiesFormat == nil ||
@@ -79,7 +79,6 @@ func NewSecurityGroupHelper(sg *network.SecurityGroup) (*RuleHelper, error) {
 		return nil, ErrInvalidSecurityGroup
 	}
 	var (
-		logger     = klog.Background().WithName("RuleHelper").WithValues("security-group-name", ptr.To(sg.Name))
 		rules      = make(map[string]*network.SecurityRule, len(*sg.SecurityGroupPropertiesFormat.SecurityRules))
 		priorities = make(map[int32]string, len(*sg.SecurityGroupPropertiesFormat.SecurityRules))
 	)
@@ -92,7 +91,7 @@ func NewSecurityGroupHelper(sg *network.SecurityGroup) (*RuleHelper, error) {
 	snapshot := makeSecurityGroupSnapshot(sg)
 
 	return &RuleHelper{
-		logger: logger,
+		logger: logger.WithName("RuleHelper"),
 		sg:     sg,
 
 		rules:      rules,
