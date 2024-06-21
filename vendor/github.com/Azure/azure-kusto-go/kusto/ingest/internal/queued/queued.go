@@ -66,6 +66,9 @@ type Ingestion struct {
 
 	bufferSize int
 	maxBuffers int
+
+	applicationForTracing   string
+	clientVersionForTracing string
 }
 
 // Option is an optional argument to New().
@@ -80,7 +83,7 @@ func WithStaticBuffer(bufferSize int, maxBuffers int) Option {
 }
 
 // New is the constructor for Ingestion.
-func New(db, table string, mgr *resources.Manager, http *http.Client, options ...Option) (*Ingestion, error) {
+func New(db, table string, mgr *resources.Manager, http *http.Client, applicationForTracing string, clientVersionForTracing string, options ...Option) (*Ingestion, error) {
 	i := &Ingestion{
 		db:    db,
 		table: table,
@@ -94,6 +97,8 @@ func New(db, table string, mgr *resources.Manager, http *http.Client, options ..
 			options *azblob.UploadFileOptions) (azblob.UploadFileResponse, error) {
 			return client.UploadFile(ctx, container, blob, file, options)
 		},
+		applicationForTracing:   applicationForTracing,
+		clientVersionForTracing: clientVersionForTracing,
 	}
 
 	for _, opt := range options {
@@ -246,6 +251,8 @@ func (i *Ingestion) Blob(ctx context.Context, from string, fileSize int64, props
 	}
 
 	props.Ingestion.RetainBlobOnSuccess = !props.Source.DeleteLocalSource
+	props.Ingestion.ApplicationForTracing = i.applicationForTracing
+	props.Ingestion.ClientVersionForTracing = i.clientVersionForTracing
 
 	err := CompleteFormatFromFileName(&props, from)
 	if err != nil {
