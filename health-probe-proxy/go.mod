@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/pires/go-proxyproto v0.7.0
 	k8s.io/component-base v0.30.2
-	k8s.io/klog/v2 v2.130.0
+	k8s.io/klog/v2 v2.130.1
 )
 
 require (
