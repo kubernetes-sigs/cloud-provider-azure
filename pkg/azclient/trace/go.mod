@@ -8,7 +8,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.27.0
 	go.opentelemetry.io/otel/trace v1.27.0
 	k8s.io/klog/v2 v2.130.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.26
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.28
 )
 
 require (
