@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-kusto-go v0.15.3
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0
@@ -43,7 +43,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kubelet v0.30.2
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.27
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.28
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.16
 	sigs.k8s.io/yaml v1.4.0
 )
