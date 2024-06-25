@@ -223,7 +223,7 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 			klog.Background().WithName("multi-tenant-resource-token-provider"),
 			authProvider.ManagedIdentityCredential,
 			[]azcore.TokenCredential{authProvider.NetworkTokenCredential},
-			authProvider.TokenScope(),
+			authProvider.DefaultTokenScope(),
 		)
 	}
 
@@ -284,7 +284,7 @@ func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure
 		return armauth.NewTokenProvider(
 			klog.Background().WithName("network-resource-token-provider"),
 			authProvider.NetworkTokenCredential,
-			authProvider.TokenScope(),
+			authProvider.DefaultTokenScope(),
 		)
 	}
 
