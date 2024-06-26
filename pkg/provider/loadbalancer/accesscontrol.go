@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -39,7 +39,7 @@ var (
 )
 
 type AccessControl struct {
-	logger   klog.Logger
+	logger   logr.Logger
 	svc      *v1.Service
 	sgHelper *securitygroup.RuleHelper
 
@@ -67,18 +67,15 @@ func SkipAnnotationValidation() AccessControlOption {
 	}
 }
 
-func NewAccessControl(svc *v1.Service, sg *network.SecurityGroup, opts ...AccessControlOption) (*AccessControl, error) {
-	logger := klog.Background().
-		WithName("LoadBalancer.AccessControl").
-		WithValues("service-name", svc.Name).
-		WithValues("security-group-name", ptr.To(sg.Name))
+func NewAccessControl(logger logr.Logger, svc *v1.Service, sg *network.SecurityGroup, opts ...AccessControlOption) (*AccessControl, error) {
+	logger = logger.WithName("AccessControl").WithValues("security-group", ptr.To(sg.Name))
 
 	options := defaultAccessControlOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
 
-	sgHelper, err := securitygroup.NewSecurityGroupHelper(sg)
+	sgHelper, err := securitygroup.NewSecurityGroupHelper(logger, sg)
 	if err != nil {
 		logger.Error(err, "Failed to initialize RuleHelper")
 		return nil, err
@@ -101,7 +98,7 @@ func NewAccessControl(svc *v1.Service, sg *network.SecurityGroup, opts ...Access
 		return nil, err
 	}
 	if len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {
-		logger.Error(err, "Forbidden configuration")
+		logger.Error(ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges, "Forbidden configuration")
 		return nil, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges
 	}
 
