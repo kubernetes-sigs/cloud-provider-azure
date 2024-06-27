@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/securitygroupclient/mocksecuritygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
@@ -53,6 +54,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		fx      = fixture.NewFixture()
 		k8sFx   = fx.Kubernetes()
 		azureFx = fx.Azure()
+		ctx     = log.NewContext(context.Background(), log.Noop())
 	)
 
 	t.Run("internal Load Balancer", func(t *testing.T) {
@@ -86,7 +88,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			sg, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			sg, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 			testutil.ExpectEqualInJSON(t, azureFx.SecurityGroup().Build(), sg)
 		})
@@ -173,7 +175,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -259,7 +261,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -334,7 +336,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -416,7 +418,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -491,7 +493,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -571,7 +573,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -669,7 +671,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -749,7 +751,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -842,13 +844,12 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
 
 	t.Run("skip - when rules are up-to-date", func(t *testing.T) {
-
 		t.Run("with `service.beta.kubernetes.io/azure-additional-public-ips` specified", func(t *testing.T) {
 			var (
 				ctrl                    = gomock.NewController(t)
@@ -910,7 +911,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -972,7 +973,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1038,7 +1039,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1122,7 +1123,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1189,7 +1190,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1268,7 +1269,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 
@@ -1365,7 +1366,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.NoError(t, err)
 		})
 	})
@@ -1549,7 +1550,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -1680,7 +1681,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -1881,7 +1882,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 		assert.NoError(t, err)
 	})
 
@@ -2163,7 +2164,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					).
 					Times(1)
 
-				_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+				_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 				assert.NoError(t, err)
 			})
 		}
@@ -2447,7 +2448,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 					).
 					Times(1)
 
-				_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+				_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 				assert.NoError(t, err)
 			})
 		}
@@ -2636,7 +2637,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2820,7 +2821,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2943,7 +2944,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			Return(loadBalancer, &retry.Error{HTTPStatusCode: http.StatusNotFound}).
 			Times(1)
 
-		_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, nil, false) // deleting
+		_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, nil, false) // deleting
 		assert.NoError(t, err)
 	})
 
@@ -2972,7 +2973,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(securityGroup, nil).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, loadbalancer.ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges)
 		})
@@ -2997,7 +2998,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(securityGroup, expectedErr).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -3027,7 +3028,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				Return(loadBalancer, expectedErr).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -3070,7 +3071,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, expectedErr.RawError)
 		})
@@ -3105,7 +3106,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				).
 				Times(1)
 
-			_, err := az.reconcileSecurityGroup(ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
+			_, err := az.reconcileSecurityGroup(ctx, ClusterName, &svc, *loadBalancer.Name, azureFx.LoadBalancer().Addresses(), EnsureLB)
 			assert.Error(t, err)
 		})
 	})

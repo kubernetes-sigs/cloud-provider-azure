@@ -27,6 +27,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
@@ -119,7 +120,7 @@ func TestAccessControl_IsAllowFromInternet(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		sg := azureFx.SecurityGroup().WithRules(azureFx.NoiseSecurityRules()).Build()
-		ac, err := NewAccessControl(&tt.svc, &sg)
+		ac, err := NewAccessControl(log.Noop(), &tt.svc, &sg)
 		assert.NoError(t, err)
 		actual := ac.IsAllowFromInternet()
 		assert.Equal(t, tt.expectedOutput, actual, "[%s] expecting IsAllowFromInternet returns %v", tt.name, tt.expectedOutput)
@@ -139,7 +140,7 @@ func TestNewAccessControl(t *testing.T) {
 			WithAllowedIPRanges("10.0.0.1/32").
 			Build()
 
-		_, err := NewAccessControl(&svc, &sg)
+		_, err := NewAccessControl(log.Noop(), &svc, &sg)
 		assert.ErrorIs(t, err, ErrSetBothLoadBalancerSourceRangesAndAllowedIPRanges)
 	})
 }
@@ -192,7 +193,7 @@ func TestAccessControl_DenyAllExceptSourceRanges(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		sg := azureFx.SecurityGroup().Build()
-		ac, err := NewAccessControl(&tt.svc, &sg)
+		ac, err := NewAccessControl(log.Noop(), &tt.svc, &sg)
 		assert.NoError(t, err)
 		actual := ac.DenyAllExceptSourceRanges()
 		assert.Equal(t, tt.expectedOutput, actual, "[%s] expecting DenyAllExceptSourceRanges returns %v", tt.name, tt.expectedOutput)
@@ -395,7 +396,7 @@ func TestAccessControl_AllowedRanges(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		sg := azureFx.SecurityGroup().Build()
-		ac, err := NewAccessControl(&tt.svc, &sg)
+		ac, err := NewAccessControl(log.Noop(), &tt.svc, &sg)
 		assert.NoError(t, err)
 		var (
 			ipv4         = ac.AllowedIPv4Ranges()
@@ -436,7 +437,7 @@ func TestAccessControl_PatchSecurityGroup(t *testing.T) {
 
 		var (
 			sg      = azureFx.SecurityGroup().WithRules(originalRules).Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
@@ -1086,7 +1087,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		var (
 			sg      = azureFx.SecurityGroup().Build()
 			svc     = fx.Kubernetes().Service().Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
@@ -1133,7 +1134,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				netip.MustParseAddr("192.168.0.2"),
 			}
 			svc     = fx.Kubernetes().Service().Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
@@ -1193,7 +1194,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				netip.MustParseAddr("192.168.0.2"),
 			}
 			svc     = fx.Kubernetes().Service().Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
@@ -1308,7 +1309,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				netip.MustParseAddr("192.168.0.2"),
 			}
 			svc     = fx.Kubernetes().Service().Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
@@ -1397,7 +1398,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 				netip.MustParseAddr("192.168.0.2"),
 			}
 			svc     = fx.Kubernetes().Service().Build()
-			ac, err = NewAccessControl(&svc, &sg)
+			ac, err = NewAccessControl(log.Noop(), &svc, &sg)
 		)
 		assert.NoError(t, err)
 
