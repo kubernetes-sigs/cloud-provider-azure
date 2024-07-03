@@ -13,6 +13,7 @@ on:
       - 'go.*'
       - '!vendor/**'
       - 'health-probe-proxy/**'
+      - 'Dockerfile'
   pull_request:
     branches: [ master, 'release-**' ]
     paths:
@@ -24,6 +25,7 @@ on:
       - 'go.*'
       - '!vendor/**'
       - 'health-probe-proxy/**'
+      - 'Dockerfile'
   schedule:
     - cron: '35 12 * * 4'
 permissions:
