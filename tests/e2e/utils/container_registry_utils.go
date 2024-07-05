@@ -104,11 +104,16 @@ func DockerLogout() (err error) {
 	return cmd.Run()
 }
 
-// PushImageToACR pull an image from Docker Hub and push
+// PushImageToACR pull an image from MCR and push
 // it to the given azure container registry
 func PushImageToACR(registryName, image string) (tag string, err error) {
-	Logf("Pulling %s from Docker Hub.", image)
-	cmd := exec.Command("docker", "pull", image)
+	Logf("Pulling %s from MCR.", image)
+	imageNameMapToMCR := map[string]string{
+		"nginx": "mcr.microsoft.com/mirror/docker/library/nginx:1.25",
+	}
+	mcrImage := imageNameMapToMCR[image]
+
+	cmd := exec.Command("docker", "pull", mcrImage)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed pulling %s with error: %w", image, err)
 	}
@@ -116,7 +121,7 @@ func PushImageToACR(registryName, image string) (tag string, err error) {
 	Logf("Tagging image.")
 	tagSuffix := string(uuid.NewUUID())[0:4]
 	registry := fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix)
-	cmd = exec.Command("docker", "tag", image, registry)
+	cmd = exec.Command("docker", "tag", mcrImage, registry)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed tagging nginx image with error: %w", err)
 	}
