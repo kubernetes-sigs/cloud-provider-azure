@@ -107,26 +107,27 @@ func AZACRLogin() (err error) {
 	return nil
 }
 
-// PushImageToACR pull an image from Docker Hub and push
+// PushImageToACR pull an image from MCR and push
 // it to the given azure container registry
 func (tc *AzureTestClient) PushImageToACR(registryName, image string) (string, error) {
 	acrClient := tc.createACRClient()
 	rgName := tc.GetResourceGroup()
 
+	tag := "1.25"
 	err := acrClient.ImportImage(context.Background(), rgName, registryName, acr.ImportImageParameters{
 		Source: &acr.ImportSource{
-			RegistryURI: pointer.String("docker.io"),
-			SourceImage: pointer.String("library/" + image + ":latest"),
+			RegistryURI: pointer.String("mcr.microsoft.com"),
+			SourceImage: pointer.String("mirror/docker/library/" + image + ":" + tag),
 		},
 		TargetTags: []*string{
-			to.Ptr(image + ":latest"),
+			to.Ptr(image + ":" + tag),
 		},
 		Mode: to.Ptr(acr.ImportModeNoForce),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to import image %s from docker hub to acr %s with error: %w", image, registryName, err)
+		return "", fmt.Errorf("failed to import image %s from MCR to acr %s with error: %w", image, registryName, err)
 	}
-	return "latest", nil
+	return tag, nil
 }
 
 // AZACRCacheCreate enables acr cache for a image.
