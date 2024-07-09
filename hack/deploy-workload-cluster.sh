@@ -27,9 +27,9 @@ GENERATED_KUBECONFIG_DIRECTORY="${REPO_ROOT}/.kubeconfig"
 : "${AZURE_SUBSCRIPTION_ID:?empty or not defined.}"
 : "${AZURE_TENANT_ID:?empty or not defined.}"
 : "${AZURE_CLIENT_ID:?empty or not defined.}"
-: "${AZURE_CLIENT_SECRET:?empty or not defined.}"
 : "${CLUSTER_NAME:?empty or not defined.}"
 : "${AZURE_RESOURCE_GROUP:?empty or not defined}"
+: "${MANAGEMENT_CLUSTER_NAME:?empty or not defined}"
 
 export AZURE_CLUSTER_IDENTITY_SECRET_NAME="${AZURE_CLUSTER_IDENTITY_SECRET_NAME:-cluster-identity-secret}"
 export CLUSTER_IDENTITY_NAME="${CLUSTER_IDENTITY_NAME:-cluster-identity}"
@@ -48,7 +48,6 @@ export AZURE_CLOUD_NODE_MANAGER_IMG_TAG="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG:-v1.
 export KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.28.0}"
 export EXP_MACHINE_POOL=true
 export EXP_CLUSTER_RESOURCE_SET=true
-export SKIP_CREATING_MGMT_CLUSTER="${SKIP_CREATING_MGMT_CLUSTER:-false}"
 export KIND="${KIND:-true}"
 
 export AZURE_LOADBALANCER_SKU="${AZURE_LOADBALANCER_SKU:-Standard}"
@@ -61,46 +60,15 @@ if [ "${AZURE_SSH_PUBLIC_KEY}" ]; then
 fi
 
 export MGMT_CLUSTER_CONTEXT="${MGMT_CLUSTER_CONTEXT:-kind-${MANAGEMENT_CLUSTER_NAME}}"
-if [ "${SKIP_CREATING_MGMT_CLUSTER}" = "true" ] || [ "${KIND}" = "false" ]; then
+if [ "${KIND}" = "false" ]; then
   MGMT_CLUSTER_CONTEXT="${MANAGEMENT_CLUSTER_NAME}"
 fi
 
 
-source "${REPO_ROOT}/hack/ensure-kind.sh"
+if [ "${KIND}" = "true" ]; then
+  source "${REPO_ROOT}/hack/ensure-kind.sh"
+fi
 source "${REPO_ROOT}/hack/ensure-clusterctl.sh"
-
-function init_and_wait_capz() {
-  echo "Initializing CAPZ"
-  kubectl create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
-  "${CLUSTERCTL}" init --infrastructure azure --addon helm
-  echo "Waiting for the CAPZ components to be Ready"
-  kubectl wait --for=condition=Available --timeout=5m -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure
-  sleep 10
-  echo "CAPZ initialized"
-}
-
-# Create CAPZ management cluster by kind
-function create_management_cluster() {
-  if [ "${SKIP_CREATING_MGMT_CLUSTER}" = "true" ]; then
-    echo "Skipping creation of management cluster as per configuration"
-    return 0
-  fi
-  unset KUBECONFIG
-  if ! kubectl cluster-info --context="${MGMT_CLUSTER_CONTEXT}"; then
-    echo "Creating kind cluster"
-    kind create cluster --name="${MANAGEMENT_CLUSTER_NAME}"
-    echo "Waiting for the node to be Ready"
-    kubectl wait node "${MANAGEMENT_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=900s --context="${MGMT_CLUSTER_CONTEXT}"
-    kubectl cluster-info --context="${MGMT_CLUSTER_CONTEXT}"
-    init_and_wait_capz
-  else
-    if [ "${KIND}" = "true" ]; then
-      echo "Found management cluster, assuming the CAPZ has been initialized"
-    else
-      init_and_wait_capz
-    fi
-  fi
-}
 
 function create_workload_cluster() {
   kubectl create ns "${CLUSTER_NAME}" \
@@ -137,7 +105,7 @@ function create_workload_cluster() {
     return 124
   fi
   echo "Get kubeconfig and store it locally."
-  kubectl --context="${MGMT_CLUSTER_CONTEXT}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json -n "${CLUSTER_NAME}" | jq -r .data.value | base64 --decode > ./"${CLUSTER_NAME}"-kubeconfig
+  kubectl --context="${MGMT_CLUSTER_CONTEXT}" get secrets "${CLUSTER_NAME}"-kubeconfig -o json -n "${CLUSTER_NAME}" | jq -r .data.value | base64 --decode > "${GENERATED_KUBECONFIG_DIRECTORY}"/"${CLUSTER_NAME}"-kubeconfig
   echo "Waiting for the control plane nodes to show up"
   timeout --foreground 1000 bash -c "while ! kubectl --kubeconfig="${GENERATED_KUBECONFIG_DIRECTORY}"/${CLUSTER_NAME}-kubeconfig get nodes -n "${CLUSTER_NAME}" | grep -E 'master|control-plane'; do sleep 1; done"
   if [ "$?" == 124 ]; then
@@ -148,7 +116,7 @@ function create_workload_cluster() {
   echo "Installing cloud provider azure"
 
   helm install cloud-provider-azure "${REPO_ROOT}"/helm/cloud-provider-azure --values helm/cloud-provider-azure/values.yaml \
-    --kubeconfig ./"${CLUSTER_NAME}"-kubeconfig \
+    --kubeconfig "${GENERATED_KUBECONFIG_DIRECTORY}"/"${CLUSTER_NAME}"-kubeconfig \
     --set infra.clusterName="${CLUSTER_NAME}" \
     --set cloudControllerManager.enableDynamicReloading=true \
     --set cloudControllerManager.replicas=1 \
@@ -159,8 +127,7 @@ function create_workload_cluster() {
     --set-string cloudNodeManager.imageTag="${AZURE_CLOUD_NODE_MANAGER_IMG_TAG}" \
     --set cloudNodeManager.enableHealthProbeProxy=true
 
-  echo "Run \"kubectl --kubeconfig=.${GENERATED_KUBECONFIG_DIRECTORY}/${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
+  echo "Run \"kubectl --kubeconfig=${GENERATED_KUBECONFIG_DIRECTORY}/${CLUSTER_NAME}-kubeconfig ...\" to work with the new target cluster, It may cost up to several minutes until all agent nodes show up. After that, do not forget to install a network plugin to make all nodes Ready."
 }
 
-create_management_cluster
 create_workload_cluster

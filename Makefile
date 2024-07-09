@@ -425,13 +425,18 @@ ifeq ($(CLOUD_BUILD_IMAGE),ccm)
 else
 	ENABLE_GIT_COMMAND=$(ENABLE_GIT_COMMAND) $(MAKE) cloud-build-prerequisites build-all-node-images push-multi-arch-node-manager-image
 endif
+
 ## --------------------------------------
-##@ Deploy clusters
+##@ Deploy clusters with capz
 ## --------------------------------------
 
-.PHONY: deploy-cluster
-deploy-cluster:
-	hack/deploy-cluster-capz.sh
+.PHONY: deploy-workload-cluster
+deploy-workload-cluster:
+	hack/deploy-workload-cluster.sh
+
+.PHONY: delete-workload-cluster
+delete-workload-cluster:
+	hack/delete-workload-cluster.sh
 
 ##@ Tools
 
