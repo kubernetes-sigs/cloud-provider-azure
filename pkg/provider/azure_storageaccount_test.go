@@ -619,6 +619,61 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 	}
 }
 
+func TestGetFileServicePropertiesCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+
+	cloud := &Cloud{}
+
+	tests := []struct {
+		name                          string
+		subsID                        string
+		resourceGroup                 string
+		account                       string
+		setFileClient                 bool
+		setFileServicePropertiesCache bool
+		expectedErr                   string
+	}{
+		{
+			name:        "[failure] FileClient is nil",
+			expectedErr: "FileClient is nil",
+		},
+		{
+			name:          "[failure] fileServicePropertiesCache is nil",
+			setFileClient: true,
+			expectedErr:   "fileServicePropertiesCache is nil",
+		},
+		{
+			name:                          "[Success]",
+			setFileClient:                 true,
+			setFileServicePropertiesCache: true,
+			expectedErr:                   "",
+		},
+	}
+
+	for _, test := range tests {
+		if test.setFileClient {
+			mockFileClient := mockfileclient.NewMockInterface(ctrl)
+			cloud.FileClient = mockFileClient
+			mockFileClient.EXPECT().WithSubscriptionID(gomock.Any()).Return(mockFileClient).AnyTimes()
+			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.FileServiceProperties{}, nil).AnyTimes()
+		}
+		if test.setFileServicePropertiesCache {
+			getter := func(key string) (interface{}, error) { return nil, nil }
+			cloud.fileServicePropertiesCache, _ = cache.NewTimedCache(time.Minute, getter, false)
+		}
+
+		_, err := cloud.getFileServicePropertiesCache(ctx, test.subsID, test.resourceGroup, test.account)
+		assert.Equal(t, err == nil, test.expectedErr == "", fmt.Sprintf("returned error: %v", err), test.name)
+		if test.expectedErr != "" && err != nil {
+			assert.Equal(t, err.Error(), test.expectedErr, err.Error(), test.name)
+		}
+	}
+}
+
 func TestAddStorageAccountTags(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
