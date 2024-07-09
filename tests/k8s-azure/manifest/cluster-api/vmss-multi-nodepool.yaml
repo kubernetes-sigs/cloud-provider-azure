@@ -1,3 +1,4 @@
+---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
@@ -10,7 +11,7 @@ spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-        - 192.168.0.0/16
+      - 192.168.0.0/16
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
@@ -33,12 +34,12 @@ spec:
   location: ${AZURE_LOCATION}
   networkSpec:
     subnets:
-      - name: control-plane-subnet
-        role: control-plane
-      - name: node-subnet
-        natGateway:
-          name: node-natgateway
-        role: node
+    - name: control-plane-subnet
+      role: control-plane
+    - name: node-subnet
+      natGateway:
+        name: node-natgateway
+      role: node
     vnet:
       name: ${CLUSTER_NAME}-vnet
   resourceGroup: ${AZURE_RESOURCE_GROUP}
@@ -56,10 +57,10 @@ spec:
         extraArgs:
           cloud-config: /etc/kubernetes/azure.json
         extraVolumes:
-          - hostPath: /etc/kubernetes/azure.json
-            mountPath: /etc/kubernetes/azure.json
-            name: cloud-config
-            readOnly: true
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
         timeoutForControlPlane: 20m
       controllerManager:
         extraArgs:
@@ -69,10 +70,10 @@ spec:
           cluster-name: ${CLUSTER_NAME}
           v: "4"
         extraVolumes:
-          - hostPath: /etc/kubernetes/azure.json
-            mountPath: /etc/kubernetes/azure.json
-            name: cloud-config
-            readOnly: true
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
       etcd:
         local:
           dataDir: /var/lib/etcddisk/etcd
@@ -80,29 +81,29 @@ spec:
             quota-backend-bytes: "8589934592"
     diskSetup:
       filesystems:
-        - device: /dev/disk/azure/scsi1/lun0
-          extraOpts:
-            - -E
-            - lazy_itable_init=1,lazy_journal_init=1
-          filesystem: ext4
-          label: etcd_disk
-        - device: ephemeral0.1
-          filesystem: ext4
-          label: ephemeral0
-          replaceFS: ntfs
+      - device: /dev/disk/azure/scsi1/lun0
+        extraOpts:
+        - -E
+        - lazy_itable_init=1,lazy_journal_init=1
+        filesystem: ext4
+        label: etcd_disk
+      - device: ephemeral0.1
+        filesystem: ext4
+        label: ephemeral0
+        replaceFS: ntfs
       partitions:
-        - device: /dev/disk/azure/scsi1/lun0
-          layout: true
-          overwrite: false
-          tableType: gpt
+      - device: /dev/disk/azure/scsi1/lun0
+        layout: true
+        overwrite: false
+        tableType: gpt
     files:
-      - contentFrom:
-          secret:
-            key: control-plane-azure.json
-            name: ${CLUSTER_NAME}-control-plane-azure-json
-        owner: root:root
-        path: /etc/kubernetes/azure.json
-        permissions: "0644"
+    - contentFrom:
+        secret:
+          key: control-plane-azure.json
+          name: ${CLUSTER_NAME}-control-plane-azure-json
+      owner: root:root
+      path: /etc/kubernetes/azure.json
+      permissions: "0644"
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
@@ -118,8 +119,8 @@ spec:
           cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     mounts:
-      - - LABEL=etcd_disk
-        - /var/lib/etcddisk
+    - - LABEL=etcd_disk
+      - /var/lib/etcddisk
     postKubeadmCommands: []
     preKubeadmCommands: []
   machineTemplate:
@@ -138,10 +139,13 @@ metadata:
 spec:
   template:
     spec:
+      identity: UserAssigned
+      userAssignedIdentities:
+      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       dataDisks:
-        - diskSizeGB: 256
-          lun: 0
-          nameSuffix: etcddisk
+      - diskSizeGB: 256
+        lun: 0
+        nameSuffix: etcddisk
       osDisk:
         diskSizeGB: 128
         osType: Linux
@@ -176,6 +180,9 @@ metadata:
   name: ${CLUSTER_NAME}-vmss-0
   namespace: ${CLUSTER_NAME}
 spec:
+  identity: UserAssigned
+  userAssignedIdentities:
+  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
   location: ${AZURE_LOCATION}
   strategy:
     type: RollingUpdate
@@ -206,13 +213,13 @@ spec:
         cloud-config: /etc/kubernetes/azure.json
         azure-container-registry-config: /etc/kubernetes/azure.json
   files:
-    - contentFrom:
-        secret:
-          name: ${CLUSTER_NAME}-vmss-0-azure-json
-          key: worker-node-azure.json
-      owner: root:root
-      path: /etc/kubernetes/azure.json
-      permissions: "0644"
+  - contentFrom:
+      secret:
+        name: ${CLUSTER_NAME}-vmss-0-azure-json
+        key: worker-node-azure.json
+    owner: root:root
+    path: /etc/kubernetes/azure.json
+    permissions: "0644"
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachinePool
@@ -242,6 +249,9 @@ metadata:
   name: ${CLUSTER_NAME}-vmss-1
   namespace: ${CLUSTER_NAME}
 spec:
+  identity: UserAssigned
+  userAssignedIdentities:
+  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
   location: ${AZURE_LOCATION}
   strategy:
     type: RollingUpdate
@@ -272,13 +282,13 @@ spec:
         cloud-config: /etc/kubernetes/azure.json
         azure-container-registry-config: /etc/kubernetes/azure.json
   files:
-    - contentFrom:
-        secret:
-          name: ${CLUSTER_NAME}-vmss-1-azure-json
-          key: worker-node-azure.json
-      owner: root:root
-      path: /etc/kubernetes/azure.json
-      permissions: "0644"
+  - contentFrom:
+      secret:
+        name: ${CLUSTER_NAME}-vmss-1-azure-json
+        key: worker-node-azure.json
+    owner: root:root
+    path: /etc/kubernetes/azure.json
+    permissions: "0644"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureClusterIdentity
@@ -290,11 +300,8 @@ metadata:
 spec:
   allowedNamespaces: {}
   clientID: ${AZURE_CLIENT_ID}
-  clientSecret:
-    name: ${AZURE_CLUSTER_IDENTITY_SECRET_NAME}
-    namespace: ${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}
   tenantID: ${AZURE_TENANT_ID}
-  type: ServicePrincipal
+  type: WorkloadIdentity
 ---
 apiVersion: addons.cluster.x-k8s.io/v1beta1
 kind: ClusterResourceSet
@@ -306,8 +313,8 @@ spec:
     matchLabels:
       ccm: external
   resources:
-    - kind: ConfigMap
-      name: cloud-controller-manager-addon
+  - kind: ConfigMap
+    name: cloud-controller-manager-addon
   strategy: ApplyOnce
 ---
 apiVersion: addons.cluster.x-k8s.io/v1beta1
@@ -320,31 +327,6 @@ spec:
     matchLabels:
       ccm: external
   resources:
-    - kind: ConfigMap
-      name: cloud-node-manager-addon
+  - kind: ConfigMap
+    name: cloud-node-manager-addon
   strategy: ApplyOnce
----
-apiVersion: addons.cluster.x-k8s.io/v1alpha1
-kind: HelmChartProxy
-metadata:
-  name: calico
-  namespace: ${CLUSTER_NAME}
-spec:
-  chartName: tigera-operator
-  clusterSelector:
-    matchLabels:
-      cni: calico
-  namespace: tigera-operator
-  releaseName: projectcalico
-  repoURL: https://docs.tigera.io/calico/charts
-  valuesTemplate: |-
-    installation:
-      cni:
-        type: Calico
-      calicoNetwork:
-        bgp: Disabled
-        mtu: 1350
-        ipPools:
-        ipPools:{{range $i, $cidr := .Cluster.spec.clusterNetwork.pods.cidrBlocks }}
-        - cidr: {{ $cidr }}
-          encapsulation: VXLAN{{end}}
