@@ -437,6 +437,8 @@ type Cloud struct {
 	plsCache azcache.Resource
 	// a timed cache storing storage account properties to avoid querying storage account frequently
 	storageAccountCache azcache.Resource
+	// a timed cache storing storage account file service properties to avoid querying storage account file service properties frequently
+	fileServicePropertiesCache azcache.Resource
 
 	// Add service lister to always get latest service
 	serviceLister corelisters.ServiceLister
@@ -857,7 +859,11 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
-	if az.storageAccountCache, err = az.newStorageAccountCache(); err != nil {
+	getter := func(key string) (interface{}, error) { return nil, nil }
+	if az.storageAccountCache, err = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache); err != nil {
+		return err
+	}
+	if az.fileServicePropertiesCache, err = azcache.NewTimedCache(5*time.Minute, getter, az.Config.DisableAPICallCache); err != nil {
 		return err
 	}
 	return nil
