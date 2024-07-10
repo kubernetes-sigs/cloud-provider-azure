@@ -124,6 +124,10 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 			}
 
 			accounts = append(accounts, accountWithLocation{Name: *acct.Name, StorageType: string((*acct.Sku).Name), Location: *acct.Location})
+			if !accountOptions.PickRandomMatchingAccount {
+				// return the first matching account if it's not required to pick a random one
+				break
+			}
 		}
 	}
 	return accounts, nil
