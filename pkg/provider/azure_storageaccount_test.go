@@ -1557,6 +1557,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	accountName := "account2"
 
 	cloud := GetTestCloud(ctrl)
+	getter := func(key string) (interface{}, error) { return nil, nil }
 
 	multichannelEnabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
@@ -1611,7 +1612,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			desc: "IsMultichannelEnabled not equal",
+			desc: "IsMultichannelEnabled not equal #1",
 			account: storage.Account{
 				Name:              &accountName,
 				AccountProperties: &storage.AccountProperties{},
@@ -1636,7 +1637,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 			expectedResult:            false,
 		},
 		{
-			desc: "IsMultichannelEnabled not equal",
+			desc: "IsMultichannelEnabled not equal #2",
 			account: storage.Account{
 				Name:              &accountName,
 				AccountProperties: &storage.AccountProperties{},
@@ -1648,7 +1649,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 			expectedResult:    false,
 		},
 		{
-			desc: "IsMultichannelEnabled is equal",
+			desc: "IsMultichannelEnabled is equal #1",
 			account: storage.Account{
 				Name:              &accountName,
 				AccountProperties: &storage.AccountProperties{},
@@ -1660,7 +1661,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 			expectedResult:    true,
 		},
 		{
-			desc: "IsMultichannelEnabled is equal",
+			desc: "IsMultichannelEnabled is equal #2",
 			account: storage.Account{
 				Name:              &accountName,
 				AccountProperties: &storage.AccountProperties{},
@@ -1686,6 +1687,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		cloud.fileServicePropertiesCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 		if test.serviceProperties != nil {
 			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
 		}
