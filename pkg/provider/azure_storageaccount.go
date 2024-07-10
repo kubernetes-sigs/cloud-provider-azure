@@ -35,7 +35,6 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
-	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
 )
@@ -513,7 +512,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 		}
 
 		if accountOptions.DisableFileServiceDeleteRetentionPolicy != nil || accountOptions.IsMultichannelEnabled != nil {
-			prop, err := az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, accountName)
+			prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, accountName)
 			if err != nil {
 				return "", "", err
 			}
@@ -676,11 +675,6 @@ func (az *Cloud) createPrivateDNSZoneGroup(ctx context.Context, dnsZoneGroupName
 	return az.privatednszonegroupclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, dnsZoneGroupName, privateDNSZoneGroup, "", false).Error()
 }
 
-func (az *Cloud) newStorageAccountCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) { return nil, nil }
-	return azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache)
-}
-
 func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourceGroup, account string) (storage.Account, *retry.Error) {
 	if az.StorageAccountClient == nil {
 		return storage.Account{}, retry.NewError(false, fmt.Errorf("StorageAccountClient is nil"))
@@ -706,6 +700,34 @@ func (az *Cloud) getStorageAccountWithCache(ctx context.Context, subsID, resourc
 			return storage.Account{}, rerr
 		}
 		az.storageAccountCache.Set(account, result)
+	}
+
+	return result, nil
+}
+
+func (az *Cloud) getFileServicePropertiesCache(ctx context.Context, subsID, resourceGroup, account string) (storage.FileServiceProperties, error) {
+	if az.FileClient == nil {
+		return storage.FileServiceProperties{}, fmt.Errorf("FileClient is nil")
+	}
+	if az.fileServicePropertiesCache == nil {
+		return storage.FileServiceProperties{}, fmt.Errorf("fileServicePropertiesCache is nil")
+	}
+
+	// search in cache first
+	cache, err := az.fileServicePropertiesCache.Get(account, cache.CacheReadTypeDefault)
+	if err != nil {
+		return storage.FileServiceProperties{}, err
+	}
+	var result storage.FileServiceProperties
+	if cache != nil {
+		result = cache.(storage.FileServiceProperties)
+		klog.V(2).Infof("Get service properties(%s) from cache", account)
+	} else {
+		result, err = az.FileClient.WithSubscriptionID(subsID).GetServiceProperties(ctx, resourceGroup, account)
+		if err != nil {
+			return storage.FileServiceProperties{}, err
+		}
+		az.fileServicePropertiesCache.Set(account, result)
 	}
 
 	return result, nil
@@ -917,7 +939,7 @@ func (az *Cloud) isMultichannelEnabledEqual(ctx context.Context, account storage
 		return false
 	}
 
-	prop, err := az.FileClient.WithSubscriptionID(accountOptions.SubscriptionID).GetServiceProperties(ctx, accountOptions.ResourceGroup, *account.Name)
+	prop, err := az.getFileServicePropertiesCache(ctx, accountOptions.SubscriptionID, accountOptions.ResourceGroup, *account.Name)
 	if err != nil {
 		klog.Warningf("GetServiceProperties(%s) under resource group(%s) failed with %v", *account.Name, accountOptions.ResourceGroup, err)
 		return false
