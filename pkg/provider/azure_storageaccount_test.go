@@ -1692,7 +1692,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
 		}
 
-		result := cloud.isMultichannelEnabledEqual(ctx, test.account, test.accountOptions)
+		result, _ := cloud.isMultichannelEnabledEqual(ctx, test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result, test.desc)
 	}
 }
@@ -1837,7 +1837,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(*test.serviceProperties, test.servicePropertiesRetError).Times(1)
 		}
 
-		result := cloud.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
+		result, _ := cloud.isDisableFileServiceDeleteRetentionPolicyEqual(ctx, test.account, test.accountOptions)
 		assert.Equal(t, test.expectedResult, result, test.desc)
 	}
 }
