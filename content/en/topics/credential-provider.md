@@ -7,14 +7,11 @@ description: >
     Detailed steps to setup out-of-tree Kubelet Credential Provider.
 ---
 
-> Note: The Kubelet credential provider feature is still in alpha and shouldn't be used in production environments. Please use `--azure-container-registry-config=/etc/kubernetes/cloud-config/azure.json` if you need pulling images from ACR in production.
-
-As part of [Out-of-Tree Credential Providers](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider), the kubelet builtin image pulling from ACR (which could be enabled by setting `kubelet --azure-container-registry-config=<config-file>`) would be moved out-of-tree credential plugin `acr-credential-provider`. Please refer the original [KEP](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider) for details.
+As part of [Out-of-Tree Credential Providers](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider), the kubelet builtin image pulling from ACR (which could originally be enabled by setting `kubelet --azure-container-registry-config=<config-file>`) would be moved out-of-tree credential plugin `acr-credential-provider`. Please refer the original [KEP](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cloud-provider/2133-out-of-tree-credential-provider) and the [credential provider KEP](https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/2133-kubelet-credential-providers) for details.
 
 In order to switch the kubelet credential provider to out-of-tree, you'll have to
 
 * Remove  `--azure-container-registry-config` from kubelet configuration options.
-* Add `--feature-gates=KubeletCredentialProviders=true` to kubelet configuration options.
 * Create directory `/var/lib/kubelet/credential-provider`, download 'acr-credential-provider' binary to this directory and add `--image-credential-provider-bin-dir=/var/lib/kubelet/credential-provider` to kubelet configuration options.
 * Create the following credential-provider-config.yaml file and add `--image-credential-provider-config=/var/lib/kubelet/credential-provider-config.yaml` to kubelet configuration options.
 
