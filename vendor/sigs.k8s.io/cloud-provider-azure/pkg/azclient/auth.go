@@ -83,6 +83,7 @@ func NewAuthProvider(armConfig *ARMClientConfig, config *AzureAuthConfig, client
 		if err != nil {
 			return nil, err
 		}
+		managedIdentityCredential = armauth.NewExpireEarlyTokenWrapper(managedIdentityCredential)
 	}
 
 	var (
