@@ -562,6 +562,45 @@ func TestSecurityGroupHelper_AddRuleForAllowedServiceTag(t *testing.T) {
 		}
 	})
 
+	t.Run("should support all ports as destination range", func(t *testing.T) {
+		rules := fx.Azure().NoiseSecurityRules()
+		sg := fx.Azure().SecurityGroup().WithRules(rules).Build()
+		helper := ExpectNewSecurityGroupHelper(t, &sg)
+		serviceTag := fx.Azure().ServiceTag()
+		protocol := network.SecurityRuleProtocolTCP
+		dstAddresses := fx.RandomIPv4Addresses(2)
+		dstPorts := []int32{-1}
+		err := helper.AddRuleForAllowedServiceTag(
+			serviceTag,
+			protocol,
+			dstAddresses,
+			dstPorts,
+		)
+		assert.NoError(t, err)
+
+		outputSG, updated, err := helper.SecurityGroup()
+
+		assert.NoError(t, err)
+		assert.True(t, updated, "[`%s`] should add 1 rule")
+		assert.Equal(t, len(*outputSG.SecurityRules), len(rules)+1, "[`%s`] should add 1 rule")
+		testutil.ExpectHasSecurityRules(t, outputSG, rules, "[`%s`] the original irrelevant rules should remain unchanged")
+		testutil.ExpectHasSecurityRules(t, outputSG, []network.SecurityRule{
+			{
+				Name: ptr.To(GenerateAllowSecurityRuleName(protocol, iputil.IPv4, []string{serviceTag}, dstPorts)),
+				SecurityRulePropertiesFormat: &network.SecurityRulePropertiesFormat{
+					Protocol:                   protocol,
+					Access:                     network.SecurityRuleAccessAllow,
+					Direction:                  network.SecurityRuleDirectionInbound,
+					SourceAddressPrefix:        ptr.To(serviceTag),
+					SourcePortRange:            ptr.To("*"),
+					DestinationAddressPrefixes: ptr.To(fnutil.Map(func(v netip.Addr) string { return v.String() }, dstAddresses)),
+					DestinationPortRange:       ptr.To("*"),
+					Priority:                   ptr.To(int32(500)),
+				},
+			},
+		}, "[`%s`] 1 allow rule should be created")
+	})
+
 	t.Run("when rule exists and outdated, it should update the one", func(t *testing.T) {
 		cases := []struct {
 			TestName      string

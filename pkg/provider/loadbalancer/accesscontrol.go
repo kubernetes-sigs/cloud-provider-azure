@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/securitygroup"
+	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 var (
@@ -311,6 +312,7 @@ func (ac *AccessControl) SecurityGroup() (*network.SecurityGroup, bool, error) {
 // SecurityRuleDestinationPortsByProtocol returns the service ports grouped by SecurityGroup protocol.
 func SecurityRuleDestinationPortsByProtocol(svc *v1.Service) (map[network.SecurityRuleProtocol][]int32, error) {
 	rv := make(map[network.SecurityRuleProtocol][]int32)
+	existingProtos := utilsets.NewString()
 	for _, port := range svc.Spec.Ports {
 		protocol, err := securitygroup.ProtocolFromKubernetes(port.Protocol)
 		if err != nil {
@@ -318,7 +320,13 @@ func SecurityRuleDestinationPortsByProtocol(svc *v1.Service) (map[network.Securi
 		}
 
 		var p int32
-		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
+		if consts.IsServiceSecurityRuleDstPortAll(svc) {
+			if existingProtos.Has(string(protocol)) {
+				continue
+			}
+			p = consts.PortRangeAllIndicator
+			existingProtos.Insert(string(protocol))
+		} else if consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
 			p = port.NodePort
 		} else {
 			p = port.Port

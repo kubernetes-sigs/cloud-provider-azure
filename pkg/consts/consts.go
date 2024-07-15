@@ -350,6 +350,9 @@ const (
 	// ServiceAnnotationDisableTCPReset is the annotation used on the service to disable TCP reset on the load balancer.
 	ServiceAnnotationDisableTCPReset = "service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset"
 
+	// ServiceAnnotationSecurityRuleDestinationPortAll configures the security rule destination ports to be "*", not service ports.
+	ServiceAnnotationSecurityRuleDestinationPortAll = "service.beta.kubernetes.io/azure-destination-port-all"
+
 	// ServiceTagKey is the service key applied for public IP tags.
 	ServiceTagKey       = "k8s-azure-service"
 	LegacyServiceTagKey = "service"
@@ -475,6 +478,9 @@ const (
 	PortAnnotationNoLBRule      PortParams = "no_lb_rule"
 	// NoHealthProbeRule determines whether the port is only used for health probe. no lb probe rule will be created.
 	PortAnnotationNoHealthProbeRule PortParams = "no_probe_rule"
+
+	PortRangeAllIndicator int32  = -1
+	PortRangeAll          string = "*"
 )
 
 type PortParams string

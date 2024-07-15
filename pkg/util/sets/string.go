@@ -33,7 +33,7 @@ func NewString(items ...string) *IgnoreCaseSet {
 	for _, item := range items {
 		lowerItems = append(lowerItems, strings.ToLower(item))
 	}
-	set := sets.New[string](lowerItems...)
+	set := sets.New(lowerItems...)
 	return &IgnoreCaseSet{set: set}
 }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	v1 "k8s.io/api/core/v1"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/fnutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 )
@@ -132,6 +133,10 @@ func ListDestinationPortRanges(r *network.SecurityRule) ([]int32, error) {
 	for _, v := range values {
 		p, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
+			if v == consts.PortRangeAll {
+				rv = append(rv, consts.PortRangeAllIndicator)
+				continue
+			}
 			return nil, fmt.Errorf("parse port range %q: %w", v, err)
 		}
 		rv = append(rv, int32(p))

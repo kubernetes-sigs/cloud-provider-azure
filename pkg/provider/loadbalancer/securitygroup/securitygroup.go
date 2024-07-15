@@ -25,6 +25,7 @@ import (
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"k8s.io/utils/ptr"
 
@@ -187,13 +188,19 @@ func (helper *RuleHelper) addAllowRule(
 		} else {
 			rule.SourceAddressPrefixes = ptr.To(srcPrefixes)
 		}
-		rule.SourcePortRange = ptr.To("*")
+		rule.SourcePortRange = ptr.To(consts.PortRangeAll)
 	}
 	{
 		// Destination
 		addresses := append(ListDestinationPrefixes(rule), dstPrefixes...)
 		SetDestinationPrefixes(rule, addresses)
 		rule.DestinationPortRanges = ptr.To(dstPortRanges)
+		if len(dstPortRanges) == 1 &&
+			dstPortRanges[0] == strconv.FormatInt(int64(consts.PortRangeAllIndicator), 10) {
+			rule.DestinationPortRanges = nil
+			rule.DestinationPortRange = ptr.To(consts.PortRangeAll)
+		}
+
 	}
 
 	helper.logger.V(4).Info("Patched a rule for allow", "rule-name", name)
@@ -292,7 +299,8 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	return nil
 }
 
-// RemoveDestinationFromRules removes the given destination addresses from rules that match the given protocol and ports is in the retainDstPorts list.
+// RemoveDestinationFromRules removes the given destination addresses from rules that match the given protocol and
+// ports is not in the retainDstPorts list.
 // It may add a new rule if the original rule needs to be split.
 func (helper *RuleHelper) RemoveDestinationFromRules(
 	protocol network.SecurityRuleProtocol,
@@ -348,8 +356,7 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *network.SecurityRule, 
 	currentPorts, err := ListDestinationPortRanges(rule)
 	if err != nil {
 		// Skip the rule with invalid destination port ranges.
-		// NOTE: cloud-provider would not create allow rules with `*` or `4000-5000` as destination port ranges.
-		logger.Info("Skip because it contains `*` or port-ranges as destination port ranges.")
+		logger.Info("Skip the rule with error", "rule", to.String(rule.Name), "error", err)
 		return nil
 	}
 	var (

@@ -70,6 +70,11 @@ func IsTCPResetDisabled(annotations map[string]string) bool {
 	return expectAttributeInSvcAnnotationBeEqualTo(annotations, ServiceAnnotationDisableTCPReset, TrueAnnotationValue)
 }
 
+// IsServiceSecurityRuleDstPortAll determines if the service has the destination port all annotation.
+func IsServiceSecurityRuleDstPortAll(service *v1.Service) bool {
+	return expectAttributeInSvcAnnotationBeEqualTo(service.Annotations, ServiceAnnotationSecurityRuleDestinationPortAll, TrueAnnotationValue)
+}
+
 // Getint32ValueFromK8sSvcAnnotation get health probe configuration for port
 func Getint32ValueFromK8sSvcAnnotation(annotations map[string]string, key string, validators ...Int32BusinessValidator) (*int32, error) {
 	val, err := GetAttributeValueInSvcAnnotation(annotations, key)
