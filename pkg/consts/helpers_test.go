@@ -349,7 +349,7 @@ func TestGetInt32HealthProbeConfigOfPortFromK8sSvcAnnotation(t *testing.T) {
 				port:        80,
 				key:         HealthProbeParamsNumOfProbe,
 			},
-			want:    ptr.To(int32(2))),
+			want:    ptr.To(int32(2)),
 			wantErr: false,
 		},
 		{
