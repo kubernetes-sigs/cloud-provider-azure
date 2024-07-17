@@ -23,8 +23,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/pointer"
+
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/routetableclient/mockroutetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -59,8 +61,8 @@ func TestCreateOrUpdateRouteTable(t *testing.T) {
 		mockRTClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "rt", gomock.Any()).Return(network.RouteTable{}, nil)
 
 		err := az.CreateOrUpdateRouteTable(network.RouteTable{
-			Name: pointer.String("rt"),
-			Etag: pointer.String("etag"),
+			Name: ptr.To("rt"),
+			Etag: ptr.To("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 

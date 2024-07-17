@@ -32,7 +32,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -86,8 +86,8 @@ func getTestDeploymentClientWithRetryAfterReader(armClient armclient.Interface) 
 
 func getTestDeploymentExtended(name string) resources.DeploymentExtended {
 	return resources.DeploymentExtended{
-		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Resources/deployments/%s", name)),
-		Name: pointer.String(name),
+		ID:   ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Resources/deployments/%s", name)),
+		Name: ptr.To(name),
 	}
 }
 
@@ -269,7 +269,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := resources.DeploymentListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -314,7 +314,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := resources.DeploymentListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -368,7 +368,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	dpList := []resources.DeploymentExtended{getTestDeploymentExtended("dep"), getTestDeploymentExtended("dep1"), getTestDeploymentExtended("dep2")}
-	partialResponse, err := json.Marshal(resources.DeploymentListResult{Value: &dpList, NextLink: pointer.String("nextLink")})
+	partialResponse, err := json.Marshal(resources.DeploymentListResult{Value: &dpList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
 	_, err = json.Marshal(resources.DeploymentListResult{Value: &dpList})
 	assert.NoError(t, err)
@@ -455,7 +455,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -474,7 +474,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -537,7 +537,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 	dp := resources.Deployment{}
 	dpExtended := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(dpExtended.ID, ""), dp, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
@@ -552,7 +552,7 @@ func TestDelete(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(dp.ID, "")).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(dp.ID, "")).Return(nil).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")
@@ -607,7 +607,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	dp := getTestDeploymentExtended("dep")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(dp.ID, "")).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(dp.ID, "")).Return(throttleErr).Times(1)
 
 	dpClient := getTestDeploymentClient(armClient)
 	rerr := dpClient.Delete(context.TODO(), "rg", "dep")

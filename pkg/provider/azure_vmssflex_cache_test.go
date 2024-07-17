@@ -23,10 +23,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
 
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -43,13 +44,13 @@ var (
 		VMName:              "testvm1",
 		VMID:                "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm1",
 		ComputerName:        "vmssflex1000001",
-		ProvisioningState:   pointer.String("Succeeded"),
+		ProvisioningState:   ptr.To("Succeeded"),
 		VmssFlexID:          testVmssFlex1ID,
 		Zones:               &[]string{"1", "2", "3"},
-		PlatformFaultDomain: pointer.Int32(1),
+		PlatformFaultDomain: ptr.To(int32(1)),
 		Status: &[]compute.InstanceViewStatus{
 			{
-				Code: pointer.String("PowerState/running"),
+				Code: ptr.To("PowerState/running"),
 			},
 		},
 		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm1-nic",
@@ -61,13 +62,13 @@ var (
 		VMName:              "testvm2",
 		VMID:                "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/testvm2",
 		ComputerName:        "vmssflex1000002",
-		ProvisioningState:   pointer.String("Succeeded"),
+		ProvisioningState:   ptr.To("Succeeded"),
 		VmssFlexID:          testVmssFlex1ID,
 		Zones:               nil,
-		PlatformFaultDomain: pointer.Int32(1),
+		PlatformFaultDomain: ptr.To(int32(1)),
 		Status: &[]compute.InstanceViewStatus{
 			{
-				Code: pointer.String("PowerState/running"),
+				Code: ptr.To("PowerState/running"),
 			},
 		},
 		NicID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/testvm2-nic",
@@ -110,12 +111,12 @@ func genreateTestVmssFlexList() []compute.VirtualMachineScaleSet {
 
 func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.VirtualMachineScaleSet {
 	return compute.VirtualMachineScaleSet{
-		ID:   pointer.String(testVmssFlexID),
-		Name: pointer.String(vmssFlexName),
+		ID:   ptr.To(testVmssFlexID),
+		Name: ptr.To(vmssFlexName),
 		VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				OsProfile: &compute.VirtualMachineScaleSetOSProfile{
-					ComputerNamePrefix: pointer.String(vmssFlexName),
+					ComputerNamePrefix: ptr.To(vmssFlexName),
 				},
 				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
@@ -126,10 +127,10 @@ func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.Vir
 										VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 											LoadBalancerBackendAddressPools: &[]compute.SubResource{
 												{
-													ID: pointer.String(testBackendPoolID0),
+													ID: ptr.To(testBackendPoolID0),
 												},
 											},
-											Primary: pointer.Bool(true),
+											Primary: ptr.To(true),
 										},
 									},
 								},
@@ -141,8 +142,8 @@ func genreteTestVmssFlex(vmssFlexName string, testVmssFlexID string) compute.Vir
 			OrchestrationMode: compute.Flexible,
 		},
 		Tags: map[string]*string{
-			consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
-			consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
+			consts.VMSetCIDRIPV4TagKey: ptr.To("24"),
+			consts.VMSetCIDRIPV6TagKey: ptr.To("64"),
 		},
 	}
 }
@@ -161,31 +162,31 @@ type VmssFlexTestVMSpec struct {
 
 func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMWithoutInstanceView compute.VirtualMachine) {
 	return compute.VirtualMachine{
-		Name: pointer.String(spec.VMName),
-		ID:   pointer.String(spec.VMID),
+		Name: ptr.To(spec.VMName),
+		ID:   ptr.To(spec.VMID),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			OsProfile: &compute.OSProfile{
-				ComputerName: pointer.String(spec.ComputerName),
+				ComputerName: ptr.To(spec.ComputerName),
 			},
 			ProvisioningState: spec.ProvisioningState,
 			VirtualMachineScaleSet: &compute.SubResource{
-				ID: pointer.String(spec.VmssFlexID),
+				ID: ptr.To(spec.VmssFlexID),
 			},
 			StorageProfile: &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: pointer.String("osdisk" + spec.VMName),
+					Name: ptr.To("osdisk" + spec.VMName),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: pointer.String("ManagedID" + spec.VMName),
+						ID: ptr.To("ManagedID" + spec.VMName),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: pointer.String("DiskEncryptionSetID" + spec.VMName),
+							ID: ptr.To("DiskEncryptionSetID" + spec.VMName),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{
 					{
-						Lun:         pointer.Int32(1),
-						Name:        pointer.String("dataDisk" + spec.VMName),
-						ManagedDisk: &compute.ManagedDiskParameters{ID: pointer.String("uri")},
+						Lun:         ptr.To(int32(1)),
+						Name:        ptr.To("dataDisk" + spec.VMName),
+						ManagedDisk: &compute.ManagedDiskParameters{ID: ptr.To("uri")},
 					},
 				},
 			},
@@ -195,20 +196,20 @@ func generateVmssFlexTestVMWithoutInstanceView(spec VmssFlexTestVMSpec) (testVMW
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
-						ID: pointer.String(spec.NicID),
+						ID: ptr.To(spec.NicID),
 					},
 				},
 			},
 		},
 		Zones:    spec.Zones,
-		Location: pointer.String("EastUS"),
+		Location: ptr.To("EastUS"),
 	}
 }
 
 func generateVmssFlexTestVMWithOnlyInstanceView(spec VmssFlexTestVMSpec) (testVMWithOnlyInstanceView compute.VirtualMachine) {
 	return compute.VirtualMachine{
-		Name: pointer.String(spec.VMName),
-		ID:   pointer.String(spec.VMID),
+		Name: ptr.To(spec.VMName),
+		ID:   ptr.To(spec.VMID),
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
 			InstanceView: &compute.VirtualMachineInstanceView{
 				PlatformFaultDomain: spec.PlatformFaultDomain,

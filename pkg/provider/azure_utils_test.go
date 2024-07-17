@@ -26,10 +26,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -105,75 +107,75 @@ func TestReconcileTags(t *testing.T) {
 		{
 			description: "reconcileTags should add missing tags and update existing tags",
 			currentTagsOnResource: map[string]*string{
-				"a": pointer.String("b"),
+				"a": ptr.To("b"),
 			},
 			newTags: map[string]*string{
-				"a": pointer.String("c"),
-				"b": pointer.String("d"),
+				"a": ptr.To("c"),
+				"b": ptr.To("d"),
 			},
 			expectedTags: map[string]*string{
-				"a": pointer.String("c"),
-				"b": pointer.String("d"),
+				"a": ptr.To("c"),
+				"b": ptr.To("d"),
 			},
 			expectedChanged: true,
 		},
 		{
 			description: "reconcileTags should remove the tags that are not included in systemTags",
 			currentTagsOnResource: map[string]*string{
-				"a": pointer.String("b"),
-				"c": pointer.String("d"),
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 			newTags: map[string]*string{
-				"a": pointer.String("c"),
+				"a": ptr.To("c"),
 			},
 			systemTags: "a, b",
 			expectedTags: map[string]*string{
-				"a": pointer.String("c"),
+				"a": ptr.To("c"),
 			},
 			expectedChanged: true,
 		},
 		{
 			description: "reconcileTags should ignore the case of keys when comparing",
 			currentTagsOnResource: map[string]*string{
-				"A": pointer.String("b"),
-				"c": pointer.String("d"),
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 			newTags: map[string]*string{
-				"a": pointer.String("b"),
-				"C": pointer.String("d"),
+				"a": ptr.To("b"),
+				"C": ptr.To("d"),
 			},
 			expectedTags: map[string]*string{
-				"A": pointer.String("b"),
-				"c": pointer.String("d"),
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 		},
 		{
 			description: "reconcileTags should ignore the case of values when comparing",
 			currentTagsOnResource: map[string]*string{
-				"A": pointer.String("b"),
-				"c": pointer.String("d"),
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 			newTags: map[string]*string{
-				"a": pointer.String("B"),
-				"C": pointer.String("D"),
+				"a": ptr.To("B"),
+				"C": ptr.To("D"),
 			},
 			expectedTags: map[string]*string{
-				"A": pointer.String("b"),
-				"c": pointer.String("d"),
+				"A": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 		},
 		{
 			description: "reconcileTags should ignore the case of keys when checking systemTags",
 			currentTagsOnResource: map[string]*string{
-				"a": pointer.String("b"),
-				"c": pointer.String("d"),
+				"a": ptr.To("b"),
+				"c": ptr.To("d"),
 			},
 			newTags: map[string]*string{
-				"a": pointer.String("c"),
+				"a": ptr.To("c"),
 			},
 			systemTags: "A, b",
 			expectedTags: map[string]*string{
-				"a": pointer.String("c"),
+				"a": ptr.To("c"),
 			},
 			expectedChanged: true,
 		},
@@ -300,18 +302,18 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 			description: "no duplicated rules",
 			rules: []network.SecurityRule{
 				{
-					Name: pointer.String("rule1"),
+					Name: ptr.To("rule1"),
 				},
 				{
-					Name: pointer.String("rule2"),
+					Name: ptr.To("rule2"),
 				},
 			},
 			expected: []network.SecurityRule{
 				{
-					Name: pointer.String("rule1"),
+					Name: ptr.To("rule1"),
 				},
 				{
-					Name: pointer.String("rule2"),
+					Name: ptr.To("rule2"),
 				},
 			},
 		},
@@ -319,21 +321,21 @@ func TestRemoveDuplicatedSecurityRules(t *testing.T) {
 			description: "duplicated rules",
 			rules: []network.SecurityRule{
 				{
-					Name: pointer.String("rule1"),
+					Name: ptr.To("rule1"),
 				},
 				{
-					Name: pointer.String("rule2"),
+					Name: ptr.To("rule2"),
 				},
 				{
-					Name: pointer.String("rule1"),
+					Name: ptr.To("rule1"),
 				},
 			},
 			expected: []network.SecurityRule{
 				{
-					Name: pointer.String("rule2"),
+					Name: ptr.To("rule2"),
 				},
 				{
-					Name: pointer.String("rule1"),
+					Name: ptr.To("rule1"),
 				},
 			},
 		},
@@ -853,7 +855,7 @@ func TestIsFIPIPv6(t *testing.T) {
 				},
 			},
 			fip: &network.FrontendIPConfiguration{
-				Name: pointer.StringPtr("fip"),
+				Name: ptr.To("fip"),
 			},
 			expectedIsIPv6: false,
 		},
@@ -865,7 +867,7 @@ func TestIsFIPIPv6(t *testing.T) {
 				},
 			},
 			fip: &network.FrontendIPConfiguration{
-				Name: pointer.StringPtr("fip-IPv6"),
+				Name: ptr.To("fip-IPv6"),
 			},
 			expectedIsIPv6: true,
 		},
@@ -907,21 +909,21 @@ func TestIsInternalLoadBalancer(t *testing.T) {
 		{
 			name: "internal load balancer",
 			lb: network.LoadBalancer{
-				Name: pointer.String("test-internal"),
+				Name: ptr.To("test-internal"),
 			},
 			expected: true,
 		},
 		{
 			name: "internal load balancer",
 			lb: network.LoadBalancer{
-				Name: pointer.String("TEST-INTERNAL"),
+				Name: ptr.To("TEST-INTERNAL"),
 			},
 			expected: true,
 		},
 		{
 			name: "not internal load balancer",
 			lb: network.LoadBalancer{
-				Name: pointer.String("test"),
+				Name: ptr.To("test"),
 			},
 			expected: false,
 		},
@@ -951,13 +953,13 @@ func TestToArmcomputeDisk(t *testing.T) {
 			args: args{
 				disks: []compute.DataDisk{
 					{
-						Name: pointer.String("disk1"),
+						Name: ptr.To("disk1"),
 					},
 				},
 			},
 			want: []*armcompute.DataDisk{
 				{
-					Name: pointer.String("disk1"),
+					Name: ptr.To("disk1"),
 				},
 			},
 			wantErr: false,

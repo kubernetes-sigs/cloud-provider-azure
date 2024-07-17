@@ -32,7 +32,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -220,7 +220,7 @@ func getTestVMSizeClient(armClient armclient.Interface) *Client {
 
 func getTestVMSize(name string) compute.VirtualMachineSize {
 	return compute.VirtualMachineSize{
-		Name: pointer.String(name),
+		Name: ptr.To(name),
 	}
 }
 

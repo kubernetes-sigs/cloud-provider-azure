@@ -23,9 +23,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/privatelinkserviceclient/mockprivatelinkserviceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/cache"
@@ -61,12 +63,12 @@ func TestCreateOrUpdatePLS(t *testing.T) {
 		mockPLSClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PrivateLinkService{}, nil)
 
 		err := az.CreateOrUpdatePLS(&v1.Service{}, "rg", network.PrivateLinkService{
-			Name: pointer.String("pls"),
-			Etag: pointer.String("etag"),
+			Name: ptr.To("pls"),
+			Etag: ptr.To("etag"),
 			PrivateLinkServiceProperties: &network.PrivateLinkServiceProperties{
 				LoadBalancerFrontendIPConfigurations: &[]network.FrontendIPConfiguration{
 					{
-						ID: pointer.String("frontendID"),
+						ID: ptr.To("frontendID"),
 					},
 				},
 			},
@@ -109,10 +111,10 @@ func TestGetPrivateLinkService(t *testing.T) {
 	defer ctrl.Finish()
 
 	az := GetTestCloud(ctrl)
-	az.plsCache.Set("rg*frontendID", &network.PrivateLinkService{Name: pointer.String("pls")})
+	az.plsCache.Set("rg*frontendID", &network.PrivateLinkService{Name: ptr.To("pls")})
 
 	// cache hit
-	pls, err := az.getPrivateLinkService("rg", pointer.String("frontendID"), azcache.CacheReadTypeDefault)
+	pls, err := az.getPrivateLinkService("rg", ptr.To("frontendID"), azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "pls", *pls.Name)
 
@@ -120,17 +122,17 @@ func TestGetPrivateLinkService(t *testing.T) {
 	mockPLSClient := az.PrivateLinkServiceClient.(*mockprivatelinkserviceclient.MockInterface)
 	mockPLSClient.EXPECT().List(gomock.Any(), "rg1").Return([]network.PrivateLinkService{
 		{
-			Name: pointer.String("pls1"),
+			Name: ptr.To("pls1"),
 			PrivateLinkServiceProperties: &network.PrivateLinkServiceProperties{
 				LoadBalancerFrontendIPConfigurations: &[]network.FrontendIPConfiguration{
 					{
-						ID: pointer.String("frontendID1"),
+						ID: ptr.To("frontendID1"),
 					},
 				},
 			},
 		},
 	}, nil)
-	pls, err = az.getPrivateLinkService("rg1", pointer.String("frontendID1"), azcache.CacheReadTypeDefault)
+	pls, err = az.getPrivateLinkService("rg1", ptr.To("frontendID1"), azcache.CacheReadTypeDefault)
 	assert.NoError(t, err)
 	assert.Equal(t, "pls1", *pls.Name)
 }

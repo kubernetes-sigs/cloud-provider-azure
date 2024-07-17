@@ -24,7 +24,7 @@ import (
 	nodeconfigv1alpha1 "k8s.io/cloud-provider/controllers/node/config/v1alpha1"
 	serviceconfigv1alpha1 "k8s.io/cloud-provider/controllers/service/config/v1alpha1"
 	cmconfigv1alpha1 "k8s.io/controller-manager/config/v1alpha1"
-	utilpointer "k8s.io/utils/pointer"
+	utilpointer "k8s.io/utils/ptr"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {

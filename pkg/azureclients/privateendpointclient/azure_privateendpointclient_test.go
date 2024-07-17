@@ -30,8 +30,10 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/pointer"
+
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -139,7 +141,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(pe.ID, ""), pe, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(pe.ID, ""), pe, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	peClient := getTestPrivateEndpointClient(armClient)
@@ -153,7 +155,7 @@ func TestCreateOrUpdateAsync(t *testing.T) {
 
 	pe := getTestPrivateEndpoint("pe1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResourceAsync(gomock.Any(), pointer.StringDeref(pe.ID, ""), pe, gomock.Any()).Return(&azure.Future{}, nil).Times(1)
+	armClient.EXPECT().PutResourceAsync(gomock.Any(), ptr.Deref(pe.ID, ""), pe, gomock.Any()).Return(&azure.Future{}, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	peClient := getTestPrivateEndpointClient(armClient)
@@ -163,9 +165,9 @@ func TestCreateOrUpdateAsync(t *testing.T) {
 
 func getTestPrivateEndpoint(name string) network.PrivateEndpoint {
 	return network.PrivateEndpoint{
-		ID:       pointer.String(fmt.Sprintf("%s/%s", testResourcePrefix, name)),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To(fmt.Sprintf("%s/%s", testResourcePrefix, name)),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 	}
 }
 

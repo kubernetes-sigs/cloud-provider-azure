@@ -37,7 +37,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/kubetest2/pkg/exec"
 )
@@ -152,10 +152,10 @@ func (d *deployer) createResourceGroup(subscriptionID string) (armresources.Reso
 	now := time.Now()
 	timestamp := now.Unix()
 	param := armresources.ResourceGroup{
-		Location: pointer.String(d.Location),
+		Location: ptr.To(d.Location),
 		Tags: map[string]*string{
-			"creation_date": pointer.String(fmt.Sprintf("%d", timestamp)),
-			"usage":         pointer.String(usageTag),
+			"creation_date": ptr.To(fmt.Sprintf("%d", timestamp)),
+			"usage":         ptr.To(usageTag),
 		},
 	}
 

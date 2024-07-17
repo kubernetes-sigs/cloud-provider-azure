@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -395,22 +395,22 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 
 func getTestBackendAddressPoolWithIPs(lbName, bpName string, ips []string) network.BackendAddressPool {
 	bp := network.BackendAddressPool{
-		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
-		Name: pointer.String(bpName),
+		ID:   ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, bpName)),
+		Name: ptr.To(bpName),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 			VirtualNetwork: &network.SubResource{
-				ID: pointer.String("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
+				ID: ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"),
 			},
-			Location:                     pointer.String("eastus"),
+			Location:                     ptr.To("eastus"),
 			LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{},
 		},
 	}
 	for _, ip := range ips {
 		if len(ip) > 0 {
 			*bp.LoadBalancerBackendAddresses = append(*bp.LoadBalancerBackendAddresses, network.LoadBalancerBackendAddress{
-				Name: pointer.String(""),
+				Name: ptr.To(""),
 				LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-					IPAddress: pointer.String(ip),
+					IPAddress: ptr.To(ip),
 				},
 			})
 		}
@@ -586,7 +586,7 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			existingBackendPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.1"})
 			existingBackendPoolIPv6 := getTestBackendAddressPoolWithIPs("lb1", "default-svc1-ipv6", []string{"fd00::1"})
 			existingLB := network.LoadBalancer{
-				Name: pointer.String("lb1"),
+				Name: ptr.To("lb1"),
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					BackendAddressPools: &[]network.BackendAddressPool{
 						existingBackendPool,

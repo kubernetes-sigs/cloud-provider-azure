@@ -202,7 +202,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 		return err
 	}
 	if err := s.AddConversionFunc((*string)(nil), (**string)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_string_To_Pointer_string(a.(*string), b.(**string), scope)
+		return Convert_string_To_ptr.To(a.(*string), b.(**string), scope)
 	}); err != nil {
 		return err
 	}

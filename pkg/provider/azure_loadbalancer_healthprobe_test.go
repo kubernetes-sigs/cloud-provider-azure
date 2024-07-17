@@ -21,15 +21,15 @@ import (
 	"strings"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -48,7 +48,7 @@ func getTestProbe(protocol, path string, interval, servicePort, probePort, numOf
 		suffix = "-" + consts.IPVersionIPv6String
 	}
 	expectedProbes := network.Probe{
-		Name: pointer.String(fmt.Sprintf("atest1-TCP-%d", *servicePort) + suffix),
+		Name: ptr.To(fmt.Sprintf("atest1-TCP-%d", *servicePort) + suffix),
 		ProbePropertiesFormat: &network.ProbePropertiesFormat{
 			Protocol:          network.ProbeProtocol(protocol),
 			Port:              probePort,
@@ -57,14 +57,14 @@ func getTestProbe(protocol, path string, interval, servicePort, probePort, numOf
 		},
 	}
 	if (strings.EqualFold(protocol, "Http") || strings.EqualFold(protocol, "Https")) && len(strings.TrimSpace(path)) > 0 {
-		expectedProbes.RequestPath = pointer.String(path)
+		expectedProbes.RequestPath = ptr.To(path)
 	}
 	return expectedProbes
 }
 
 // getDefaultTestProbes returns dualStack probes.
 func getDefaultTestProbes(protocol, path string) map[bool][]network.Probe {
-	return getTestProbes(protocol, path, pointer.Int32(5), pointer.Int32(80), pointer.Int32(10080), pointer.Int32(2))
+	return getTestProbes(protocol, path, ptr.To(int32(5)), ptr.To(int32(80)), ptr.To(int32(10080)), ptr.To(int32(2)))
 }
 
 func TestFindProbe(t *testing.T) {
@@ -82,16 +82,16 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe names match while ports don't should return false",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("httpProbe"),
+					Name: ptr.To("httpProbe"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
+						Port: ptr.To(int32(1)),
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("httpProbe"),
+				Name: ptr.To("httpProbe"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(2),
+					Port: ptr.To(int32(2)),
 				},
 			},
 			expected: false,
@@ -100,16 +100,16 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe ports match while names don't should return false",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("probe1"),
+					Name: ptr.To("probe1"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
+						Port: ptr.To(int32(1)),
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("probe2"),
+				Name: ptr.To("probe2"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(1),
+					Port: ptr.To(int32(1)),
 				},
 			},
 			expected: false,
@@ -118,17 +118,17 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe protocol don't match should return false",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("probe1"),
+					Name: ptr.To("probe1"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:     pointer.Int32(1),
+						Port:     ptr.To(int32(1)),
 						Protocol: network.ProbeProtocolHTTP,
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
+				Name: ptr.To("probe1"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:     pointer.Int32(1),
+					Port:     ptr.To(int32(1)),
 					Protocol: network.ProbeProtocolTCP,
 				},
 			},
@@ -138,18 +138,18 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe path don't match should return false",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("probe1"),
+					Name: ptr.To("probe1"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:        pointer.Int32(1),
-						RequestPath: pointer.String("/path1"),
+						Port:        ptr.To(int32(1)),
+						RequestPath: ptr.To("/path1"),
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
+				Name: ptr.To("probe1"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:        pointer.Int32(1),
-					RequestPath: pointer.String("/path2"),
+					Port:        ptr.To(int32(1)),
+					RequestPath: ptr.To("/path2"),
 				},
 			},
 			expected: false,
@@ -158,20 +158,20 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe interval don't match should return false",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("probe1"),
+					Name: ptr.To("probe1"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port:              pointer.Int32(1),
-						RequestPath:       pointer.String("/path"),
-						IntervalInSeconds: pointer.Int32(5),
+						Port:              ptr.To(int32(1)),
+						RequestPath:       ptr.To("/path"),
+						IntervalInSeconds: ptr.To(int32(5)),
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("probe1"),
+				Name: ptr.To("probe1"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port:              pointer.Int32(1),
-					RequestPath:       pointer.String("/path"),
-					IntervalInSeconds: pointer.Int32(10),
+					Port:              ptr.To(int32(1)),
+					RequestPath:       ptr.To("/path"),
+					IntervalInSeconds: ptr.To(int32(10)),
 				},
 			},
 			expected: false,
@@ -180,16 +180,16 @@ func TestFindProbe(t *testing.T) {
 			msg: "probe match should return true",
 			existingProbe: []network.Probe{
 				{
-					Name: pointer.String("matchName"),
+					Name: ptr.To("matchName"),
 					ProbePropertiesFormat: &network.ProbePropertiesFormat{
-						Port: pointer.Int32(1),
+						Port: ptr.To(int32(1)),
 					},
 				},
 			},
 			curProbe: network.Probe{
-				Name: pointer.String("matchName"),
+				Name: ptr.To("matchName"),
 				ProbePropertiesFormat: &network.ProbePropertiesFormat{
-					Port: pointer.Int32(1),
+					Port: ptr.To(int32(1)),
 				},
 			},
 			expected: true,
@@ -226,7 +226,7 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String("notSharedProbe"),
+							Name: ptr.To("notSharedProbe"),
 						},
 					},
 				},
@@ -240,7 +240,7 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String(consts.SharedProbeName),
+							Name: ptr.To(consts.SharedProbeName),
 							ProbePropertiesFormat: &network.ProbePropertiesFormat{
 								LoadBalancingRules: &[]network.SubResource{},
 							},
@@ -261,15 +261,15 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String(consts.SharedProbeName),
-							ID:   pointer.String("id"),
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
 							ProbePropertiesFormat: &network.ProbePropertiesFormat{
 								LoadBalancingRules: &[]network.SubResource{
 									{
-										ID: pointer.String("other"),
+										ID: ptr.To("other"),
 									},
 									{
-										ID: pointer.String("auid"),
+										ID: ptr.To("auid"),
 									},
 								},
 							},
@@ -290,15 +290,15 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String(consts.SharedProbeName),
-							ID:   pointer.String("id"),
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
 							ProbePropertiesFormat: &network.ProbePropertiesFormat{
 								LoadBalancingRules: &[]network.SubResource{
 									{
-										ID: pointer.String("other"),
+										ID: ptr.To("other"),
 									},
 									{
-										ID: pointer.String("auid"),
+										ID: ptr.To("auid"),
 									},
 								},
 							},
@@ -319,12 +319,12 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String(consts.SharedProbeName),
-							ID:   pointer.String("id"),
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
 							ProbePropertiesFormat: &network.ProbePropertiesFormat{
 								LoadBalancingRules: &[]network.SubResource{
 									{
-										ID: pointer.String("auid"),
+										ID: ptr.To("auid"),
 									},
 								},
 							},
@@ -347,12 +347,12 @@ func TestShouldKeepSharedProbe(t *testing.T) {
 				LoadBalancerPropertiesFormat: &network.LoadBalancerPropertiesFormat{
 					Probes: &[]network.Probe{
 						{
-							Name: pointer.String(consts.SharedProbeName),
-							ID:   pointer.String("id"),
+							Name: ptr.To(consts.SharedProbeName),
+							ID:   ptr.To("id"),
 							ProbePropertiesFormat: &network.ProbePropertiesFormat{
 								LoadBalancingRules: &[]network.SubResource{
 									{
-										ID: pointer.String(""),
+										ID: ptr.To(""),
 									},
 								},
 							},

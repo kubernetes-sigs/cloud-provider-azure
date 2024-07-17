@@ -30,7 +30,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/zoneclient/mockzoneclient"
@@ -214,7 +214,7 @@ func TestGetZoneByProviderID(t *testing.T) {
 	mockVMClient := az.VirtualMachinesClient.(*mockvmclient.MockInterface)
 	mockVMClient.EXPECT().Get(gomock.Any(), az.ResourceGroup, "vm-0", gomock.Any()).Return(compute.VirtualMachine{
 		Zones:    &[]string{"1"},
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}, nil)
 	zone, err = az.GetZoneByProviderID(context.Background(), testAvailabilitySetNodeProviderID)
 	assert.NoError(t, err)

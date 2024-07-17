@@ -27,11 +27,12 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	autorestmocks "github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -110,11 +111,11 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 		for _, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: pointer.String("osdisk1"),
+					Name: ptr.To("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: pointer.String("ManagedID"),
+						ID: ptr.To("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: pointer.String("DiskEncryptionSetID"),
+							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
@@ -124,7 +125,7 @@ func TestAttachDiskWithVMSS(t *testing.T) {
 				diskURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s",
 					testCloud.SubscriptionID, testCloud.ResourceGroup, diskname)
 				vmssvm.StorageProfile.DataDisks = &[]compute.DataDisk{
-					{Lun: pointer.Int32(0), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
+					{Lun: ptr.To(int32(0)), Name: &diskname, ManagedDisk: &compute.ManagedDiskParameters{ID: &diskURI}},
 				}
 			}
 		}
@@ -249,26 +250,26 @@ func TestDetachDiskWithVMSS(t *testing.T) {
 		for itr, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: pointer.String("osdisk1"),
+					Name: ptr.To("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: pointer.String("ManagedID"),
+						ID: ptr.To("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: pointer.String("DiskEncryptionSetID"),
+							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{
 					{
-						Lun:  pointer.Int32(0),
-						Name: pointer.String(diskName),
+						Lun:  ptr.To(int32(0)),
+						Name: ptr.To(diskName),
 					},
 					{
-						Lun:  pointer.Int32(1),
-						Name: pointer.String("disk2"),
+						Lun:  ptr.To(int32(1)),
+						Name: ptr.To("disk2"),
 					},
 					{
-						Lun:  pointer.Int32(2),
-						Name: pointer.String("disk3"),
+						Lun:  ptr.To(int32(2)),
+						Name: ptr.To("disk3"),
 					},
 				},
 			}
@@ -331,7 +332,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss-vm-000001"},
 			vmssName:       "vm1",
 			vmssvmName:     "vm1",
-			existedDisk:    compute.Disk{Name: pointer.String(diskName)},
+			existedDisk:    compute.Disk{Name: ptr.To(diskName)},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("not a vmss instance"),
 		},
@@ -340,7 +341,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: pointer.String(diskName)},
+			existedDisk: compute.Disk{Name: ptr.To(diskName)},
 			expectedErr: false,
 		},
 		{
@@ -348,7 +349,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:     []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:       fakeStatusNotFoundVMSSName,
 			vmssvmName:     "vmss00-vm-000000",
-			existedDisk:    compute.Disk{Name: pointer.String(diskName)},
+			existedDisk:    compute.Disk{Name: ptr.To(diskName)},
 			expectedErr:    true,
 			expectedErrMsg: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 404, RawError: %w", fmt.Errorf("instance not found")),
 		},
@@ -357,7 +358,7 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 			vmssVMList:  []string{"vmss00-vm-000000", "vmss00-vm-000001", "vmss00-vm-000002"},
 			vmssName:    "vmss00",
 			vmssvmName:  "vmss00-vm-000000",
-			existedDisk: compute.Disk{Name: pointer.String("disk-name-err")},
+			existedDisk: compute.Disk{Name: ptr.To("disk-name-err")},
 			expectedErr: false,
 		},
 	}
@@ -380,17 +381,17 @@ func TestUpdateVMWithVMSS(t *testing.T) {
 		for itr, vmssvm := range expectedVMSSVMs {
 			vmssvm.StorageProfile = &compute.StorageProfile{
 				OsDisk: &compute.OSDisk{
-					Name: pointer.String("osdisk1"),
+					Name: ptr.To("osdisk1"),
 					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: pointer.String("ManagedID"),
+						ID: ptr.To("ManagedID"),
 						DiskEncryptionSet: &compute.DiskEncryptionSetParameters{
-							ID: pointer.String("DiskEncryptionSetID"),
+							ID: ptr.To("DiskEncryptionSetID"),
 						},
 					},
 				},
 				DataDisks: &[]compute.DataDisk{{
-					Lun:  pointer.Int32(0),
-					Name: pointer.String(diskName),
+					Lun:  ptr.To(int32(0)),
+					Name: ptr.To(diskName),
 				}},
 			}
 
@@ -456,8 +457,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			nodeName: "vmss00-vm-000000",
 			expectedDataDisks: []*armcompute.DataDisk{
 				{
-					Lun:  pointer.Int32(0),
-					Name: pointer.String("disk1"),
+					Lun:  ptr.To(int32(0)),
+					Name: ptr.To("disk1"),
 				},
 			},
 			expectedErr: false,
@@ -468,8 +469,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			nodeName: "vmss00-vm-000000",
 			expectedDataDisks: []*armcompute.DataDisk{
 				{
-					Lun:  pointer.Int32(0),
-					Name: pointer.String("disk1"),
+					Lun:  ptr.To(int32(0)),
+					Name: ptr.To("disk1"),
 				},
 			},
 			expectedErr: false,
@@ -501,8 +502,8 @@ func TestGetDataDisksWithVMSS(t *testing.T) {
 			for _, vmssvm := range expectedVMSSVMs {
 				vmssvm.StorageProfile = &compute.StorageProfile{
 					DataDisks: &[]compute.DataDisk{{
-						Lun:  pointer.Int32(0),
-						Name: pointer.String("disk1"),
+						Lun:  ptr.To(int32(0)),
+						Name: ptr.To("disk1"),
 					}},
 				}
 			}

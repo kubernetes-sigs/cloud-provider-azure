@@ -24,10 +24,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -62,7 +64,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		{
 			vmss: compute.VirtualMachineScaleSet{
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
-					ProvisioningState: pointer.String(consts.ProvisionStateDeleting),
+					ProvisioningState: ptr.To(consts.ProvisionStateDeleting),
 				},
 			},
 		},
@@ -136,14 +138,14 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 
 	expectedVM := compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: pointer.String("availability-set")},
+			AvailabilitySet: &compute.SubResource{ID: ptr.To("availability-set")},
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
 						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-							Primary: pointer.Bool(true),
+							Primary: ptr.To(true),
 						},
-						ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
+						ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -155,7 +157,7 @@ func TestGetPrivateIPsForMachine(t *testing.T) {
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						PrivateIPAddress: pointer.String("1.2.3.4"),
+						PrivateIPAddress: ptr.To("1.2.3.4"),
 					},
 				},
 			},
@@ -198,14 +200,14 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 
 	expectedVM := compute.VirtualMachine{
 		VirtualMachineProperties: &compute.VirtualMachineProperties{
-			AvailabilitySet: &compute.SubResource{ID: pointer.String("availability-set")},
+			AvailabilitySet: &compute.SubResource{ID: ptr.To("availability-set")},
 			NetworkProfile: &compute.NetworkProfile{
 				NetworkInterfaces: &[]compute.NetworkInterfaceReference{
 					{
 						NetworkInterfaceReferenceProperties: &compute.NetworkInterfaceReferenceProperties{
-							Primary: pointer.Bool(true),
+							Primary: ptr.To(true),
 						},
-						ID: pointer.String("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
+						ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
 					},
 				},
 			},
@@ -217,9 +219,9 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
 					InterfaceIPConfigurationPropertiesFormat: &network.InterfaceIPConfigurationPropertiesFormat{
-						PrivateIPAddress: pointer.String("1.2.3.4"),
+						PrivateIPAddress: ptr.To("1.2.3.4"),
 						PublicIPAddress: &network.PublicIPAddress{
-							ID: pointer.String("test/pip"),
+							ID: ptr.To("test/pip"),
 						},
 					},
 				},
@@ -228,9 +230,9 @@ func TestGetIPForMachineWithRetry(t *testing.T) {
 	}
 
 	expectedPIP := network.PublicIPAddress{
-		Name: pointer.String("pip"),
+		Name: ptr.To("pip"),
 		PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-			IPAddress: pointer.String("5.6.7.8"),
+			IPAddress: ptr.To("5.6.7.8"),
 		},
 	}
 
