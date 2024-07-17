@@ -553,7 +553,7 @@ func Convert_v1beta1_Issuer_To_apiserver_Issuer(in *Issuer, out *apiserver.Issue
 
 func autoConvert_apiserver_Issuer_To_v1beta1_Issuer(in *apiserver.Issuer, out *Issuer, s conversion.Scope) error {
 	out.URL = in.URL
-	if err := v1.Convert_string_To_ptr.To(&in.DiscoveryURL, &out.DiscoveryURL, s); err != nil {
+	if err := v1.Convert_string_To_Pointer_string(&in.DiscoveryURL, &out.DiscoveryURL, s); err != nil {
 		return err
 	}
 	out.CertificateAuthority = in.CertificateAuthority

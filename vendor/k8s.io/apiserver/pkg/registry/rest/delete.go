@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
-	utilpointer "k8s.io/utils/ptr"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 // RESTDeleteStrategy defines deletion behavior on an object that follows Kubernetes

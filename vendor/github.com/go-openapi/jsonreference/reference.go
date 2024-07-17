@@ -87,10 +87,10 @@ func (r *Ref) String() string {
 	}
 
 	if r.HasFragmentOnly {
-		return fragmentRune + r.referenceptr.To()
+		return fragmentRune + r.referencePointer.String()
 	}
 
-	return r.referenceptr.To()
+	return r.referencePointer.String()
 }
 
 // IsRoot returns true if this reference is a root document

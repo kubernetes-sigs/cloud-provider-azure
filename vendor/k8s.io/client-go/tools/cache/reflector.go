@@ -42,7 +42,7 @@ import (
 	"k8s.io/client-go/tools/pager"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-	"k8s.io/utils/ptr"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/trace"
 )

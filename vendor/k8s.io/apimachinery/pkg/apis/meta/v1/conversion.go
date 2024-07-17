@@ -99,7 +99,7 @@ func Convert_Pointer_string_To_string(in **string, out *string, s conversion.Sco
 	return nil
 }
 
-func Convert_string_To_ptr.To(in *string, out **string, s conversion.Scope) error {
+func Convert_string_To_Pointer_string(in *string, out **string, s conversion.Scope) error {
 	if in == nil {
 		stringVar := ""
 		*out = &stringVar

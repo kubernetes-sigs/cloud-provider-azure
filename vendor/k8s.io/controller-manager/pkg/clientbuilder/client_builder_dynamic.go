@@ -37,7 +37,7 @@ import (
 	"k8s.io/client-go/transport"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-	utilpointer "k8s.io/utils/ptr"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 var (
