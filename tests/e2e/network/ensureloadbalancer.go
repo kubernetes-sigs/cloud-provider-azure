@@ -37,7 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -148,11 +148,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		for _, rule := range lb.Properties.LoadBalancingRules {
 			switch {
 			case strings.EqualFold(string(*rule.Properties.Protocol), string(v1.ProtocolTCP)):
-				if pointer.Int32Deref(rule.Properties.FrontendPort, 0) == serverPort {
+				if ptr.Deref(rule.Properties.FrontendPort, 0) == serverPort {
 					foundTCP = true
 				}
 			case strings.EqualFold(string(*rule.Properties.Protocol), string(v1.ProtocolUDP)):
-				if pointer.Int32Deref(rule.Properties.FrontendPort, 0) == testingPort {
+				if ptr.Deref(rule.Properties.FrontendPort, 0) == testingPort {
 					foundUDP = true
 				}
 			}
@@ -166,7 +166,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		ipNameBase := basename + "-public-IP" + string(uuid.NewUUID())[0:4]
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		expectedTags := map[string]*string{
-			"foo": pointer.String("bar"),
+			"foo": ptr.To("bar"),
 		}
 		pips := []*aznetwork.PublicIPAddress{}
 		targetIPs := []*string{}
@@ -557,7 +557,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				for _, sharedIP := range sharedIPs {
 					pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), sharedIP)
 					Expect(err).NotTo(HaveOccurred())
-					pipNames = append(pipNames, pointer.StringDeref(pip.Name, ""))
+					pipNames = append(pipNames, ptr.Deref(pip.Name, ""))
 				}
 				utils.Logf("update pip names %s", strings.Join(pipNames, ","))
 				service = updateServicePIPNames(tc.IPFamily, service, pipNames)
@@ -611,8 +611,8 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			}
 
 			for _, pip := range pips {
-				if _, ok := sharedIPsMap[pointer.StringDeref(pip.Properties.IPAddress, "")]; ok {
-					utils.Logf("the public IP with address %s still exists", pointer.StringDeref(pip.Properties.IPAddress, ""))
+				if _, ok := sharedIPsMap[ptr.Deref(pip.Properties.IPAddress, "")]; ok {
+					utils.Logf("the public IP with address %s still exists", ptr.Deref(pip.Properties.IPAddress, ""))
 					return false, nil
 				}
 			}
@@ -722,7 +722,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				for _, ip := range lbBackendPoolIPs {
 					Expect(ip.Properties).NotTo(BeNil())
 					Expect(ip.Properties.NetworkInterfaceIPConfiguration).NotTo(BeNil())
-					ipConfigID := pointer.StringDeref(ip.Properties.NetworkInterfaceIPConfiguration.ID, "")
+					ipConfigID := ptr.Deref(ip.Properties.NetworkInterfaceIPConfiguration.ID, "")
 					if !strings.Contains(ipConfigID, utils.SystemPool) {
 						lbBackendPoolIPCount++
 					}
@@ -823,7 +823,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 				continue
 			}
 			utils.Logf("%q is the corresponding rule of the Service", *lbRule.Name)
-			Expect(pointer.BoolDeref(lbRule.Properties.EnableFloatingIP, false)).To(BeFalse())
+			Expect(ptr.Deref(lbRule.Properties.EnableFloatingIP, false)).To(BeFalse())
 			found = true
 			break
 		}
@@ -998,9 +998,9 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			Expect(err).NotTo(HaveOccurred())
 
 			if tc.IPFamily == utils.DualStack {
-				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = pointer.StringDeref(prefix.ID, "")
+				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[isIPv6]] = ptr.Deref(prefix.ID, "")
 			} else {
-				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = pointer.StringDeref(prefix.ID, "")
+				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = ptr.Deref(prefix.ID, "")
 			}
 			return deleteFunc
 		}
@@ -1043,13 +1043,13 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		By("Creating a subnet for ilb frontend ip")
 		subnetName := "testSubnet"
 		subnet, isNew := createNewSubnet(tc, subnetName)
-		Expect(pointer.StringDeref(subnet.Name, "")).To(Equal(subnetName))
+		Expect(ptr.Deref(subnet.Name, "")).To(Equal(subnetName))
 		if isNew {
 			defer func() {
 				utils.Logf("cleaning up test subnet %s", subnetName)
 				vNet, err := tc.GetClusterVirtualNetwork()
 				Expect(err).NotTo(HaveOccurred())
-				err = tc.DeleteSubnet(pointer.StringDeref(vNet.Name, ""), subnetName)
+				err = tc.DeleteSubnet(ptr.Deref(vNet.Name, ""), subnetName)
 				Expect(err).NotTo(HaveOccurred())
 			}()
 		}
@@ -1153,9 +1153,9 @@ func createNewSubnet(tc *utils.AzureTestClient, subnetName string) (*aznetwork.S
 
 func getResourceEtags(tc *utils.AzureTestClient, ip *string, nsgRulePrefix string, internal bool) (lbEtag, nsgEtag, pipEtag string) {
 	if internal {
-		lbEtag = pointer.StringDeref(getAzureInternalLoadBalancerFromPrivateIP(tc, ip, "").Etag, "")
+		lbEtag = ptr.Deref(getAzureInternalLoadBalancerFromPrivateIP(tc, ip, "").Etag, "")
 	} else {
-		lbEtag = pointer.StringDeref(getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "").Etag, "")
+		lbEtag = ptr.Deref(getAzureLoadBalancerFromPIP(tc, ip, tc.GetResourceGroup(), "").Etag, "")
 	}
 
 	nsgs, err := tc.GetClusterSecurityGroups()
@@ -1165,9 +1165,9 @@ func getResourceEtags(tc *utils.AzureTestClient, ip *string, nsgRulePrefix strin
 			continue
 		}
 		for _, securityRule := range nsg.Properties.SecurityRules {
-			utils.Logf("Checking security rule %q", pointer.StringDeref(securityRule.Name, ""))
-			if strings.HasPrefix(pointer.StringDeref(securityRule.Name, ""), nsgRulePrefix) {
-				nsgEtag = pointer.StringDeref(nsg.Etag, "")
+			utils.Logf("Checking security rule %q", ptr.Deref(securityRule.Name, ""))
+			if strings.HasPrefix(ptr.Deref(securityRule.Name, ""), nsgRulePrefix) {
+				nsgEtag = ptr.Deref(nsg.Etag, "")
 				break
 			}
 		}
@@ -1176,7 +1176,7 @@ func getResourceEtags(tc *utils.AzureTestClient, ip *string, nsgRulePrefix strin
 	if !internal {
 		pip, err := tc.GetPublicIPFromAddress(tc.GetResourceGroup(), ip)
 		Expect(err).NotTo(HaveOccurred())
-		pipEtag = pointer.StringDeref(pip.Etag, "")
+		pipEtag = ptr.Deref(pip.Etag, "")
 	}
 	utils.Logf("Got resource etags: lbEtag: %s; nsgEtag: %s, pipEtag: %s", lbEtag, nsgEtag, pipEtag)
 	return
@@ -1224,7 +1224,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip *string, expected
 				if lbBackendPoolIPConfigs != nil {
 					ipConfigNum = len(lbBackendPoolIPConfigs)
 					for _, ipConfig := range lbBackendPoolIPConfigs {
-						ipConfigIDs = append(ipConfigIDs, pointer.StringDeref(ipConfig.ID, ""))
+						ipConfigIDs = append(ipConfigIDs, ptr.Deref(ipConfig.ID, ""))
 					}
 				}
 				if expectedNum == ipConfigNum {
@@ -1255,7 +1255,7 @@ func waitForNodesInLBBackendPool(tc *utils.AzureTestClient, ip *string, expected
 							ip.Properties.NetworkInterfaceIPConfiguration == nil {
 							return false, fmt.Errorf("LB backendPool address's NIC IP config ID is nil")
 						}
-						ipConfigID := pointer.StringDeref(ip.Properties.NetworkInterfaceIPConfiguration.ID, "")
+						ipConfigID := ptr.Deref(ip.Properties.NetworkInterfaceIPConfiguration.ID, "")
 						if !strings.Contains(ipConfigID, utils.SystemPool) {
 							ipNum++
 							ipConfigIDs = append(ipConfigIDs, ipConfigID)
@@ -1340,8 +1340,8 @@ func defaultPublicIPAddress(ipName string, isIPv6 bool) *aznetwork.PublicIPAddre
 		}
 	}
 	pip := &aznetwork.PublicIPAddress{
-		Name:     pointer.String(ipName),
-		Location: pointer.String(os.Getenv(utils.ClusterLocationEnv)),
+		Name:     ptr.To(ipName),
+		Location: ptr.To(os.Getenv(utils.ClusterLocationEnv)),
 		SKU: &aznetwork.PublicIPAddressSKU{
 			Name: to.Ptr(skuName),
 		},
@@ -1363,13 +1363,13 @@ func defaultPublicIPPrefix(name string, isIPv6 bool) aznetwork.PublicIPPrefix {
 		prefixLen = 124
 	}
 	return aznetwork.PublicIPPrefix{
-		Name:     pointer.String(name),
-		Location: pointer.String(os.Getenv(utils.ClusterLocationEnv)),
+		Name:     ptr.To(name),
+		Location: ptr.To(os.Getenv(utils.ClusterLocationEnv)),
 		SKU: &aznetwork.PublicIPPrefixSKU{
 			Name: to.Ptr(aznetwork.PublicIPPrefixSKUNameStandard),
 		},
 		Properties: &aznetwork.PublicIPPrefixPropertiesFormat{
-			PrefixLength:           pointer.Int32(prefixLen),
+			PrefixLength:           ptr.To(prefixLen),
 			PublicIPAddressVersion: to.Ptr(pipAddrVersion),
 		},
 	}
@@ -1379,7 +1379,7 @@ func createPIP(tc *utils.AzureTestClient, ipNameBase string, isIPv6 bool) (strin
 	ipName := utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[isIPv6])
 	pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), defaultPublicIPAddress(ipName, isIPv6))
 	Expect(err).NotTo(HaveOccurred())
-	targetIP := pointer.StringDeref(pip.Properties.IPAddress, "")
+	targetIP := ptr.Deref(pip.Properties.IPAddress, "")
 	utils.Logf("Created PIP to %s", targetIP)
 	return targetIP, func() {
 		By("Cleaning up PIP")

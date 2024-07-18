@@ -25,13 +25,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // CreateTestResourceGroup create a test rg
 func CreateTestResourceGroup(tc *AzureTestClient) (*resources.ResourceGroup, func(string)) {
 	gc := tc.createResourceGroupClient()
-	rgName := pointer.String("e2e-" + string(uuid.NewUUID())[0:4])
+	rgName := ptr.To("e2e-" + string(uuid.NewUUID())[0:4])
 	rg, err := gc.CreateOrUpdate(context.Background(), *rgName, createTestTemplate(tc, rgName))
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("resource group %s created", *rgName))
@@ -47,6 +47,6 @@ func CreateTestResourceGroup(tc *AzureTestClient) (*resources.ResourceGroup, fun
 func createTestTemplate(tc *AzureTestClient, name *string) resources.ResourceGroup {
 	return resources.ResourceGroup{
 		Name:     name,
-		Location: pointer.String(tc.location),
+		Location: ptr.To(tc.location),
 	}
 }

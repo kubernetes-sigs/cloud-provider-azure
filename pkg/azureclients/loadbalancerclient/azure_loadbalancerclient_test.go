@@ -29,8 +29,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/pointer"
+
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -192,7 +194,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	lbList := []network.LoadBalancer{getTestLoadBalancer("lb1"), getTestLoadBalancer("lb2"), getTestLoadBalancer("lb3")}
-	partialResponse, err := json.Marshal(network.LoadBalancerListResult{Value: &lbList, NextLink: pointer.String("nextLink")})
+	partialResponse, err := json.Marshal(network.LoadBalancerListResult{Value: &lbList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
 	_, err = json.Marshal(network.LoadBalancerListResult{Value: &lbList})
 	assert.NoError(t, err)
@@ -230,7 +232,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := network.LoadBalancerListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -272,7 +274,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(lb.ID, ""), lb, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(lb.ID, ""), lb, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -290,7 +292,7 @@ func TestCreateOrUpdateBackendPools(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(backendAddressPool.ID, ""), backendAddressPool, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(backendAddressPool.ID, ""), backendAddressPool, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	lbClient := getTestLoadBalancerClient(armClient)
@@ -321,7 +323,7 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		armClient := mockarmclient.NewMockInterface(ctrl)
-		armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(lb.ID, "")).Return(test.armClientErr)
+		armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(lb.ID, "")).Return(test.armClientErr)
 
 		lbClient := getTestLoadBalancerClient(armClient)
 		rerr := lbClient.Delete(context.TODO(), "rg", "lb1")
@@ -392,18 +394,18 @@ func TestMigrateToIpBasedBackendPools(t *testing.T) {
 
 func getTestLoadBalancer(name string) network.LoadBalancer {
 	return network.LoadBalancer{
-		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s", name)),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s", name)),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 	}
 }
 
 func getTestBackendAddressPool(lbName, backendPoolName string) network.BackendAddressPool {
 	return network.BackendAddressPool{
-		ID:   pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, backendPoolName)),
-		Name: pointer.String(backendPoolName),
+		ID:   ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", lbName, backendPoolName)),
+		Name: ptr.To(backendPoolName),
 		BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
-			Location: pointer.String("eastus"),
+			Location: ptr.To("eastus"),
 		},
 	}
 }

@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/go-logr/logr"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 

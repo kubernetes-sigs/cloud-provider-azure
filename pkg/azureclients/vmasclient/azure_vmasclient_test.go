@@ -33,7 +33,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -318,7 +318,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	vmasList := []compute.AvailabilitySet{getTestVMAS("vmas1"), getTestVMAS("vmas2"), getTestVMAS("vmas3")}
-	partialResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList, NextLink: pointer.String("nextLink")})
+	partialResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
 	pagedResponse, err := json.Marshal(compute.AvailabilitySetListResult{Value: &vmasList})
 	assert.NoError(t, err)
@@ -403,7 +403,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := compute.AvailabilitySetListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -459,7 +459,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := compute.AvailabilitySetListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -495,12 +495,12 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 
 func getTestVMAS(name string) compute.AvailabilitySet {
 	return compute.AvailabilitySet{
-		ID:       pointer.String("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/vmas1"),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/availabilitySets/vmas1"),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 		Sku: &compute.Sku{
-			Name:     pointer.String("Standard"),
-			Capacity: pointer.Int64(3),
+			Name:     ptr.To("Standard"),
+			Capacity: ptr.To(int64(3)),
 		},
 	}
 }

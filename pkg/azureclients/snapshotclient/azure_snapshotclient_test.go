@@ -29,9 +29,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -316,7 +318,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	snList := []compute.Snapshot{getTestSnapshot("sn1"), getTestSnapshot("sn2"), getTestSnapshot("sn3")}
-	partialResponse, err := json.Marshal(compute.SnapshotList{Value: &snList, NextLink: pointer.String("nextLink")})
+	partialResponse, err := json.Marshal(compute.SnapshotList{Value: &snList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
 	pagedResponse, err := json.Marshal(compute.SnapshotList{Value: &snList})
 	assert.NoError(t, err)
@@ -394,7 +396,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := compute.SnapshotList{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -439,7 +441,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := compute.SnapshotList{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -477,7 +479,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(sn.ID, ""), sn).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(sn.ID, ""), sn).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
@@ -494,7 +496,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(sn.ID, ""), sn).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(sn.ID, ""), sn).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
@@ -547,7 +549,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	sn := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(sn.ID, ""), sn).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(sn.ID, ""), sn).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
@@ -562,7 +564,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(r.ID, "")).Return(nil).Times(1)
 
 	rtClient := getTestSnapshotClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "", "rg", "sn1")
@@ -615,7 +617,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	sn := getTestSnapshot("sn1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(sn.ID, "")).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(sn.ID, "")).Return(throttleErr).Times(1)
 
 	snClient := getTestSnapshotClient(armClient)
 	rerr := snClient.Delete(context.TODO(), "", "rg", "sn1")
@@ -625,9 +627,9 @@ func TestDeleteThrottle(t *testing.T) {
 
 func getTestSnapshot(name string) compute.Snapshot {
 	return compute.Snapshot{
-		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/snapshots/%s", name)),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Compute/snapshots/%s", name)),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 	}
 }
 

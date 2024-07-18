@@ -29,12 +29,13 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -200,7 +201,7 @@ var _ = Describe("Azure node resources", Label(utils.TestSuiteLabelNode), func()
 
 		utils.Logf("getting all NICs of VMSS VMs")
 		for _, vmssVM := range vmssVMs {
-			utils.Logf("Checking VMSS VM %q", pointer.StringDeref(vmssVM.Name, ""))
+			utils.Logf("Checking VMSS VM %q", ptr.Deref(vmssVM.Name, ""))
 			nodeName, err := utils.GetVMSSVMComputerName(vmssVM)
 			Expect(err).NotTo(HaveOccurred())
 

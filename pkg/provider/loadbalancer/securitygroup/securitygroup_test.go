@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"

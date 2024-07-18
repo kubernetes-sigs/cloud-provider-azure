@@ -25,7 +25,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"

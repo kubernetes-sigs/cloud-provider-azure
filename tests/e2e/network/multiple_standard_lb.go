@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 
@@ -112,10 +112,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 
 		for _, svcIP := range svcIPs {
 			lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-			lbName := pointer.StringDeref(lb.Name, "")
+			lbName := ptr.Deref(lb.Name, "")
 			for _, bp := range lb.Properties.BackendAddressPools {
 				for _, a := range bp.Properties.LoadBalancerBackendAddresses {
-					nodeName := pointer.StringDeref(a.Name, "")
+					nodeName := ptr.Deref(a.Name, "")
 					expectedVMSSName := lbNameToExpectedVMSetNameMap[lbName]
 					if nodeName == "" || !strings.HasPrefix(nodeName, expectedVMSSName) {
 						Fail(fmt.Sprintf("Node %s is not in the expected VMSS %s on LB %s", nodeName, expectedVMSSName, lbName))
@@ -140,7 +140,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		svcIP := svsWithLabel.Status.LoadBalancer.Ingress[0].IP
 		svcIPs = append(svcIPs, &svcIP)
 		lb := getAzureLoadBalancerFromPIP(tc, &svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-		Expect(pointer.StringDeref(lb.Name, "")).To(Equal("lb-2"))
+		Expect(ptr.Deref(lb.Name, "")).To(Equal("lb-2"))
 
 		svcCount := 2
 		var svc *v1.Service
@@ -195,10 +195,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling the deployment to 3 replicas and then to 1")
-		deployment.Spec.Replicas = pointer.Int32(3)
+		deployment.Spec.Replicas = ptr.To(int32(3))
 		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		deployment.Spec.Replicas = pointer.Int32(1)
+		deployment.Spec.Replicas = ptr.To(int32(1))
 		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -215,7 +215,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Scaling the deployment to 5")
-		deployment.Spec.Replicas = pointer.Int32(5)
+		deployment.Spec.Replicas = ptr.To(int32(5))
 		_, err = cs.AppsV1().Deployments(ns.Name).Update(context.Background(), deployment, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodeNames, err = getDeploymentPodsNodeNames(cs, ns.Name, testDeploymentName)
@@ -268,14 +268,14 @@ func getDeploymentPodsNodeNames(kubeClient clientset.Interface, namespace, deplo
 func checkNodeCountInBackendPoolByServiceIPs(tc *utils.AzureTestClient, expectedLBName, bpName string, svcIPs []*string, expectedCount int) error {
 	for _, svcIP := range svcIPs {
 		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-		lbName := pointer.StringDeref(lb.Name, "")
+		lbName := ptr.Deref(lb.Name, "")
 		if !strings.EqualFold(lbName, expectedLBName) {
 			return fmt.Errorf("expected load balancer name %s, actual %s", expectedLBName, lbName)
 		}
 
 		var found bool
 		for _, bp := range lb.Properties.BackendAddressPools {
-			if strings.HasPrefix(strings.ToLower(pointer.StringDeref(bp.Name, "")), strings.ToLower(bpName)) {
+			if strings.HasPrefix(strings.ToLower(ptr.Deref(bp.Name, "")), strings.ToLower(bpName)) {
 				found = true
 			}
 			if len(bp.Properties.LoadBalancerBackendAddresses) != expectedCount {
@@ -293,7 +293,7 @@ func getLBsFromPublicIPs(tc *utils.AzureTestClient, pips []*string) sets.Set[str
 	lbNames := sets.New[string]()
 	for _, svcIP := range pips {
 		lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
-		lbName := pointer.StringDeref(lb.Name, "")
+		lbName := ptr.Deref(lb.Name, "")
 		lbNames.Insert(lbName)
 	}
 	return lbNames

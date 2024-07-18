@@ -24,9 +24,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/publicipclient/mockpublicipclient"
@@ -69,36 +71,36 @@ func TestListManagedLBs(t *testing.T) {
 		},
 		{
 			existingLBs: []network.LoadBalancer{
-				{Name: pointer.String("kubernetes")},
-				{Name: pointer.String("kubernetes-internal")},
-				{Name: pointer.String("vmas-1")},
-				{Name: pointer.String("vmas-1-internal")},
-				{Name: pointer.String("unmanaged")},
-				{Name: pointer.String("unmanaged-internal")},
+				{Name: ptr.To("kubernetes")},
+				{Name: ptr.To("kubernetes-internal")},
+				{Name: ptr.To("vmas-1")},
+				{Name: ptr.To("vmas-1-internal")},
+				{Name: ptr.To("unmanaged")},
+				{Name: ptr.To("unmanaged-internal")},
 			},
 			expectedLBs: &[]network.LoadBalancer{
-				{Name: pointer.String("kubernetes")},
-				{Name: pointer.String("kubernetes-internal")},
-				{Name: pointer.String("vmas-1")},
-				{Name: pointer.String("vmas-1-internal")},
+				{Name: ptr.To("kubernetes")},
+				{Name: ptr.To("kubernetes-internal")},
+				{Name: ptr.To("vmas-1")},
+				{Name: ptr.To("vmas-1-internal")},
 			},
 			callTimes: 1,
 		},
 		{
 			existingLBs: []network.LoadBalancer{
-				{Name: pointer.String("kubernetes")},
-				{Name: pointer.String("kubernetes-internal")},
-				{Name: pointer.String("lb1-internal")},
-				{Name: pointer.String("lb2")},
+				{Name: ptr.To("kubernetes")},
+				{Name: ptr.To("kubernetes-internal")},
+				{Name: ptr.To("lb1-internal")},
+				{Name: ptr.To("lb2")},
 			},
 			multiSLBConfigs: []MultipleStandardLoadBalancerConfiguration{
 				{Name: "kubernetes"},
 				{Name: "lb1"},
 			},
 			expectedLBs: &[]network.LoadBalancer{
-				{Name: pointer.String("kubernetes")},
-				{Name: pointer.String("kubernetes-internal")},
-				{Name: pointer.String("lb1-internal")},
+				{Name: ptr.To("kubernetes")},
+				{Name: ptr.To("kubernetes-internal")},
+				{Name: ptr.To("lb1-internal")},
 			},
 		},
 	}
@@ -159,15 +161,15 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		mockPIPClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 		mockPIPClient.EXPECT().CreateOrUpdate(gomock.Any(), az.ResourceGroup, "pip", gomock.Any()).Return(nil).MaxTimes(1)
 		mockPIPClient.EXPECT().List(gomock.Any(), az.ResourceGroup).Return([]network.PublicIPAddress{{
-			Name: pointer.String("pip"),
+			Name: ptr.To("pip"),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 				ProvisioningState: network.ProvisioningStateSucceeded,
 			},
 		}}, nil).MaxTimes(2)
 
 		err := az.CreateOrUpdateLB(&v1.Service{}, network.LoadBalancer{
-			Name: pointer.String("lb"),
-			Etag: pointer.String("etag"),
+			Name: ptr.To("lb"),
+			Etag: ptr.To("etag"),
 		})
 		assert.EqualError(t, test.expectedErr, err.Error())
 
@@ -270,29 +272,29 @@ func TestMigrateToIPBasedBackendPoolAndWaitForCompletion(t *testing.T) {
 		{
 			desc: "MigrateToIPBasedBackendPoolAndWaitForCompletion should retry if the number IPs on the backend pool is not expected",
 			backendPool: network.BackendAddressPool{
-				Name: pointer.String(testClusterName),
+				Name: ptr.To(testClusterName),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: pointer.String("1.2.3.4"),
+								IPAddress: ptr.To("1.2.3.4"),
 							},
 						},
 					},
 				},
 			},
 			backendPoolAfterRetry: &network.BackendAddressPool{
-				Name: pointer.String(testClusterName),
+				Name: ptr.To(testClusterName),
 				BackendAddressPoolPropertiesFormat: &network.BackendAddressPoolPropertiesFormat{
 					LoadBalancerBackendAddresses: &[]network.LoadBalancerBackendAddress{
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: pointer.String("1.2.3.4"),
+								IPAddress: ptr.To("1.2.3.4"),
 							},
 						},
 						{
 							LoadBalancerBackendAddressPropertiesFormat: &network.LoadBalancerBackendAddressPropertiesFormat{
-								IPAddress: pointer.String("2.3.4.5"),
+								IPAddress: ptr.To("2.3.4.5"),
 							},
 						},
 					},

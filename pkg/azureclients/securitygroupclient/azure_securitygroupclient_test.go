@@ -32,7 +32,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -257,7 +257,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := network.SecurityGroupListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -302,7 +302,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := network.SecurityGroupListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -356,7 +356,7 @@ func TestListWithNextPage(t *testing.T) {
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	nsgList := []network.SecurityGroup{getTestSecurityGroup("nsg1"), getTestSecurityGroup("nsg2"), getTestSecurityGroup("nsg3")}
-	partialResponse, err := json.Marshal(network.SecurityGroupListResult{Value: &nsgList, NextLink: pointer.String("nextLink")})
+	partialResponse, err := json.Marshal(network.SecurityGroupListResult{Value: &nsgList, NextLink: ptr.To("nextLink")})
 	assert.NoError(t, err)
 	pagedResponse, err := json.Marshal(network.SecurityGroupListResult{Value: &nsgList})
 	assert.NoError(t, err)
@@ -448,7 +448,7 @@ func TestCreateOrUpdate(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(nsg.ID, ""), nsg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(nsg.ID, ""), nsg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -465,7 +465,7 @@ func TestCreateOrUpdateWithCreateOrUpdateResponderError(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 	}
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(nsg.ID, ""), nsg, gomock.Any()).Return(response, nil).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(nsg.ID, ""), nsg, gomock.Any()).Return(response, nil).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -520,7 +520,7 @@ func TestCreateOrUpdateThrottle(t *testing.T) {
 
 	nsg := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().PutResource(gomock.Any(), pointer.StringDeref(nsg.ID, ""), nsg, gomock.Any()).Return(response, throttleErr).Times(1)
+	armClient.EXPECT().PutResource(gomock.Any(), ptr.Deref(nsg.ID, ""), nsg, gomock.Any()).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
@@ -535,7 +535,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(r.ID, "")).Return(nil).Times(1)
 
 	rtClient := getTestSecurityGroupClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "rg", "nsg1")
@@ -590,7 +590,7 @@ func TestDeleteThrottle(t *testing.T) {
 
 	nsg := getTestSecurityGroup("nsg1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(nsg.ID, "")).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(nsg.ID, "")).Return(throttleErr).Times(1)
 
 	nsgClient := getTestSecurityGroupClient(armClient)
 	rerr := nsgClient.Delete(context.TODO(), "rg", "nsg1")
@@ -600,9 +600,9 @@ func TestDeleteThrottle(t *testing.T) {
 
 func getTestSecurityGroup(name string) network.SecurityGroup {
 	return network.SecurityGroup{
-		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/%s", name)),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/%s", name)),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 	}
 }
 

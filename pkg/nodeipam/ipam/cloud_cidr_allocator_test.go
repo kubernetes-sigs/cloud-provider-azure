@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmssclient/mockvmssclient"
@@ -168,8 +168,8 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			description: "updateNodeSubnetMaskSizes should put the correct mask sizes on the map",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: pointer.String("25"),
-				consts.VMSetCIDRIPV6TagKey: pointer.String("65"),
+				consts.VMSetCIDRIPV4TagKey: ptr.To("25"),
+				consts.VMSetCIDRIPV6TagKey: ptr.To("65"),
 			},
 			expectedNodeNameSubnetMaskSizesMap: map[string][]int{"vmss-0": {25, 65}},
 		},
@@ -177,8 +177,8 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			description: "updateNodeSubnetMaskSizes should put the default mask sizes on the map if the providerID is invalid",
 			providerID:  "invalid",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: pointer.String("24"),
-				consts.VMSetCIDRIPV6TagKey: pointer.String("64"),
+				consts.VMSetCIDRIPV4TagKey: ptr.To("24"),
+				consts.VMSetCIDRIPV6TagKey: ptr.To("64"),
 			},
 			expectedNodeNameSubnetMaskSizesMap: map[string][]int{"vmss-0": {24, 64}},
 		},
@@ -186,8 +186,8 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			description: "updateNodeSubnetMaskSizes should report an error if the ipv4 mask is smaller than the cluster mask",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: pointer.String("15"),
-				consts.VMSetCIDRIPV6TagKey: pointer.String("65"),
+				consts.VMSetCIDRIPV4TagKey: ptr.To("15"),
+				consts.VMSetCIDRIPV6TagKey: ptr.To("65"),
 			},
 			expectedNodeNameSubnetMaskSizesMap: map[string][]int{},
 			expectedErr:                        fmt.Errorf("updateNodeSubnetMaskSizes: invalid ipv4 mask size %d of node %s because it is out of the range of the cluster CIDR with the mask size %d", 15, "vmss-0", 16),
@@ -196,8 +196,8 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			description: "updateNodeSubnetMaskSizes should report an error if the ipv6 mask is smaller than the cluster mask",
 			providerID:  "azure:///subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 			tags: map[string]*string{
-				consts.VMSetCIDRIPV4TagKey: pointer.String("25"),
-				consts.VMSetCIDRIPV6TagKey: pointer.String("45"),
+				consts.VMSetCIDRIPV4TagKey: ptr.To("25"),
+				consts.VMSetCIDRIPV6TagKey: ptr.To("45"),
 			},
 			expectedNodeNameSubnetMaskSizesMap: map[string][]int{},
 			expectedErr:                        fmt.Errorf("updateNodeSubnetMaskSizes: invalid ipv6 mask size %d of node %s because it is out of the range of the cluster CIDR with the mask size %d", 45, "vmss-0", 48),
@@ -209,7 +209,7 @@ func TestUpdateNodeSubnetMaskSizes(t *testing.T) {
 			assert.NoError(t, err)
 
 			expectedVMSS := compute.VirtualMachineScaleSet{
-				Name: pointer.String("vmss"),
+				Name: ptr.To("vmss"),
 				Tags: tc.tags,
 				VirtualMachineScaleSetProperties: &compute.VirtualMachineScaleSetProperties{
 					OrchestrationMode: compute.Uniform,

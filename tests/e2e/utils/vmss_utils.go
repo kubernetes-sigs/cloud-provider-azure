@@ -25,10 +25,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	azcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -79,7 +80,7 @@ func ScaleVMSS(tc *AzureTestClient, vmssName string, instanceCount int64) (err e
 		Location: vmss.Location,
 		SKU: &azcompute.SKU{
 			Name:     vmss.SKU.Name,
-			Capacity: pointer.Int64(instanceCount),
+			Capacity: ptr.To(instanceCount),
 		},
 	}
 

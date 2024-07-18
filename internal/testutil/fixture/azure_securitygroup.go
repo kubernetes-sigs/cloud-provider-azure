@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
+
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"

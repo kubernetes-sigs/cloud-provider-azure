@@ -32,7 +32,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	azclients "sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/armclient"
@@ -158,7 +158,7 @@ func TestAllNeverRateLimiter(t *testing.T) {
 	assert.Equal(t, saErr3, rerr3)
 
 	sa := storage.AccountCreateParameters{
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}
 
 	rerr4 := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
@@ -218,7 +218,7 @@ func TestAllRetryAfterReader(t *testing.T) {
 	assert.Equal(t, saErr3, rerr3)
 
 	sa := storage.AccountCreateParameters{
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}
 
 	rerr4 := saClient.Create(context.TODO(), "", "rg", "sa1", sa)
@@ -244,7 +244,7 @@ func TestAllThrottle(t *testing.T) {
 	}
 
 	sa := storage.AccountCreateParameters{
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}
 
 	r := getTestStorageAccount("sa1")
@@ -253,7 +253,7 @@ func TestAllThrottle(t *testing.T) {
 	armClient.EXPECT().PostResource(gomock.Any(), testResourceID, "listKeys", struct{}{}, map[string]interface{}{}).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().GetResource(gomock.Any(), testResourceID).Return(response, throttleErr).Times(1)
 	armClient.EXPECT().PutResource(gomock.Any(), testResourceID, sa).Return(response, throttleErr).Times(1)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(throttleErr).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(r.ID, "")).Return(throttleErr).Times(1)
 	armClient.EXPECT().CloseResponse(gomock.Any(), gomock.Any()).Times(3)
 
 	saClient := getTestStorageAccountClient(armClient)
@@ -379,7 +379,7 @@ func TestListNextResultsMultiPages(t *testing.T) {
 	}
 
 	lastResult := storage.AccountListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	for _, test := range tests {
@@ -424,7 +424,7 @@ func TestListNextResultsMultiPagesWithListResponderError(t *testing.T) {
 	}
 
 	lastResult := storage.AccountListResult{
-		NextLink: pointer.String("next"),
+		NextLink: ptr.To("next"),
 	}
 
 	armClient := mockarmclient.NewMockInterface(ctrl)
@@ -498,7 +498,7 @@ func TestCreate(t *testing.T) {
 	defer ctrl.Finish()
 
 	sa := storage.AccountCreateParameters{
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
@@ -518,7 +518,7 @@ func TestCreateResponderError(t *testing.T) {
 	defer ctrl.Finish()
 
 	sa := storage.AccountCreateParameters{
-		Location: pointer.String("eastus"),
+		Location: ptr.To("eastus"),
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
@@ -538,7 +538,7 @@ func TestUpdate(t *testing.T) {
 	defer ctrl.Finish()
 
 	sa := storage.AccountUpdateParameters{
-		Tags: map[string]*string{"key": pointer.String("value")},
+		Tags: map[string]*string{"key": ptr.To("value")},
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
@@ -558,7 +558,7 @@ func TestUpdateResponderError(t *testing.T) {
 	defer ctrl.Finish()
 
 	sa := storage.AccountUpdateParameters{
-		Tags: map[string]*string{"key": pointer.String("value")},
+		Tags: map[string]*string{"key": ptr.To("value")},
 	}
 	armClient := mockarmclient.NewMockInterface(ctrl)
 	response := &http.Response{
@@ -579,7 +579,7 @@ func TestDelete(t *testing.T) {
 
 	r := getTestStorageAccount("sa1")
 	armClient := mockarmclient.NewMockInterface(ctrl)
-	armClient.EXPECT().DeleteResource(gomock.Any(), pointer.StringDeref(r.ID, "")).Return(nil).Times(1)
+	armClient.EXPECT().DeleteResource(gomock.Any(), ptr.Deref(r.ID, "")).Return(nil).Times(1)
 
 	rtClient := getTestStorageAccountClient(armClient)
 	rerr := rtClient.Delete(context.TODO(), "", "rg", "sa1")
@@ -588,9 +588,9 @@ func TestDelete(t *testing.T) {
 
 func getTestStorageAccount(name string) storage.Account {
 	return storage.Account{
-		ID:       pointer.String(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/%s", name)),
-		Name:     pointer.String(name),
-		Location: pointer.String("eastus"),
+		ID:       ptr.To(fmt.Sprintf("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/%s", name)),
+		Name:     ptr.To(name),
+		Location: ptr.To("eastus"),
 	}
 }
 

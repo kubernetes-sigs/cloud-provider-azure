@@ -30,7 +30,8 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/utils/pointer"
+
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -85,19 +86,19 @@ func TestDoHackRegionalRetryForGET(t *testing.T) {
 			"RegionalRetry",
 			"{\"error\":{\"code\":\"ResourceGroupNotFound\"}}",
 			http.StatusInternalServerError,
-			pointer.String("100"),
+			ptr.To("100"),
 		},
 		{
 			"ReplicationLatency-Content-Length-0",
 			"{}",
 			http.StatusOK,
-			pointer.String("0"),
+			ptr.To("0"),
 		},
 		{
 			"ReplicationLatency-Content-Length-minus-1",
 			"{}",
 			http.StatusOK,
-			pointer.String("-1"),
+			ptr.To("-1"),
 		},
 	}
 
