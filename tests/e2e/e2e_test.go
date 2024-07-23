@@ -43,6 +43,7 @@ const (
 	clusterProvisioningToolCAPZ = "capz"
 	testMultiSLB                = "TEST_MULTI_SLB"
 	healthProbeMode             = "HEALTH_PROBE_MODE"
+	failFast                    = "FAIL_FAST"
 )
 
 func TestAzureTest(t *testing.T) {
@@ -64,6 +65,10 @@ func TestAzureTest(t *testing.T) {
 
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 	suiteConfig.Timeout = 0
+
+	if os.Getenv(failFast) == utils.TrueValue {
+		suiteConfig.FailFast = true
+	}
 
 	labelFilters := []string{}
 	if suiteConfig.LabelFilter != "" {
