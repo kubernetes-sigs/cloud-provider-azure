@@ -1,4 +1,4 @@
-# github.com/Azure/azure-kusto-go v0.15.3
+# github.com/Azure/azure-kusto-go v0.16.0
 ## explicit; go 1.19
 github.com/Azure/azure-kusto-go/kusto
 github.com/Azure/azure-kusto-go/kusto/data/errors
