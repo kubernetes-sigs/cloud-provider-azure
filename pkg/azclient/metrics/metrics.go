@@ -27,6 +27,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	api "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
 )
 
 var (
@@ -59,12 +62,22 @@ func BeginARMRequest(subscriptionID, resourceGroup, resource, method string) *AR
 // It's a convenience method for calling Done, Errored, RateLimited, or Throttled.
 // You should not call this method after calling one of the other methods.
 func (c *ARMContext) Observe(ctx context.Context, err error) {
-	if err != nil {
-		c.Errored(ctx, err)
+	if err == nil {
+		c.Done(ctx)
 		return
 	}
 
-	c.Done(ctx)
+	if errors.Is(err, ratelimit.ErrRateLimitReached) {
+		c.RateLimited(ctx)
+		return
+	}
+
+	if errors.Is(err, retryrepectthrottled.ErrTooManyRequest) {
+		c.Throttled(ctx)
+		return
+	}
+
+	c.Errored(ctx, err)
 }
 
 // Done finishes the ARMContext and records the latency.
@@ -76,7 +89,6 @@ func (c *ARMContext) Done(ctx context.Context) {
 // Errored finishes the ARMContext and records the error.
 func (c *ARMContext) Errored(ctx context.Context, err error) {
 	c.Done(ctx)
-
 	var respErr *azcore.ResponseError
 	if errors.As(err, &respErr) {
 		attributes := append(c.attributes,
