@@ -19,6 +19,7 @@ package ipam
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
@@ -127,7 +128,11 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 				// This will happen if:
 				// 1. We find garbage in the podCIDRs field. Retrying is useless.
 				// 2. CIDR out of range: This means a node CIDR has changed.
-				// This error will keep crashing controller-manager.
+				// This error should not keep crashing controller-manager as there may be a podcidr migration happening.
+				if strings.Contains(err.Error(), "is out the range of cluster cidr") {
+					klog.Warningf("Error occupying podCIDR %s on node %s: %v", node.Spec.PodCIDR, node.Name, err)
+					continue
+				}
 				return nil, err
 			}
 		}
