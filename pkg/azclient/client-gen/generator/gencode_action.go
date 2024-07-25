@@ -43,6 +43,7 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 		return err
 	}
 	if len(markerConf.Verbs) > 0 {
+		importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"] = make(map[string]struct{})
 		importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"] = make(map[string]struct{})
 		importList["context"] = make(map[string]struct{})
 	}
