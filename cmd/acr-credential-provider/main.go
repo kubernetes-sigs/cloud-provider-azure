@@ -44,7 +44,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			acrProvider, err := credentialprovider.NewAcrProvider(args[0])
+			acrProvider, err := credentialprovider.NewAcrProviderFromConfig(args[0])
 			if err != nil {
 				klog.Errorf("Failed to initialize ACR provider: %v", err)
 				os.Exit(1)
