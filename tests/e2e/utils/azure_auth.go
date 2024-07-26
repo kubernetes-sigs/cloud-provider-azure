@@ -27,12 +27,13 @@ import (
 const (
 	TenantIDEnv               = "AZURE_TENANT_ID"
 	SubscriptionEnv           = "AZURE_SUBSCRIPTION_ID"
-	ServicePrincipleIDEnv     = "AZURE_CLIENT_ID"
+	AADClientIDEnv            = "AZURE_CLIENT_ID"
 	ServicePrincipleSecretEnv = "AZURE_CLIENT_SECRET" // #nosec G101
 	ClusterLocationEnv        = "AZURE_LOCATION"
 	ClusterEnvironment        = "AZURE_ENVIRONMENT"
 	LoadBalancerSkuEnv        = "AZURE_LOADBALANCER_SKU"
 	managedIdentityClientID   = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
+	federatedTokenFile        = "AZURE_FEDERATED_TOKEN_FILE"
 	managedIdentityType       = "E2E_MANAGED_IDENTITY_TYPE"
 
 	userAssignedManagedIdentity = "userassigned"
@@ -46,13 +47,14 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 	}
 
 	var azureAuthConfig azclient.AzureAuthConfig
-	servicePrincipleIDEnv := os.Getenv(ServicePrincipleIDEnv)
+	aadClientIDEnv := os.Getenv(AADClientIDEnv)
 	servicePrincipleSecretEnv := os.Getenv(ServicePrincipleSecretEnv)
 	managedIdentityTypeEnv := os.Getenv(managedIdentityType)
 	managedIdentityClientIDEnv := os.Getenv(managedIdentityClientID)
-	if servicePrincipleIDEnv != "" && servicePrincipleSecretEnv != "" {
+	federatedTokenFileEnv := os.Getenv(federatedTokenFile)
+	if aadClientIDEnv != "" && servicePrincipleSecretEnv != "" {
 		azureAuthConfig = azclient.AzureAuthConfig{
-			AADClientID:     servicePrincipleIDEnv,
+			AADClientID:     aadClientIDEnv,
 			AADClientSecret: servicePrincipleSecretEnv,
 		}
 	} else if managedIdentityTypeEnv != "" {
@@ -62,6 +64,12 @@ func azureAuthConfigFromTestProfile() (*azclient.AzureAuthConfig, *azclient.ARMC
 		if managedIdentityTypeEnv == userAssignedManagedIdentity {
 			azureAuthConfig.UserAssignedIdentityID = managedIdentityClientIDEnv
 
+		}
+	} else if federatedTokenFileEnv != "" {
+		azureAuthConfig = azclient.AzureAuthConfig{
+			AADFederatedTokenFile:                 federatedTokenFileEnv,
+			UseFederatedWorkloadIdentityExtension: true,
+			AADClientID:                           aadClientIDEnv,
 		}
 	} else {
 		return nil, nil, nil, fmt.Errorf("failed to get Azure auth config from environment")
