@@ -1,6 +1,7 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace
 
-go 1.21.1
+go 1.22.5
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0
 	go.opentelemetry.io/otel v1.28.0
