@@ -46,6 +46,8 @@ var (
 		false: "",
 		true:  "-IPv6",
 	}
+
+	UnwantedTagKeys = []string{"DateCreated"}
 )
 
 // getVirtualNetworkList returns the list of virtual networks in the cluster resource group.
@@ -287,7 +289,17 @@ func WaitCreatePIP(azureTestClient *AzureTestClient, ipName, rgName string, ipPa
 		}
 		return pip.Properties.IPAddress != nil, nil
 	})
+	if err == nil {
+		pip.Tags = cleanupTags(pip.Tags, UnwantedTagKeys)
+	}
 	return pip, err
+}
+
+func cleanupTags(tags map[string]*string, unwantedKeys []string) map[string]*string {
+	for _, key := range unwantedKeys {
+		delete(tags, key)
+	}
+	return tags
 }
 
 func WaitCreatePIPPrefix(
@@ -414,6 +426,9 @@ func WaitGetPIP(azureTestClient *AzureTestClient, ipName string) (pip *aznetwork
 		}
 		return true, nil
 	})
+	if err == nil {
+		pip.Tags = cleanupTags(pip.Tags, UnwantedTagKeys)
+	}
 	return
 }
 
