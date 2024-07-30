@@ -19,6 +19,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 
 	acr "github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry"
@@ -145,11 +147,30 @@ func AZACRLogin(acrName string) (err error) {
 	}
 
 	Logf("Attempting az login with azure cred.")
-	//nolint:gosec // G204 ignore this!
-	cmd := exec.Command("az", "login", "--service-principal",
+	authFlags := []string{
 		"--username", authConfig.AADClientID,
 		"--password", authConfig.AADClientSecret,
-		"--tenant", authConfig.TenantID)
+	}
+	if authConfig.UseFederatedWorkloadIdentityExtension {
+		tokenFile, err := os.Open(authConfig.AADFederatedTokenFile)
+		if err != nil {
+			return err
+		}
+		token, err := io.ReadAll(tokenFile)
+		if err != nil {
+			return err
+		}
+		authFlags = []string{
+			"--username", authConfig.AADClientID,
+			"--federated-token", string(token),
+		}
+	}
+	args := []string{
+		"login", "--service-principal",
+		"--tenant", authConfig.TenantID,
+	}
+	//nolint:gosec // G204 ignore this!
+	cmd := exec.Command("az", append(args, authFlags...)...)
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("az failed to login with error: %w", err)
 	}
