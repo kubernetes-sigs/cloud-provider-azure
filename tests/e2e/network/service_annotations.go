@@ -1415,6 +1415,9 @@ func waitComparePIPTags(tc *utils.AzureTestClient, expectedTags map[string]*stri
 		delete(tags, consts.LegacyClusterNameKey)
 		delete(tags, consts.ServiceTagKey)
 		delete(tags, consts.LegacyServiceTagKey)
+		for _, k := range utils.UnwantedTagKeys {
+			delete(tags, k)
+		}
 
 		printTags := func(name string, ts map[string]*string) {
 			msg := ""
