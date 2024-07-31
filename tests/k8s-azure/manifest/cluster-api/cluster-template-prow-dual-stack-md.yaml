@@ -1,3 +1,4 @@
+---
 # Modified from: https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/test/ci/cluster-template-prow-dual-stack.yaml
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
@@ -132,8 +133,7 @@ spec:
       - /var/lib/etcddisk
     postKubeadmCommands:
     - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-    - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-      /etc/resolv.conf
+    - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
     - systemctl restart systemd-resolved
     preKubeadmCommands: []
   machineTemplate:
@@ -152,6 +152,9 @@ metadata:
 spec:
   template:
     spec:
+      identity: UserAssigned
+      userAssignedIdentities:
+      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       dataDisks:
       - diskSizeGB: 256
         lun: 0
@@ -173,11 +176,8 @@ metadata:
 spec:
   allowedNamespaces: {}
   clientID: ${AZURE_CLIENT_ID}
-  clientSecret:
-    name: ${AZURE_CLUSTER_IDENTITY_SECRET_NAME}
-    namespace: ${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}
   tenantID: ${AZURE_TENANT_ID}
-  type: ServicePrincipal
+  type: WorkloadIdentity
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -188,7 +188,7 @@ spec:
   clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT}
   selector:
-    matchLabels: null
+    matchLabels:
   template:
     spec:
       bootstrap:
@@ -211,6 +211,9 @@ metadata:
 spec:
   template:
     spec:
+      identity: UserAssigned
+      userAssignedIdentities:
+      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       enableIPForwarding: true
       osDisk:
         diskSizeGB: 30
@@ -244,8 +247,7 @@ spec:
           name: '{{ ds.meta_data["local_hostname"] }}'
       postKubeadmCommands:
       - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-      - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-        /etc/resolv.conf
+      - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
       - systemctl restart systemd-resolved
 ---
 apiVersion: addons.cluster.x-k8s.io/v1alpha1
