@@ -186,11 +186,8 @@ metadata:
 spec:
   allowedNamespaces: {}
   clientID: ${AZURE_CLIENT_ID}
-  clientSecret:
-    name: ${AZURE_CLUSTER_IDENTITY_SECRET_NAME}
-    namespace: ${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}
   tenantID: ${AZURE_TENANT_ID}
-  type: ServicePrincipal
+  type: WorkloadIdentity
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -222,8 +219,14 @@ metadata:
   name: ${CLUSTER_NAME}-md-0
   namespace: default
 spec:
+  identity: UserAssigned
+  userAssignedIdentities:
+  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
   template:
     spec:
+      identity: UserAssigned
+      userAssignedIdentities:
+      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
       enableIPForwarding: true
       osDisk:
         diskSizeGB: 30
