@@ -19,6 +19,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -88,11 +90,30 @@ func AZACRLogin() (err error) {
 	}
 
 	Logf("Attempting az login with azure cred.")
-	//nolint:gosec // G204 ignore this!
-	cmd := exec.Command("az", "login", "--service-principal",
+	authFlags := []string{
 		"--username", authConfig.AADClientID,
 		"--password", authConfig.AADClientSecret,
-		"--tenant", armConfig.TenantID)
+	}
+	if authConfig.UseFederatedWorkloadIdentityExtension {
+		tokenFile, err := os.Open(authConfig.AADFederatedTokenFile)
+		if err != nil {
+			return err
+		}
+		token, err := io.ReadAll(tokenFile)
+		if err != nil {
+			return err
+		}
+		authFlags = []string{
+			"--username", authConfig.AADClientID,
+			"--federated-token", string(token),
+		}
+	}
+	args := []string{
+		"login", "--service-principal",
+		"--tenant", armConfig.TenantID,
+	}
+	//nolint:gosec // G204 ignore this!
+	cmd := exec.Command("az", append(args, authFlags...)...)
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("az failed to login with error: %w", err)
 	}
