@@ -533,7 +533,7 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType StorageType) error {
 	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
 
-	subnet, _, err := az.getSubnet(vnetName, subnetName)
+	subnet, _, err := az.getSubnet(vnetResourceGroup, vnetName, subnetName)
 	if err != nil {
 		return err
 	}
@@ -543,6 +543,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 		// Disable the private endpoint network policies before creating private endpoint
 		subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
 	}
+
 	if rerr := az.SubnetsClient.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, subnet); rerr != nil {
 		return rerr.Error()
 	}

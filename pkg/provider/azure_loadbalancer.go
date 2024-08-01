@@ -2277,7 +2277,7 @@ func (az *Cloud) reconcileFrontendIPConfigs(clusterName string,
 			if subnetName == nil {
 				subnetName = &az.SubnetName
 			}
-			subnet, existsSubnet, err = az.getSubnet(az.VnetName, *subnetName)
+			subnet, existsSubnet, err = az.getSubnet("", az.VnetName, *subnetName)
 			if err != nil {
 				return nil, toDeleteConfigs, false, err
 			}
