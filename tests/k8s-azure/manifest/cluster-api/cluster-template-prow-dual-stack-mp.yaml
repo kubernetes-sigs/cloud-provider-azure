@@ -247,7 +247,7 @@ spec:
     spec:
       identity: UserAssigned
       userAssignedIdentities:
-      - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/capz-ci/providers/Microsoft.ManagedIdentity/userAssignedIdentities/cloud-provider-user-identity
+      - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${USER_IDENTITY}
       dataDisks:
       - diskSizeGB: 256
         lun: 0
@@ -295,7 +295,7 @@ metadata:
 spec:
   identity: UserAssigned
   userAssignedIdentities:
-  - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/capz-ci/providers/Microsoft.ManagedIdentity/userAssignedIdentities/cloud-provider-user-identity
+  - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${USER_IDENTITY}
   location: ${AZURE_LOCATION}
   strategy:
     rollingUpdate:
