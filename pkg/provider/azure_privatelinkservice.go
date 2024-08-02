@@ -199,7 +199,7 @@ func (az *Cloud) disablePLSNetworkPolicy(service *v1.Service) error {
 		subnetName = &az.SubnetName
 	}
 
-	subnet, existsSubnet, err := az.getSubnet(az.VnetName, *subnetName)
+	subnet, existsSubnet, err := az.getSubnet("", az.VnetName, *subnetName)
 	if err != nil {
 		return err
 	}
@@ -352,7 +352,7 @@ func (az *Cloud) reconcilePLSIpConfigs(
 	if subnetName == nil {
 		subnetName = &az.SubnetName
 	}
-	subnet, existsSubnet, err := az.getSubnet(az.VnetName, *subnetName)
+	subnet, existsSubnet, err := az.getSubnet("", az.VnetName, *subnetName)
 	if err != nil {
 		return false, err
 	}
