@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/apis/apiserver"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	cpconfig "k8s.io/cloud-provider/config"
 	serviceconfig "k8s.io/cloud-provider/controllers/service/config"
@@ -121,6 +122,7 @@ func TestDefaultFlags(t *testing.T) {
 				ExtraHeaderPrefixes: []string{"x-remote-extra-"},
 			},
 			RemoteKubeConfigFileOptional: true,
+			Anonymous:                    &apiserver.AnonymousAuthConfig{Enabled: true},
 		},
 		Authorization: &apiserveroptions.DelegatingAuthorizationOptions{
 			AllowCacheTTL:                10 * time.Second,
@@ -265,6 +267,7 @@ func TestAddFlags(t *testing.T) {
 				GroupHeaders:        []string{"x-remote-group"},
 				ExtraHeaderPrefixes: []string{"x-remote-extra-"},
 			},
+			Anonymous:                    &apiserver.AnonymousAuthConfig{Enabled: true},
 			RemoteKubeConfigFileOptional: true,
 		},
 		Authorization: &apiserveroptions.DelegatingAuthorizationOptions{
