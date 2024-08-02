@@ -1,6 +1,3 @@
-//go:build windows
-// +build windows
-
 /*
 Copyright 2021 The Kubernetes Authors.
 
@@ -20,6 +17,8 @@ limitations under the License.
 package app
 
 import (
+	"runtime"
+
 	"sigs.k8s.io/cloud-provider-azure/pkg/windows/service"
 )
 
@@ -28,6 +27,9 @@ const (
 )
 
 func initForOS(windowsService bool) error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
 	if windowsService {
 		return service.InitService(serviceName)
 	}

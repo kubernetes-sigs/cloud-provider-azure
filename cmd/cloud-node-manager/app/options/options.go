@@ -94,7 +94,7 @@ type CloudNodeManagerOptions struct {
 }
 
 // NewCloudNodeManagerOptions creates a new CloudNodeManagerOptions with a default config.
-func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
+func NewCloudNodeManagerOptions() *CloudNodeManagerOptions {
 	s := CloudNodeManagerOptions{
 		SecureServing:  apiserveroptions.NewSecureServingOptions().WithLoopback(),
 		Authentication: apiserveroptions.NewDelegatingAuthenticationOptions(),
@@ -111,7 +111,7 @@ func NewCloudNodeManagerOptions() (*CloudNodeManagerOptions, error) {
 	s.SecureServing.ServerCert.CertDirectory = ""
 	s.SecureServing.ServerCert.PairName = "cloud-node-manager"
 	s.SecureServing.BindPort = defaultCloudNodeManagerPort
-	return &s, nil
+	return &s
 }
 
 // Flags returns flags for a specific APIServer by section name

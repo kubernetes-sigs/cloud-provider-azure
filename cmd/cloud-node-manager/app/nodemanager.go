@@ -17,15 +17,11 @@ limitations under the License.
 package app
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apiserver/pkg/server/healthz"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/config"
@@ -34,7 +30,6 @@ import (
 	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
 	"k8s.io/klog/v2"
 
-	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
 	"sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/options"
 	nodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/node"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
@@ -42,118 +37,88 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/version/verflag"
 )
 
-// NewCloudNodeManagerCommand creates a *cobra.Command object with default parameters
-func NewCloudNodeManagerCommand() *cobra.Command {
-	s, err := options.NewCloudNodeManagerOptions()
-	if err != nil {
-		klog.Fatalf("unable to initialize command options: %v", err)
-	}
+var cloudNodeManagerOptions = options.NewCloudNodeManagerOptions()
 
-	cmd := &cobra.Command{
-		Use:  "cloud-node-manager",
-		Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			verflag.PrintAndExitIfRequested("Cloud Node Manager")
-			cliflag.PrintFlags(cmd.Flags())
-
-			c, err := s.Config()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
-			}
-
-			if err := initForOS(c.WindowsService); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
-			}
-
-			if err := Run(c, wait.NeverStop); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
-			}
-
-		},
-	}
-
-	fs := cmd.Flags()
-	namedFlagSets := s.Flags()
+func init() {
+	fs := Rootcmd.Flags()
+	namedFlagSets := cloudNodeManagerOptions.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), Rootcmd.Name())
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
+
 	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
-	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
+	cols, _, _ := term.TerminalSize(Rootcmd.OutOrStdout())
+	Rootcmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
-		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
+		cliflag.PrintSections(Rootcmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
-	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+	Rootcmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
 	})
-
-	return cmd
 }
 
-// Run runs the ExternalCMServer.  This should never exit.
-func Run(c *cloudnodeconfig.Config, stopCh <-chan struct{}) error {
-	// To help debugging, immediately log version and nodeName
-	klog.Infof("Version: %+v", version.Get())
-	klog.Infof("NodeName: %s", c.NodeName)
+// NewCloudNodeManagerCommand creates a *cobra.Command object with default parameters
+var Rootcmd = &cobra.Command{
+	Use:  "cloud-node-manager",
+	Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		verflag.PrintAndExitIfRequested("Cloud Node Manager")
+		cliflag.PrintFlags(cmd.Flags())
 
-	// Start the controller manager HTTP server
-	var checks []healthz.HealthChecker
-	healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
-	if c.SecureServing != nil {
-		unsecuredMux := genericcontrollermanager.NewBaseHandler(&config.DebuggingConfiguration{}, healthzHandler)
-		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
-		// TODO: handle stoppedCh returned by c.SecureServing.Serve
-		if _, _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
+		c, err := cloudNodeManagerOptions.Config()
+		if err != nil {
 			return err
 		}
-	}
+		ctx := cmd.Context()
+		// To help debugging, immediately log version and nodeName
+		klog.Infof("Version: %+v", version.Get())
+		klog.Infof("NodeName: %s", c.NodeName)
 
-	run := func(ctx context.Context) {
-		if err := startControllers(ctx, c, ctx.Done(), healthzHandler); err != nil {
-			klog.Fatalf("error running controllers: %v", err)
+		// Start the controller manager HTTP server
+		if c.SecureServing != nil {
+			check := controllerhealthz.NamedPingChecker(c.NodeName)
+			healthzHandler := controllerhealthz.NewMutableHealthzHandler()
+			healthzHandler.AddHealthChecker(check)
+			unsecuredMux := genericcontrollermanager.NewBaseHandler(&config.DebuggingConfiguration{}, healthzHandler)
+			handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
+			// no need to handle stoppedCh returned by c.SecureServing.Serve because here is health checker.
+			if _, _, err := c.SecureServing.Serve(handler, 0, ctx.Done()); err != nil {
+				return err
+			}
 		}
-	}
 
-	run(context.TODO())
-	panic("unreachable")
-}
+		klog.V(1).Infof("Starting cloud-node-manager...")
+		var nodeProvider nodemanager.NodeProvider
 
-// startControllers starts the cloud specific controller loops.
-func startControllers(ctx context.Context, c *cloudnodeconfig.Config, stopCh <-chan struct{}, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
-	klog.V(1).Infof("Starting cloud-node-manager...")
+		if c.UseInstanceMetadata {
+			nodeProvider = nodeprovider.NewIMDSNodeProvider(ctx)
+		} else {
+			nodeProvider = nodeprovider.NewARMNodeProvider(ctx, c.CloudConfigFilePath)
+		}
 
-	// Start the CloudNodeController
-	nodeController := nodemanager.NewCloudNodeController(
-		c.NodeName,
-		c.SharedInformers.Core().V1().Nodes(),
-		// cloud node controller uses existing cluster role from node-controller
-		c.ClientBuilder.ClientOrDie("node-controller"),
-		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath),
-		c.NodeStatusUpdateFrequency.Duration,
-		c.WaitForRoutes,
-		c.EnableDeprecatedBetaTopologyLabels)
+		// Start the CloudNodeController
+		nodeController := nodemanager.NewCloudNodeController(
+			c.NodeName,
+			c.SharedInformers.Core().V1().Nodes(),
+			// cloud node controller uses existing cluster role from node-controller
+			c.ClientBuilder.ClientOrDie("node-controller"),
+			nodeProvider,
+			c.NodeStatusUpdateFrequency.Duration,
+			c.WaitForRoutes,
+			c.EnableDeprecatedBetaTopologyLabels)
 
-	go nodeController.Run(stopCh)
-
-	check := controllerhealthz.NamedPingChecker(c.NodeName)
-	healthzHandler.AddHealthChecker(check)
-
-	klog.Infof("Started cloud-node-manager")
-
-	// If apiserver is not running we should wait for some time and fail only then. This is particularly
-	// important when we start node manager before apiserver starts.
-	if err := genericcontrollermanager.WaitForAPIServer(c.VersionedClient, 10*time.Second); err != nil {
-		klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
-	}
-
-	c.SharedInformers.Start(stopCh)
-
-	select {}
+		// If apiserver is not running we should wait for some time and fail only then. This is particularly
+		// important when we start node manager before apiserver starts.
+		if err := genericcontrollermanager.WaitForAPIServer(c.VersionedClient, 10*time.Second); err != nil {
+			klog.Fatalf("Failed to wait for apiserver being healthy: %v", err)
+		}
+		c.SharedInformers.Start(ctx.Done())
+		go klog.Infof("Started cloud-node-manager")
+		nodeController.Run(ctx)
+		return nil
+	},
 }

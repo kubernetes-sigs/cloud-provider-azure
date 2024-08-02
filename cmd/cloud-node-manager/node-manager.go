@@ -20,9 +20,7 @@ limitations under the License.
 package main
 
 import (
-	"math/rand"
 	"os"
-	"time"
 
 	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo" // load all the prometheus client-go plugins
@@ -32,14 +30,11 @@ import (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
-	command := app.NewCloudNodeManagerCommand()
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	if err := command.Execute(); err != nil {
+	if err := app.Rootcmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
