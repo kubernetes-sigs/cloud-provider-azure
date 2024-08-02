@@ -221,12 +221,12 @@ metadata:
 spec:
   identity: UserAssigned
   userAssignedIdentities:
-  - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
+  - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/capz-ci/providers/Microsoft.ManagedIdentity/userAssignedIdentities/cloud-provider-user-identity
   template:
     spec:
       identity: UserAssigned
       userAssignedIdentities:
-      - providerID: ${AZURE_USER_ASSIGNED_IDENTITY_PROVIDER_ID}
+      - providerID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/capz-ci/providers/Microsoft.ManagedIdentity/userAssignedIdentities/cloud-provider-user-identity
       enableIPForwarding: true
       osDisk:
         diskSizeGB: 30
