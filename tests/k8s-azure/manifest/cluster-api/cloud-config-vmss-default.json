@@ -15,7 +15,6 @@
   "routeTableName": "${CLUSTER_NAME}-node-routetable",
   "loadBalancerSku": "${AZURE_LOADBALANCER_SKU}",
   "maximumLoadBalancerRuleCount": 250,
-  "useManagedIdentityExtension": false,
   "useInstanceMetadata": true,
   "primaryScaleSetName": "${CLUSTER_NAME}-vmss-0",
   "loadBalancerBackendPoolConfigurationType": "${LB_BACKEND_POOL_CONFIG_TYPE}",
