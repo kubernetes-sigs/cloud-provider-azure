@@ -1842,7 +1842,7 @@ func TestIsDisableFileServiceDeleteRetentionPolicyEqual(t *testing.T) {
 	}
 }
 
-func Test_isSoftDeleteBlobsEqual(t *testing.T) {
+func TestIsSoftDeleteBlobsEqual(t *testing.T) {
 	type args struct {
 		property       storage.BlobServiceProperties
 		accountOptions *AccountOptions
@@ -2090,5 +2090,107 @@ func TestParseServiceAccountToken(t *testing.T) {
 	}
 	if token != expectedToken {
 		t.Errorf("ParseServiceAccountToken(%s) = %s, want %s", saTokens, token, expectedToken)
+	}
+}
+
+func TestAreVNetRulesEqual(t *testing.T) {
+	type args struct {
+		account       storage.Account
+		accountOption *AccountOptions
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "account option is empty",
+			args: args{
+				account: storage.Account{
+					AccountProperties: &storage.AccountProperties{},
+				},
+				accountOption: &AccountOptions{
+					VirtualNetworkResourceIDs: []string{},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "VirtualNetworkRules are equal",
+			args: args{
+				account: storage.Account{
+					AccountProperties: &storage.AccountProperties{
+						NetworkRuleSet: &storage.NetworkRuleSet{
+							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+								{
+									VirtualNetworkResourceID: ptr.To("id"),
+									Action:                   storage.ActionAllow,
+									State:                    "state",
+								},
+							},
+						},
+					},
+				},
+				accountOption: &AccountOptions{
+					VirtualNetworkResourceIDs: []string{"id"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "VirtualNetworkRules are equal with multiple NetworkRules",
+			args: args{
+				account: storage.Account{
+					AccountProperties: &storage.AccountProperties{
+						NetworkRuleSet: &storage.NetworkRuleSet{
+							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+								{
+									VirtualNetworkResourceID: ptr.To("id1"),
+									Action:                   storage.ActionAllow,
+								},
+								{
+									VirtualNetworkResourceID: ptr.To("id2"),
+									Action:                   storage.ActionAllow,
+								},
+							},
+						},
+					},
+				},
+				accountOption: &AccountOptions{
+					VirtualNetworkResourceIDs: []string{"id2"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "VirtualNetworkRules not equal",
+			args: args{
+				account: storage.Account{
+					AccountProperties: &storage.AccountProperties{
+						NetworkRuleSet: &storage.NetworkRuleSet{
+							VirtualNetworkRules: &[]storage.VirtualNetworkRule{
+								{
+									VirtualNetworkResourceID: ptr.To("id1"),
+									Action:                   storage.ActionAllow,
+									State:                    "state",
+								},
+							},
+						},
+					},
+				},
+				accountOption: &AccountOptions{
+					VirtualNetworkResourceIDs: []string{"id2"},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AreVNetRulesEqual(tt.args.account, tt.args.accountOption); got != tt.want {
+				t.Errorf("areVNetRulesEqual() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
