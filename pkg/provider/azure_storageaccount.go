@@ -109,7 +109,6 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 			if !(isStorageTypeEqual(acct, accountOptions) &&
 				isAccountKindEqual(acct, accountOptions) &&
 				isLocationEqual(acct, accountOptions) &&
-				AreVNetRulesEqual(acct, accountOptions) &&
 				isLargeFileSharesPropertyEqual(acct, accountOptions) &&
 				isTagsEqual(acct, accountOptions) &&
 				isTaggedWithSkip(acct) &&
@@ -120,6 +119,7 @@ func (az *Cloud) getStorageAccounts(ctx context.Context, accountOptions *Account
 				isRequireInfrastructureEncryptionEqual(acct, accountOptions) &&
 				isAllowSharedKeyAccessEqual(acct, accountOptions) &&
 				isAccessTierEqual(acct, accountOptions) &&
+				AreVNetRulesEqual(acct, accountOptions) &&
 				isPrivateEndpointAsExpected(acct, accountOptions)) {
 				continue
 			}
@@ -851,10 +851,10 @@ func AreVNetRulesEqual(account storage.Account, accountOptions *AccountOptions) 
 				}
 			}
 			if !found {
-				klog.V(2).Infof("subnetID(%s) not found in account(%s) virtual network rules", subnetID, ptr.Deref(account.Name, ""))
 				return false
 			}
 		}
+		klog.V(2).Infof("found all vnet rules(%v) in account %s", accountOptions.VirtualNetworkResourceIDs, ptr.Deref(account.Name, ""))
 	}
 	return true
 }
