@@ -1,3 +1,4 @@
+---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
@@ -119,12 +120,10 @@ spec:
       permissions: "0644"
     - content: |
         #!/bin/bash
-
         set -o nounset
         set -o pipefail
         set -o errexit
         [[ $(id -u) != 0 ]] && SUDO="sudo" || SUDO=""
-
         echo "Use OOT credential provider"
         mkdir -p /var/lib/kubelet/credential-provider
         curl --retry 10 --retry-delay 5 -w "response status code is %{http_code}" -Lo /var/lib/kubelet/credential-provider/acr-credential-provider "https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_BLOB_CONTAINER_NAME}/${IMAGE_TAG_ACR_CREDENTIAL_PROVIDER}/azure-acr-credential-provider"
@@ -136,7 +135,6 @@ spec:
       permissions: "0744"
     - content: |
         #!/bin/bash
-
         set -o nounset
         set -o pipefail
         set -o errexit
@@ -222,8 +220,7 @@ spec:
       - /var/lib/etcddisk
     postKubeadmCommands:
     - echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
-    - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf
-      /etc/resolv.conf
+    - mv /etc/resolv.conf /etc/resolv.conf.OLD && ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
     - systemctl restart systemd-resolved containerd
     preKubeadmCommands:
     - bash -c /tmp/oot-cred-provider.sh
@@ -336,12 +333,10 @@ spec:
   files:
   - content: |
       #!/bin/bash
-
       set -o nounset
       set -o pipefail
       set -o errexit
       [[ $(id -u) != 0 ]] && SUDO="sudo" || SUDO=""
-
       echo "Use OOT credential provider"
       mkdir -p /var/lib/kubelet/credential-provider
       curl --retry 10 --retry-delay 5 -w "response status code is %{http_code}" -Lo /var/lib/kubelet/credential-provider/acr-credential-provider "https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_BLOB_CONTAINER_NAME}/${IMAGE_TAG_ACR_CREDENTIAL_PROVIDER}/azure-acr-credential-provider"
@@ -353,7 +348,6 @@ spec:
     permissions: "0744"
   - content: |
       #!/bin/bash
-
       set -o nounset
       set -o pipefail
       set -o errexit
@@ -443,7 +437,7 @@ metadata:
   namespace: default
 spec:
   allowedNamespaces: {}
-  clientID: ${AZURE_CLIENT_ID}
+  clientID: ${AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY}
   tenantID: ${AZURE_TENANT_ID}
   type: WorkloadIdentity
 ---
