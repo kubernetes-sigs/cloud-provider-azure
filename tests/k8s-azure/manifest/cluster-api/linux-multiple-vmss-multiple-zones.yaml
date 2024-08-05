@@ -1,3 +1,4 @@
+---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
@@ -163,8 +164,8 @@ metadata:
 spec:
   clusterName: ${CLUSTER_NAME}
   failureDomains:
-    - "1"
-    - "2"
+  - "1"
+  - "2"
   replicas: ${WORKER_MACHINE_COUNT}
   template:
     spec:
@@ -235,8 +236,8 @@ metadata:
 spec:
   clusterName: ${CLUSTER_NAME}
   failureDomains:
-    - "1"
-    - "2"
+  - "1"
+  - "2"
   replicas: ${WORKER_MACHINE_COUNT}
   template:
     spec:
@@ -308,7 +309,7 @@ metadata:
   namespace: default
 spec:
   allowedNamespaces: {}
-  clientID: ${AZURE_CLIENT_ID}
+  clientID: ${AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY}
   tenantID: ${AZURE_TENANT_ID}
   type: WorkloadIdentity
 ---
