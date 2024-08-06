@@ -111,6 +111,7 @@ var (
 // for more details.
 type Config struct {
 	ratelimitconfig.AzureAuthConfig
+
 	ratelimitconfig.CloudProviderRateLimitConfig
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
