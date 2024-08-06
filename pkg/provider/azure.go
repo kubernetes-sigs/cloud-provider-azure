@@ -111,7 +111,8 @@ var (
 // See https://kubernetes.io/docs/reference/using-api/deprecation-policy/#deprecating-a-flag-or-cli
 // for more details.
 type Config struct {
-	ratelimitconfig.AzureAuthConfig              `json:",inline" yaml:",inline"`
+	ratelimitconfig.AzureAuthConfig `json:",inline" yaml:",inline"`
+
 	ratelimitconfig.CloudProviderRateLimitConfig `json:",inline" yaml:",inline"`
 
 	// The cloud configure type for Azure cloud provider. Supported values are file, secret and merge.
