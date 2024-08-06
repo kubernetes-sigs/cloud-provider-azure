@@ -3,6 +3,7 @@ name: Code Lint
 on:
   workflow_dispatch:
   push:
+    branches: [ master, 'release-**' ]
   pull_request:
 
 permissions:
@@ -32,3 +33,5 @@ jobs:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
           version: v1.55
           args: -v
+          install-mode: "goinstall"
+
