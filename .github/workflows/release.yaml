@@ -38,7 +38,7 @@ jobs:
           rm -rf ./bin
           ARCH=${{ matrix.arch }} make bin/azure-cloud-controller-manager
           mv bin/azure-cloud-controller-manager bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
-      - uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+      - uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
@@ -84,13 +84,13 @@ jobs:
           mv bin/azure-cloud-node-manager-${{ matrix.arch }}.exe bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-cloud-node-manager-${{ matrix.os }}-${{ matrix.arch }}.exe
@@ -135,13 +135,13 @@ jobs:
           mv bin/azure-acr-credential-provider.exe bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
       - name: Upload artifact for linux
         if: matrix.os == 'linux'
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
       - name: Upload artifact for windows
         if: matrix.os == 'windows'
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/azure-acr-credential-provider-${{ matrix.os }}-${{ matrix.arch }}.exe
