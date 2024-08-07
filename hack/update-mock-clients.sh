@@ -31,7 +31,7 @@ fi
 function update_all_mocks(){
     for dir in $TARGET_DIR/*
     do
-        if [ -d "${dir}" ] && [ "${dir##*/}" != "v2" ]; then \
+        if [ -d "${dir}" ] && [ "${dir##*/}" != "v2" ] && [ -f "${AZURECLIENTS}/${dir##*/}/interface.go" ]; then \
             echo "Updating mocks for ${dir%*/}"
             mockgen -copyright_file=$COPYRIGHT_FILE -source="${AZURECLIENTS}/${dir##*/}/interface.go" -package=mock${dir##*/} Interface > $TARGET_DIR/${dir##*/}/mock${dir##*/}/interface.go
         fi
@@ -41,8 +41,10 @@ function update_all_mocks(){
 # update_mock creates mock for specific module
 function update_mock(){
     mock_module=$1
+    if [ -f "${AZURECLIENTS}/$mock_module/interface.go" ]; then
     echo "Updating mock for $mock_module"
     mockgen -copyright_file=$COPYRIGHT_FILE -source="${AZURECLIENTS}/$mock_module/interface.go" -package=mock$mock_module Interface > $TARGET_DIR/$mock_module/mock$mock_module/interface.go
+    fi
 }
 
 if [ "$#" -eq "0" ]
