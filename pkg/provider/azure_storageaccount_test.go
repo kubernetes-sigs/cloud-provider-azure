@@ -32,6 +32,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -426,6 +427,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 		accountName                     string
 		subscriptionID                  string
 		resourceGroup                   string
+		subnetName                      string
 		expectedErr                     string
 	}{
 		{
@@ -444,7 +446,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			expectedErr:                     "",
 		},
 		{
-			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint",
+			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint with given subnet name",
 			createAccount:                   true,
 			createPrivateEndpoint:           ptr.To(true),
 			mockStorageAccountsClient:       true,
@@ -454,6 +456,21 @@ func TestEnsureStorageAccount(t *testing.T) {
 			resourceGroup:                   "rg",
 			accessTier:                      "AccessTierHot",
 			accountName:                     "",
+			subnetName:                      cloud.SubnetName,
+			expectedErr:                     "",
+		},
+		{
+			name:                            "[Success] EnsureStorageAccount with createPrivateEndpoint with empty subnet name",
+			createAccount:                   true,
+			createPrivateEndpoint:           ptr.To(true),
+			mockStorageAccountsClient:       true,
+			setAccountOptions:               true,
+			requireInfrastructureEncryption: ptr.To(true),
+			keyVaultURL:                     ptr.To("keyVaultURL"),
+			resourceGroup:                   "rg",
+			accessTier:                      "AccessTierHot",
+			accountName:                     "",
+			subnetName:                      "",
 			expectedErr:                     "",
 		},
 		{
@@ -465,6 +482,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			setAccountOptions:         true,
 			resourceGroup:             "rg",
 			accountName:               "accountname",
+			subnetName:                cloud.SubnetName,
 			expectedErr:               "could not get storage key for storage account",
 		},
 		{
@@ -515,10 +533,14 @@ func TestEnsureStorageAccount(t *testing.T) {
 			if test.SubnetPropertiesFormatNil {
 				subnetPropertiesFormat = nil
 			}
-			subnet := network.Subnet{SubnetPropertiesFormat: subnetPropertiesFormat}
+			subnet := network.Subnet{Name: pointer.String(subnetName), SubnetPropertiesFormat: subnetPropertiesFormat}
 
 			mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
-			mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
+			if test.subnetName != "" {
+				mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
+			} else {
+				mockSubnetsClient.EXPECT().List(gomock.Any(), vnetResourceGroup, vnetName).Return([]network.Subnet{subnet}, nil).Times(1)
+			}
 			mockSubnetsClient.EXPECT().CreateOrUpdate(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(nil).Times(1)
 			cloud.SubnetsClient = mockSubnetsClient
 
@@ -551,6 +573,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 				SubscriptionID:            test.subscriptionID,
 				AccessTier:                test.accessTier,
 				StorageType:               test.storageType,
+				SubnetName:                test.subnetName,
 				EnableBlobVersioning:      ptr.To(true),
 				SoftDeleteBlobs:           7,
 				SoftDeleteContainers:      7,
