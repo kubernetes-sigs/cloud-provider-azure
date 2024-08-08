@@ -1,12 +1,56 @@
 # Release History
 
+## 1.1.0 (2024-02-13)
+
+### Other Changes
+* Upgraded to API service version `7.5`
+* Upgraded dependencies
+
+## 1.1.0-beta.1 (2023-11-08)
+
+### Other Changes
+* Upgraded service version to `7.5-preview.1`
+* Updated to latest version of `azcore`.
+* Enabled spans for distributed tracing.
+
+## 1.0.1 (2023-08-22)
+
+### Other Changes
+* Upgraded dependencies
+
+## 1.0.0 (2023-07-17)
+
+### Features Added
+* first stable release of `azsecrets` module
+
+### Breaking Changes
+* changed type of `KID` from string to type `ID`
+
+## 0.14.0 (2023-06-08)
+
+### Breaking Changes
+* Renamed `Client.ListSecrets` to `Client.ListSecretProperties`
+* Renamed `Client.ListSecretVersions` to `Client.ListSecretPropertiesVersions`
+* Renamed `SecretBundle` to `Secret`
+* Renamed `DeletedSecretBundle` to `DeletedSecret`
+* Renamed `SecretItem` to `SecretProperties`
+* Renamed `DeletedSecretItem` to `DeletedSecretProperties`
+* Renamed `Kid` to `KID`
+* Removed `DeletionRecoveryLevel` type
+* Remove `MaxResults` option
+
+### Other Changes
+* Updated dependencies
+
+## 0.13.0 (2023-04-13)
+
+### Breaking Changes
+* Moved from `sdk/keyvault/azsecrets` to `sdk/security/keyvault/azsecrets`
+
 ## 0.12.0 (2023-04-13)
 
 ### Features Added
 * upgraded to api version 7.4
-
-### Breaking Changes
-* This module is now DEPRECATED. The latest supported version of this module is at github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets
 
 ## 0.11.0 (2022-11-08)
 
