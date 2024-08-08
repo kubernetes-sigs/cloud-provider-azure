@@ -603,41 +603,66 @@ func (az *Cloud) EnsureStorageAccount(ctx context.Context, accountOptions *Accou
 
 func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, accountID *string, privateEndpointName, vnetResourceGroup, vnetName, subnetName, location string, storageType StorageType) error {
 	klog.V(2).Infof("Creating private endpoint(%s) for account (%s)", privateEndpointName, accountName)
-
-	subnet, _, err := az.getSubnet(vnetResourceGroup, vnetName, subnetName)
-	if err != nil {
-		return err
-	}
-	if subnet.SubnetPropertiesFormat == nil {
-		klog.Errorf("SubnetPropertiesFormat of (%s, %s) is nil", vnetName, subnetName)
+	var subnets []network.Subnet
+	if subnetName != "" {
+		// list multiple subnets separated by comma
+		subnetNames := strings.Split(subnetName, ",")
+		for _, sn := range subnetNames {
+			sn = strings.TrimSpace(sn)
+			subnet, _, err := az.getSubnet(vnetResourceGroup, vnetName, sn)
+			if err != nil {
+				return err
+			}
+			subnets = append(subnets, subnet)
+		}
 	} else {
-		// Disable the private endpoint network policies before creating private endpoint
-		subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+		var err error
+		subnets, err = az.listSubnet(vnetResourceGroup, vnetName)
+		if err != nil {
+			return fmt.Errorf("failed to list subnets under rg %s vnet %s: %v", vnetResourceGroup, vnetName, err)
+		}
 	}
 
-	if rerr := az.SubnetsClient.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, subnetName, subnet); rerr != nil {
-		return rerr.Error()
-	}
+	for _, subnet := range subnets {
+		if subnet.Name == nil {
+			return fmt.Errorf("subnet name is nil")
+		}
+		sn := *subnet.Name
+		if subnet.SubnetPropertiesFormat == nil {
+			klog.Errorf("SubnetPropertiesFormat of (%s, %s) is nil", vnetName, sn)
+		} else {
+			// Disable the private endpoint network policies before creating private endpoint
+			subnet.SubnetPropertiesFormat.PrivateEndpointNetworkPolicies = network.VirtualNetworkPrivateEndpointNetworkPoliciesDisabled
+		}
 
-	//Create private endpoint
-	privateLinkServiceConnectionName := accountName + "-pvtsvcconn"
-	if storageType == StorageTypeBlob {
-		privateLinkServiceConnectionName = privateLinkServiceConnectionName + blobNameSuffix
-	}
-	privateLinkServiceConnection := network.PrivateLinkServiceConnection{
-		Name: &privateLinkServiceConnectionName,
-		PrivateLinkServiceConnectionProperties: &network.PrivateLinkServiceConnectionProperties{
-			GroupIds:             &[]string{string(storageType)},
-			PrivateLinkServiceID: accountID,
-		},
-	}
-	privateLinkServiceConnections := []network.PrivateLinkServiceConnection{privateLinkServiceConnection}
-	privateEndpoint := network.PrivateEndpoint{
-		Location:                  &location,
-		PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
-	}
+		if rerr := az.SubnetsClient.CreateOrUpdate(ctx, vnetResourceGroup, vnetName, sn, subnet); rerr != nil {
+			return rerr.Error()
+		}
 
-	return az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint, "", true).Error()
+		//Create private endpoint
+		privateLinkServiceConnectionName := accountName + "-pvtsvcconn"
+		if storageType == StorageTypeBlob {
+			privateLinkServiceConnectionName = privateLinkServiceConnectionName + blobNameSuffix
+		}
+		privateLinkServiceConnection := network.PrivateLinkServiceConnection{
+			Name: &privateLinkServiceConnectionName,
+			PrivateLinkServiceConnectionProperties: &network.PrivateLinkServiceConnectionProperties{
+				GroupIds:             &[]string{string(storageType)},
+				PrivateLinkServiceID: accountID,
+			},
+		}
+		privateLinkServiceConnections := []network.PrivateLinkServiceConnection{privateLinkServiceConnection}
+		privateEndpoint := network.PrivateEndpoint{
+			Location:                  &location,
+			PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
+		}
+
+		klog.V(2).Infof("begin to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s)", privateEndpointName, sn, vnetName, vnetResourceGroup)
+		if err := az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint, "", true).Error(); err != nil {
+			return fmt.Errorf("failed to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s): %v", privateEndpointName, sn, vnetName, vnetResourceGroup, err)
+		}
+	}
+	return nil
 }
 
 func (az *Cloud) createPrivateDNSZone(ctx context.Context, vnetResourceGroup, privateDNSZoneName string) error {
