@@ -67,3 +67,22 @@ func (az *Cloud) getSubnet(vnetResourceGroup, virtualNetworkName, subnetName str
 	}
 	return subnet, exists, nil
 }
+
+func (az *Cloud) listSubnet(vnetResourceGroup, virtualNetworkName string) ([]network.Subnet, error) {
+	if vnetResourceGroup == "" {
+		if len(az.VnetResourceGroup) > 0 {
+			vnetResourceGroup = az.VnetResourceGroup
+		} else {
+			vnetResourceGroup = az.ResourceGroup
+		}
+	}
+
+	ctx, cancel := getContextWithCancel()
+	defer cancel()
+	subnets, rerr := az.SubnetsClient.List(ctx, vnetResourceGroup, virtualNetworkName)
+	if rerr != nil {
+		return subnets, rerr.Error()
+	}
+
+	return subnets, nil
+}

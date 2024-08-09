@@ -32,6 +32,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -515,7 +516,7 @@ func TestEnsureStorageAccount(t *testing.T) {
 			if test.SubnetPropertiesFormatNil {
 				subnetPropertiesFormat = nil
 			}
-			subnet := network.Subnet{SubnetPropertiesFormat: subnetPropertiesFormat}
+			subnet := network.Subnet{Name: pointer.String(subnetName), SubnetPropertiesFormat: subnetPropertiesFormat}
 
 			mockSubnetsClient := mocksubnetclient.NewMockInterface(ctrl)
 			mockSubnetsClient.EXPECT().Get(gomock.Any(), vnetResourceGroup, vnetName, subnetName, gomock.Any()).Return(subnet, nil).Times(1)
