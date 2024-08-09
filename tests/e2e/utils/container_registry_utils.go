@@ -72,71 +72,30 @@ func (tc *AzureTestClient) DeleteContainerRegistry(registryName string) (err err
 	return nil
 }
 
-// DockerLogin execute the `docker login` if docker is available
-func DockerLogin(registryName string) (err error) {
-	authConfig, err := azureAuthConfigFromTestProfile()
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command("docker", "-v")
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("failed to execute docker command with error: %w", err)
-	}
-
-	Logf("Attempting Docker login with azure cred.")
-	arg0 := "--username=" + authConfig.AADClientID
-	arg1 := "--password=" + authConfig.AADClientSecret
-	cmd = exec.Command("docker",
-		"login",
-		arg0,
-		arg1,
-		registryName+".azurecr.io")
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("docker failed to login with error: %w", err)
-	}
-	Logf("Docker login success.")
-	return nil
-}
-
-// DockerLogout execute the `docker logout` if docker is available
-func DockerLogout() (err error) {
-	Logf("Docker logout.")
-	cmd := exec.Command("docker", "logout")
-	return cmd.Run()
-}
-
 // PushImageToACR pull an image from MCR and push
 // it to the given azure container registry
-func PushImageToACR(registryName, image string) (tag string, err error) {
-	Logf("Pulling %s from MCR.", image)
+func (tc *AzureTestClient) PushImageToACR(registryName, image string) (tag string, err error) {
+	acrClient := tc.createACRClient()
+	rgName := tc.GetResourceGroup()
 
-	imageNameMapToMCR := map[string]string{
-		"nginx": "mcr.microsoft.com/mirror/docker/library/nginx:1.25",
+	tag = "1.25"
+	future, err := acrClient.ImportImage(context.Background(), rgName, registryName, acr.ImportImageParameters{
+		Source: &acr.ImportSource{
+			RegistryURI: pointer.String("mcr.microsoft.com"),
+			SourceImage: pointer.String("mirror/docker/library/" + image + ":" + tag),
+		},
+		TargetTags: &[]string{
+			image + ":" + tag,
+		},
+		Mode: acr.NoForce,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to import image %s from mcr to acr %s with error: %w", image, registryName, err)
 	}
-	mcrImage := imageNameMapToMCR[image]
-
-	cmd := exec.Command("docker", "pull", mcrImage)
-	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed pulling %s with error: %w", image, err)
+	err = future.WaitForCompletionRef(context.Background(), acrClient.Client)
+	if err != nil {
+		return "", fmt.Errorf("failed to import image %s from mcr to acr %s with error: %w", image, registryName, err)
 	}
-
-	Logf("Tagging image.")
-	tagSuffix := string(uuid.NewUUID())[0:4]
-	registry := fmt.Sprintf("%s.azurecr.io/%s:e2e-%s", registryName, image, tagSuffix)
-	cmd = exec.Command("docker", "tag", mcrImage, registry)
-	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed tagging nginx image with error: %w", err)
-	}
-
-	Logf("Pushing image to ACR.")
-	cmd = exec.Command("docker", "push", registry)
-	if err = cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed pushing %s image to registry %s with error: %w", image, registryName, err)
-	}
-
-	Logf("Pushing image success.")
-	tag = fmt.Sprintf("e2e-%s", tagSuffix)
 	return tag, nil
 }
 

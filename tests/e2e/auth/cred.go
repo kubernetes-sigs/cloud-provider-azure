@@ -70,13 +70,10 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 			}
 		}()
 
-		err = utils.DockerLogin(*registry.Name)
-		Expect(err).NotTo(HaveOccurred())
-
 		image := "nginx"
-		tag, err := utils.PushImageToACR(*registry.Name, image)
-		Expect(tag).NotTo(Equal(""))
+		tag, err := tc.PushImageToACR(*registry.Name, image)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(tag).NotTo(Equal(""))
 
 		acrImageURL := fmt.Sprintf("%s.azurecr.io/%s:%s", *registry.Name, image, tag)
 		podTemplate := createPodPullingFromACR(image, acrImageURL, "linux")
@@ -85,9 +82,6 @@ var _ = Describe("Azure Credential Provider", Label(utils.TestSuiteLabelCredenti
 
 		result, err := utils.WaitPodTo(v1.PodRunning, cs, podTemplate, ns.Name)
 		Expect(result).To(BeTrue())
-		Expect(err).NotTo(HaveOccurred())
-
-		err = utils.DockerLogout()
 		Expect(err).NotTo(HaveOccurred())
 	})
 

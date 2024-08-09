@@ -146,11 +146,9 @@ func azureAuthConfigFromTestProfile() (*AzureAuthConfig, error) {
 			c.UserAssignedIdentityID = managedIdentityClientIDEnv
 		}
 	} else if federatedTokenFileEnv != "" {
-		c = &AzureAuthConfig{
-			AADFederatedTokenFile:                 federatedTokenFileEnv,
-			UseFederatedWorkloadIdentityExtension: true,
-			AADClientID:                           aadClientIDEnv,
-		}
+		c.AADFederatedTokenFile = federatedTokenFileEnv
+		c.UseFederatedWorkloadIdentityExtension = true
+		c.AADClientID = aadClientIDEnv
 	} else {
 		return c, fmt.Errorf("failed to get Azure auth config from environment")
 	}
