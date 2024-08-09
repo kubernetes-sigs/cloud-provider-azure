@@ -1,3 +1,4 @@
+
 # NOTE: Please refer to https://aka.ms/azsdk/engsys/ci-yaml before editing this file.
 trigger:
   branches:
@@ -8,7 +9,7 @@ trigger:
       - release/*
   paths:
     include:
-    - sdk/keyvault/internal
+    - sdk/security/keyvault/azsecrets
 
 pr:
   branches:
@@ -19,10 +20,11 @@ pr:
       - release/*
   paths:
     include:
-    - sdk/keyvault/internal
+    - sdk/security/keyvault/azsecrets
 
 stages:
 - template: /eng/pipelines/templates/jobs/archetype-sdk-client.yml
   parameters:
-    ServiceDirectory: 'keyvault/internal'
-    RunLiveTests: false
+    ServiceDirectory: 'security/keyvault/azsecrets'
+    RunLiveTests: true
+    UsePipelineProxy: false
