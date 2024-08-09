@@ -623,7 +623,7 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 		}
 	}
 
-	for _, subnet := range subnets {
+	for idx, subnet := range subnets {
 		if subnet.Name == nil {
 			return fmt.Errorf("subnet name is nil")
 		}
@@ -657,9 +657,13 @@ func (az *Cloud) createPrivateEndpoint(ctx context.Context, accountName string, 
 			PrivateEndpointProperties: &network.PrivateEndpointProperties{Subnet: &subnet, PrivateLinkServiceConnections: &privateLinkServiceConnections},
 		}
 
-		klog.V(2).Infof("begin to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s)", privateEndpointName, sn, vnetName, vnetResourceGroup)
-		if err := az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointName, privateEndpoint, "", true).Error(); err != nil {
-			return fmt.Errorf("failed to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s): %v", privateEndpointName, sn, vnetName, vnetResourceGroup, err)
+		privateEndpointNameOnSubnet := privateEndpointName
+		if len(subnets) > 1 {
+			privateEndpointNameOnSubnet = fmt.Sprintf("%s-%d", privateEndpointName, idx)
+		}
+		klog.V(2).Infof("begin to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s)", privateEndpointNameOnSubnet, sn, vnetName, vnetResourceGroup)
+		if err := az.privateendpointclient.CreateOrUpdate(ctx, vnetResourceGroup, privateEndpointNameOnSubnet, privateEndpoint, "", true).Error(); err != nil {
+			return fmt.Errorf("failed to create private endpoint(%s) on subnet(%s) under vnet(%s) in rg(%s): %v", privateEndpointNameOnSubnet, sn, vnetName, vnetResourceGroup, err)
 		}
 	}
 	return nil
