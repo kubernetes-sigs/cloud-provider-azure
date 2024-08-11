@@ -1,10 +1,10 @@
 # Azure Key Vault Secrets client module for Go
-> Deprecated: use github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets instead
 
 Azure Key Vault helps solve the following problems:
 * Secrets management (this module) - securely store and control access to tokens, passwords, certificates, API keys, and other secrets
-* Cryptographic key management ([azkeys](https://azsdk/go/keyvault-keys/docs)) - create, store, and control access to the keys used to encrypt your data
+* Managed HSM administration ([azadmin](https://aka.ms/azsdk/go/keyvault-admin/docs)) - role-based access control (RBAC), settings, and vault-level backup and restore options
 * Certificate management ([azcertificates](https://aka.ms/azsdk/go/keyvault-certificates/docs)) - create, manage, and deploy public and private SSL/TLS certificates
+* Cryptographic key management ([azkeys](https://azsdk/go/keyvault-keys/docs)) - create, store, and control access to the keys used to encrypt your data
 
 [Source code][module_source] | [Package (pkg.go.dev)][reference_docs] | [Product documentation][keyvault_docs] | [Samples][secrets_samples]
 
@@ -14,7 +14,7 @@ Azure Key Vault helps solve the following problems:
 
 Install `azsecrets` and `azidentity` with `go get`:
 ```
-go get github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets
+go get github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets
 go get github.com/Azure/azure-sdk-for-go/sdk/azidentity
 ```
 [azidentity][azure_identity] is used for Azure Active Directory authentication as demonstrated below.
@@ -39,7 +39,7 @@ Constructing the client also requires your vault's URL, which you can get from t
 ```golang
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 )
 
 func main() {
@@ -62,7 +62,7 @@ A secret consists of a secret value and its associated metadata and management i
 
 ## Examples
 
-Get started with our [examples](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets#pkg-examples).
+Get started with our [examples][secrets_samples].
 
 ## Troubleshooting
 
@@ -96,7 +96,7 @@ azlog.SetListener(func(cls azlog.Event, msg string) {
 	fmt.Println(msg)
 })
 
-// Includes only requests and responses in credential logs
+// Includes only requests and responses in logs
 azlog.SetEvents(azlog.EventRequest, azlog.EventResponse)
 ```
 
@@ -138,7 +138,7 @@ This project has adopted the [Microsoft Open Source Code of Conduct][code_of_con
 [managed_identity]: https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/overview
 [reference_docs]: https://aka.ms/azsdk/go/keyvault-secrets/docs
 [client_docs]: https://aka.ms/azsdk/go/keyvault-secrets/docs#Client
-[module_source]: https://github.com/Azure/azure-sdk-for-go/tree/main/sdk/keyvault/azsecrets
-[secrets_samples]: https://github.com/Azure/azure-sdk-for-go/tree/main/sdk/keyvault/azsecrets/example_test.go
+[module_source]: https://github.com/Azure/azure-sdk-for-go/tree/main/sdk/security/keyvault/azsecrets
+[secrets_samples]: https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets#pkg-examples
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-go%2Fsdk%2Fkeyvault%2Fazsecrets%2FREADME.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-go%2Fsdk%2Fsecurity%2Fkeyvault%2Fazsecrets%2FREADME.png)
