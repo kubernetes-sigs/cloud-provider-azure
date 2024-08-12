@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/pires/go-proxyproto v0.7.0
-	k8s.io/component-base v0.30.2
+	k8s.io/component-base v0.30.3
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -35,7 +35,7 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apimachinery v0.30.2 // indirect
+	k8s.io/apimachinery v0.30.3 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
