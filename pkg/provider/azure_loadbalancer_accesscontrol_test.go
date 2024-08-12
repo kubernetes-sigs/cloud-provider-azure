@@ -216,7 +216,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Build(),
 
 						azureFx.
-							AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0", "8.8.8.8/32"}, k8sFx.Service().TCPPorts()).
+							AllowSecurityRule(network.SecurityRuleProtocolTCP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().TCPPorts()).
 							WithPriority(501).
 							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
 							Build(),
@@ -234,7 +234,7 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 							Build(),
 
 						azureFx.
-							AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv4, []string{"0.0.0.0/0", "8.8.8.8/32"}, k8sFx.Service().UDPPorts()).
+							AllowSecurityRule(network.SecurityRuleProtocolUDP, iputil.IPv4, []string{"0.0.0.0/0"}, k8sFx.Service().UDPPorts()).
 							WithPriority(504).
 							WithDestination(azureFx.LoadBalancer().IPv4Addresses()...).
 							Build(),
@@ -515,7 +515,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				allowedIPv6Ranges = []string{"2607:f0d0:1002:51::/64", "fd00::/8"}
 			)
 
-			svc.Annotations[consts.ServiceAnnotationAllowedIPRanges] = strings.Join(append(allowedIPv4Ranges, allowedIPv6Ranges...), ",")
+			{
+				ipRanges := append(allowedIPv4Ranges, allowedIPv6Ranges...)
+				ipRanges = append(ipRanges, "172.30.0.1/32", "2607:f0d0:1002:51::1/128") // with overlapping CIDRs
+				svc.Annotations[consts.ServiceAnnotationAllowedIPRanges] = strings.Join(ipRanges, ",")
+			}
 
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
@@ -693,7 +697,11 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				allowedIPv6Ranges = []string{"2607:f0d0:1002:51::/64", "fd00::/8"}
 			)
 
-			svc.Spec.LoadBalancerSourceRanges = append(allowedIPv4Ranges, allowedIPv6Ranges...)
+			{
+				ipRanges := append(allowedIPv4Ranges, allowedIPv6Ranges...)
+				ipRanges = append(ipRanges, "172.30.0.1/32", "2607:f0d0:1002:51::1/128") // with overlapping CIDRs
+				svc.Spec.LoadBalancerSourceRanges = ipRanges
+			}
 
 			securityGroupClient.EXPECT().
 				Get(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any()).
