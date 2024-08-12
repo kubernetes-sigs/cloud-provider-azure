@@ -79,7 +79,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: cloud-node-manager
-        image: mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.4
+        image: mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.5
         imagePullPolicy: IfNotPresent
         command:
         - cloud-node-manager
@@ -136,7 +136,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: cloud-node-manager
-        image: mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.4
+        image: mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.5
         imagePullPolicy: IfNotPresent
         command:
         - /cloud-node-manager.exe

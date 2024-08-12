@@ -17,8 +17,8 @@ This is the "external" or "out-of-tree" cloud provider for Azure. The "in-tree" 
 
 The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
 
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.30.4`
-* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.4`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:v1.30.5`
+* `mcr.microsoft.com/oss/kubernetes/azure-cloud-node-manager:v1.30.5`
 
 ### Version matrix
 
@@ -39,10 +39,10 @@ The table below shows the cloud-controller-manager and cloud-node-manager versio
 
 | AKS version                 | cloud-controller-manager version | cloud-node-manager version |
 |-----------------------------|----------------------------------|----------------------------|
-| v1.30.x                     | v1.30.4                          | v1.30.0                    |
-| v1.29.x                     | v1.29.8                          | v1.29.4                    |
-| v1.28.x                     | v1.28.10                         | v1.28.9                    |
-| v1.27.x                     | v1.27.18                         | v1.27.17                   |
+| v1.30.x                     | v1.30.4                          | v1.30.5                    |
+| v1.29.x                     | v1.29.8                          | v1.29.9                    |
+| v1.28.x                     | v1.28.10                         | v1.28.11                    |
+| v1.27.x                     | v1.27.18                         | v1.27.19                   |
 
 ## Build
 
