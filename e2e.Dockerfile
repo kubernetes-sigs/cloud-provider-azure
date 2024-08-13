@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.20.5-buster
+FROM golang:1.22.6-bookworm
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 
 COPY . .
 
 RUN go get github.com/onsi/ginkgo/ginkgo \
-  && go get github.com/onsi/gomega/... \
-  && go mod tidy
+    && go get github.com/onsi/gomega/... \
+    && go mod tidy
