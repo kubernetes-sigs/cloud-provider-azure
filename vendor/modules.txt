@@ -38,7 +38,7 @@ github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources
 github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-09-01/storage
 github.com/Azure/azure-sdk-for-go/storage
 github.com/Azure/azure-sdk-for-go/version
-# github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0
+# github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/azcore
 github.com/Azure/azure-sdk-for-go/sdk/azcore/arm
@@ -1521,7 +1521,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualnetworklinkclient/mock_virtualnetworklinkclient
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.18
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.23
 ## explicit; go 1.22.0
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 # sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd

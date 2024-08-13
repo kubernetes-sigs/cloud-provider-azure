@@ -9,8 +9,8 @@ github.com/Azure/azure-pipeline-go v0.2.3 h1:7U9HBg1JFK3jHl5qmo4CTZKFTVgMwdFHMVt
 github.com/Azure/azure-pipeline-go v0.2.3/go.mod h1:x841ezTBIMG6O3lAcl8ATHnsOPVl2bqk7S3ta6S6u4k=
 github.com/Azure/azure-sdk-for-go v68.0.0+incompatible h1:fcYLmCpyNYRnvJbPerq7U0hS+6+I79yEDJBqVNcqUzU=
 github.com/Azure/azure-sdk-for-go v68.0.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0 h1:GJHeeA2N7xrG3q30L2UXDyuWRzDM900/65j70wcM4Ww=
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0/go.mod h1:l38EPgmsp71HHLq9j7De57JcKOWPyhrsW1Awm1JS6K0=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0 h1:nyQWyZvwGTvunIMxi1Y9uXkcyr+I7TeNrr/foo4Kpk8=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0/go.mod h1:l38EPgmsp71HHLq9j7De57JcKOWPyhrsW1Awm1JS6K0=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0 h1:tfLQ34V6F7tVSwoTf/4lH5sE0o6eCJuNDTmH09nDpbc=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0/go.mod h1:9kIvujWAA58nmPmWB1m23fyWic1kYZMxD9CxaWn4Qpg=
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 h1:ywEEhmNahHBihViHepv3xPBn1663uRv2t2q/ESv9seY=
@@ -442,8 +442,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 h1:/U5vjBbQn3RCh
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0/go.mod h1:z7+wmGM2dfIiLRfrC6jb5kV2Mq/sK1ZP303cxzkV5Y4=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.39 h1:ETGegXd+NvVfkt8iVKgg7gO6Rj4cXkbYDy2THyfD1RY=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.39/go.mod h1:+c0jflnTjZ3aP/6ojmlYxNDIvGkDdvfHfVVtfbQPqQo=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.18 h1:PhXbmp06mdagpcavRWc/bAF7aNAEknuuzioI+NJgE3E=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.18/go.mod h1:qJdztdabNCvj3MiRKT1AEOeYwhplYAodY8UPR/LwcT8=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.23 h1:a5y9q6vFzIPjMvswU7O4GYL2Jq1x2EddGUet3WmyJB4=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.23/go.mod h1:CzaXnBaqvr/3iMIA0pzb4/8OAHdQwNCNima3Udsucdc=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.1 h1:150L+0vs/8DA78h1u02ooW1/fFq/Lwr+sGiqlzvrtq4=
