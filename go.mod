@@ -3,7 +3,7 @@ module sigs.k8s.io/cloud-provider-azure
 go 1.22.5
 
 require (
-	github.com/Azure/azure-kusto-go v0.15.3
+	github.com/Azure/azure-kusto-go v0.16.1
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
