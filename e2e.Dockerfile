@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.22.6-bookworm
+FROM golang:1.23.0-bookworm
 
 WORKDIR /go/src/sigs.k8s.io/cloud-provider-azure
 

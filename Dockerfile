@@ -14,7 +14,7 @@
 
 # syntax=docker/dockerfile:1
 
-FROM --platform=linux/amd64 golang:1.22.6-bookworm AS builder
+FROM --platform=linux/amd64 golang:1.23.0-bookworm AS builder
 
 ARG ENABLE_GIT_COMMAND=true
 ARG ARCH=amd64
