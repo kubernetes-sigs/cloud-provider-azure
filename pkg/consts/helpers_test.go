@@ -192,7 +192,7 @@ func Test_extractInt32FromString(t *testing.T) {
 			nil,
 		}}, want: pointer.Int32(-6), wantErr: false},
 		{name: "validation failed", args: args{val: "-6", businessValidator: []Int32BusinessValidator{
-			func(i *int32) error {
+			func(_ *int32) error {
 				return fmt.Errorf("validator failed")
 			},
 		}}, wantErr: true},
@@ -226,7 +226,7 @@ func Test_getAttributeValueInSvcAnnotation(t *testing.T) {
 		{name: "annotation set is empty", args: args{key: "key"}, want: nil, wantErr: false},
 		{name: "key is not specified even though annotation set is not empty", args: args{annotations: map[string]string{"key": ""}}, want: nil, wantErr: false},
 		{name: "validation failed", args: args{annotations: map[string]string{"key": ""}, key: "key", validators: []BusinessValidator{
-			func(s *string) error {
+			func(_ *string) error {
 				return fmt.Errorf("validator failed")
 			},
 		}}, wantErr: true},

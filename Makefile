@@ -436,7 +436,7 @@ deploy-cluster:
 ##@ Tools
 
 LINTER = $(shell pwd)/bin/golangci-lint
-LINTER_VERSION = v1.51.2
+LINTER_VERSION = v1.60.2
 .PHONY: golangci-lint
 golangci-lint:  ## Download golangci-lint locally if necessary.
 	@echo "Installing golangci-lint"

@@ -65,7 +65,7 @@ const (
 )
 
 func (ss *ScaleSet) newVMSSCache(ctx context.Context) (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		localCache := &sync.Map{} // [vmssName]*vmssEntry
 
 		allResourceGroups, err := ss.GetResourceGroups()
@@ -326,7 +326,7 @@ func (ss *ScaleSet) updateCache(nodeName, resourceGroupName, vmssName, instanceI
 }
 
 func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		vmssFlexVMNodeNames := utilsets.NewString()
 		vmssFlexVMProviderIDs := utilsets.NewString()
 		avSetVMNodeNames := utilsets.NewString()
