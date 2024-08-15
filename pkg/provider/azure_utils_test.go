@@ -458,8 +458,7 @@ func TestGetVMSSVMCacheKey(t *testing.T) {
 }
 
 func TestIsNodeInVMSSVMCache(t *testing.T) {
-
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		return nil, nil
 	}
 	emptyCacheEntryTimedCache, _ := azcache.NewTimedcache(fakeCacheTTL, getter)
@@ -986,6 +985,7 @@ func TestIsFIPIPv6(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			isIPv6, err := az.isFIPIPv6(&tc.svc, "rg", tc.fip)

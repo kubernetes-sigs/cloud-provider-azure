@@ -256,12 +256,12 @@ func TestCreateOrUpdateLB(t *testing.T) {
 			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 412, RawError: %w", error(nil)),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(consts.OperationCanceledErrorMessage)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf("canceledandsupersededduetoanotheroperation")),
+			clientErr:   &retry.Error{RawError: errors.New(consts.OperationCanceledErrorMessage)},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New("canceledandsupersededduetoanotheroperation")),
 		},
 		{
-			clientErr:   &retry.Error{RawError: fmt.Errorf(referencedResourceNotProvisionedRawErrorString)},
-			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", fmt.Errorf(referencedResourceNotProvisionedRawErrorString)),
+			clientErr:   &retry.Error{RawError: errors.New(referencedResourceNotProvisionedRawErrorString)},
+			expectedErr: fmt.Errorf("Retriable: false, RetryAfter: 0s, HTTPStatusCode: 0, RawError: %w", errors.New(referencedResourceNotProvisionedRawErrorString)),
 		},
 	}
 

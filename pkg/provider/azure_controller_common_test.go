@@ -1136,7 +1136,7 @@ func TestIsInstanceNotFoundError(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		result := isInstanceNotFoundError(fmt.Errorf(test.errMsg))
+		result := isInstanceNotFoundError(errors.New(test.errMsg))
 		assert.Equal(t, test.expectedResult, result, "TestCase[%d]", i, result)
 	}
 }

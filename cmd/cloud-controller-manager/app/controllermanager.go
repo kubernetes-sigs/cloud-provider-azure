@@ -79,7 +79,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:  "cloud-controller-manager",
 		Long: `The Cloud controller manager is a daemon that embeds the cloud specific control loops shipped with Kubernetes.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			verflag.PrintAndExitIfRequested("Cloud Provider Azure")
 			cliflag.PrintFlags(cmd.Flags())
 
@@ -164,7 +164,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
-	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+	cmd.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
 	})
@@ -174,7 +174,7 @@ func NewCloudControllerManagerCommand() *cobra.Command {
 
 // RunWrapper adapts the ccm boot logic to the leader elector call back function
 func RunWrapper(s *options.CloudControllerManagerOptions, c *cloudcontrollerconfig.Config, h *controllerhealthz.MutableHealthzHandler) func(ctx context.Context) {
-	return func(ctx context.Context) {
+	return func(_ context.Context) {
 		if !c.DynamicReloadingConfig.EnableDynamicReloading {
 			klog.V(1).Infof("using static initialization from config file %s", c.ComponentConfig.KubeCloudShared.CloudProvider.CloudConfigFile)
 			if err := Run(context.TODO(), c.Complete(), h); err != nil {

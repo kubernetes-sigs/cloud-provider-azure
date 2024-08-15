@@ -724,7 +724,7 @@ func TestEnsureLoadBalancerDeleted(t *testing.T) {
 	defer ctrl.Finish()
 	az := GetTestCloud(ctrl)
 	mockLBBackendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
-	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
+	mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, _ *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
 		return false, false, lb, nil
 	}).AnyTimes()
 	mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -2162,6 +2162,7 @@ func TestFindMatchedPIPByLoadBalancerIP(t *testing.T) {
 		},
 	}
 	for _, test := range testCases {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 
@@ -3828,6 +3829,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 
 	for _, test := range testCases {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			az.Config.LoadBalancerSku = test.loadBalancerSku
@@ -3878,7 +3880,7 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 			if test.shouldRefreshLBAfterReconcileBackendPools {
 				mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, &test.expectedLB, test.expectedError)
 			}
-			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(clusterName string, service *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
+			mockLBBackendPool.EXPECT().ReconcileBackendPools(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, _ *v1.Service, lb *network.LoadBalancer) (bool, bool, *network.LoadBalancer, error) {
 				return false, false, lb, nil
 			}).AnyTimes()
 			mockLBBackendPool.EXPECT().EnsureHostsInPool(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -5217,6 +5219,7 @@ func TestReconcileSecurityGroupLoadBalancerSourceRanges(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		originalSg := network.SecurityGroup{
 			Name: pointer.String("nsg"),
 			SecurityGroupPropertiesFormat: &network.SecurityGroupPropertiesFormat{
@@ -5954,7 +5957,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			az := GetTestCloud(ctrl)
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 			creator := mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).AnyTimes()
-			creator.DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
+			creator.DoAndReturn(func(_ context.Context, _ string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
 				m.Lock()
 				deletedPips[publicIPAddressName] = false
 				savedPips[publicIPAddressName] = parameters
@@ -5971,7 +5974,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 			for _, pip := range test.existingPIPs {
 				savedPips[*pip.Name] = pip
 				getter := mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", *pip.Name, gomock.Any()).AnyTimes()
-				getter.DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, expand string) (result network.PublicIPAddress, rerr *retry.Error) {
+				getter.DoAndReturn(func(_ context.Context, _ string, publicIPAddressName string, _ string) (result network.PublicIPAddress, rerr *retry.Error) {
 					m.Lock()
 					deletedValue, deletedContains := deletedPips[publicIPAddressName]
 					savedPipValue, savedPipContains := savedPips[publicIPAddressName]
@@ -5985,7 +5988,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 
 				})
 				deleter := mockPIPsClient.EXPECT().Delete(gomock.Any(), "rg", *pip.Name).Return(nil).AnyTimes()
-				deleter.Do(func(ctx context.Context, resourceGroupName string, publicIPAddressName string) *retry.Error {
+				deleter.Do(func(_ context.Context, _ string, publicIPAddressName string) *retry.Error {
 					m.Lock()
 					deletedPips[publicIPAddressName] = true
 					m.Unlock()
@@ -5999,7 +6002,7 @@ func TestReconcilePublicIPsCommon(t *testing.T) {
 				createOrUpdateCount = 0
 			}
 			lister := mockPIPsClient.EXPECT().List(gomock.Any(), "rg").AnyTimes()
-			lister.DoAndReturn(func(ctx context.Context, resourceGroupName string) (result []network.PublicIPAddress, rerr *retry.Error) {
+			lister.DoAndReturn(func(_ context.Context, _ string) (result []network.PublicIPAddress, rerr *retry.Error) {
 				m.Lock()
 				for pipName, pip := range savedPips {
 					deleted, deletedContains := deletedPips[pipName]
@@ -6457,7 +6460,7 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 			service.ObjectMeta.Annotations = test.additionalAnnotations
 			mockPIPsClient := az.PublicIPAddressesClient.(*mockpublicipclient.MockInterface)
 			if test.shouldPutPIP {
-				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) *retry.Error {
+				mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, parameters network.PublicIPAddress) *retry.Error {
 					if len(test.existingPIPs) != 0 {
 						test.existingPIPs[0] = parameters
 					} else {
@@ -6466,10 +6469,10 @@ func TestEnsurePublicIPExistsCommon(t *testing.T) {
 					return nil
 				}).AnyTimes()
 			}
-			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", test.pipName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, expand string) (network.PublicIPAddress, *retry.Error) {
+			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", test.pipName, gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ string) (network.PublicIPAddress, *retry.Error) {
 				return test.existingPIPs[0], nil
 			}).MaxTimes(1)
-			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").DoAndReturn(func(ctx context.Context, resourceGroupName string) ([]network.PublicIPAddress, *retry.Error) {
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").DoAndReturn(func(_ context.Context, _ string) ([]network.PublicIPAddress, *retry.Error) {
 				var basicPIP *network.PublicIPAddress
 				if len(test.existingPIPs) == 0 {
 					basicPIP = &network.PublicIPAddress{
@@ -6575,7 +6578,7 @@ func TestEnsurePublicIPExistsWithExtendedLocation(t *testing.T) {
 			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", tc.pipName, gomock.Any()).Return(*tc.expectedPIP, nil).After(first)
 
 			mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", tc.pipName, gomock.Any()).
-				DoAndReturn(func(ctx context.Context, resourceGroupName string, publicIPAddressName string, publicIPAddressParameters network.PublicIPAddress) *retry.Error {
+				DoAndReturn(func(_ context.Context, _ string, _ string, publicIPAddressParameters network.PublicIPAddress) *retry.Error {
 					assert.NotNil(t, publicIPAddressParameters)
 					assert.NotNil(t, publicIPAddressParameters.ExtendedLocation)
 					assert.Equal(t, *publicIPAddressParameters.ExtendedLocation.Name, exLocName)
