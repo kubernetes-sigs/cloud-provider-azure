@@ -116,10 +116,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					serviceTags := []string{securitygroup.ServiceTagInternet}
 					rules := []network.SecurityRule{
@@ -203,10 +203,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					rules := []network.SecurityRule{
 						azureFx.
@@ -287,10 +287,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 4, "expect exact 4 (2 TCP + 2 UDP) rule for allowing Internet")
 
@@ -364,10 +364,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 4, "expect exact 4 rule for allowing Internet")
 
@@ -444,10 +444,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 4, "expect exact 4 (2 TCP + 2 UDP) rule for allowing Internet on IPv4 and IPv6")
 
@@ -524,10 +524,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 4, "expect exact 4 rules for allowing on IPv4 and IPv6")
 
@@ -601,10 +601,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 8, "<2 service tags> * <2 IP stack> * <2 Protocol[TCP/UDP]>")
 
@@ -702,10 +702,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 4, "expect exact 4 rules for allowing on IPv4 and IPv6")
 
@@ -783,10 +783,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 			securityGroupClient.EXPECT().
 				CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(
-					ctx context.Context,
-					resourceGroupName, securityGroupName string,
+					_ context.Context,
+					_, _ string,
 					properties network.SecurityGroup,
-					etag string,
+					_ string,
 				) *retry.Error {
 					assert.Len(t, *properties.SecurityRules, 6, "4 allow rules + 2 deny all rules")
 
@@ -1501,10 +1501,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		securityGroupClient.EXPECT().
 			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(
-				ctx context.Context,
-				resourceGroupName, securityGroupName string,
+				_ context.Context,
+				_, _ string,
 				properties network.SecurityGroup,
-				etag string,
+				_ string,
 			) *retry.Error {
 				rules := append(append(noiseRules, targetRules...),
 					azureFx.
@@ -1640,10 +1640,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		securityGroupClient.EXPECT().
 			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(
-				ctx context.Context,
-				resourceGroupName, securityGroupName string,
+				_ context.Context,
+				_, _ string,
 				properties network.SecurityGroup,
-				etag string,
+				_ string,
 			) *retry.Error {
 				rules := append(append(noiseRules, upToDateRules...),
 					azureFx.
@@ -1816,10 +1816,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		securityGroupClient.EXPECT().
 			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(
-				ctx context.Context,
-				resourceGroupName, securityGroupName string,
+				_ context.Context,
+				_, _ string,
 				properties network.SecurityGroup,
-				etag string,
+				_ string,
 			) *retry.Error {
 				rules := append(append(noiseRules, upToDateRules...),
 					azureFx.
@@ -2143,10 +2143,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				securityGroupClient.EXPECT().
 					CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 					DoAndReturn(func(
-						ctx context.Context,
-						resourceGroupName, securityGroupName string,
+						_ context.Context,
+						_, _ string,
 						properties network.SecurityGroup,
-						etag string,
+						_ string,
 					) *retry.Error {
 						testutil.ExpectExactSecurityRules(t, &properties, tt.RulesAfterReconcile)
 
@@ -2427,10 +2427,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 				securityGroupClient.EXPECT().
 					CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 					DoAndReturn(func(
-						ctx context.Context,
-						resourceGroupName, securityGroupName string,
+						_ context.Context,
+						_, _ string,
 						properties network.SecurityGroup,
-						etag string,
+						_ string,
 					) *retry.Error {
 						testutil.ExpectExactSecurityRules(t, &properties, tt.RulesAfterReconcile)
 
@@ -2577,10 +2577,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		securityGroupClient.EXPECT().
 			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(
-				ctx context.Context,
-				resourceGroupName, securityGroupName string,
+				_ context.Context,
+				_, _ string,
 				properties network.SecurityGroup,
-				etag string,
+				_ string,
 			) *retry.Error {
 				rules := append(append(noiseRules, upToDateRules...),
 					azureFx.
@@ -2766,10 +2766,10 @@ func TestCloud_reconcileSecurityGroup(t *testing.T) {
 		securityGroupClient.EXPECT().
 			CreateOrUpdate(gomock.Any(), az.ResourceGroup, az.SecurityGroupName, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(
-				ctx context.Context,
-				resourceGroupName, securityGroupName string,
+				_ context.Context,
+				_, _ string,
 				properties network.SecurityGroup,
-				etag string,
+				_ string,
 			) *retry.Error {
 				rules := append(append(noiseRules, upToDateRules...),
 					azureFx.

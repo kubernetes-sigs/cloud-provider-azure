@@ -111,7 +111,7 @@ func StartTestServer(t Logger, customFlags []string) (result TestServer, err err
 	}
 
 	errCh := make(chan error)
-	go func(stopCh <-chan struct{}) {
+	go func(_ <-chan struct{}) {
 		if err := app.Run(context.TODO(), config.Complete(), nil); err != nil {
 			errCh <- err
 		}

@@ -607,7 +607,7 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 		}
 
 		if test.setStorageAccountCache {
-			getter := func(key string) (interface{}, error) { return nil, nil }
+			getter := func(_ string) (interface{}, error) { return nil, nil }
 			cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 		}
 
@@ -662,7 +662,7 @@ func TestGetFileServicePropertiesCache(t *testing.T) {
 			mockFileClient.EXPECT().GetServiceProperties(gomock.Any(), gomock.Any(), gomock.Any()).Return(storage.FileServiceProperties{}, nil).AnyTimes()
 		}
 		if test.setFileServicePropertiesCache {
-			getter := func(key string) (interface{}, error) { return nil, nil }
+			getter := func(_ string) (interface{}, error) { return nil, nil }
 			cloud.fileServicePropertiesCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 		}
 
@@ -712,7 +712,7 @@ func TestAddStorageAccountTags(t *testing.T) {
 		},
 	}
 
-	getter := func(key string) (interface{}, error) { return nil, nil }
+	getter := func(_ string) (interface{}, error) { return nil, nil }
 	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 
 	for _, test := range tests {
@@ -784,7 +784,7 @@ func TestRemoveStorageAccountTags(t *testing.T) {
 		},
 	}
 
-	getter := func(key string) (interface{}, error) { return nil, nil }
+	getter := func(_ string) (interface{}, error) { return nil, nil }
 	cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 	cloud.lockMap = newLockMap()
 	for _, test := range tests {
@@ -1557,7 +1557,7 @@ func TestIsMultichannelEnabledEqual(t *testing.T) {
 	accountName := "account2"
 
 	cloud := GetTestCloud(ctrl)
-	getter := func(key string) (interface{}, error) { return nil, nil }
+	getter := func(_ string) (interface{}, error) { return nil, nil }
 
 	multichannelEnabled := storage.FileServiceProperties{
 		FileServicePropertiesProperties: &storage.FileServicePropertiesProperties{
