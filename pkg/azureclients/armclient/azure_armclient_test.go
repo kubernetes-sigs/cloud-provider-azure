@@ -46,7 +46,7 @@ const (
 
 func TestSend(t *testing.T) {
 	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if count <= 1 {
 			http.Error(w, "failed", http.StatusInternalServerError)
 			count++
@@ -111,7 +111,7 @@ func TestDoHackRegionalRetryForGET(t *testing.T) {
 				assert.NoError(t, err)
 			}))
 
-			globalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			globalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				if tc.globalServerContentLength != nil {
 					w.Header().Set("Content-Length", *tc.globalServerContentLength)
 				}
@@ -136,7 +136,7 @@ func TestDoHackRegionalRetryForGET(t *testing.T) {
 
 func TestSendFailure(t *testing.T) {
 	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "failed", http.StatusInternalServerError)
 		count++
 	}))
@@ -166,7 +166,7 @@ func TestSendFailure(t *testing.T) {
 
 func TestSendThrottled(t *testing.T) {
 	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set(consts.RetryAfterHeaderKey, "30")
 		http.Error(w, "failed", http.StatusTooManyRequests)
 		count++
@@ -196,7 +196,7 @@ func TestSendThrottled(t *testing.T) {
 
 func TestSendAsync(t *testing.T) {
 	count := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		count++
 		http.Error(w, "failed", http.StatusForbidden)
 	}))
@@ -228,7 +228,7 @@ func TestSendAsync(t *testing.T) {
 }
 
 func TestSendAsyncSuccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -307,7 +307,7 @@ func TestGetResource(t *testing.T) {
 				"param1": "value1",
 				"param2": "value2",
 			},
-			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+			getResource: func(ctx context.Context, armClient *Client, _ string, params map[string]interface{}) (*http.Response, *retry.Error) {
 				decorators := []autorest.PrepareDecorator{
 					autorest.WithQueryParameters(params),
 				}
@@ -319,7 +319,7 @@ func TestGetResource(t *testing.T) {
 			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01",
 			apiVersion:          "2019-01-01",
 			expectedAPIVersion:  "2019-01-01",
-			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+			getResource: func(ctx context.Context, armClient *Client, _ string, _ map[string]interface{}) (*http.Response, *retry.Error) {
 				return armClient.GetResourceWithExpandQuery(ctx, testResourceID, "data")
 			},
 		},
@@ -328,7 +328,7 @@ func TestGetResource(t *testing.T) {
 			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?%24expand=data&api-version=2019-01-01",
 			apiVersion:          "2018-01-01",
 			expectedAPIVersion:  "2019-01-01",
-			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, _ map[string]interface{}) (*http.Response, *retry.Error) {
 				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "data", apiVersion)
 			},
 		},
@@ -337,7 +337,7 @@ func TestGetResource(t *testing.T) {
 			expectedURIResource: "/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/testPIP?api-version=2019-01-01",
 			apiVersion:          "2018-01-01",
 			expectedAPIVersion:  "2019-01-01",
-			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+			getResource: func(ctx context.Context, armClient *Client, apiVersion string, _ map[string]interface{}) (*http.Response, *retry.Error) {
 				return armClient.GetResourceWithExpandAPIVersionQuery(ctx, testResourceID, "", apiVersion)
 			},
 		},
@@ -350,7 +350,7 @@ func TestGetResource(t *testing.T) {
 				"param1": "value1",
 				"param2": "value2",
 			},
-			getResource: func(ctx context.Context, armClient *Client, apiVersion string, params map[string]interface{}) (*http.Response, *retry.Error) {
+			getResource: func(ctx context.Context, armClient *Client, _ string, params map[string]interface{}) (*http.Response, *retry.Error) {
 				return armClient.GetResourceWithQueries(ctx, testResourceID, params)
 			},
 		},
@@ -537,11 +537,11 @@ func TestResourceAction(t *testing.T) {
 	}{
 		{
 			description: "put resource async",
-			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+			action: func(armClient *Client, ctx context.Context, resourceID string, _ interface{}) (*azure.Future, *http.Response, *retry.Error) {
 				future, rerr := armClient.PutResourceAsync(ctx, resourceID, "")
 				return future, nil, rerr
 			},
-			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+			assertion: func(count int, future *azure.Future, _ *http.Response, rerr *retry.Error) {
 				assert.Equal(t, 3, count, "count")
 				assert.Nil(t, future, "future")
 				assert.NotNil(t, rerr, "rerr")
@@ -550,11 +550,11 @@ func TestResourceAction(t *testing.T) {
 		},
 		{
 			description: "delete resource async",
-			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+			action: func(armClient *Client, ctx context.Context, resourceID string, _ interface{}) (*azure.Future, *http.Response, *retry.Error) {
 				future, rerr := armClient.DeleteResourceAsync(ctx, resourceID)
 				return future, nil, rerr
 			},
-			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+			assertion: func(count int, future *azure.Future, _ *http.Response, rerr *retry.Error) {
 				assert.Equal(t, 3, count, "count")
 				assert.Nil(t, future, "future")
 				assert.NotNil(t, rerr, "rerr")
@@ -563,11 +563,11 @@ func TestResourceAction(t *testing.T) {
 		},
 		{
 			description: "post resource",
-			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+			action: func(armClient *Client, ctx context.Context, resourceID string, _ interface{}) (*azure.Future, *http.Response, *retry.Error) {
 				response, rerr := armClient.PostResource(ctx, resourceID, "post", "", map[string]interface{}{})
 				return nil, response, rerr
 			},
-			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+			assertion: func(count int, _ *azure.Future, response *http.Response, rerr *retry.Error) {
 				assert.Equal(t, 3, count, "count")
 				assert.NotNil(t, response, "response")
 				assert.NotNil(t, rerr, "rerr")
@@ -576,11 +576,11 @@ func TestResourceAction(t *testing.T) {
 		},
 		{
 			description: "delete resource",
-			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+			action: func(armClient *Client, ctx context.Context, resourceID string, _ interface{}) (*azure.Future, *http.Response, *retry.Error) {
 				rerr := armClient.DeleteResource(ctx, resourceID)
 				return nil, nil, rerr
 			},
-			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+			assertion: func(count int, _ *azure.Future, _ *http.Response, rerr *retry.Error) {
 				assert.Equal(t, 3, count, "count")
 				assert.NotNil(t, rerr, "rerr")
 				assert.Equal(t, true, rerr.Retriable, "rerr.Retriable")
@@ -588,11 +588,11 @@ func TestResourceAction(t *testing.T) {
 		},
 		{
 			description: "head resource",
-			action: func(armClient *Client, ctx context.Context, resourceID string, parameters interface{}) (*azure.Future, *http.Response, *retry.Error) {
+			action: func(armClient *Client, ctx context.Context, resourceID string, _ interface{}) (*azure.Future, *http.Response, *retry.Error) {
 				response, rerr := armClient.HeadResource(ctx, resourceID)
 				return nil, response, rerr
 			},
-			assertion: func(count int, future *azure.Future, response *http.Response, rerr *retry.Error) {
+			assertion: func(count int, _ *azure.Future, response *http.Response, rerr *retry.Error) {
 				assert.Equal(t, 3, count, "count")
 				assert.NotNil(t, response, "response")
 				assert.NotNil(t, rerr, "rerr")
@@ -600,9 +600,9 @@ func TestResourceAction(t *testing.T) {
 			},
 		},
 	} {
-		t.Run(tc.description, func(t *testing.T) {
+		t.Run(tc.description, func(_ *testing.T) {
 			count := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				count++
 				http.Error(w, "failed", http.StatusInternalServerError)
 			}))

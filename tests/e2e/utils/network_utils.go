@@ -499,7 +499,7 @@ func SelectAvailablePrivateIPs(tc *AzureTestClient) ([]*string, error) {
 	if err != nil {
 		return []*string{}, err
 	}
-	if vNet.Properties.Subnets == nil || len(vNet.Properties.Subnets) == 0 {
+	if len(vNet.Properties.Subnets) == 0 {
 		return []*string{}, fmt.Errorf("failed to find a subnet in vNet %s", ptr.Deref(vNet.Name, ""))
 	}
 	subnets, err := selectSubnets(tc.IPFamily, vNet.Properties.Subnets)

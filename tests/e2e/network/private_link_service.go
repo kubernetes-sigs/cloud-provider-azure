@@ -120,7 +120,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		Expect(pls.Properties.IPConfigurations).NotTo(BeNil())
 		Expect(len(pls.Properties.IPConfigurations)).To(Equal(1))
 		Expect(*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod).To(Equal(network.IPAllocationMethodDynamic))
-		Expect(pls.Properties.Fqdns == nil || len(pls.Properties.Fqdns) == 0).To(BeTrue())
+		Expect(len(pls.Properties.Fqdns) == 0).To(BeTrue())
 		Expect(pls.Properties.EnableProxyProtocol == nil || !*pls.Properties.EnableProxyProtocol).To(BeTrue())
 		Expect(pls.Properties.Visibility == nil || len(pls.Properties.Visibility.Subscriptions) == 0).To(BeTrue())
 		Expect(pls.Properties.AutoApproval == nil || len(pls.Properties.AutoApproval.Subscriptions) == 0).To(BeTrue())
@@ -282,8 +282,7 @@ var _ = Describe("Private link service", Label(utils.TestSuiteLabelPrivateLinkSe
 		// wait and check pls is updated also
 		err = wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
 			pls := getPrivateLinkServiceFromIP(tc, ip, "", "", "")
-			return pls.Properties.IPConfigurations != nil &&
-				len(pls.Properties.IPConfigurations) == 1 &&
+			return len(pls.Properties.IPConfigurations) == 1 &&
 				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAllocationMethod == network.IPAllocationMethodStatic &&
 				*(pls.Properties.IPConfigurations)[0].Properties.PrivateIPAddress == *selectedIP, nil
 		})

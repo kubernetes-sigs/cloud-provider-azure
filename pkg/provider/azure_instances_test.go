@@ -230,9 +230,9 @@ func TestInstanceID(t *testing.T) {
 		}
 
 		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			if test.metadataTemplate != "" {
-				fmt.Fprintf(w, test.metadataTemplate)
+				fmt.Fprint(w, test.metadataTemplate)
 			} else {
 				fmt.Fprintf(w, "{\"compute\":{\"name\":\"%s\",\"VMScaleSetName\":\"%s\",\"subscriptionId\":\"subscription\",\"resourceGroupName\":\"rg\", \"resourceId\":\"%s\"}}", test.metadataName, test.vmssName, test.resourceID)
 			}
@@ -247,7 +247,7 @@ func TestInstanceID(t *testing.T) {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
 		}
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			}, false)
 			if err != nil {
@@ -622,7 +622,7 @@ func TestNodeAddresses(t *testing.T) {
 			}
 
 			if test.metadataTemplate != "" {
-				fmt.Fprintf(w, test.metadataTemplate)
+				fmt.Fprint(w, test.metadataTemplate)
 			} else {
 				if test.loadBalancerSku == "standard" {
 					fmt.Fprintf(w, metadataTemplate, test.metadataName, test.ipV4, "", test.ipV6, "")
@@ -642,7 +642,7 @@ func TestNodeAddresses(t *testing.T) {
 		}
 
 		if test.useCustomImsCache {
-			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(key string) (interface{}, error) {
+			cloud.Metadata.imsCache, err = azcache.NewTimedCache(consts.MetadataCacheTTL, func(_ string) (interface{}, error) {
 				return nil, fmt.Errorf("getError")
 			}, false)
 			if err != nil {
@@ -848,7 +848,7 @@ func TestNodeAddressesByProviderID(t *testing.T) {
 		}
 
 		mux := http.NewServeMux()
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			fmt.Fprintf(w, metadataTemplate, test.nodeName, test.ipV4, test.ipV4Public, test.ipV6, test.ipV6Public)
 		}))
 		go func() {

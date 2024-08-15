@@ -760,7 +760,7 @@ func (fs *FlexScaleSet) ensureBackendPoolDeletedFromVmssFlex(backendPoolIDs []st
 			return err
 		}
 		vmssFlexes := cached.(*sync.Map)
-		vmssFlexes.Range(func(key, value interface{}) bool {
+		vmssFlexes.Range(func(_, value interface{}) bool {
 			vmssFlex := value.(*compute.VirtualMachineScaleSet)
 			vmssNamesMap[ptr.Deref(vmssFlex.Name, "")] = true
 			return true

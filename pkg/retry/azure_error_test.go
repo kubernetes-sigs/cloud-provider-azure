@@ -18,6 +18,7 @@ package retry
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -381,7 +382,7 @@ func TestHasErrorCode(t *testing.T) {
 }
 
 func TestGetVMSSNameByRawError(t *testing.T) {
-	rgName, vmssName, err := GetVMSSMetadataByRawError(&Error{RawError: fmt.Errorf(LBInUseRawError)})
+	rgName, vmssName, err := GetVMSSMetadataByRawError(&Error{RawError: errors.New(LBInUseRawError)})
 	assert.NoError(t, err)
 	assert.Equal(t, "rg", rgName)
 	assert.Equal(t, "vmss", vmssName)

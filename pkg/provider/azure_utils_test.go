@@ -388,7 +388,7 @@ func TestGetVMSSVMCacheKey(t *testing.T) {
 }
 
 func TestIsNodeInVMSSVMCache(t *testing.T) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		return nil, nil
 	}
 	emptyCacheEntryTimedCache, _ := azcache.NewTimedCache(fakeCacheTTL, getter, false)
