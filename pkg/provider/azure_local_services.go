@@ -91,7 +91,7 @@ func newLoadBalancerBackendPoolUpdater(az *Cloud, interval time.Duration) *loadB
 // run starts the loadBalancerBackendPoolUpdater, and stops if the context exits.
 func (updater *loadBalancerBackendPoolUpdater) run(ctx context.Context) {
 	klog.V(2).Info("loadBalancerBackendPoolUpdater.run: started")
-	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextCancel(ctx, updater.interval, false, func(_ context.Context) (bool, error) {
 		updater.process()
 		return false, nil
 	})
@@ -468,7 +468,7 @@ func (az *Cloud) getLocalServiceEndpointsNodeNames(service *v1.Service) (*utilse
 		ep           *discovery_v1.EndpointSlice
 		foundInCache bool
 	)
-	az.endpointSlicesCache.Range(func(key, value interface{}) bool {
+	az.endpointSlicesCache.Range(func(_, value interface{}) bool {
 		endpointSlice := value.(*discovery_v1.EndpointSlice)
 		if strings.EqualFold(getServiceNameOfEndpointSlice(endpointSlice), service.Name) &&
 			strings.EqualFold(endpointSlice.Namespace, service.Namespace) {

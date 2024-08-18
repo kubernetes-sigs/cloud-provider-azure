@@ -408,7 +408,7 @@ type AvailabilitySetEntry struct {
 }
 
 func (as *availabilitySet) newVMASCache() (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		localCache := &sync.Map{}
 
 		allResourceGroups, err := as.GetResourceGroups()

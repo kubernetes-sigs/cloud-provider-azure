@@ -52,7 +52,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:  "cloud-node-manager",
 		Long: `The Cloud node manager is a daemon that reconciles node information for its running node.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			verflag.PrintAndExitIfRequested("Cloud Node Manager")
 			cliflag.PrintFlags(cmd.Flags())
 
@@ -89,7 +89,7 @@ func NewCloudNodeManagerCommand() *cobra.Command {
 		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
-	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+	cmd.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
 	})

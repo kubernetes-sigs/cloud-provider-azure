@@ -124,7 +124,7 @@ func TestGetPlatformSubFaultDomain(t *testing.T) {
 				respString = "{}"
 			}
 			mux := http.NewServeMux()
-			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Fprint(w, respString)
 			}))
 			go func() {

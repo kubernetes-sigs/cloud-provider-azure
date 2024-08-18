@@ -147,7 +147,7 @@ func (az *Cloud) listPIP(pipResourceGroup string, crt azcache.AzureCacheReadType
 	}
 	pips := cached.(*sync.Map)
 	var ret []network.PublicIPAddress
-	pips.Range(func(key, value interface{}) bool {
+	pips.Range(func(_, value interface{}) bool {
 		pip := value.(*network.PublicIPAddress)
 		ret = append(ret, *pip)
 		return true
