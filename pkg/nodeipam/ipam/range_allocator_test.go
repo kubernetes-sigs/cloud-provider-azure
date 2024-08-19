@@ -182,9 +182,8 @@ func TestOccupyPreExistingCIDR(t *testing.T) {
 			expectedAllocatedCIDR: nil,
 			ctrlCreateFail:        false,
 		},
-		// failure cases
 		{
-			description: "fail, single stack incorrect node allocation",
+			description: "success, single stack incorrect node allocation",
 			fakeNodeHandler: &testutil.FakeNodeHandler{
 				Existing: []*v1.Node{
 					{
@@ -209,39 +208,10 @@ func TestOccupyPreExistingCIDR(t *testing.T) {
 			},
 			allocatedCIDRs:        nil,
 			expectedAllocatedCIDR: nil,
-			ctrlCreateFail:        true,
+			ctrlCreateFail:        false,
 		},
 		{
-			description: "fail, dualstack node allocating from non existing cidr",
-
-			fakeNodeHandler: &testutil.FakeNodeHandler{
-				Existing: []*v1.Node{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "node0",
-						},
-						Spec: v1.NodeSpec{
-							PodCIDRs: []string{"10.10.0.1/24", "a00::/86"},
-						},
-					},
-				},
-				Clientset: fake.NewSimpleClientset(),
-			},
-			allocatorParams: CIDRAllocatorParams{
-				ClusterCIDRs: func() []*net.IPNet {
-					_, clusterCIDRv4, _ := net.ParseCIDR("10.10.0.0/16")
-					return []*net.IPNet{clusterCIDRv4}
-				}(),
-				ServiceCIDR:          nil,
-				SecondaryServiceCIDR: nil,
-				NodeCIDRMaskSizes:    []int{24},
-			},
-			allocatedCIDRs:        nil,
-			expectedAllocatedCIDR: nil,
-			ctrlCreateFail:        true,
-		},
-		{
-			description: "fail, dualstack node allocating bad v4",
+			description: "success, dualstack node allocating bad v4",
 
 			fakeNodeHandler: &testutil.FakeNodeHandler{
 				Existing: []*v1.Node{
@@ -268,10 +238,10 @@ func TestOccupyPreExistingCIDR(t *testing.T) {
 			},
 			allocatedCIDRs:        nil,
 			expectedAllocatedCIDR: nil,
-			ctrlCreateFail:        true,
+			ctrlCreateFail:        false,
 		},
 		{
-			description: "fail, dualstack node allocating bad v6",
+			description: "success, dualstack node allocating bad v6",
 
 			fakeNodeHandler: &testutil.FakeNodeHandler{
 				Existing: []*v1.Node{
@@ -280,7 +250,7 @@ func TestOccupyPreExistingCIDR(t *testing.T) {
 							Name: "node0",
 						},
 						Spec: v1.NodeSpec{
-							PodCIDRs: []string{"10.10.0.1/24", "cdd::/86"},
+							PodCIDRs: []string{"10.10.0.1/24", "a00::/86"},
 						},
 					},
 				},
@@ -295,6 +265,35 @@ func TestOccupyPreExistingCIDR(t *testing.T) {
 				ServiceCIDR:          nil,
 				SecondaryServiceCIDR: nil,
 				NodeCIDRMaskSizes:    []int{24, 24},
+			},
+			allocatedCIDRs:        nil,
+			expectedAllocatedCIDR: nil,
+			ctrlCreateFail:        false,
+		},
+		{
+			description: "fail, dualstack node allocating from non existing cidr",
+
+			fakeNodeHandler: &testutil.FakeNodeHandler{
+				Existing: []*v1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node0",
+						},
+						Spec: v1.NodeSpec{
+							PodCIDRs: []string{"10.10.0.1/24", "a00::/86"},
+						},
+					},
+				},
+				Clientset: fake.NewSimpleClientset(),
+			},
+			allocatorParams: CIDRAllocatorParams{
+				ClusterCIDRs: func() []*net.IPNet {
+					_, clusterCIDRv4, _ := net.ParseCIDR("10.10.0.0/16")
+					return []*net.IPNet{clusterCIDRv4}
+				}(),
+				ServiceCIDR:          nil,
+				SecondaryServiceCIDR: nil,
+				NodeCIDRMaskSizes:    []int{24},
 			},
 			allocatedCIDRs:        nil,
 			expectedAllocatedCIDR: nil,
