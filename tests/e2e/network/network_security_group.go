@@ -237,6 +237,21 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				allowedIPv6Ranges = []string{
 					"2c0f:fe40:8000::/48", "2c0f:feb0::/43",
 				}
+
+				// The overlapping IP ranges will be aggregated after reconciled
+				overlappingIPv4Ranges = []string{
+					"10.20.8.0/24",
+					"10.20.9.0/25",
+					"10.20.8.1/32",
+					"192.168.0.1/32",
+				}
+				overlappingIPv6Ranges = []string{
+					"2c0f:fe40:8000::/49",
+					"2c0f:fe40:8000:1111::/64",
+					"2c0f:feb0::/43",
+					"2c0f:feb0::/44",
+					"2c0f:feb0::1/128",
+				}
 			)
 
 			By("Creating a LoadBalancer service", func() {
@@ -245,7 +260,13 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 						"app": ServiceName,
 					}
 					annotations = map[string]string{
-						v1.AnnotationLoadBalancerSourceRangesKey: strings.Join(append(allowedIPv4Ranges, allowedIPv6Ranges...), ","),
+						v1.AnnotationLoadBalancerSourceRangesKey: strings.Join(
+							append(
+								append(allowedIPv4Ranges, overlappingIPv4Ranges...),
+								append(allowedIPv6Ranges, overlappingIPv6Ranges...)...,
+							),
+							",",
+						),
 					}
 					ports = []v1.ServicePort{{
 						Port:       serverPort,
@@ -618,6 +639,21 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 				allowedIPv6Ranges = []string{
 					"2c0f:fe40:8000::/48", "2c0f:feb0::/43",
 				}
+
+				// The overlapping IP ranges will be aggregated after reconciled
+				overlappingIPv4Ranges = []string{
+					"10.20.8.0/24",
+					"10.20.9.0/25",
+					"10.20.8.1/32",
+					"192.168.0.1/32",
+				}
+				overlappingIPv6Ranges = []string{
+					"2c0f:fe40:8000::/49",
+					"2c0f:fe40:8000:1111::/64",
+					"2c0f:feb0::/43",
+					"2c0f:feb0::/44",
+					"2c0f:feb0::1/128",
+				}
 			)
 
 			By("Creating a LoadBalancer service", func() {
@@ -626,7 +662,13 @@ var _ = Describe("Network security group", Label(utils.TestSuiteLabelNSG), func(
 						"app": ServiceName,
 					}
 					annotations = map[string]string{
-						consts.ServiceAnnotationAllowedIPRanges: strings.Join(append(allowedIPv4Ranges, allowedIPv6Ranges...), ","),
+						consts.ServiceAnnotationAllowedIPRanges: strings.Join(
+							append(
+								append(allowedIPv4Ranges, overlappingIPv4Ranges...),
+								append(allowedIPv6Ranges, overlappingIPv6Ranges...)...,
+							),
+							",",
+						),
 					}
 					ports = []v1.ServicePort{{
 						Port:       serverPort,
