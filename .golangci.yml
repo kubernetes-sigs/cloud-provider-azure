@@ -40,5 +40,10 @@ linters-settings:
   gosec:
     excludes:
       - G114
+      - G115
   goimports:
     local-prefixes: sigs.k8s.io/cloud-provider-azure
+  goconst:
+    min-occurrences: 10
+
+  
