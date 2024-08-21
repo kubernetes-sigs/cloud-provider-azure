@@ -435,7 +435,7 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 
 		if tc.expectedNIC != "" {
 			mockNICClient := ss.InterfacesClient.(*mockinterfaceclient.MockInterface)
-			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, nicName string, expand string) (network.Interface, *retry.Error) {
+			mockNICClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ string, _ string) (network.Interface, *retry.Error) {
 				switch tc.expectedNIC {
 				case "testvm1":
 					return testVM1NIC, tc.nicGetErr
