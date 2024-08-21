@@ -568,7 +568,7 @@ func TestCleanupVMSetFromBackendPoolByConditionNodeIP(t *testing.T) {
 
 	bi := newBackendPoolTypeNodeIP(cloud)
 
-	shouldRemoveVMSetFromSLB := func(vmSetName string) bool {
+	shouldRemoveVMSetFromSLB := func(_ string) bool {
 		return true
 	}
 

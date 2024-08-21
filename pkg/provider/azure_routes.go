@@ -87,7 +87,7 @@ func newDelayedRouteUpdater(az *Cloud, interval time.Duration) batchProcessor {
 // run starts the updater reconciling loop.
 func (d *delayedRouteUpdater) run(ctx context.Context) {
 	klog.Info("delayedRouteUpdater: started")
-	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextCancel(ctx, d.interval, true, func(_ context.Context) (bool, error) {
 		d.updateRoutes()
 		return false, nil
 	})
@@ -553,7 +553,7 @@ func (az *Cloud) ensureRouteTableTagged(rt *network.RouteTable) (map[string]*str
 		return nil, false
 	}
 
-	if az.Tags == "" && (az.TagsMap == nil || len(az.TagsMap) == 0) {
+	if az.Tags == "" && (len(az.TagsMap) == 0) {
 		return nil, false
 	}
 	tags := parseTags(az.Tags, az.TagsMap)

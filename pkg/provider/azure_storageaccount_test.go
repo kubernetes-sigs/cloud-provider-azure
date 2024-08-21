@@ -605,7 +605,7 @@ func TestGetStorageAccountWithCache(t *testing.T) {
 		}
 
 		if test.setStorageAccountCache {
-			getter := func(key string) (interface{}, error) { return nil, nil }
+			getter := func(_ string) (interface{}, error) { return nil, nil }
 			cloud.storageAccountCache, _ = cache.NewTimedCache(time.Minute, getter, false)
 		}
 
