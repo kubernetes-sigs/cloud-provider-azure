@@ -35,7 +35,7 @@ import (
 )
 
 func (fs *FlexScaleSet) newVmssFlexCache(ctx context.Context) (azcache.Resource, error) {
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		localCache := &sync.Map{}
 
 		allResourceGroups, err := fs.GetResourceGroups()
@@ -141,7 +141,7 @@ func (fs *FlexScaleSet) getNodeNameByVMName(vmName string) (string, error) {
 		}
 		vmssFlexes := cached.(*sync.Map)
 
-		vmssFlexes.Range(func(key, value interface{}) bool {
+		vmssFlexes.Range(func(key, _ interface{}) bool {
 			vmssFlexID := key.(string)
 			_, err := fs.vmssFlexVMCache.Get(vmssFlexID, azcache.CacheReadTypeForceRefresh)
 			if err != nil {
@@ -287,7 +287,7 @@ func (fs *FlexScaleSet) getVmssFlexIDByName(vmssFlexName string) (string, error)
 	}
 	var targetVmssFlexID string
 	vmssFlexes := cached.(*sync.Map)
-	vmssFlexes.Range(func(key, value interface{}) bool {
+	vmssFlexes.Range(func(key, _ interface{}) bool {
 		vmssFlexID := key.(string)
 		name, err := getLastSegment(vmssFlexID, "/")
 		if err != nil {

@@ -124,7 +124,7 @@ func TestCacheGet(t *testing.T) {
 
 func TestCacheGetError(t *testing.T) {
 	getError := fmt.Errorf("getError")
-	getter := func(key string) (interface{}, error) {
+	getter := func(_ string) (interface{}, error) {
 		return nil, getError
 	}
 	cache, err := NewTimedCache(fakeCacheTTL, getter, false)

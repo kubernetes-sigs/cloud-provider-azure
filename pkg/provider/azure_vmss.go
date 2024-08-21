@@ -332,7 +332,7 @@ func (ss *ScaleSet) getVmssVMByInstanceID(resourceGroup, scaleSetName, instanceI
 			return nil, false, err
 		}
 
-		virtualMachines.Range(func(key, value interface{}) bool {
+		virtualMachines.Range(func(_, value interface{}) bool {
 			vmEntry := value.(*VMSSVirtualMachineEntry)
 			if strings.EqualFold(vmEntry.ResourceGroup, resourceGroup) &&
 				strings.EqualFold(vmEntry.VMSSName, scaleSetName) &&
@@ -536,7 +536,7 @@ func (ss *ScaleSet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
 	}
 
 	var failureDomain string
-	if vm.Zones != nil && len(vm.Zones) > 0 {
+	if len(vm.Zones) > 0 {
 		// Get availability zone for the node.
 		zones := vm.Zones
 		zoneID, err := strconv.Atoi(zones[0])
@@ -753,7 +753,7 @@ func (ss *ScaleSet) getNodeIdentityByNodeName(nodeName string, crt azcache.Azure
 		}
 
 		vmsses := cached.(*sync.Map)
-		vmsses.Range(func(key, value interface{}) bool {
+		vmsses.Range(func(_, value interface{}) bool {
 			v := value.(*VMSSEntry)
 			if v.VMSS.Name == nil {
 				return true
@@ -1671,7 +1671,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolIDs []string, vm
 		}
 		vmssUniformMap := cachedUniform.(*sync.Map)
 
-		vmssUniformMap.Range(func(key, value interface{}) bool {
+		vmssUniformMap.Range(func(_, value interface{}) bool {
 			vmssEntry := value.(*VMSSEntry)
 			if pointer.StringDeref(vmssEntry.VMSS.Name, "") == vmSetName {
 				found = true
@@ -1690,7 +1690,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVMSS(backendPoolIDs []string, vm
 			return err
 		}
 		vmssFlexMap := cachedFlex.(*sync.Map)
-		vmssFlexMap.Range(func(key, value interface{}) bool {
+		vmssFlexMap.Range(func(_, value interface{}) bool {
 			vmssFlex := value.(*compute.VirtualMachineScaleSet)
 			if pointer.StringDeref(vmssFlex.Name, "") == vmSetName {
 				found = true
@@ -1729,7 +1729,7 @@ func (ss *ScaleSet) ensureBackendPoolDeletedFromVmssUniform(backendPoolIDs []str
 
 		vmssUniformMap := cachedUniform.(*sync.Map)
 		var errorList []error
-		walk := func(key, value interface{}) bool {
+		walk := func(_, value interface{}) bool {
 			var vmss *compute.VirtualMachineScaleSet
 			if vmssEntry, ok := value.(*VMSSEntry); ok {
 				vmss = vmssEntry.VMSS

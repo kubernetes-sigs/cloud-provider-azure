@@ -132,7 +132,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.plsCache, _ = az.newPLSCache()
 	az.LoadBalancerBackendPool = NewMockBackendPool(ctrl)
 
-	getter := func(key string) (interface{}, error) { return nil, nil }
+	getter := func(_ string) (interface{}, error) { return nil, nil }
 	az.storageAccountCache, _ = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache)
 	az.fileServicePropertiesCache, _ = azcache.NewTimedCache(5*time.Minute, getter, az.Config.DisableAPICallCache)
 
