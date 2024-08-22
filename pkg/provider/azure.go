@@ -862,7 +862,7 @@ func (az *Cloud) initCaches() (err error) {
 		return err
 	}
 
-	getter := func(key string) (interface{}, error) { return nil, nil }
+	getter := func(_ string) (interface{}, error) { return nil, nil }
 	if az.storageAccountCache, err = azcache.NewTimedCache(time.Minute, getter, az.Config.DisableAPICallCache); err != nil {
 		return err
 	}
