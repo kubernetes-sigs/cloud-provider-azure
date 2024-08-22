@@ -6,7 +6,7 @@ toolchain go1.22.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
-	github.com/onsi/ginkgo/v2 v2.20.0
+	github.com/onsi/ginkgo/v2 v2.20.1
 	github.com/onsi/gomega v1.34.1
 	k8s.io/api v0.31.0
 	k8s.io/apimachinery v0.31.0
