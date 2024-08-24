@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/Azure/azure-kusto-go v0.16.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry v1.2.0
@@ -30,19 +30,19 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.23.0
 	golang.org/x/text v0.17.0
-	k8s.io/api v0.30.3
-	k8s.io/apimachinery v0.30.3
+	k8s.io/api v0.31.0
+	k8s.io/apimachinery v0.31.0
 	k8s.io/apiserver v0.30.3
-	k8s.io/client-go v0.30.3
+	k8s.io/client-go v0.31.0
 	k8s.io/cloud-provider v0.30.3
 	k8s.io/component-base v0.30.3
 	k8s.io/component-helpers v0.30.3
 	k8s.io/controller-manager v0.30.3
-	k8s.io/klog/v2 v2.120.1
+	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.30.3
-	k8s.io/utils v0.0.0-20231127182322-b307cd553661
+	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.39
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.18
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.24
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -70,9 +70,10 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
@@ -106,7 +107,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
@@ -114,6 +115,7 @@ require (
 	github.com/samber/lo v1.38.1 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
@@ -131,7 +133,7 @@ require (
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
+	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
@@ -140,6 +142,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
