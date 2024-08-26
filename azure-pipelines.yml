@@ -1,0 +1,26 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: AzureCLI@2
+    displayName: Build component binaries, containers and packages
+    inputs:
+      azureSubscription: aks deploy msi - dev
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        export DOCKER_BUILDKIT=1
+        az acr login --name acsdevdeployment      
+        IMAGE_REGISTRY=acsdevdeployment.azurecr.io ARCH=amd64 OUTPUT_TYPE=docker make build-ccm-image
+        IMAGE_TAG=$(git rev-parse --short=7 HEAD)
+        docker tag acsdevdeployment.azurecr.io/azure-cloud-controller-manager:$IMAGE_TAG acsdevdeployment.azurecr.io/azure-cloud-controller-manager:v1.29.vapa1.$IMAGE_TAG
+        docker push acsdevdeployment.azurecr.io/azure-cloud-controller-manager:v1.29.vapa1.$IMAGE_TAG
