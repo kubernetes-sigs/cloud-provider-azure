@@ -49,6 +49,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer/iputil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/retry"
+	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
+	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -87,7 +89,12 @@ func (az *Cloud) existsPip(clusterName string, service *v1.Service) bool {
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager.
 // TODO: Break this up into different interfaces (LB, etc) when we have more than one type of service
 func (az *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
-	logger := log.FromContextOrBackground(ctx).WithName("GetLoadBalancer").WithValues("service", service.Name)
+	const Operation = "GetLoadBalancer"
+
+	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation)
+	defer func() { span.Observe(ctx, err) }()
+
+	logger := log.FromContextOrBackground(ctx).WithName(Operation).WithValues("service", service.Name)
 	ctx = log.NewContext(ctx, logger)
 
 	existingLBs, err := az.ListLB(service)
@@ -200,6 +207,11 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	// When a client updates the internal load balancer annotation,
 	// the service may be switched from an internal LB to a public one, or vice versa.
 	// Here we'll firstly ensure service do not lie in the opposite LB.
+	const Operation = "EnsureLoadBalancer"
+
+	var err error
+	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
+	defer func() { span.Observe(ctx, err) }()
 
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
@@ -207,10 +219,9 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 
 	var (
 		svcName              = getServiceName(service)
-		logger               = log.FromContextOrBackground(ctx).WithName("EnsureLoadBalancer").WithValues("cluster", clusterName, "service", svcName)
+		logger               = log.FromContextOrBackground(ctx).WithName(Operation).WithValues("cluster", clusterName, "service", svcName)
 		mc                   = metrics.NewMetricContext("services", "ensure_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), svcName)
 		isOperationSucceeded = false
-		err                  error
 	)
 
 	logger.V(5).Info("Starting", "service-spec", log.ValueAsMap(service))
@@ -256,16 +267,21 @@ func (az *Cloud) getLatestService(serviceName string, deepcopy bool) (*v1.Servic
 // parameters as read-only and not modify them.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	const Operation = "UpdateLoadBalancer"
+
+	var err error
+	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
+	defer func() { span.Observe(ctx, err) }()
+
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
 	defer az.serviceReconcileLock.Unlock()
 
 	var (
 		svcName              = getServiceName(service)
-		logger               = log.FromContextOrBackground(ctx).WithName("UpdateLoadBalancer").WithValues("cluster", clusterName, "service", svcName)
+		logger               = log.FromContextOrBackground(ctx).WithName(Operation).WithValues("cluster", clusterName, "service", svcName)
 		mc                   = metrics.NewMetricContext("services", "update_loadbalancer", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), svcName)
 		isOperationSucceeded = false
-		err                  error
 	)
 
 	logger.V(5).Info("Starting", "service-spec", log.ValueAsMap(service))
@@ -318,16 +334,21 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 // Implementations must treat the *v1.Service parameter as read-only and not modify it.
 // Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	const Operation = "EnsureLoadBalancerDeleted"
+
+	var err error
+	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
+	defer func() { span.Observe(ctx, err) }()
+
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
 	defer az.serviceReconcileLock.Unlock()
 
 	var (
 		svcName              = getServiceName(service)
-		logger               = log.FromContextOrBackground(ctx).WithName("EnsureLoadBalancerDeleted").WithValues("cluster", clusterName, "service", svcName)
+		logger               = log.FromContextOrBackground(ctx).WithName(Operation).WithValues("cluster", clusterName, "service", svcName)
 		mc                   = metrics.NewMetricContext("services", "ensure_loadbalancer_deleted", az.ResourceGroup, az.getNetworkResourceSubscriptionID(), svcName)
 		isOperationSucceeded = false
-		err                  error
 	)
 	ctx = log.NewContext(ctx, logger)
 
