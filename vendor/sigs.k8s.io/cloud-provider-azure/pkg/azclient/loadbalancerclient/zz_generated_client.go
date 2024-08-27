@@ -62,7 +62,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 		ops = &armnetwork.LoadBalancersClientGetOptions{Expand: expand}
 	}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "LoadBalancer", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.LoadBalancersClient.Get(ctx, resourceGroupName, resourceName, ops)
@@ -78,7 +78,7 @@ const CreateOrUpdateOperationName = "LoadBalancersClient.Create"
 // CreateOrUpdate creates or updates a LoadBalancer.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.LoadBalancer) (result *armnetwork.LoadBalancer, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "LoadBalancer", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.LoadBalancersClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -96,7 +96,7 @@ const DeleteOperationName = "LoadBalancersClient.Delete"
 // Delete deletes a LoadBalancer by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "LoadBalancer", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -108,7 +108,7 @@ const ListOperationName = "LoadBalancersClient.List"
 // List gets a list of LoadBalancer in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.LoadBalancer, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "LoadBalancer", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.LoadBalancersClient.NewListPager(resourceGroupName, nil)

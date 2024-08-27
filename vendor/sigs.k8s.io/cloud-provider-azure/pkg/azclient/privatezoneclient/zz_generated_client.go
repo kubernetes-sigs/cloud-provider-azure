@@ -59,7 +59,7 @@ const GetOperationName = "PrivateZonesClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armprivatedns.PrivateZone, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PrivateZone", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.PrivateZonesClient.Get(ctx, resourceGroupName, resourceName, nil)
@@ -75,7 +75,7 @@ const CreateOrUpdateOperationName = "PrivateZonesClient.Create"
 // CreateOrUpdate creates or updates a PrivateZone.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armprivatedns.PrivateZone) (result *armprivatedns.PrivateZone, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PrivateZone", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.PrivateZonesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
