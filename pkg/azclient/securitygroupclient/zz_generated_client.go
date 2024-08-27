@@ -59,7 +59,7 @@ const GetOperationName = "SecurityGroupsClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armnetwork.SecurityGroup, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SecurityGroup", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.SecurityGroupsClient.Get(ctx, resourceGroupName, resourceName, nil)
@@ -75,7 +75,7 @@ const CreateOrUpdateOperationName = "SecurityGroupsClient.Create"
 // CreateOrUpdate creates or updates a SecurityGroup.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.SecurityGroup) (result *armnetwork.SecurityGroup, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SecurityGroup", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.SecurityGroupsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -93,7 +93,7 @@ const DeleteOperationName = "SecurityGroupsClient.Delete"
 // Delete deletes a SecurityGroup by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SecurityGroup", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -105,7 +105,7 @@ const ListOperationName = "SecurityGroupsClient.List"
 // List gets a list of SecurityGroup in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.SecurityGroup, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SecurityGroup", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.SecurityGroupsClient.NewListPager(resourceGroupName, nil)

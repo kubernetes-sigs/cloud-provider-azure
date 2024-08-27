@@ -66,7 +66,7 @@ const CreateOrUpdateOperationName = "{{.ClientName}}.Create"
 // CreateOrUpdate creates or updates a {{$resource}}.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.{{.ClientName}}.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName,{{with .SubResource}}parentResourceName,{{end}} resource, nil)).WaitforPollerResp(ctx)
@@ -89,7 +89,7 @@ const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.{{.ClientName}}.NewListByResourceGroupPager(resourceGroupName, nil)
@@ -113,7 +113,7 @@ const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.{{.ClientName}}.NewListPager(resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} nil)
@@ -137,7 +137,7 @@ const DeleteOperationName = "{{.ClientName}}.Delete"
 // Delete deletes a {{$resource}} by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, {{with .SubResource}} parentResourceName string, {{end}}resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName, nil)).WaitforPollerResp(ctx)
@@ -158,7 +158,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with 
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
 	}{{- end}}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}}ops{{else}}nil{{end}} )
