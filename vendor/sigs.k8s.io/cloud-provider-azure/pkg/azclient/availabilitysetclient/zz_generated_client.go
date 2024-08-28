@@ -59,7 +59,7 @@ const GetOperationName = "AvailabilitySetsClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.AvailabilitySet, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "AvailabilitySet", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.AvailabilitySetsClient.Get(ctx, resourceGroupName, resourceName, nil)
@@ -75,7 +75,7 @@ const ListOperationName = "AvailabilitySetsClient.List"
 // List gets a list of AvailabilitySet in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.AvailabilitySet, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "AvailabilitySet", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.AvailabilitySetsClient.NewListPager(resourceGroupName, nil)
