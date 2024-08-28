@@ -58,7 +58,7 @@ const CreateOrUpdateOperationName = "VirtualMachineScaleSetsClient.Create"
 // CreateOrUpdate creates or updates a VirtualMachineScaleSet.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcompute.VirtualMachineScaleSet) (result *armcompute.VirtualMachineScaleSet, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualMachineScaleSet", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.VirtualMachineScaleSetsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -76,7 +76,7 @@ const DeleteOperationName = "VirtualMachineScaleSetsClient.Delete"
 // Delete deletes a VirtualMachineScaleSet by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualMachineScaleSet", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -88,7 +88,7 @@ const ListOperationName = "VirtualMachineScaleSetsClient.List"
 // List gets a list of VirtualMachineScaleSet in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.VirtualMachineScaleSet, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualMachineScaleSet", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.VirtualMachineScaleSetsClient.NewListPager(resourceGroupName, nil)

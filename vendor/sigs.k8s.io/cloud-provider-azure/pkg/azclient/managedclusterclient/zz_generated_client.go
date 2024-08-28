@@ -59,7 +59,7 @@ const GetOperationName = "ManagedClustersClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcontainerservice.ManagedCluster, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ManagedCluster", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.ManagedClustersClient.Get(ctx, resourceGroupName, resourceName, nil)
@@ -75,7 +75,7 @@ const CreateOrUpdateOperationName = "ManagedClustersClient.Create"
 // CreateOrUpdate creates or updates a ManagedCluster.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armcontainerservice.ManagedCluster) (result *armcontainerservice.ManagedCluster, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ManagedCluster", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.ManagedClustersClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -93,7 +93,7 @@ const DeleteOperationName = "ManagedClustersClient.Delete"
 // Delete deletes a ManagedCluster by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ManagedCluster", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -105,7 +105,7 @@ const ListOperationName = "ManagedClustersClient.List"
 // List gets a list of ManagedCluster in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcontainerservice.ManagedCluster, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ManagedCluster", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.ManagedClustersClient.NewListByResourceGroupPager(resourceGroupName, nil)
