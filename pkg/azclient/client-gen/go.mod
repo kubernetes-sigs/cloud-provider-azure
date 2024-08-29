@@ -4,7 +4,7 @@ go 1.22.5
 
 require (
 	github.com/spf13/cobra v1.8.1
-	sigs.k8s.io/controller-tools v0.16.1
+	sigs.k8s.io/controller-tools v0.16.2
 )
 
 require (
