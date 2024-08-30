@@ -17,8 +17,6 @@ limitations under the License.
 package provider
 
 import (
-	"context"
-
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2022-07-01/network"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -68,21 +66,4 @@ func (az *Cloud) getSubnet(vnetResourceGroup, virtualNetworkName, subnetName str
 		klog.V(2).Infof("Subnet %q not found", subnetName)
 	}
 	return subnet, exists, nil
-}
-
-func (az *Cloud) listSubnet(ctx context.Context, vnetResourceGroup, virtualNetworkName string) ([]network.Subnet, error) {
-	if vnetResourceGroup == "" {
-		if len(az.VnetResourceGroup) > 0 {
-			vnetResourceGroup = az.VnetResourceGroup
-		} else {
-			vnetResourceGroup = az.ResourceGroup
-		}
-	}
-
-	subnets, rerr := az.SubnetsClient.List(ctx, vnetResourceGroup, virtualNetworkName)
-	if rerr != nil {
-		return subnets, rerr.Error()
-	}
-
-	return subnets, nil
 }
