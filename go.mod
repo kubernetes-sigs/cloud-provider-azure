@@ -21,7 +21,7 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-logr/logr v1.4.2
-	github.com/onsi/ginkgo/v2 v2.20.1
+	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/cobra v1.8.1
@@ -49,7 +49,7 @@ require (
 	k8s.io/kubelet v0.30.4
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.44
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.26
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.27
 	sigs.k8s.io/yaml v1.4.0
 )
 
