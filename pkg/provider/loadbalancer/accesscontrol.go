@@ -186,13 +186,22 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 	logger := ac.logger.WithName("PatchSecurityGroup")
 
 	var (
-		allowedIPv4Ranges  = ac.AllowedIPv4Ranges()
-		allowedIPv6Ranges  = ac.AllowedIPv6Ranges()
+		allowedIPRanges    = append(ac.AllowedIPv4Ranges(), ac.AllowedIPv6Ranges()...)
 		allowedServiceTags = ac.AllowedServiceTags
 	)
 	if ac.IsAllowFromInternet() {
 		allowedServiceTags = append(allowedServiceTags, securitygroup.ServiceTagInternet)
 	}
+
+	{
+		// Aggregate allowed IP ranges.
+		ipRanges := iputil.AggregatePrefixes(allowedIPRanges)
+		if len(ipRanges) != len(allowedIPRanges) {
+			logger.Info("Overlapping IP ranges detected", "allowed-ip-ranges", allowedIPRanges, "aggregated-ip-ranges", ipRanges)
+		}
+		allowedIPRanges = ipRanges
+	}
+	var allowedIPv4Ranges, allowedIPv6Ranges = iputil.GroupPrefixesByFamily(allowedIPRanges)
 
 	logger.V(10).Info("Start patching",
 		"num-allowed-ipv4-ranges", len(allowedIPv4Ranges),
