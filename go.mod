@@ -35,7 +35,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.29.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.8.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	golang.org/x/text v0.17.0
 	k8s.io/api v0.31.0
 	k8s.io/apimachinery v0.31.0
