@@ -25,9 +25,9 @@ COPY . .
 # Build the Go app
 RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND}
 
-# Use distroless static image for a lean production container.
+# Use distroless base image for a lean production container.
 # Start a new build stage.
-FROM gcr.io/distroless/static
+FROM gcr.io/distroless/base
 
 # Create a group and user
 USER 65532:65532
