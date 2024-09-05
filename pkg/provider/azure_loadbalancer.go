@@ -1582,7 +1582,7 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerConfigurations(
 		}
 	}
 
-	return az.reconcileMultipleStandardLoadBalancerBackendNodes("", lbs, service, nodes)
+	return az.reconcileMultipleStandardLoadBalancerBackendNodes(clusterName, "", lbs, service, nodes, true)
 }
 
 // reconcileLoadBalancer ensures load balancer exists and the frontend ip config is setup.
@@ -1784,7 +1784,7 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 		}()
 
 		if az.useMultipleStandardLoadBalancers() {
-			err := az.reconcileMultipleStandardLoadBalancerBackendNodes(lbName, existingLBs, service, nodes)
+			err := az.reconcileMultipleStandardLoadBalancerBackendNodes(clusterName, lbName, existingLBs, service, nodes, false)
 			if err != nil {
 				return nil, err
 			}
@@ -2083,11 +2083,27 @@ func isLBInList(lbs *[]network.LoadBalancer, lbConfigName string) bool {
 // 2. We only check nodes that are not matched by primary vmSet before we ensure
 // hosts in pool. So the number API calls is under control.
 func (az *Cloud) reconcileMultipleStandardLoadBalancerBackendNodes(
+	clusterName string,
 	lbName string,
 	lbs *[]network.LoadBalancer,
 	service *v1.Service,
 	nodes []*v1.Node,
+	init bool,
 ) error {
+	logger := klog.Background().WithName("reconcileMultipleStandardLoadBalancerBackendNodes").
+		WithValues(
+			"clusterName", clusterName,
+			"lbName", lbName,
+			"service", service.Name,
+			"init", init,
+		)
+	if init {
+		if err := az.recordExistingNodesOnLoadBalancers(clusterName, lbs); err != nil {
+			logger.Error(err, "failed to record existing nodes on load balancers")
+			return err
+		}
+	}
+
 	// Remove the nodes from the load balancer configurations if they are not in the node list.
 	nodeNameToLBConfigIDXMap := az.removeDeletedNodesFromLoadBalancerConfigurations(nodes)
 
@@ -2101,6 +2117,38 @@ func (az *Cloud) reconcileMultipleStandardLoadBalancerBackendNodes(
 		return err
 	}
 
+	return nil
+}
+
+// recordExistingNodesOnLoadBalancers restores the node distribution
+// across multiple load balancers each time the cloud provider restarts.
+func (az *Cloud) recordExistingNodesOnLoadBalancers(clusterName string, lbs *[]network.LoadBalancer) error {
+	bi, ok := az.LoadBalancerBackendPool.(*backendPoolTypeNodeIP)
+	if !ok {
+		return errors.New("must use backend pool type nodeIP")
+	}
+	bpNames := getBackendPoolNames(clusterName)
+	for _, lb := range *lbs {
+		if lb.LoadBalancerPropertiesFormat == nil ||
+			lb.LoadBalancerPropertiesFormat.BackendAddressPools == nil {
+			continue
+		}
+		lbName := pointer.StringDeref(lb.Name, "")
+		for _, backendPool := range *lb.LoadBalancerPropertiesFormat.BackendAddressPools {
+			backendPool := backendPool
+			if found, _ := isLBBackendPoolsExisting(bpNames, backendPool.Name); found {
+				nodeNames := bi.getBackendPoolNodeNames(&backendPool)
+				for i, multiSLBConfig := range az.MultipleStandardLoadBalancerConfigurations {
+					if strings.EqualFold(trimSuffixIgnoreCase(
+						lbName, consts.InternalLoadBalancerNameSuffix,
+					), multiSLBConfig.Name) {
+						az.MultipleStandardLoadBalancerConfigurations[i].ActiveNodes =
+							utilsets.SafeInsert(multiSLBConfig.ActiveNodes, nodeNames...)
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
