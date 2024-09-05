@@ -69,7 +69,7 @@ func init() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		storageaccountClient = storageClientFactory.NewAccountsClient()
-		parentResourceName = "akscitblobsdktest"
+		parentResourceName = "akscitblobsdktestparent"
 		storageAccount, err := utils.NewPollerWrapper(storageaccountClient.BeginCreate(ctx, resourceGroupName, parentResourceName, armstorage.AccountCreateParameters{
 			Location: to.Ptr(location),
 			Kind:     to.Ptr(armstorage.KindStorageV2),

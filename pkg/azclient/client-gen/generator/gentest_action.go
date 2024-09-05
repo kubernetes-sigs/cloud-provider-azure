@@ -74,8 +74,8 @@ func generateTestSuite(ctx *genall.GenerationContext, root *loader.Package, _ st
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
-	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
-	importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
+	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
+	importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"] = make(map[string]struct{})
 
 	return WriteToFile(ctx, root, root.Name+"_suite_test.go", headerText, importList, &outContent)
@@ -92,7 +92,7 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 		}
 	}
 	if len(markerConf.Verbs) > 0 {
-		importList["github.com/onsi/gomega"] = map[string]struct{}{".": {}}
+		importList["github.com/onsi/gomega"] = map[string]struct{}{}
 	}
 	var outContent bytes.Buffer
 	if err := TestCaseTemplate.Execute(&outContent, markerConf); err != nil {
@@ -104,7 +104,7 @@ func generateTestCase(ctx *genall.GenerationContext, root *loader.Package, _ str
 	}
 
 	importList["context"] = make(map[string]struct{})
-	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{".": {}}
+	importList["github.com/onsi/ginkgo/v2"] = map[string]struct{}{}
 	return WriteToFile(ctx, root, root.Name+"_test.go", headerText, importList, &outContent)
 }
 

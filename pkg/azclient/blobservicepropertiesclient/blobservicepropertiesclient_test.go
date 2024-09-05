@@ -20,17 +20,17 @@ package blobservicepropertiesclient
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
 )
 
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
 
-var _ = Describe("BlobServicesClient", Ordered, func() {
+var _ = ginkgo.Describe("BlobServicesClient", ginkgo.Ordered, func() {
 
 	if beforeAllFunc != nil {
-		BeforeAll(beforeAllFunc)
+		ginkgo.BeforeAll(beforeAllFunc)
 	}
 
 	if additionalTestCases != nil {
@@ -38,6 +38,6 @@ var _ = Describe("BlobServicesClient", Ordered, func() {
 	}
 
 	if afterAllFunc != nil {
-		AfterAll(afterAllFunc)
+		ginkgo.AfterAll(afterAllFunc)
 	}
 })

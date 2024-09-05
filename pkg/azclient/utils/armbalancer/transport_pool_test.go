@@ -66,7 +66,7 @@ func Benchmark_testRoundtripperPool(b *testing.B) {
 	pool := newtransportChannPool(10, func() Transport {
 		MockTransport := mock.NewMockTransport(ctrl)
 		MockTransport.EXPECT().ForceClose().Return(nil).AnyTimes()
-		MockTransport.EXPECT().RoundTrip(gomock.Any()).DoAndReturn(func(req *http.Request) (*http.Response, error) {
+		MockTransport.EXPECT().RoundTrip(gomock.Any()).DoAndReturn(func(_ *http.Request) (*http.Response, error) {
 			return &http.Response{}, nil
 		}).AnyTimes()
 		return MockTransport

@@ -20,41 +20,42 @@ package accountclient
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
 
-var _ = Describe("AccountsClient", Ordered, func() {
+var _ = ginkgo.Describe("AccountsClient", ginkgo.Ordered, func() {
 
 	if beforeAllFunc != nil {
-		BeforeAll(beforeAllFunc)
+		ginkgo.BeforeAll(beforeAllFunc)
 	}
 
 	if additionalTestCases != nil {
 		additionalTestCases()
 	}
 
-	When("list requests are raised", func() {
-		It("should not return error", func(ctx context.Context) {
+	ginkgo.When("list requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			resourceList, err := realClient.List(ctx, resourceGroupName)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(resourceList).NotTo(BeNil())
-			Expect(len(resourceList)).To(Equal(1))
-			Expect(*resourceList[0].Name).To(Equal(resourceName))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(resourceList).NotTo(gomega.BeNil())
+			gomega.Expect(len(resourceList)).To(gomega.Equal(1))
+			gomega.Expect(*resourceList[0].Name).To(gomega.Equal(resourceName))
 		})
 	})
-	When("invalid list requests are raised", func() {
-		It("should return error", func(ctx context.Context) {
+	ginkgo.When("invalid list requests are raised", func() {
+		ginkgo.It("should return error", func(ctx context.Context) {
 			resourceList, err := realClient.List(ctx, resourceGroupName+"notfound")
-			Expect(err).To(HaveOccurred())
-			Expect(resourceList).To(BeNil())
+			gomega.Expect(err).To(gomega.HaveOccurred())
+			gomega.Expect(resourceList).To(gomega.BeNil())
 		})
 	})
+
 	if afterAllFunc != nil {
-		AfterAll(afterAllFunc)
+		ginkgo.AfterAll(afterAllFunc)
 	}
 })

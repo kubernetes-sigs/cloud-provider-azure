@@ -51,28 +51,28 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 3.769367626s
+        duration: 200ms
     - id: 1
       request:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 567
+        content_length: 583
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"name":"agentpool1","vmSize":"Standard_DS2_v2"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
+        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"mode":"System","name":"agentpool1","vmSize":"Standard_D2s_v3"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "567"
+                - "583"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -80,126 +80,130 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3058
+        content_length: 3037
         uncompressed: false
         body: |-
             {
-              "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-              "location": "eastus",
-              "name": "testResource",
-              "type": "Microsoft.ContainerService/ManagedClusters",
-              "properties": {
-               "provisioningState": "Creating",
-               "powerState": {
-                "code": "Running"
-               },
-               "kubernetesVersion": "1.27",
-               "currentKubernetesVersion": "1.27.7",
-               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-               "agentPoolProfiles": [
-                {
-                 "name": "agentpool1",
-                 "count": 3,
-                 "vmSize": "Standard_DS2_v2",
-                 "osDiskSizeGB": 128,
-                 "osDiskType": "Managed",
-                 "kubeletDiskType": "OS",
-                 "maxPods": 110,
-                 "type": "VirtualMachineScaleSets",
-                 "provisioningState": "Creating",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "orchestratorVersion": "1.27.7",
-                 "currentOrchestratorVersion": "1.27.7",
-                 "nodeLabels": {},
-                 "mode": "User",
-                 "osType": "Linux",
-                 "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                 "enableFIPS": false
-                }
-               ],
-               "linuxProfile": {
-                "adminUsername": "azureuser",
-                "ssh": {
-                 "publicKeys": [
-                  {
-                   "keyData": "ssh-rsa {KEY}\n"
-                  }
-                 ]
-                }
-               },
-               "servicePrincipalProfile": {
-                "clientId": "msi"
-               },
-               "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-               "enableRBAC": true,
-               "supportPlan": "KubernetesOfficial",
-               "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "standard",
-                "loadBalancerProfile": {
-                 "managedOutboundIPs": {
-                  "count": 1
-                 },
-                 "backendPoolType": "nodeIPConfiguration"
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Creating",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.29",
+              "currentKubernetesVersion": "1.29.7",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 110,
+                "type": "VirtualMachineScaleSets",
+                "provisioningState": "Creating",
+                "powerState": {
+                 "code": "Running"
                 },
-                "podCidr": "10.244.0.0/16",
-                "serviceCidr": "10.0.0.0/16",
-                "dnsServiceIP": "10.0.0.10",
-                "outboundType": "loadBalancer",
-                "podCidrs": [
-                 "10.244.0.0/16"
-                ],
-                "serviceCidrs": [
-                 "10.0.0.0/16"
-                ],
-                "ipFamilies": [
-                 "IPv4"
+                "orchestratorVersion": "1.29",
+                "currentOrchestratorVersion": "1.29.7",
+                "enableNodePublicIP": false,
+                "nodeLabels": {},
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
                 ]
-               },
-               "maxAgentPools": 100,
-               "autoUpgradeProfile": {
-                "nodeOSUpgradeChannel": "NodeImage"
-               },
-               "securityProfile": {},
-               "storageProfile": {
-                "diskCSIDriver": {
-                 "enabled": true
-                },
-                "fileCSIDriver": {
-                 "enabled": true
-                },
-                "snapshotController": {
-                 "enabled": true
-                }
-               },
-               "oidcIssuerProfile": {
-                "enabled": false
-               },
-               "workloadAutoScalerProfile": {},
-               "resourceUID": "65c31b4a15c38700010ce7d1"
+               }
               },
-              "identity": {
-               "type": "SystemAssigned",
-               "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "tenantid"
+              "servicePrincipalProfile": {
+               "clientId": "msi"
               },
-              "sku": {
-               "name": "Base",
-               "tier": "Standard"
-              }
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "kubenet",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "66d9e0e042f7f200014ad7cf"
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
              }
+            }
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428821229201682&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=bSX2JnIt1FvoLyLDQFuZvEswcPPpQkfo0nhK4A8Y2Nq0p4tzw46U2uqVyFG7aYKj7dSmjhluRJ_9rZzMXm5QrzFiBQj7M3OSwkZGKjr73yjAgyOb8WDpqDxZ8k-Db5iUhqljlyMWrwP96EQBBEP0lDsCSPSDppT4icYyafxu5_Z0AvzMSuru51l17YrvcbjRC-Mncv7LCbK07vx4qg4HeDLRmb61hBC_XIM8FdIQqB04W1NIDviXyWK6NWsKclt2J5_amI52BxNVIOXp_lZvZvSVumuSxcOZj_QgfzdXV5tXeUXyj25pz_-jRSUZVNZSKWA2DbTF3yTVklze9SzDfg&h=X1PFQrckCXcHtJRxaxM_sPumKh8fw15Z1BiwYI7aWdc
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3058"
+                - "3037"
             Content-Type:
                 - application/json
             Expires:
@@ -214,7 +218,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 7.635581869s
+        duration: 200ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -229,7 +233,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428821229201682&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=bSX2JnIt1FvoLyLDQFuZvEswcPPpQkfo0nhK4A8Y2Nq0p4tzw46U2uqVyFG7aYKj7dSmjhluRJ_9rZzMXm5QrzFiBQj7M3OSwkZGKjr73yjAgyOb8WDpqDxZ8k-Db5iUhqljlyMWrwP96EQBBEP0lDsCSPSDppT4icYyafxu5_Z0AvzMSuru51l17YrvcbjRC-Mncv7LCbK07vx4qg4HeDLRmb61hBC_XIM8FdIQqB04W1NIDviXyWK6NWsKclt2J5_amI52BxNVIOXp_lZvZvSVumuSxcOZj_QgfzdXV5tXeUXyj25pz_-jRSUZVNZSKWA2DbTF3yTVklze9SzDfg&h=X1PFQrckCXcHtJRxaxM_sPumKh8fw15Z1BiwYI7aWdc
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -237,20 +241,20 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 170
+        content_length: 165
         uncompressed: false
         body: |-
             {
-              "name": "00000000-0000-0000-0000-000000000000",
-              "status": "Succeeded",
-              "startTime": "2001-02-03T04:05:06Z",
-              "endTime": "2001-02-03T04:05:06Z"
-             }
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z"
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "170"
+                - "165"
             Content-Type:
                 - application/json
             Expires:
@@ -265,7 +269,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 281.324341ms
+        duration: 200ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -280,7 +284,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -288,135 +292,139 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3694
+        content_length: 3662
         uncompressed: false
         body: |-
             {
-              "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-              "location": "eastus",
-              "name": "testResource",
-              "type": "Microsoft.ContainerService/ManagedClusters",
-              "properties": {
-               "provisioningState": "Succeeded",
-               "powerState": {
-                "code": "Running"
-               },
-               "kubernetesVersion": "1.27",
-               "currentKubernetesVersion": "1.27.7",
-               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-               "agentPoolProfiles": [
-                {
-                 "name": "agentpool1",
-                 "count": 3,
-                 "vmSize": "Standard_DS2_v2",
-                 "osDiskSizeGB": 128,
-                 "osDiskType": "Managed",
-                 "kubeletDiskType": "OS",
-                 "maxPods": 110,
-                 "type": "VirtualMachineScaleSets",
-                 "provisioningState": "Succeeded",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "orchestratorVersion": "1.27.7",
-                 "currentOrchestratorVersion": "1.27.7",
-                 "mode": "User",
-                 "osType": "Linux",
-                 "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                 "enableFIPS": false
-                }
-               ],
-               "linuxProfile": {
-                "adminUsername": "azureuser",
-                "ssh": {
-                 "publicKeys": [
-                  {
-                   "keyData": "ssh-rsa {KEY}\n"
-                  }
-                 ]
-                }
-               },
-               "servicePrincipalProfile": {
-                "clientId": "msi"
-               },
-               "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-               "enableRBAC": true,
-               "supportPlan": "KubernetesOfficial",
-               "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "Standard",
-                "loadBalancerProfile": {
-                 "managedOutboundIPs": {
-                  "count": 1
-                 },
-                 "effectiveOutboundIPs": [
-                  {
-                   "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
-                  }
-                 ],
-                 "backendPoolType": "nodeIPConfiguration"
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.29",
+              "currentKubernetesVersion": "1.29.7",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 110,
+                "type": "VirtualMachineScaleSets",
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
                 },
-                "podCidr": "10.244.0.0/16",
-                "serviceCidr": "10.0.0.0/16",
-                "dnsServiceIP": "10.0.0.10",
-                "outboundType": "loadBalancer",
-                "podCidrs": [
-                 "10.244.0.0/16"
-                ],
-                "serviceCidrs": [
-                 "10.0.0.0/16"
-                ],
-                "ipFamilies": [
-                 "IPv4"
+                "orchestratorVersion": "1.29",
+                "currentOrchestratorVersion": "1.29.7",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
                 ]
-               },
-               "maxAgentPools": 100,
-               "identityProfile": {
-                "kubeletidentity": {
-                 "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
-                 "clientId": "00000000-0000-0000-0000-000000000000",
-                 "objectId": "00000000-0000-0000-0000-000000000000"
-                }
-               },
-               "autoUpgradeProfile": {
-                "nodeOSUpgradeChannel": "NodeImage"
-               },
-               "securityProfile": {},
-               "storageProfile": {
-                "diskCSIDriver": {
-                 "enabled": true
-                },
-                "fileCSIDriver": {
-                 "enabled": true
-                },
-                "snapshotController": {
-                 "enabled": true
-                }
-               },
-               "oidcIssuerProfile": {
-                "enabled": false
-               },
-               "workloadAutoScalerProfile": {},
-               "resourceUID": "65c31b4a15c38700010ce7d1"
+               }
               },
-              "identity": {
-               "type": "SystemAssigned",
-               "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "tenantid"
+              "servicePrincipalProfile": {
+               "clientId": "msi"
               },
-              "sku": {
-               "name": "Base",
-               "tier": "Standard"
-              }
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "kubenet",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "66d9e0e042f7f200014ad7cf"
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
              }
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3694"
+                - "3662"
             Content-Type:
                 - application/json
             Expires:
@@ -431,7 +439,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.374770287s
+        duration: 200ms
     - id: 4
       request:
         proto: HTTP/1.1
@@ -448,7 +456,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -456,135 +464,139 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3694
+        content_length: 3662
         uncompressed: false
         body: |-
             {
-              "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-              "location": "eastus",
-              "name": "testResource",
-              "type": "Microsoft.ContainerService/ManagedClusters",
-              "properties": {
-               "provisioningState": "Succeeded",
-               "powerState": {
-                "code": "Running"
-               },
-               "kubernetesVersion": "1.27",
-               "currentKubernetesVersion": "1.27.7",
-               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-               "agentPoolProfiles": [
-                {
-                 "name": "agentpool1",
-                 "count": 3,
-                 "vmSize": "Standard_DS2_v2",
-                 "osDiskSizeGB": 128,
-                 "osDiskType": "Managed",
-                 "kubeletDiskType": "OS",
-                 "maxPods": 110,
-                 "type": "VirtualMachineScaleSets",
-                 "provisioningState": "Succeeded",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "orchestratorVersion": "1.27.7",
-                 "currentOrchestratorVersion": "1.27.7",
-                 "mode": "User",
-                 "osType": "Linux",
-                 "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                 "enableFIPS": false
-                }
-               ],
-               "linuxProfile": {
-                "adminUsername": "azureuser",
-                "ssh": {
-                 "publicKeys": [
-                  {
-                   "keyData": "ssh-rsa {KEY}\n"
-                  }
-                 ]
-                }
-               },
-               "servicePrincipalProfile": {
-                "clientId": "msi"
-               },
-               "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-               "enableRBAC": true,
-               "supportPlan": "KubernetesOfficial",
-               "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "Standard",
-                "loadBalancerProfile": {
-                 "managedOutboundIPs": {
-                  "count": 1
-                 },
-                 "effectiveOutboundIPs": [
-                  {
-                   "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
-                  }
-                 ],
-                 "backendPoolType": "nodeIPConfiguration"
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.29",
+              "currentKubernetesVersion": "1.29.7",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 110,
+                "type": "VirtualMachineScaleSets",
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
                 },
-                "podCidr": "10.244.0.0/16",
-                "serviceCidr": "10.0.0.0/16",
-                "dnsServiceIP": "10.0.0.10",
-                "outboundType": "loadBalancer",
-                "podCidrs": [
-                 "10.244.0.0/16"
-                ],
-                "serviceCidrs": [
-                 "10.0.0.0/16"
-                ],
-                "ipFamilies": [
-                 "IPv4"
+                "orchestratorVersion": "1.29",
+                "currentOrchestratorVersion": "1.29.7",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
                 ]
-               },
-               "maxAgentPools": 100,
-               "identityProfile": {
-                "kubeletidentity": {
-                 "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
-                 "clientId": "00000000-0000-0000-0000-000000000000",
-                 "objectId": "00000000-0000-0000-0000-000000000000"
-                }
-               },
-               "autoUpgradeProfile": {
-                "nodeOSUpgradeChannel": "NodeImage"
-               },
-               "securityProfile": {},
-               "storageProfile": {
-                "diskCSIDriver": {
-                 "enabled": true
-                },
-                "fileCSIDriver": {
-                 "enabled": true
-                },
-                "snapshotController": {
-                 "enabled": true
-                }
-               },
-               "oidcIssuerProfile": {
-                "enabled": false
-               },
-               "workloadAutoScalerProfile": {},
-               "resourceUID": "65c31b4a15c38700010ce7d1"
+               }
               },
-              "identity": {
-               "type": "SystemAssigned",
-               "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "tenantid"
+              "servicePrincipalProfile": {
+               "clientId": "msi"
               },
-              "sku": {
-               "name": "Base",
-               "tier": "Standard"
-              }
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "kubenet",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "66d9e0e042f7f200014ad7cf"
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
              }
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3694"
+                - "3662"
             Content-Type:
                 - application/json
             Expires:
@@ -599,7 +611,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.036325315s
+        duration: 200ms
     - id: 5
       request:
         proto: HTTP/1.1
@@ -616,7 +628,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -648,28 +660,28 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 333.786334ms
+        duration: 200ms
     - id: 6
       request:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 567
+        content_length: 583
         transfer_encoding: []
         trailer: {}
         host: management.azure.com
         remote_addr: ""
         request_uri: ""
-        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"name":"agentpool1","vmSize":"Standard_DS2_v2"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
+        body: '{"identity":{"type":"SystemAssigned"},"location":"eastus","properties":{"agentPoolProfiles":[{"count":3,"mode":"System","name":"agentpool1","vmSize":"Standard_D2s_v3"}],"dnsPrefix":"aks-cit-ManagedClustertestResourcednsPrefix","enableRBAC":true,"linuxProfile":{"adminUsername":"azureuser","ssh":{"publicKeys":[{"keyData":"ssh-rsa {KEY}\n"}]}}},"sku":{"name":"Base","tier":"Standard"}}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "567"
+                - "583"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -677,138 +689,143 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3715
+        content_length: 3714
         uncompressed: false
         body: |-
             {
-              "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-              "location": "eastus",
-              "name": "testResource",
-              "type": "Microsoft.ContainerService/ManagedClusters",
-              "properties": {
-               "provisioningState": "Updating",
-               "powerState": {
-                "code": "Running"
-               },
-               "kubernetesVersion": "1.27",
-               "currentKubernetesVersion": "1.27.7",
-               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-               "agentPoolProfiles": [
-                {
-                 "name": "agentpool1",
-                 "count": 3,
-                 "vmSize": "Standard_DS2_v2",
-                 "osDiskSizeGB": 128,
-                 "osDiskType": "Managed",
-                 "kubeletDiskType": "OS",
-                 "maxPods": 110,
-                 "type": "VirtualMachineScaleSets",
-                 "provisioningState": "Updating",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "orchestratorVersion": "1.27.7",
-                 "currentOrchestratorVersion": "1.27.7",
-                 "nodeLabels": {},
-                 "mode": "User",
-                 "osType": "Linux",
-                 "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                 "enableFIPS": false
-                }
-               ],
-               "linuxProfile": {
-                "adminUsername": "azureuser",
-                "ssh": {
-                 "publicKeys": [
-                  {
-                   "keyData": "ssh-rsa {KEY}\n"
-                  }
-                 ]
-                }
-               },
-               "servicePrincipalProfile": {
-                "clientId": "msi"
-               },
-               "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-               "enableRBAC": true,
-               "supportPlan": "KubernetesOfficial",
-               "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "Standard",
-                "loadBalancerProfile": {
-                 "managedOutboundIPs": {
-                  "count": 1
-                 },
-                 "effectiveOutboundIPs": [
-                  {
-                   "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
-                  }
-                 ],
-                 "backendPoolType": "nodeIPConfiguration"
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Updating",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.29",
+              "currentKubernetesVersion": "1.29.7",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 110,
+                "type": "VirtualMachineScaleSets",
+                "enableAutoScaling": false,
+                "provisioningState": "Updating",
+                "powerState": {
+                 "code": "Running"
                 },
-                "podCidr": "10.244.0.0/16",
-                "serviceCidr": "10.0.0.0/16",
-                "dnsServiceIP": "10.0.0.10",
-                "outboundType": "loadBalancer",
-                "podCidrs": [
-                 "10.244.0.0/16"
-                ],
-                "serviceCidrs": [
-                 "10.0.0.0/16"
-                ],
-                "ipFamilies": [
-                 "IPv4"
+                "orchestratorVersion": "1.29",
+                "currentOrchestratorVersion": "1.29.7",
+                "enableNodePublicIP": false,
+                "nodeLabels": {},
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
                 ]
-               },
-               "maxAgentPools": 100,
-               "identityProfile": {
-                "kubeletidentity": {
-                 "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
-                 "clientId": "00000000-0000-0000-0000-000000000000",
-                 "objectId": "00000000-0000-0000-0000-000000000000"
-                }
-               },
-               "autoUpgradeProfile": {
-                "nodeOSUpgradeChannel": "NodeImage"
-               },
-               "securityProfile": {},
-               "storageProfile": {
-                "diskCSIDriver": {
-                 "enabled": true
-                },
-                "fileCSIDriver": {
-                 "enabled": true
-                },
-                "snapshotController": {
-                 "enabled": true
-                }
-               },
-               "oidcIssuerProfile": {
-                "enabled": false
-               },
-               "workloadAutoScalerProfile": {},
-               "resourceUID": "65c31b4a15c38700010ce7d1"
+               }
               },
-              "identity": {
-               "type": "SystemAssigned",
-               "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "tenantid"
+              "servicePrincipalProfile": {
+               "clientId": "msi"
               },
-              "sku": {
-               "name": "Base",
-               "tier": "Standard"
-              }
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "kubenet",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "66d9e0e042f7f200014ad7cf"
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
              }
+            }
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428824120032639&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=JdZLXqi3JinUXQFyvOU8rptWzA8-o4i6AHwnADBlnHGSgQvsssrOCdjiCFa3Zn2SRcksS03OhPYyZR7c6VQxO93Pr0T7my2A3FlBfYiUcHLCmyC5DVmYPKsc6MkhZp7IDsGY8AfwYCadPzxKg7YNDDUZSyLkYjn9hgOOHRmG27eNrRvN9eOBKUVHUbK_CWeuWIvjRpAtDd7gZVEHpbE1l2vp4MqivM96UIEc5D3iVqkNMdV9BTW9EuFDYz84BvhQ_OpzhWJ9CQbkJLMgsLOrbh4pjKfDb_T5Wqoiq58908ff0aKy7vdeQ-5sfuPHF9SxWQWN2xEcbxoa0FzBDbOb-A&h=HQ5_8nqhTNvb-v28J1yBp-aZp0Ljo1wH-ZPYNnyvy-w
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3715"
+                - "3714"
             Content-Type:
                 - application/json
             Expires:
@@ -823,7 +840,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 12.138015523s
+        duration: 200ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -838,7 +855,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428824120032639&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=JdZLXqi3JinUXQFyvOU8rptWzA8-o4i6AHwnADBlnHGSgQvsssrOCdjiCFa3Zn2SRcksS03OhPYyZR7c6VQxO93Pr0T7my2A3FlBfYiUcHLCmyC5DVmYPKsc6MkhZp7IDsGY8AfwYCadPzxKg7YNDDUZSyLkYjn9hgOOHRmG27eNrRvN9eOBKUVHUbK_CWeuWIvjRpAtDd7gZVEHpbE1l2vp4MqivM96UIEc5D3iVqkNMdV9BTW9EuFDYz84BvhQ_OpzhWJ9CQbkJLMgsLOrbh4pjKfDb_T5Wqoiq58908ff0aKy7vdeQ-5sfuPHF9SxWQWN2xEcbxoa0FzBDbOb-A&h=HQ5_8nqhTNvb-v28J1yBp-aZp0Ljo1wH-ZPYNnyvy-w
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -846,24 +863,20 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 417
+        content_length: 165
         uncompressed: false
         body: |-
             {
-              "name": "00000000-0000-0000-0000-000000000000",
-              "status": "Succeeded",
-              "startTime": "2001-02-03T04:05:06Z",
-              "endTime": "2001-02-03T04:05:06Z",
-              "error": {
-               "code": "NotLatestOperation",
-               "message": "Cannot proceed with the operation. Either the operation has been preempted by another one, or the information needed by the operation failed to be saved (or hasn't been saved yet)."
-              }
-             }
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z"
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "417"
+                - "165"
             Content-Type:
                 - application/json
             Expires:
@@ -878,7 +891,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 723.007327ms
+        duration: 200ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -893,7 +906,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -905,126 +918,131 @@ interactions:
         uncompressed: false
         body: |-
             {
-              "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-              "location": "eastus",
-              "name": "testResource",
-              "type": "Microsoft.ContainerService/ManagedClusters",
-              "properties": {
-               "provisioningState": "Succeeded",
-               "powerState": {
-                "code": "Running"
-               },
-               "kubernetesVersion": "1.27",
-               "currentKubernetesVersion": "1.27.7",
-               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-               "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-               "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-               "agentPoolProfiles": [
-                {
-                 "name": "agentpool1",
-                 "count": 3,
-                 "vmSize": "Standard_DS2_v2",
-                 "osDiskSizeGB": 128,
-                 "osDiskType": "Managed",
-                 "kubeletDiskType": "OS",
-                 "maxPods": 110,
-                 "type": "VirtualMachineScaleSets",
-                 "provisioningState": "Succeeded",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "orchestratorVersion": "1.27.7",
-                 "currentOrchestratorVersion": "1.27.7",
-                 "mode": "User",
-                 "osType": "Linux",
-                 "osSKU": "Ubuntu",
-                 "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                 "enableFIPS": false
-                }
-               ],
-               "linuxProfile": {
-                "adminUsername": "azureuser",
-                "ssh": {
-                 "publicKeys": [
-                  {
-                   "keyData": "ssh-rsa {KEY}\n"
-                  }
-                 ]
-                }
-               },
-               "servicePrincipalProfile": {
-                "clientId": "msi"
-               },
-               "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-               "enableRBAC": true,
-               "supportPlan": "KubernetesOfficial",
-               "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "Standard",
-                "loadBalancerProfile": {
-                 "managedOutboundIPs": {
-                  "count": 1
-                 },
-                 "effectiveOutboundIPs": [
-                  {
-                   "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
-                  }
-                 ],
-                 "backendPoolType": "nodeIPConfiguration"
+             "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+             "location": "eastus",
+             "name": "testResource",
+             "type": "Microsoft.ContainerService/ManagedClusters",
+             "properties": {
+              "provisioningState": "Succeeded",
+              "powerState": {
+               "code": "Running"
+              },
+              "kubernetesVersion": "1.29",
+              "currentKubernetesVersion": "1.29.7",
+              "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "agentPoolProfiles": [
+               {
+                "name": "agentpool1",
+                "count": 3,
+                "vmSize": "Standard_D2s_v3",
+                "osDiskSizeGB": 128,
+                "osDiskType": "Managed",
+                "kubeletDiskType": "OS",
+                "maxPods": 110,
+                "type": "VirtualMachineScaleSets",
+                "enableAutoScaling": false,
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
                 },
-                "podCidr": "10.244.0.0/16",
-                "serviceCidr": "10.0.0.0/16",
-                "dnsServiceIP": "10.0.0.10",
-                "outboundType": "loadBalancer",
-                "podCidrs": [
-                 "10.244.0.0/16"
-                ],
-                "serviceCidrs": [
-                 "10.0.0.0/16"
-                ],
-                "ipFamilies": [
-                 "IPv4"
+                "orchestratorVersion": "1.29",
+                "currentOrchestratorVersion": "1.29.7",
+                "enableNodePublicIP": false,
+                "mode": "System",
+                "osType": "Linux",
+                "osSKU": "Ubuntu",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "upgradeSettings": {
+                 "maxSurge": "10%"
+                },
+                "enableFIPS": false
+               }
+              ],
+              "linuxProfile": {
+               "adminUsername": "azureuser",
+               "ssh": {
+                "publicKeys": [
+                 {
+                  "keyData": "ssh-rsa {KEY}\n"
+                 }
                 ]
-               },
-               "maxAgentPools": 100,
-               "identityProfile": {
-                "kubeletidentity": {
-                 "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
-                 "clientId": "00000000-0000-0000-0000-000000000000",
-                 "objectId": "00000000-0000-0000-0000-000000000000"
-                }
-               },
-               "autoUpgradeProfile": {
-                "nodeOSUpgradeChannel": "NodeImage"
-               },
-               "securityProfile": {},
-               "storageProfile": {
-                "diskCSIDriver": {
-                 "enabled": true
-                },
-                "fileCSIDriver": {
-                 "enabled": true
-                },
-                "snapshotController": {
-                 "enabled": true
-                }
-               },
-               "oidcIssuerProfile": {
-                "enabled": false
-               },
-               "workloadAutoScalerProfile": {},
-               "resourceUID": "65c31b4a15c38700010ce7d1"
+               }
               },
-              "identity": {
-               "type": "SystemAssigned",
-               "principalId": "00000000-0000-0000-0000-000000000000",
-               "tenantId": "tenantid"
+              "servicePrincipalProfile": {
+               "clientId": "msi"
               },
-              "sku": {
-               "name": "Base",
-               "tier": "Standard"
-              }
+              "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+              "enableRBAC": true,
+              "supportPlan": "KubernetesOfficial",
+              "networkProfile": {
+               "networkPlugin": "kubenet",
+               "loadBalancerSku": "standard",
+               "loadBalancerProfile": {
+                "managedOutboundIPs": {
+                 "count": 1
+                },
+                "effectiveOutboundIPs": [
+                 {
+                  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                 }
+                ],
+                "backendPoolType": "nodeIPConfiguration"
+               },
+               "podCidr": "10.244.0.0/16",
+               "serviceCidr": "10.0.0.0/16",
+               "dnsServiceIP": "10.0.0.10",
+               "outboundType": "loadBalancer",
+               "podCidrs": [
+                "10.244.0.0/16"
+               ],
+               "serviceCidrs": [
+                "10.0.0.0/16"
+               ],
+               "ipFamilies": [
+                "IPv4"
+               ]
+              },
+              "maxAgentPools": 100,
+              "identityProfile": {
+               "kubeletidentity": {
+                "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                "clientId": "00000000-0000-0000-0000-000000000000",
+                "objectId": "00000000-0000-0000-0000-000000000000"
+               }
+              },
+              "autoUpgradeProfile": {
+               "nodeOSUpgradeChannel": "NodeImage"
+              },
+              "securityProfile": {},
+              "storageProfile": {
+               "diskCSIDriver": {
+                "enabled": true
+               },
+               "fileCSIDriver": {
+                "enabled": true
+               },
+               "snapshotController": {
+                "enabled": true
+               }
+              },
+              "oidcIssuerProfile": {
+               "enabled": false
+              },
+              "workloadAutoScalerProfile": {},
+              "resourceUID": "66d9e0e042f7f200014ad7cf"
+             },
+             "identity": {
+              "type": "SystemAssigned",
+              "principalId": "00000000-0000-0000-0000-000000000000",
+              "tenantId": "tenantid"
+             },
+             "sku": {
+              "name": "Base",
+              "tier": "Standard"
              }
+            }
         headers:
             Cache-Control:
                 - no-cache
@@ -1044,7 +1062,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 962.811914ms
+        duration: 200ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -1061,7 +1079,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1069,139 +1087,145 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3959
+        content_length: 4224
         uncompressed: false
         body: |-
             {
-              "value": [
-               {
-                "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
-                "location": "eastus",
-                "name": "testResource",
-                "type": "Microsoft.ContainerService/ManagedClusters",
-                "properties": {
-                 "provisioningState": "Succeeded",
-                 "powerState": {
-                  "code": "Running"
-                 },
-                 "kubernetesVersion": "1.27",
-                 "currentKubernetesVersion": "1.27.7",
-                 "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                 "fqdn": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.hcp.eastus.azmk8s.io",
-                 "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-crx3p24b.portal.hcp.eastus.azmk8s.io",
-                 "agentPoolProfiles": [
-                  {
-                   "name": "agentpool1",
-                   "count": 3,
-                   "vmSize": "Standard_DS2_v2",
-                   "osDiskSizeGB": 128,
-                   "osDiskType": "Managed",
-                   "kubeletDiskType": "OS",
-                   "maxPods": 110,
-                   "type": "VirtualMachineScaleSets",
-                   "provisioningState": "Succeeded",
-                   "powerState": {
-                    "code": "Running"
-                   },
-                   "orchestratorVersion": "1.27.7",
-                   "currentOrchestratorVersion": "1.27.7",
-                   "mode": "User",
-                   "osType": "Linux",
-                   "osSKU": "Ubuntu",
-                   "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202401.17.1",
-                   "enableFIPS": false
-                  }
-                 ],
-                 "linuxProfile": {
-                  "adminUsername": "azureuser",
-                  "ssh": {
-                   "publicKeys": [
-                    {
-                     "keyData": "ssh-rsa {KEY}\n"
-                    }
-                   ]
-                  }
-                 },
-                 "servicePrincipalProfile": {
-                  "clientId": "msi"
-                 },
-                 "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
-                 "enableRBAC": true,
-                 "supportPlan": "KubernetesOfficial",
-                 "networkProfile": {
-                  "networkPlugin": "kubenet",
-                  "loadBalancerSku": "Standard",
-                  "loadBalancerProfile": {
-                   "managedOutboundIPs": {
-                    "count": 1
-                   },
-                   "effectiveOutboundIPs": [
-                    {
-                     "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
-                    }
-                   ],
-                   "backendPoolType": "nodeIPConfiguration"
+             "value": [
+              {
+               "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource",
+               "location": "eastus",
+               "name": "testResource",
+               "type": "Microsoft.ContainerService/ManagedClusters",
+               "properties": {
+                "provisioningState": "Succeeded",
+                "powerState": {
+                 "code": "Running"
+                },
+                "kubernetesVersion": "1.29",
+                "currentKubernetesVersion": "1.29.7",
+                "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
+                "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
+                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+                "agentPoolProfiles": [
+                 {
+                  "name": "agentpool1",
+                  "count": 3,
+                  "vmSize": "Standard_D2s_v3",
+                  "osDiskSizeGB": 128,
+                  "osDiskType": "Managed",
+                  "kubeletDiskType": "OS",
+                  "maxPods": 110,
+                  "type": "VirtualMachineScaleSets",
+                  "enableAutoScaling": false,
+                  "provisioningState": "Succeeded",
+                  "powerState": {
+                   "code": "Running"
                   },
-                  "podCidr": "10.244.0.0/16",
-                  "serviceCidr": "10.0.0.0/16",
-                  "dnsServiceIP": "10.0.0.10",
-                  "outboundType": "loadBalancer",
-                  "podCidrs": [
-                   "10.244.0.0/16"
-                  ],
-                  "serviceCidrs": [
-                   "10.0.0.0/16"
-                  ],
-                  "ipFamilies": [
-                   "IPv4"
+                  "orchestratorVersion": "1.29",
+                  "currentOrchestratorVersion": "1.29.7",
+                  "enableNodePublicIP": false,
+                  "mode": "System",
+                  "osType": "Linux",
+                  "osSKU": "Ubuntu",
+                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                  "upgradeSettings": {
+                   "maxSurge": "10%"
+                  },
+                  "enableFIPS": false
+                 }
+                ],
+                "linuxProfile": {
+                 "adminUsername": "azureuser",
+                 "ssh": {
+                  "publicKeys": [
+                   {
+                    "keyData": "ssh-rsa {KEY}\n"
+                   }
                   ]
-                 },
-                 "maxAgentPools": 100,
-                 "identityProfile": {
-                  "kubeletidentity": {
-                   "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
-                   "clientId": "00000000-0000-0000-0000-000000000000",
-                   "objectId": "00000000-0000-0000-0000-000000000000"
-                  }
-                 },
-                 "autoUpgradeProfile": {
-                  "nodeOSUpgradeChannel": "NodeImage"
-                 },
-                 "securityProfile": {},
-                 "storageProfile": {
-                  "diskCSIDriver": {
-                   "enabled": true
-                  },
-                  "fileCSIDriver": {
-                   "enabled": true
-                  },
-                  "snapshotController": {
-                   "enabled": true
-                  }
-                 },
-                 "oidcIssuerProfile": {
-                  "enabled": false
-                 },
-                 "workloadAutoScalerProfile": {},
-                 "resourceUID": "65c31b4a15c38700010ce7d1"
+                 }
                 },
-                "identity": {
-                 "type": "SystemAssigned",
-                 "principalId": "00000000-0000-0000-0000-000000000000",
-                 "tenantId": "tenantid"
+                "servicePrincipalProfile": {
+                 "clientId": "msi"
                 },
-                "sku": {
-                 "name": "Base",
-                 "tier": "Standard"
-                }
+                "nodeResourceGroup": "MC_aks-cit-ManagedCluster_testResource_eastus",
+                "enableRBAC": true,
+                "supportPlan": "KubernetesOfficial",
+                "networkProfile": {
+                 "networkPlugin": "kubenet",
+                 "loadBalancerSku": "standard",
+                 "loadBalancerProfile": {
+                  "managedOutboundIPs": {
+                   "count": 1
+                  },
+                  "effectiveOutboundIPs": [
+                   {
+                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.Network/publicIPAddresses/00000000-0000-0000-0000-000000000000"
+                   }
+                  ],
+                  "backendPoolType": "nodeIPConfiguration"
+                 },
+                 "podCidr": "10.244.0.0/16",
+                 "serviceCidr": "10.0.0.0/16",
+                 "dnsServiceIP": "10.0.0.10",
+                 "outboundType": "loadBalancer",
+                 "podCidrs": [
+                  "10.244.0.0/16"
+                 ],
+                 "serviceCidrs": [
+                  "10.0.0.0/16"
+                 ],
+                 "ipFamilies": [
+                  "IPv4"
+                 ]
+                },
+                "maxAgentPools": 100,
+                "identityProfile": {
+                 "kubeletidentity": {
+                  "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/MC_aks-cit-ManagedCluster_testResource_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testResource-agentpool",
+                  "clientId": "00000000-0000-0000-0000-000000000000",
+                  "objectId": "00000000-0000-0000-0000-000000000000"
+                 }
+                },
+                "autoUpgradeProfile": {
+                 "nodeOSUpgradeChannel": "NodeImage"
+                },
+                "securityProfile": {},
+                "storageProfile": {
+                 "diskCSIDriver": {
+                  "enabled": true
+                 },
+                 "fileCSIDriver": {
+                  "enabled": true
+                 },
+                 "snapshotController": {
+                  "enabled": true
+                 }
+                },
+                "oidcIssuerProfile": {
+                 "enabled": false
+                },
+                "workloadAutoScalerProfile": {},
+                "resourceUID": "66d9e0e042f7f200014ad7cf"
+               },
+               "identity": {
+                "type": "SystemAssigned",
+                "principalId": "00000000-0000-0000-0000-000000000000",
+                "tenantId": "tenantid"
+               },
+               "sku": {
+                "name": "Base",
+                "tier": "Standard"
                }
-              ]
-             }
+              }
+             ],
+             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9530800\u0026api-version=2024-01-01\u0026skipToken=9530800"
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3959"
+                - "4224"
             Content-Type:
                 - application/json
             Expires:
@@ -1216,8 +1240,56 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.199406003s
+        duration: 200ms
     - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers: {}
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9530800&api-version=2024-01-01&skipToken=9530800
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 16
+        uncompressed: false
+        body: |-
+            {
+             "value": []
+            }
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "16"
+            Content-Type:
+                - application/json
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 11
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1233,7 +1305,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1265,8 +1337,8 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 109.255789ms
-    - id: 11
+        duration: 200ms
+    - id: 12
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1282,7 +1354,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2023-11-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -1295,7 +1367,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428826048012503&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=gNjtdVJeZnGldyciykqmFdlL9BaW7kAkMtXtGzjhu_ANMdL0WrS8F1iMElDwoNWwgfhz4ob44Wt8ybKCL0bFx7nvP-SoY0WtI6Gc9kJvXK_0guTCrDnS7LMhK-pbMceTKvfJgFrSF6486OecgKYPgasFpedNQjs8YJbrdldi3ZIqT4UftWSpmAz5g-BQSs8D9uzakbfCbWwbcF-j3nWYfBknsDyVVS6XufWtFA3CT8fbez-2tR_-EuJR3MOA9s5JHZX3wHrKpYogj0LPH7qvL1XQdAHgrJTI4WgAm4IWHJvnRWjCLrVTBLx34AAx_iQsogeEEOkb2OWJHc3tSEAICA&h=Ya36rVAdevZ5Up03TnZpTJ7jjfsgd8vEfR99fz0y2A4
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -1303,7 +1375,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operationresults/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428826048012503&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=UkWPeIQWj7rCakF1IWZfFnWk8DwKXpAdF6QQvv70nn3sjxVfYlGTEsZQRqVdQbbS0VKta9cCep_Wy4KlBs3pY0OCB-iiuheZFnktYwIue4TOjvH_xnzi4HmU17oQDpMV26E02_yWyn-pJPe0P0vkdjPgCgSZNYktkrUajE4fOyc9PWMEAPpQYpD-dDQvBKit3lkXQdXDndCRpSQ4XOITMZKYrC_5IwKgRmtAij5oRcdV8_2M255lCo4x7NVkPJ1uzRC0gJuN6xb0JLVvD2UDtAGBerowd2HRbFWExP6cHNu_7f7VbGlIki5COMxcJb-taviSdDVP6N7J9dWOOwRwtA&h=-SPLvlR_Z53dCirkDzhJq74ClQy2_BdcNzDSPLoAJEo
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operationresults/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1314,8 +1386,8 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 1.865800486s
-    - id: 12
+        duration: 200ms
+    - id: 13
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1329,7 +1401,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&t=638428826048012503&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=gNjtdVJeZnGldyciykqmFdlL9BaW7kAkMtXtGzjhu_ANMdL0WrS8F1iMElDwoNWwgfhz4ob44Wt8ybKCL0bFx7nvP-SoY0WtI6Gc9kJvXK_0guTCrDnS7LMhK-pbMceTKvfJgFrSF6486OecgKYPgasFpedNQjs8YJbrdldi3ZIqT4UftWSpmAz5g-BQSs8D9uzakbfCbWwbcF-j3nWYfBknsDyVVS6XufWtFA3CT8fbez-2tR_-EuJR3MOA9s5JHZX3wHrKpYogj0LPH7qvL1XQdAHgrJTI4WgAm4IWHJvnRWjCLrVTBLx34AAx_iQsogeEEOkb2OWJHc3tSEAICA&h=Ya36rVAdevZ5Up03TnZpTJ7jjfsgd8vEfR99fz0y2A4
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.ContainerService/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2017-08-31&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -1337,24 +1409,20 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 418
+        content_length: 165
         uncompressed: false
         body: |-
             {
-              "name": "00000000-0000-0000-0000-000000000000",
-              "status": "Succeeded",
-              "startTime": "2001-02-03T04:05:06Z",
-              "endTime": "2001-02-03T04:05:06Z",
-              "error": {
-               "code": "NotLatestOperation",
-               "message": "Cannot proceed with the operation. Either the operation has been preempted by another one, or the information needed by the operation failed to be saved (or hasn't been saved yet)."
-              }
-             }
+             "name": "00000000-0000-0000-0000-000000000000",
+             "status": "Succeeded",
+             "startTime": "2001-02-03T04:05:06Z",
+             "endTime": "2001-02-03T04:05:06Z"
+            }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "418"
+                - "165"
             Content-Type:
                 - application/json
             Expires:
@@ -1369,8 +1437,8 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 5.140670821s
-    - id: 13
+        duration: 200ms
+    - id: 14
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -1405,7 +1473,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=638428828215363656&c=MIIHADCCBeigAwIBAgITHgPtKFZCSVesK0WPLAAAA-0oVjANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDYwHhcNMjQwMjAyMTQwMTAxWhcNMjUwMTI3MTQwMTAxWjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK91qXSatAXLDynhJ7OmG-j0vO0hqhAjRdFNuJg9SayOMQgzA-obKyjKzODz-eKOFoz6nV1rqHbnb7YUxvz5Ke74ZDjbxdnwYGhAju6jD9ThtiS78Bt0iUKpZpY2QDYxCrpC2DaO5kCSOWUb4PBGhVDkexnKJTTgzHe6iS1gE6V9VyO5bN14Lsq_45qNHoMXlm6258OEIXZ2gvBFpy3CkYEY1Arc4oCuWYWzDTjzP7FJj-v_gVsjhKFAqVWdVND8k982bhNvxjCDqvTMMy2wR4V0GDA6ur0EnTPCKX1N3S7GUf17d1gJdpMzlb_jeHKjnYWKYv0LNyFwaqnk7GeduL0CAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9CTDJQS0lJTlRDQTAyLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA2LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQkwyUEtJSU5UQ0EwMi5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNi5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0JMMlBLSUlOVENBMDIuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3J0MB0GA1UdDgQWBBSg-6hed5hnNyz0o02J9YCREXHiLTAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDYuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBTxRmjG8cPwKy19i2rhsvm-NfzRQTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAJqTNNAFYbI8tYZvhkWYcJR1aDHuYU1URw_WgivmBHLOfIAZaztxQqvdsxn7EbAcjcOcq9H3pjUKGr3BRtnBNY431tr6872Si1uhnA9Q0oY_Loy1TELqVVHSnZv5Ak_tfVj8WfIk_tPErWJFKYSyH5rm8Oib-ESxwUgReD_HF9MnY14bWX17k0lKxbWDXBozqanPn8qTmnfF9QP-lqUSWCaCx8-p8Ko_YAwLYsD8uPcZogm5XP6QN4UM88O0WhW2SbtydDRtmuU41k0j2byj3C2lK-JwND1w0CfKV6HlCFm_yKAdbmJUK50Y8Mkh2ebZhN0HOcoGcebh1hrMvD1lL1A&s=aPyxcbfN-JKtymoB57pfLOSJIxqWOFQdUYLXA5xuCE0mmxf-Hz_tgaeA9ZjzEQZsynMqKbahgtQ2hotE7Smaa7u1JEE3kb2E3yj2ZSxVBBBRMOb5aIpkuxEMEcym9AatTgOdyWjXDaJwTqVF6PWj5-36fq2ljdRL3K4PeSknTLL0ISJFEj118ujItMTRLFMzSl4HlhmCt4oDT81MfLrebQnqo_hYelm1M7CzhS7WkvcWw1thdgF6OXHjvH00fVd88tRMdN29NdD-cbrH2KtCVw8sAlBBmSmwGtZxlQMJfTHA7rh60p4qVqxUF1j_HqR9BLGCaFB-Qb0Z98W9voYJng&h=TeLiz55dV6NmzvbDt8LXn2mDe4UEnvn62xKk-uyfB6w
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -1416,4 +1484,47 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 4.862203325s
+        duration: 200ms
+    - id: 15
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers: {}
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRNQU5BR0VEQ0xVU1RFUi1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms

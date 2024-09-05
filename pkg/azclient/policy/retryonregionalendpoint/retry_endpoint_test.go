@@ -24,16 +24,16 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryonregionalendpoint"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-var _ = Describe("RetryEndpoint", func() {
-	Describe("RetryEndpoint", func() {
-		It("should return on regional endpoint", func() {
+var _ = ginkgo.Describe("RetryEndpoint", func() {
+	ginkgo.Describe("RetryEndpoint", func() {
+		ginkgo.It("should return on regional endpoint", func() {
 			regionalEndpoint := "eastus.management.microsoft.com"
 			pipeline := runtime.NewPipeline("testmodule", "v0.1.0", runtime.PipelineOptions{}, &policy.ClientOptions{
 				PerCallPolicies: []policy.Policy{
@@ -56,13 +56,13 @@ var _ = Describe("RetryEndpoint", func() {
 				},
 			})
 			req, err := runtime.NewRequest(context.Background(), http.MethodGet, "https://management.microsoft.com")
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			response, err := pipeline.Do(req)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(response.StatusCode).To(Equal(http.StatusOK))
-			Expect(response.Request.URL.Host).To(Equal(regionalEndpoint))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(response.StatusCode).To(gomega.Equal(http.StatusOK))
+			gomega.Expect(response.Request.URL.Host).To(gomega.Equal(regionalEndpoint))
 		})
-		It("should return on non-regional endpoint", func() {
+		ginkgo.It("should return on non-regional endpoint", func() {
 			regionalEndpoint := "eastus.management.microsoft.com"
 			pipeline := runtime.NewPipeline("testmodule", "v0.1.0", runtime.PipelineOptions{}, &policy.ClientOptions{
 				PerCallPolicies: []policy.Policy{
@@ -85,11 +85,11 @@ var _ = Describe("RetryEndpoint", func() {
 				},
 			})
 			req, err := runtime.NewRequest(context.Background(), http.MethodGet, "https://management.microsoft.com")
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			response, err := pipeline.Do(req)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(response.StatusCode).To(Equal(http.StatusOK))
-			Expect(response.Request.URL.Host).To(Equal(regionalEndpoint))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(response.StatusCode).To(gomega.Equal(http.StatusOK))
+			gomega.Expect(response.Request.URL.Host).To(gomega.Equal(regionalEndpoint))
 		})
 	})
 })

@@ -51,7 +51,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 2.37058994s
+        duration: 200ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -87,7 +87,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -106,7 +106,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 1.907613397s
+        duration: 200ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -121,7 +121,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -151,7 +151,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 615.332476ms
+        duration: 200ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -198,7 +198,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.486780071s
+        duration: 200ms
     - id: 4
       request:
         proto: HTTP/1.1
@@ -234,7 +234,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -253,7 +253,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 779.562942ms
+        duration: 200ms
     - id: 5
       request:
         proto: HTTP/1.1
@@ -268,7 +268,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -298,7 +298,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 286.713611ms
+        duration: 200ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -345,7 +345,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 964.658337ms
+        duration: 200ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -394,7 +394,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.330026851s
+        duration: 200ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -441,7 +441,7 @@ interactions:
                 - nosniff
         status: 404 Not Found
         code: 404
-        duration: 1.67151357s
+        duration: 200ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -477,7 +477,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -496,7 +496,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 1.21652563s
+        duration: 200ms
     - id: 10
       request:
         proto: HTTP/1.1
@@ -543,7 +543,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 439.702483ms
+        duration: 200ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -590,7 +590,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 443.705484ms
+        duration: 200ms
     - id: 12
       request:
         proto: HTTP/1.1
@@ -639,7 +639,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 104.99062ms
+        duration: 200ms
     - id: 13
       request:
         proto: HTTP/1.1
@@ -671,7 +671,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -679,7 +679,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -690,7 +690,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 609.580015ms
+        duration: 200ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -705,7 +705,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -735,7 +735,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 782.239058ms
+        duration: 200ms
     - id: 15
       request:
         proto: HTTP/1.1
@@ -767,7 +767,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -775,7 +775,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operationResults/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -786,7 +786,7 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 1.246476053s
+        duration: 200ms
     - id: 16
       request:
         proto: HTTP/1.1
@@ -801,7 +801,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus/operations/00000000-0000-0000-0000-000000000000?api-version=2023-05-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -831,7 +831,7 @@ interactions:
                 - nosniff
         status: 200 OK
         code: 200
-        duration: 298.716469ms
+        duration: 200ms
     - id: 17
       request:
         proto: HTTP/1.1
@@ -867,7 +867,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTVUJORVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&t=2023-09-22T06%3a23%3a38&c=MIIHADCCBeigAwIBAgITfAOtZbVyhIaoXiQX9QAAA61ltTANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDUwHhcNMjMwODAyMTQ1NDA5WhcNMjQwNzI3MTQ1NDA5WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANQA35gS4wn0cANlmlnrdJ9IBU1aE-8EI1MYINCOUfFs-tm1yetu3MztHR_R1oMLS3u-W0fIdQKhPRs3jLbRX3PdqKRlNg6Xj2SKS_knzgi9EkbJTCcbzvr6-hYCotnkmzQ71vwTIpGBneJO1bmbXvWd6-aSebKaQS5t-hYyUWleJ0Q8O0aPEpGpbAAdaAexFfsFGz63lvaVsgwJKLGPowqYAghYNBTpEBPxb6Grd7ZC-gzZBL7FjBTy1yCOCqS3-jI_KRhTdgFnVVOMVudOgfZ-apeefg0vEAp4J6Juqv5NeNv-BgnY1ra64Wq08iXnDweyicXeZT8usRAZ7ESr_HkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9DTzFQS0lJTlRDQTAxLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA1LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MB0GA1UdDgQWBBQsFNk21ikHAEgHqLMy9ffGg_wlJDAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBR61hmFKHlscXYeYPjzS--iBUIWHTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAGpldslox7xUmN36iQjxMtFk50rqShFRiY69tsnUPZ47bZ2MXuwyoA3RXv6V9xzM35xPlacN1l8DiVUGlVKc7-DjgL9VJBLvD4EFOAJ-0I6xK1iYatmF1l-qTJDVeuvBzQA3ruagp4WrHkLfXF2_d_-ZDKQItUSzHS1N5F6Kurek0TEXHB-ZNM34W8tbreTLLqGxY6_M6rQlNFpIO_M1VXsBn7HivI2aTGbfyTrxU3gz6PP8XseOXA2jCCxvYm5SLY4P2jKF1H1zt3NIGuhb23yNPKXCOsJ7284R9GXFoCl0c8AFVRkkDyZs-KZp85_SMPVJ8FLP8h0JqyS0MmPk0q8&s=CbYG-giB_JedObRCBtp4C7jwbG-KQ9m0vOprBOyOxvk_LQi-XVd73hOZJKX8vr9SJMQw0GJVm4m6E4pe3tYPNNkWHTDYz43XDt8qHwUv1ZNM_Omv4P_qgxGmmqO52aszJ_HxlBQy20qAJsD7M3YFgv7K1D-bYbberBR4Vutv_iHa_hFiraCaNJMqqtYMECX3H-OET7YbEReM1YHc5bA3cgdkv2s5mbLxHXj_HNHD7cB-9dP7m98na-r68rHXMJpFAdok49073wkblrlGF6jMlb6WKym946I57dnK16SEO_vuu63IIVMGJ7vOKdbljYAqDY5l1esShIrJbMV31ax3Zw&h=RfdiJhPjCMp4AnaPw28cadr7z9VJtMfoMFNiUWbf2W8
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTVUJORVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -878,4 +878,47 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 3.362695506s
+        duration: 200ms
+    - id: 18
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers: {}
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRTVUJORVQtRUFTVFVTIiwiam9iTG9jYXRpb24iOiJlYXN0dXMifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms

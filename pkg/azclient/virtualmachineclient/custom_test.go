@@ -151,7 +151,7 @@ func init() {
 					},
 				},
 				HardwareProfile: &armcompute.HardwareProfile{
-					VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_F2s")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+					VMSize: to.Ptr(armcompute.VirtualMachineSizeTypesStandardD2SV3), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 				},
 				OSProfile: &armcompute.OSProfile{ //
 					ComputerName:  to.Ptr("sample-compute"),

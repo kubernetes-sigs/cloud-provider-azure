@@ -18,228 +18,228 @@
 package azclient
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
-var _ = Describe("Factory", func() {
-	When("config is nil", func() {
-		It("should create factory instance without painc - Account", func() {
+var _ = ginkgo.Describe("Factory", func() {
+	ginkgo.When("config is nil", func() {
+		ginkgo.It("should create factory instance without painc - Account", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetAccountClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - AvailabilitySet", func() {
+		ginkgo.It("should create factory instance without painc - AvailabilitySet", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetAvailabilitySetClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - BlobContainer", func() {
+		ginkgo.It("should create factory instance without painc - BlobContainer", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetBlobContainerClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - BlobServiceProperties", func() {
+		ginkgo.It("should create factory instance without painc - BlobServiceProperties", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetBlobServicePropertiesClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Deployment", func() {
+		ginkgo.It("should create factory instance without painc - Deployment", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetDeploymentClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Disk", func() {
+		ginkgo.It("should create factory instance without painc - Disk", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetDiskClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - FileShare", func() {
+		ginkgo.It("should create factory instance without painc - FileShare", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetFileShareClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Interface", func() {
+		ginkgo.It("should create factory instance without painc - Interface", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetInterfaceClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - IPGroup", func() {
+		ginkgo.It("should create factory instance without painc - IPGroup", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetIPGroupClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - LoadBalancer", func() {
+		ginkgo.It("should create factory instance without painc - LoadBalancer", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetLoadBalancerClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - ManagedCluster", func() {
+		ginkgo.It("should create factory instance without painc - ManagedCluster", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetManagedClusterClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - PrivateEndpoint", func() {
+		ginkgo.It("should create factory instance without painc - PrivateEndpoint", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetPrivateEndpointClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - PrivateLinkService", func() {
+		ginkgo.It("should create factory instance without painc - PrivateLinkService", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetPrivateLinkServiceClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - PrivateZone", func() {
+		ginkgo.It("should create factory instance without painc - PrivateZone", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetPrivateZoneClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Provider", func() {
+		ginkgo.It("should create factory instance without painc - Provider", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetProviderClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - PublicIPAddress", func() {
+		ginkgo.It("should create factory instance without painc - PublicIPAddress", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetPublicIPAddressClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - PublicIPPrefix", func() {
+		ginkgo.It("should create factory instance without painc - PublicIPPrefix", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetPublicIPPrefixClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Registry", func() {
+		ginkgo.It("should create factory instance without painc - Registry", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetRegistryClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - ResourceGroup", func() {
+		ginkgo.It("should create factory instance without painc - ResourceGroup", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetResourceGroupClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - RouteTable", func() {
+		ginkgo.It("should create factory instance without painc - RouteTable", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetRouteTableClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Secret", func() {
+		ginkgo.It("should create factory instance without painc - Secret", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetSecretClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - SecurityGroup", func() {
+		ginkgo.It("should create factory instance without painc - SecurityGroup", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetSecurityGroupClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Snapshot", func() {
+		ginkgo.It("should create factory instance without painc - Snapshot", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetSnapshotClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - SSHPublicKeyResource", func() {
+		ginkgo.It("should create factory instance without painc - SSHPublicKeyResource", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetSSHPublicKeyResourceClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Subnet", func() {
+		ginkgo.It("should create factory instance without painc - Subnet", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetSubnetClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - Vault", func() {
+		ginkgo.It("should create factory instance without painc - Vault", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVaultClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - VirtualMachine", func() {
+		ginkgo.It("should create factory instance without painc - VirtualMachine", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVirtualMachineClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - VirtualMachineScaleSet", func() {
+		ginkgo.It("should create factory instance without painc - VirtualMachineScaleSet", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVirtualMachineScaleSetClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - VirtualMachineScaleSetVM", func() {
+		ginkgo.It("should create factory instance without painc - VirtualMachineScaleSetVM", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVirtualMachineScaleSetVMClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - VirtualNetwork", func() {
+		ginkgo.It("should create factory instance without painc - VirtualNetwork", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVirtualNetworkClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
-		It("should create factory instance without painc - VirtualNetworkLink", func() {
+		ginkgo.It("should create factory instance without painc - VirtualNetworkLink", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(factory).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
 			client := factory.GetVirtualNetworkLinkClient()
-			Expect(client).NotTo(BeNil())
+			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
 	})
 })
