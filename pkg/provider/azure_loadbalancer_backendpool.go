@@ -774,6 +774,20 @@ func (bi *backendPoolTypeNodeIP) GetBackendPrivateIPs(clusterName string, servic
 	return backendPrivateIPv4s.UnsortedList(), backendPrivateIPv6s.UnsortedList()
 }
 
+// getBackendPoolNameForService returns all node names in the backend pool.
+func (bi *backendPoolTypeNodeIP) getBackendPoolNodeNames(bp *network.BackendAddressPool) []string {
+	nodeNames := utilsets.NewString()
+	if bp.BackendAddressPoolPropertiesFormat != nil && bp.LoadBalancerBackendAddresses != nil {
+		for _, backendAddress := range *bp.LoadBalancerBackendAddresses {
+			if backendAddress.LoadBalancerBackendAddressPropertiesFormat != nil {
+				ip := ptr.Deref(backendAddress.IPAddress, "")
+				nodeNames.Insert(bi.nodePrivateIPToNodeNameMap[ip])
+			}
+		}
+	}
+	return nodeNames.UnsortedList()
+}
+
 func newBackendPool(lb *network.LoadBalancer, isBackendPoolPreConfigured bool, preConfiguredBackendPoolLoadBalancerTypes, serviceName, lbBackendPoolName string) bool {
 	if isBackendPoolPreConfigured {
 		klog.V(2).Infof("newBackendPool for service (%s)(true): lb backendpool - PreConfiguredBackendPoolLoadBalancerTypes %s has been set but can not find corresponding backend pool %q, ignoring it",
