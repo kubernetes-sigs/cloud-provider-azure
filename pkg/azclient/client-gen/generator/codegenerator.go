@@ -109,10 +109,11 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 					root.AddError(err)
 					return
 				}
-
-				if err := factoryGenerator.RegisterClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
-					root.AddError(err)
-					return
+				if !markerConf.OutOfSubscriptionScope {
+					if err := factoryGenerator.RegisterClient(ctx, root, typeInfo.Name, markerConf, headerText); err != nil {
+						root.AddError(err)
+						return
+					}
 				}
 			}
 		})
@@ -129,7 +130,7 @@ func (g Generator) Generate(ctx *genall.GenerationContext) error {
 	fmt.Println("Run go test ")
 
 	//nolint:gosec // G204 ignore this!
-	cmd = exec.Command("go", "test", "./...")
+	cmd = exec.Command("go", "test", "./...", "--timeout=30m")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

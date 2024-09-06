@@ -19,21 +19,22 @@ package generator
 import "html/template"
 
 type ClientGenConfig struct {
-	Verbs           []string `marker:",optional"`
-	Resource        string
-	SubResource     string `marker:"subResource,optional"`
-	PackageName     string
-	PackageAlias    string
-	ClientName      string
-	Expand          bool   `marker:"expand,optional"`
-	RateLimitKey    string `marker:"rateLimitKey,optional"`
-	CrossSubFactory bool   `marker:"crossSubFactory,optional"`
+	Verbs                  []string `marker:",optional"`
+	Resource               string
+	SubResource            string `marker:"subResource,optional"`
+	PackageName            string
+	PackageAlias           string
+	ClientName             string
+	OutOfSubscriptionScope bool   `marker:"outOfSubscriptionScope,optional"`
+	Expand                 bool   `marker:"expand,optional"`
+	RateLimitKey           string `marker:"rateLimitKey,optional"`
+	CrossSubFactory        bool   `marker:"crossSubFactory,optional"`
 }
 
 var ClientTemplate = template.Must(template.New("object-scaffolding-client-struct").Parse(`
 type Client struct{
 	*{{.PackageAlias}}.{{.ClientName}}
-	subscriptionID string
+	{{if not .OutOfSubscriptionScope -}}subscriptionID string {{- end}}
 	tracer tracing.Tracer
 }
 `))
@@ -45,13 +46,13 @@ func New(subscriptionID string, credential azcore.TokenCredential, options *arm.
 	}
 	tr := options.TracingProvider.NewTracer(utils.ModuleName, utils.ModuleVersion)
 
-	client, err := {{.PackageAlias}}.New{{.ClientName}}(subscriptionID, credential, options)
+	client, err := {{.PackageAlias}}.New{{.ClientName}}({{if not .OutOfSubscriptionScope}}subscriptionID,{{end}} credential, options)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{ 
 		{{.ClientName}}: client, 
-		subscriptionID:  subscriptionID,
+		{{if not .OutOfSubscriptionScope}}subscriptionID: subscriptionID,{{end}}
 		tracer:          tr, 
 	}, nil
 }
@@ -65,7 +66,11 @@ var CreateOrUpdateFuncTemplate = template.Must(template.New("object-scaffolding-
 const CreateOrUpdateOperationName = "{{.ClientName}}.Create"
 // CreateOrUpdate creates or updates a {{$resource}}.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string,{{with .SubResource}}parentResourceName string, {{end}} resource {{.PackageAlias}}.{{$resource}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
+	{{if .OutOfSubscriptionScope -}}
+	metricsCtx := metrics.BeginARMRequestWithAttributes(attribute.String("resource", "{{ $resource }}"), attribute.String("method", "create_or_update"))
+	{{else -}}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "create_or_update")
+	{{end -}}
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
@@ -111,12 +116,16 @@ var ListFuncTemplate = template.Must(template.New("object-scaffolding-list-func"
 {{- end }}
 const ListOperationName = "{{.ClientName}}.List"
 // List gets a list of {{$resource}} in the resource group.
-func (client *Client) List(ctx context.Context, resourceGroupName string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
-	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "list")
+func (client *Client) List(ctx context.Context,{{if .OutOfSubscriptionScope}} scopeName{{else}} resourceGroupName{{end}} string{{with .SubResource}}, parentResourceName string{{end}}) (result []*{{.PackageAlias}}.{{$resource}}, err error) {
+	{{if .OutOfSubscriptionScope -}}
+	metricsCtx := metrics.BeginARMRequestWithAttributes(attribute.String("resource", "{{ $resource }}"), attribute.String("method", "list"))
+	{{else -}}
+	metricsCtx := metrics.BeginARMRequest({{if .OutOfSubscriptionScope}}scopeName{{else}}client.subscriptionID, resourceGroupName,{{end}} "{{ $resource }}", "list")
+	{{end -}}
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
-	pager := client.{{.ClientName}}.NewListPager(resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} nil)
+	pager := client.{{.ClientName}}.NewListPager({{if .OutOfSubscriptionScope}}scopeName{{else}}resourceGroupName{{end}},{{with .SubResource}} parentResourceName,{{end}} nil)
 	for pager.More() {
 		nextResult, err := pager.NextPage(ctx)
 		if err != nil {
@@ -153,15 +162,15 @@ var GetFuncTemplate = template.Must(template.New("object-scaffolding-get-func").
 const GetOperationName = "{{.ClientName}}.Get"
 // Get gets the {{$resource}}
 func (client *Client) Get(ctx context.Context, resourceGroupName string, {{with .SubResource}}parentResourceName string,{{end}} resourceName string{{if .Expand}}, expand *string{{end}}) (result *{{.PackageAlias}}.{{$resource}}, err error) {
-	{{ if .Expand}}var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
+	{{ if .Expand -}}var ops *{{.PackageAlias}}.{{.ClientName}}GetOptions
 	if expand != nil {
 		ops = &{{.PackageAlias}}.{{.ClientName}}GetOptions{ Expand: expand }
-	}{{- end}}
+	}{{ end }}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "{{ $resource }}", "get")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
-	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}}ops{{else}}nil{{end}} )
+	resp, err := client.{{.ClientName}}.Get(ctx, resourceGroupName,{{with .SubResource}}parentResourceName,{{end}} resourceName,{{if .Expand}} ops{{else}} nil{{end}})
 	if err != nil {
 		return nil, err
 	}
