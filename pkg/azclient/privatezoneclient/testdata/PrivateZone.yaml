@@ -51,7 +51,7 @@ interactions:
                 - nosniff
         status: 201 Created
         code: 201
-        duration: 1.677343942s
+        duration: 200ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -85,7 +85,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTthNDgxNjEzNy04MTRlLTRmYTItOGVjMS05ZGFiNGRlM2Q2NmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs2OTFlYzdiYi01MjhhLTQxZTktOTVlMC04YTgyNGUyMjQwNTRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -93,7 +93,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTthNDgxNjEzNy04MTRlLTRmYTItOGVjMS05ZGFiNGRlM2Q2NmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs2OTFlYzdiYi01MjhhLTQxZTktOTVlMC04YTgyNGUyMjQwNTRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -102,13 +102,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "11999"
             X-Powered-By:
                 - ASP.NET
         status: 202 Accepted
         code: 202
-        duration: 3.619159401s
+        duration: 200ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -117,13 +115,13 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com:443
+        host: management.azure.com
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTthNDgxNjEzNy04MTRlLTRmYTItOGVjMS05ZGFiNGRlM2Q2NmNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs2OTFlYzdiYi01MjhhLTQxZTktOTVlMC04YTgyNGUyMjQwNTRfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -149,13 +147,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 322.709062ms
+        duration: 200ms
     - id: 3
       request:
         proto: HTTP/1.1
@@ -180,7 +176,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzNhMTg1Njk4LTcxZWUtNDhmNi1iMjIzLWZkODMwZTE5MmRlMzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzYzYWVhNjU4LWI3ODQtNDQ5Ny04NmZlLTdlOWVjYWYxNjEzZTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -198,13 +194,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 313.452064ms
+        duration: 200ms
     - id: 4
       request:
         proto: HTTP/1.1
@@ -231,7 +225,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzNhMTg1Njk4LTcxZWUtNDhmNi1iMjIzLWZkODMwZTE5MmRlMzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzYzYWVhNjU4LWI3ODQtNDQ5Ny04NmZlLTdlOWVjYWYxNjEzZTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -249,13 +243,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 878.704979ms
+        duration: 200ms
     - id: 5
       request:
         proto: HTTP/1.1
@@ -304,7 +296,7 @@ interactions:
                 - gateway
         status: 404 Not Found
         code: 404
-        duration: 250.26415ms
+        duration: 200ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -338,7 +330,7 @@ interactions:
         body: '{}'
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkM2Y1MWRmMi1kYWVlLTQxODItODk1YS1iNDllODlmZjI0ZTBfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4NWE0NTZkNi1hOTA1LTRmZjUtYmFhOS01MmRmODcwNDMwYThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
@@ -346,7 +338,7 @@ interactions:
             Content-Type:
                 - application/json; charset=utf-8
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkM2Y1MWRmMi1kYWVlLTQxODItODk1YS1iNDllODlmZjI0ZTBfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4NWE0NTZkNi1hOTA1LTRmZjUtYmFhOS01MmRmODcwNDMwYThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -355,13 +347,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "11999"
             X-Powered-By:
                 - ASP.NET
         status: 202 Accepted
         code: 202
-        duration: 1.849924676s
+        duration: 200ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -370,13 +360,13 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com:443
+        host: management.azure.com
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTtkM2Y1MWRmMi1kYWVlLTQxODItODk1YS1iNDllODlmZjI0ZTBfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtVcHNlcnRQcml2YXRlRG5zWm9uZTs4NWE0NTZkNi1hOTA1LTRmZjUtYmFhOS01MmRmODcwNDMwYThfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -402,13 +392,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 760.811119ms
+        duration: 200ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -433,7 +421,7 @@ interactions:
         trailer: {}
         content_length: 751
         uncompressed: false
-        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzNhMTg1Njk4LTcxZWUtNDhmNi1iMjIzLWZkODMwZTE5MmRlMzsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
+        body: '{"id":"\/subscriptions\/00000000-0000-0000-0000-000000000000\/resourceGroups\/aks-cit-privatezone\/providers\/Microsoft.Network\/privateDnsZones\/aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","name":"aks-cit-privatednszone-uttest.privatelink.global.azmk8s.io","type":"Microsoft.Network\/privateDnsZones","etag":"00000000-0000-0000-0000-000000000000","location":"global","properties":{"internalId":"SW1tdXRhYmxlWm9uZUlkZW50aXR5OzYzYWVhNjU4LWI3ODQtNDQ5Ny04NmZlLTdlOWVjYWYxNjEzZTsw","maxNumberOfRecordSets":25000,"maxNumberOfVirtualNetworkLinks":1000,"maxNumberOfVirtualNetworkLinksWithRegistration":100,"numberOfRecordSets":1,"numberOfVirtualNetworkLinks":0,"numberOfVirtualNetworkLinksWithRegistration":0,"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - private
@@ -451,13 +439,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 458.587632ms
+        duration: 200ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -487,13 +473,13 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs5ZGU0Zjg2ZC0wYzU4LTQ4MTEtOWM1OS1jOWMwZGRkZDQxZGNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTthYjkyYzhmOC0wNWUxLTQ3MTYtYTRhZC1jNmUyMWRmNmZiMzFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - private
             Content-Length:
                 - "0"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs5ZGU0Zjg2ZC0wYzU4LTQ4MTEtOWM1OS1jOWMwZGRkZDQxZGNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationResults/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTthYjkyYzhmOC0wNWUxLTQ3MTYtYTRhZC1jNmUyMWRmNmZiMzFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Aspnet-Version:
@@ -502,13 +488,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "11999"
             X-Powered-By:
                 - ASP.NET
         status: 202 Accepted
         code: 202
-        duration: 2.01475038s
+        duration: 200ms
     - id: 10
       request:
         proto: HTTP/1.1
@@ -517,13 +501,13 @@ interactions:
         content_length: 0
         transfer_encoding: []
         trailer: {}
-        host: management.azure.com:443
+        host: management.azure.com
         remote_addr: ""
         request_uri: ""
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com:443/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTs5ZGU0Zjg2ZC0wYzU4LTQ4MTEtOWM1OS1jOWMwZGRkZDQxZGNfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-privatezone/providers/Microsoft.Network/privateDnsOperationStatuses/RnJvbnRFbmRBc3luY09wZXJhdGlvbjtEZWxldGVQcml2YXRlRG5zWm9uZTthYjkyYzhmOC0wNWUxLTQ3MTYtYTRhZC1jNmUyMWRmNmZiMzFfOGVjYWRmYzktZDFhMy00ZWE0LWI4NDQtMGQ5Zjg3ZTRkN2M4?api-version=2020-06-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -549,13 +533,11 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-            X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests:
-                - "499"
             X-Powered-By:
                 - ASP.NET
         status: 200 OK
         code: 200
-        duration: 372.452499ms
+        duration: 200ms
     - id: 11
       request:
         proto: HTTP/1.1
@@ -591,7 +573,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&t=638309606673368391&c=MIIHADCCBeigAwIBAgITfAOtZbVyhIaoXiQX9QAAA61ltTANBgkqhkiG9w0BAQsFADBEMRMwEQYKCZImiZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRgwFgYDVQQDEw9BTUUgSW5mcmEgQ0EgMDUwHhcNMjMwODAyMTQ1NDA5WhcNMjQwNzI3MTQ1NDA5WjBAMT4wPAYDVQQDEzVhc3luY29wZXJhdGlvbnNpZ25pbmdjZXJ0aWZpY2F0ZS5tYW5hZ2VtZW50LmF6dXJlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANQA35gS4wn0cANlmlnrdJ9IBU1aE-8EI1MYINCOUfFs-tm1yetu3MztHR_R1oMLS3u-W0fIdQKhPRs3jLbRX3PdqKRlNg6Xj2SKS_knzgi9EkbJTCcbzvr6-hYCotnkmzQ71vwTIpGBneJO1bmbXvWd6-aSebKaQS5t-hYyUWleJ0Q8O0aPEpGpbAAdaAexFfsFGz63lvaVsgwJKLGPowqYAghYNBTpEBPxb6Grd7ZC-gzZBL7FjBTy1yCOCqS3-jI_KRhTdgFnVVOMVudOgfZ-apeefg0vEAp4J6Juqv5NeNv-BgnY1ra64Wq08iXnDweyicXeZT8usRAZ7ESr_HkCAwEAAaOCA-0wggPpMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwEwCgYIKwYBBQUHAwIwPQYJKwYBBAGCNxUHBDAwLgYmKwYBBAGCNxUIhpDjDYTVtHiE8Ys-hZvdFs6dEoFggvX2K4Py0SACAWQCAQowggHLBggrBgEFBQcBAQSCAb0wggG5MGMGCCsGAQUFBzAChldodHRwOi8vY3JsLm1pY3Jvc29mdC5jb20vcGtpaW5mcmEvQ2VydHMvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmwxLmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MFMGCCsGAQUFBzAChkdodHRwOi8vY3JsMi5hbWUuZ2JsL2FpYS9DTzFQS0lJTlRDQTAxLkFNRS5HQkxfQU1FJTIwSW5mcmElMjBDQSUyMDA1LmNydDBTBggrBgEFBQcwAoZHaHR0cDovL2NybDMuYW1lLmdibC9haWEvQ08xUEtJSU5UQ0EwMS5BTUUuR0JMX0FNRSUyMEluZnJhJTIwQ0ElMjAwNS5jcnQwUwYIKwYBBQUHMAKGR2h0dHA6Ly9jcmw0LmFtZS5nYmwvYWlhL0NPMVBLSUlOVENBMDEuQU1FLkdCTF9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3J0MB0GA1UdDgQWBBQsFNk21ikHAEgHqLMy9ffGg_wlJDAOBgNVHQ8BAf8EBAMCBaAwggEmBgNVHR8EggEdMIIBGTCCARWgggERoIIBDYY_aHR0cDovL2NybC5taWNyb3NvZnQuY29tL3BraWluZnJhL0NSTC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMS5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMi5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsMy5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JshjFodHRwOi8vY3JsNC5hbWUuZ2JsL2NybC9BTUUlMjBJbmZyYSUyMENBJTIwMDUuY3JsMBcGA1UdIAQQMA4wDAYKKwYBBAGCN3sBATAfBgNVHSMEGDAWgBR61hmFKHlscXYeYPjzS--iBUIWHTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAGpldslox7xUmN36iQjxMtFk50rqShFRiY69tsnUPZ47bZ2MXuwyoA3RXv6V9xzM35xPlacN1l8DiVUGlVKc7-DjgL9VJBLvD4EFOAJ-0I6xK1iYatmF1l-qTJDVeuvBzQA3ruagp4WrHkLfXF2_d_-ZDKQItUSzHS1N5F6Kurek0TEXHB-ZNM34W8tbreTLLqGxY6_M6rQlNFpIO_M1VXsBn7HivI2aTGbfyTrxU3gz6PP8XseOXA2jCCxvYm5SLY4P2jKF1H1zt3NIGuhb23yNPKXCOsJ7284R9GXFoCl0c8AFVRkkDyZs-KZp85_SMPVJ8FLP8h0JqyS0MmPk0q8&s=UpWVSHgpkCGYoZowNItjvw1l3NDPeDjlJu8LsgeHNJxbaIfjxDxS48mijfYO1CEIj7IBcKynf3pgqNaPdcobNrwAGwSAbSy9E37aPA0CexTWkUshi2j9H0geazD1HhCoCdxUdHYnQuCXFFPgoJaNBwmBInlUzstckhU_lAjTsWZjFxeW8fUzoadDi31QCVOVWisRJ_rAfDZ28oTsgkPuiFO29jR3p1K05pqbUP1iLAYH6VjnhJF5MdAz_kNo9ifcdQDdG7PWubeuGHjjJod0TEzKO0Q0VP12DS7qjYDJya5hrYhrQKN8T9FRO2t7IugSnc6K9P8rU2knTszZIVMetg&h=B4jl8VlPkTF7Ca05AIUcIn04vwoW3VKcGgK54AG3wSk
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -602,4 +584,47 @@ interactions:
                 - nosniff
         status: 202 Accepted
         code: 202
-        duration: 3.249266858s
+        duration: 200ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.azure.com
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers: {}
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQUklWQVRFWk9ORS1FQVNUVVMiLCJqb2JMb2NhdGlvbiI6ImVhc3R1cyJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 0
+        uncompressed: false
+        body: ""
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "0"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Cache:
+                - CONFIG_NOCACHE
+            X-Content-Type-Options:
+                - nosniff
+        status: 200 OK
+        code: 200
+        duration: 200ms

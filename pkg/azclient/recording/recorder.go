@@ -20,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -65,6 +67,9 @@ var responseHeadersToRemove = []string{
 
 	"Content-Security-Policy-Report-Only",
 	"X-Msedge-Ref",
+	"X-Ms-Ratelimit-Remaining-Resource",
+	"X-Ms-Served-By",
+	"X-Ms-Ratelimit-Remaining-Subscription-Resource-Requests",
 }
 
 var (
@@ -89,6 +94,12 @@ var (
 
 	// uuidMatcher matches any valid UUID
 	uuidMatcher = regexp.MustCompile("[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}")
+
+	// emailmatcher matches any valid email
+	emailMatcher = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+
+	// statusMatcher matches any status field with value InProgress
+	statusMatcher = regexp.MustCompile(`\"status\" *: *\"InProgress\"`)
 )
 
 // hideDates replaces all ISO8601 datetimes with a fixed value
@@ -102,8 +113,8 @@ func hideSSHKeys(s string) string {
 	return sshKeyMatcher.ReplaceAllLiteralString(s, "ssh-rsa {KEY}")
 }
 
-// hideuuid hides uuid
-func hideUUID(s string) string {
+// hideuuID hides uuid
+func hideuuID(s string) string {
 	return uuidMatcher.ReplaceAllLiteralString(s, uuid.Nil.String())
 }
 
@@ -125,24 +136,25 @@ func hideKeys(s string) string {
 	return keyMatcher.ReplaceAllLiteralString(s, "{KEY}")
 }
 
+func hideEmails(s string) string {
+	return emailMatcher.ReplaceAllLiteralString(s, "{EMAIL}")
+}
+
 func hideRecordingData(s string) string {
 	result := hideDates(s)
 	result = hideSSHKeys(result)
 	result = hidePasswords(result)
 	result = hideKeys(result)
-	result = hideUUID(result)
+	result = hideuuID(result)
+	result = hideEmails(result)
 	return result
 }
 
 type Recorder struct {
-	credential       azcore.TokenCredential
-	rec              *gorecorder.Recorder
-	subscriptionID   string
-	tenantID         string
-	clientID         string
-	clientSecret     string
-	clientCertPath   string
-	clientCertPasswd string
+	credential     azcore.TokenCredential
+	rec            *gorecorder.Recorder
+	subscriptionID string
+	tenantID       string
 }
 
 type DummyTokenCredential func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error)
@@ -152,24 +164,19 @@ func (d DummyTokenCredential) GetToken(ctx context.Context, opts policy.TokenReq
 }
 
 func NewRecorder(cassetteName string) (*Recorder, error) {
-
-	rec, err := gorecorder.NewWithOptions(&gorecorder.Options{
+	var tokenCredential azcore.TokenCredential
+	var subscriptionID string
+	var tenantID string
+	var recOpstions *gorecorder.Options = &gorecorder.Options{
 		CassetteName:       cassetteName,
 		Mode:               gorecorder.ModeRecordOnce,
 		SkipRequestLatency: true,
 		RealTransport:      utils.DefaultTransport,
-	})
+	}
+	rec, err := gorecorder.NewWithOptions(recOpstions)
 	if err != nil {
 		return nil, err
 	}
-	rec.SetReplayableInteractions(false)
-	var tokenCredential azcore.TokenCredential
-	var subscriptionID string
-	var tenantID string
-	var clientID string
-	var clientSecret string
-	var clientCertPath string
-	var clientCertPasswd string
 	if rec.IsNewCassette() {
 		subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
 		if subscriptionID == "" {
@@ -179,64 +186,86 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		tenantID = os.Getenv(utils.AzureTenantID)
 		if tenantID == "" {
 			return nil, errors.New("required environment variable AZURE_TENANT_ID was not supplied")
-		}
-
-		clientID = os.Getenv(utils.AzureClientID)
-		if clientID == "" {
-			return nil, errors.New("required environment variable AZURE_CLIENT_ID was not supplied")
-		}
-		clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
-		clientCertPath = os.Getenv("AZURE_CLIENT_CERT_PATH")
-		clientCertPasswd = os.Getenv("AZURE_CLIENT_CERT_PASSWD")
-		if clientSecret == "" && clientCertPath == "" {
-			return nil, errors.New("either AZURE_CLIENT_SECRET or AZURE_CLIENT_CERT_PATH must be supplied")
 		}
 	} else {
 		// if we are replaying, we won't need auth
 		// and we use a dummy subscription ID
 		subscriptionID = uuid.Nil.String()
-		tokenCredential = DummyTokenCredential(func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+		tokenCredential = DummyTokenCredential(func(_ context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
 			return azcore.AccessToken{}, nil
 		})
-
 		tenantID = "tenantid"
-		clientID = "clientid"
-		clientSecret = "clientsecret"
 	}
 
+	rec.SetReplayableInteractions(false)
 	rec.AddHook(func(i *cassette.Interaction) error {
 		//ignore inprogress requests
-		if strings.Contains(i.Response.Body, "\"status\": \"InProgress\"") {
+		if statusMatcher.MatchString(i.Response.Body) {
 			i.DiscardOnSave = true
 			return nil
+		}
+		//ignore 202 responses
+		//ref https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/async-operations
+		//Operation|operation|asyncoperation|operationresults|nfvOperations
+		if strings.EqualFold(i.Request.Method, http.MethodGet) && strings.Contains(i.Request.URL, "peration") && i.Response.Code == 202 {
+			i.DiscardOnSave = true
+			return nil
+		}
+		opsURLStr := i.Response.Headers.Get("Location")
+		if opsURLStr != "" {
+			opsurl, err := url.Parse(opsURLStr)
+			if err != nil {
+				return err
+			}
+			values := opsurl.Query()
+			values.Set("t", "t")
+			values.Set("s", "s")
+			values.Set("h", "h")
+			values.Set("c", "c")
+			opsurl.RawQuery = values.Encode()
+			i.Response.Headers.Set("Location", opsurl.String())
+		}
+
+		opsURLStr = i.Response.Headers.Get("Azure-Asyncoperation")
+		if opsURLStr != "" {
+			opsurl, err := url.Parse(opsURLStr)
+			if err != nil {
+				return err
+			}
+			values := opsurl.Query()
+			values.Set("t", "t")
+			values.Set("s", "s")
+			values.Set("h", "h")
+			values.Set("c", "c")
+			opsurl.RawQuery = values.Encode()
+			i.Response.Headers.Set("Azure-Asyncoperation", opsurl.String())
+		}
+
+		//operation|Operation|asyncoperation|operationresults|nfvOperations|privateDnsOperationStatuses
+		if strings.EqualFold(i.Request.Method, http.MethodGet) && strings.Contains(i.Request.URL, "peration") {
+			opsurl, err := url.Parse(i.Request.URL)
+			if err != nil {
+				return err
+			}
+			values := opsurl.Query()
+			values.Set("t", "t")
+			values.Set("s", "s")
+			values.Set("h", "h")
+			values.Set("c", "c")
+			opsurl.RawQuery = values.Encode()
+			i.Request.URL = opsurl.String()
 		}
 		if !strings.EqualFold(tenantID, "tenantid") {
 			i.Request.URL = strings.Replace(i.Request.URL, tenantID, "tenantid", -1)
 			i.Request.Body = strings.Replace(i.Request.Body, tenantID, "tenantid", -1)
 			i.Response.Body = strings.Replace(i.Response.Body, tenantID, "tenantid", -1)
 			if i.Request.Form.Has("tenant_id") {
-				i.Request.Form.Set("tenant_id", tenantID)
-			}
-		}
-		if !strings.EqualFold(clientID, "clientid") {
-			i.Request.URL = strings.Replace(i.Request.URL, clientID, "clientid", -1)
-			i.Request.Body = strings.Replace(i.Request.Body, clientID, "clientid", -1)
-			i.Response.Body = strings.Replace(i.Response.Body, clientID, "clientid", -1)
-			if i.Request.Form.Has("client_id") {
-				i.Request.Form.Set("client_id", "clientid")
-			}
-		}
-
-		if len(clientSecret) > 0 && !strings.EqualFold(clientSecret, "clientsecret") {
-			i.Request.URL = strings.Replace(i.Request.URL, clientSecret, "clientsecret", -1)
-			i.Request.Body = strings.Replace(i.Request.Body, clientSecret, "clientsecret", -1)
-			i.Response.Body = strings.Replace(i.Response.Body, clientSecret, "clientsecret", -1)
-			if i.Request.Form.Has("client_secret") {
-				i.Request.Form.Set("client_secret", "clientsecret")
+				value := i.Request.Form
+				value.Set("tenant_id", tenantID)
+				i.Request.Form = value
 			}
 		}
 		if i.Request.Form.Has("client_assertion") {
@@ -249,55 +278,62 @@ func NewRecorder(cassetteName string) (*Recorder, error) {
 		if strings.Contains(i.Response.Body, "-----BEGIN RSA PRIVATE KEY-----") {
 			i.Response.Body = "{\r\n  \"privateKey\": \"-----BEGIN RSA PRIVATE KEY-----\\r\\n\\r\\n-----END RSA PRIVATE KEY-----\\r\\n\",\r\n  \"publicKey\": \"ssh-rsa {KEY} generated-by-azure\",\r\n  \"id\": \"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/AKS-CIT-SSHPUBLICKEYRESOURCE/providers/Microsoft.Compute/sshPublicKeys/testResource\"\r\n}"
 		}
-		if strings.Contains(i.Response.Body, "skiptoken") {
-			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
+		if strings.Contains(i.Response.Body, "skiptoken") && strings.Contains(i.Response.Body, "skipToken") {
+			re := regexp.MustCompile(`skip[Tt]oken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`)
 			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
 		}
-		if strings.Contains(i.Request.URL, "skiptoken") {
-			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
+		if strings.Contains(i.Request.URL, "skiptoken") && strings.Contains(i.Response.Body, "skipToken") {
+			re := regexp.MustCompile(`skip[Tt]oken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
 			i.Request.URL = string(re.ReplaceAll([]byte(i.Request.URL), []byte("skiptoken=skiptoken")))
 		}
-		if strings.Contains(i.Request.RequestURI, "skiptoken") {
-			re := regexp.MustCompile(`skiptoken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
+		if strings.Contains(i.Request.RequestURI, "skiptoken") && strings.Contains(i.Response.Body, "skipToken") {
+			re := regexp.MustCompile(`skip[Tt]oken=(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}%3D%3D|[A-Za-z0-9+/]{3}%3D)?`)
 			i.Response.Body = string(re.ReplaceAll([]byte(i.Response.Body), []byte("skiptoken=skiptoken")))
 		}
 
 		for _, header := range requestHeadersToRemove {
-			delete(i.Request.Headers, header)
+			i.Request.Headers.Del(header)
 		}
 
 		for _, header := range responseHeadersToRemove {
-			delete(i.Response.Headers, header)
+			i.Response.Headers.Del(header)
 		}
 
 		i.Request.Body = hideRecordingData(i.Request.Body)
 		i.Response.Body = hideRecordingData(i.Response.Body)
-		i.Request.URL = hideUUID(i.Request.URL)
-
+		i.Request.URL = hideuuID(i.Request.URL)
 		for _, values := range i.Request.Headers {
 			for i := range values {
-				values[i] = hideUUID(values[i])
+				values[i] = hideuuID(values[i])
 			}
 		}
 
 		for _, values := range i.Response.Headers {
 			for i := range values {
-				values[i] = hideUUID(values[i])
+				values[i] = hideuuID(values[i])
 			}
 		}
-
+		i.Response.Duration = 200 * time.Millisecond
 		return nil
 	}, gorecorder.BeforeSaveHook)
-
+	if !rec.IsNewCassette() {
+		rec.SetMatcher(func(r *http.Request, i cassette.Request) bool {
+			if strings.EqualFold(r.Method, http.MethodGet) && strings.Contains(r.URL.String(), "operation") {
+				value := r.URL.Query()
+				value.Set("t", "t")
+				value.Set("s", "s")
+				value.Set("h", "h")
+				value.Set("c", "c")
+				r.URL.RawQuery = value.Encode()
+			}
+			return cassette.DefaultMatcher(r, i)
+		})
+	}
 	return &Recorder{
-		credential:       tokenCredential,
-		rec:              rec,
-		subscriptionID:   subscriptionID,
-		tenantID:         tenantID,
-		clientID:         clientID,
-		clientSecret:     clientSecret,
-		clientCertPath:   clientCertPath,
-		clientCertPasswd: clientCertPasswd,
+		credential:     tokenCredential,
+		rec:            rec,
+		subscriptionID: subscriptionID,
+		tenantID:       tenantID,
 	}, nil
 }
 
@@ -315,22 +351,6 @@ func (r *Recorder) SubscriptionID() string {
 
 func (r *Recorder) TenantID() string {
 	return r.tenantID
-}
-
-func (r *Recorder) ClientID() string {
-	return r.clientID
-}
-
-func (r *Recorder) ClientSecret() string {
-	return r.clientSecret
-}
-
-func (r *Recorder) ClientCertPath() string {
-	return r.clientCertPath
-}
-
-func (r *Recorder) ClientCertPasswd() string {
-	return r.clientCertPasswd
 }
 
 func (r *Recorder) Stop() error {

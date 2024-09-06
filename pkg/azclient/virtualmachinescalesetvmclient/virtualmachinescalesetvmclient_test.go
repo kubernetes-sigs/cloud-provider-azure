@@ -20,46 +20,47 @@ package virtualmachinescalesetvmclient
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
 var beforeAllFunc func(context.Context)
 var afterAllFunc func(context.Context)
 var additionalTestCases func()
 
-var _ = Describe("VirtualMachineScaleSetVMsClient", Ordered, func() {
+var _ = ginkgo.Describe("VirtualMachineScaleSetVMsClient", ginkgo.Ordered, func() {
 
 	if beforeAllFunc != nil {
-		BeforeAll(beforeAllFunc)
+		ginkgo.BeforeAll(beforeAllFunc)
 	}
 
 	if additionalTestCases != nil {
 		additionalTestCases()
 	}
 
-	When("get requests are raised", func() {
-		It("should not return error", func(ctx context.Context) {
+	ginkgo.When("get requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(newResource).NotTo(BeNil())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 	})
-	When("invalid get requests are raised", func() {
-		It("should return 404 error", func(ctx context.Context) {
+	ginkgo.When("invalid get requests are raised", func() {
+		ginkgo.It("should return 404 error", func(ctx context.Context) {
 			newResource, err := realClient.Get(ctx, resourceGroupName, parentResourceName, resourceName+"notfound")
-			Expect(err).To(HaveOccurred())
-			Expect(newResource).To(BeNil())
+			gomega.Expect(err).To(gomega.HaveOccurred())
+			gomega.Expect(newResource).To(gomega.BeNil())
 		})
 	})
 
-	When("deletion requests are raised", func() {
-		It("should not return error", func(ctx context.Context) {
+	ginkgo.When("deletion requests are raised", func() {
+		ginkgo.It("should not return error", func(ctx context.Context) {
 			err = realClient.Delete(ctx, resourceGroupName, parentResourceName, resourceName)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})
+
 	if afterAllFunc != nil {
-		AfterAll(afterAllFunc)
+		ginkgo.AfterAll(afterAllFunc)
 	}
 })

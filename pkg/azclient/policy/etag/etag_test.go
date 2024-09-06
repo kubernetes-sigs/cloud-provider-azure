@@ -25,36 +25,36 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/etag"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
-var _ = Describe("Etag", func() {
-	Describe("AppendEtag", func() {
-		It("should append etag", func() {
+var _ = ginkgo.Describe("Etag", func() {
+	ginkgo.Describe("AppendEtag", func() {
+		ginkgo.It("should append etag", func() {
 			pipeline := runtime.NewPipeline("testmodule", "v0.1.0", runtime.PipelineOptions{}, &policy.ClientOptions{
 				PerCallPolicies: []policy.Policy{
 					utils.FuncPolicyWrapper(etag.AppendEtag),
 					utils.FuncPolicyWrapper(
 						func(req *policy.Request) (*http.Response, error) {
-							Expect(req.Raw().Header.Get("If-Match")).To(Equal("etag"))
+							gomega.Expect(req.Raw().Header.Get("If-Match")).To(gomega.Equal("etag"))
 							body, err := io.ReadAll(req.Body())
-							Expect(err).NotTo(HaveOccurred())
-							Expect(string(body)).To(Equal(`{"etag":"etag"}`))
+							gomega.Expect(err).NotTo(gomega.HaveOccurred())
+							gomega.Expect(string(body)).To(gomega.Equal(`{"etag":"etag"}`))
 							return nil, nil
 						},
 					),
 				},
 			})
 			req, err := runtime.NewRequest(context.Background(), http.MethodPut, "http://localhost:8080")
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			err = req.SetBody(streaming.NopCloser(strings.NewReader(`{"etag":"etag"}`)), "application/json")
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			_, err = pipeline.Do(req)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})
 })

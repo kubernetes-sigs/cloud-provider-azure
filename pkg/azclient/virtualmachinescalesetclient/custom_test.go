@@ -83,7 +83,7 @@ func init() {
 		newResource = &armcompute.VirtualMachineScaleSet{
 			Location: to.Ptr(location),
 			SKU: &armcompute.SKU{
-				Name:     to.Ptr("Basic_A0"), //armcompute.VirtualMachineSizeTypesBasicA0
+				Name:     to.Ptr(string(armcompute.VirtualMachineSizeTypesStandardD2SV3)),
 				Capacity: to.Ptr[int64](1),
 			},
 			Properties: &armcompute.VirtualMachineScaleSetProperties{
