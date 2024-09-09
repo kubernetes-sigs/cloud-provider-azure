@@ -85,6 +85,9 @@ func generateClient(ctx *genall.GenerationContext, root *loader.Package, _ strin
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"] = make(map[string]struct{})
+	if markerConf.OutOfSubscriptionScope && len(markerConf.Verbs) > 0 {
+		importList["go.opentelemetry.io/otel/attribute"] = make(map[string]struct{})
+	}
 	if err := WriteToFile(ctx, root, "zz_generated_client.go", headerText, importList, &outContent); err != nil {
 		return err
 	}

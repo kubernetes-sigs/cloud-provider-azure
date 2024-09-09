@@ -157,6 +157,13 @@ var _ = ginkgo.Describe("Factory", func() {
 			client := factory.GetResourceGroupClient()
 			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
+		ginkgo.It("should create factory instance without painc - RoleAssignment", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
+			client := factory.GetRoleAssignmentClient()
+			gomega.Expect(client).NotTo(gomega.BeNil())
+		})
 		ginkgo.It("should create factory instance without painc - RouteTable", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
