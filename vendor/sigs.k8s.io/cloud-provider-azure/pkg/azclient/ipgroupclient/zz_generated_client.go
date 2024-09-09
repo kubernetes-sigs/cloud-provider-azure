@@ -62,7 +62,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 		ops = &armnetwork.IPGroupsClientGetOptions{Expand: expand}
 	}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "IPGroup", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.IPGroupsClient.Get(ctx, resourceGroupName, resourceName, ops)
@@ -78,7 +78,7 @@ const CreateOrUpdateOperationName = "IPGroupsClient.Create"
 // CreateOrUpdate creates or updates a IPGroup.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.IPGroup) (result *armnetwork.IPGroup, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "IPGroup", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.IPGroupsClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -96,7 +96,7 @@ const DeleteOperationName = "IPGroupsClient.Delete"
 // Delete deletes a IPGroup by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "IPGroup", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -108,7 +108,7 @@ const ListOperationName = "IPGroupsClient.List"
 // List gets a list of IPGroup in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.IPGroup, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "IPGroup", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.IPGroupsClient.NewListByResourceGroupPager(resourceGroupName, nil)

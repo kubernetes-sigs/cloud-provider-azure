@@ -62,7 +62,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 		ops = &armnetwork.VirtualNetworksClientGetOptions{Expand: expand}
 	}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetwork", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.VirtualNetworksClient.Get(ctx, resourceGroupName, resourceName, ops)
@@ -78,7 +78,7 @@ const CreateOrUpdateOperationName = "VirtualNetworksClient.Create"
 // CreateOrUpdate creates or updates a VirtualNetwork.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.VirtualNetwork) (result *armnetwork.VirtualNetwork, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetwork", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.VirtualNetworksClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -96,7 +96,7 @@ const DeleteOperationName = "VirtualNetworksClient.Delete"
 // Delete deletes a VirtualNetwork by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetwork", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -108,7 +108,7 @@ const ListOperationName = "VirtualNetworksClient.List"
 // List gets a list of VirtualNetwork in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.VirtualNetwork, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetwork", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.VirtualNetworksClient.NewListPager(resourceGroupName, nil)

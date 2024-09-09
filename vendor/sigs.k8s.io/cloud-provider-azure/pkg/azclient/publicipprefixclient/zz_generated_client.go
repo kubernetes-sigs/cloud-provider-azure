@@ -62,7 +62,7 @@ func (client *Client) Get(ctx context.Context, resourceGroupName string, resourc
 		ops = &armnetwork.PublicIPPrefixesClientGetOptions{Expand: expand}
 	}
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPPrefix", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.PublicIPPrefixesClient.Get(ctx, resourceGroupName, resourceName, ops)
@@ -78,7 +78,7 @@ const CreateOrUpdateOperationName = "PublicIPPrefixesClient.Create"
 // CreateOrUpdate creates or updates a PublicIPPrefix.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, resource armnetwork.PublicIPPrefix) (result *armnetwork.PublicIPPrefix, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPPrefix", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.PublicIPPrefixesClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, resource, nil)).WaitforPollerResp(ctx)
@@ -96,7 +96,7 @@ const DeleteOperationName = "PublicIPPrefixesClient.Delete"
 // Delete deletes a PublicIPPrefix by name.
 func (client *Client) Delete(ctx context.Context, resourceGroupName string, resourceName string) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPPrefix", "delete")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, DeleteOperationName, client.tracer, nil)
 	defer endSpan(err)
 	_, err = utils.NewPollerWrapper(client.BeginDelete(ctx, resourceGroupName, resourceName, nil)).WaitforPollerResp(ctx)
@@ -108,7 +108,7 @@ const ListOperationName = "PublicIPPrefixesClient.List"
 // List gets a list of PublicIPPrefix in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armnetwork.PublicIPPrefix, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "PublicIPPrefix", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.PublicIPPrefixesClient.NewListPager(resourceGroupName, nil)
