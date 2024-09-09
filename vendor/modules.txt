@@ -74,6 +74,9 @@ github.com/Azure/azure-sdk-for-go/sdk/internal/log
 github.com/Azure/azure-sdk-for-go/sdk/internal/poller
 github.com/Azure/azure-sdk-for-go/sdk/internal/temporal
 github.com/Azure/azure-sdk-for-go/sdk/internal/uuid
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0
+## explicit; go 1.18
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 ## explicit; go 1.18
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5
@@ -570,7 +573,7 @@ go.uber.org/zap/internal/pool
 go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/zapcore
 go.uber.org/zap/zapgrpc
-# golang.org/x/crypto v0.26.0
+# golang.org/x/crypto v0.27.0
 ## explicit; go 1.20
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
@@ -616,7 +619,7 @@ golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
-# golang.org/x/term v0.23.0
+# golang.org/x/term v0.24.0
 ## explicit; go 1.18
 golang.org/x/term
 # golang.org/x/text v0.18.0
@@ -1522,8 +1525,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.46
-## explicit; go 1.21
+# sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.49
+## explicit; go 1.22
 sigs.k8s.io/cloud-provider-azure/pkg/azclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/accountclient/mock_accountclient
@@ -1552,6 +1555,7 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient
