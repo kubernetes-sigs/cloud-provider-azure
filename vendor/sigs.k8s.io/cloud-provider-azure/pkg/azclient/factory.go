@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
@@ -75,6 +76,7 @@ type ClientFactory interface {
 	GetPublicIPPrefixClient() publicipprefixclient.Interface
 	GetRegistryClient() registryclient.Interface
 	GetResourceGroupClient() resourcegroupclient.Interface
+	GetRoleAssignmentClient() roleassignmentclient.Interface
 	GetRouteTableClient() routetableclient.Interface
 	GetSecretClient() secretclient.Interface
 	GetSecurityGroupClient() securitygroupclient.Interface
