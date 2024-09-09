@@ -7,7 +7,6 @@ on:
     paths:
       - '.github/workflows/trivy.yaml'
       - 'pkg/**.go'
-      - '!pkg/azureclients/v2/**.go'
       - '!kubetest2-aks/**.go'
       - 'cmd/**.go'
       - 'go.*'
@@ -18,14 +17,13 @@ on:
     paths:
       - '.github/workflows/trivy.yaml'
       - 'pkg/**.go'
-      - '!pkg/azureclients/v2/**.go'
       - '!kubetest2-aks/**.go'
       - 'cmd/**.go'
       - 'go.*'
       - '!vendor/**'
       - 'health-probe-proxy/**'
   schedule:
-    - cron: '35 12 * * 4'
+    - cron: '0 */24 * * *'
 permissions:
   contents: read
 jobs:
@@ -104,8 +102,7 @@ jobs:
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         with:
           scan-type: 'fs'
-          ignore-unfixed: true
           format: 'github'
           output: 'dependency-results.sbom.json'
-          image-ref: '.'
+          scan-ref: '.'
           github-pat: ${{ secrets.GITHUB_TOKEN }}
