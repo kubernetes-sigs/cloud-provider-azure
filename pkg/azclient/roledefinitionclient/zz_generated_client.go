@@ -32,7 +32,7 @@ type Client struct {
 	tracer tracing.Tracer
 }
 
-func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
+func New(credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
