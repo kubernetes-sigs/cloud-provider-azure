@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	go.opentelemetry.io/otel v1.29.0
 	go.opentelemetry.io/otel/trace v1.29.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.49
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.51
 )
 
 require (
