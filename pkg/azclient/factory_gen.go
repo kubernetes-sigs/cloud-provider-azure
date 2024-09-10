@@ -317,6 +317,12 @@ func (factory *ClientFactoryImpl) createAccountClient(subscription string) (acco
 		return nil, err
 	}
 
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("storageAccountRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	for _, optionMutFn := range factory.clientOptionsMutFn {
 		if optionMutFn != nil {
 			optionMutFn(options)
@@ -1031,7 +1037,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineScaleSetClient(subscriptio
 	}
 
 	//add ratelimit policy
-	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineSizesRateLimit")
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineScaleSetRateLimit")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
