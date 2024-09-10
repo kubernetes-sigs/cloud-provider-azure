@@ -40,7 +40,7 @@ type Client struct{
 `))
 
 var ClientFactoryTemplate = template.Must(template.New("object-scaffolding-factory").Parse(`
-func New(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
+func New({{if not .OutOfSubscriptionScope}}subscriptionID string, {{end}}credential azcore.TokenCredential, options *arm.ClientOptions) (Interface, error) {
 	if options == nil {
 		options = utils.GetDefaultOption()
 	}
@@ -227,7 +227,7 @@ var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
 		},
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
+	realClient, err = New({{if not .OutOfSubscriptionScope}}subscriptionID, {{end}}recorder.TokenCredential(), &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
 			Transport: recorder.HTTPClient(),
 			TracingProvider: utils.TracingProvider,

@@ -60,7 +60,7 @@ var _ = ginkgo.BeforeSuite(func(ctx context.Context) {
 		},
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	realClient, err = New(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
+	realClient, err = New(recorder.TokenCredential(), &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
 			Transport:       recorder.HTTPClient(),
 			TracingProvider: utils.TracingProvider,
