@@ -47,14 +47,19 @@ type ARMContext struct {
 
 // BeginARMRequest creates a new ARMContext for an ARM request.
 func BeginARMRequest(subscriptionID, resourceGroup, resource, method string) *ARMContext {
+	return BeginARMRequestWithAttributes(
+		attribute.String("subscription_id", subscriptionID),
+		attribute.String("resource_group", strings.ToLower(resourceGroup)),
+		attribute.String("resource", resource),
+		attribute.String("method", method),
+	)
+}
+
+// BeginARMRequest creates a new ARMContext for an ARM request.
+func BeginARMRequestWithAttributes(attributes ...attribute.KeyValue) *ARMContext {
 	return &ARMContext{
-		startedAt: time.Now(),
-		attributes: []attribute.KeyValue{
-			attribute.String("subscription_id", subscriptionID),
-			attribute.String("resource_group", strings.ToLower(resourceGroup)),
-			attribute.String("resource", resource),
-			attribute.String("method", method),
-		},
+		startedAt:  time.Now(),
+		attributes: attributes,
 	}
 }
 
