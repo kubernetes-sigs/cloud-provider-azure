@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/armauth"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 
@@ -117,7 +116,6 @@ func NewAcrProviderFromConfig(configFile string, registryMirrorStr string) (Cred
 		if err != nil {
 			return nil, err
 		}
-		managedIdentityCredential = armauth.NewExpireEarlyTokenWrapper(managedIdentityCredential)
 	}
 
 	return &acrProvider{
