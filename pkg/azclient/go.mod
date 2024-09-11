@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient
 
-go 1.20
+go 1.23.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1
