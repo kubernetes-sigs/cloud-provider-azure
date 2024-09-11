@@ -44,7 +44,6 @@ func (s SecretResourceID) String() string {
 
 type KeyVaultCredential struct {
 	secretClient     *azsecrets.Client
-	vaultURI         string
 	secretResourceID SecretResourceID
 
 	mtx   sync.RWMutex
@@ -155,7 +154,7 @@ func (c *KeyVaultCredential) refreshToken(ctx context.Context) (*azcore.AccessTo
 	return cloneAccessToken(c.token), nil
 }
 
-func (c *KeyVaultCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
+func (c *KeyVaultCredential) GetToken(ctx context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	token, err := c.refreshToken(ctx)
 	if err != nil {
 		return azcore.AccessToken{}, fmt.Errorf("refresh token: %w", err)

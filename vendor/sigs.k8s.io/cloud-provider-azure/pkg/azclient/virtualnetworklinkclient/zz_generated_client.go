@@ -59,7 +59,7 @@ const GetOperationName = "VirtualNetworkLinksClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armprivatedns.VirtualNetworkLink, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.VirtualNetworkLinksClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
@@ -75,7 +75,7 @@ const CreateOrUpdateOperationName = "VirtualNetworkLinksClient.Create"
 // CreateOrUpdate creates or updates a VirtualNetworkLink.
 func (client *Client) CreateOrUpdate(ctx context.Context, resourceGroupName string, resourceName string, parentResourceName string, resource armprivatedns.VirtualNetworkLink) (result *armprivatedns.VirtualNetworkLink, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "VirtualNetworkLink", "create_or_update")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, CreateOrUpdateOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := utils.NewPollerWrapper(client.VirtualNetworkLinksClient.BeginCreateOrUpdate(ctx, resourceGroupName, resourceName, parentResourceName, resource, nil)).WaitforPollerResp(ctx)

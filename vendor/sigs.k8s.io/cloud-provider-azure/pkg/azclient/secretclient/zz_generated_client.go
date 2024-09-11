@@ -59,7 +59,7 @@ const GetOperationName = "SecretsClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, parentResourceName string, resourceName string) (result *armkeyvault.Secret, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Secret", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.SecretsClient.Get(ctx, resourceGroupName, parentResourceName, resourceName, nil)
@@ -75,7 +75,7 @@ const ListOperationName = "SecretsClient.List"
 // List gets a list of Secret in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string, parentResourceName string) (result []*armkeyvault.Secret, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Secret", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.SecretsClient.NewListPager(resourceGroupName, parentResourceName, nil)
