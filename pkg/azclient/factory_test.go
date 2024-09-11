@@ -73,6 +73,13 @@ var _ = ginkgo.Describe("Factory", func() {
 			client := factory.GetFileShareClient()
 			gomega.Expect(client).NotTo(gomega.BeNil())
 		})
+		ginkgo.It("should create factory instance without painc - Identity", func() {
+			factory, err := NewClientFactory(nil, nil, nil)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(factory).NotTo(gomega.BeNil())
+			client := factory.GetIdentityClient()
+			gomega.Expect(client).NotTo(gomega.BeNil())
+		})
 		ginkgo.It("should create factory instance without painc - Interface", func() {
 			factory, err := NewClientFactory(nil, nil, nil)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
