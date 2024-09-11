@@ -203,7 +203,7 @@ func TestAggregatePrefixes(t *testing.T) {
 			Name: "Overlap IPv4",
 			Input: []netip.Prefix{
 				netip.MustParsePrefix("192.168.0.0/16"),
-				netip.MustParsePrefix("192.169.0.0/16"),
+				netip.MustParsePrefix("192.170.0.0/16"),
 				netip.MustParsePrefix("10.10.0.1/32"),
 
 				netip.MustParsePrefix("192.168.1.0/24"),
@@ -211,8 +211,47 @@ func TestAggregatePrefixes(t *testing.T) {
 			},
 			Output: []netip.Prefix{
 				netip.MustParsePrefix("192.168.0.0/16"),
-				netip.MustParsePrefix("192.169.0.0/16"),
+				netip.MustParsePrefix("192.170.0.0/16"),
 				netip.MustParsePrefix("10.10.0.1/32"),
+			},
+		},
+		{
+			Name: "Collapse IPv4",
+			Input: []netip.Prefix{
+				netip.MustParsePrefix("192.168.0.0/24"),
+				netip.MustParsePrefix("192.168.1.0/24"),
+				netip.MustParsePrefix("192.168.2.0/24"),
+				netip.MustParsePrefix("192.168.3.0/24"),
+				netip.MustParsePrefix("10.0.0.0/8"),
+				netip.MustParsePrefix("172.16.0.0/12"),
+				netip.MustParsePrefix("192.168.4.0/24"),
+				netip.MustParsePrefix("192.168.5.0/24"),
+			},
+			Output: []netip.Prefix{
+				netip.MustParsePrefix("10.0.0.0/8"),
+				netip.MustParsePrefix("172.16.0.0/12"),
+				netip.MustParsePrefix("192.168.0.0/22"),
+				netip.MustParsePrefix("192.168.4.0/23"),
+			},
+		},
+		{
+			Name: "Collapse IPv6",
+			Input: []netip.Prefix{
+				netip.MustParsePrefix("2001:db8::/32"),
+				netip.MustParsePrefix("2001:db8:1::/48"),
+				netip.MustParsePrefix("2001:db8:2::/48"),
+				netip.MustParsePrefix("2001:db8:3::/48"),
+				netip.MustParsePrefix("2001:db8:4::/48"),
+				netip.MustParsePrefix("2001:db8:5::/48"),
+				netip.MustParsePrefix("2001:db8:6::/48"),
+				netip.MustParsePrefix("2001:db8:7::/48"),
+				netip.MustParsePrefix("2001:dbf::/32"),
+				netip.MustParsePrefix("2001:dba::/32"),
+			},
+			Output: []netip.Prefix{
+				netip.MustParsePrefix("2001:db8::/32"),
+				netip.MustParsePrefix("2001:dbf::/32"),
+				netip.MustParsePrefix("2001:dba::/32"),
 			},
 		},
 	}
