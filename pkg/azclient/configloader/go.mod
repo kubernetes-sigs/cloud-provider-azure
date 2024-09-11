@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader
 
-go 1.20
+go 1.23.1
 
 require (
 	github.com/onsi/ginkgo/v2 v2.11.0
