@@ -16,14 +16,37 @@ limitations under the License.
 
 package iputil
 
-import "net/netip"
+import (
+	"net/netip"
+)
 
 type prefixTreeNode struct {
 	masked bool
 	prefix netip.Prefix
 
-	l *prefixTreeNode
-	r *prefixTreeNode
+	p *prefixTreeNode // parent node
+	l *prefixTreeNode // left child node
+	r *prefixTreeNode // right child node
+}
+
+// pruneToRoot prunes the tree to the root.
+// If a node's left and right children are both masked,
+// it is masked and its children are pruned.
+// This is done recursively up to the root.
+func (n *prefixTreeNode) pruneToRoot() {
+	var node = n
+	for node.p != nil {
+		p := node.p
+		if p.l == nil || !p.l.masked {
+			break
+		}
+		if p.r == nil || !p.r.masked {
+			break
+		}
+		p.masked = true
+		p.l, p.r = nil, nil
+		node = p
+	}
 }
 
 type prefixTree struct {
@@ -70,6 +93,7 @@ func (t *prefixTree) Add(prefix netip.Prefix) {
 				}
 				n.l = &prefixTreeNode{
 					prefix: next,
+					p:      n,
 				}
 			}
 			n = n.l
@@ -81,6 +105,7 @@ func (t *prefixTree) Add(prefix netip.Prefix) {
 				}
 				n.r = &prefixTreeNode{
 					prefix: next,
+					p:      n,
 				}
 			}
 			n = n.r
@@ -90,10 +115,18 @@ func (t *prefixTree) Add(prefix netip.Prefix) {
 	}
 
 	n.masked = true
+	n.l, n.r = nil, nil
+	n.pruneToRoot()
 }
 
 // List returns all prefixes in the tree.
 // Overlapping prefixes are merged.
+// It will also collapse the neighboring prefixes.
+// The order of the prefixes in the output is guaranteed.
+//
+// Example:
+//   - [192.168.0.0/16, 192.168.1.0/24, 192.168.0.1/32] -> [192.168.0.0/16]
+//   - [192.168.0.0/32, 192.168.0.1/32] -> [192.168.0.0/31]
 func (t *prefixTree) List() []netip.Prefix {
 	var (
 		rv []netip.Prefix
