@@ -105,6 +105,7 @@ generatecode: build ## Generate client
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources --package-alias armresources --resource Provider --client-name ProvidersClient 
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 --package-alias armauthorization --resource RoleAssignment --client-name RoleAssignmentsClient
 	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 --package-alias armauthorization --resource RoleDefinition --client-name RoleDefinitionsClient
+	$(TYPESCAFFOLD) --package github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi --package-alias armmsi --resource Identity --client-name UserAssignedIdentitiesClient
 
 
 .PHONY: generateimpl
