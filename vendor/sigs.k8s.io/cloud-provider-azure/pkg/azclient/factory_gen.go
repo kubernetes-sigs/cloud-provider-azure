@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
@@ -83,6 +84,7 @@ type ClientFactoryImpl struct {
 	publicipprefixclientInterface           publicipprefixclient.Interface
 	registryclientInterface                 registryclient.Interface
 	resourcegroupclientInterface            resourcegroupclient.Interface
+	roleassignmentclientInterface           roleassignmentclient.Interface
 	routetableclientInterface               routetableclient.Interface
 	secretclientInterface                   secretclient.Interface
 	securitygroupclientInterface            securitygroupclient.Interface
@@ -228,6 +230,12 @@ func NewClientFactory(config *ClientFactoryConfig, armConfig *ARMClientConfig, c
 		return nil, err
 	}
 
+	//initialize roleassignmentclient
+	factory.roleassignmentclientInterface, err = factory.createRoleAssignmentClient(config.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
 	//initialize routetableclient
 	factory.routetableclientInterface, err = factory.createRouteTableClient(config.SubscriptionID)
 	if err != nil {
@@ -309,6 +317,12 @@ func (factory *ClientFactoryImpl) createAccountClient(subscription string) (acco
 		return nil, err
 	}
 
+	//add ratelimit policy
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("storageAccountRateLimit")
+	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
+	if rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
 	for _, optionMutFn := range factory.clientOptionsMutFn {
 		if optionMutFn != nil {
 			optionMutFn(options)
@@ -797,6 +811,25 @@ func (factory *ClientFactoryImpl) GetResourceGroupClient() resourcegroupclient.I
 	return factory.resourcegroupclientInterface
 }
 
+func (factory *ClientFactoryImpl) createRoleAssignmentClient(subscription string) (roleassignmentclient.Interface, error) {
+	//initialize roleassignmentclient
+	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, optionMutFn := range factory.clientOptionsMutFn {
+		if optionMutFn != nil {
+			optionMutFn(options)
+		}
+	}
+	return roleassignmentclient.New(subscription, factory.cred, options)
+}
+
+func (factory *ClientFactoryImpl) GetRoleAssignmentClient() roleassignmentclient.Interface {
+	return factory.roleassignmentclientInterface
+}
+
 func (factory *ClientFactoryImpl) createRouteTableClient(subscription string) (routetableclient.Interface, error) {
 	//initialize routetableclient
 	options, err := GetDefaultResourceClientOption(factory.armConfig, factory.facotryConfig)
@@ -1004,7 +1037,7 @@ func (factory *ClientFactoryImpl) createVirtualMachineScaleSetClient(subscriptio
 	}
 
 	//add ratelimit policy
-	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineSizesRateLimit")
+	ratelimitOption := factory.facotryConfig.GetRateLimitConfig("virtualMachineScaleSetRateLimit")
 	rateLimitPolicy := ratelimit.NewRateLimitPolicy(ratelimitOption)
 	if rateLimitPolicy != nil {
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
