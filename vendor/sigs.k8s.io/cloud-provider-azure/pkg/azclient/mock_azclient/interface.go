@@ -49,6 +49,7 @@ import (
 	publicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	registryclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/registryclient"
 	resourcegroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/resourcegroupclient"
+	roleassignmentclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/roleassignmentclient"
 	routetableclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient"
 	secretclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/secretclient"
 	securitygroupclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient"
@@ -410,6 +411,20 @@ func (m *MockClientFactory) GetResourceGroupClient() resourcegroupclient.Interfa
 func (mr *MockClientFactoryMockRecorder) GetResourceGroupClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceGroupClient", reflect.TypeOf((*MockClientFactory)(nil).GetResourceGroupClient))
+}
+
+// GetRoleAssignmentClient mocks base method.
+func (m *MockClientFactory) GetRoleAssignmentClient() roleassignmentclient.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRoleAssignmentClient")
+	ret0, _ := ret[0].(roleassignmentclient.Interface)
+	return ret0
+}
+
+// GetRoleAssignmentClient indicates an expected call of GetRoleAssignmentClient.
+func (mr *MockClientFactoryMockRecorder) GetRoleAssignmentClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoleAssignmentClient", reflect.TypeOf((*MockClientFactory)(nil).GetRoleAssignmentClient))
 }
 
 // GetRouteTableClient mocks base method.

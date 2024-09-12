@@ -58,7 +58,7 @@ const ListOperationName = "AccountsClient.List"
 // List gets a list of Account in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armstorage.Account, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "Account", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.AccountsClient.NewListByResourceGroupPager(resourceGroupName, nil)

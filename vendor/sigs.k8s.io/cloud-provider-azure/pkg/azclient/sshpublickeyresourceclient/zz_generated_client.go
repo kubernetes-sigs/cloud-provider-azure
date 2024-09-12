@@ -59,7 +59,7 @@ const GetOperationName = "SSHPublicKeysClient.Get"
 func (client *Client) Get(ctx context.Context, resourceGroupName string, resourceName string) (result *armcompute.SSHPublicKeyResource, err error) {
 
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SSHPublicKeyResource", "get")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, GetOperationName, client.tracer, nil)
 	defer endSpan(err)
 	resp, err := client.SSHPublicKeysClient.Get(ctx, resourceGroupName, resourceName, nil)
@@ -75,7 +75,7 @@ const ListOperationName = "SSHPublicKeysClient.List"
 // List gets a list of SSHPublicKeyResource in the resource group.
 func (client *Client) List(ctx context.Context, resourceGroupName string) (result []*armcompute.SSHPublicKeyResource, err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "SSHPublicKeyResource", "list")
-	defer metricsCtx.Observe(ctx, err)
+	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, ListOperationName, client.tracer, nil)
 	defer endSpan(err)
 	pager := client.SSHPublicKeysClient.NewListByResourceGroupPager(resourceGroupName, nil)
