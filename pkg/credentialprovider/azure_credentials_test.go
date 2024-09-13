@@ -17,15 +17,16 @@ limitations under the License.
 package credentialprovider
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 )
 
 const (
@@ -36,11 +37,6 @@ const (
 )
 
 func TestGetCredentials(t *testing.T) {
-	configStr := `
-    {
-        "aadClientId": "foo",
-        "aadClientSecret": "bar"
-    }`
 	result := []string{
 		"*.azurecr.io",
 		"*.azurecr.cn",
@@ -48,10 +44,12 @@ func TestGetCredentials(t *testing.T) {
 		"*.azurecr.us",
 	}
 
-	provider, err := newAcrProviderFromConfigReader(bytes.NewBufferString(configStr))
-	if err != nil {
-		t.Fatalf("Unexpected error when creating new acr provider: %v", err)
-	}
+	provider := NewAcrProvider(&config.AzureAuthConfig{
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:     "foo",
+			AADClientSecret: "bar",
+		},
+	}, nil, nil)
 
 	credResponse, err := provider.GetCredentials(context.TODO(), "foo.azurecr.io/nginx:v1", nil)
 	if err != nil {
@@ -75,7 +73,6 @@ func TestGetCredentials(t *testing.T) {
 		}
 	}
 }
-
 func TestGetCredentialsConfig(t *testing.T) {
 	// msiEndpointEnv and msiSecretEnv are required because autorest/adal requires IMDS endpoint to be available.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,15 +125,35 @@ func TestGetCredentialsConfig(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		provider, err := newAcrProviderFromConfigReader(bytes.NewBufferString(test.configStr))
+		configFile, err := os.CreateTemp(".", "config.json")
+		if err != nil {
+			t.Fatalf("Unexpected error when creating temp file: %v", err)
+		}
+		_, err = configFile.WriteString(test.configStr)
+		if err != nil {
+			t.Fatalf("Unexpected error when writing to temp file: %v", err)
+		}
+		err = configFile.Close()
+		if err != nil {
+			t.Fatalf("Unexpected error when closing temp file: %v", err)
+		}
+		provider, err := NewAcrProviderFromConfig(configFile.Name())
 		if err != nil && !test.expectError {
 			t.Fatalf("Unexpected error when creating new acr provider: %v", err)
 		}
 		if err != nil && test.expectError {
+			err = os.Remove(configFile.Name())
+			if err != nil {
+				t.Fatalf("Unexpected error when writing to temp file: %v", err)
+			}
 			continue
 		}
+		err = os.Remove(configFile.Name())
+		if err != nil {
+			t.Fatalf("Unexpected error when writing to temp file: %v", err)
+		}
 
-		credResponse, err := provider.GetCredentials(context.TODO(), test.image, nil)
+		credResponse, err := provider.GetCredentials(context.Background(), test.image, nil)
 		if err != nil {
 			t.Fatalf("Unexpected error when fetching acr credentials: %v", err)
 		}
@@ -147,18 +164,17 @@ func TestGetCredentialsConfig(t *testing.T) {
 }
 
 func TestParseACRLoginServerFromImage(t *testing.T) {
-	configStr := `
-    {
-        "aadClientId": "foo",
-        "aadClientSecret": "bar"
-    }`
 
-	provider, err := newAcrProviderFromConfigReader(bytes.NewBufferString(configStr))
-	if err != nil {
-		t.Fatalf("Unexpected error when creating new acr provider: %v", err)
-	}
+	providerInterface := NewAcrProvider(&config.AzureAuthConfig{
+		AzureAuthConfig: azclient.AzureAuthConfig{
+			AADClientID:     "foo",
+			AADClientSecret: "bar",
+		},
+	}, nil, nil)
 
-	provider.environment = &azure.Environment{
+	provider := providerInterface.(*acrProvider)
+
+	provider.environment = &azclient.Environment{
 		ContainerRegistryDNSSuffix: ".azurecr.my.cloud",
 	}
 	tests := []struct {
