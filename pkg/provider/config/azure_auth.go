@@ -220,12 +220,12 @@ func GetMultiTenantServicePrincipalToken(config *AzureAuthConfig, env *azure.Env
 			env.ServiceManagementEndpoint)
 	}
 
-	if authProvider.ManagedIdentityCredential != nil && authProvider.NetworkTokenCredential != nil {
+	if authProvider.ComputeCredential != nil && authProvider.NetworkCredential != nil {
 		logger.V(2).Info("Setup ARM multi-tenant token provider", "method", "msi_with_auxiliary_token")
 		return armauth.NewMultiTenantTokenProvider(
 			klog.Background().WithName("multi-tenant-resource-token-provider"),
-			authProvider.ManagedIdentityCredential,
-			[]azcore.TokenCredential{authProvider.NetworkTokenCredential},
+			authProvider.ComputeCredential,
+			[]azcore.TokenCredential{authProvider.NetworkCredential},
 			authProvider.DefaultTokenScope(),
 		)
 	}
@@ -281,12 +281,12 @@ func GetNetworkResourceServicePrincipalToken(config *AzureAuthConfig, env *azure
 			env.ServiceManagementEndpoint)
 	}
 
-	if authProvider.ManagedIdentityCredential != nil && authProvider.NetworkTokenCredential != nil {
+	if authProvider.ComputeCredential != nil && authProvider.NetworkCredential != nil {
 		logger.V(2).Info("Setup ARM network resource token provider", "method", "msi_with_auxiliary_token")
 
 		return armauth.NewTokenProvider(
 			klog.Background().WithName("network-resource-token-provider"),
-			authProvider.NetworkTokenCredential,
+			authProvider.NetworkCredential,
 			authProvider.DefaultTokenScope(),
 		)
 	}
