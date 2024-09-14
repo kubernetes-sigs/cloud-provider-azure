@@ -31,13 +31,14 @@ import (
 
 var msiClient *armmsi.UserAssignedIdentitiesClient
 var useridentity *armmsi.Identity
+
 func init() {
 	additionalTestCases = func() {
 	}
 
 	beforeAllFunc = func(ctx context.Context) {
 		var err error
-		msiClient,err = armmsi.NewUserAssignedIdentitiesClient(subscriptionID,recorder.TokenCredential(),&arm.ClientOptions{
+		msiClient, err = armmsi.NewUserAssignedIdentitiesClient(subscriptionID, recorder.TokenCredential(), &arm.ClientOptions{
 			ClientOptions: azcore.ClientOptions{
 				Transport:       recorder.HTTPClient(),
 				TracingProvider: utils.TracingProvider,
@@ -45,16 +46,16 @@ func init() {
 		})
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		resp,err := msiClient.CreateOrUpdate(ctx,resourceGroupName,resourceName,armmsi.Identity{
+		resp, err := msiClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, armmsi.Identity{
 			Location: to.Ptr(location),
-			Name: to.Ptr(resourceName),
-		},nil)
+			Name:     to.Ptr(resourceName),
+		}, nil)
 		useridentity = &resp.Identity
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	}
 	afterAllFunc = func(ctx context.Context) {
-		_,err := msiClient.Delete(ctx,resourceGroupName,resourceName,nil)
+		_, err := msiClient.Delete(ctx, resourceGroupName, resourceName, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 }

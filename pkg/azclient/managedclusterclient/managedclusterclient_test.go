@@ -21,7 +21,7 @@ import (
 	"context"
 	"strings"
 
-	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
+	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v6"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 )

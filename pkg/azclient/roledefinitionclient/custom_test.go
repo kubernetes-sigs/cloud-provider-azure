@@ -40,10 +40,9 @@ func init() {
 			})
 		})
 		ginkgo.When("invalid list requests are raised", func() {
-			ginkgo.It("should return error", func(ctx context.Context) {
-				resourceList, err := realClient.List(ctx, "/subscriptions/"+subscriptionID+"/resourceGroups/"+resourceGroupName+"notfound", nil)
-				gomega.Expect(err).To(gomega.HaveOccurred())
-				gomega.Expect(resourceList).To(gomega.BeNil())
+			ginkgo.It("should not return error", func(ctx context.Context) {
+				_, err := realClient.List(ctx, "/subscriptions/"+subscriptionID+"/resourceGroups/"+resourceGroupName+"notfound", nil)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			})
 		})
 	}

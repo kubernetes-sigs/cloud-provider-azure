@@ -49,8 +49,8 @@ interactions:
                 - CONFIG_NOCACHE
             X-Content-Type-Options:
                 - nosniff
-        status: 201 Created
-        code: 201
+        status: 200 OK
+        code: 200
         duration: 200ms
     - id: 1
       request:
@@ -80,14 +80,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1387
+        content_length: 1385
         uncompressed: false
         body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1387"
+                - "1385"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -129,14 +129,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1388
+        content_length: 1386
         uncompressed: false
         body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"RegisteringDns","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1388"
+                - "1386"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -178,14 +178,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1383
+        content_length: 1381
         uncompressed: false
         body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1383"
+                - "1381"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -229,14 +229,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1383
+        content_length: 1381
         uncompressed: false
         body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1383"
+                - "1381"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -329,14 +329,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 1616
+        content_length: 1614
         uncompressed: false
         body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults/akscitkeyvaulttestva","name":"akscitkeyvaulttestva","type":"Microsoft.KeyVault/vaults","location":"eastus","tags":{},"systemData":{"createdBy":"{EMAIL}","createdByType":"User","createdAt":"2001-02-03T04:05:06Z","lastModifiedBy":"{EMAIL}","lastModifiedByType":"User","lastModifiedAt":"2001-02-03T04:05:06Z"},"properties":{"sku":{"family":"A","name":"standard"},"tenantId":"tenantid","accessPolicies":[{"tenantId":"tenantid","objectId":"00000000-0000-0000-0000-000000000000","permissions":{"certificates":["get","list","delete","create","import","update","managecontacts","getissuers","listissuers","setissuers","deleteissuers","manageissuers","recover","purge"],"keys":["encrypt","decrypt","wrapKey","unwrapKey","sign","verify","get","list","create","update","import","delete","backup","restore","recover","purge"],"secrets":["get","list","set","delete","backup","restore","recover","purge"]}}],"enabledForDeployment":true,"enabledForDiskEncryption":true,"enabledForTemplateDeployment":true,"enableSoftDelete":true,"softDeleteRetentionInDays":90,"vaultUri":"https://akscitkeyvaulttestva.vault.azure.net/","provisioningState":"Succeeded","publicNetworkAccess":"Enabled"}}],"nextLink":"https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-Vault/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01&$skiptoken=YWtzY2l0a2V5dmF1bHR0ZXN0dmE="}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "1616"
+                - "1614"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -538,7 +538,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYxMTUyMTU2MzQ3MTYzOHwyMTM1NDA3RDkwNTk0MUNEOTU4RkRCNUVEQzlBOUZBOA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYxODg5Nzg5MDAyNzgyMXwwODhFODAwQTJGODk0ODNFODBFRUYwQUZDNDNBMUJDMQ?api-version=2023-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -568,7 +568,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYxMTUyMTU2MzQ3MTYzOHwyMTM1NDA3RDkwNTk0MUNEOTU4RkRCNUVEQzlBOUZBOA?api-version=2023-07-01&c=c&h=h&s=s&t=t
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.KeyVault/locations/eastus/operationResults/VVR8MDYzODYxODg5Nzg5MDAyNzgyMXwwODhFODAwQTJGODk0ODNFODBFRUYwQUZDNDNBMUJDMQ?api-version=2023-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -578,7 +578,7 @@ interactions:
         trailer: {}
         content_length: 107
         uncompressed: false
-        body: '{"createdDateTime":"2024-09-05 16:55:55Z","lastActionDateTime":"2024-09-05 17:05:56Z","status":"Succeeded"}'
+        body: '{"createdDateTime":"2024-09-14 05:49:48Z","lastActionDateTime":"2024-09-14 05:59:50Z","status":"Succeeded"}'
         headers:
             Cache-Control:
                 - no-cache

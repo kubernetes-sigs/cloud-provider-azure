@@ -189,7 +189,7 @@ interactions:
             Content-Type:
                 - application/json
             Etag:
-                - '"0x8DCCDCA51EEB477"'
+                - '"0x8DCD47B431D0E4A"'
             Expires:
                 - "-1"
             Pragma:
@@ -229,7 +229,7 @@ interactions:
         trailer: {}
         content_length: 721
         uncompressed: false
-        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCCDCA51EEB477\"","properties":{"immutableStorageWithVersioning":{"enabled":false},"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","hasImmutabilityPolicy":false,"hasLegalHold":false}}]}'
+        body: '{"value":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCD47B431D0E4A\"","properties":{"immutableStorageWithVersioning":{"enabled":false},"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","hasImmutabilityPolicy":false,"hasLegalHold":false}}]}'
         headers:
             Cache-Control:
                 - no-cache
@@ -276,7 +276,7 @@ interactions:
         trailer: {}
         content_length: 703
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCCDCA51EEB477\"","properties":{"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","legalHold":{"hasLegalHold":false,"tags":[]},"hasImmutabilityPolicy":false,"hasLegalHold":false}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-BlobContainer/providers/Microsoft.Storage/storageAccounts/akscitblobsdktestparent/blobServices/default/containers/akscitblobsdktest","name":"akscitblobsdktest","type":"Microsoft.Storage/storageAccounts/blobServices/containers","etag":"\"0x8DCD47B431D0E4A\"","properties":{"deleted":false,"remainingRetentionDays":0,"defaultEncryptionScope":"$account-encryption-key","denyEncryptionScopeOverride":false,"publicAccess":"None","leaseStatus":"Unlocked","leaseState":"Available","lastModifiedTime":"2001-02-03T04:05:06Z","legalHold":{"hasLegalHold":false,"tags":[]},"hasImmutabilityPolicy":false,"hasLegalHold":false}}'
         headers:
             Cache-Control:
                 - no-cache
@@ -285,7 +285,7 @@ interactions:
             Content-Type:
                 - application/json
             Etag:
-                - '"0x8DCCDCA51EEB477"'
+                - '"0x8DCD47B431D0E4A"'
             Expires:
                 - "-1"
             Pragma:

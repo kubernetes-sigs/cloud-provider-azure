@@ -72,7 +72,7 @@ interactions:
                 - "583"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -80,7 +80,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3037
+        content_length: 3139
         uncompressed: false
         body: |-
             {
@@ -96,8 +96,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.7",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -119,7 +119,7 @@ interactions:
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -144,6 +144,7 @@ interactions:
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
                "networkPlugin": "kubenet",
+               "networkPolicy": "none",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -185,7 +186,12 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66d9e0e042f7f200014ad7cf"
+              "resourceUID": "66e52d750c1aa5000192302f",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
              },
              "identity": {
               "type": "SystemAssigned",
@@ -203,7 +209,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3037"
+                - "3139"
             Content-Type:
                 - application/json
             Expires:
@@ -241,7 +247,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 165
+        content_length: 163
         uncompressed: false
         body: |-
             {
@@ -254,7 +260,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "165"
+                - "163"
             Content-Type:
                 - application/json
             Expires:
@@ -284,7 +290,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -292,7 +298,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3662
+        content_length: 3764
         uncompressed: false
         body: |-
             {
@@ -308,8 +314,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.7",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -330,7 +336,7 @@ interactions:
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -355,6 +361,7 @@ interactions:
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
                "networkPlugin": "kubenet",
+               "networkPolicy": "none",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -408,7 +415,12 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66d9e0e042f7f200014ad7cf"
+              "resourceUID": "66e52d750c1aa5000192302f",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
              },
              "identity": {
               "type": "SystemAssigned",
@@ -424,7 +436,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3662"
+                - "3764"
             Content-Type:
                 - application/json
             Expires:
@@ -456,7 +468,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -464,7 +476,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3662
+        content_length: 3764
         uncompressed: false
         body: |-
             {
@@ -480,8 +492,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.7",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -502,7 +514,7 @@ interactions:
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -527,6 +539,7 @@ interactions:
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
                "networkPlugin": "kubenet",
+               "networkPolicy": "none",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -580,7 +593,12 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66d9e0e042f7f200014ad7cf"
+              "resourceUID": "66e52d750c1aa5000192302f",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
              },
              "identity": {
               "type": "SystemAssigned",
@@ -596,7 +614,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3662"
+                - "3764"
             Content-Type:
                 - application/json
             Expires:
@@ -628,7 +646,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResourcenotfound?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -681,7 +699,7 @@ interactions:
                 - "583"
             Content-Type:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -689,7 +707,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3714
+        content_length: 3816
         uncompressed: false
         body: |-
             {
@@ -705,8 +723,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.7",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -729,7 +747,7 @@ interactions:
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -754,6 +772,7 @@ interactions:
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
                "networkPlugin": "kubenet",
+               "networkPolicy": "none",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -807,7 +826,12 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66d9e0e042f7f200014ad7cf"
+              "resourceUID": "66e52d750c1aa5000192302f",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
              },
              "identity": {
               "type": "SystemAssigned",
@@ -825,7 +849,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3714"
+                - "3816"
             Content-Type:
                 - application/json
             Expires:
@@ -906,7 +930,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -914,7 +938,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 3694
+        content_length: 3796
         uncompressed: false
         body: |-
             {
@@ -930,8 +954,8 @@ interactions:
               "kubernetesVersion": "1.29",
               "currentKubernetesVersion": "1.29.7",
               "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-              "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+              "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+              "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
               "agentPoolProfiles": [
                {
                 "name": "agentpool1",
@@ -953,7 +977,7 @@ interactions:
                 "mode": "System",
                 "osType": "Linux",
                 "osSKU": "Ubuntu",
-                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                 "upgradeSettings": {
                  "maxSurge": "10%"
                 },
@@ -978,6 +1002,7 @@ interactions:
               "supportPlan": "KubernetesOfficial",
               "networkProfile": {
                "networkPlugin": "kubenet",
+               "networkPolicy": "none",
                "loadBalancerSku": "standard",
                "loadBalancerProfile": {
                 "managedOutboundIPs": {
@@ -1031,7 +1056,12 @@ interactions:
                "enabled": false
               },
               "workloadAutoScalerProfile": {},
-              "resourceUID": "66d9e0e042f7f200014ad7cf"
+              "resourceUID": "66e52d750c1aa5000192302f",
+              "metricsProfile": {
+               "costAnalysis": {
+                "enabled": false
+               }
+              }
              },
              "identity": {
               "type": "SystemAssigned",
@@ -1047,7 +1077,7 @@ interactions:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "3694"
+                - "3796"
             Content-Type:
                 - application/json
             Expires:
@@ -1079,7 +1109,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1087,7 +1117,7 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 4224
+        content_length: 4338
         uncompressed: false
         body: |-
             {
@@ -1105,8 +1135,8 @@ interactions:
                 "kubernetesVersion": "1.29",
                 "currentKubernetesVersion": "1.29.7",
                 "dnsPrefix": "aks-cit-ManagedClustertestResourcednsPrefix",
-                "fqdn": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.hcp.eastus.azmk8s.io",
-                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-rz7prioa.portal.hcp.eastus.azmk8s.io",
+                "fqdn": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.hcp.eastus.azmk8s.io",
+                "azurePortalFQDN": "aks-cit-managedclustertestresourcednsprefix-4zhs6sy2.portal.hcp.eastus.azmk8s.io",
                 "agentPoolProfiles": [
                  {
                   "name": "agentpool1",
@@ -1128,7 +1158,7 @@ interactions:
                   "mode": "System",
                   "osType": "Linux",
                   "osSKU": "Ubuntu",
-                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202408.27.0",
+                  "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202409.04.0",
                   "upgradeSettings": {
                    "maxSurge": "10%"
                   },
@@ -1153,6 +1183,7 @@ interactions:
                 "supportPlan": "KubernetesOfficial",
                 "networkProfile": {
                  "networkPlugin": "kubenet",
+                 "networkPolicy": "none",
                  "loadBalancerSku": "standard",
                  "loadBalancerProfile": {
                   "managedOutboundIPs": {
@@ -1206,7 +1237,12 @@ interactions:
                  "enabled": false
                 },
                 "workloadAutoScalerProfile": {},
-                "resourceUID": "66d9e0e042f7f200014ad7cf"
+                "resourceUID": "66e52d750c1aa5000192302f",
+                "metricsProfile": {
+                 "costAnalysis": {
+                  "enabled": false
+                 }
+                }
                },
                "identity": {
                 "type": "SystemAssigned",
@@ -1219,13 +1255,13 @@ interactions:
                }
               }
              ],
-             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9530800\u0026api-version=2024-01-01\u0026skipToken=9530800"
+             "nextLink": "https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9585513\u0026api-version=2024-05-01\u0026skipToken=9585513"
             }
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "4224"
+                - "4338"
             Content-Type:
                 - application/json
             Expires:
@@ -1255,7 +1291,7 @@ interactions:
         body: ""
         form: {}
         headers: {}
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9530800&api-version=2024-01-01&skipToken=9530800
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters?%24skipToken=9585513&api-version=2024-05-01&skipToken=9585513
         method: GET
       response:
         proto: HTTP/2.0
@@ -1305,7 +1341,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedClusternotfound/providers/Microsoft.ContainerService/managedClusters?api-version=2024-05-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -1354,7 +1390,7 @@ interactions:
         headers:
             Accept:
                 - application/json
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-01-01
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-ManagedCluster/providers/Microsoft.ContainerService/managedClusters/testResource?api-version=2024-05-01
         method: DELETE
       response:
         proto: HTTP/2.0
