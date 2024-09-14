@@ -123,6 +123,9 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.VirtualMachinesClient = mockvmclient.NewMockInterface(ctrl)
 	az.PrivateLinkServiceClient = mockprivatelinkserviceclient.NewMockInterface(ctrl)
 	az.ComputeClientFactory = mock_azclient.NewMockClientFactory(ctrl)
+	az.AuthProvider = &azclient.AuthProvider{
+		ComputeCredential: mock_azclient.NewMockTokenCredential(ctrl),
+	}
 	az.VMSet, _ = newAvailabilitySet(az)
 	az.vmCache, _ = az.newVMCache()
 	az.lbCache, _ = az.newLBCache()
